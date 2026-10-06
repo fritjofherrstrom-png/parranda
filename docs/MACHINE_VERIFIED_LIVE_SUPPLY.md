@@ -109,6 +109,59 @@ The initial national layer remains Pulse-only and does not become a route stop.
 The source API's availability and breadth are not verified runtime coverage:
 no DATAtourisme event request has been made in this workstream.
 
+## Public-holiday calendar facts
+
+festivos.io and OpenHolidays now complement the same background Live source
+plan, selected by resolver-attested country/admin context. Spain uses festivos.io;
+other countries use the OpenHolidays supported-country metadata, with unsupported
+countries reported unavailable. The two providers do not duplicate Spanish
+national holidays. Selection means a source can be attempted, not that its
+calendar has responded or that local programmes are covered.
+
+The festivos reference index must join one exact municipality name (or an
+explicit source alias) plus the trusted province/region to one INE5. Name-only,
+ambiguous or conflicting administrative matches are unavailable. Each municipal
+calendar must match that reference identity and requested year. National,
+regional and local date facts retain their original Spanish names, official
+reference and supplied attribution, with CC BY 4.0 credit. Missing official
+URLs remain missing; existing bulletin/PDF/JSON/home links stay exact and are
+not advertised as event pages. Published years and variable local data are not
+generalized into complete municipal coverage.
+
+OpenHolidays verifies supported countries and its own subdivision reference
+codes; codes are not assumed to be ISO identifiers. An explicitly nationwide
+public holiday needs national scope and no contradictory subdivision/group
+restriction. Other holidays require exact, unique source-name/admin joins,
+with a matched regional ancestor for local-name joins. A proved subdivision
+also proves its source-listed ancestors. Other-area facts are excluded; an
+unresolved relevant scope or subgroup restriction produces partial/failure
+health rather than an empty success. Source names/languages and ODbL credit
+remain intact. School holidays are outside this adapter.
+
+The existing private source cache stores validated reference metadata for 24
+hours; successful date/admin-bound source snapshots are shared for 20 minutes
+between Live periods. One collection uses fixed HTTPS endpoints with manual
+redirect rejection, at most three requests (two static years at year boundaries
+for festivos), four MB total, 160 result rows and a 30-second deadline. Municipal
+calendars are capped at 64 entries per year; country/subdivision metadata also
+have structural/count/depth caps. Failed metadata/snapshots are not persisted
+as healthy empty calendars.
+
+Calendar facts are date/admin context: normalization removes venue coordinates,
+they spend no venue lookup budget, cannot fuse with venue programmes or differently
+scoped holidays, and are always route-ineligible. They receive neutral, lower
+cultural ranking. The shared EN/SV card/sheet labels the administrative scope
+and unverified programme; half days have no invented clock, and recommended /
+provisional flags remain visible. Escaped, deduplicated credits survive even
+without a source URL. Mapless calendar facts are limited to ordinary
+around-place display, including initial Live context; they do not enter
+near-me, in-place, route corridors or a distance-based settlement fallback.
+This does not suppress local-source scouting or change the source budget.
+
+All provider and UI verification here uses network-disabled fixtures. No
+calendar endpoint was fetched; these tests do not establish provider availability,
+link reachability, legal closure rules or deployed/full-path acceptance.
+
 ## Delivery state and remaining landing condition
 
 OSM marketplace schedules now reuse the deployment's existing cached map loader
@@ -143,14 +196,14 @@ in this workstream; all new tests use offline fixture data.
 Implemented in this worktree: default automatic machine-qualified event supply,
 the quoted document reader/provider and scout/qualification/Live integration,
 bounded PDF/OCR input, DATAtourisme country-layer acquisition and Live integration,
-OSM recurring-market schedules and shared uncertainty presentation,
+OSM recurring-market schedules, public-holiday calendar facts from festivos.io /
+OpenHolidays, and shared uncertainty presentation,
 server credential wiring, and corrected current policy
 documents. Network-disabled tests cover original-language evidence, invented
 atom rejection, failures/cache, PDF input and association-news → qualification
 → visible Live with credits/evidence and no route promotion.
 
-Remaining work for the full goal: implement and verify festivos.io and OpenHolidays
-through the ordinary supply chain, finish adversarial /
+Remaining work for the full goal: finish adversarial /
 operational review of document inputs, obtain exact-head CI, and record actual
 deployment wiring / runtime observation limits. The goal is **not complete**.
 No model/provider live fetch, migration, merge or deployment has been performed

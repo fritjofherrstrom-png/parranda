@@ -21,6 +21,13 @@ function record(overrides = {}) {
 function response(objects = [], meta = { page: 1, total: objects.length, total_pages: 1 }) {
   return new Response(JSON.stringify({ objects, meta }));
 }
+// The new complementary country calendar is a healthy empty control here;
+// assertions below count actual DATAtourisme reads, not all country sources.
+function openCalendarControl(url) {
+  if (!url.startsWith("https://openholidaysapi.org/")) return null;
+  return new Response(JSON.stringify(url.endsWith("/Countries")
+    ? [{ isoCode: "FR", name: [{ language: "FR", text: "France" }], officialLanguages: ["FR"] }] : []));
+}
 async function collect(options = {}) {
   return createDatatourismeEventProvider({ key: "private-test-key", anchor: ANCHOR,
     fetcher: async () => response([record()]), ...options }).create().collect({ date: "2026-07-20" });
@@ -200,7 +207,8 @@ test("ordinary default supply warms once, preserves scout demand and reuses sour
     collectEvents: options => {
       assert.equal(options.datatourismeKey, "private-test-key");
       assert.equal(options.registry[0].key, undefined);
-      const promise = collectAnchorEvents({ ...options, fetcher: async () => {
+      const promise = collectAnchorEvents({ ...options, fetcher: async (url) => {
+        const calendar = openCalendarControl(url); if (calendar) return calendar;
         fetched++; await started; return response([record()]);
       } });
       producers.push(promise); return promise;
@@ -248,7 +256,8 @@ for (const lang of ["en", "sv"]) test(`${lang} attested Live query/retry exposes
   const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_DATATOURISME_KEY: "private-test-key" }, {
     eventCache: createSourceCache({ namespace: `fixture-${lang}`, ttlMs: 60000 }),
     collectEvents: options => {
-      const promise = collectAnchorEvents({ ...options, fetcher: async () => {
+      const promise = collectAnchorEvents({ ...options, fetcher: async (url) => {
+        const calendar = openCalendarControl(url); if (calendar) return calendar;
         fetches++; return response([record(), record({ uuid: "next-day", takesPlaceAt: [{ startDate: "2026-07-23" }] })]);
       } });
       producers.push(promise); return promise;

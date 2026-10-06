@@ -144,6 +144,57 @@ for (const lang of ['en', 'sv']) test(`${lang} Live credits survive without URLs
   assert.equal(h.fetchMock.calls.filter((call) => call.url.includes('/api/route-recommendations')).length, composeCount);
 });
 
+for (const lang of ['en', 'sv']) test(`${lang} calendar facts keep date/admin scope and uncertainty in card and both sheet periods`, async (t) => {
+  const credit = '<img src=x onerror=alert(1)> & Calendar owner';
+  const calendar = { id: 'public-holiday', title: 'Source holiday name', starts_on: '2026-09-25', ends_on: '2026-09-25',
+    time_window: { kind: 'period', starts_on: '2026-09-25', ends_on: '2026-09-25' }, place: 'Trusted region',
+    calendar_fact: { kind: 'public_holiday', scope: 'regional', country_code: 'XX', area: 'Trusted region',
+      temporal_scope: 'half_day', flags: ['Recommended', 'Provisional'] },
+    source_label: 'Calendar provider', source_url: 'https://api.example/PublicHolidays?countryIsoCode=XX',
+    source_link_kind: 'page', source_link_host: 'api.example',
+    sources: [{ attribution: credit }, { attribution: credit }], route_eligible: false, lat: null, lng: null,
+  };
+  const withoutUrl = { ...calendar, id: 'public-holiday-no-url', title: 'Holiday without official URL',
+    source_url: null, source_link_kind: null, source_link_host: null,
+    calendar_fact: { ...calendar.calendar_fact, scope: 'local', temporal_scope: 'full_day', flags: [] },
+    time_window: { kind: 'all_day', starts_on: '2026-09-25', ends_on: '2026-09-25' },
+  };
+  const events = { ...liveEvents(), selected_date: '2026-09-25', tonight: [calendar, withoutUrl], this_week: [calendar, withoutUrl],
+    browse: { tonight: { more: [] }, this_week: { more: [] } } };
+  const h = await composed(lang, { ...composedDay(), live_events: events });
+  t.after(() => h.unmount());
+  const check = root => {
+    assert.match(root.textContent, lang === 'en' ? /Regional public holiday — programme not verified/ : /Regional helgdag — program inte verifierat/);
+    assert.match(root.textContent, lang === 'en' ? /Half day — time unspecified/ : /Halvdag — tid saknas/);
+    assert.match(root.textContent, lang === 'en' ? /Recommended by source/ : /Rekommenderad enligt källan/);
+    assert.match(root.textContent, lang === 'en' ? /Provisional date/ : /Preliminärt datum/);
+    assert.match(root.textContent, /25 sept?/i);
+    assert.match(root.textContent, /Trusted region/);
+    assert.equal(root.textContent.split(credit).length - 1, 2, 'deduplicated per-row credit, including no URL');
+    assert.equal(root.querySelectorAll('img').length, 0);
+    assert.equal(anchorsTo(root, calendar.source_url).length, 1);
+    assert.equal(linkText(anchorsTo(root, calendar.source_url)[0]), 'api.example');
+    assert.equal([...root.querySelectorAll('li')].find(row => row.textContent.includes(withoutUrl.title)).querySelectorAll('a').length, 0);
+    assert.doesNotMatch(root.textContent, /Recurring schedule|Återkommande schema/);
+  };
+  check(livePanel(h));
+  const before = h.readStorage(LAST_KEY);
+  const compositions = h.fetchMock.calls.filter(call => call.url.includes('/api/route-recommendations')).length;
+  await click(h, button(h, /See all live|Se allt live/));
+  for (const period of ['this_week', 'tonight']) {
+    await click(h, button(h, period === 'this_week'
+      ? /^(Following 7 days|Följande 7 dagar)$/ : /^(Fri 25 Sept|fre 25 sep\.)$/));
+    const call = h.fetchMock.pending().find(call => call.url.includes('/api/live-events'));
+    assert.equal(call.body.time, period);
+    await h.fetchMock.respond(call, { contract: 'live_event_query_v1', route_mutation: false,
+      day_anchor_mutation: false, live_events: events });
+    check(h.container.querySelector('[role="dialog"]'));
+    assert.deepEqual(h.readStorage(LAST_KEY), before);
+  }
+  await h.clock.advance(120000);
+  assert.equal(h.fetchMock.calls.filter(call => call.url.includes('/api/route-recommendations')).length, compositions);
+});
+
 function assertHonestRows(root, { homepage, page, lang = 'en' }) {
   const [home] = anchorsTo(root, HOME.source_url);
   assert.ok(home, 'the homepage row keeps its exact link');

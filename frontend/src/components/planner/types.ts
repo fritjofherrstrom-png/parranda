@@ -59,6 +59,9 @@ export interface PulseEvent {
   ends_on?: string;
   time_window?: PulseTimeWindow | null;
   recurrence?: { rule?: string; occurrence_status?: "unconfirmed" } | null;
+  calendar_fact?: { kind: "public_holiday"; scope: "national" | "regional" | "local";
+    country_code: string; area: string; temporal_scope: "full_day" | "half_day";
+    flags: ("Recommended" | "Provisional" | "OneTime" | "Exception")[] } | null;
   place?: string;
   /** The reviewed feed that listed the event — attribution, not the link's destination. */
   source_label?: string;

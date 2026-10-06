@@ -57,6 +57,8 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     timingRelevance,
   });
   const coordinates = normalizeCoordinates(rawEvent);
+  const calendarFact = normalizeCalendarFact(rawEvent.calendar_fact);
+  if (rawEvent.calendar_fact != null && !calendarFact) return null;
 
   return compactObject({
     id: firstString(rawEvent.id, rawEvent.source_event_id, rawEvent.provider_id, sourceUrl),
@@ -73,11 +75,13 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     country: firstString(rawEvent.country),
     place_context: firstString(rawEvent.place_context, rawEvent.place, rawEvent.venue),
     // A municipality or virtual service is not a walkable event venue.
-    source_location_scope: ["municipality", "virtual"].includes(rawEvent.source_location_scope)
+    source_location_scope: calendarFact
+      ? ({ national: "country", regional: "region", local: "municipality" })[calendarFact.scope]
+      : ["municipality", "virtual"].includes(rawEvent.source_location_scope)
       ? rawEvent.source_location_scope : null,
     address: firstString(rawEvent.address, rawEvent.venue_address, rawEvent.location_address),
-    lat: coordinates.lat,
-    lng: coordinates.lng,
+    lat: calendarFact ? null : coordinates.lat,
+    lng: calendarFact ? null : coordinates.lng,
     area: firstString(rawEvent.area, rawEvent.neighborhood, rawEvent.district),
     starts_at: startsAt ? startsAt.toISOString() : null,
     ends_at: endsAt ? endsAt.toISOString() : null,
@@ -85,6 +89,7 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     ends_on: endsOn,
     time_window: timeWindow,
     recurrence: normalizeRecurrence(rawEvent.recurrence),
+    calendar_fact: calendarFact,
     freshness: firstString(rawEvent.freshness) || (timingRelevance === "stale" ? "stale" : null),
     last_checked: lastChecked ? lastChecked.toISOString() : null,
     confidence,
@@ -211,6 +216,16 @@ function timingReasons(timingRelevance, facts = {}) {
   if (!facts.hasSourceBacking) reasons.push("missing_source_backing");
   reasons.push(`confidence_${facts.confidence || "needs_review"}`);
   return reasons;
+}
+
+function normalizeCalendarFact(value) {
+  if (value?.kind !== "public_holiday" || !["national", "regional", "local"].includes(value.scope)
+    || !/^[A-Z]{2}$/.test(value.country_code || "") || typeof value.area !== "string"
+    || !value.area.trim() || value.area.length > 500 || !["full_day", "half_day"].includes(value.temporal_scope)
+    || !Array.isArray(value.flags) || value.flags.length > 4
+    || value.flags.some(flag => !["Recommended", "Provisional", "OneTime", "Exception"].includes(flag))) return null;
+  return { kind: "public_holiday", scope: value.scope, country_code: value.country_code,
+    area: value.area.trim(), temporal_scope: value.temporal_scope, flags: [...new Set(value.flags)] };
 }
 
 function normalizeProvenance(value, { sourceUrl, sourceLabel } = {}) {
