@@ -7,9 +7,9 @@ const input = {
   day_rhythm: 'balanced', experimental_agnostic_route_output: true,
   agnostic_engine_compose: true, include_external_candidates: true,
 };
-async function setup(t, loader = async () => Object.assign([], { loader_status: 'error_failed_closed', loader_error: 'fixture_outage' })) {
+async function setup(t, loader = async () => Object.assign([], { loader_status: 'error_failed_closed', loader_error: 'fixture_outage' }), extra = {}) {
   const server = buildApp({ openDataLoader: loader, eventSupply: null, reviewedPlaceSource: null,
-    placeResolver: null, weatherProvider: async () => null }).listen(0);
+    placeResolver: null, weatherProvider: async () => null, ...extra }).listen(0);
   t.after(() => { server.close(); server.closeAllConnections(); });
   return async body => (await requestJson(server, { path: '/api/route-recommendations?lang=en', body })).body;
 }
@@ -75,4 +75,19 @@ test('legacy any-place kilometer requests keep their prior source-only behavior'
   const body = await request({ ...legacy, city: "unknown-fixture", walking_km_target: 4 });
   assert.ok(!body.days?.some(day => day.primary_route));
   assert.ok(body.agnostic_route_output_experiment.eligibility.blockers.includes('loader_error'));
+});
+
+
+test('explicit coffee survives afternoon heuristics without inventing opening hours or anchoring', async t => {
+  const request = await setup(t, undefined, {
+    weatherProvider: async () => ({ condition: 'sun', maxTemp: 20,
+      timezone_resolution: { timezone: 'Europe/Madrid', timezone_source: 'weather_provider_auto', utc_offset_seconds: 7200 } }),
+    clock: () => new Date('2026-10-06T11:30:00Z'),
+  });
+  const body = await request(input);
+  const route = body.days?.[0]?.primary_route;
+  assert.ok(route);
+  assert.ok(body.agnostic_route_output_experiment.constraint_negotiation.preference_coverage.covered_preferences.includes('coffee'));
+  assert.equal(route.anchored_to_local_time, false);
+  assert.ok(route.main_stops.filter(stop => stop.covered_preferences.includes('coffee')).every(stop => !stop.selected_day_hours));
 });

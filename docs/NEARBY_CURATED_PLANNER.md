@@ -23,6 +23,13 @@ catalog supply when an external completion is outstanding; catalog rows never
 masquerade as a successful external source answer. Late external rows cannot
 mutate the day. This adds no network retry or timeout extension.
 
+The first frozen candidate also reproduced an independent temporal loss: a
+coffee role with unknown hours was removed after morning, despite explicit
+coffee intent and no source closure. Requested experiences with unknown hours
+now retain the full, explicitly unanchored arc. Known source closure still
+rejects them; known remaining-day availability can still retime them. A typical
+role label cannot certify a place is unavailable.
+
 This is a geographic supplier, not a city recognition or template switch.
 The explicit-coordinate anchor remains unchanged and a public city label,
 context, candidate array or trust claim cannot add a curated place. Existing

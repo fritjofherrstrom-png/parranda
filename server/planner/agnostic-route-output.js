@@ -685,9 +685,10 @@ function anchorAdaptedBodyToCurrentBand(adaptedBody, currentRank) {
 // Anchor BEFORE composition so ordering and geometry use the actual reservoir.
 // A role's usual daypart is only a heuristic: a requested experience with
 // source-supported availability in the remaining day can move to the current
-// band. Unknown hours keep the existing heuristic. With fewer than two retained
+// band. An explicitly requested experience with unknown hours keeps the full
+// unanchored arc rather than being discarded on typical timing alone. With fewer than two retained
 // candidates, keep the full arc and its explicit not-anchored caveat.
-function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinnedIds = [], preferences = []) {
+function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinnedIds = [], preferences = [], preserveRequestedUnknownTime = false) {
   const candidates = Array.isArray(sourceCandidates) ? sourceCandidates : [];
   const requested = normalizeUserIntents(preferences).intents;
   const currentBand = ["morning", "midday", "afternoon", "evening"][currentRank];
@@ -698,6 +699,7 @@ function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinn
   const kept = [];
   const trimmedDayparts = [];
   let retimed = false;
+  let retainedUnknownRequestedTime = false;
   for (const candidate of candidates) {
     const role = candidate?.role || (Array.isArray(candidate?.route_roles) ? candidate.route_roles[0] : null);
     const daypart = daypartForRole(role || null);
@@ -709,13 +711,18 @@ function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinn
     if (rank !== null && rank < currentRank && currentBand && sourceAvailable && requestedExperience) {
       kept.push({ ...candidate, anchored_daypart: currentBand });
       retimed = true;
+    } else if (preserveRequestedUnknownTime && rank !== null && rank < currentRank && requestedExperience && candidate?.availability?.eligible !== false) {
+      // Typical timing is not a source closure. Keep the explicit experience
+      // with unknown hours, but do not claim this full arc is anchored to now.
+      kept.push(candidate);
+      retainedUnknownRequestedTime = true;
     } else if (rank !== null && rank < currentRank && !pins.has(String(candidate?.id ?? ""))) {
       if (!trimmedDayparts.includes(daypart)) trimmedDayparts.push(daypart);
     } else {
       kept.push(candidate);
     }
   }
-  if (kept.length < 2 || (kept.length === candidates.length && !retimed)) {
+  if (kept.length < 2 || retainedUnknownRequestedTime || (kept.length === candidates.length && !retimed)) {
     return { anchored: false, candidates, trimmedDayparts: [] };
   }
   return { anchored: true, candidates: kept, trimmedDayparts };
@@ -1475,7 +1482,7 @@ async function composeAgnosticRouteViaEngine({
         pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
       });
   const timeAnchoring = Number.isInteger(currentTimeBandRank)
-    ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, pinnedStopIds, preferences)
+    ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, pinnedStopIds, preferences, Boolean(dayRhythm))
     : { anchored: false, candidates: sourceCandidates, trimmedDayparts: [] };
 
   async function runEngine(candidates, pins = pinnedStopIds) {
@@ -1539,7 +1546,7 @@ async function composeAgnosticRouteViaEngine({
       shouldTryCapacityRepair(route, walkingKmTarget)
     ) {
       let capacityAnchoring = anchored && Number.isInteger(currentTimeBandRank)
-        ? anchorSourceCandidatesToCurrentBand(capacitySourceCandidates, currentTimeBandRank, pins, preferences)
+        ? anchorSourceCandidatesToCurrentBand(capacitySourceCandidates, currentTimeBandRank, pins, preferences, Boolean(dayRhythm))
         : { anchored: false, candidates: capacitySourceCandidates, trimmedDayparts: [] };
       let repairedDay = await runEngine(capacityAnchoring.candidates, pins);
       let repairedRoute = repairedDay?.primary_route || null;
@@ -1577,7 +1584,7 @@ async function composeAgnosticRouteViaEngine({
         const removedId = sourceCandidates.find(candidate => !trialIds.has(candidate.id))?.id;
         const addedId = candidates.find(candidate => !sourceIds.has(candidate.id))?.id;
         const trialAnchoring = anchored && Number.isInteger(currentTimeBandRank)
-          ? anchorSourceCandidatesToCurrentBand(candidates,currentTimeBandRank,[],preferences)
+          ? anchorSourceCandidatesToCurrentBand(candidates,currentTimeBandRank,[],preferences,Boolean(dayRhythm))
           : {anchored:false,candidates};
         if (anchored && !trialAnchoring.anchored) continue;
         const trialDay = await runEngine(trialAnchoring.candidates, []);
