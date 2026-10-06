@@ -94,6 +94,14 @@ Unknown-name duplicates can still dedupe; the ambiguity survives canonical
 switches. A unique match or explicit shared entity retains normal corroboration.
 This preserves the existing Planner/Blitz trust gates without new acquisition.
 
+Modern rhythm any-place Planner requests also admit geo-bounded real places
+from public/beta/preview server catalogs through the same candidate spine and
+engine. Coordinates select individual nearby places, never a city template or
+public label. Source acquisition failure remains visible but cannot veto
+independently eligible curated supply. Closed weekdays, exclusions, intent,
+source trust and final walking gates still apply. Legacy kilometre requests and
+recognized-city template behavior retain their existing contracts.
+
 Current cold first-visit capability: the modern Planner uses a bounded server
 lifecycle to continue its original plan when source acquisition is outstanding.
 One server execution owns the normalized request and trusted anchor; browser

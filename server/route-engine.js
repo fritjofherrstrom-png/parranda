@@ -169,7 +169,7 @@ function buildProvisionalComposeStops() {
       operationalViabilityRank: Number.isFinite(candidate.operational_viability_rank)
         ? candidate.operational_viability_rank
         : null,
-      provisional: true,
+      provisional: candidate.city_pack_owned !== true,
       source: candidate.source || null,
       trust: candidate.trust || null,
       provenance: candidate.provenance || null,
@@ -4994,6 +4994,7 @@ function formatMainStop(stop) {
   // than a provisional source candidate.
   formatted.trust = resolveStopTrust(stop);
 
+  // Preserve fit and provenance for both nearby curated and provisional supply.
   // Honest provenance for provisional source candidates: a stop that did not
   // come from the verified catalog carries its source/provenance so the UI can
   // mark it clearly instead of presenting it as full citypack confidence.
@@ -5004,8 +5005,8 @@ function formatMainStop(stop) {
   // can legitimately be human_verified:false without being a provisional
   // source-candidate placeholder. Gating on the explicit flag keeps the
   // "provisional place" badge tied to source candidates only.
-  if (stop.provisional === true) {
-    formatted.provisional = true;
+  if (stop.provisional === true || stop.candidateOrigin === "curated_catalog") {
+    formatted.provisional = stop.provisional === true;
     formatted.source = stop.source || null;
     formatted.provenance = stop.provenance || null;
     formatted.role = stop.role || stop.routeRoles?.[0] || null;

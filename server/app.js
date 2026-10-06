@@ -45,6 +45,7 @@ const {
 } = require("./planner/pinned-candidates");
 const { parseRequestedDates } = require("./planner/requested-dates");
 const { createPlannerLifecycle, lifecycleLoader } = require('./planner/cold-lifecycle');
+const { nearbyCuratedSupply } = require('./planner/nearby-curated-supply');
 const { attributeToWithheldDay } = require("./planner/pin-refusal-reasons");
 const {
   markCommitmentEligibility,
@@ -1937,7 +1938,7 @@ function buildApp({
       const excludedCandidateIds = parseExcludedCandidateIds(
         request.body?.excluded_candidate_ids ?? request.body?.excludedCandidateIds,
       );
-      const scopedOpenDataLoader = withoutExcludedCandidates(
+      let scopedOpenDataLoader = withoutExcludedCandidates(
         lifecycle ? lifecycleLoader(openDataLoader, lifecycle) : openDataLoader,
         excludedCandidateIds,
       );
@@ -2275,6 +2276,15 @@ function buildApp({
       // mutates the route or the experiment verdict, and the promotion gate is
       // untouched (structure surfaces even while the synthesized route stays in the
       // diagnostic block, so the intelligence is visible before any deploy flip).
+      const curatedCandidates = requestedRhythm && isAgnosticEngineComposeRequested(request)
+        ? nearbyCuratedSupply({ configs: cityConfigs, anchor, date: payload.dates[0], excludedIds: excludedCandidateIds })
+        : [];
+      if (lifecycle && curatedCandidates.length) {
+        scopedOpenDataLoader = withoutExcludedCandidates(
+          lifecycleLoader(openDataLoader, lifecycle, { independentSupply: curatedCandidates }),
+          excludedCandidateIds,
+        );
+      }
       let agnosticPlaceStructure = null;
       if (isExternalCandidatesRequested(request) && typeof scopedOpenDataLoader === "function") {
         try {
@@ -2285,7 +2295,7 @@ function buildApp({
             spatialScope,
             walkingTargetBand: requestedRhythm ? null : resolveAgnosticWalkingTargetBand(payload.walkingKmTarget),
           });
-          const structureCandidates = (Array.isArray(records) ? records : []).filter(
+          const structureCandidates = [...curatedCandidates, ...(Array.isArray(records) ? records : [])].filter(
             (c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng),
           );
           if (structureCandidates.length >= 3) {
@@ -2389,6 +2399,7 @@ function buildApp({
         baselineResult: baselineBody,
         externalRequested: isExternalCandidatesRequested(request),
         openDataLoader: scopedOpenDataLoader,
+        curatedCandidates,
         preferences,
         pinnedStopIds: pinnedCandidateIds,
         lens: request.body?.lens || request.query?.lens || null,

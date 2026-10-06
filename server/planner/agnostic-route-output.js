@@ -11,7 +11,7 @@
  *   - Mutation/synthesis happens ONLY when the caller passes the explicit
  *     experiment flag (gated in app.js, NEVER by `inspect=`).
  *   - The baseline result object is never mutated in place: we deep-clone first.
- *   - Trusted candidates come ONLY from the server-injected openDataLoader. The
+ *   - Trusted candidates come from the server loader and geo-bounded server catalogs. The
  *     public request payload can never inject candidates (fail-closed).
  *   - No named-city or narrow-intent branching: the agnostic context is built
  *     purely from coordinates.
@@ -397,6 +397,7 @@ function evaluateEligibility({
   engineSourceCandidates = null,
   plannerRoles = null,
   candidateCombination = null,
+  curatedCandidateCount = 0,
 }) {
   const blockers = [];
   // Walking-order honesty is decided downstream by the #261 walking-budget
@@ -411,10 +412,12 @@ function evaluateEligibility({
 
   const loaderStatus = (sourceStatus && sourceStatus.status) || "skipped";
   checks.trusted_loader_status = loaderStatus;
+  if (curatedCandidateCount) checks.curated_candidate_count = curatedCandidateCount;
   const loaderBlocker = LOADER_BLOCKERS[loaderStatus];
-  // Avoid a duplicate "external_candidates_not_requested" when we already added
-  // it above (loaderStatus stays "skipped" when external wasn't requested).
-  if (externalRequested && loaderBlocker) {
+  // External failures remain observable, but cannot veto independently gated
+  // catalog supply. Geometry, preferences and walking still decide eligibility.
+  // With no catalog supply, keep the existing loader blockers.
+  if (externalRequested && loaderBlocker && curatedCandidateCount === 0) {
     blockers.push(loaderBlocker);
   }
 
@@ -682,9 +685,10 @@ function anchorAdaptedBodyToCurrentBand(adaptedBody, currentRank) {
 // Anchor BEFORE composition so ordering and geometry use the actual reservoir.
 // A role's usual daypart is only a heuristic: a requested experience with
 // source-supported availability in the remaining day can move to the current
-// band. Unknown hours keep the existing heuristic. With fewer than two retained
+// band. An explicitly requested experience with unknown hours keeps the full
+// unanchored arc rather than being discarded on typical timing alone. With fewer than two retained
 // candidates, keep the full arc and its explicit not-anchored caveat.
-function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinnedIds = [], preferences = []) {
+function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinnedIds = [], preferences = [], preserveRequestedUnknownTime = false) {
   const candidates = Array.isArray(sourceCandidates) ? sourceCandidates : [];
   const requested = normalizeUserIntents(preferences).intents;
   const currentBand = ["morning", "midday", "afternoon", "evening"][currentRank];
@@ -695,6 +699,7 @@ function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinn
   const kept = [];
   const trimmedDayparts = [];
   let retimed = false;
+  let retainedUnknownRequestedTime = false;
   for (const candidate of candidates) {
     const role = candidate?.role || (Array.isArray(candidate?.route_roles) ? candidate.route_roles[0] : null);
     const daypart = daypartForRole(role || null);
@@ -706,13 +711,18 @@ function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinn
     if (rank !== null && rank < currentRank && currentBand && sourceAvailable && requestedExperience) {
       kept.push({ ...candidate, anchored_daypart: currentBand });
       retimed = true;
+    } else if (preserveRequestedUnknownTime && rank !== null && rank < currentRank && requestedExperience && candidate?.availability?.eligible !== false) {
+      // Typical timing is not a source closure. Keep the explicit experience
+      // with unknown hours, but do not claim this full arc is anchored to now.
+      kept.push(candidate);
+      retainedUnknownRequestedTime = true;
     } else if (rank !== null && rank < currentRank && !pins.has(String(candidate?.id ?? ""))) {
       if (!trimmedDayparts.includes(daypart)) trimmedDayparts.push(daypart);
     } else {
       kept.push(candidate);
     }
   }
-  if (kept.length < 2 || (kept.length === candidates.length && !retimed)) {
+  if (kept.length < 2 || retainedUnknownRequestedTime || (kept.length === candidates.length && !retimed)) {
     return { anchored: false, candidates, trimmedDayparts: [] };
   }
   return { anchored: true, candidates: kept, trimmedDayparts };
@@ -916,6 +926,7 @@ async function composeAgnosticRouteOutput({
   baselineResult,
   externalRequested = false,
   openDataLoader = null,
+  curatedCandidates = [],
   preferences = [],
   pinnedStopIds = [],
   lens = null,
@@ -970,8 +981,9 @@ async function composeAgnosticRouteOutput({
     spatialScope,
     walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
   });
-  const helpers = resolvedTrusted.helpers;
+  const helpers = { ...resolvedTrusted.helpers, curated_candidates: curatedCandidates };
   const loadedCandidateIds = [
+    ...curatedCandidates.map(candidate => candidate.id),
     ...(Array.isArray(resolvedTrusted.trustedRecords)
       ? resolvedTrusted.trustedRecords.map((record) => record?.id)
       : []),
@@ -996,7 +1008,7 @@ async function composeAgnosticRouteOutput({
   // the weather call; context is never an eligibility substitute.
   const loaderStatus = (sourceStatus && sourceStatus.status) || "skipped";
   const willRunTrustedSelection =
-    Boolean(externalRequested) && typeof loaderStatus === "string" && loaderStatus.startsWith("loaded:") && loaderStatus !== "loaded:0";
+    Boolean(externalRequested) && typeof loaderStatus === "string" && (curatedCandidates.length > 0 || (loaderStatus.startsWith("loaded:") && loaderStatus !== "loaded:0"));
   const ctx = willRunTrustedSelection
     ? await resolveAgnosticContext({
         coords: selectionOrigin,
@@ -1146,6 +1158,7 @@ async function composeAgnosticRouteOutput({
   const providerSpecs = buildProviderSpecs({
     externalEnabled: Boolean(externalRequested),
     externalOptions: helpers.external_provider || null,
+    curatedCandidates,
     now: effectiveDate,
   });
   const candidateReadiness = safeAssessReadiness(agnosticContext, { providerSpecs });
@@ -1158,6 +1171,7 @@ async function composeAgnosticRouteOutput({
     engineSourceCandidates,
     plannerRoles,
     candidateCombination,
+    curatedCandidateCount: curatedCandidates.length,
   });
 
   if (!eligibility.eligible) {
@@ -1468,7 +1482,7 @@ async function composeAgnosticRouteViaEngine({
         pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
       });
   const timeAnchoring = Number.isInteger(currentTimeBandRank)
-    ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, pinnedStopIds, preferences)
+    ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, pinnedStopIds, preferences, Boolean(dayRhythm))
     : { anchored: false, candidates: sourceCandidates, trimmedDayparts: [] };
 
   async function runEngine(candidates, pins = pinnedStopIds) {
@@ -1532,7 +1546,7 @@ async function composeAgnosticRouteViaEngine({
       shouldTryCapacityRepair(route, walkingKmTarget)
     ) {
       let capacityAnchoring = anchored && Number.isInteger(currentTimeBandRank)
-        ? anchorSourceCandidatesToCurrentBand(capacitySourceCandidates, currentTimeBandRank, pins, preferences)
+        ? anchorSourceCandidatesToCurrentBand(capacitySourceCandidates, currentTimeBandRank, pins, preferences, Boolean(dayRhythm))
         : { anchored: false, candidates: capacitySourceCandidates, trimmedDayparts: [] };
       let repairedDay = await runEngine(capacityAnchoring.candidates, pins);
       let repairedRoute = repairedDay?.primary_route || null;
@@ -1570,7 +1584,7 @@ async function composeAgnosticRouteViaEngine({
         const removedId = sourceCandidates.find(candidate => !trialIds.has(candidate.id))?.id;
         const addedId = candidates.find(candidate => !sourceIds.has(candidate.id))?.id;
         const trialAnchoring = anchored && Number.isInteger(currentTimeBandRank)
-          ? anchorSourceCandidatesToCurrentBand(candidates,currentTimeBandRank,[],preferences)
+          ? anchorSourceCandidatesToCurrentBand(candidates,currentTimeBandRank,[],preferences,Boolean(dayRhythm))
           : {anchored:false,candidates};
         if (anchored && !trialAnchoring.anchored) continue;
         const trialDay = await runEngine(trialAnchoring.candidates, []);
@@ -1889,7 +1903,7 @@ function sanitizeAgnosticEngineRoute({ route, placeLabel, lang, anchorMode = "un
   if (normalizeAnchorMode(anchorMode) === "place") {
     cleaned = projectRouteToSelectedStopChain(cleaned);
   }
-  const prose = buildAgnosticRouteProse({ placeLabel, lang });
+  const prose = buildAgnosticRouteProse({ placeLabel, lang, curated: cleaned.main_stops?.length > 0 && cleaned.main_stops.every(stop => stop.origin === "curated_catalog") });
   cleaned.title = prose.title;
   cleaned.summary = prose.summary;
   cleaned.why_recommended = prose.why_recommended;
@@ -1927,9 +1941,14 @@ function scrubAgnosticAppliedDay(result, engineDay) {
   }
 }
 
-function buildAgnosticRouteProse({ placeLabel, lang }) {
+function buildAgnosticRouteProse({ placeLabel, lang, curated = false }) {
   const sv = String(lang || "").toLowerCase().startsWith("sv");
   const label = safeAgnosticPlaceLabel(placeLabel) || (sv ? "platsen" : "this place");
+  if (curated) return {
+    title: sv ? `Plan för ${label}` : `Plan for ${label}`,
+    summary: sv ? `Byggd från kuraterade Parranda-platser nära ${label}.` : `Built from curated Parranda places near ${label}.`,
+    why_recommended: sv ? 'Lokala kuraterade stopp som matchar dina val, med uppskattad gångsträcka.' : 'Local curated stops matching your choices, with estimated walking distance.',
+  };
   return sv
     ? {
         title: `Plan för ${label}`,
