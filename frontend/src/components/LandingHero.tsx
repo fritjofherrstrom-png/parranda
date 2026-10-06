@@ -233,7 +233,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
             it as a labelled snapshot and offers a fresh rebuild. */}
         {resume && (
           <a
-            href={`/anywhere?lang=${lang}`}
+            href={`/anywhere?restore=last&lang=${lang}`}
             className="group flex min-h-14 items-center gap-3 self-stretch rounded-parranda-btn bg-parranda-ink px-4 text-sm text-parranda-paper transition hover:brightness-125 sm:self-start"
           >
             <span className="type-eyebrow text-parranda-paper/72">{t("Fortsätt", "Continue")}<span className="sr-only"> · </span></span>

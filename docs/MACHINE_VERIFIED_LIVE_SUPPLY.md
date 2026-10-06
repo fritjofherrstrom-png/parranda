@@ -7,6 +7,15 @@ landed with #556 included. The later main #558 was merged into this branch on
 2026-10-06 without conflicts. Both GitHub landings occurred outside this
 workstream; their visual/runtime acceptance is not inferred here.
 
+During the calendar patch, GitHub main advanced to
+`6aa077752ec64ecf387fdc3e93f1cd0fa6a78dd7` with #560's sole public entry.
+That authoritative main commit is merged into this same PR branch; the only
+conflict was generated Anywhere HTML, resolved by rebuilding `frontend/dist`.
+#560's source PR head is `99f4627441552f300a3d5e370d454f9d518c09e5`;
+its source delta is included through GitHub main, not a separate unlanded stack.
+The entry and HTTP/Live seams were rechecked with offline fixtures. This local
+integration is not a GitHub merge, deployment or runtime acceptance.
+
 ## Activation contract
 
 Per-source human approval is not the normal prerequisite for event display.
