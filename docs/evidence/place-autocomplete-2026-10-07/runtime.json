@@ -1,0 +1,146 @@
+{
+  "qa_sha": "417a0bb8e70e7b3d5c99381fd429bdb2b2c39a6c",
+  "time": "2026-10-07T21:04:28.434Z",
+  "provider": "real public Photon",
+  "typed_prefix": {
+    "status": 200,
+    "provider_status": "ready",
+    "choices": [
+      {
+        "title": "Aspudden",
+        "context": "Stockholms kommun · Sverige",
+        "query": "Aspudden, Stockholms kommun, Stockholms län, Sverige",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "ODbL"
+      },
+      {
+        "title": "Aspudden",
+        "context": "Bodens kommun · Sverige",
+        "query": "Aspudden, Bodens kommun, Norrbottens län, Sverige",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "ODbL"
+      },
+      {
+        "title": "Aspudden",
+        "context": "Vimmerby kommun · Sverige",
+        "query": "Aspudden, Vimmerby kommun, Kalmar län, Sverige",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "ODbL"
+      },
+      {
+        "title": "Aspudden",
+        "context": "Nyköpings kommun · Sverige",
+        "query": "Aspudden, Nyköpings kommun, Södermanlands län, Sverige",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "ODbL"
+      },
+      {
+        "title": "Aspudden",
+        "context": "Alingsås kommun · Sverige",
+        "query": "Aspudden, Alingsås kommun, Västra Götalands län, Sverige",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "ODbL"
+      }
+    ]
+  },
+  "short_prefix_with_verified_prior_area": {
+    "status": 200,
+    "provider_status": "ready",
+    "choices": [
+      {
+        "title": "Aspudden",
+        "context": "Stockholms kommun · Sverige",
+        "query": "Aspudden, Stockholms kommun, Stockholms län, Sverige",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "ODbL"
+      },
+      {
+        "title": "Asplunden",
+        "context": "Stockholm · Sverige",
+        "query": "Asplunden, Stockholm, Stockholms län, Sverige",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "ODbL"
+      },
+      {
+        "title": "Aspsätra",
+        "context": "Stockholm · Sverige",
+        "query": "Aspsätra, Stockholm, Stockholms län, Sverige",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "ODbL"
+      },
+      {
+        "title": "Aspen",
+        "context": "Stockholm · Sverige",
+        "query": "Aspen, Stockholm, Stockholms län, Sverige",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "ODbL"
+      },
+      {
+        "title": "Aspen",
+        "context": "Sundbyberg · Sverige",
+        "query": "Aspen, Sundbyberg, Stockholms län, Sverige",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "ODbL"
+      }
+    ]
+  },
+  "suburb_prefix": {
+    "status": 200,
+    "provider_status": "ready",
+    "choices": [
+      {
+        "title": "Montrouge",
+        "context": "Hauts-de-Seine · Île-de-France · France",
+        "query": "Montrouge, Hauts-de-Seine, Île-de-France, France",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "ODbL"
+      },
+      {
+        "title": "Montrouveau",
+        "context": "Loir-et-Cher · Centre-Val de Loire · France",
+        "query": "Montrouveau, Loir-et-Cher, Centre-Val de Loire, France",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "ODbL"
+      },
+      {
+        "title": "Montroux",
+        "context": "Randburg · Gauteng · South Africa",
+        "query": "Montroux, Randburg, City of Johannesburg Metropolitan Municipality, Gauteng, South Africa",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "ODbL"
+      },
+      {
+        "title": "Montroux",
+        "context": "Montret · Bourgogne – Franche-Comté · France",
+        "query": "Montroux, Montret, Saône-et-Loire, Bourgogne – Franche-Comté, France",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "ODbL"
+      },
+      {
+        "title": "Montroux",
+        "context": "Saint-Pierre-du-Palais · Nouvelle-Aquitaine · France",
+        "query": "Montroux, Saint-Pierre-du-Palais, Charente-Maritime, Nouvelle-Aquitaine, France",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "ODbL"
+      }
+    ]
+  },
+  "blitz_selected_intake": {
+    "mode": "place",
+    "query": "Aspudden, Stockholms kommun, Stockholms län, Sverige",
+    "status": "resolved",
+    "resolved": {
+      "label": "Aspudden, Stockholms kommun, Stockholms län, Sverige",
+      "lat": 59.3065662,
+      "lng": 17.9898661,
+      "confidence": "medium",
+      "provenance": "photon_osm",
+      "attribution": "© OpenStreetMap contributors",
+      "license": "ODbL",
+      "timezone": null
+    },
+    "candidates_considered": 1,
+    "blockers": []
+  },
+  "limits": "Local built app; openDataLoader/eventSupply disabled; no route-supply or deployed tunnel acceptance."
+}

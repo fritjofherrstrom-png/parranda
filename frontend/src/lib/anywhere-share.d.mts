@@ -10,6 +10,7 @@ export interface ShareInputs {
 export declare function encodeShareParams(inputs?: ShareInputs): string;
 
 export declare function buildShareUrl(origin: string, inputs: ShareInputs): string;
+export declare function shareablePlace(inputs?: { place?: string | null; placeLabel?: string | null } | null): string | null;
 
 export declare function decodeShareParams(
   search: string | URLSearchParams,

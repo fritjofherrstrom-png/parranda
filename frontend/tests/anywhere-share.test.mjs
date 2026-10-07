@@ -13,7 +13,7 @@ test("a shared free-rhythm day restores the same non-kilometer contract", () => 
 });
 
 import assert from "node:assert/strict";
-import { encodeShareParams, buildShareUrl, decodeShareParams } from "../src/lib/anywhere-share.mjs";
+import { encodeShareParams, buildShareUrl, decodeShareParams, shareablePlace } from "../src/lib/anywhere-share.mjs";
 
 test("encode → decode round-trips the day inputs", () => {
   const inputs = { place: "Lyon", preferences: ["food", "views"], dayOffset: 1, walkKey: "full", lang: "sv" };
@@ -60,4 +60,11 @@ test("decode drops non-whitelisted preferences and bad values (never trusts the 
 test("only INPUTS are encoded — never composed results", () => {
   const qs = encodeShareParams({ place: "Lyon", preferences: ["food"] });
   assert.ok(!/district|stop|event|safeResponse/i.test(qs), "no result data leaks into the link");
+});
+
+test('a selected place shares its qualified label or declines an oversized label', () => {
+ assert.equal(shareablePlace({place:'Harbour',placeLabel:'Harbour, Second City, Country'}),'Harbour, Second City, Country');
+ assert.equal(shareablePlace({place:'Harbour',placeLabel:'Harbour, '+ 'Long region '.repeat(25)}),null);
+ assert.equal(shareablePlace({place:'Harbour'}),'Harbour');
+ assert.equal(shareablePlace({place:null}),null);
 });

@@ -28,6 +28,7 @@ export declare function buildLiveEventQueryPayload(options?: {
       preferences: string[];
       anchor?: { lat: number; lng: number };
       place_query?: string;
+      place_selection?: string;
       route_points?: Array<{ lat: number; lng: number }>;
     }
   | null;

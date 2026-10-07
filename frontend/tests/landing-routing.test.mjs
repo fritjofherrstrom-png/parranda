@@ -31,7 +31,7 @@ test("a registered city or exact alias keeps citypack curation on the modern pla
 test("the frontpage links no city, and never back into a legacy city shell", () => {
   // The hand-picked city list is gone from the landing; a registered city is
   // reached by typing it (routeForInput), which only ever leads to /anywhere.
-  assert.doesNotMatch(landingSource, /curatedCityHref|Hand-picked in/);
+  assert.doesNotMatch(landingSource, /Hand-picked in|<a[^>]+href=\{curatedCityHref/);
   assert.doesNotMatch(landingSource, /href=\{`\/\$\{city\.key\}/);
 });
 

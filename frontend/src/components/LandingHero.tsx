@@ -14,12 +14,14 @@
  * only what it does.
  */
 import { useEffect, useRef, useState } from "react";
-import { routeForInput, inlineCompletion, type CityRegistry } from "../lib/landing-routing.mjs";
+import { routeForInput, inlineCompletion, curatedCityHref, type CityRegistry } from "../lib/landing-routing.mjs";
 import { storeAnchorCoords, requestPosition } from "../lib/location-anchor.mjs";
+import PlaceSearchField, { type PlaceSuggestion } from "./PlaceSearchField";
+import { storePlaceChoice } from "../lib/place-choice.mjs";
 import { LAST_KEY } from "../lib/anywhere-storage.mjs";
 import { liveDateLabel } from "../lib/live-event-query.mjs";
 import AppBar from "./shared/AppBar";
-import { ChevronRightIcon, LocationIcon, SearchIcon } from "./shared/icons";
+import { ChevronRightIcon, LocationIcon } from "./shared/icons";
 
 type Lang = "sv" | "en";
 
@@ -72,6 +74,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
   }, [lang]);
 
   const [value, setValue] = useState("");
+  const [selectedPlace, setSelectedPlace] = useState<PlaceSuggestion | null>(null);
   const [locating, setLocating] = useState(false);
   const [geoDenied, setGeoDenied] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -97,6 +100,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
 
   function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setSelectedPlace(null);
     const el = e.target;
     const typed = el.value;
     const inserting =
@@ -123,7 +127,10 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
 
   function submit(e?: { preventDefault?: () => void }) {
     e?.preventDefault?.();
-    const route = routeForInput(registry, value, lang);
+    const cityEntry = selectedPlace?.city_key ? Object.values(registry).find(entry => entry.key === selectedPlace.city_key) : null;
+    const cityHref = cityEntry ? curatedCityHref(cityEntry, lang) : null;
+    const route = selectedPlace ? { href: cityHref || routeForInput({}, selectedPlace.query, lang)!.href } : routeForInput(registry, value, lang);
+    if (selectedPlace && !cityHref) storePlaceChoice({ place: selectedPlace.query, selection: selectedPlace.selection_id, label: selectedPlace.query });
     // Empty submit isn't a dead end: focus the field so the next keystroke lands
     // where it should (the CTA stays visually live rather than reading as broken).
     if (!route) {
@@ -174,28 +181,9 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
             <label htmlFor="landingCity" className="sr-only">
               {t("Skriv en stad eller plats", "Type a city or place")}
             </label>
-            {/* The field shows focus on its frame, so the input inside does
-                not draw a second, square ring. After a blocked position the
-                frame is highlighted with the SAME ring (at full strength),
-                never an extra outline around it. */}
-            <div
-              className={
-                "flex min-h-[3.75rem] flex-1 items-center gap-3 rounded-parranda border-2 bg-parranda-ink/4 px-5 transition focus-within:border-parranda-ember focus-within:ring-3 focus-within:ring-parranda-glow/60 sm:min-h-16 " +
-                (geoDenied ? "border-parranda-glow ring-3 ring-parranda-glow" : "border-parranda-ink")
-              }
-            >
-              <SearchIcon className="h-5 w-5 text-parranda-ink/68" />
-              <input
-                id="landingCity"
-                ref={inputRef}
-                value={value}
-                onChange={onChange}
-                placeholder={t("T.ex. Lyon eller Kyoto", "e.g. Lyon or Kyoto")}
-                autoComplete="off"
-                autoFocus
-                className="min-w-0 flex-1 bg-transparent text-lg text-parranda-ink outline-hidden placeholder:text-parranda-ink/68 focus-visible:outline-hidden sm:text-xl"
-              />
-            </div>
+            <PlaceSearchField value={value} lang={lang} selected={selectedPlace} inputRef={inputRef}
+              onChange={onChange} geoDenied={geoDenied}
+              onSelect={choice => { setSelectedPlace(choice); setValue(choice.query); inputRef.current?.focus(); }} />
             <button
               type="submit"
               className="min-h-[3.75rem] whitespace-nowrap rounded-parranda bg-parranda-terracotta px-8 text-[17px] font-extrabold text-white transition [font-stretch:110%] hover:brightness-110 sm:min-h-16 sm:text-lg"
