@@ -83,6 +83,7 @@ import DayHeader from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
 import LiveSheet from "./planner/LiveSheet";
+import { selectedDayEmpty, useLiveFallback } from "./planner/useLiveFallback";
 import SavedDays from "./planner/SavedDays";
 import StopLine from "./planner/StopLine";
 import { pickLabel, unkeptReasonSentence, type Lang } from "./planner/copy";
@@ -1324,6 +1325,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   );
   const inPlaceScopeAvailable = Boolean(buildLiveEventQueryPayload({ scope: "in_place", response: safeResponse }));
 
+  const liveFallback = useLiveFallback({
+    enabled: liveSheetOpen && liveSheetScope === "around_place" && liveSheetTime === "tonight" &&
+      !liveQueryPending && !liveQueryError && !dayIsStale && phase !== "loading" && split.woven.length === 0,
+    response: safeResponse, localEvents: sheetLiveEvents, preferences: selected, lang,
+  });
+
   function requestLiveSheetTime(nextTime: "tonight" | "week") {
     setLiveSheetTime(nextTime);
     requestLiveSheetScope(liveSheetScope, nextTime, true).catch(() => {});
@@ -1613,7 +1620,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // and a pending route/GPS query would restart around the place.
     const reopening = liveSheetOpenedRef.current;
     const nextTime = reopening ? liveSheetTime
-      : pulseBuckets.tonight.length > 0 || split.woven.length > 0 ? "tonight" : "week";
+      : pulseBuckets.tonight.length > 0 || split.woven.length > 0 ||
+        (inPlaceScopeAvailable && selectedDayEmpty(liveEvents)) ? "tonight" : "week";
     const nextScope = reopening ? liveSheetScope : "around_place";
     liveSheetOpenedRef.current = true;
     setLiveSheetTime(nextTime);
@@ -2122,6 +2130,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           liveQueryPending={liveQueryPending}
           liveQueryGeoHint={liveQueryGeoHint}
           liveQueryError={liveQueryError}
+          liveFallback={liveFallback}
           sheetLiveEvents={sheetLiveEvents}
           sheetBuckets={sheetBuckets}
           sheetBrowseBuckets={sheetBrowseBuckets}

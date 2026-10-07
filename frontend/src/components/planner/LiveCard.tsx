@@ -16,6 +16,7 @@ import { ChevronRightIcon } from "../shared/icons";
 import { buttonClass, Eyebrow } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 import { liveEventSource } from "./LiveEventSource";
+import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
 import type { LiveEvents, PulseEvent } from "./types";
 
 export default function LiveCard({
@@ -113,10 +114,7 @@ export default function LiveCard({
       )}
       {pulseState === "rejected_empty" && (
         <p className="mt-3 text-sm text-parranda-ink/75">
-          {t(
-            "Det fanns listningar, men inga var pålitliga eller aktuella nog att visa.",
-            "Listings existed, but none were reliable or current enough to show.",
-          )}
+          {liveRejectedSentence(liveEvents, lang)}
         </p>
       )}
       {pulseState === "unavailable" && (
