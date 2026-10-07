@@ -64,3 +64,7 @@ test('explicit malformed falsy selections cannot silently resolve another identi
   assert.equal(out.anchor,null);assert.deepEqual(out.intake.blockers,['place_selection_invalid']);
  }
 });
+test('ambiguous choices retain the provider attribution for their displayed labels',async()=>{
+ const store=createPlaceSelectionStore();const out=await resolveAgnosticIntake({placeQuery:QUERY,placeSelectionStore:store,placeResolver:async()=>[ {...choice('First area'),attribution:'© OpenStreetMap contributors',license:'ODbL'}, {...choice('Second area'),lat:51.5,attribution:'© OpenStreetMap contributors',license:'ODbL'} ]});
+ assert.equal(out.intake.candidates[0].attribution,'© OpenStreetMap contributors');assert.equal(out.intake.candidates[0].license,'ODbL');
+});

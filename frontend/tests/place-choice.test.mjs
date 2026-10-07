@@ -7,7 +7,7 @@ import { anchorKey } from '../src/lib/recompose-retention.mjs';
 import { mountPlanner } from './helpers/planner-harness.mjs';
 const selected = { label:'Harbour, Second City, Country',lat:51.5,lng:2.32,selection_id:'selected-token' };
 const response={days:[],agnostic_route_output_experiment:{intake:{query:'Harbour',status:'resolved',resolved:selected},source_status:{anchor:{lat:51.5,lng:2.32},status:'healthy_empty'}}};
-const ambiguous={days:[],agnostic_route_output_experiment:{intake:{query:'Harbour',status:'unresolved',resolved:null,blockers:['ambiguous_place'],candidates:[{label:'Harbour, First City, Country',selection_id:'first-token'},{label:selected.label,selection_id:'selected-token'}]},source_status:{status:'no_anchor'}}};
+const ambiguous={days:[],agnostic_route_output_experiment:{intake:{query:'Harbour',status:'unresolved',resolved:null,blockers:['ambiguous_place'],candidates:[{label:'Harbour, First City, Country',selection_id:'first-token',attribution:'© OpenStreetMap contributors',license:'ODbL'},{label:selected.label,selection_id:'selected-token'}]},source_status:{status:'no_anchor'}}};
 const composed={...response,days:[{date:'2026-10-07',experimental_agnostic_route_applied:true,primary_route:{id:'__agnostic_compose__',main_stops:[{id:'a',label:'Place A',lat:51.5,lng:2.32,type:'museum'},{id:'b',label:'Place B',lat:51.501,lng:2.32,type:'restaurant'}],estimated_km:1,legs:[],map_route_points:[],map_path_points:[],confidence:'low'},alternatives:[]}]};
 const button=(h,text)=>[...h.container.querySelectorAll('button')].find(x=>x.textContent.includes(text));
 const click=(h,element)=>h.act(()=>element.dispatchEvent(new h.window.MouseEvent('click',{bubbles:true,cancelable:true,button:0})));
@@ -33,7 +33,7 @@ test('ambiguous place offers choices, then retains selected identity for an adju
  const h=await mountPlanner({url:'http://localhost/anywhere?place=Harbour&lang=en'});t.after(()=>h.unmount());
  await h.clock.advance(500);
  await h.fetchMock.respond(h.fetchMock.pending()[0],ambiguous);await h.clock.advance(30);
- assert.match(h.text(),/Which place/);assert.ok(button(h,'Harbour, Second City'));
+ assert.match(h.text(),/Which place/);assert.match(h.text(),/© OpenStreetMap contributors · ODbL/);assert.ok(button(h,'Harbour, Second City'));
  await click(h,button(h,'Harbour, Second City'));
  const chosen=h.fetchMock.pending().find(x=>x.url.startsWith('/api/route-recommendations'));
  assert.equal(chosen.body.place,'Harbour');assert.equal(chosen.body.place_selection,'selected-token');

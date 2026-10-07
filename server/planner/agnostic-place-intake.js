@@ -181,6 +181,8 @@ async function resolveAgnosticIntake({
     label: candidate.label || null,
     confidence: candidate.confidence ?? null,
     provenance: candidate.provenance || null,
+    attribution: typeof candidate.attribution === "string" ? candidate.attribution : null,
+    license: typeof candidate.license === "string" ? candidate.license : null,
     ...(placeSelectionStore ? { selection_id: placeSelectionStore.issue(candidate, placeQuery) } : {}),
   });
 
