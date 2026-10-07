@@ -38,7 +38,7 @@ const {
   createCachedVisitSwedenNapiSource,
   createVisitSwedenNapiSource,
 } = require("./visit-sweden-napi-source");
-const { normalizeOpeningHours } = require("./opening-hours");
+const { normalizeOpeningHours, evaluateOpeningHoursForWindow } = require("./opening-hours");
 const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
 const {
   sanitizeTrustedSpatialScope,
@@ -257,11 +257,26 @@ function supplyScore(records, requestedIntents = []) {
   );
 }
 
-function chooseExpansion(first, { baseRadiusKm, requestedIntents, origin = null, walkingTargetBand = null }) {
+function normalizeAvailabilityWindow(value) {
+  if (!value || !Number.isInteger(value.weekday) || value.weekday < 0 || value.weekday > 6 ||
+      !Number.isFinite(value.startMinute) || !Number.isFinite(value.endMinute) ||
+      value.startMinute < 0 || value.endMinute > 1440 || value.endMinute <= value.startMinute) return null;
+  return { weekday: value.weekday, startMinute: value.startMinute, endMinute: value.endMinute };
+}
+function confirmedOpenRecords(records, window) {
+  return records.filter(record => evaluateOpeningHoursForWindow(record.opening_hours, window).status === 'available_in_window');
+}
+function chooseExpansion(first, { baseRadiusKm, requestedIntents, origin = null, walkingTargetBand = null, availabilityWindow = null }) {
   const profile = supplyProfile(first, requestedIntents);
   const capacity = dayCapacityProfile(first, { origin, walkingTargetBand });
   const requestedGap = profile.requested_intents_covered.length < profile.requested_intent_count;
   const capacityGap = capacity.can_support_target === false;
+  const window = normalizeAvailabilityWindow(availabilityWindow);
+  const openGap = window && requestedIntents.length > 0 &&
+    supplyProfile(confirmedOpenRecords(first, window), requestedIntents).requested_intents_covered.length < requestedIntents.length;
+  if (openGap && !String(first?.loader_status || '').startsWith('error') && baseRadiusKm < MAX_RADIUS_KM) {
+    return { radius_km: REGIONAL_EXPANSION_RADIUS_KM, trigger: 'requested_opening_gap' };
+  }
   if (!isThinSupply(first) && !requestedGap && !capacityGap) {
     return null;
   }
@@ -287,6 +302,14 @@ function chooseExpansion(first, { baseRadiusKm, requestedIntents, origin = null,
     };
   }
   return null;
+}
+
+// Rhythm controls discovery breadth, never a requested walking-distance target.
+// Focus/availability gaps may still expand Easy; explicit operator radii win.
+function rhythmAwareRadiusKm(band, dayRhythm) {
+  if (band) return budgetAwareRadiusKm(band);
+  return ({ calm: 1.5, balanced: 3, full: MAX_RADIUS_KM, free: MAX_RADIUS_KM })[dayRhythm]
+    ?? budgetAwareRadiusKm(null);
 }
 
 function createOpenDataLoader({
@@ -353,7 +376,7 @@ function createOpenDataLoader({
   // One geocoded query at a given radius, with mirror failover. Fetch wider than
   // the final limit so scarce-but-important categories (scenic in a food-dense
   // centre) survive, then balance down to `boundedLimit` client-side.
-  async function fetchAtRadius(lat, lng, radiusM, { queryIntents = [], walkingTargetBand = null } = {}) {
+  async function fetchAtRadius(lat, lng, radiusM, { queryIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
     const fetchBreadth = Math.min(boundedLimit * 6, OVERPASS_FETCH_CAP);
     const query = buildOverpassQuery({
       lat,
@@ -371,6 +394,7 @@ function createOpenDataLoader({
         const records = mapOverpassResponse(attempt.payload, boundedLimit, {
           origin: { lat, lng },
           walkingTargetBand,
+          availabilityWindow,
         });
         return withLoaderStatus(records, records.length > 0 ? `loaded:${records.length}` : "loaded:0", null);
       }
@@ -438,18 +462,22 @@ function createOpenDataLoader({
     requestedIntents = [],
     anchorMode = "unknown",
     walkingTargetBand = null,
+    dayRhythm = null,
+    availabilityWindow = null,
   } = {}, { onAnsweredPass = null } = {}) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return withLoaderStatus([], "loaded:0", null);
 
     const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents);
     const normalizedWalkingTargetBand = normalizeWalkingTargetBand(walkingTargetBand);
+    const normalizedWindow = normalizeAvailabilityWindow(availabilityWindow);
     const origin = { lat, lng };
     // The aperture this request is answered from. A pinned radius wins; else it
     // follows the budget the caller actually asked for.
-    const requestRadiusKm = pinnedRadiusKm ?? budgetAwareRadiusKm(normalizedWalkingTargetBand);
+    const requestRadiusKm = pinnedRadiusKm ?? rhythmAwareRadiusKm(normalizedWalkingTargetBand, dayRhythm);
 
     const first = await fetchAtRadius(lat, lng, Math.round(requestRadiusKm * 1000), {
       walkingTargetBand: normalizedWalkingTargetBand,
+      availabilityWindow: normalizedWindow,
     });
     const initialProfile = supplyProfile(first, normalizedRequestedIntents);
     const initialDayCapacity = dayCapacityProfile(first, {
@@ -461,6 +489,7 @@ function createOpenDataLoader({
       requestedIntents: normalizedRequestedIntents,
       origin,
       walkingTargetBand: normalizedWalkingTargetBand,
+      availabilityWindow: normalizedWindow,
     });
     let selected = first;
     let selectedRadiusKm = requestRadiusKm;
@@ -481,7 +510,9 @@ function createOpenDataLoader({
         expansion.radius_km > requestRadiusKm ? expansion.radius_km : MAX_RADIUS_KM,
         MAX_RADIUS_KM,
       );
-      const expansionQueryIntents = expansion.trigger === "requested_intent_gap"
+      const expansionQueryIntents = expansion.trigger === "requested_opening_gap"
+        ? normalizedRequestedIntents
+        : expansion.trigger === "requested_intent_gap"
         ? [
             ...initialProfile.requested_intents_partial,
             ...initialProfile.requested_intents_missing,
@@ -512,15 +543,18 @@ function createOpenDataLoader({
       const wider = await fetchAtRadius(lat, lng, Math.round(widerKm * 1000), {
         queryIntents: expansionQueryIntents,
         walkingTargetBand: normalizedWalkingTargetBand,
+        availabilityWindow: normalizedWindow,
       });
       const combined = mergeLoaderRecords(first, wider, boundedLimit, origin, {
         walkingTargetBand: normalizedWalkingTargetBand,
+        availabilityWindow: normalizedWindow,
       });
       if (isWiderSupplyBetter(first, combined, {
         requestedIntents: normalizedRequestedIntents,
         origin,
         walkingTargetBand: normalizedWalkingTargetBand,
         trigger: expansion.trigger,
+        availabilityWindow: normalizedWindow,
       })) {
         selected = combined;
         selectedRadiusKm = widerKm;
@@ -538,7 +572,9 @@ function createOpenDataLoader({
       selection_reason: selectionReason,
       anchor_mode: normalizeAnchorMode(anchorMode),
       requested_intents: normalizedRequestedIntents,
-      expansion_query_intents: expansion?.trigger === "requested_intent_gap"
+      expansion_query_intents: expansion?.trigger === "requested_opening_gap"
+        ? normalizedRequestedIntents
+        : expansion?.trigger === "requested_intent_gap"
         ? [...initialProfile.requested_intents_partial, ...initialProfile.requested_intents_missing]
         : [],
       initial_profile: initialProfile,
@@ -656,19 +692,24 @@ function createOpenDataLoader({
   };
 
   // One request's identity: the ~110 m anchor bucket plus everything that
-  // shaped its query. v8 invalidates every row collected before the aperture
+  // shaped its query. v9 includes the trusted availability window and rhythm aperture.
+  // v8 invalidates every row collected before the aperture
   // followed the walking budget: a `t9` row cached under v7 was gathered from
   // a 1.5 km disc, so reusing it would keep serving the narrow day this fixes.
   // `budgetsKey` is the same identity without the walking budget: requests
   // that differ only in Kort/Lagom/Lång share it.
   function requestIdentity(request) {
     const band = normalizeWalkingTargetBand(request.walkingTargetBand);
-    const radiusKm = pinnedRadiusKm ?? budgetAwareRadiusKm(band);
+    const radiusKm = pinnedRadiusKm ?? rhythmAwareRadiusKm(band, request.dayRhythm);
     const anchorKey = `${request.lat.toFixed(3)},${request.lng.toFixed(3)}`;
     const shape = `l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:i${normalizeRequestedIntents(request.requestedIntents).join(".") || "all"}`;
     const scopeKey = spatialScopeCacheKey(request.spatialScope ?? null);
+    const window = normalizeAvailabilityWindow(request.availabilityWindow);
+    const windowKey = window ? `${window.weekday}.${window.startMinute}.${window.endMinute}` : "none";
     return {
-      key: `v8:${anchorKey}:r${radiusKm}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
+      key: !request.dayRhythm && !window
+        ? `v8:${anchorKey}:r${radiusKm}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`
+        : `v9:${anchorKey}:r${radiusKm}:w${windowKey}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
       budgetsKey: `v8-budgets:${anchorKey}:${shape}:s${scopeKey}`,
       evidenceKey: `v8-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
       radiusKm,
@@ -864,7 +905,7 @@ function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_
   return `[out:json][timeout:${OVERPASS_QUERY_TIMEOUT_SECONDS}];${blocks.join("")}`;
 }
 
-function mapOverpassResponse(payload, limit, { origin = null, walkingTargetBand = null } = {}) {
+function mapOverpassResponse(payload, limit, { origin = null, walkingTargetBand = null, availabilityWindow = null } = {}) {
   if (!payload || !Array.isArray(payload.elements)) return [];
   // Map + dedupe everything Overpass returned (already bounded by the fetch
   // cap), preserving response order.
@@ -877,11 +918,11 @@ function mapOverpassResponse(payload, limit, { origin = null, walkingTargetBand 
     seenIds.add(record.id);
     mapped.push(record);
   }
-  return balanceMappedRecords(mapped, limit, origin, { walkingTargetBand });
+  return balanceMappedRecords(mapped, limit, origin, { walkingTargetBand, availabilityWindow });
 }
 
-function balanceMappedRecords(mapped, limit, origin, { walkingTargetBand = null } = {}) {
-  const ranked = rankMappedRecords(mapped, origin);
+function balanceMappedRecords(mapped, limit, origin, { walkingTargetBand = null, availabilityWindow = null } = {}) {
+  const ranked = rankMappedRecords(mapped, origin, availabilityWindow);
   if (mapped.length <= limit) return ranked;
 
   // Category-balanced round-robin: a food-dense centre must not crowd out the
@@ -940,7 +981,7 @@ function mappingsForRequestedIntents(requestedIntents = []) {
   return mappings.length ? mappings : OSM_TAG_MAP;
 }
 
-function mergeLoaderRecords(first, wider, limit, origin, { walkingTargetBand = null } = {}) {
+function mergeLoaderRecords(first, wider, limit, origin, { walkingTargetBand = null, availabilityWindow = null } = {}) {
   const deduped = [];
   const ids = new Set();
   for (const record of [...(Array.isArray(first) ? first : []), ...(Array.isArray(wider) ? wider : [])]) {
@@ -948,7 +989,7 @@ function mergeLoaderRecords(first, wider, limit, origin, { walkingTargetBand = n
     ids.add(record.id);
     deduped.push(record);
   }
-  const selected = balanceMappedRecords(deduped, limit, origin, { walkingTargetBand });
+  const selected = balanceMappedRecords(deduped, limit, origin, { walkingTargetBand, availabilityWindow });
   return withLoaderStatus(
     selected,
     selected.length ? `loaded:${selected.length}` : first?.loader_status || wider?.loader_status || "loaded:0",
@@ -961,7 +1002,13 @@ function isWiderSupplyBetter(first, combined, {
   origin = null,
   walkingTargetBand = null,
   trigger = null,
+  availabilityWindow = null,
 } = {}) {
+  const window = normalizeAvailabilityWindow(availabilityWindow);
+  if (trigger === 'requested_opening_gap' && window) {
+    return supplyScore(confirmedOpenRecords(combined, window), requestedIntents) >
+      supplyScore(confirmedOpenRecords(first, window), requestedIntents);
+  }
   if (!["walking_target_capacity_gap", "requested_intent_and_capacity_gap"].includes(trigger)) {
     return supplyScore(combined, requestedIntents) > supplyScore(first, requestedIntents);
   }
@@ -989,9 +1036,22 @@ function requestedCoverageRank(profile) {
   return profile.requested_intents_covered.length * 2 + profile.requested_intents_partial.length;
 }
 
-function rankMappedRecords(records, origin) {
+function rankMappedRecords(records, origin, availabilityWindow = null) {
+  const window = normalizeAvailabilityWindow(availabilityWindow);
+  const availabilityRank = record => {
+    if (!window) return 0;
+    const status = evaluateOpeningHoursForWindow(record.opening_hours, window).status;
+    return status === 'available_in_window' ? 0 : status === 'unknown' ? 1 : 2;
+  };
   if (!origin || !Number.isFinite(origin.lat) || !Number.isFinite(origin.lng)) return records;
+  if (!window) return [...records].sort((a, b) =>
+    operationalRecordRank(a) - operationalRecordRank(b) ||
+    Number(a.chain === true) - Number(b.chain === true) ||
+    distanceKm(origin, a) - distanceKm(origin, b) ||
+    String(a.id).localeCompare(String(b.id)),
+  );
   return [...records].sort((a, b) =>
+    availabilityRank(a) - availabilityRank(b) ||
     operationalRecordRank(a) - operationalRecordRank(b) ||
     Number(a.chain === true) - Number(b.chain === true) ||
     distanceKm(origin, a) - distanceKm(origin, b) ||

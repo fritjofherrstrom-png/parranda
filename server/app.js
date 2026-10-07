@@ -2308,6 +2308,7 @@ function buildApp({
             anchorMode: intake.mode,
             spatialScope,
             walkingTargetBand: requestedRhythm ? null : resolveAgnosticWalkingTargetBand(payload.walkingKmTarget),
+            ...(requestedRhythm ? { dayRhythm: requestedRhythm } : {}),
           });
           const structureCandidates = [...curatedCandidates, ...(Array.isArray(records) ? records : [])].filter(
             (c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng),
