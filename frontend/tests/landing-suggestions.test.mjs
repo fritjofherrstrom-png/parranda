@@ -42,3 +42,16 @@ test('only saved receipts provide context; unavailable lookup still permits free
   assert.match(h.text(),/You can still search/);assert.equal(h.document.querySelector('#landingCity').value,'har');
  }finally{await h.unmount();}
 });
+
+test('a registered-city suggestion carries its qualified choice into shared any-place intake', async () => {
+ const h=await mount({injected:{__PARRANDA_CITIES__:{rome:{key:'rome',label:'Rome'}}}});try {
+  const selected={...choice('Rome','Lazio · Italy'),city_key:'rome'};
+  await type(h,'rom');await h.clock.advance(200);
+  await h.fetchMock.respond(h.fetchMock.calls[0],{status:'ready',choices:[selected]});
+  await key(h,'ArrowDown');await key(h,'Enter');
+  await h.act(()=>h.document.querySelector('form').dispatchEvent(new h.window.Event('submit',{bubbles:true,cancelable:true})));
+  const carried=JSON.parse(h.window.sessionStorage.getItem('parranda:place-choice'));
+  assert.equal(carried?.selection,selected.selection_id);
+  assert.equal(carried?.place,selected.query,'receipt stays bound to the full selected query');
+ }finally{await h.unmount();}
+});
