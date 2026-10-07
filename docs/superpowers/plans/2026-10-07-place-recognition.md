@@ -26,6 +26,6 @@ Review focus: forged selection/context, expired saved choice, delayed responses 
 - [x] Run frontend tests/check/build and commit generated dist.
 
 ### Task 4: Reviewable delivery
-- [ ] Run required backend/frontend checks, inspect full diff and obtain independent review; fix material findings with regression tests.
-- [ ] Freeze candidate, perform bounded local native/browser and provider QA, document PASS/FAIL/INCONCLUSIVE by scope.
+- [x] Run required backend/frontend checks, inspect full diff and obtain independent review; fix material findings with regression tests.
+- [x] Freeze candidate, perform bounded local native/browser and provider QA, document PASS/FAIL/INCONCLUSIVE by scope.
 - [ ] Publish main-targeted PR, attach it, obtain exact-head CI and report candidate/main, evidence, limitations and owner. Preserve worktree and branches.
