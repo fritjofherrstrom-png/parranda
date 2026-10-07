@@ -63,11 +63,22 @@ test("reviewed local profile selects two independent event publishers around Sim
       "visit-stockholm-open-api",
       "malmo-municipal-calendar",
       "helsinki-region-linked-events",
+      "barcelona-open-data-agenda",
+      "rome-tourism-live-listing",
+      "athens-city-events-calendar",
+      "athens-megaron-calendar",
     ],
   );
   assert.equal(new Set(feeds.map((feed) => feed.source_identity)).size, feeds.length);
   assert.ok(feeds.every((feed) => feed.status === "active"));
-  assert.ok(feeds.every((feed) => feed.timezone === (feed.id === "helsinki-region-linked-events" ? "Europe/Helsinki" : "Europe/Stockholm")));
+  const migratedTimezones = {
+    "helsinki-region-linked-events": "Europe/Helsinki",
+    "barcelona-open-data-agenda": "Europe/Madrid",
+    "rome-tourism-live-listing": "Europe/Rome",
+    "athens-city-events-calendar": "Europe/Athens",
+    "athens-megaron-calendar": "Europe/Athens",
+  };
+  assert.ok(feeds.every((feed) => feed.timezone === (migratedTimezones[feed.id] || "Europe/Stockholm")));
   assert.equal(feeds.find((feed) => feed.adapter === "wix_event_sitemap")?.event_path_prefix, "/evenemang-1/");
 
   const env = buildFullDevEnvironment({}, { cacheDir: os.tmpdir() });

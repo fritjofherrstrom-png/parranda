@@ -34,7 +34,6 @@ export declare function buildAnywherePayload(options?: {
   excludedCandidateIds?: string[];
   pinnedCandidateIds?: string[];
 }): {
-  city?: string;
   place?: string;
   place_query?: string;
   excluded_candidate_ids?: string[];

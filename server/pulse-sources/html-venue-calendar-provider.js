@@ -7,6 +7,7 @@
  * gated decisions.
  */
 
+const { normalizeSourceEventDateTime, datePartsInTimezone } = require("./source-event-time");
 const { GENERIC_PROVIDER_CITY } = require("./provider-registry");
 const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
 
@@ -167,7 +168,7 @@ function extractHtmlVenueCalendarEvents(html, options = {}) {
   const events = [];
   for (const section of sections) {
     const sectionDate = parseDateHeader(section.header, options);
-    const sectionDateKey = dateKeyFromIso(sectionDate);
+    const sectionDateKey = dateKeyFromIso(sectionDate, options);
     if (isBeforeCollectionDate(sectionDateKey, options.date)) continue;
     for (const itemHtml of extractListItems(section.html)) {
       const event = extractEventCard(itemHtml, { ...options, baseUrl, sectionDate, sectionDateKey });
@@ -212,7 +213,7 @@ function extractEventCard(itemHtml, options = {}) {
   if (!title || !link) return null;
   const dateAttr = firstMatch(itemHtml, /data-date=["']([^"']+)["']/i);
   const dateFromAttribute = parseDateAttribute(dateAttr, options);
-  const listingDate = dateKeyFromIso(dateFromAttribute || options.sectionDate);
+  const listingDate = dateKeyFromIso(dateFromAttribute || options.sectionDate, options);
   const category = htmlToText(firstMatch(itemHtml, /<div[^>]*class=["'][^"']*\bcategory-title\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i));
   const organiser = htmlToText(firstMatch(itemHtml, /ORGANISER[\s\S]*?<h2[^>]*class=["'][^"']*\bh3\b[^"']*["'][^>]*>([\s\S]*?)<\/h2>/i));
   return compact({
@@ -234,7 +235,7 @@ function extractHtmlVenueEventDetail(html, options = {}) {
   const candidates = extractDisplayDateTimes(detailHtml)
     .map((value) => parseDisplayDateTime(htmlToText(value), options))
     .filter(Boolean);
-  const dateTime = selectDateTimeForExpectedDate(candidates, options.expectedDate);
+  const dateTime = selectDateTimeForExpectedDate(candidates, options.expectedDate, options);
   return compact({
     starts_at: dateTime,
   }) || {};
@@ -248,11 +249,11 @@ function extractDisplayDateTimes(html) {
   return [...new Set(out)];
 }
 
-function selectDateTimeForExpectedDate(values, expectedDate) {
+function selectDateTimeForExpectedDate(values, expectedDate, options = {}) {
   if (!values.length) return null;
   const expected = firstString(expectedDate);
   if (expected) {
-    const matched = values.find((value) => dateKeyFromIso(value) === expected);
+    const matched = values.find((value) => dateKeyFromIso(value, options) === expected);
     if (matched) return matched;
     return null;
   }
@@ -269,6 +270,7 @@ function parseDateHeader(value, options = {}) {
     month: Number(match[2]),
     day: Number(match[1]),
     timezoneOffset: options.timezoneOffset,
+    timezone: options.timezone,
   });
 }
 
@@ -280,6 +282,7 @@ function parseDateAttribute(value, options = {}) {
     month: Number(match[2]),
     day: Number(match[1]),
     timezoneOffset: options.timezoneOffset,
+    timezone: options.timezone,
   });
 }
 
@@ -293,10 +296,15 @@ function parseDisplayDateTime(value, options = {}) {
     hour: Number(match[4]),
     minute: Number(match[5]),
     timezoneOffset: options.timezoneOffset,
+    timezone: options.timezone,
   });
 }
 
-function dateKeyFromIso(value) {
+function dateKeyFromIso(value, options = {}) {
+  if (options.timezone && value) {
+    const parts = datePartsInTimezone(value, options.timezone);
+    if (parts) return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+  }
   const match = String(value || "").match(/^(\d{4}-\d{2}-\d{2})/);
   return match ? match[1] : null;
 }
@@ -306,11 +314,13 @@ function isBeforeCollectionDate(dateKey, collectionDate) {
   return Boolean(dateKey && wanted && dateKey < wanted);
 }
 
-function isoLocalDateTime({ year, month, day, hour = 0, minute = 0, timezoneOffset = null }) {
+function isoLocalDateTime({ year, month, day, hour = 0, minute = 0, timezoneOffset = null, timezone = null }) {
   if (![year, month, day, hour, minute].every((value) => Number.isInteger(value))) return null;
   if (month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
     return null;
   }
+  const local = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
+  if (timezone) return normalizeSourceEventDateTime(local, { timezone });
   if (!/^[+-](?:0\d|1\d|2[0-3]):[0-5]\d$/.test(String(timezoneOffset || ""))) return null;
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00${timezoneOffset}`;
 }
