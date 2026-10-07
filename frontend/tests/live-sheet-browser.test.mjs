@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { chromium } from 'playwright-core';
@@ -55,6 +55,26 @@ async function browserHarness(t) {
   t.after(() => assert.deepEqual(errors, [], 'no React/browser exceptions'));
   return { page, render };
 }
+
+test('mobile LiveSheet long source periods do not push event text offscreen', async t => {
+  const {page,render}=await browserHarness(t);
+  const cssDir=new URL('../dist/_astro/',import.meta.url);
+  for(const file of readdirSync(cssDir).filter(f=>f.endsWith('.css'))) {
+    await page.addStyleTag({content:readFileSync(new URL(file,cssDir),'utf8')});
+  }
+  const row={id:'long-period',title:"Exposició 'Recerca del passat per a salvar el futur'",place:'Carrer de Sant Cugat',
+    timezone:'Europe/Madrid',time_window:{kind:'period',starts_on:'2026-09-10',ends_on:'2026-10-31'},
+    source_label:'Open Data BCN',source_url:'https://guia.barcelona.cat/event',source_link_kind:'page',source_link_host:'guia.barcelona.cat'};
+  const events={coverage:'covered',selected_date:'2026-10-07',tonight:[],this_week:[row],acquisition:{source_health:{status:'healthy',result:'events_found',selected_source_count:1,responding_source_count:1}}};
+  for(const width of [320,390,430]) {
+    await page.setViewportSize({width,height:844});
+    await render(events,'en','week');
+    const dimensions=await page.getByRole('dialog').evaluate(e=>({width:e.clientWidth,scroll:e.scrollWidth}));
+    assert.ok(dimensions.scroll<=dimensions.width+1,`width ${width}: dialog ${JSON.stringify(dimensions)}`);
+    const title=await page.getByText(row.title,{exact:true}).boundingBox();
+    assert.ok(title.x>=0 && title.x+title.width<=width+1,'event title stays fully inside viewport');
+  }
+});
 
 const unknown = /Live information is unavailable right now|Live-information är inte tillgänglig just nu/;
 const falseEmpty = /Nothing verified|Nothing listed|Inget verifierat|Inget listat/;
