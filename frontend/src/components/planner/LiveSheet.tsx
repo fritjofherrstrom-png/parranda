@@ -107,9 +107,9 @@ export default function LiveSheet({
     const relevance = liveRelevanceSentence(liveEventRelevance(ev, selected), lang, t);
     const distance = nearbyDistanceLabel(ev, lang);
     return (
-      <li key={ev.id ?? i} className="flex items-baseline gap-3">
-        <span className="type-data min-w-[56px] shrink-0 text-xs font-semibold text-parranda-live">{eventTiming(ev, lang, undefined, timingDate)}</span>
-        <span className="text-sm leading-relaxed text-parranda-ink/90">
+      <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 sm:gap-2">
+        <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">{eventTiming(ev, lang, undefined, timingDate)}</span>
+        <span className="min-w-0 max-w-full break-words text-sm leading-relaxed text-parranda-ink/90">
           <span className={titleClassName}>{ev.title}</span>
           {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
           {distance && <span className="font-semibold text-parranda-live"> · {distance}</span>}

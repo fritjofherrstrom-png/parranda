@@ -1609,6 +1609,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const reopening = liveSheetOpenedRef.current;
     const nextTime = reopening ? liveSheetTime
       : pulseBuckets.tonight.length > 0 || split.woven.length > 0 ||
+        pulseState === "pending" ||
         (inPlaceScopeAvailable && selectedDayEmpty(liveEvents)) ? "tonight" : "week";
     const nextScope = reopening ? liveSheetScope : "around_place";
     liveSheetOpenedRef.current = true;
