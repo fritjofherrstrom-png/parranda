@@ -219,7 +219,7 @@ async function buildAnywhereBlitzDecision({
   placeQuery = null,
   placeResolver = null,
   placeSelectionStore = null,
-  placeSelection = null,
+  placeSelection,
   placeContextSelection = null,
   placeBias = null,
   openDataLoader = null,

@@ -57,3 +57,10 @@ test('prior verified selection can bias a different query without becoming its i
   const out=await resolveAgnosticIntake({placeQuery:'New district',placeSelectionStore:store,placeContextSelection:token,placeResolver:async(q,c)=>{context=c;return[];}});
   assert.deepEqual(context.near,{lat:48.85,lng:2.32});assert.equal(out.anchor,null);
 });
+test('explicit malformed falsy selections cannot silently resolve another identity',async()=>{
+ const store=createPlaceSelectionStore();
+ for(const selection of ['',false,0,null]) {
+  const out=await resolveAgnosticIntake({placeQuery:QUERY,placeSelection:selection,placeSelectionStore:store,placeResolver:async()=>[choice('Different place')]});
+  assert.equal(out.anchor,null);assert.deepEqual(out.intake.blockers,['place_selection_invalid']);
+ }
+});

@@ -9,6 +9,8 @@ import type { CommitmentSnapshot } from "./commitment-snapshot.mjs";
 export interface SavedInputs {
   city?: string | null;
   place?: string | null;
+  placeLabel?: string | null;
+  placeSelection?: string | null;
   mode?: string;
   dayOffset?: number;
   walkKey?: string;
@@ -29,6 +31,7 @@ export interface SavedEntry {
 }
 
 export declare function savedEntryId(options?: {
+  placeLabel?: string | null;
   city?: string | null;
   place?: string | null;
   dateIso?: string | null;
@@ -37,6 +40,7 @@ export declare function savedEntryId(options?: {
 }): string;
 
 export declare function buildSavedEntry(options?: {
+  placeLabel?: string;
   city?: string | null;
   place?: string;
   label?: string;

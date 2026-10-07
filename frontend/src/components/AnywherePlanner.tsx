@@ -54,8 +54,10 @@ import {
 import { planComposeFollowup } from "../lib/compose-followup.mjs";
 import { composeServiceRefusal, type ComposeServiceRefusal } from "../lib/compose-service-refusal.mjs";
 import plannerEntry from "../../../planner-entry.js";
-import { buildShareUrl, decodeShareParams, encodeShareParams } from "../lib/anywhere-share.mjs";
+import { buildShareUrl, decodeShareParams, encodeShareParams, shareablePlace } from "../lib/anywhere-share.mjs";
 import { consumeAnchorCoords, requestPosition, storeAnchorCoords } from "../lib/location-anchor.mjs";
+import { consumePlaceChoice, storePlaceChoice } from "../lib/place-choice.mjs";
+import { PlaceChoices } from "./planner/PlaceChoices";
 import {
   buildSavedEntry,
   upsertSaved,
@@ -170,6 +172,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (q === "sv" || q === "en") setLang(q);
   }, []);
   const [place, setPlace] = useState("");
+  const [placeSelection, setPlaceSelection] = useState<string | null>(null);
+  const [selectionLabel, setSelectionLabel] = useState<string | undefined>();
+  const [narrowingPlace, setNarrowingPlace] = useState(false);
+  const [narrowingFailed, setNarrowingFailed] = useState(false);
   const [cityKey, setCityKey] = useState<string | null>(null);
   const [mode, setMode] = useState<"typed" | "near_me">("typed"); // start context
   const [relocating, setRelocating] = useState(false); // near-me: position asked again
@@ -337,8 +343,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     return () => timers.forEach(clearTimeout);
   }, [phase]);
 
-  type Anchor = { city?: string; place?: string; coords?: { lat: number; lng: number } };
+  type Anchor = { city?: string; place?: string; coords?: { lat: number; lng: number }; placeSelection?: string | null; selectionLabel?: string; placeBias?: { lat: number; lng: number }; placeContextSelection?: string };
   const lastRequestedAnchorRef = useRef<Anchor | null>(null);
+  function resetBlitz() {
+    blitzRequestRef.current?.abort();
+    blitzRequestRef.current = null;
+    blitzRequestSequenceRef.current += 1;
+    setBlitzPhase("idle");
+    setBlitzResult(null);
+  }
 
   async function execute(
     anchor: Anchor,
@@ -366,6 +379,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   ) {
     if (navigationSuspendedRef.current) return;
     lastRequestedAnchorRef.current = anchor;
+    // An explicit choice already carries the current preferences. An older
+    // debounce must not replace it with its previous place-selection closure.
+    if (!silent && recomposeTimerRef.current) {
+      clearTimeout(recomposeTimerRef.current);
+      recomposeTimerRef.current = null;
+    }
     if (!silent && pollTimerRef.current) {
       clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
@@ -400,10 +419,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       nextAnchorKey,
     });
     if (!silent) {
-      blitzRequestRef.current?.abort();
-      blitzRequestRef.current = null;
-      setBlitzPhase("idle");
-      setBlitzResult(null);
+      resetBlitz();
       liveQueryAbortRef.current?.abort();
       liveQueryAbortRef.current = null;
       setLiveRefreshExhausted(false);
@@ -450,6 +466,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         city: anchor.city,
         place: anchor.place,
         coords: anchor.coords ?? null,
+        placeSelection: anchor.placeSelection,
+        placeBias: anchor.placeBias,
+        placeContextSelection: anchor.placeContextSelection,
         dates: [effectiveDateIso],
         preferences: preferencesOverride ?? selected,
         dayRhythm: rhythm.key,
@@ -514,6 +533,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         ? safeCuratedCityResponse(body, cls)
         : decision.safeResponseFor(body, cls);
       const authoritativePlace = anchor.city ? cls.placeLabel : anchor.place;
+      const resolution = body?.agnostic_route_output_experiment?.intake?.resolved;
+      if (!anchor.city && !anchor.coords && typeof resolution?.selection_id === "string") {
+        anchor = { ...anchor, placeSelection: resolution.selection_id, selectionLabel: resolution.label || anchor.selectionLabel };
+        lastRequestedAnchorRef.current = anchor;
+        setPlaceSelection(anchor.placeSelection ?? null);
+        setSelectionLabel(anchor.selectionLabel);
+      }
       if (anchor.city && authoritativePlace) setPlace(authoritativePlace);
       // Atomic replacement. If the new verdict is structure_only/unavailable,
       // the held day disappears here — it no longer answers the request.
@@ -547,14 +573,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         const entry = buildSavedEntry({
           city: anchor.city ?? null,
           place: authoritativePlace,
-          label: authoritativePlace || (requestLang === "en" ? "My position" : "Min position"),
+          placeLabel: anchor.selectionLabel,
+          label: anchor.selectionLabel || authoritativePlace || (requestLang === "en" ? "My position" : "Min position"),
           dateIso: effectiveDateIso,
           savedAt: new Date().toISOString(),
           safeResponse: safe,
           classification: cls,
           // The mode is the anchor's, not this render's: an arrival composes
           // from the first render, before the near-me mode it set has landed.
-          inputs: { city: anchor.city ?? null, place: authoritativePlace ?? null, mode: anchor.coords ? "near_me" : "typed", dayOffset: effectiveDayOffset, walkKey: effectiveWalkKey, selected: prefs },
+          inputs: { city: anchor.city ?? null, place: authoritativePlace ?? null, placeSelection: anchor.placeSelection, placeLabel: anchor.selectionLabel, mode: anchor.coords ? "near_me" : "typed", dayOffset: effectiveDayOffset, walkKey: effectiveWalkKey, selected: prefs },
           // Frozen from the SAME request that produced this day: the ledger it
           // carried and the verdict that came back. Recorded here rather than
           // at save time, because by then the live ledger may have moved on
@@ -568,6 +595,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             dayKey: savedEntryId({
               city: anchor.city ?? null,
               place: anchor.place ?? null,
+              placeLabel: anchor.selectionLabel,
               dateIso: effectiveDateIso,
               selected: prefs,
               walkKey: effectiveWalkKey,
@@ -713,6 +741,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Show a stored day WITHOUT re-fetching. A restored day is a snapshot (events /
   // "today" may be stale), so restoredAt is set and the UI labels it + offers rebuild.
   function restoreEntry(entry: SavedEntry) {
+    resetBlitz();
     setNavigationInterrupted(false);
     // A saved day is its own generation: nothing from before it can be undone
     // back onto it.
@@ -722,6 +751,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (i) {
       setCityKey(typeof i.city === "string" && i.city.trim() ? i.city.trim() : null);
       if (typeof i.place === "string") setPlace(i.place);
+      setPlaceSelection(i.placeSelection ?? null);
+      setSelectionLabel(i.placeLabel ?? undefined);
       if (i.mode === "typed" || i.mode === "near_me") setMode(i.mode);
       if (i.dayOffset === 0 || i.dayOffset === 1) setDayOffset(i.dayOffset);
       if (typeof i.walkKey === "string") setWalkKey(normalizeSavedWalkKey(i.walkKey));
@@ -761,6 +792,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const restoredAnchorKey = anchorKey({
       city: typeof i?.city === "string" ? i.city : undefined,
       place: typeof i?.place === "string" ? i.place : undefined,
+      selectionLabel: i?.placeLabel ?? undefined,
     });
     displayedAnchorKeyRef.current = restoredAnchorKey;
     // Restoring puts a day on screen without a compose, so the ledger cannot
@@ -804,6 +836,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   function undoDayChange() {
     const change = dayChange;
     if (!change) return;
+    resetBlitz();
     const previous = change.previous;
     setDayChange(null);
     undoBaselineRef.current = null;
@@ -902,7 +935,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setCityKey(shared.city || null);
       adoptLinkInputs();
       execute(
-        { city: shared.city || undefined, place: shared.place },
+        { city: shared.city || undefined, place: shared.place, ...(!shared.city ? consumePlaceChoice(shared.place) : {}) },
         {
           langOverride: shared.lang ?? undefined,
           preferencesOverride: shared.preferences.length ? shared.preferences : undefined,
@@ -962,9 +995,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   async function shareDay() {
     const entry = lastEntryRef.current;
     const i = entry?.inputs;
-    if (!i || !i.place) return; // coords-anchored days have no shareable place text
+    const sharedPlace = shareablePlace(i);
+    if (!i || !sharedPlace) return;
     const url = buildShareUrl(window.location.origin, {
-      place: i.place,
+      place: sharedPlace,
       city: i.city ?? null,
       preferences: Array.isArray(i.selected) ? i.selected : [],
       dayOffset: i.dayOffset ?? 0,
@@ -981,7 +1015,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
   }
   // A coords-anchored day has no shareable place text.
-  const canShare = Boolean(lastEntryRef.current?.inputs?.place);
+  const canShare = Boolean(shareablePlace(lastEntryRef.current?.inputs));
 
   const isSaved = Boolean(lastEntryRef.current && savedDays.some((e) => e.id === lastEntryRef.current!.id));
 
@@ -1018,7 +1052,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
     const trimmed = place.trim();
     if (!trimmed) return;
-    await execute({ city: cityKey || undefined, place: trimmed }, opts);
+    await execute({ city: cityKey || undefined, place: trimmed, placeSelection, selectionLabel }, opts);
   }
 
   async function plan(event?: { preventDefault?: () => void }) {
@@ -1046,7 +1080,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     try {
       const anchor = nearMeAnchor
         ? { lat: nearMeAnchor.lat, lng: nearMeAnchor.lng }
-        : { place: typedAnchor };
+        : { place: typedAnchor, ...(placeSelection ? { place_selection: placeSelection } : {}) };
       const response = await fetch(`/api/blitz?anywhere_blitz=1&lang=${lang}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1094,12 +1128,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     : (option: Lang) => `?restore=last&lang=${option}`;
 
   const leavePlanner = (target: "home" | "language") => {
+    if (mode === "typed" && placeSelection) storePlaceChoice({ place, selection: placeSelection, label: selectionLabel });
     if (target === "language" && mode === "near_me") {
       const coords = nearMeCoords;
       if (coords) storeAnchorCoords(coords);
     }
     cancelActivePlannerForNavigation();
   };
+
+  async function narrowPlaceSearch() {
+    if (narrowingPlace) return;
+    const generation = requestSequenceRef.current;
+    setNarrowingPlace(true);
+    setNarrowingFailed(false);
+    try {
+      const coords = await requestPosition();
+      if (generation !== requestSequenceRef.current || navigationSuspendedRef.current) return;
+      await execute({ place: place.trim(), placeBias: coords });
+    } catch { setNarrowingFailed(true); }
+    finally { setNarrowingPlace(false); }
+  }
 
   // A near-me page without a position (a reload consumed it) asks again only on
   // an explicit tap, the same consent the landing asked for.
@@ -1844,8 +1892,16 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               compose. The count comes from the classifier's trusted-loader
               evidence, never from copy. The label follows the pill rule:
               primary locality, not the resolver's full admin chain. */}
-          <p className="text-[15px] text-parranda-ink">
-            {anchorUnresolved ? (
+          <div className="text-[15px] text-parranda-ink">
+            {anchorUnresolved && (safeResponse?.agnostic_route_output_experiment?.intake?.candidates?.some((c: any) => c.selection_id) || safeResponse?.agnostic_route_output_experiment?.intake?.blockers?.includes("place_selection_invalid")) ? (
+              <PlaceChoices intake={safeResponse?.agnostic_route_output_experiment?.intake}
+                pending={false} locationPending={narrowingPlace} locationFailed={narrowingFailed} t={t}
+                onNarrow={() => { narrowPlaceSearch().catch(() => {}); }}
+                onChoose={(choice) => {
+                  setPlaceSelection(choice.selection_id); setSelectionLabel(choice.label);
+                  execute({ place: place.trim(), placeSelection: choice.selection_id, selectionLabel: choice.label }).catch(() => {});
+                }} />
+            ) : anchorUnresolved ? (
               t(
                 `Parranda kunde inte hitta ”${typedPlaceLabel}” just nu. Prova en annan stavning eller lägg till land eller region — inget hittas på.`,
                 `Parranda couldn't pin down “${typedPlaceLabel}” right now. Try another spelling or add a country or region — nothing is invented in its place.`,
@@ -1861,7 +1917,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 `Parranda couldn't compose a day ${anchorIsPosition ? "near you" : `for ${placeName}`} yet — nothing is invented in its place.`,
               )
             )}
-          </p>
+          </div>
           {!anchorUnresolved && selected.length > 0 && (
             <p>{t(
               "Vi kunde inte bekräfta en gångbar dag med dina val. Andra intressen läggs inte till automatiskt. Du kan ändra datum, dagens rytm eller själv välja fler intressen.",

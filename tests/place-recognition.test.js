@@ -23,6 +23,20 @@ test('qualified district stays the destination ahead of its higher-ranked statio
   const out = await resolver([station, district])('Harbour Quarter, Example City');
   assert.equal(out.find(x => x.confidence === 'medium').osm_ref, 'relation/488500');
 });
+test('a city qualifier without a comma still distinguishes a district from its station', async () => {
+  const out = await resolver([station, district])('Harbour Quarter Example City');
+  assert.equal(out.find(x => x.confidence === 'medium').osm_ref, 'relation/488500');
+});
+test('a shared full provider label retains source-backed geographic qualifiers', async () => {
+  const shared = { ...district, display_name: 'Harbour Quarter, Example City, Mainland Country, 12345, Country' };
+  const out = await resolver([station, shared])(shared.display_name);
+  assert.equal(out.find(x => x.confidence === 'medium').osm_ref, 'relation/488500');
+});
+test('qualified venue resolution still works for event-location consumers', async () => {
+  const venue = { ...station, name: 'Theatre Hall', display_name: 'Theatre Hall, Example City, Country', type: 'theatre', addresstype: 'amenity', importance: .41 };
+  const out = await resolver([venue])('Theatre Hall, Example City');
+  assert.equal(out[0].confidence, 'medium');
+});
 test('every administrative qualifier must match provider-owned address context', async () => {
   const out = await resolver([district])('Harbour Quarter, Other City');
   assert.ok(out.every(x => x.confidence === 'low'));
@@ -60,4 +74,25 @@ test('language and bias are forwarded and isolate cached resolution decisions', 
 test('explicit GPS anchor never moves because of a typed query or hint', async () => {
   const out = await resolveAgnosticIntake({ coords: { lat: 10, lng: 20 }, placeQuery: 'Harbour Quarter', placeBias: { lat: 48.85, lng: 2.32 }, placeResolver: () => { throw Error('must not search'); } });
   assert.deepEqual(out.anchor, { lat: 10, lng: 20 });
+});
+test('source-owned street address can resolve a venue without the venue name in its query', async () => {
+  const { resolveEventVenueGeometry } = require('../server/place-candidates/event-venue-resolution');
+  const venue = { ...station, name: 'Theatre Hall', display_name: 'Theatre Hall, Example Street, Example City, Country', type: 'theatre', addresstype: 'amenity', address: { road: 'Example Street', house_number: '12', city: 'Example City', country: 'Country' } };
+  const out = await resolveEventVenueGeometry([{ id: 'show', address: 'Example Street 12', city: 'Example City', country: 'Country' }], { anchor: { lat: 48.855, lng: 2.32 }, resolver: resolver([venue]) });
+  assert.equal(out.summary.resolved_count, 1);
+});
+test('a station inside the district cannot deduplicate away the district identity', async () => {
+ const inside={...station,lat:String(Number(district.lat)+.0005)};
+ const out=await resolver([inside,district])('Harbour Quarter, Example City');
+ assert.equal(out.find(x=>x.confidence==='medium').osm_ref,'relation/488500');
+});
+test('unrelated provider geography cannot bypass a qualified destination query', async () => {
+ const out=await resolver([area('Provider District','Example City',48.85,.41)])('Nonexistent Quarter, Other City');
+ assert.ok(out.every(x=>x.confidence==='low'));
+});
+test('venue-purpose caching cannot authorize the same unmatched typed-place query', async () => {
+ const urls=[];const r=resolver([{...station,name:'Theatre Hall',type:'theatre',addresstype:'amenity'}],urls);
+ const venue=await r('Example Street 12, Example City',{purpose:'event_venue'});
+ const place=await r('Example Street 12, Example City');
+ assert.equal(venue[0].confidence,'medium');assert.equal(place[0].confidence,'low');assert.equal(urls.length,2);
 });

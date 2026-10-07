@@ -29,3 +29,23 @@ test('Live attests selected area instead of re-resolving an ambiguous name',asyn
  const bad=await executeLiveEventQuery({payload:{scope:'around_place',anchor:{lat:51.5,lng:2.32},place_query:'Harbour',place_selection:selection+'x'},eventSupply,placeSelectionStore:store,now:'2026-10-07T12:00:00Z'});
  assert.equal(bad.status,400);assert.equal(called,1);
 });
+test('Live retains a valid selected point without inventing an administrative scope',async()=>{
+ const store=createPlaceSelectionStore();const point={label:'Theatre Hall',lat:51.5,lng:2.32,confidence:'medium',provenance:'fixture'};
+ const selection=store.issue(point,'Theatre Hall');let called=0;
+ const eventSupply=async()=>{called++;return {events:[],source_status:[]};};
+ const payload={scope:'around_place',anchor:{lat:51.5,lng:2.32},place_query:'Theatre Hall',place_selection:selection};
+ const out=await executeLiveEventQuery({payload,eventSupply,placeSelectionStore:store,now:'2026-10-07T12:00:00Z'});
+ assert.equal(out.status,200);assert.equal(out.body.query.discovery_scope,'local');assert.equal(called,1);
+ const area=await executeLiveEventQuery({payload:{...payload,scope:'in_place'},eventSupply,placeSelectionStore:store,now:'2026-10-07T12:00:00Z'});
+ assert.equal(area.status,400);assert.equal(area.body.error,'place_scope_unavailable');assert.equal(called,1);
+ const drift=await executeLiveEventQuery({payload:{...payload,anchor:{lat:10,lng:20}},eventSupply,placeSelectionStore:store,now:'2026-10-07T12:00:00Z'});
+ assert.equal(drift.status,400);assert.equal(called,1);
+});
+test('Live rejects empty or non-string choice fields before collecting events',async()=>{
+ let called=0;
+ for(const selection of ['',false,0,null]) {
+  const out=await executeLiveEventQuery({payload:{scope:'around_place',anchor:{lat:51.5,lng:2.32},place_query:'Harbour',place_selection:selection},eventSupply:async()=>{called++;return {events:[]};}});
+  assert.equal(out.status,400);
+ }
+ assert.equal(called,0);
+});

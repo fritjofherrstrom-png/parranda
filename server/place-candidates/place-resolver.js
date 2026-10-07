@@ -149,6 +149,7 @@ function matchesGeographicQuery(candidate, query) {
   const parts = String(query || "").split(",").map(normalizeNameForMatch).filter(Boolean);
   const names = candidate.matching_names || [normalizeNameForMatch(candidate.name)];
   const admins = candidate.admin_names || [];
+  if (parts.length === 1 && names.some(name => admins.some(admin => parts[0] === `${name} ${admin}` || parts[0] === `${admin} ${name}`))) return true;
   return parts.length > 0 && parts.some((part, index) => names.includes(part) && parts.every((qualifier, qIndex) => qIndex === index || admins.includes(qualifier)));
 }
 
@@ -180,7 +181,10 @@ function toRawCandidate(result) {
     label,
     name,
     matching_names: matchingNames(result),
-    admin_names: ADMIN_NAME_FIELDS.map(key => normalizeNameForMatch(result.address?.[key])).filter(Boolean),
+    // Provider display labels can include additional divisions and postcodes.
+    // Keep those source-owned qualifiers so a shared canonical label works too.
+    admin_names: [...new Set([...ADMIN_NAME_FIELDS.map(key => normalizeNameForMatch(result.address?.[key])),
+      ...String(result.display_name || '').split(',').slice(1).map(normalizeNameForMatch)])].filter(Boolean),
     osm_ref: osmRef,
     admin_context: normalizeAdminContext(result.address),
     spatial_scope: normalizeNominatimSpatialScope(result),
@@ -249,6 +253,8 @@ function dedupeSamePlace(rawCandidates) {
     const label = normalizeNameForMatch(candidate.label);
     const name = normalizeNameForMatch(candidate.name);
     const duplicateOf = kept.find((existing) => {
+      const geographic = value => ["settlement", "district", "municipality", "region"].includes(value.spatial_scope?.kind);
+      if (geographic(existing) !== geographic(candidate)) return false;
       const sameLabel = Boolean(label && normalizeNameForMatch(existing.label) === label);
       const sameName = Boolean(name && normalizeNameForMatch(existing.name) === name);
       if (sameLabel) return coordinateDistanceKm(existing, candidate) <= SAME_FULL_LABEL_CLUSTER_KM;
@@ -324,7 +330,10 @@ function classifyConfidences(rawCandidates, query = null, context = {}) {
 
   // An administrative qualifier must be corroborated by the provider, not
   // dropped so that popularity can turn a different place into the destination.
-  if (String(query || "").includes(",") && !sorted.some(candidate => matchesGeographicQuery(candidate, query))) {
+  // Source-owned street-address queries need not contain the venue's name.
+  // Preserve their established resolver behavior; this guard binds geographic
+  // names to their qualifiers rather than reinterpreting event addresses.
+  if (context.purpose !== "event_venue" && String(query || "").includes(",") && !sorted.some(candidate => matchesGeographicQuery(candidate, query))) {
     return sorted.map(candidate => ({ ...candidate, confidence: "low" }));
   }
 
@@ -584,8 +593,8 @@ function createNominatimPlaceResolver({
     if (!query) return [];
     // An invalid configured endpoint fails closed without ever calling fetch.
     if (!endpointValid) return [];
-    const context = { language: normalizeLanguage(options.language), near: normalizeBias(options.near) };
-    const queryIdentity = createHash("sha256").update(JSON.stringify([query.toLowerCase(), context.language, context.near])).digest("hex");
+    const context = { language: normalizeLanguage(options.language), near: normalizeBias(options.near), purpose: options.purpose === "event_venue" ? "event_venue" : "place" };
+    const queryIdentity = createHash("sha256").update(JSON.stringify([query.toLowerCase(), context.language, context.near, context.purpose])).digest("hex");
     const key = `v4:${endpointIdentity}:${queryIdentity}`;
     const result = await cache.get(
       key,

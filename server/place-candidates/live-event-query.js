@@ -174,8 +174,8 @@ function normalizeLiveEventQuery(payload = {}) {
     if (placeQuery && placeQuery.length <= MAX_PLACE_QUERY_LENGTH) query.place_query = placeQuery;
   }
   if (scopeKind === "in_place" && !query.place_query) return { error: "in_place_requires_place_query" };
-  if (["around_place", "in_place"].includes(scopeKind) && payload.place_selection != null) {
-    if (typeof payload.place_selection !== "string" || payload.place_selection.length > 8192 || !query.place_query) return { error: "invalid_place_selection" };
+  if (["around_place", "in_place"].includes(scopeKind) && payload.place_selection !== undefined) {
+    if (typeof payload.place_selection !== "string" || !payload.place_selection || payload.place_selection.length > 8192 || !query.place_query) return { error: "invalid_place_selection" };
     query.place_selection = payload.place_selection;
   }
   return { value: query, public: publicQueryShape(query) };
@@ -413,19 +413,19 @@ async function attestLivePlaceContext(query, placeResolver, placeLanguage, place
     placeSelectionStore,
   });
   if (query.place_selection && resolved.intake?.status !== "resolved") return { invalidSelection: true };
-  if (!resolved.anchor || !resolved.spatialScope) return null;
+  if (!resolved.anchor) return null;
   const driftKm = haversineKm(query.collection_anchor, resolved.anchor);
   const scope = resolved.spatialScope;
   if (
     !Number.isFinite(driftKm) ||
     driftKm > MAX_ATTESTED_ANCHOR_DRIFT_KM ||
-    !pointWithinTrustedSpatialScope(query.collection_anchor, scope)
+    (scope && !pointWithinTrustedSpatialScope(query.collection_anchor, scope))
   ) return null;
   return {
     placeContext: resolved.placeContext,
     spatialScope: scope,
     placeLabel: resolved.intake?.resolved?.label || null,
-    smallSettlement: !reverseOnly && scope.kind === "settlement" && scope.collection_mode === "local_anchor" && scope.diagonal_km <= 15,
+    smallSettlement: !reverseOnly && scope?.kind === "settlement" && scope.collection_mode === "local_anchor" && scope.diagonal_km <= 15,
   };
 }
 

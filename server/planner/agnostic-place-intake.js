@@ -111,7 +111,7 @@ async function resolveAgnosticIntake({
   placeQuery = null,
   placeResolver = null,
   placeLanguage = null,
-  placeSelection = null,
+  placeSelection,
   placeSelectionStore = null,
   placeContextSelection = null,
   placeBias = null,
@@ -172,8 +172,9 @@ async function resolveAgnosticIntake({
 
   // Selected identity may come only from a receipt issued by this server.
   // Explicit coordinates above remain authoritative, including with a token.
-  const selected = placeSelection ? placeSelectionStore?.read(placeSelection, placeQuery) : null;
-  const selectionInvalid = Boolean(placeSelection && !selected);
+  const hasSelection = placeSelection !== undefined;
+  const selected = hasSelection ? placeSelectionStore?.read(placeSelection, placeQuery) : null;
+  const selectionInvalid = hasSelection && !selected;
   const previous = placeContextSelection ? placeSelectionStore?.read(placeContextSelection) : null;
   const near = previous || (placeBias && isValidCoordinate(placeBias.lat, placeBias.lng) ? placeBias : null);
   const candidateChoice = candidate => ({
