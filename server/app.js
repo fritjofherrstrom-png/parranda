@@ -46,6 +46,7 @@ const {
 const { parseRequestedDates } = require("./planner/requested-dates");
 const { createPlannerLifecycle, lifecycleLoader } = require('./planner/cold-lifecycle');
 const { nearbyCuratedSupply } = require('./planner/nearby-curated-supply');
+const { createPlaceSelectionStore, placeResolutionInputs } = require('./place-candidates/place-selection');
 const { attributeToWithheldDay } = require("./planner/pin-refusal-reasons");
 const {
   markCommitmentEligibility,
@@ -1486,6 +1487,7 @@ function selectPublishedEventWeave({ promotionPromote, eventWeave, publicResult 
 function buildApp({
   openDataLoader = resolveDefaultOpenDataLoader(),
   placeResolver = resolveDefaultPlaceResolver(),
+  placeSelectionStore = createPlaceSelectionStore({ cacheDir: process.env.PARRANDA_CACHE_DIR }),
   eventSupply,
   sourceCatalog,
   reviewedPlaceSource,
@@ -1863,6 +1865,7 @@ function buildApp({
       now: eventsNow,
       placeResolver,
       placeLanguage: normalizeLanguage(request.query?.lang),
+      placeSelectionStore,
     });
     response.status(result.status).json(result.body);
   });
@@ -2240,6 +2243,8 @@ function buildApp({
         placeQuery,
         placeResolver,
         placeLanguage: lang,
+        placeSelectionStore,
+        ...placeResolutionInputs(request.body),
       });
 
       if (!anchor) {
@@ -2598,6 +2603,8 @@ function buildApp({
           coords: parseBlitzCoordinates(request),
           placeQuery: parsePlaceQuery(request),
           placeResolver,
+          placeSelectionStore,
+          ...placeResolutionInputs(request.body),
           openDataLoader,
           eventSupply,
           weatherProvider,
