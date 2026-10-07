@@ -142,7 +142,7 @@ export function createDeferredFetch() {
   };
 }
 
-let cachedModulePath = null;
+const cachedModulePaths = new Map();
 let bundleGeneration = 0;
 
 /**
@@ -151,11 +151,11 @@ let bundleGeneration = 0;
  * test renderer share one instance; the map library (MapLibre) is stubbed because the map effect
  * needs a real container it will never have here.
  */
-async function buildComponent() {
-  if (cachedModulePath) return cachedModulePath;
+async function buildComponent(entry) {
+  if (cachedModulePaths.has(entry)) return cachedModulePaths.get(entry);
   // node:test runs test files in separate processes. A shared outfile lets a
   // concurrent esbuild truncate a module while another process imports it.
-  const outfile = resolve(HERE, `.planner-harness-bundle.${process.pid}.mjs`);
+  const outfile = resolve(HERE, `.planner-harness-bundle.${process.pid}${entry === "components/AnywherePlanner.tsx" ? "" : "." + entry.replace(/[^\w]/g, "_")}.mjs`);
   const stubMap = {
     name: "stub-leaflet",
     setup(build) {
@@ -189,7 +189,7 @@ async function buildComponent() {
     },
   };
   await esbuild.build({
-    entryPoints: [resolve(SRC, "components/AnywherePlanner.tsx")],
+    entryPoints: [resolve(SRC, entry)],
     bundle: true,
     outfile,
     format: "esm",
@@ -200,7 +200,7 @@ async function buildComponent() {
     plugins: [stubMap],
     logLevel: "silent",
   });
-  cachedModulePath = outfile;
+  cachedModulePaths.set(entry, outfile);
   process.once("exit", () => rmSync(outfile, { force: true }));
   return outfile;
 }
@@ -208,8 +208,8 @@ async function buildComponent() {
 /**
  * @returns {Promise<{ window, document, clock, fetchMock, container, unmount, act }>}
  */
-export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", storage = {}, sessionStorage = {} } = {}) {
-  const code = await buildComponent();
+export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", storage = {}, sessionStorage = {}, entry = "components/AnywherePlanner.tsx", props = { lang: "en" }, injected = {} } = {}) {
+  const code = await buildComponent(entry);
   bundleGeneration += 1;
 
   const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", {
@@ -217,6 +217,7 @@ export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", 
     pretendToBeVisual: false,
   });
   const { window } = dom;
+  Object.assign(window, injected);
 
   for (const [key, value] of Object.entries(storage)) {
     window.localStorage.setItem(key, JSON.stringify(value));
@@ -281,7 +282,7 @@ export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", 
   };
 
   await run(() => {
-    root.render(React.createElement(AnywherePlanner, { lang: "en" }));
+    root.render(React.createElement(AnywherePlanner, props));
   });
 
   return {

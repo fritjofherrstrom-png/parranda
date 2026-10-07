@@ -324,3 +324,9 @@ test("resolveDefaultOpenDataLoader stays null when the flag is unset, and return
   assert.equal(resolveDefaultOpenDataLoader({ PARRANDA_OPEN_DATA_LOADER: "enabled" }) === null, false);
   assert.equal(typeof resolveDefaultOpenDataLoader({ PARRANDA_OPEN_DATA_LOADER: "enabled" }), "function");
 });
+
+test('a bounded cache evicts oldest entries without retaining arbitrary prefix searches', async () => {
+  const cache = createSourceCache({namespace:'bounded',maxEntries:2});
+  await cache.get('first', async () => 1); await cache.get('second', async () => 2); await cache.get('third', async () => 3);
+  assert.equal(cache.peek('first'), null); assert.equal(cache.peek('second'), 2); assert.equal(cache.peek('third'), 3);
+});

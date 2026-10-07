@@ -47,6 +47,7 @@ const { parseRequestedDates } = require("./planner/requested-dates");
 const { createPlannerLifecycle, lifecycleLoader } = require('./planner/cold-lifecycle');
 const { nearbyCuratedSupply } = require('./planner/nearby-curated-supply');
 const { createPlaceSelectionStore, placeResolutionInputs } = require('./place-candidates/place-selection');
+const { resolveDefaultPlaceSuggestions } = require('./place-candidates/place-suggestions');
 const { attributeToWithheldDay } = require("./planner/pin-refusal-reasons");
 const {
   markCommitmentEligibility,
@@ -1488,6 +1489,7 @@ function buildApp({
   openDataLoader = resolveDefaultOpenDataLoader(),
   placeResolver = resolveDefaultPlaceResolver(),
   placeSelectionStore = createPlaceSelectionStore({ cacheDir: process.env.PARRANDA_CACHE_DIR }),
+  placeSuggestions = resolveDefaultPlaceSuggestions(),
   eventSupply,
   sourceCatalog,
   reviewedPlaceSource,
@@ -1529,6 +1531,27 @@ function buildApp({
   // from the open data the whole app depends on. On by default, generous
   // enough that a person planning days never notices it.
   app.use(createPublicAccessGuard({ env: process.env }));
+  app.post('/api/place-suggestions', async (request, response) => {
+    const query = typeof request.body?.query === 'string' ? request.body.query.trim().replace(/\s+/g, ' ') : '';
+    if (query.length > 200) return response.status(400).json({ error: 'invalid_query' });
+    if (query.length < 3) return response.json({ status: 'ready', choices: [] });
+    if (typeof placeSuggestions !== 'function') return response.json({ status: 'unavailable', choices: [] });
+    const previous = placeSelectionStore.read(request.body?.context_selection);
+    try {
+      const result = await placeSuggestions(query, { language: normalizeLanguage(request.query?.lang), ...(previous ? { near: { lat: previous.lat, lng: previous.lng } } : {}) });
+      const registry = buildLandingCityRegistry(normalizeLanguage(request.query?.lang));
+      const choices = (result.choices || []).slice(0, 5).flatMap(choice => {
+        const selection = placeSelectionStore.issue(choice.candidate, choice.query);
+        if (!selection) return [];
+        const entry = registry[choice.title.toLowerCase()];
+        const point = choice.candidate;
+        const distance = entry?.center ? Math.hypot((point.lat - entry.center.lat) * 111, (point.lng - entry.center.lng) * 111 * Math.cos(point.lat * Math.PI / 180)) : Infinity;
+        const cityKey = choice.kind === 'settlement' && distance <= 10 ? entry?.key : null;
+        return [{ title: choice.title, context: choice.context, query: choice.query, selection_id: selection, attribution: point.attribution, license: point.license, ...(cityKey ? { city_key: cityKey } : {}) }];
+      });
+      response.json({ status: result.status, choices, ...(result.retry_after_ms ? { retry_after_ms: result.retry_after_ms } : {}) });
+    } catch (_) { response.json({ status: 'unavailable', choices: [] }); }
+  });
   // GET / — the new frontend IS the landing (sole owner since the old shell was
   // retired). The committed frontend/dist makes the build always present; if a
   // deployment somehow lacks it, fail LOUDLY — never a silently wrong page.
