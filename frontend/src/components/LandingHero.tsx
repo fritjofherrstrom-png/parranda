@@ -4,8 +4,8 @@
  *   - type a city or place → the planner composes around it;
  *   - "Use my location" → position becomes the day's anchor (coords handed to
  *     the planner via sessionStorage, never the URL).
- * A registered city routes to the modern planner with its server-owned citypack
- * identity; anything else goes to freeform any-city intake. The registry is injected by
+ * Every place routes to the modern planner and freeform any-place intake.
+ * Registered aliases supply canonical display labels only. The registry is injected by
  * the server at serve time (a city is data, never code). It powers the inline
  * completion and the routing only: the landing advertises no list of cities
  * (the hand-picked city stations were removed in October 2026 — they read as a

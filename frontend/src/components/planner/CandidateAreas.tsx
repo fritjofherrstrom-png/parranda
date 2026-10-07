@@ -23,7 +23,6 @@ export default function CandidateAreas({
   expandedCandidateKey,
   setExpandedCandidateKey,
   commitments,
-  cityKey,
   releaseCommitment,
   commit,
 }: {
@@ -37,7 +36,6 @@ export default function CandidateAreas({
   expandedCandidateKey: string | null;
   setExpandedCandidateKey: (key: string | null) => void;
   commitments: Commitments;
-  cityKey: string | null;
   releaseCommitment: (identity: string) => void;
   commit: (identity: string, kind: "exclude" | "pin", commitLabel: string) => void;
 }) {
@@ -107,7 +105,7 @@ export default function CandidateAreas({
                               <ExternalIcon />
                             </a>
                           )}
-                          {!cityKey && candidateId && (commitments[candidateId]?.kind === "pin" || canCommitTo(stop)) && (
+                          {candidateId && (commitments[candidateId]?.kind === "pin" || canCommitTo(stop)) && (
                             <button
                               type="button"
                               onClick={() =>

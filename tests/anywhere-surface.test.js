@@ -61,14 +61,12 @@ async function withServer(opts, run) {
   }
 }
 
-test("a registered city still serves its normal city shell (not the alpha)", async () => {
+test("a registered city enters the modern planner with ordinary place intake", async () => {
   await withServer({}, async (server) => {
     const res = await get(server, "/barcelona?lang=en");
-    assert.equal(res.status, 200);
-    const b = bootstrapOf(res.body);
-    assert.ok(b, "city bootstrap present");
-    assert.equal(b.key, "barcelona");
-    assert.notEqual(b.anywhereMode, true, "registered city is NOT in anywhere mode");
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.location, "/anywhere?lang=en&place=Barcelona&planner=open");
+    assert.equal(bootstrapOf(res.body), null);
   });
 });
 
