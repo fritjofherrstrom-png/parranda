@@ -15,7 +15,7 @@ async function start() {
   if (!runtime) runtime = (async () => {
     const browser = await chromium.launch({ ...(process.env.PARRANDA_TEST_CHROMIUM
       ? { executablePath: process.env.PARRANDA_TEST_CHROMIUM } : {}), headless: true,
-      args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
     const server = buildApp({ openDataLoader: null, eventSupply: null, placeResolver: null, reviewedPlaceSource: null }).listen(0, '127.0.0.1');
     await once(server, 'listening');
     return { browser, server, origin: `http://127.0.0.1:${server.address().port}` };
@@ -68,7 +68,10 @@ for (const [label, path, anchor] of [
       const payload = route.request().postDataJSON(); liveQueries.push(payload);
       return route.fulfill({ json: { contract: 'live_event_query_v1', live_events: { ...day(label, anchor, {}).live_events,
         acquisition: { source_health: { ...HEALTH, status: 'healthy', result: 'events_found', reasons: [], selected_source_count: 1, responding_source_count: 1, event_bearing_source_count: 1, raw_event_count: 1, normalized_event_count: 1, accepted_event_count: 1, surfaced_event_count: 1 } },
-        this_week: [{ id: 'event', title: `${label} concert`, starts_at: `${DATE}T18:00:00Z`, timezone: ({ Rome: 'Europe/Rome', Barcelona: 'Europe/Madrid', Athens: 'Europe/Athens', Stockholm: 'Europe/Stockholm' })[label],
+        // This fixture occurs on the selected day: the contract puts it in
+        // tonight, not the following-days bucket. The Live hierarchy preserves
+        // the chosen day rather than switching to week when tonight is empty.
+        tonight: [{ id: 'event', title: `${label} concert`, starts_at: `${DATE}T18:00:00Z`, timezone: ({ Rome: 'Europe/Rome', Barcelona: 'Europe/Madrid', Athens: 'Europe/Athens', Stockholm: 'Europe/Stockholm' })[label],
           source_url: 'https://calendar.example/event', source_label: 'Fixture calendar', lat: anchor.lat, lng: anchor.lng } ] }, query: { scope: payload.scope, time: payload.time, selected_date: payload.selected_date }, route_mutation: false, day_anchor_mutation: false } });
     }
     if (url.pathname.startsWith('/api/')) return route.fulfill({ status: 503, json: { error: 'outside fixture scope' } });
