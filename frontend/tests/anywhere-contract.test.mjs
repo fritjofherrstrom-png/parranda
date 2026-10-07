@@ -33,33 +33,22 @@ test("payload carries the freeform place + the three agnostic flags, never a cit
   assert.deepEqual(payload.preferences, ["food", "views"]);
 });
 
-test("recognized curated cities use the same modern planner with the server-owned citypack key", () => {
-  const payload = buildAnywherePayload({
-    city: "barcelona",
-    place: "Barcelona",
-    dates: ["2026-08-26"],
-    preferences: ["food", "views"],
-  });
-  assert.equal(payload.city, "barcelona");
-  assert.ok(!("place" in payload) && !("place_query" in payload), "citypack mode must not be demoted to freeform intake");
-  assert.ok(!("experimental_agnostic_route_output" in payload), "rich citypack mode uses the recognized-city route path");
+test("a legacy curated-city input uses the shared place engine and keeps its preferences", () => {
+  const payload = buildAnywherePayload({ city: "barcelona", place: "Barcelona", dates: ["2026-08-26"], preferences: ["food", "views"] });
+  assert.equal(payload.place, "Barcelona");
+  assert.equal(payload.place_query, "Barcelona");
+  assert.ok(!("city" in payload));
+  assert.equal(payload.experimental_agnostic_route_output, 1);
+  assert.equal(payload.include_external_candidates, 1);
+  assert.equal(payload.agnostic_engine_compose, 1);
   assert.deepEqual(payload.preferences, ["food", "views"]);
 });
 
-test("the modern planner owns curated city links and sends their citypack identity", () => {
-  assert.match(anywherePlannerSource, /shared\.city/);
-  assert.match(anywherePlannerSource, /city: anchor\.city/);
-  assert.match(anywherePlannerSource, /const authoritativePlace = anchor\.city \? cls\.placeLabel : anchor\.place/);
-  assert.match(anywherePlannerSource, /place: authoritativePlace/);
-  assert.match(anywherePlannerSource, /const restoredAnchorKey = anchorKey\(\{[\s\S]{0,100}city: typeof i\?\.city === "string" \? i\.city : undefined/);
-});
-
-test("curated mode hides actions whose current APIs would silently lose citypack identity", () => {
-  // Blitz is offered only outside curated mode, and the offer is one button.
-  assert.match(componentSource("AnywherePlanner.tsx"), /!cityKey && !serviceRefusal && !anchorUnresolved && \(\s*<BlitzCard\b[\s\S]{0,240}blitz=\{blitz\}/);
-  assert.match(componentSource("planner/BlitzCard.tsx"), /<div[^>]*>\s*<button\s+type="button"\s+onClick=\{blitz\}/);
-  assert.match(anywherePlannerSource, /!cityKey && hasRealId/);
-  assert.match(anywherePlannerSource, /!cityKey && candidateId/);
+test("explicit coordinates win over obsolete city identity", () => {
+  const payload = buildAnywherePayload({ city: "rome", place: "Rome", coords: { lat: 48.5, lng: 8.5 } });
+  assert.equal(payload.lat, 48.5);
+  assert.equal(payload.lng, 8.5);
+  assert.ok(!("city" in payload) && !("place" in payload));
 });
 
 test("day rhythm carries no kilometer goal while preserving real date math", () => {
@@ -156,7 +145,7 @@ test("cold-start refresh is bounded: the component delegates to the tested follo
   assert.match(anywherePlannerSource, /composed: cls\.status === "composed"/);
   assert.match(anywherePlannerSource, /structureOnly: cls\.status === "structure_only"/);
   assert.match(anywherePlannerSource, /hasStructure: Boolean\(safe\?\.place_structure\)/);
-  assert.match(anywherePlannerSource, /transientSourceRetry: anchor\.city \? false : decision\.shouldRetryTransientSource\(body, cls\)/);
+  assert.match(anywherePlannerSource, /transientSourceRetry: decision\.shouldRetryTransientSource\(body, cls\)/);
   assert.match(anywherePlannerSource, /livePending: safe\?\.live_events\?\.pending === true/);
   assert.match(anywherePlannerSource, /setLiveRefreshExhausted\(followup\.liveRefreshExhausted\)/);
   assert.match(anywherePlannerSource, /pollAttempt: followup\.nextPollAttempt/);

@@ -11,11 +11,14 @@
  * the trigger the focus returns to.
  */
 import type { RefObject } from "react";
+import { nextSourceDate, type LiveFallback } from "./useLiveFallback";
+import { liveDateLabel } from "../../lib/live-event-query.mjs";
 import { eventTiming, liveEventRelevance, liveHighlightGroups } from "../../lib/pulse-view.mjs";
 import type { LiveEventScope } from "../../lib/live-event-query.mjs";
 import { CloseIcon, LocationIcon } from "../shared/icons";
 import { liveRelevanceSentence, nearbyDistanceLabel, type Lang, type Translate } from "./copy";
 import { liveEventSource } from "./LiveEventSource";
+import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
 import type { LiveEvents, LiveFailure, LiveSourceHealth, PulseEvent } from "./types";
 
 type SheetState = "hidden" | "uncovered" | "pending" | "unavailable" | "partial" | "ok" | "rejected_empty" | "soft_empty";
@@ -44,6 +47,7 @@ export default function LiveSheet({
   liveQueryPending,
   liveQueryGeoHint,
   liveQueryError,
+  liveFallback = null,
   sheetLiveEvents,
   sheetBuckets,
   sheetBrowseBuckets,
@@ -76,6 +80,7 @@ export default function LiveSheet({
   liveQueryPending: boolean;
   liveQueryGeoHint: string | null;
   liveQueryError: string | null;
+  liveFallback?: LiveFallback | null;
   sheetLiveEvents: LiveEvents | null;
   sheetBuckets: { tonight: PulseEvent[]; thisWeek: PulseEvent[] };
   sheetBrowseBuckets: { tonight: PulseEvent[]; thisWeek: PulseEvent[] };
@@ -98,13 +103,13 @@ export default function LiveSheet({
   // current picks: matched rows get the picks heading, every other row
   // (the reserved local discovery included) is listed as "other".
   const highlightGroups = liveHighlightGroups(sheetEvents, selected);
-  const sheetRow = (ev: PulseEvent, i: number, titleClassName: string) => {
+  const sheetRow = (ev: PulseEvent, i: number, titleClassName: string, timingDate = sheetLiveEvents?.selected_date) => {
     const relevance = liveRelevanceSentence(liveEventRelevance(ev, selected), lang, t);
     const distance = nearbyDistanceLabel(ev, lang);
     return (
-      <li key={ev.id ?? i} className="flex items-baseline gap-3">
-        <span className="type-data min-w-[56px] shrink-0 text-xs font-semibold text-parranda-live">{eventTiming(ev, lang, undefined, sheetLiveEvents?.selected_date)}</span>
-        <span className="text-sm leading-relaxed text-parranda-ink/90">
+      <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 sm:gap-2">
+        <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">{eventTiming(ev, lang, undefined, timingDate)}</span>
+        <span className="min-w-0 max-w-full break-words text-sm leading-relaxed text-parranda-ink/90">
           <span className={titleClassName}>{ev.title}</span>
           {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
           {distance && <span className="font-semibold text-parranda-live"> · {distance}</span>}
@@ -325,7 +330,7 @@ export default function LiveSheet({
                     same collection states as the Live card before describing
                     a genuinely empty selected period. */}
                 {sheetPulseState === "rejected_empty"
-                    ? t("Det fanns listningar, men inga var pålitliga eller aktuella nog att visa.", "Listings existed, but none were reliable or current enough to show.")
+                    ? liveRejectedSentence(sheetLiveEvents, lang)
                     : sheetPulseState === "soft_empty"
                         ? t("Källorna svarade men listar inga händelser för perioden.", "The sources responded but list no events for this period.")
                         : liveSheetTime === "tonight" && liveSheetScope !== "near_me" && wovenNames.length > 0
@@ -364,6 +369,37 @@ export default function LiveSheet({
                 </button>
               )}
             </div>
+          )}
+          {liveFallback && (
+            <section aria-label={t("Separata Live-förslag", "Separate Live suggestions")}
+              className="flex flex-col gap-3 rounded-parranda border border-parranda-live/30 bg-parranda-live/5 p-4">
+              <h4 className="text-sm font-bold text-parranda-live">
+                {liveFallback.kind === "following"
+                  ? t(`Följande dagar — runt ${anchorLabel}`, `Following days — around ${anchorLabel}`)
+                  : t(`Samma dag — större område kring ${anchorLabel}`, `Same day — wider area around ${anchorLabel}`)}
+              </h4>
+              {liveFallback.status === "checking" ? <p role="status">{t("Kollar det större området…", "Checking the wider area…")}</p>
+                : liveFallback.status === "unconfirmed" ? <p>{t("Det större området kunde inte bekräftas just nu.", "The wider area could not be confirmed right now.")}</p>
+                : liveFallback.events.length > 0 ? <ul className="flex flex-col gap-3">
+                  {liveFallback.events.map((ev, i) => {
+                    const date = liveFallback.kind === "following" ? nextSourceDate(ev, liveFallback.selectedDate) : null;
+                    return <li key={ev.id ?? i} className="flex flex-col gap-1">
+                      {date && <span className="type-data text-xs font-semibold text-parranda-live">{liveDateLabel(date, lang)}</span>}
+                      <ul>{sheetRow(ev, i, "font-bold", date || liveFallback.selectedDate)}</ul>
+                    </li>;
+                  })}
+                </ul> : <p>{t("Inga verifierade händelser listades samma dag i det större området.", "No verified same-day events were listed in the wider area.")}</p>}
+              {liveFallback.partial && <p className="text-xs text-parranda-ink/68">
+                {t("Vissa källor kunde inte läsas. De här träffarna är verifierade, men listan kan vara ofullständig.", "Some sources could not be read. These events are verified, but the list may be incomplete.")}
+              </p>}
+              {liveFallback.widerStatus && <p role={liveFallback.widerStatus === "checking" ? "status" : undefined} className="text-xs text-parranda-ink/68">
+                {liveFallback.widerStatus === "checking"
+                  ? t("Kollar också samma dag i det större området…", "Also checking the same day in the wider area…")
+                  : t("Det större området kunde inte bekräftas just nu.", "The wider area could not be confirmed right now.")}
+              </p>}
+              {liveFallback.kind === "following" && !liveFallback.widerStatus && liveFallback.events.length > 0 &&
+                <p className="text-xs text-parranda-ink/68">{t("Inga verifierade händelser listades samma dag i det större området. Här visas källornas senare lokala datum.", "No verified same-day events were listed in the wider area. These are the sources' later local dates.")}</p>}
+            </section>
           )}
           {(liveQueryError || (!liveQueryPending && (sheetPulseState === "pending" || sheetPulseState === "unavailable"))) && (
             <button type="button" onClick={onRetry}

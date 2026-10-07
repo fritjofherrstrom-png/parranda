@@ -62,7 +62,7 @@ function rankCandidatesForBlitz(cityConfig, payload = {}, helpers = {}) {
   const { context, density, normalized, pool } = candidatePool;
 
   const eligible = [];
-  for (const { candidate, derived, gates } of pool) {
+  for (const { candidate, derived, gates, availability } of pool) {
     const fit = scoreCandidateFit({
       candidate,
       userIntents: normalized.intents,
@@ -81,7 +81,7 @@ function rankCandidatesForBlitz(cityConfig, payload = {}, helpers = {}) {
       diversity: derived.provenance_diversity,
       freshness: derived.freshness,
     });
-    eligible.push({ candidate, derived, gates, fit, calibration });
+    eligible.push({ candidate, derived, gates, fit, calibration, availability });
   }
 
   return { ranked: rankEligible(eligible), candidatePool };

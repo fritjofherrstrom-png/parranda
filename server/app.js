@@ -1602,6 +1602,20 @@ function buildApp({
   });
   app.get("/anywhere", (request, response) => {
     const params = entryParams(request);
+    // Canonicalize old curated shares/bookmarks before the UI loads. Registry
+    // identity supplies a label, never route templates or public coordinates.
+    if (params.has("city")) {
+      const entry = readPlannerEntry(params);
+      const registered = resolveCityConfig(params.get("city"), { allowFallback: false });
+      params.delete("city");
+      if (entry.coords || entry.near) {
+        params.delete("place");
+      } else if (registered.found && ["public", "beta", "preview"].includes(registered.cityConfig.visibility || "public")) {
+        params.set("place", resolveDisplayLabel(registered.cityConfig, null, normalizeLanguage(params.get("lang"))));
+      }
+      response.redirect(302, readPlannerEntry(params).hasIntent ? `/anywhere?${params.toString()}` : landingHref(params));
+      return;
+    }
     if (!readPlannerEntry(params).hasIntent) {
       response.redirect(302, landingHref(params));
       return;
@@ -2322,6 +2336,7 @@ function buildApp({
             anchorMode: intake.mode,
             spatialScope,
             walkingTargetBand: requestedRhythm ? null : resolveAgnosticWalkingTargetBand(payload.walkingKmTarget),
+            ...(requestedRhythm ? { dayRhythm: requestedRhythm } : {}),
           });
           const structureCandidates = [...curatedCandidates, ...(Array.isArray(records) ? records : [])].filter(
             (c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng),
@@ -2843,6 +2858,22 @@ function buildApp({
     }
     if (!isCityRoot && !isPlannerEntry) {
       response.status(404).type("text/plain").send("Not found");
+      return;
+    }
+
+    const config = cityResolution.cityConfig;
+    if (["public", "beta", "preview"].includes(config.visibility || "public")) {
+      const params = entryParams(request);
+      const lang = normalizeLanguage(params.get("lang"));
+      params.delete("city");
+      // Keep an explicit position/session handoff; otherwise the registered
+      // path supplies a label and its query label cannot rename the place.
+      const entry = readPlannerEntry(params);
+      if (entry.coords || entry.near) params.delete("place");
+      else params.set("place", resolveDisplayLabel(config, null, lang));
+      params.set("planner", "open");
+      params.set("lang", lang);
+      response.redirect(302, `/anywhere?${params.toString()}`);
       return;
     }
 

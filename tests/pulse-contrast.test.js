@@ -2,7 +2,7 @@
 
 /**
  * Pulse contrast and wrapping on the legacy city shell (index.html +
- * styles.css + script.js, served by the /:city catch-all).
+ * styles.css + script.js, retained for internal compatibility only).
  *
  * The Pulse teaser and edition are themed by several layers of rules, and
  * an earlier fix edited a base rule that later rules override: zero pixels
@@ -33,6 +33,13 @@ const test = require("node:test");
 const zlib = require("node:zlib");
 
 const { buildApp } = require("../server/app");
+const { cityConfigs } = require("../server/cities");
+// Public city bookmarks now redirect to the shared React Planner. Keep this
+// legacy renderer audit on explicit internal fixtures; modern public entry,
+// map/actions/Live coverage lives in unified-city-planner-browser.test.js.
+for (const city of ["barcelona", "rome", "athens"]) {
+  cityConfigs[`contrast-${city}`] = { ...cityConfigs[city], visibility: "internal" };
+}
 
 const typesSource = fs.readFileSync(path.join(__dirname, "..", "server", "pulse-engine", "types.js"), "utf8");
 const SIGNAL_TYPES = [
@@ -428,7 +435,7 @@ async function openPulse({ browser, origin }, { city, width, empty = false }) {
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.clock.setFixedTime(FIXED_NOW);
-  await page.goto(`${origin}/${city}?lang=sv`);
+  await page.goto(`${origin}/contrast-${city}?lang=sv`);
   await page.addStyleTag({ content: NO_MOTION_CSS });
   await page.locator("#cityPulseTeaserButton").click();
   await page.locator("#cityPulseStart .pulse-entry").first().waitFor();
@@ -436,7 +443,7 @@ async function openPulse({ browser, origin }, { city, width, empty = false }) {
 }
 
 for (const shell of SHELLS) {
-  test(`Pulse teaser and edition on /${shell.city} at ${shell.width}px meet WCAG AA and keep text inside`, { timeout: 120_000 }, async (t) => {
+  test(`Internal legacy Pulse teaser and edition (${shell.city}) at ${shell.width}px meet WCAG AA and keep text inside`, { timeout: 120_000 }, async (t) => {
     const current = await openRuntime(t);
     if (!current) return;
     const { context, page, pageErrors } = await openPulse(current, shell);
@@ -476,7 +483,7 @@ for (const shell of SHELLS) {
   });
 }
 
-test("the Pulse empty state keeps its dark surface (/barcelona at 390px)", { timeout: 120_000 }, async (t) => {
+test("the Pulse empty state keeps its dark surface (internal Barcelona fixture at 390px)", { timeout: 120_000 }, async (t) => {
   const current = await openRuntime(t);
   if (!current) return;
   // No signals: the client falls back to one timeless card, which "Ikväll" hides.

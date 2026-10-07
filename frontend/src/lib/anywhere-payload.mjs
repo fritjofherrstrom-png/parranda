@@ -3,7 +3,7 @@
  * anywhere-mode request (script.js planRoutesAnywhere) so the new frontend and
  * the current app speak the SAME API contract:
  *   - freeform `place` + agnostic flags for any-place intake;
- *   - exact `city` only for a server-registered citypack using the same modern UI.
+ *   - registered-city labels use the same freeform intake and nearby curated supply.
  * Kept as a pure .mjs module so node --test can assert the contract without a DOM.
  */
 
@@ -47,12 +47,12 @@ export function freezeComposeDateIso({ dayOffset = 0, dateIsoOverride = null, no
 // Day density, not a walking-distance goal. Distance is measured afterwards.
 // Three steps of one scale (calm < balanced < full) and "free", which is not a
 // fourth step: the reader leaves the choice to Parranda. Each `note` says what
-// the engine does with it — today it builds a "free" day like a full one.
+// the engine does with it — "free" adapts to eligible supply and trusted time.
 export const DAY_RHYTHMS = [
   { key: "calm", sv: "Lugn", en: "Easy", noteSv: "Färre stopp, mer tid på varje plats.", noteEn: "Fewer stops, more time at each place." },
   { key: "balanced", sv: "Lagom", en: "Balanced", noteSv: "Några stopp med luft emellan.", noteEn: "A few stops with room in between." },
   { key: "full", sv: "Fylld", en: "Full", noteSv: "Så många stopp som dagen rymmer.", noteEn: "As many stops as the day holds." },
-  { key: "free", sv: "Parranda väljer", en: "Parranda chooses", noteSv: "Inget eget val — dagen byggs då som Fylld.", noteEn: "No choice of your own — the day is then built like Full." },
+  { key: "free", sv: "Parranda väljer", en: "Parranda chooses", noteSv: "Anpassar rytmen efter möjliga stopp och tiden som finns.", noteEn: "Adapts the rhythm to usable stops and the time available." },
 ];
 
 export function buildAnywherePayload({
@@ -73,16 +73,15 @@ export function buildAnywherePayload({
   //  - coords ("near me now"): top-level lat/lng — explicit coords WIN in the
   //    agnostic intake (parseBlitzCoordinates), and no place text is sent;
   //  - place (typed city): freeform text only, never a recognized city key.
-  const cityKey = typeof city === "string" ? city.trim() : "";
-  const anchor = cityKey
-    ? { city: cityKey }
-    : coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng)
-      ? { lat: coords.lat, lng: coords.lng }
-      : { place, place_query: place };
+  // A legacy city key is text only at this UI boundary. Public citypack
+  // selection no longer bypasses any-place intake, preferences or trust gates.
+  const anchor = coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng)
+    ? { lat: coords.lat, lng: coords.lng }
+    : { place: place || city, place_query: place || city };
   const rhythm = DAY_RHYTHMS.some(({ key }) => key === dayRhythm) ? dayRhythm : "balanced";
   return {
     ...anchor,
-    ...(!cityKey && !coords ? {
+    ...(!coords ? {
       ...(placeSelection ? { place_selection: placeSelection } : {}),
       ...(placeBias ? { place_bias: placeBias } : {}),
       ...(placeContextSelection ? { place_context_selection: placeContextSelection } : {}),
@@ -96,13 +95,9 @@ export function buildAnywherePayload({
     preferences,
     distance_mode: "no_limit",
     budget_tier: "standard",
-    ...(!cityKey
-      ? {
-          experimental_agnostic_route_output: 1,
-          include_external_candidates: 1,
-          agnostic_engine_compose: 1,
-        }
-      : {}),
+    experimental_agnostic_route_output: 1,
+    include_external_candidates: 1,
+    agnostic_engine_compose: 1,
     // "Not this" — the commitment ledger, v1. Subtractive only: it can remove a
     // place from consideration, never add or vouch for one. Omitted entirely
     // when empty so the default request is unchanged.

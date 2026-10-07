@@ -276,160 +276,19 @@ test("repo internals are not served as static files or city shells", async () =>
   }
 });
 
-test("shell has full i18n coverage for English mode without Swedish leakage", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during shell i18n coverage test: ${url}`);
-  };
-
-  const server = buildApp().listen(0);
-
-  try {
-    const enResponse = await requestText(server, {
-      path: "/barcelona?lang=en",
-    });
-
-    assert.equal(enResponse.status, 200);
-    assert.match(enResponse.body, /<body data-city-key="barcelona"[^>]+data-lang="en">/);
-
-    // The client-side i18n bootstrap legitimately contains every language for
-    // runtime language switching. Strip it so leakage checks only inspect what
-    // the user actually sees rendered.
-    const visibleHtml = enResponse.body.replace(
-      /window\.__PARRANDA_I18N__\s*=\s*\{[\s\S]*?\};/,
-      "window.__PARRANDA_I18N__ = {};",
-    );
-
-    // No previously-hardcoded Swedish strings may leak into the English shell.
-    const swedishSentinels = [
-      "Välj kvarter före checklista",
-      "Bästa timmarna",
-      "Bygg en personlig liten lista",
-      "Visa sparade",
-      "Visa alla igen",
-      "Se ställena på kartan",
-      "Karta över platser i staden",
-      "0 sparade",
-      "Välj en plats i listan eller på kartan",
-      "Spara vald plats",
-      "Öppna i Google Maps",
-      "Klassiker rätt gjort",
-      "Sök plats eller känsla",
-      "STADSDELSMODE",
-      "STOPP DU INTE SKA MISSA",
-      "PERFEKTA DAGEN",
-      "GÖR NÅGOT AV DET",
-      "Sätt som start",
-      "Sätt som mål",
-      "Planera dag härifrån",
-      "Visa kvarteret på karta",
-      "Hotell eller område",
-      "Startkvarter",
-      "Slutkvarter",
-      "Visa på karta",
-    ];
-    swedishSentinels.forEach((swedish) => {
-      assert.equal(
-        visibleHtml.includes(swedish),
-        false,
-        `English shell must not contain Swedish string: "${swedish}"`,
-      );
-    });
-
-    // No unresolved __PARRANDA_I18N_*__ tokens may remain.
-    assert.doesNotMatch(visibleHtml, /__PARRANDA_I18N_[A-Z0-9_]+__/);
-
-    // English equivalents should be present.
-    const englishExpected = [
-      "Choose a neighborhood before a checklist",
-      "Build a personal little list",
-      "Show saved",
-      "See the places on the map",
-      "Map of places in the city",
-      "0 saved",
-      "Choose a place from the list",
-      "Save selected place",
-      "Open in Google Maps",
-      "Classics done right",
-      "NEIGHBORHOOD MODE",
-      "STOPS NOT TO MISS",
-      "THE PERFECT DAY",
-      "Set as start",
-      "Set as end",
-    ];
-    englishExpected.forEach((english) => {
-      assert.equal(
-        visibleHtml.includes(english),
-        true,
-        `English shell must contain: "${english}"`,
-      );
-    });
-
-    // Swedish shell still works.
-    const svResponse = await requestText(server, {
-      path: "/barcelona?lang=sv",
-    });
-    assert.equal(svResponse.status, 200);
-    const visibleSvHtml = svResponse.body.replace(
-      /window\.__PARRANDA_I18N__\s*=\s*\{[\s\S]*?\};/,
-      "window.__PARRANDA_I18N__ = {};",
-    );
-    assert.ok(visibleSvHtml.includes("Välj kvarteret som ska bära dagen"));
-    assert.ok(visibleSvHtml.includes("Klassiker rätt gjort"));
-    assert.doesNotMatch(visibleSvHtml, /__PARRANDA_I18N_[A-Z0-9_]+__/);
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
 test("public pages default to English while explicit Swedish stays available", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during default-English locale test: ${url}`);
-  };
-
-  const stripI18nBootstrap = (html) => html.replace(
-    /window\.__PARRANDA_I18N__\s*=\s*\{[\s\S]*?\};/,
-    "window.__PARRANDA_I18N__ = {};",
-  );
-
   const server = buildApp().listen(0);
-
   try {
-    // The landing is the PROMOTED new-frontend surface (FRONTEND_MIGRATION_
-    // CONTRACT "Promoted surfaces"): the language contract holds via the
-    // request-time <html lang>; copy is rendered client-side by the island.
-    const landing = await requestText(server, { path: "/" });
-    assert.equal(landing.status, 200);
-    assert.match(landing.body, /<html lang="en">/);
-    assert.match(landing.body, /window\.__PARRANDA_CITIES__ = \{/, "city registry injected at serve time");
-
-    const swedishLanding = await requestText(server, { path: "/?lang=sv" });
-    assert.equal(swedishLanding.status, 200);
-    assert.match(swedishLanding.body, /<html lang="sv">/);
-
-    for (const pathName of ["/barcelona", "/rome", "/athens", "/barcelona/plan"]) {
-      const response = await requestText(server, { path: pathName });
-      assert.equal(response.status, 200, `${pathName} should render`);
-      assert.match(response.body, /<html lang="en">/, `${pathName} should default to English html lang`);
-      assert.match(response.body, /<body[^>]+data-lang="en"/, `${pathName} should default body data-lang to English`);
-      assert.equal(
-        stripI18nBootstrap(response.body).includes("Planera dagen."),
-        false,
-        `${pathName} should not default to Swedish shell copy`,
-      );
+    for (const [query, lang] of [["", "en"], ["?lang=sv", "sv"]]) {
+      const landing = await requestText(server, { path: "/" + query });
+      assert.equal(landing.status, 200);
+      assert.ok(landing.body.includes(`<html lang="${lang}">`));
+      const planner = await requestText(server, { path: "/anywhere?place=Lyon&lang=" + lang });
+      assert.equal(planner.status, 200);
+      assert.ok(planner.body.includes(`<html lang="${lang}">`));
     }
-
-    const swedishCity = await requestText(server, { path: "/barcelona?lang=sv" });
-    assert.equal(swedishCity.status, 200);
-    assert.match(swedishCity.body, /<html lang="sv">/);
-    assert.match(swedishCity.body, /<body[^>]+data-lang="sv"/);
-    assert.ok(stripI18nBootstrap(swedishCity.body).includes("Bygg en dag i staden"));
-
-    const invalidLangCity = await requestText(server, { path: "/rome?lang=unknown" });
-    assert.equal(invalidLangCity.status, 200);
-    assert.match(invalidLangCity.body, /<html lang="en">/);
-    assert.match(invalidLangCity.body, /<body[^>]+data-lang="en"/);
   } finally {
-    await new Promise((resolve) => server.close(resolve));
+    await new Promise(resolve => server.close(resolve));
   }
 });
 
@@ -713,132 +572,6 @@ test("GET /api/places/search för barcelona visar inte strukturella route anchor
   }
 });
 
-test("GET /barcelona renderar curated beta shell utan Rome-fallback", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during shell fallback test: ${url}`);
-  };
-
-  const server = buildApp().listen(0);
-
-  try {
-    const response = await requestText(server, {
-      path: "/barcelona",
-    });
-
-    assert.equal(response.status, 200);
-    assert.match(response.body, /<body data-city-key="barcelona" data-city-label="Barcelona" data-lang="en">/);
-    assert.match(
-      response.body,
-      /window\.__PARRANDA_CITY__ = \{"key":"barcelona","label":"Barcelona","displayLabel":"Barcelona"/,
-    );
-    assert.match(response.body, /"displayLabel":"Barcelona"/);
-    assert.match(response.body, /"requestedKey":"barcelona"/);
-    assert.match(response.body, /"fallbackUsed":false/);
-    assert.match(response.body, /"visibility":"beta"/);
-    assert.match(response.body, /<title>Parranda \| Personal City Guide for Barcelona<\/title>/);
-    assert.match(response.body, /Plan the day\./);
-    assert.match(response.body, /Build your day in Barcelona/);
-    assert.doesNotMatch(response.body, /<title>.*city-core preview.*<\/title>/);
-    assert.doesNotMatch(response.body, /"key":"rome","label":"Rom","displayLabel":"Barcelona"/);
-    assert.doesNotMatch(response.body, /Din resa till Rom/);
-    assert.doesNotMatch(response.body, /Just nu i Rom/);
-    assert.doesNotMatch(response.body, /google\.com\/maps\/search\/Rome/i);
-    assert.doesNotMatch(response.body, /Monti som kulturstart/);
-    assert.doesNotMatch(response.body, /__PARRANDA_I18N_[A-Z0-9_]+__/);
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
-test("GET /barcelona/plan renderar planner-entry-route shell med plannerEntryRoute: true", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during planner-entry-route test: ${url}`);
-  };
-
-  const server = buildApp().listen(0);
-
-  try {
-    const response = await requestText(server, {
-      path: "/barcelona/plan",
-    });
-
-    assert.equal(response.status, 200);
-    assert.match(response.body, /<body data-city-key="barcelona"/);
-    assert.match(response.body, /"plannerEntryRoute":true/);
-    assert.match(response.body, /"key":"barcelona"/);
-    assert.match(response.body, /"fallbackUsed":false/);
-    assert.doesNotMatch(response.body, /__PARRANDA_I18N_[A-Z0-9_]+__/);
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
-test("GET /rome/plan renderar planner-entry-route shell för Rom", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during rome planner-entry-route test: ${url}`);
-  };
-
-  const server = buildApp().listen(0);
-
-  try {
-    const response = await requestText(server, {
-      path: "/rome/plan",
-    });
-
-    assert.equal(response.status, 200);
-    assert.match(response.body, /<body data-city-key="rome"/);
-    assert.match(response.body, /"plannerEntryRoute":true/);
-    assert.match(response.body, /"key":"rome"/);
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
-test("GET /athens/plan renderar planner-entry-route shell för Athens", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during athens planner-entry-route test: ${url}`);
-  };
-
-  const server = buildApp().listen(0);
-
-  try {
-    const response = await requestText(server, {
-      path: "/athens/plan",
-    });
-
-    assert.equal(response.status, 200);
-    assert.match(response.body, /<body data-city-key="athens"/);
-    assert.match(response.body, /"plannerEntryRoute":true/);
-    assert.match(response.body, /"key":"athens"/);
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
-test("GET /athens?lang=en surfaces the field-test preview copy without pretending Athens is curated", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during athens preview shell test: ${url}`);
-  };
-
-  const server = buildApp().listen(0);
-
-  try {
-    const response = await requestText(server, {
-      path: "/athens?lang=en",
-    });
-
-    assert.equal(response.status, 200);
-    assert.match(response.body, /<body data-city-key="athens"/);
-    assert.match(response.body, /Athens preview for field testing/);
-    assert.match(response.body, /Athens preview planner/);
-    assert.match(response.body, /Build a simple test day from verified Athens places\./);
-    assert.match(response.body, /Preview • low confidence • no handbuilt routes\./);
-    assert.match(response.body, /Test the Athens planner/);
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
 test("GET /unknown-city/plan does not borrow a registered city's planner shell", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during unknown-city planner-entry-route test: ${url}`);
@@ -855,80 +588,6 @@ test("GET /unknown-city/plan does not borrow a registered city's planner shell",
     assert.equal(response.body, "Not found");
     assert.doesNotMatch(response.body, /"plannerEntryRoute":true/);
     assert.doesNotMatch(response.body, /window\.__PARRANDA_CITY__/);
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
-test("GET /barcelona (utan /plan) har plannerEntryRoute: false", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during normal barcelona shell test: ${url}`);
-  };
-
-  const server = buildApp().listen(0);
-
-  try {
-    const response = await requestText(server, {
-      path: "/barcelona",
-    });
-
-    assert.equal(response.status, 200);
-    assert.match(response.body, /"plannerEntryRoute":false/);
-    assert.match(response.body, /"key":"barcelona"/);
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
-test("GET /barcelona/plan?lang=en renderar engelsk planner-entry-route shell", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during english planner-entry-route test: ${url}`);
-  };
-
-  const server = buildApp().listen(0);
-
-  try {
-    const response = await requestText(server, {
-      path: "/barcelona/plan?lang=en",
-    });
-
-    assert.equal(response.status, 200);
-    assert.match(response.body, /"plannerEntryRoute":true/);
-    assert.match(response.body, /"lang":"en"/);
-    assert.match(response.body, /data-lang="en"/);
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
-test("GET /barcelona/plan bootstrap innehåller samma stadsdata som GET /barcelona förutom plannerEntryRoute", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during bootstrap comparison test: ${url}`);
-  };
-
-  const server = buildApp().listen(0);
-
-  try {
-    const normalResponse = await requestText(server, { path: "/barcelona" });
-    const planResponse = await requestText(server, { path: "/barcelona/plan" });
-
-    // Extract bootstrap JSON from both
-    const normalMatch = normalResponse.body.match(/window\.__PARRANDA_CITY__ = ({.*?});/);
-    const planMatch = planResponse.body.match(/window\.__PARRANDA_CITY__ = ({.*?});/);
-    assert.ok(normalMatch, "expected city bootstrap in normal shell");
-    assert.ok(planMatch, "expected city bootstrap in planner shell");
-
-    const normalBootstrap = JSON.parse(normalMatch[1]);
-    const planBootstrap = JSON.parse(planMatch[1]);
-
-    // plannerEntryRoute differs
-    assert.equal(normalBootstrap.plannerEntryRoute, false);
-    assert.equal(planBootstrap.plannerEntryRoute, true);
-
-    // Everything else is the same
-    delete normalBootstrap.plannerEntryRoute;
-    delete planBootstrap.plannerEntryRoute;
-    assert.deepEqual(normalBootstrap, planBootstrap);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -1052,24 +711,6 @@ test("unknown top-level paths return 404 instead of borrowing the Rome city shel
   }
 });
 
-test("registered city roots and planner-entry routes still render after the catch-all is restricted", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during registered city shell test: ${url}`);
-  };
-
-  const server = buildApp().listen(0);
-
-  try {
-    for (const pathName of ["/barcelona", "/barcelona/plan", "/rome", "/rome/plan", "/athens", "/athens/plan"]) {
-      const response = await requestText(server, { path: pathName });
-      assert.equal(response.status, 200, `${pathName} should keep rendering its registered city shell`);
-      assert.match(response.body, /window\.__PARRANDA_CITY__/);
-    }
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
 test("unknown nested registered-city paths return 404 instead of a city shell", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during nested city 404 test: ${url}`);
@@ -1084,138 +725,6 @@ test("unknown nested registered-city paths return 404 instead of a city shell", 
       assert.equal(response.body, "Not found");
       assert.doesNotMatch(response.body, /window\.__PARRANDA_CITY__/);
     }
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
-test("GET /rome?lang=en renderar engelsk shell och planner utan att byta interna keys", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during English shell test: ${url}`);
-  };
-
-  const server = buildApp().listen(0);
-
-  try {
-    const response = await requestText(server, {
-      path: "/rome?lang=en",
-    });
-
-    assert.equal(response.status, 200);
-    const bootstrap = extractCityBootstrap(response.body);
-    assert.match(response.body, /<html lang="en">/);
-    assert.match(response.body, /<body data-city-key="rome" data-city-label="Rome" data-lang="en">/);
-    assert.match(response.body, /window\.__PARRANDA_LANGUAGE__ = "en"/);
-    assert.match(response.body, /"lang":"en"/);
-    assert.match(response.body, /<title>Parranda \| Personal City Guide for Rome<\/title>/);
-    assert.ok(response.body.includes("Curated city days with more feeling than a checklist"));
-    assert.ok(response.body.includes("Build your day in Rome"));
-    assert.ok(response.body.includes("Choose a date and mood. Parranda builds the route."));
-    assert.ok(response.body.includes("Plan the day"));
-    assert.ok(response.body.includes("Let Parranda choose"));
-    assert.ok(response.body.includes("Customize start/end"));
-    assert.ok(response.body.includes("Start from"));
-    assert.ok(response.body.includes("Near me now"));
-    assert.ok(response.body.includes("Where I’m staying"));
-    assert.ok(response.body.includes("Let Parranda choose the best start"));
-    assert.match(response.body, /id="homeBaseToggle"[\s\S]*?aria-expanded="false"/);
-    assert.match(response.body, /<div id="homeBaseBody" hidden>/);
-    assert.ok(response.body.includes("Plan from here"));
-    assert.doesNotMatch(response.body, /Manual controls/);
-    assert.ok(response.body.includes("Loading today’s Pulse..."));
-    assert.ok(response.body.includes("Open Pulse"));
-    assert.ok(response.body.includes("WHERE YOU’RE STAYING"));
-    assert.ok(response.body.includes("Hotel or area"));
-    assert.ok(response.body.includes("Optional"));
-    assert.ok(response.body.includes("Plan from here"));
-    assert.match(response.body, /value="food_drink"\s+checked\s*\/>\s*<span>Food &amp; drink<\/span>/);
-    assert.match(response.body, /value="nightlife"\s*\/>\s*<span>Nightlife<\/span>/);
-    assert.match(response.body, /value="second_hand"\s*\/>\s*<span>Second hand<\/span>/);
-    // The "Main route" badge was removed in the day-card revision (Slice 1):
-    // the editorial-title day card no longer needs a "main route" tag because
-    // alternatives are surfaced via the alternative-section toggle, not as
-    // peer cards. The Main route i18n string remains in ui-i18n.js for any
-    // future reuse but is no longer rendered in the day-card chrome.
-    assert.doesNotMatch(response.body, /class="[^"]*planner-day-badge[^"]*"/);
-    assert.doesNotMatch(response.body, /<button[^>]*id="routePlanButton"[^>]*>\s*Planera min dag\s*<\/button>/);
-    assert.doesNotMatch(response.body, /<p class="eyebrow">DÄR DU BOR<\/p>/);
-    assert.doesNotMatch(response.body, /value="food_drink"\s+checked\s*\/>\s*<span>Mat &amp; dryck<\/span>/);
-    assert.doesNotMatch(response.body, /__PARRANDA_I18N_[A-Z0-9_]+__/);
-    assert.ok(Array.isArray(bootstrap.plannerAreas));
-    assert.ok(bootstrap.plannerAreas.length > 0);
-    assert.ok(bootstrap.plannerAreas.some((area) => area.id === "trastevere"));
-    const trastevere = bootstrap.plannerAreas.find((area) => area.id === "trastevere");
-    assert.equal(trastevere.label, "Trastevere");
-    assert.equal(trastevere.macro, "west");
-    assert.equal(trastevere.type, "district");
-    assert.ok(Number.isFinite(trastevere.lat));
-    assert.ok(Number.isFinite(trastevere.lng));
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
-test("GET /rome?lang=unknown falls safely back to English", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during language fallback shell test: ${url}`);
-  };
-
-  const server = buildApp().listen(0);
-
-  try {
-    const response = await requestText(server, {
-      path: "/rome?lang=zz",
-    });
-
-    assert.equal(response.status, 200);
-    assert.match(response.body, /<html lang="en">/);
-    assert.match(response.body, /data-lang="en"/);
-    assert.ok(response.body.includes("Plan the day"));
-    assert.ok(response.body.includes("Let Parranda choose"));
-    assert.doesNotMatch(response.body, /Din resa till Rom/);
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
-test("GET /barcelona?lang=en renderar curated beta shell på engelska", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during English fallback shell test: ${url}`);
-  };
-
-  const server = buildApp().listen(0);
-
-  try {
-    const response = await requestText(server, {
-      path: "/barcelona?lang=en",
-    });
-
-    assert.equal(response.status, 200);
-    const bootstrap = extractCityBootstrap(response.body);
-    assert.match(response.body, /<body data-city-key="barcelona" data-city-label="Barcelona" data-lang="en">/);
-    assert.match(response.body, /<title>Parranda \| Personal City Guide for Barcelona<\/title>/);
-    assert.match(response.body, /"fallbackUsed":false/);
-    assert.match(response.body, /"visibility":"beta"/);
-    assert.ok(response.body.includes("Plan the day."));
-    assert.ok(response.body.includes("Build your day in Barcelona"));
-    assert.doesNotMatch(response.body, /<title>.*city-core preview.*<\/title>/);
-    assert.match(
-      response.body,
-      /id="mapPlaceLink"[\s\S]*href="https:\/\/www\.google\.com\/maps\/search\/\?api=1&amp;query=Barcelona%20hidden%20gems"/,
-    );
-    assert.doesNotMatch(response.body, /Din resa till Rom/);
-    assert.doesNotMatch(response.body, /google\.com\/maps\/search\/Rome/i);
-    assert.doesNotMatch(response.body, /__PARRANDA_CITY_MAP_URL__/);
-    assert.doesNotMatch(response.body, /Rome-wide/);
-    assert.ok(Array.isArray(bootstrap.plannerAreas));
-    assert.ok(bootstrap.plannerAreas.length > 0);
-    assert.ok(bootstrap.plannerAreas.some((area) => area.id === "gracia" && area.label === "Gràcia"));
-    assert.ok(bootstrap.plannerAreas.some((area) => area.id === "poblenou" && area.label === "Poblenou"));
-    const gracia = bootstrap.plannerAreas.find((area) => area.id === "gracia");
-    assert.equal(gracia.macro, "northwest-local");
-    assert.equal(gracia.type, "district");
-    assert.ok(Number.isFinite(gracia.lat));
-    assert.ok(Number.isFinite(gracia.lng));
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -1248,7 +757,7 @@ test("landing and city shells use root-absolute asset urls for deep routes", asy
 
   try {
     const response = await requestText(server, {
-      path: "/barcelona?lang=en",
+      path: "/test-city?lang=en",
     });
 
     assert.equal(response.status, 200);

@@ -22,6 +22,7 @@ const { createHash } = require("node:crypto");
  * never prose — the UI/i18n layer renders labels.
  */
 
+const { createDateRangeListingProvider } = require("../pulse-sources/date-range-listing-provider");
 const { createLinkedEventsProvider } = require("../pulse-sources/linked-events-source-provider");
 const { createTicketmasterProvider } = require("../pulse-sources/ticketmaster-source-provider");
 const { createSchemaOrgEventProvider } = require("../pulse-sources/schema-org-event-provider");
@@ -104,6 +105,8 @@ const MAX_HAPPENING_DAYS = 14;
 const MAX_PULSE_DAILY_RANGE_DAYS = 120;
 const MAX_EVENT_FEED_MANIFEST_BYTES = 1024 * 1024;
 const LOCAL_EVENT_ADAPTERS = new Set([
+  "ckan_agenda",
+  "tourism_listing",
   "linked_events",
   "schema_org",
   "schema_org_html",
@@ -247,6 +250,7 @@ function normalizeEventFeedRow(f, index = 0) {
     endpoint,
     adapter,
     format: firstString(f.format),
+    resource_id: firstString(f.resource_id),
     bbox,
     license: f.license != null ? String(f.license) : null,
     timezone: f.timezone != null ? String(f.timezone) : null,
@@ -1274,6 +1278,11 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
     license: source.license,
   };
 
+  if (["ckan_agenda", "tourism_listing"].includes(adapter)) {
+    return createDateRangeListingProvider({ ...common, adapter,
+      resourceId: source.resource_id, maxPages: source.max_pages,
+      timezone: source.timezone, sourceLanguage: source.source_language });
+  }
   if (adapter === "datatourisme") {
     return createDatatourismeEventProvider({ key: datatourismeKey, anchor, fetcher: fetcher || undefined, radiusM, timeoutMs });
   }
@@ -1324,6 +1333,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
       status: "active",
       baseUrl: endpoint,
       timezoneOffset: source.timezone_offset || undefined,
+      timezone: source.timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       routeRoleHint: source.route_role_hint || undefined,
       fetchDetails: source.fetch_details !== false,

@@ -18,14 +18,14 @@ const REGISTRY = {
   rom: { key: "rome", label: "Rome", status: "public" },
 };
 
-test("a registered city or exact alias keeps citypack curation on the modern planner", () => {
+test("a registered city or exact alias uses ordinary place intake on the modern planner", () => {
   const exact = routeForInput(REGISTRY, "Barcelona", "sv");
-  assert.equal(exact.type, "city");
-  assert.equal(exact.href, "/anywhere?city=barcelona&place=Barcelona&planner=open&lang=sv");
+  assert.equal(exact.type, "anywhere");
+  assert.equal(exact.href, "/anywhere?place=Barcelona&planner=open&lang=sv");
 
   const alias = routeForInput(REGISTRY, "bcn", "en");
-  assert.equal(alias.href, "/anywhere?city=barcelona&place=Barcelona&planner=open&lang=en");
-  assert.equal(curatedCityHref(REGISTRY.rome, "en"), "/anywhere?city=rome&place=Rome&planner=open&lang=en");
+  assert.equal(alias.href, "/anywhere?place=Barcelona&planner=open&lang=en");
+  assert.equal(curatedCityHref(REGISTRY.rome, "en"), "/anywhere?place=Rome&planner=open&lang=en");
 });
 
 test("the frontpage links no city, and never back into a legacy city shell", () => {

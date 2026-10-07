@@ -37,7 +37,7 @@ test('a free-rhythm composed day has no kilometer-fit verdict and keeps its meas
   assert.ok(route?.main_stops?.length>=2);
   assert.ok(Number.isFinite(route.estimated_km));
   assert.equal(output.experiment.constraint_negotiation.walking.status,'not_requested');
-  assert.equal(route.day_profile,'peak');
+  assert.equal(route.day_profile,'light', 'free adapts to the two eligible focused shops instead of forcing Full');
 });
 
 test('calm rhythm shapes day density without a kilometer target',async()=>{

@@ -4,8 +4,8 @@
  *   - type a city or place → the planner composes around it;
  *   - "Use my location" → position becomes the day's anchor (coords handed to
  *     the planner via sessionStorage, never the URL).
- * A registered city routes to the modern planner with its server-owned citypack
- * identity; anything else goes to freeform any-city intake. The registry is injected by
+ * Every place routes to the modern planner and freeform any-place intake.
+ * Registered aliases supply canonical display labels only. The registry is injected by
  * the server at serve time (a city is data, never code). It powers the inline
  * completion and the routing only: the landing advertises no list of cities
  * (the hand-picked city stations were removed in October 2026 — they read as a
@@ -14,7 +14,7 @@
  * only what it does.
  */
 import { useEffect, useRef, useState } from "react";
-import { routeForInput, inlineCompletion, curatedCityHref, type CityRegistry } from "../lib/landing-routing.mjs";
+import { routeForInput, inlineCompletion, type CityRegistry } from "../lib/landing-routing.mjs";
 import { storeAnchorCoords, requestPosition } from "../lib/location-anchor.mjs";
 import PlaceSearchField, { type PlaceSuggestion } from "./PlaceSearchField";
 import { storePlaceChoice } from "../lib/place-choice.mjs";
@@ -127,10 +127,10 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
 
   function submit(e?: { preventDefault?: () => void }) {
     e?.preventDefault?.();
-    const cityEntry = selectedPlace?.city_key ? Object.values(registry).find(entry => entry.key === selectedPlace.city_key) : null;
-    const cityHref = cityEntry ? curatedCityHref(cityEntry, lang) : null;
-    const route = selectedPlace ? { href: cityHref || routeForInput({}, selectedPlace.query, lang)!.href } : routeForInput(registry, value, lang);
-    if (selectedPlace && !cityHref) storePlaceChoice({ place: selectedPlace.query, selection: selectedPlace.selection_id, label: selectedPlace.query });
+    // Every selected suggestion uses the shared any-place intake, including
+    // registered cities. Keep its receipt bound to the qualified query.
+    const route = selectedPlace ? routeForInput({}, selectedPlace.query, lang) : routeForInput(registry, value, lang);
+    if (selectedPlace) storePlaceChoice({ place: selectedPlace.query, selection: selectedPlace.selection_id, label: selectedPlace.query });
     // Empty submit isn't a dead end: focus the field so the next keystroke lands
     // where it should (the CTA stays visually live rather than reading as broken).
     if (!route) {
