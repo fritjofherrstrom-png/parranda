@@ -670,6 +670,7 @@ function createOpenDataLoader({
     return {
       key: `v8:${anchorKey}:r${radiusKm}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
       budgetsKey: `v8-budgets:${anchorKey}:${shape}:s${scopeKey}`,
+      evidenceKey: `v8-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
       radiusKm,
       targetKm: band ? band.targetKm : null,
     };
@@ -711,11 +712,13 @@ function createOpenDataLoader({
   const canIndexBudgets = typeof cache.set === "function" && typeof cache.peek === "function";
   function rememberBudget(identity) {
     if (!canIndexBudgets) return;
-    const previous = cache.peek(identity.budgetsKey);
-    cache.set(identity.budgetsKey, [
-      { key: identity.key, target_km: identity.targetKm, radius_km: identity.radiusKm },
-      ...(Array.isArray(previous) ? previous : []).filter((entry) => entry?.key !== identity.key),
-    ].slice(0, MAX_REMEMBERED_BUDGETS));
+    for (const indexKey of [identity.budgetsKey, identity.evidenceKey]) {
+      const previous = cache.peek(indexKey);
+      cache.set(indexKey, [
+        { key: identity.key, target_km: identity.targetKm, radius_km: identity.radiusKm },
+        ...(Array.isArray(previous) ? previous : []).filter((entry) => entry?.key !== identity.key),
+      ].slice(0, MAX_REMEMBERED_BUDGETS));
+    }
   }
 
   // The same anchor's fresh map answer for another walking budget, or null. A
@@ -729,8 +732,11 @@ function createOpenDataLoader({
     const merged = { ...request, ...anchor };
     if (!canIndexBudgets || !hasAnchor(merged)) return null;
     const own = requestIdentity(merged);
-    const budgets = cache.peek(own.budgetsKey);
-    if (!Array.isArray(budgets)) return null;
+    const exactBudgets = cache.peek(own.budgetsKey);
+    const heldEvidence = cache.peek(own.evidenceKey);
+    const budgets = [...(Array.isArray(exactBudgets) ? exactBudgets : []),
+      ...(Array.isArray(heldEvidence) ? heldEvidence : [])];
+    if (!budgets.length) return null;
     const distance = (a, b) => (Number.isFinite(a) && Number.isFinite(b) ? Math.abs(a - b) : Number.POSITIVE_INFINITY);
     const best = budgets
       .filter((entry) => typeof entry?.key === "string" && entry.key !== own.key)
@@ -1610,6 +1616,7 @@ function composeOpenDataLoaders(
     const metadata = mapMetadata
       ? {
           ...mapMetadata,
+          requested_intents: requestedIntents,
           selected_profile: supplyProfile(records, requestedIntents),
           selected_day_capacity: dayCapacityProfile(records, {
             origin: wikiAnchor,

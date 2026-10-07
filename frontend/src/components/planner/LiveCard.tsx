@@ -130,11 +130,11 @@ export default function LiveCard({
           <p className="text-sm font-bold text-parranda-ink">{liveDayLabel}</p>
           <ul className="mt-2 flex flex-col gap-3">
             {pulseBuckets.tonight.slice(0, 4).map((ev: PulseEvent, i: number) => (
-              <li key={ev.id ?? i} className="flex items-baseline gap-3 text-sm leading-relaxed text-parranda-ink/85">
-                <span className="type-data min-w-[56px] shrink-0 text-xs font-semibold text-parranda-live">
+              <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-parranda-ink/85">
+                <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">
                   {eventTiming(ev, lang, undefined, liveEvents?.selected_date)}
                 </span>
-                <span>
+                <span className="min-w-0 max-w-full break-words">
                   <span className="font-bold text-parranda-ink">{ev.title}</span>
                   {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
                   {liveEventSource(ev, lang)}

@@ -110,6 +110,21 @@ function createPlannerLifecycle({ deadlineMs = DEADLINE_MS, maxActive = MAX_ACTI
   return { start, read, cancel };
 }
 
+// Stop the orchestration wait promptly even when a shared, independently
+// bounded primary cache acquisition does not cancel its producer. Observe both
+// settlements; never continue composition or enrichment after cancellation.
+function awaitLifecycleWork(work, signal) {
+  return new Promise((resolve, reject) => {
+    const abort = () => { signal.removeEventListener('abort', abort); reject(new Error('planner_cancelled')); };
+    signal.addEventListener('abort', abort, { once: true });
+    Promise.resolve(work).then(value => {
+      signal.removeEventListener('abort', abort);
+      if (signal.aborted) abort(); else resolve(value);
+    }, error => { signal.removeEventListener('abort', abort); reject(error); });
+    if (signal.aborted) abort();
+  });
+}
+
 // One memoized trusted supply snapshot for both structure and composer. Await
 // only evidence attached by a server source, never status strings in JSON.
 function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, reserveMs = COMPOSITION_RESERVE_MS, independentSupply = [] } = {}) {
@@ -119,7 +134,7 @@ function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, res
     context.signal.throwIfAborted();
     const key = JSON.stringify(request);
     if (!loads.has(key)) loads.set(key, (async () => {
-      let records = await loader({ ...request, preferCachedSupply: true, signal: context.signal });
+      let records = await awaitLifecycleWork(loader({ ...request, preferCachedSupply: true, signal: context.signal }), context.signal);
       if (records?.[SOURCE_COMPLETION]) {
         context.warming();
         const initial = records;
