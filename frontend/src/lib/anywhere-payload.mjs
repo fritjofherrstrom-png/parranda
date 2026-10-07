@@ -81,7 +81,7 @@ export function buildAnywherePayload({
   const rhythm = DAY_RHYTHMS.some(({ key }) => key === dayRhythm) ? dayRhythm : "balanced";
   return {
     ...anchor,
-    ...(!cityKey && !coords ? {
+    ...(!coords ? {
       ...(placeSelection ? { place_selection: placeSelection } : {}),
       ...(placeBias ? { place_bias: placeBias } : {}),
       ...(placeContextSelection ? { place_context_selection: placeContextSelection } : {}),
