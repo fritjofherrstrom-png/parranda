@@ -107,7 +107,8 @@ export function buildLiveEventQueryPayload({
   if (!anchor) return null;
   const placeQuery = ["around_place", "in_place"].includes(scope) ? trustedPlaceQuery(response) : null;
   if (scope === "in_place" && !placeQuery) return null;
-  return placeQuery ? { ...base, anchor, place_query: placeQuery } : { ...base, anchor };
+  const selection = response?.agnostic_route_output_experiment?.intake?.resolved?.selection_id;
+  return placeQuery ? { ...base, anchor, place_query: placeQuery, ...(typeof selection === "string" ? { place_selection: selection } : {}) } : { ...base, anchor };
 }
 
 export function acceptedLiveEventQuery(response) {

@@ -129,7 +129,7 @@ async function resolveEventVenueGeometry(
 
 async function resolveVenueQuery(query, { resolver, anchor, radiusKm, regionalScope }) {
   try {
-    const candidates = await resolver(query);
+    const candidates = await resolver(query, { purpose: "event_venue" });
     const trusted = (Array.isArray(candidates) ? candidates : [])
       .filter(hasCoordinates)
       .filter((candidate) => confidenceRank(candidate.confidence) >= confidenceRank("medium"))

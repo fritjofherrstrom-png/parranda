@@ -1,0 +1,58 @@
+{
+  "health": {
+    "ok": true,
+    "runtime_profile": "local-place-recognition-qa",
+    "build_sha": "132ed539e0b8ab5101347309981379aa97777206"
+  },
+  "checks": [
+    {
+      "place": "Montrouge",
+      "http": 200,
+      "status": "resolved",
+      "label": "Montrouge, Antony, Hauts-de-Seine, Ile-de-France, Metropolitan France, 92120, France",
+      "confidence": "medium",
+      "provenance": "nominatim_osm",
+      "blockers": []
+    },
+    {
+      "place": "Aspudden, Stockholm",
+      "http": 200,
+      "status": "resolved",
+      "label": "Aspudden, Hägersten-Älvsjö stadsdelsområde, Stockholm, Stockholm Municipality, Stockholm County, Sweden",
+      "confidence": "medium",
+      "provenance": "nominatim_osm",
+      "blockers": []
+    },
+    {
+      "place": "Aspudden",
+      "status": "unresolved",
+      "candidates": [
+        {
+          "label": "Aspudden, Hägersten-Älvsjö stadsdelsområde, Stockholm, Stockholms kommun, Stockholms län, Sverige",
+          "attribution": "© OpenStreetMap contributors",
+          "license": "ODbL"
+        },
+        {
+          "label": "Aspudden, Bodens kommun, Norrbottens län, Sverige",
+          "attribution": "© OpenStreetMap contributors",
+          "license": "ODbL"
+        },
+        {
+          "label": "Aspudden, Nyköpings kommun, Södermanlands län, Sverige",
+          "attribution": "© OpenStreetMap contributors",
+          "license": "ODbL"
+        },
+        {
+          "label": "Aspudden, Vimmerby kommun, Kalmar län, 598 71, Sverige",
+          "attribution": "© OpenStreetMap contributors",
+          "license": "ODbL"
+        }
+      ],
+      "chosen": "Aspudden, Hägersten-Älvsjö stadsdelsområde, Stockholm, Stockholms kommun, Stockholms län, Sverige",
+      "selectionStatus": "resolved",
+      "rebuildLabel": "Aspudden, Hägersten-Älvsjö stadsdelsområde, Stockholm, Stockholms kommun, Stockholms län, Sverige",
+      "blitzLabel": "Aspudden, Hägersten-Älvsjö stadsdelsområde, Stockholm, Stockholms kommun, Stockholms län, Sverige",
+      "blitzHttp": 200
+    }
+  ]
+}

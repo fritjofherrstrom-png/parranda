@@ -174,6 +174,10 @@ function normalizeLiveEventQuery(payload = {}) {
     if (placeQuery && placeQuery.length <= MAX_PLACE_QUERY_LENGTH) query.place_query = placeQuery;
   }
   if (scopeKind === "in_place" && !query.place_query) return { error: "in_place_requires_place_query" };
+  if (["around_place", "in_place"].includes(scopeKind) && payload.place_selection !== undefined) {
+    if (typeof payload.place_selection !== "string" || !payload.place_selection || payload.place_selection.length > 8192 || !query.place_query) return { error: "invalid_place_selection" };
+    query.place_selection = payload.place_selection;
+  }
   return { value: query, public: publicQueryShape(query) };
 }
 
@@ -397,32 +401,35 @@ function liveEventQueryBody(normalized, liveEvents) {
   };
 }
 
-async function attestLivePlaceContext(query, placeResolver, placeLanguage) {
-  if (query?.scope?.kind === "near_route" || typeof placeResolver !== "function") return null;
+async function attestLivePlaceContext(query, placeResolver, placeLanguage, placeSelectionStore) {
+  if (query?.scope?.kind === "near_route" || (typeof placeResolver !== "function" && !query.place_selection)) return null;
   const reverseOnly = !query.place_query;
   if (reverseOnly && typeof placeResolver.resolveCoordinates !== "function") return null;
   const resolved = await resolveAgnosticIntake({
     ...(reverseOnly ? { coords: query.collection_anchor } : { placeQuery: query.place_query }),
     placeResolver,
     placeLanguage,
+    placeSelection: query.place_selection,
+    placeSelectionStore,
   });
-  if (!resolved.anchor || !resolved.spatialScope) return null;
+  if (query.place_selection && resolved.intake?.status !== "resolved") return { invalidSelection: true };
+  if (!resolved.anchor) return null;
   const driftKm = haversineKm(query.collection_anchor, resolved.anchor);
   const scope = resolved.spatialScope;
   if (
     !Number.isFinite(driftKm) ||
     driftKm > MAX_ATTESTED_ANCHOR_DRIFT_KM ||
-    !pointWithinTrustedSpatialScope(query.collection_anchor, scope)
+    (scope && !pointWithinTrustedSpatialScope(query.collection_anchor, scope))
   ) return null;
   return {
     placeContext: resolved.placeContext,
     spatialScope: scope,
     placeLabel: resolved.intake?.resolved?.label || null,
-    smallSettlement: !reverseOnly && scope.kind === "settlement" && scope.collection_mode === "local_anchor" && scope.diagonal_km <= 15,
+    smallSettlement: !reverseOnly && scope?.kind === "settlement" && scope.collection_mode === "local_anchor" && scope.diagonal_km <= 15,
   };
 }
 
-async function executeLiveEventQuery({ payload, eventSupply, now, placeResolver = null, placeLanguage = null } = {}) {
+async function executeLiveEventQuery({ payload, eventSupply, now, placeResolver = null, placeLanguage = null, placeSelectionStore = null } = {}) {
   const normalized = normalizeLiveEventQuery(payload);
   if (normalized.error) {
     return { status: 400, body: { error: normalized.error } };
@@ -436,7 +443,8 @@ async function executeLiveEventQuery({ payload, eventSupply, now, placeResolver 
 
   const query = normalized.value;
   try {
-    const attested = await attestLivePlaceContext(query, placeResolver, placeLanguage).catch(() => null);
+    const attested = await attestLivePlaceContext(query, placeResolver, placeLanguage, placeSelectionStore).catch(() => query.place_selection ? { invalidSelection: true } : null);
+    if (attested?.invalidSelection || (query.place_selection && !attested)) return { status: 400, body: { error: "place_selection_invalid" } };
     if (query.scope.kind === "in_place") {
       const scope = attested?.spatialScope;
       if (!scope || !["settlement", "district", "municipality"].includes(scope.kind) || scope.collection_mode === "broad_anchor_only") {

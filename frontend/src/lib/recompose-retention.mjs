@@ -38,7 +38,8 @@ export function anchorKey(anchor) {
   if (coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng)) {
     return `coords:${coords.lat.toFixed(COORD_PRECISION)},${coords.lng.toFixed(COORD_PRECISION)}`;
   }
-  const place = typeof anchor.place === "string" ? anchor.place.trim().toLowerCase() : "";
+  const label = anchor.selectionLabel || anchor.place;
+  const place = typeof label === "string" ? label.trim().toLowerCase() : "";
   return place ? `place:${place}` : null;
 }
 

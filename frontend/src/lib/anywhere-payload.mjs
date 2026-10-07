@@ -59,6 +59,9 @@ export function buildAnywherePayload({
   city,
   place,
   coords,
+  placeSelection,
+  placeBias,
+  placeContextSelection,
   dates,
   preferences = [],
   dayRhythm = "balanced",
@@ -78,6 +81,11 @@ export function buildAnywherePayload({
   const rhythm = DAY_RHYTHMS.some(({ key }) => key === dayRhythm) ? dayRhythm : "balanced";
   return {
     ...anchor,
+    ...(!cityKey && !coords ? {
+      ...(placeSelection ? { place_selection: placeSelection } : {}),
+      ...(placeBias ? { place_bias: placeBias } : {}),
+      ...(placeContextSelection ? { place_context_selection: placeContextSelection } : {}),
+    } : {}),
     dates,
     home_base: autoPoint,
     start: autoPoint,

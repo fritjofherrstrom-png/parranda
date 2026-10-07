@@ -49,6 +49,12 @@ function createSourceCache(options = {}) {
 
   const boundedTtlMs = Math.max(0, Math.floor(Number(ttlMs) || 0));
   const mem = new Map(); // key -> { value, expiresAt }
+  // Optional bound for memory-only, high-cardinality consumers such as prefixes.
+  const maxEntries = Number.isInteger(options.maxEntries) && options.maxEntries > 0 ? options.maxEntries : Infinity;
+  function remember(key, entry) {
+    mem.set(key, entry);
+    while (mem.size > maxEntries) mem.delete(mem.keys().next().value);
+  }
   const inFlight = new Map(); // key -> Promise<value>
   const fileDir = dir ? path.join(dir, namespace) : null;
   let fileReady = false;
@@ -118,7 +124,7 @@ function createSourceCache(options = {}) {
 
     const fileEntry = readFile(key);
     if (fileEntry) {
-      mem.set(key, fileEntry); // hydrate the hot path
+      remember(key, fileEntry); // hydrate the hot path
       return fileEntry.value;
     }
 
@@ -140,7 +146,7 @@ function createSourceCache(options = {}) {
         const value = await producer();
         if (!signal?.aborted && shouldStore(value)) {
           const entry = { value, expiresAt: now() + boundedTtlMs };
-          mem.set(key, entry);
+          remember(key, entry);
           writeFile(key, entry);
           return value;
         }
@@ -189,7 +195,7 @@ function createSourceCache(options = {}) {
     if (fresh(memEntry)) return memEntry.value;
     const fileEntry = readFile(key);
     if (fileEntry) {
-      mem.set(key, fileEntry);
+      remember(key, fileEntry);
       return fileEntry.value;
     }
     return null;
@@ -205,7 +211,7 @@ function createSourceCache(options = {}) {
   // points at entries stored through `get`). Same TTL and backing as `get`.
   function set(key, value) {
     const entry = { value, expiresAt: now() + boundedTtlMs };
-    mem.set(key, entry);
+    remember(key, entry);
     writeFile(key, entry);
   }
 
