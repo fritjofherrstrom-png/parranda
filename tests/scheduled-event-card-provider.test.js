@@ -44,6 +44,36 @@ function withCountry(html, country) {
   return html.replace('typeof="PostalAddress">', `typeof="PostalAddress"><span property="addressCountry">${country}</span>`);
 }
 
+function scheduledCardArticle({ title, slug, date }) {
+  return `<article class="node node--type-event node--view-mode-teaser-list">
+    <h3 class="node--title"><a href="/nl/agenda/${slug}" rel="bookmark"><span>${title}</span></a></h3>
+    <div class="field field--name-field-schedule field__item">${date}</div>
+  </article>`;
+}
+
+function scheduledDetailPage({ title, url }) {
+  return detail
+    .replace('href="https://destination.example/nl/agenda/bloemenmarkt"', `href="${url}"`)
+    .replace("Bloe\u00admen\u00admarkt", title)
+    .replace("Bloe\u00admen\u00admarkt Kou\u00adter", `${title} venue`);
+}
+
+function collectScheduledCards(cardSpecs, overrides = {}, context = { now: "2026-10-07T09:00:00Z" }) {
+  const calls = [];
+  const listing = cardSpecs.map(scheduledCardArticle).join("\n");
+  const byUrl = new Map(cardSpecs.map((item) => [`${new URL(endpoint).origin}/nl/agenda/${item.slug}`, item]));
+  const fetcher = async (url) => {
+    calls.push(url);
+    if (url.endsWith("/robots.txt")) return response("User-agent: *\nAllow: /\n", url);
+    if (url === endpoint) return response(listing, url);
+    const item = byUrl.get(url);
+    if (item) return response(scheduledDetailPage({ title: item.title, url }), url);
+    assert.fail(`unexpected fetch: ${url}`);
+  };
+  return createScheduledEventCardProvider({ ...options, fetcher, ...overrides }).create({ key: "anywhere" }).collect(context)
+    .then((result) => ({ result, calls }));
+}
+
 test("review: an event article cannot borrow matching page-shell identity for another event", async () => {
   for (const identity of [
     '<h2 class="node--title"><a href="/nl/agenda/biomarkt">Biomarkt</a></h2>',
@@ -103,6 +133,70 @@ test("published countries are optional facts, with names compared only in the pa
   const noRouteCountry = detail.replace("destination=Kouter+9000+Gent+BE", "destination=Kouter+9000+Gent");
   assert.equal(extractScheduledEventContact(noRouteCountry, card).country, undefined, "country is never inferred from the host or timezone");
   assert.equal(extractScheduledEventContact(withCountry(noRouteCountry, "BE"), card).country, "BE");
+});
+
+test("eligible cards are prioritized by nearest occurrence before the detail budget", async () => {
+  const future = Array.from({ length: 8 }, (_, index) => ({
+    title: `Future ${index + 1}`,
+    slug: `future-${index + 1}`,
+    date: index % 2 === 0 ? "10 oktober 2026" : "11 oktober 2026",
+  }));
+  const { result, calls } = await collectScheduledCards([
+    ...future,
+    { title: "Current day", slug: "current-day", date: "7 oktober 2026" },
+  ], { detailLimit: 8 });
+
+  assert.equal(result.collection_status.status, "ok");
+  assert.equal(result.time_sensitive_events.length, 8, "detail cap remains unchanged");
+  assert.equal(result.time_sensitive_events[0].starts_on, "2026-10-07");
+  assert.equal(result.time_sensitive_events[0].title, "Current day");
+  assert.ok(calls.includes("https://destination.example/nl/agenda/current-day"), "today's detail is inside the capped sample");
+});
+
+test("future eligible cards are fetched in nearest-date order before later dates", async () => {
+  const { result, calls } = await collectScheduledCards([
+    { title: "Later future", slug: "later-future", date: "12 oktober 2026" },
+    { title: "Nearest future", slug: "nearest-future", date: "8 oktober 2026" },
+    { title: "Middle future", slug: "middle-future", date: "10 oktober 2026" },
+  ], { detailLimit: 2 });
+
+  assert.equal(result.collection_status.status, "ok");
+  assert.deepEqual(result.time_sensitive_events.map((event) => event.title), ["Nearest future", "Middle future"]);
+  assert.deepEqual(calls.slice(2), [
+    "https://destination.example/nl/agenda/nearest-future",
+    "https://destination.example/nl/agenda/middle-future",
+  ]);
+});
+
+test("equal occurrence dates keep source order after date priority is applied", async () => {
+  const { result, calls } = await collectScheduledCards([
+    { title: "Later future", slug: "later-future", date: "12 oktober 2026" },
+    { title: "Same day A", slug: "same-day-a", date: "8 oktober 2026" },
+    { title: "Same day B", slug: "same-day-b", date: "8 oktober 2026" },
+  ], { detailLimit: 2 });
+
+  assert.equal(result.collection_status.status, "ok");
+  assert.deepEqual(result.time_sensitive_events.map((event) => event.title), ["Same day A", "Same day B"]);
+  assert.deepEqual(calls.slice(2), [
+    "https://destination.example/nl/agenda/same-day-a",
+    "https://destination.example/nl/agenda/same-day-b",
+  ]);
+});
+
+test("stale and outside-horizon cards are not fetched and detail cap is unchanged", async () => {
+  const { result, calls } = await collectScheduledCards([
+    { title: "Stale", slug: "stale", date: "6 oktober 2026" },
+    { title: "Eligible A", slug: "eligible-a", date: "7 oktober 2026" },
+    { title: "Too far", slug: "too-far", date: "15 oktober 2026" },
+    { title: "Eligible B", slug: "eligible-b", date: "8 oktober 2026" },
+    { title: "Eligible C", slug: "eligible-c", date: "9 oktober 2026" },
+  ], { detailLimit: 2, horizonDays: 7 });
+
+  assert.equal(result.collection_status.status, "ok");
+  assert.deepEqual(result.time_sensitive_events.map((event) => event.title), ["Eligible A", "Eligible B"]);
+  assert.equal(calls.length, 4, "robots, listing and two detail fetches only");
+  assert.ok(!calls.includes("https://destination.example/nl/agenda/stale"));
+  assert.ok(!calls.includes("https://destination.example/nl/agenda/too-far"));
 });
 
 test("review: a directly hidden route link is not venue evidence", async () => {
