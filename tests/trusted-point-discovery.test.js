@@ -74,7 +74,7 @@ test("provider bounds remain authoritative and malformed or detached bounds do n
 
 test("real provider normalization preserves missing versus invalid bounds for forward and reverse discovery", async () => {
   for (const boundingbox of [undefined, ["bad", "59.9", "17.6", "17.7"], ["59.9", "59.8", "17.6", "17.7"], []]) {
-    const raw = { lat: String(observed.lat), lon: String(observed.lng), display_name: observed.label, importance: 0.7,
+    const raw = { lat: String(observed.lat), lon: String(observed.lng), display_name: observed.label, name: "Uppsala", importance: 0.7,
       osm_type: "node", osm_id: 25735371, address: { county: "Uppsala län", country: "Sverige", country_code: "se" },
       ...(boundingbox === undefined ? {} : { boundingbox }) };
     const resolver = createNominatimPlaceResolver({ minIntervalMs: 0, fetcher: async (url) => ({ ok: true, status: 200,
@@ -94,13 +94,13 @@ test("legacy cached points cannot erase invalid provider bounds and the new deci
   const cacheDir = mkdtempSync(join(tmpdir(), "parranda-point-scope-"));
   t.after(() => rmSync(cacheDir, { recursive: true, force: true }));
   const endpointId = createHash("sha256").update("https://nominatim.openstreetmap.org/search|limit:5").digest("hex").slice(0, 16);
-  const queryId = createHash("sha256").update(observed.label.toLowerCase()).digest("hex");
-  const oldCache = createSourceCache({ namespace: "place-resolver-nominatim-v3", dir: cacheDir });
-  await oldCache.get(`v3:${endpointId}:${queryId}`, async () => ({ ok: true, candidates: [observed] }));
+  const queryId = createHash("sha256").update(JSON.stringify([observed.label.toLowerCase(), null, null, "place"])).digest("hex");
+  const oldCache = createSourceCache({ namespace: "place-resolver-nominatim-v5", dir: cacheDir });
+  await oldCache.get(`v5:${endpointId}:${queryId}`, async () => ({ ok: true, candidates: [observed] }));
   let calls = 0;
   const resolver = createNominatimPlaceResolver({ cacheDir, minIntervalMs: 0, fetcher: async () => {
     calls++;
-    return { ok: true, status: 200, json: async () => [{ lat: observed.lat, lon: observed.lng, display_name: observed.label, importance: 0.7,
+    return { ok: true, status: 200, json: async () => [{ lat: observed.lat, lon: observed.lng, display_name: observed.label, name: "Uppsala", importance: 0.7,
       address: { county: "Uppsala län", country: "Sverige", country_code: "se" }, boundingbox: [] }] };
   } });
   const result = await resolveAgnosticIntake({ placeQuery: observed.label, placeResolver: resolver });

@@ -132,6 +132,33 @@ function normalizeAdminContext(address) {
   return Object.values(context).some(Boolean) ? context : null;
 }
 
+const ADMIN_NAME_FIELDS = ["city", "town", "village", "hamlet", "municipality", "city_district", "suburb", "neighbourhood", "quarter", "borough", "county", "state", "region", "country", "country_code"];
+const PLACE_BIAS_KM = 30;
+
+function matchingNames(result) {
+  const names = [result.name];
+  for (const [key, value] of Object.entries(result.namedetails || {}).slice(0, 50)) {
+    if (/^(?:name(?::[a-zA-Z-]+)?|alt_name|short_name|official_name|old_name)$/.test(key) && typeof value === "string") {
+      names.push(...value.split(";").slice(0, 5));
+    }
+  }
+  return [...new Set(names.filter(x => typeof x === "string" && x.length <= 200).map(normalizeNameForMatch).filter(Boolean))].slice(0, 30);
+}
+
+function matchesGeographicQuery(candidate, query) {
+  const parts = String(query || "").split(",").map(normalizeNameForMatch).filter(Boolean);
+  const names = candidate.matching_names || [normalizeNameForMatch(candidate.name)];
+  const admins = candidate.admin_names || [];
+  if (parts.length === 1 && names.some(name => admins.some(admin => parts[0] === `${name} ${admin}` || parts[0] === `${admin} ${name}`))) return true;
+  return parts.length > 0 && parts.some((part, index) => names.includes(part) && parts.every((qualifier, qIndex) => qIndex === index || admins.includes(qualifier)));
+}
+
+function normalizeBias(point) {
+  if (!point || !isValidCoordinate(point.lat, point.lng)) return null;
+  // A coarse search hint is never an exact user/day anchor.
+  return { lat: Math.round(point.lat * 100) / 100, lng: Math.round(point.lng * 100) / 100 };
+}
+
 function toRawCandidate(result) {
   if (!result || typeof result !== "object") return null;
   const lat = Number(result.lat);
@@ -154,6 +181,11 @@ function toRawCandidate(result) {
     importance,
     label,
     name,
+    matching_names: matchingNames(result),
+    // Provider display labels can include additional divisions and postcodes.
+    // Keep those source-owned qualifiers so a shared canonical label works too.
+    admin_names: [...new Set([...ADMIN_NAME_FIELDS.map(key => normalizeNameForMatch(result.address?.[key])),
+      ...String(result.display_name || '').split(',').slice(1).map(normalizeNameForMatch)])].filter(Boolean),
     osm_ref: osmRef,
     admin_context: normalizeAdminContext(result.address),
     spatial_scope: spatialScope,
@@ -224,6 +256,8 @@ function dedupeSamePlace(rawCandidates) {
     const label = normalizeNameForMatch(candidate.label);
     const name = normalizeNameForMatch(candidate.name);
     const duplicateOf = kept.find((existing) => {
+      const geographic = value => ["settlement", "district", "municipality", "region"].includes(value.spatial_scope?.kind);
+      if (geographic(existing) !== geographic(candidate)) return false;
       const sameLabel = Boolean(label && normalizeNameForMatch(existing.label) === label);
       const sameName = Boolean(name && normalizeNameForMatch(existing.name) === name);
       if (sameLabel) return coordinateDistanceKm(existing, candidate) <= SAME_FULL_LABEL_CLUSTER_KM;
@@ -255,7 +289,7 @@ function coordinateDistanceKm(a, b) {
   return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
-function classifyConfidences(rawCandidates, query = null) {
+function classifyConfidences(rawCandidates, query = null, context = {}) {
   if (!rawCandidates.length) return [];
   const sorted = [...dedupeSamePlace(rawCandidates)].sort((a, b) => (b.importance ?? -1) - (a.importance ?? -1));
 
@@ -269,7 +303,7 @@ function classifyConfidences(rawCandidates, query = null) {
   const normalizedQuery = normalizeNameForMatch(query);
   const exactStructuralMatches = normalizedQuery
     ? sorted.filter((candidate) => (
-        normalizeNameForMatch(candidate.name) === normalizedQuery &&
+        matchesGeographicQuery(candidate, query) &&
         Boolean(candidate.osm_ref) &&
         Boolean(candidate.admin_context) &&
         ["settlement", "district", "municipality", "region"].includes(candidate.spatial_scope?.kind) &&
@@ -280,6 +314,8 @@ function classifyConfidences(rawCandidates, query = null) {
     // Already importance-sorted after dedupe. Compare exact identities only:
     // a surrounding administrative container must not manufacture a near-tie.
     // Missing scores cannot establish dominance, nor can junk-floor leaders.
+    const near = normalizeBias(context.near);
+    const local = near ? exactStructuralMatches.filter(candidate => coordinateDistanceKm(candidate, near) <= PLACE_BIAS_KM) : [];
     const [leader, runnerUp] = exactStructuralMatches;
     const dominant = runnerUp &&
       exactStructuralMatches.every((candidate) => candidate.importance !== null) &&
@@ -288,11 +324,20 @@ function classifyConfidences(rawCandidates, query = null) {
       // Require a lead beyond floating-point noise before weakening a rival.
       leader.importance - runnerUp.importance > AMBIGUITY_MARGIN +
         Number.EPSILON * Math.max(1, Math.abs(leader.importance), Math.abs(runnerUp.importance));
-    const exact = new Set(dominant ? [leader] : exactStructuralMatches);
+    const exact = new Set(local.length === 1 ? local : dominant ? [leader] : exactStructuralMatches);
     return sorted.map((candidate) => ({
       ...candidate,
       confidence: exact.has(candidate) ? "medium" : "low",
     }));
+  }
+
+  // An administrative qualifier must be corroborated by the provider, not
+  // dropped so that popularity can turn a different place into the destination.
+  // Source-owned street-address queries need not contain the venue's name.
+  // Preserve their established resolver behavior; this guard binds geographic
+  // names to their qualifiers rather than reinterpreting event addresses.
+  if (context.purpose !== "event_venue" && String(query || "").includes(",") && !sorted.some(candidate => matchesGeographicQuery(candidate, query))) {
+    return sorted.map(candidate => ({ ...candidate, confidence: "low" }));
   }
 
   if (sorted.length === 1) {
@@ -421,9 +466,8 @@ function createNominatimPlaceResolver({
     .digest("hex")
     .slice(0, 16);
   const cache = sourceCache || createSourceCache({
-    // Old cache entries discarded invalid-bounds state; do not reinterpret them
-    // as genuinely bounds-free points under the discovery aperture contract.
-    namespace: "place-resolver-nominatim-v4",
+    // Preserve bounds-validity semantics independently of prior geocoder caches.
+    namespace: "place-resolver-nominatim-v6",
     ttlMs: cacheTtlMs,
     dir: cacheDir,
     now,
@@ -478,7 +522,9 @@ function createNominatimPlaceResolver({
     }
   }
 
-  async function fetchAndMapQueued(query) {
+  async function fetchAndMapQueued(query, context) {
+    const startedAt = now();
+    let providerUrl;
     const result = await fetchJsonQueued(() => {
       const url = new URL(endpoint);
       url.searchParams.set("q", query);
@@ -486,12 +532,48 @@ function createNominatimPlaceResolver({
       // A compact allowlisted subset becomes trusted server-side place context
       // for source-family discovery. The raw address never leaves this module.
       url.searchParams.set("addressdetails", "1");
+      url.searchParams.set("namedetails", "1");
+      if (context.language) url.searchParams.set("accept-language", context.language);
+      if (context.near) {
+        const latDelta = PLACE_BIAS_KM / 111.32;
+        const lngDelta = latDelta / Math.max(0.05, Math.cos(context.near.lat * Math.PI / 180));
+        url.searchParams.set("viewbox", [Math.max(-180, context.near.lng - lngDelta), Math.min(90, context.near.lat + latDelta), Math.min(180, context.near.lng + lngDelta), Math.max(-90, context.near.lat - latDelta)].join(","));
+      }
       url.searchParams.set("limit", String(clampedLimit));
+      providerUrl = url;
       return url;
     });
     if (!result.ok || !Array.isArray(result.data)) return { ok: false, candidates: [] };
     const raw = result.data.map(toRawCandidate).filter(Boolean);
-    return { ok: true, candidates: classifyConfidences(raw, query).map(finalizeCandidate) };
+    let classified = classifyConfidences(raw, query, context);
+    // UI language can translate administrative names while the qualified query
+    // contains native names. One native-language read may corroborate aliases,
+    // but only for the exact same provider identity and nearby coordinates.
+    // It shares the original time/rate budget and never changes the query.
+    const namedQuery = String(query).split(',').map(normalizeNameForMatch).filter(Boolean);
+    const qualifierGap = context.language && context.purpose !== 'event_venue' && namedQuery.length > 1 &&
+      raw.some(candidate => candidate.osm_ref && candidate.matching_names.some(name => namedQuery.includes(name))) &&
+      !raw.some(candidate => matchesGeographicQuery(candidate, query)) &&
+      !classified.some(candidate => candidate.confidence === 'medium');
+    const remainingMs = timeoutMs - (now() - startedAt) - Math.max(0, nextSlot - now(), cooldownUntil - now());
+    if (qualifierGap && remainingMs >= 50) {
+      const native = await fetchJsonQueued(() => {
+        const url = new URL(providerUrl); url.searchParams.delete('accept-language'); return url;
+      }, remainingMs);
+      if (!native.ok || !Array.isArray(native.data)) {
+        return { ok: false, candidates: classified.map(finalizeCandidate) };
+      }
+      const nativeRows = native.data.map(toRawCandidate).filter(Boolean);
+      for (const candidate of raw) {
+        const aliases = nativeRows.find(other => other.osm_ref === candidate.osm_ref &&
+          candidate.admin_context?.country_code &&
+          other.admin_context?.country_code === candidate.admin_context.country_code &&
+          coordinateDistanceKm(other, candidate) <= 0.15);
+        if (aliases) candidate.admin_names = [...new Set([...candidate.admin_names, ...aliases.admin_names])];
+      }
+      classified = classifyConfidences(raw, query, context);
+    }
+    return { ok: true, candidates: classified.map(finalizeCandidate) };
   }
 
   async function fetchCoordinateContextQueued(coords, language) {
@@ -542,16 +624,17 @@ function createNominatimPlaceResolver({
     });
   }
 
-  async function resolvePlace(rawQuery) {
+  async function resolvePlace(rawQuery, options = {}) {
     const query = normalizeQuery(rawQuery);
     if (!query) return [];
     // An invalid configured endpoint fails closed without ever calling fetch.
     if (!endpointValid) return [];
-    const queryIdentity = createHash("sha256").update(query.toLowerCase()).digest("hex");
-    const key = `v4:${endpointIdentity}:${queryIdentity}`;
+    const context = { language: normalizeLanguage(options.language), near: normalizeBias(options.near), purpose: options.purpose === "event_venue" ? "event_venue" : "place" };
+    const queryIdentity = createHash("sha256").update(JSON.stringify([query.toLowerCase(), context.language, context.near, context.purpose])).digest("hex");
+    const key = `v6:${endpointIdentity}:${queryIdentity}`;
     const result = await cache.get(
       key,
-      () => enqueueProviderTask(() => fetchAndMapQueued(query)),
+      () => enqueueProviderTask(() => fetchAndMapQueued(query, context)),
       { shouldStore: (value) => value && value.ok === true },
     );
     return clone(Array.isArray(result?.candidates) ? result.candidates : []);

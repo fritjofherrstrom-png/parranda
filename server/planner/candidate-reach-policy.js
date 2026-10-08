@@ -5,7 +5,7 @@ const { REACHABLE_ORIGIN_KM } = require("./candidate-combination");
 
 const { normalizeUserIntents } = require("../candidates/intent-vocabulary");
 
-const REACH_POLICY_NAMES = new Set(["exact_anchor", "local_place_anchor", "focused_day"]);
+const REACH_POLICY_NAMES = new Set(["exact_anchor", "local_place_anchor", "focused_day", "wide_rhythm_day"]);
 
 // A city/district lookup describes a local walking day. A focused rhythm day
 // may widen that local aperture; regional reach still requires resolver-attested
@@ -19,6 +19,14 @@ function resolveAgnosticCandidateReachPolicy({ anchorMode, spatialScope, dayRhyt
   const remainingMinutes = availabilityWindow
     ? availabilityWindow.endMinute - availabilityWindow.startMinute : null;
   const hasTimeForWiderDay = remainingMinutes === null || remainingMinutes >= 240;
+  if (["full", "free"].includes(dayRhythm) && hasTimeForWiderDay &&
+      ["coordinates", "place"].includes(anchorMode)) {
+    const scope = sanitizeTrustedSpatialScope(spatialScope);
+    // A genuinely regional scope keeps its existing independent cluster policy.
+    if (anchorMode !== 'place' || !scope || !['municipality','region'].includes(scope.kind)) {
+      return { policy: 'wide_rhythm_day', max_origin_distance_km: 5, scope_kind: scope?.kind || null };
+    }
+  }
   if (["calm", "balanced", "full", "free"].includes(dayRhythm) &&
       normalizeUserIntents(preferences).intents.length === 1 && hasTimeForWiderDay &&
       ["coordinates", "place"].includes(anchorMode)) {

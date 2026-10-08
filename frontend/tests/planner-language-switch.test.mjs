@@ -76,10 +76,11 @@ test("the language link carries the adjustments made after the page loaded", asy
   assert.equal(params.get("lang"), "sv");
 });
 
-test("a curated day's language link keeps its city identity", async (t) => {
+test("a legacy city day's language link keeps its place on the shared planner", async (t) => {
   const h = await arrive(t, "http://localhost/anywhere?city=rome&place=Rome&planner=open&lang=en");
   const params = new URLSearchParams(languageLink(h, "SV").getAttribute("href"));
-  assert.equal(params.get("city"), "rome");
+  assert.equal(params.has("city"), false);
+  assert.equal(params.get("place"), "Rome");
   assert.equal(params.get("lang"), "sv");
 });
 

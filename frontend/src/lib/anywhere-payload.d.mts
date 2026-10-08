@@ -28,15 +28,20 @@ export declare function buildAnywherePayload(options?: {
   city?: string;
   place?: string;
   coords?: { lat: number; lng: number } | null;
+  placeSelection?: string | null;
+  placeBias?: { lat: number; lng: number } | null;
+  placeContextSelection?: string | null;
   dates?: string[];
   preferences?: string[];
   dayRhythm?: "calm" | "balanced" | "full" | "free";
   excludedCandidateIds?: string[];
   pinnedCandidateIds?: string[];
 }): {
-  city?: string;
   place?: string;
   place_query?: string;
+  place_selection?: string;
+  place_bias?: { lat: number; lng: number };
+  place_context_selection?: string;
   excluded_candidate_ids?: string[];
   pinned_candidate_ids?: string[];
   lat?: number;

@@ -16,6 +16,7 @@ import { ChevronRightIcon } from "../shared/icons";
 import { buttonClass, Eyebrow } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 import { liveEventSource } from "./LiveEventSource";
+import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
 import type { LiveEvents, PulseEvent } from "./types";
 
 export default function LiveCard({
@@ -113,10 +114,7 @@ export default function LiveCard({
       )}
       {pulseState === "rejected_empty" && (
         <p className="mt-3 text-sm text-parranda-ink/75">
-          {t(
-            "Det fanns listningar, men inga var pålitliga eller aktuella nog att visa.",
-            "Listings existed, but none were reliable or current enough to show.",
-          )}
+          {liveRejectedSentence(liveEvents, lang)}
         </p>
       )}
       {pulseState === "unavailable" && (
@@ -132,11 +130,11 @@ export default function LiveCard({
           <p className="text-sm font-bold text-parranda-ink">{liveDayLabel}</p>
           <ul className="mt-2 flex flex-col gap-3">
             {pulseBuckets.tonight.slice(0, 4).map((ev: PulseEvent, i: number) => (
-              <li key={ev.id ?? i} className="flex items-baseline gap-3 text-sm leading-relaxed text-parranda-ink/85">
-                <span className="type-data min-w-[56px] shrink-0 text-xs font-semibold text-parranda-live">
+              <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-parranda-ink/85">
+                <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">
                   {eventTiming(ev, lang, undefined, liveEvents?.selected_date)}
                 </span>
-                <span>
+                <span className="min-w-0 max-w-full break-words">
                   <span className="font-bold text-parranda-ink">{ev.title}</span>
                   {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
                   {liveEventSource(ev, lang)}
@@ -172,7 +170,9 @@ export default function LiveCard({
       )}
       {pulseState === "partial" && (
         <p className="mt-2 text-xs text-parranda-ink/68">
-          {t("Alla källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
+          {liveEvents?.acquisition?.source_health?.reasons?.includes("source_collection_truncated")
+            ? t("Vissa kalendrar kunde bara läsas delvis — fler händelser kan finnas hos källan.", "Some calendars were only partly read — more events may be listed at the source.")
+            : t("Alla källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
         </p>
       )}
 

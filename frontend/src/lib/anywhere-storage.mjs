@@ -37,9 +37,9 @@ export function normalizeSavedWalkKey(value) {
  * with different preferences or walking contracts, are different days — and a
  * record written for one must not be readable by the other.
  */
-export function savedEntryId({ city, place, dateIso, selected, walkKey } = {}) {
+export function savedEntryId({ city, place, placeLabel, dateIso, selected, walkKey } = {}) {
   const c = String(city || "").trim().toLowerCase();
-  const p = (place || "").trim();
+  const p = (placeLabel || place || "").trim();
   const anchor = c ? `city:${c}` : p || "pos";
   return `${anchor}::${dateIso || ""}::${prefsKey(selected)}::rhythm=${normalizeSavedWalkKey(walkKey)}`;
 }
@@ -47,6 +47,7 @@ export function savedEntryId({ city, place, dateIso, selected, walkKey } = {}) {
 export function buildSavedEntry({
   city,
   place,
+  placeLabel,
   label,
   dateIso,
   savedAt,
@@ -63,6 +64,7 @@ export function buildSavedEntry({
     id: savedEntryId({
       city: c,
       place: p,
+      placeLabel: placeLabel || inputs?.placeLabel,
       dateIso,
       selected: inputs && inputs.selected,
       walkKey: inputs && inputs.walkKey,

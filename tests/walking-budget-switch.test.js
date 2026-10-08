@@ -27,6 +27,7 @@ const {
   composeOpenDataLoaders,
   createOpenDataLoader,
   createOvertureBackgroundSource,
+  supplyProfile,
 } = require("../server/place-candidates/open-data-loader");
 const { createSourceCache } = require("../server/place-candidates/source-cache");
 const { SOURCE_COMPLETION, createBackgroundSource } = require("../server/place-candidates/background-source");
@@ -428,10 +429,10 @@ test("with no map answer for any budget the directory still rescues, and says so
 });
 
 // --------------------------------------------------------------------------
-// Bounds on the neighbouring answer: it is only ever the same anchor's fresh,
-// stored answer for the same preferences, mode and scope.
+// Bounds on the neighbouring answer: only fresh evidence for the same
+// anchor, mode and scope. A changed preference may reuse facts, not verdicts.
 
-test("a neighbouring budget is never another preference set, and the nearest aperture wins", async () => {
+test("a neighbouring budget preserves factual map evidence across preference changes, and the nearest aperture wins", async () => {
   const overpass = controllableOverpass();
   const loader = await createSupply({ overpass });
   await loader(loaderRequest(6)); // aperture 1.5 km
@@ -445,9 +446,12 @@ test("a neighbouring budget is never another preference set, and the nearest ape
   assert.equal(ten.loader_metadata?.primary_collection_target_km, 12, "3 km is nearer 2.5 km than 1.5 km is");
 
   const otherPreferences = await loader(loaderRequest(9, { requestedIntents: ["second_hand"] }));
-  assert.equal(otherPreferences.loader_metadata?.primary_collection ?? null, null);
-  assert.ok(otherPreferences.every((record) => !familiesOf(record).has("map")),
-    "a map answer gathered for other preferences is not borrowed");
+  assert.equal(otherPreferences.loader_metadata?.primary_collection, "neighbouring_budget_cache");
+  assert.ok(otherPreferences.some((record) => familiesOf(record).has("map")),
+    "fresh mapped places remain facts even when the preference changes");
+  assert.deepEqual(otherPreferences.loader_metadata?.requested_intents, ["second_hand"]);
+  assert.deepEqual(otherPreferences.loader_metadata?.selected_profile, supplyProfile(otherPreferences, ["second_hand"]),
+    "coverage is recomputed for the current preference, never copied from the earlier request");
 });
 
 test("a neighbouring budget answer is never served after it expires", async () => {

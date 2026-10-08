@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { chromium } from 'playwright-core';
@@ -55,6 +55,26 @@ async function browserHarness(t) {
   t.after(() => assert.deepEqual(errors, [], 'no React/browser exceptions'));
   return { page, render };
 }
+
+test('mobile LiveSheet long source periods do not push event text offscreen', async t => {
+  const {page,render}=await browserHarness(t);
+  const cssDir=new URL('../dist/_astro/',import.meta.url);
+  for(const file of readdirSync(cssDir).filter(f=>f.endsWith('.css'))) {
+    await page.addStyleTag({content:readFileSync(new URL(file,cssDir),'utf8')});
+  }
+  const row={id:'long-period',title:"Exposició 'Recerca del passat per a salvar el futur'",place:'Carrer de Sant Cugat',
+    timezone:'Europe/Madrid',time_window:{kind:'period',starts_on:'2026-09-10',ends_on:'2026-10-31'},
+    source_label:'Open Data BCN',source_url:'https://guia.barcelona.cat/event',source_link_kind:'page',source_link_host:'guia.barcelona.cat'};
+  const events={coverage:'covered',selected_date:'2026-10-07',tonight:[],this_week:[row],acquisition:{source_health:{status:'healthy',result:'events_found',selected_source_count:1,responding_source_count:1}}};
+  for(const width of [320,390,430]) {
+    await page.setViewportSize({width,height:844});
+    await render(events,'en','week');
+    const dimensions=await page.getByRole('dialog').evaluate(e=>({width:e.clientWidth,scroll:e.scrollWidth}));
+    assert.ok(dimensions.scroll<=dimensions.width+1,`width ${width}: dialog ${JSON.stringify(dimensions)}`);
+    const title=await page.getByText(row.title,{exact:true}).boundingBox();
+    assert.ok(title.x>=0 && title.x+title.width<=width+1,'event title stays fully inside viewport');
+  }
+});
 
 const unknown = /Live information is unavailable right now|Live-information är inte tillgänglig just nu/;
 const falseEmpty = /Nothing verified|Nothing listed|Inget verifierat|Inget listat/;
@@ -149,5 +169,20 @@ test('native mounted LiveSheet distinguishes captured uncovered and healthy cont
       : 'Återkommande schema — tillfället är inte bekräftat'));
     assert.ok(shown.includes('© OpenStreetMap contributors — ODbL'));
     assert.equal(await page.locator('a[href="https://www.openstreetmap.org/node/42"]').count(),1);
+  }
+});
+
+test('mapless reviewed calendar rows disclose source area rather than implying exact local distance',async t=>{
+  const {render}=await browserHarness(t);
+  const row={id:'mapless',title:'Dated source event',source_label:'Reviewed calendar',source_url:'https://calendar.example/event',
+    geographic_relevance:'source_scope',source_scope_verified:true,geometry_status:'unresolved',route_eligible:false,
+    time_window:{kind:'occurrences',dates:['2026-10-08']}};
+  const events={coverage:'covered',selected_date:'2026-10-08',tonight:[row],this_week:[],acquisition:{source_health:{status:'healthy',result:'events_found',selected_source_count:1,responding_source_count:1}}};
+  for(const lang of ['en','sv']){
+    const text=await render(events,lang);
+    assert.match(text,lang==='en'?/Source calendar area — exact location unverified/:/Källans kalenderområde — exakt plats ej verifierad/);
+    assert.doesNotMatch(text,/0 km|0,0 km/);
+    const partial=await render({...events,acquisition:{source_health:{...events.acquisition.source_health,status:'partial',reasons:['source_collection_truncated']}}},lang);
+    assert.match(partial,lang==='en'?/Some calendars were only partly read — more events may be listed at the source/:/Vissa kalendrar kunde bara läsas delvis — fler händelser kan finnas hos källan/);
   }
 });

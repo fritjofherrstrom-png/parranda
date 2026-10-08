@@ -74,5 +74,5 @@ test("'Let Parranda choose' sends free, presses no step, and says how the day is
   const scale = h.container.querySelector('[role="group"][aria-label="Dagens rytm"]');
   assert.deepEqual([...scale.querySelectorAll("button")].map((b) => b.getAttribute("aria-pressed")), ["false", "false", "false"]);
   assert.equal(named(h, /Låt Parranda välja$/).getAttribute("aria-pressed"), "true");
-  assert.match(h.text(), /Parranda väljer: Inget eget val — dagen byggs då som Fylld\./);
+  assert.match(h.text(), /Parranda väljer: Anpassar rytmen efter möjliga stopp och tiden som finns\./);
 });

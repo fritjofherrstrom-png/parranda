@@ -290,3 +290,12 @@ test("an unconfigured normal deployment is not silently moved onto share limits"
   }
   assert.equal(passed, 25);
 });
+
+test('prefix lookups have their own allowance and cannot spend the day request budget', () => {
+  const guard = createPublicAccessGuard({env:{PARRANDA_PUBLIC_GUARD:'enabled',PARRANDA_PUBLIC_GUARD_MAX:'1'},now:()=>1000});
+  let allowed=0;
+  for(let i=0;i<60;i++) {const res=responseSpy();guard(requestFrom('/api/place-suggestions'),res,()=>allowed++);res.emit('finish');}
+  assert.equal(allowed,60);
+  const refused=responseSpy();guard(requestFrom('/api/place-suggestions'),refused,()=>allowed++);assert.equal(refused.sent.status,429);
+  const day=responseSpy();guard(requestFrom('/api/route-recommendations'),day,()=>allowed++);day.emit('finish');assert.equal(allowed,61);
+});

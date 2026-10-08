@@ -204,6 +204,11 @@ function rankEligible(eligible) {
     if (cov) return cov;
     const part = b.fit.coverage_rank[1] - a.fit.coverage_rank[1];
     if (part) return part;
+    // Source-supported availability outranks proximity within the same intent
+    // tier; unknown remains a usable but explicitly unverified fallback.
+    const availability = Number(b.availability?.status === 'available_in_window') -
+      Number(a.availability?.status === 'available_in_window');
+    if (availability) return availability;
     const operational = operationalViabilityRank(a) - operationalViabilityRank(b);
     if (operational) return operational;
     const score = b.fit.primary_score - a.fit.primary_score;

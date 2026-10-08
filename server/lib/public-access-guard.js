@@ -32,6 +32,7 @@ const { isIP } = require("node:net");
 const UPSTREAM_COST_PATHS = new Set([
   "/api/route-recommendations",
   "/api/geocode",
+  "/api/place-suggestions",
   "/api/city-pulse",
   "/api/live-events",
   "/api/place-details",
@@ -198,6 +199,8 @@ function guardSettings(env = {}) {
 function createPublicAccessGuard({ env = process.env, now = () => Date.now() } = {}) {
   const settings = guardSettings(env);
   const limiter = createFixedWindowLimiter({ windowMs: settings.windowMs, max: settings.max, now });
+  // Prefix lookups have their own budget; typing must not spend day-composition allowances.
+  const suggestionLimiter = createFixedWindowLimiter({ windowMs: settings.windowMs, max: 60, now });
   const gate = createConcurrencyGate({ max: settings.maxConcurrent });
 
   function middleware(request, response, next) {
@@ -218,7 +221,7 @@ function createPublicAccessGuard({ env = process.env, now = () => Date.now() } =
       return;
     }
 
-    const verdict = limiter.check(clientKey(request, {
+    const verdict = (request.path === '/api/place-suggestions' ? suggestionLimiter : limiter).check(clientKey(request, {
       mode: settings.identityMode,
       trustedHops: settings.trustedHops,
     }));

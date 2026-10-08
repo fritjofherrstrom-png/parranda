@@ -63,11 +63,22 @@ test("reviewed local profile selects two independent event publishers around Sim
       "visit-stockholm-open-api",
       "malmo-municipal-calendar",
       "helsinki-region-linked-events",
+      "barcelona-open-data-agenda",
+      "rome-tourism-live-listing",
+      "athens-city-events-calendar",
+      "athens-megaron-calendar",
     ],
   );
   assert.equal(new Set(feeds.map((feed) => feed.source_identity)).size, feeds.length);
   assert.ok(feeds.every((feed) => feed.status === "active"));
-  assert.ok(feeds.every((feed) => feed.timezone === (feed.id === "helsinki-region-linked-events" ? "Europe/Helsinki" : "Europe/Stockholm")));
+  const migratedTimezones = {
+    "helsinki-region-linked-events": "Europe/Helsinki",
+    "barcelona-open-data-agenda": "Europe/Madrid",
+    "rome-tourism-live-listing": "Europe/Rome",
+    "athens-city-events-calendar": "Europe/Athens",
+    "athens-megaron-calendar": "Europe/Athens",
+  };
+  assert.ok(feeds.every((feed) => feed.timezone === (migratedTimezones[feed.id] || "Europe/Stockholm")));
   assert.equal(feeds.find((feed) => feed.adapter === "wix_event_sitemap")?.event_path_prefix, "/evenemang-1/");
 
   const env = buildFullDevEnvironment({}, { cacheDir: os.tmpdir() });
@@ -311,9 +322,14 @@ test("both reviewed manifests collect normalized evidence through their generic 
   assert.equal(result.acquisition.source_health.event_bearing_source_count, 2);
   assert.equal(result.acquisition.source_health.status, "healthy");
   assert.equal(result.tonight.some((event) => event.title === "Summer market"), true);
-  assert.deepEqual(result.acquisition.rejection_summary, [
-    { reason: "missing_event_coordinates", count: 1 },
-  ]);
+  assert.deepEqual(result.acquisition.rejection_summary, []);
+  const harbour = result.tonight.find(event => event.title === "Harbour concert");
+  assert.ok(harbour, "the mapless reviewed listing remains useful Pulse evidence");
+  assert.equal(harbour.lat, null);
+  assert.equal(harbour.lng, null);
+  assert.equal(harbour.route_eligible, false);
+  assert.equal(harbour.geographic_relevance, "source_scope");
+  assert.equal(harbour.source_scope_verified, true);
 });
 
 function textResponse(url, body) {

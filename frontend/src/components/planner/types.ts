@@ -72,7 +72,11 @@ export interface PulseEvent {
   source_link_kind?: EventSourceLinkKind | null;
   source_link_host?: string | null;
   timezone?: string;
-  live_proximity?: "nearby";
+  lat?: number;
+  lng?: number;
+  live_proximity?: "nearby" | "local" | "in_place";
+  geographic_relevance?: string | null;
+  source_scope_verified?: boolean;
   anchor_distance_km?: number;
   // The server's preference fit for this row, in canonical intents.
   preference_match?: string;
@@ -105,7 +109,7 @@ export interface LiveEvents {
   pending?: boolean;
   feed?: { label?: string; license?: string } | null;
   feeds?: Array<{ label?: string; license?: string | null }>;
-  acquisition?: { source_health?: LiveSourceHealth | null } | null;
+  acquisition?: { source_health?: LiveSourceHealth | null; rejection_summary?: Array<{ reason: string; count: number }> } | null;
   tonight?: PulseEvent[];
   this_week?: PulseEvent[];
   browse?: {

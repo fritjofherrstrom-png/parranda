@@ -65,6 +65,21 @@ test('pending polls continue the same server execution; neither token nor public
   assert.equal(jobs.read(token).status, 410);
 });
 
+test('cancelling during the initial loader wait releases lifecycle capacity without publishing late rows', async () => {
+  const work=deferred(); const started=deferred();
+  const jobs=createPlannerLifecycle({maxActive:1});const controller=new AbortController();
+  const first=jobs.start(async context=>{
+    const load=lifecycleLoader(()=>{started.resolve();return work.promise;},context);
+    await load({lat:1,lng:2});
+    return {status:200,body:{route:'late'}};
+  },{signal:controller.signal});
+  await started.promise;controller.abort();await first;
+  await new Promise(resolve=>setImmediate(resolve));
+  const next=await jobs.start(async()=>({status:200,body:{days:[]}}));
+  work.resolve([]);
+  assert.equal(next.status,200,'aborted orchestration must not occupy a planner slot until the shared primary settles');
+});
+
 test('warm completion is immediate and emits no pending contract', async () => {
   const jobs = createPlannerLifecycle();
   const result = await jobs.start(async () => ({ status: 200, body: { days: [] } }));
@@ -156,6 +171,24 @@ test('healthy empty acquisition caches absence; failed acquisition never poisons
   assert.deepEqual(await source.load({})[SOURCE_COMPLETION], []);
   assert.deepEqual(source.load({}), []);
   assert.equal(calls, 2);
+});
+
+test('preference changes retain fresh same-anchor map evidence when the new acquisition fails', async () => {
+  let failed=false,calls=0;
+  const cache=createSourceCache();
+  const primary=createOpenDataLoader({cache,fetcher:async()=>{calls++;return failed
+    ? {ok:false,status:504}
+    : {ok:true,json:async()=>({elements:Array.from({length:16},(_,i)=>({type:'node',id:i+1,lat:1+i/10000,lon:2,
+      tags:{name:`Place ${i}`,amenity:i%2?'bar':'restaurant'}}))})};}});
+  const loader=composeOpenDataLoaders(primary);
+  const anchor={lat:1,lng:2,anchorMode:'place'};
+  await loader({...anchor,requestedIntents:['food','bars']});
+  failed=true;
+  const result=await loader({...anchor,requestedIntents:['bars']});
+  assert.ok(result.some(x=>x.type==='bar'),'changing mood must not discard verified bar evidence because a new query failed');
+  assert.deepEqual(result.loader_metadata.selected_profile.requested_intents_covered,['bars']);
+  assert.ok(calls>=2,'new preference acquisition still runs; cached evidence is only a rescue');
+  assert.equal(primary.readNeighbouring({lat:4,lng:5},{requestedIntents:['bars']}),null,'never cross anchors');
 });
 
 test('warm supply preserves cached independent families without any live load', async () => {

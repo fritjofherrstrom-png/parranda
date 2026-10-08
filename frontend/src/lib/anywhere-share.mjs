@@ -27,6 +27,14 @@ export function buildShareUrl(origin, inputs) {
   return `${base}/anywhere?${encodeShareParams(inputs)}`;
 }
 
+// Losing a selected qualifier can silently share a different namesake.
+// Decline sharing when the canonical label exceeds the resolver query budget.
+export function shareablePlace(inputs) {
+  if (!inputs?.place) return null;
+  const place = String(inputs.placeLabel || inputs.place).trim();
+  return place && place.length <= 200 ? place : null;
+}
+
 // Decode a query string (or URLSearchParams) back into day inputs. Unknown/absent
 // params fall back to sensible defaults; only whitelisted preference keys survive.
 export function decodeShareParams(search, allowedPrefKeys = null) {

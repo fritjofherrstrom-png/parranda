@@ -102,7 +102,11 @@ async function collectBounded({ endpoint, fetcher, signal, date, timezone, langu
   const last = new Date(`${date}T00:00:00Z`);
   last.setUTCDate(last.getUTCDate() + horizon);
   const until = last.toISOString().slice(0, 10);
-  const current = parsed.cards.filter((card) => card.date >= date && card.date <= until);
+  const current = parsed.cards
+    .map((card, index) => ({ card, index }))
+    .filter(({ card }) => card.date >= date && card.date <= until)
+    .sort((a, b) => a.card.date.localeCompare(b.card.date) || a.index - b.index)
+    .map(({ card }) => card);
   if (!current.length) return collection([], "empty", "source_empty");
   const rows = [];
   // This is an explicitly bounded sample, not exhaustive calendar coverage.

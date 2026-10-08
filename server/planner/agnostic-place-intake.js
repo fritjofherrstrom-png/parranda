@@ -124,6 +124,10 @@ async function resolveAgnosticIntake({
   placeQuery = null,
   placeResolver = null,
   placeLanguage = null,
+  placeSelection,
+  placeSelectionStore = null,
+  placeContextSelection = null,
+  placeBias = null,
 } = {}) {
   // 1. Explicit valid coordinates always win. The place-search function is
   // never called. A separately trusted reverse-context method may enrich only
@@ -180,24 +184,48 @@ async function resolveAgnosticIntake({
     return { anchor: null, placeContext: null, intake: intake("none", null, { blockers: ["missing_or_invalid_coordinates"] }) };
   }
 
+  // Selected identity may come only from a receipt issued by this server.
+  // Explicit coordinates above remain authoritative, including with a token.
+  const hasSelection = placeSelection !== undefined;
+  const selected = hasSelection ? placeSelectionStore?.read(placeSelection, placeQuery) : null;
+  const selectionInvalid = hasSelection && !selected;
+  const previous = placeContextSelection ? placeSelectionStore?.read(placeContextSelection) : null;
+  const near = previous || (placeBias && isValidCoordinate(placeBias.lat, placeBias.lng) ? placeBias : null);
+  const candidateChoice = candidate => ({
+    label: candidate.label || null,
+    confidence: candidate.confidence ?? null,
+    provenance: candidate.provenance || null,
+    attribution: typeof candidate.attribution === "string" ? candidate.attribution : null,
+    license: typeof candidate.license === "string" ? candidate.license : null,
+    ...(placeSelectionStore ? { selection_id: placeSelectionStore.issue(candidate, placeQuery) } : {}),
+  });
+
   // 3. Freeform place → trusted server resolver ONLY.
-  if (typeof placeResolver !== "function") {
-    return { anchor: null, placeContext: null, intake: intake("place", placeQuery, { blockers: ["place_resolver_unavailable"] }) };
+  if (!selected && typeof placeResolver !== "function") {
+    return { anchor: null, placeContext: null, intake: intake("place", placeQuery, { blockers: [selectionInvalid ? "place_selection_invalid" : "place_resolver_unavailable"] }) };
   }
 
   let resolved;
   try {
-    resolved = await placeResolver(placeQuery, { language: placeLanguage });
+    resolved = selected ? [selected] : await placeResolver(placeQuery, { language: placeLanguage, ...(near ? { near: { lat: near.lat, lng: near.lng } } : {}) });
   } catch (_error) {
-    return { anchor: null, placeContext: null, intake: intake("place", placeQuery, { blockers: ["place_resolver_error"] }) };
+    return { anchor: null, placeContext: null, intake: intake("place", placeQuery, { blockers: [selectionInvalid ? "place_selection_invalid" : "place_resolver_error"] }) };
   }
 
   const candidates = Array.isArray(resolved) ? resolved : resolved && typeof resolved === "object" ? [resolved] : [];
   if (!candidates.length) {
-    return { anchor: null, placeContext: null, intake: intake("place", placeQuery, { blockers: ["place_not_resolved"] }) };
+    return { anchor: null, placeContext: null, intake: intake("place", placeQuery, { blockers: [selectionInvalid ? "place_selection_invalid" : "place_not_resolved"] }) };
   }
 
   const strong = candidates.filter((candidate) => candidate && isStrongConfidence(candidate.confidence));
+
+  if (selectionInvalid) {
+    return { anchor: null, placeContext: null, intake: intake("place", placeQuery, {
+      candidates_considered: candidates.length,
+      candidates: strong.slice(0, 5).map(candidateChoice),
+      blockers: ["place_selection_invalid"],
+    }) };
+  }
 
   // 3a. Only weak candidates → fail closed (no soft caveat in #260).
   if (!strong.length) {
@@ -218,11 +246,7 @@ async function resolveAgnosticIntake({
       placeContext: null,
       intake: intake("place", placeQuery, {
         candidates_considered: candidates.length,
-        candidates: strong.slice(0, 5).map((candidate) => ({
-          label: candidate.label || null,
-          confidence: candidate.confidence ?? null,
-          provenance: candidate.provenance || null,
-        })),
+        candidates: strong.slice(0, 5).map(candidateChoice),
         blockers: ["ambiguous_place"],
       }),
     };
@@ -259,6 +283,7 @@ async function resolveAgnosticIntake({
       status: "resolved",
       candidates_considered: candidates.length,
       resolved: {
+        ...(placeSelectionStore ? { selection_id: selected ? placeSelection : placeSelectionStore.issue(best, placeQuery) } : {}),
         label: best.label || null,
         lat,
         lng,
