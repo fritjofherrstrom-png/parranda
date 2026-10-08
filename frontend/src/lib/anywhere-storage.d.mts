@@ -11,6 +11,7 @@ export interface SavedInputs {
   place?: string | null;
   placeLabel?: string | null;
   placeSelection?: string | null;
+  placeRef?: string | null;
   mode?: string;
   dayOffset?: number;
   walkKey?: string;
@@ -29,6 +30,8 @@ export interface SavedEntry {
   /** The commitments this day answered. Null for days saved before this existed. */
   commitments: CommitmentSnapshot | null;
 }
+
+export declare function isComposedEntry(entry: unknown): boolean;
 
 export declare function savedEntryId(options?: {
   placeLabel?: string | null;

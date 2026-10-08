@@ -1,4 +1,4 @@
-type Choice = { label: string; selection_id: string; attribution?: string; license?: string };
+type Choice = { label: string; selection_id: string; place_ref?: string; attribution?: string; license?: string };
 export function PlaceChoices({ intake, pending, locationPending, locationFailed, onChoose, onNarrow, t }: {
   intake: any; pending: boolean; locationPending: boolean; locationFailed: boolean;
   onChoose: (choice: Choice) => void; onNarrow: () => void; t: (sv: string, en: string) => string;

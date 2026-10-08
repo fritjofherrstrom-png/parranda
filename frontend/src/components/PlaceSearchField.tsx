@@ -8,6 +8,7 @@ export interface PlaceSuggestion {
   query: string;
   selection_id: string;
   kind?: "settlement" | "district" | "region";
+  place_ref?: string;
   city_key?: string;
   attribution?: string;
 }
