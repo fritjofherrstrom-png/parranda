@@ -10,21 +10,22 @@ const LAYERS=['city','district','locality','county','state','country'];
 const KINDS={city:'settlement',district:'district',locality:'settlement',county:'region',state:'region',country:'region'};
 // Photon ranks exact default-name matches ahead of importance, so five hamlets
 // called "Malmo" can push Malmö (or every US "Lisbon" push Lisboa) past the
-// visible rows. Read a wider page; rank by match first, and only within an
-// equal match lift major places — cities and countries by their own OSM tag —
-// keeping Photon's order everywhere else.
+// visible rows. Read a wider page; rank by visible-name match first, and only
+// within comparable exact/prefix matches lift major places — cities and countries
+// by their own OSM tag. Nonprefix relevance keeps Photon's order; no alias is
+// inferred from inclusion in the page.
 const PROVIDER_LIMIT=20;
 const VISIBLE_LIMIT=5;
 const MAJOR_PLACES=['city','country'];
 const LETTERS={ø:'o',æ:'ae',œ:'oe',ß:'ss',đ:'d',ł:'l',ı:'i',þ:'th'};
 const fold=value=>String(value||'').normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase().replace(/[øæœßđłıþ]/g,letter=>LETTERS[letter]).replace(/\s+/g,' ').trim();
-// A title that only extends the typed text ("Gotemba" for "Gote") is a weaker
-// match than one equal to it or matched through another name (an exonym, so
-// Photon returns "Lisboa" for "Lisbon"). An exact small place is never pushed
-// below a larger place that merely starts the same way.
+// Only the source-backed visible name establishes exact/prefix relevance.
+// Photon's mapped response has no matched-alias evidence: a nonprefix name
+// may be an exonym or merely fuzzy. Preserve provider order for that tier;
+// never infer equivalence or lift a fuzzy major place over an exact small one.
 function matchTier(title,query) {
  const t=fold(title),q=fold(query);
- return q&&t!==q&&t.startsWith(q)?1:0;
+ return q&&t===q?0:q&&t.startsWith(q)?1:2;
 }
 const compact=value=>typeof value==='string' ? value.trim().replace(/\s+/g,' ').slice(0,160) : '';
 
@@ -55,7 +56,7 @@ function mapFeature(feature) {
 // Stable: match tier first, then major places, then provider order.
 function rankChoices(choices,query) {
  return choices.map((choice,index)=>({choice,index,tier:matchTier(choice.title,query)}))
-  .sort((a,b)=>a.tier-b.tier||Number(b.choice.major)-Number(a.choice.major)||a.index-b.index)
+  .sort((a,b)=>a.tier-b.tier||(a.tier<2 ? Number(b.choice.major)-Number(a.choice.major) : 0)||a.index-b.index)
   .map(entry=>entry.choice).slice(0,VISIBLE_LIMIT);
 }
 

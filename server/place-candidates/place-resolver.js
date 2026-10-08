@@ -612,9 +612,23 @@ function createNominatimPlaceResolver({
       return url;
     });
     if (!result.ok || !Array.isArray(result.data)) return { ok: false };
+    // Invalid provider rows are not evidence of absence. In particular, never
+    // let Number(null), Number('') or a boolean invent a coordinate at zero.
+    const coordinateValue = value => (typeof value === "number" && Number.isFinite(value)) ||
+      (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value)));
+    const candidates = [];
+    for (const row of result.data) {
+      if (!row || typeof row !== "object" || Array.isArray(row) ||
+          !["node", "way", "relation"].includes(row.osm_type) ||
+          !/^[1-9]\d{0,11}$/.test(String(row.osm_id)) ||
+          !coordinateValue(row.lat) || !coordinateValue(row.lon)) return { ok: false };
+      const candidate = toRawCandidate(row);
+      if (!candidate) return { ok: false };
+      candidates.push(candidate);
+    }
     // Exact type and id before anything else: no dedupe, classification or
     // dominance logic may swap the identity the link named.
-    const raw = result.data.map(toRawCandidate).find((candidate) => candidate?.osm_ref === parsed.osmRef);
+    const raw = candidates.find(candidate => candidate.osm_ref === parsed.osmRef);
     if (!raw) return { ok: true, outcome: "not_found" };
     if (!isLinkablePlace(raw)) return { ok: true, outcome: "unsupported" };
     // Exact by construction, but never above the resolver's automatic ceiling.
@@ -695,7 +709,8 @@ function createNominatimPlaceResolver({
     if (!parsed) return { status: "invalid" };
     if (!lookupEndpointValid || typeof fetcher !== "function") return { status: "unavailable" };
     const language = normalizeLanguage(context.language);
-    const key = `lookup-v2:${lookupEndpointIdentity}:${parsed.lookupId}:${language || "default"}`;
+    // v3 invalidates v2 successes/absence normalized before raw-coordinate checks.
+    const key = `lookup-v3:${lookupEndpointIdentity}:${parsed.lookupId}:${language || "default"}`;
     const result = await cache.get(
       key,
       () => enqueueProviderTask(() => fetchRefQueued(parsed, language)),
