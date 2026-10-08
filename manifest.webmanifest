@@ -1,7 +1,7 @@
 {
   "name": "Parranda",
   "short_name": "Parranda",
-  "description": "Parranda är din lokala guide till Rom med hidden gems, Trastevere-barer, karta och perfekta dagar till fots.",
+  "description": "Parranda hjälper dig att upptäcka en plats och planera dagen efter intressen, rytm och tid, med källbelagda platser och lokala händelser.",
   "lang": "sv",
   "start_url": "./",
   "scope": "./",

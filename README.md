@@ -1,10 +1,16 @@
 # Parranda
 
-Parranda är en city-intelligence PWA med planner, Pulse och Blitz. Den ska förstå stadens rytm, inte bara lista platser. Produkten väger in område, tid på dagen, väder, live- och Pulse-signaler, intent, gångbarhet, trovärdighet och lokal täthet för att bygga bättre dagsflöden och nästa-drag-förslag.
+Parranda är en mobilanpassad webbapp för platsmedveten dagsplanering och lokal upptäckt. **Planner** komponerar dagar, **Live/Pulse** visar källbelagda lokala händelser och dagsläge, och **Blitz** föreslår ett nästa drag just nu.
 
-Rome var första referensstaden. Barcelona är aktiv för beta- och produktarbete. Athens är ett preview-/thin-city-test där vi provar hur långt den agnostiska motorn kan komma med verified catalog items och ärliga provisional source candidates. Målet är att city packs ska förbättra och accelerera upplevelsen, inte vara ett hårt krav för att Parranda ska fungera.
+Produktens riktning är att välja relevanta upplevelser utifrån användarens plats, intressen, rytm och tillgängliga tid — inte bara lista de närmaste eller mest populära platserna. Öppettider, väder, geografi och källornas säkerhet ska påverka verkliga val. Okända fakta och ofullständig täckning ska framgå.
 
-Det här repot är alpha-versionen för att snabbt kunna visa produkten, få skarp feedback och iterera på route engine, Pulse, Blitz, trust/credibility och multi-city-arkitekturen.
+Parranda är platsagnostisk i sin produktinriktning: städer, stadsdelar och mindre orter ska kunna använda samma motor. Handbyggda stadspaket är ett förbättringslager, inte målet eller ett krav på varje framtida plats. Rom, Barcelona och Aten är referenser och testmiljöer, inte produktens geografiska avgränsning.
+
+**Status: alpha.** Kallt källunderlag, kvalificerad platsigenkänning, öppettidstäckning och verklig mobilacceptans har fortfarande begränsningar. En grön CI eller en lyckad teststad är inte bevis på komplett lokal täckning. Olika stagingbyggen kan innehålla ännu omergade PR:er; kontrollera deras `/api/health` och exakta SHA separat från `main`.
+
+## Produktkrav
+
+[MVP-PRD för Parranda](docs/PRD-Parranda-MVP.md) samlar produktutfall, kärnresa, scope, fel-/osäkerhetstillstånd och observerbara acceptanskriterier. Dokumentet är ett kravutkast; planerade kontroller är inte utförd QA. Överenskomna beslut och öppna frågor är markerade separat.
 
 ## Nuvarande alpha
 
@@ -32,11 +38,12 @@ Framtida produktarbete finns i [Product TODO](docs/PRODUCT_TODO.md), inklusive e
 
 ## Stack
 
-- Frontend: `index.html`, `landing.html`, `script.js`, `landing.js`, `planner-trust.js`, `styles.css`
+- Modern frontend: Astro, React, TypeScript och Tailwind CSS i `frontend/`; byggd distribution i `frontend/dist/`
 - Backend: `Node.js` + `Express`
-- City data: `server/cities/<city>/`
+- Platsdata och stadspaket: `server/cities/<city>/`, med källbelagda any-place-kandidater som komplement
 - Engine: `server/route-engine.js`, `server/blitz-engine.js`, `server/pulse-engine/`
-- Karta: `Leaflet`
+- Modern Planner-karta: MapLibre GL; äldre stadsskal använder även Leaflet
+- Äldre frontendytor finns kvar under migreringen: `index.html`, `landing.html`, `script.js`, `planner-trust.js`, `styles.css`
 - Tester: `node --test`
 - CI: GitHub Actions i `.github/workflows/ci.yml`
 
