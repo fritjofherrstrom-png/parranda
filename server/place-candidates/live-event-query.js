@@ -406,19 +406,21 @@ async function attestLivePlaceContext(query, placeResolver, placeLanguage) {
     placeResolver,
     placeLanguage,
   });
-  if (!resolved.anchor || !resolved.spatialScope) return null;
+  const discoveryScope = resolved.discoverySpatialScope;
+  if (!resolved.anchor || !discoveryScope) return null;
   const driftKm = haversineKm(query.collection_anchor, resolved.anchor);
   const scope = resolved.spatialScope;
   if (
     !Number.isFinite(driftKm) ||
     driftKm > MAX_ATTESTED_ANCHOR_DRIFT_KM ||
-    !pointWithinTrustedSpatialScope(query.collection_anchor, scope)
+    !pointWithinTrustedSpatialScope(query.collection_anchor, discoveryScope)
   ) return null;
   return {
     placeContext: resolved.placeContext,
     spatialScope: scope,
+    discoverySpatialScope: discoveryScope,
     placeLabel: resolved.intake?.resolved?.label || null,
-    smallSettlement: !reverseOnly && scope.kind === "settlement" && scope.collection_mode === "local_anchor" && scope.diagonal_km <= 15,
+    smallSettlement: !reverseOnly && scope?.kind === "settlement" && scope.collection_mode === "local_anchor" && scope.diagonal_km <= 15,
   };
 }
 
@@ -473,7 +475,7 @@ async function executeLiveEventQuery({ payload, eventSupply, now, placeResolver 
       ...(attested ? {
         placeLabel: attested.placeLabel,
         placeContext: attested.placeContext,
-        discoverySpatialScope: attested.spatialScope,
+        discoverySpatialScope: attested.discoverySpatialScope,
         ...(attested.smallSettlement && query.scope.kind === "around_place" ? { spatialScope: attested.spatialScope } : {}),
       } : {}),
     });

@@ -161,6 +161,25 @@ function deriveLocalAnchorSpatialScope(value, anchor) {
   });
 }
 
+// Search geometry around an already attested point, not the extent of a place.
+// Callers must establish trusted place identity before using this for discovery.
+function createPointDiscoverySpatialScope(anchor) {
+  if (!validPoint(anchor) || Math.abs(anchor.lat) > 90 || Math.abs(anchor.lng) > 180) return null;
+  const latDelta = LOCAL_ANCHOR_HALF_SIDE_KM / 111.32;
+  const longitudeScale = Math.max(0.05, Math.abs(Math.cos((anchor.lat * Math.PI) / 180)));
+  const lngDelta = LOCAL_ANCHOR_HALF_SIDE_KM / (111.32 * longitudeScale);
+  return sanitizeTrustedSpatialScope({
+    source: "trusted_point_aperture",
+    kind: "unknown",
+    bounds: {
+      south: Math.max(-90, anchor.lat - latDelta),
+      north: Math.min(90, anchor.lat + latDelta),
+      west: Math.max(-180, anchor.lng - lngDelta),
+      east: Math.min(180, anchor.lng + lngDelta),
+    },
+  });
+}
+
 function spatialScopeCacheKey(value) {
   const scope = sanitizeTrustedSpatialScope(value);
   if (!scope) return "none";
@@ -232,6 +251,7 @@ module.exports = {
   MAX_SECONDARY_ANCHORS,
   MIN_SECONDARY_ANCHOR_DISTANCE_KM,
   deriveLocalAnchorSpatialScope,
+  createPointDiscoverySpatialScope,
   normalizeNominatimSpatialScope,
   sanitizeTrustedSpatialScope,
   deriveSecondaryAnchors,

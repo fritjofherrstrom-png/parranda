@@ -23,7 +23,7 @@
  * Pure except for the awaited injected resolver. Deterministic given its inputs.
  */
 
-const { sanitizeTrustedSpatialScope } = require("../place-candidates/spatial-scope");
+const { sanitizeTrustedSpatialScope, pointWithinTrustedSpatialScope, createPointDiscoverySpatialScope } = require("../place-candidates/spatial-scope");
 
 // Confidence labels the resolver may return for a candidate. Anything outside
 // this set (or a number below the threshold) is treated as too weak to anchor.
@@ -101,6 +101,18 @@ function trustedPlaceContext(value) {
   return Object.keys(out).length ? out : null;
 }
 
+function trustedDiscoveryScope(candidate, anchor, placeContext, spatialScope) {
+  // Present provider bounds retain authority, including when unusable. Never
+  // disguise invalid/detached bounds by replacing them with a guessed area.
+  if (candidate?.spatial_scope != null) {
+    return pointWithinTrustedSpatialScope(anchor, spatialScope) ? spatialScope : null;
+  }
+  const label = typeof candidate?.label === "string" ? candidate.label.trim() : "";
+  if (!label || label.length > 160 || !placeContext?.country_code ||
+      !["locality", "municipality", "county", "region"].some((field) => placeContext[field])) return null;
+  return createPointDiscoverySpatialScope(anchor);
+}
+
 /**
  * Resolve the trusted coordinate anchor for the agnostic route experiment.
  *
@@ -133,6 +145,7 @@ async function resolveAgnosticIntake({
       anchor: { lat: coords.lat, lng: coords.lng },
       placeContext,
       spatialScope,
+      discoverySpatialScope: trustedDiscoveryScope(coordinateContext, coords, placeContext, spatialScope),
       intake: intake("coordinates", placeQuery, {
         status: "resolved",
         resolved: {
@@ -229,14 +242,18 @@ async function resolveAgnosticIntake({
     };
   }
 
+  const placeContext = trustedPlaceContext(best.admin_context);
+  const spatialScope = sanitizeTrustedSpatialScope(best.spatial_scope);
   return {
     anchor: { lat, lng },
     // Private server-side discovery context. It is deliberately adjacent to,
     // not nested inside, the public intake block attached to API responses.
-    placeContext: trustedPlaceContext(best.admin_context),
+    placeContext,
     // Private server-side collection scope. Only the injected resolver can mint
     // it; public request fields are never consulted.
-    spatialScope: sanitizeTrustedSpatialScope(best.spatial_scope),
+    spatialScope,
+    // Discovery-only search aperture is private and cannot widen route geometry.
+    discoverySpatialScope: trustedDiscoveryScope(best, { lat, lng }, placeContext, spatialScope),
     intake: intake("place", placeQuery, {
       status: "resolved",
       candidates_considered: candidates.length,
