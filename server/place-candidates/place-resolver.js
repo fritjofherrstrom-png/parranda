@@ -462,7 +462,7 @@ function createNominatimPlaceResolver({
     .digest("hex")
     .slice(0, 16);
   const cache = sourceCache || createSourceCache({
-    namespace: "place-resolver-nominatim-v4",
+    namespace: "place-resolver-nominatim-v5",
     ttlMs: cacheTtlMs,
     dir: cacheDir,
     now,
@@ -518,6 +518,8 @@ function createNominatimPlaceResolver({
   }
 
   async function fetchAndMapQueued(query, context) {
+    const startedAt = now();
+    let providerUrl;
     const result = await fetchJsonQueued(() => {
       const url = new URL(endpoint);
       url.searchParams.set("q", query);
@@ -533,11 +535,40 @@ function createNominatimPlaceResolver({
         url.searchParams.set("viewbox", [Math.max(-180, context.near.lng - lngDelta), Math.min(90, context.near.lat + latDelta), Math.min(180, context.near.lng + lngDelta), Math.max(-90, context.near.lat - latDelta)].join(","));
       }
       url.searchParams.set("limit", String(clampedLimit));
+      providerUrl = url;
       return url;
     });
     if (!result.ok || !Array.isArray(result.data)) return { ok: false, candidates: [] };
     const raw = result.data.map(toRawCandidate).filter(Boolean);
-    return { ok: true, candidates: classifyConfidences(raw, query, context).map(finalizeCandidate) };
+    let classified = classifyConfidences(raw, query, context);
+    // UI language can translate administrative names while the qualified query
+    // contains native names. One native-language read may corroborate aliases,
+    // but only for the exact same provider identity and nearby coordinates.
+    // It shares the original time/rate budget and never changes the query.
+    const namedQuery = String(query).split(',').map(normalizeNameForMatch).filter(Boolean);
+    const qualifierGap = context.language && context.purpose !== 'event_venue' && namedQuery.length > 1 &&
+      raw.some(candidate => candidate.osm_ref && candidate.matching_names.some(name => namedQuery.includes(name))) &&
+      !raw.some(candidate => matchesGeographicQuery(candidate, query)) &&
+      !classified.some(candidate => candidate.confidence === 'medium');
+    const remainingMs = timeoutMs - (now() - startedAt) - Math.max(0, nextSlot - now(), cooldownUntil - now());
+    if (qualifierGap && remainingMs >= 50) {
+      const native = await fetchJsonQueued(() => {
+        const url = new URL(providerUrl); url.searchParams.delete('accept-language'); return url;
+      }, remainingMs);
+      if (!native.ok || !Array.isArray(native.data)) {
+        return { ok: false, candidates: classified.map(finalizeCandidate) };
+      }
+      const nativeRows = native.data.map(toRawCandidate).filter(Boolean);
+      for (const candidate of raw) {
+        const aliases = nativeRows.find(other => other.osm_ref === candidate.osm_ref &&
+          candidate.admin_context?.country_code &&
+          other.admin_context?.country_code === candidate.admin_context.country_code &&
+          coordinateDistanceKm(other, candidate) <= 0.15);
+        if (aliases) candidate.admin_names = [...new Set([...candidate.admin_names, ...aliases.admin_names])];
+      }
+      classified = classifyConfidences(raw, query, context);
+    }
+    return { ok: true, candidates: classified.map(finalizeCandidate) };
   }
 
   async function fetchCoordinateContextQueued(coords, language) {
@@ -595,7 +626,7 @@ function createNominatimPlaceResolver({
     if (!endpointValid) return [];
     const context = { language: normalizeLanguage(options.language), near: normalizeBias(options.near), purpose: options.purpose === "event_venue" ? "event_venue" : "place" };
     const queryIdentity = createHash("sha256").update(JSON.stringify([query.toLowerCase(), context.language, context.near, context.purpose])).digest("hex");
-    const key = `v4:${endpointIdentity}:${queryIdentity}`;
+    const key = `v5:${endpointIdentity}:${queryIdentity}`;
     const result = await cache.get(
       key,
       () => enqueueProviderTask(() => fetchAndMapQueued(query, context)),
