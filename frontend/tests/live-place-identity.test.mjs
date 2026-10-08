@@ -39,6 +39,42 @@ test('Live position/route scopes do not carry the place identity or receipt', ()
   }
 });
 
+test('Live place scopes accept published ref-only identity but still require an independent trusted anchor', () => {
+  const refOnly = structuredClone(response);
+  delete refOnly.agnostic_route_output_experiment.intake.query;
+  const before = structuredClone(refOnly);
+  for (const scope of ['around_place', 'in_place']) {
+    const payload = buildLiveEventQueryPayload({ scope, response: refOnly });
+    assert.ok(payload, scope);
+    assert.equal(payload.place_ref, 'r12345');
+    assert.equal(payload.place_selection, 'session-receipt');
+    assert.equal('place_query' in payload, false);
+    assert.deepEqual(payload.anchor, { lat: 51.5, lng: 2.32 });
+    assert.equal(payload.selected_date, '2026-10-08');
+    const noAnchor = structuredClone(refOnly);
+    delete noAnchor.agnostic_route_output_experiment.source_status.anchor;
+    delete noAnchor.agnostic_route_output_experiment.intake.resolved.lat;
+    delete noAnchor.agnostic_route_output_experiment.intake.resolved.lng;
+    assert.equal(buildLiveEventQueryPayload({ scope, response: noAnchor }), null, 'identity never invents geography');
+  }
+  assert.deepEqual(refOnly, before);
+  const invalid = structuredClone(refOnly);
+  invalid.agnostic_route_output_experiment.intake.resolved.place_ref = 'R12345';
+  assert.equal(buildLiveEventQueryPayload({ scope: 'in_place', response: invalid }), null);
+  const around = buildLiveEventQueryPayload({ scope: 'around_place', response: invalid });
+  assert.equal('place_ref' in around, false);
+  assert.equal('place_selection' in around, false);
+  for (const scope of ['near_me', 'near_route']) {
+    const payload = buildLiveEventQueryPayload({ scope, response: refOnly,
+      nearMeCoords: { lat: 10, lng: 20 },
+      routeStops: [{ lat: 51.5, lng: 2.32 }, { lat: 51.501, lng: 2.32 }],
+    });
+    assert.ok(payload);
+    assert.equal('place_ref' in payload, false);
+    assert.equal('place_selection' in payload, false);
+  }
+});
+
 test('Live does not publish a malformed server reference as a valid identity', () => {
   for (const ref of ['R12345', 'r0', 'r0123', 'r12345\n', 'r12345&lat=1', 'r1234567890123', 12345, null]) {
     const invalid = structuredClone(response);

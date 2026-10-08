@@ -18,4 +18,4 @@ export declare function shareablePlace(inputs?: { place?: string | null; placeLa
 export declare function decodeShareParams(
   search: string | URLSearchParams,
   allowedPrefKeys?: string[] | null,
-): { city: string | null; place: string; placeRef: string | null; preferences: string[]; dayOffset: 0 | 1; walkKey: string; lang: "sv" | "en" | null };
+): { city: string | null; place: string; placeRef: string | null; invalidPlaceRef: boolean; preferences: string[]; dayOffset: 0 | 1; walkKey: string; lang: "sv" | "en" | null };

@@ -105,13 +105,15 @@ export function buildLiveEventQueryPayload({
 
   const anchor = scope === "near_me" ? coordinate(nearMeCoords) : trustedDayAnchor(response);
   if (!anchor) return null;
-  const placeQuery = ["around_place", "in_place"].includes(scope) ? trustedPlaceQuery(response) : null;
-  if (scope === "in_place" && !placeQuery) return null;
+  const placeScope = ["around_place", "in_place"].includes(scope);
+  const placeQuery = placeScope ? trustedPlaceQuery(response) : null;
   const selection = response?.agnostic_route_output_experiment?.intake?.resolved?.selection_id;
   const placeRef = response?.agnostic_route_output_experiment?.intake?.resolved?.place_ref;
-  const validPlaceRef = typeof placeRef === "string" && /^[nwr][1-9]\d{0,11}$/.test(placeRef) && !/[\r\n]/.test(placeRef);
-  return placeQuery ? {
-    ...base, anchor, place_query: placeQuery,
+  const validPlaceRef = placeScope && typeof placeRef === "string" && /^[nwr][1-9]\d{0,11}$/.test(placeRef) && !/[\r\n]/.test(placeRef);
+  if (scope === "in_place" && !placeQuery && !validPlaceRef) return null;
+  return placeQuery || validPlaceRef ? {
+    ...base, anchor,
+    ...(placeQuery ? { place_query: placeQuery } : {}),
     ...(typeof selection === "string" ? { place_selection: selection } : {}),
     ...(validPlaceRef ? { place_ref: placeRef } : {}),
   } : { ...base, anchor };

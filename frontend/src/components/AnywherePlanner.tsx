@@ -176,6 +176,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // The chosen place's OSM identity. Unlike the receipt it survives reloads,
   // other languages and new sessions; the server re-validates it.
   const [placeRef, setPlaceRef] = useState<string | null>(null);
+  const [invalidPlaceLink, setInvalidPlaceLink] = useState(false);
   const [narrowingPlace, setNarrowingPlace] = useState(false);
   const [narrowingFailed, setNarrowingFailed] = useState(false);
   const [mode, setMode] = useState<"typed" | "near_me">("typed"); // start context
@@ -529,16 +530,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const requestLang = langOverride ?? lang;
       const cls = decision.classifyAnywhereResult(body, { place: fallbackLabel });
       const safe = decision.safeResponseFor(body, cls);
-      const authoritativePlace = anchor.place;
+      let authoritativePlace = anchor.place;
       const resolution = body?.agnostic_route_output_experiment?.intake?.resolved;
       if (!anchor.coords && typeof resolution?.selection_id === "string") {
         anchor = {
           ...anchor,
+          place: anchor.place || (typeof resolution.label === "string" ? resolution.label : undefined),
           placeSelection: resolution.selection_id,
           selectionLabel: resolution.label || anchor.selectionLabel,
           placeRef: validPlaceRef(resolution.place_ref) ?? anchor.placeRef,
         };
+        authoritativePlace = anchor.place;
         lastRequestedAnchorRef.current = anchor;
+        if (anchor.place) setPlace(anchor.place);
         setPlaceSelection(anchor.placeSelection ?? null);
         setSelectionLabel(anchor.selectionLabel);
         setPlaceRef(anchor.placeRef ?? null);
@@ -903,6 +907,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const allowedPrefs = ANYWHERE_PREFERENCES.map((p: { key: string }) => p.key);
     const shared = decodeShareParams(window.location.search, allowedPrefs);
     const entry = plannerEntry.readPlannerEntry(window.location.search);
+    // A malformed identity must never turn into a namesake search or a saved day.
+    if (shared.invalidPlaceRef) {
+      setInvalidPlaceLink(true);
+      return;
+    }
     // Only values that differ are set (the same picks in a new array are not a
     // change), and only then is the re-run they cause marked as the arrival's.
     const adoptLinkInputs = () => {
@@ -932,8 +941,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       }).catch(() => {});
       return;
     }
-    if (entry.place) {
-      shared.place = entry.place;
+    if (entry.place || shared.placeRef) {
+      shared.place = entry.place || "";
       setPlace(shared.place);
       setPlaceRef(shared.placeRef);
       adoptLinkInputs();
@@ -1055,7 +1064,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       return;
     }
     const trimmed = place.trim();
-    if (!trimmed) return;
+    if (!trimmed && !placeRef) return;
     await execute({ place: trimmed, placeSelection, selectionLabel, placeRef }, opts);
   }
 
@@ -1109,7 +1118,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   // An ANCHOR exists once the landing handed one over (typed place or the
   // position it captured). Everything after that is adjustment.
-  const hasAnchor = mode === "near_me" || Boolean(place.trim());
+  const hasAnchor = mode === "near_me" || Boolean(place.trim() || placeRef);
 
   // The language links reopen the day as it is NOW, adjustments included,
   // through the same encoder a shared link uses. A position never enters the
@@ -1768,7 +1777,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           place-entry step. Root is the only place picker. */}
       {!hasAnchor && (
         <div className="flex flex-col items-start gap-3 pt-8" role="status">
-          <p>{t("Förbereder din dag. Om ingen sparad dag finns, välj en plats på startsidan.", "Preparing your day. If no saved day is available, choose a place on the home page.")}</p>
+          <p>{invalidPlaceLink
+            ? t("Länken har en ogiltig platsreferens. Välj en plats på startsidan — ingen annan plats väljs automatiskt.", "This link has an invalid place reference. Choose a place on the home page — no other place is selected automatically.")
+            : t("Förbereder din dag. Om ingen sparad dag finns, välj en plats på startsidan.", "Preparing your day. If no saved day is available, choose a place on the home page.")}</p>
           <a href={`/?lang=${lang}`} onClick={() => leavePlanner("home")} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
             {t("Till startsidan", "Go to home")}
           </a>
