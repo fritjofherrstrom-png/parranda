@@ -42,10 +42,12 @@ const { isValidCoordinate } = require("../planner/agnostic-place-intake");
 const { normalizeNominatimSpatialScope } = require("./spatial-scope");
 const { createWikidataPlaceResolver } = require("./wikidata-place-resolver");
 const { createSourceCache } = require("./source-cache");
+const { parsePlaceRef } = require("./place-ref");
 const { createHash } = require("node:crypto");
 
 const NOMINATIM_ENDPOINT = "https://nominatim.openstreetmap.org/search";
 const NOMINATIM_REVERSE_ENDPOINT = "https://nominatim.openstreetmap.org/reverse";
+const NOMINATIM_LOOKUP_ENDPOINT = "https://nominatim.openstreetmap.org/lookup";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_REVERSE_TIMEOUT_MS = 2500;
@@ -416,6 +418,7 @@ function createNominatimPlaceResolver({
   fetcher = typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
   endpoint = NOMINATIM_ENDPOINT,
   reverseEndpoint = NOMINATIM_REVERSE_ENDPOINT,
+  lookupEndpoint = NOMINATIM_LOOKUP_ENDPOINT,
   userAgent = DEFAULT_USER_AGENT,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   reverseTimeoutMs = DEFAULT_REVERSE_TIMEOUT_MS,
@@ -441,6 +444,7 @@ function createNominatimPlaceResolver({
   // resolver fail closed (return []) without ever calling fetch — never throws.
   let endpointValid = true;
   let reverseEndpointValid = true;
+  let lookupEndpointValid = true;
   try {
     // eslint-disable-next-line no-new
     new URL(endpoint);
@@ -453,6 +457,12 @@ function createNominatimPlaceResolver({
   } catch (_error) {
     reverseEndpointValid = false;
   }
+  try {
+    // eslint-disable-next-line no-new
+    new URL(lookupEndpoint);
+  } catch (_error) {
+    lookupEndpointValid = false;
+  }
   const endpointIdentity = createHash("sha256")
     .update(`${endpoint}|limit:${clampedLimit}`)
     .digest("hex")
@@ -461,6 +471,7 @@ function createNominatimPlaceResolver({
     .update(`${reverseEndpoint}|zoom:${REVERSE_ZOOM}`)
     .digest("hex")
     .slice(0, 16);
+  const lookupEndpointIdentity = createHash("sha256").update(lookupEndpoint).digest("hex").slice(0, 16);
   const cache = sourceCache || createSourceCache({
     namespace: "place-resolver-nominatim-v5",
     ttlMs: cacheTtlMs,
@@ -587,6 +598,23 @@ function createNominatimPlaceResolver({
     return context ? { ok: true, context } : { ok: false, context: null };
   }
 
+  async function fetchRefQueued(parsed, language) {
+    const result = await fetchJsonQueued(() => {
+      const url = new URL(lookupEndpoint);
+      url.searchParams.set("osm_ids", parsed.lookupId);
+      url.searchParams.set("format", "jsonv2");
+      url.searchParams.set("addressdetails", "1");
+      url.searchParams.set("namedetails", "1");
+      if (language) url.searchParams.set("accept-language", language);
+      return url;
+    });
+    if (!result.ok || !Array.isArray(result.data)) return { ok: false };
+    const raw = result.data.map(toRawCandidate).find((candidate) => candidate?.osm_ref === parsed.osmRef);
+    // The identity is exact by construction, but an id lookup never claims more
+    // than the resolver's automatic ceiling.
+    return { ok: true, candidate: raw ? finalizeCandidate({ ...raw, confidence: "medium" }) : null };
+  }
+
   async function drainQueue() {
     if (queueActive) return;
     queueActive = true;
@@ -652,6 +680,25 @@ function createNominatimPlaceResolver({
     return clone(result?.context || null);
   };
 
+  // Exact OSM identity → the provider's own record, named in the reader's
+  // language. The caller supplies only an id; coordinates, names and bounds
+  // come from the provider. A failed read ("unavailable") and an identity the
+  // provider no longer has ("not_found") stay distinct.
+  resolvePlace.lookupRef = async function lookupRef(rawRef, context = {}) {
+    const parsed = parsePlaceRef(rawRef);
+    if (!parsed) return { status: "unsupported" };
+    if (!lookupEndpointValid || typeof fetcher !== "function") return { status: "unavailable" };
+    const language = normalizeLanguage(context.language);
+    const key = `lookup-v1:${lookupEndpointIdentity}:${parsed.lookupId}:${language || "default"}`;
+    const result = await cache.get(
+      key,
+      () => enqueueProviderTask(() => fetchRefQueued(parsed, language)),
+      { shouldStore: (value) => value && value.ok === true },
+    );
+    if (!result?.ok) return { status: "unavailable" };
+    return result.candidate ? { status: "resolved", candidate: clone(result.candidate) } : { status: "not_found" };
+  };
+
   return resolvePlace;
 }
 
@@ -673,6 +720,9 @@ function resolveDefaultPlaceResolver(env = process.env, overrides = {}) {
   const reverseEndpoint =
     (env && typeof env.PARRANDA_PLACE_REVERSE_ENDPOINT === "string" && env.PARRANDA_PLACE_REVERSE_ENDPOINT.trim()) ||
     NOMINATIM_REVERSE_ENDPOINT;
+  const lookupEndpoint =
+    (env && typeof env.PARRANDA_PLACE_LOOKUP_ENDPOINT === "string" && env.PARRANDA_PLACE_LOOKUP_ENDPOINT.trim()) ||
+    NOMINATIM_LOOKUP_ENDPOINT;
   const timeoutMs = clampInt(env && env.PARRANDA_PLACE_RESOLVER_TIMEOUT_MS, 50, 30000, DEFAULT_TIMEOUT_MS);
   const reverseTimeoutMs = clampInt(
     env && env.PARRANDA_PLACE_REVERSE_TIMEOUT_MS,
@@ -703,6 +753,7 @@ function resolveDefaultPlaceResolver(env = process.env, overrides = {}) {
     userAgent,
     endpoint,
     reverseEndpoint,
+    lookupEndpoint,
     timeoutMs,
     reverseTimeoutMs,
     cacheTtlMs,
@@ -760,6 +811,9 @@ function composePlaceResolvers(primaryResolver, fallbackResolver) {
   };
   if (typeof primaryResolver.resolveCoordinates === "function") {
     resolveAcrossSources.resolveCoordinates = (...args) => primaryResolver.resolveCoordinates(...args);
+  }
+  if (typeof primaryResolver.lookupRef === "function") {
+    resolveAcrossSources.lookupRef = (...args) => primaryResolver.lookupRef(...args);
   }
   return resolveAcrossSources;
 }

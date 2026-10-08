@@ -105,7 +105,7 @@ test('a same-name region and city stay separate identities and the public row sa
  const app=buildApp({placeSuggestions:provider([region,city])});const server=app.listen(0);
  try{
   const out=await requestJson(server,{path:'/api/place-suggestions?lang=en',body:{query:'Lisbon'}});
-  assert.deepEqual(out.body.choices.map(choice=>[choice.title,choice.kind]),[['Lisbon','settlement'],['Lisbon','region']]);
+  assert.deepEqual(out.body.choices.map(choice=>[choice.title,choice.kind,choice.place_ref]),[['Lisbon','settlement','r5400890'],['Lisbon','region','r2897141']]);
   assert.equal(out.body.choices.some(choice=>'major' in choice),false);
  }finally{await new Promise(r=>server.close(r));}
 });

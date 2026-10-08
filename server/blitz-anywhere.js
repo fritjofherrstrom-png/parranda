@@ -224,6 +224,7 @@ async function buildAnywhereBlitzDecision({
   placeSelection,
   placeContextSelection = null,
   placeBias = null,
+  placeRef,
   openDataLoader = null,
   eventSupply = null,
   weatherProvider = null,
@@ -241,6 +242,7 @@ async function buildAnywhereBlitzDecision({
     placeSelection,
     placeContextSelection,
     placeBias,
+    placeRef,
     placeLanguage: lang,
   });
   if (!resolved.anchor) {
