@@ -146,8 +146,8 @@ async function rememberedDay() {
 test("malformed URL identities block planning and stored-day fallback without repairing the address", async () => {
   const last = await rememberedDay();
   for (const storage of [{}, { [LAST_KEY]: last }]) {
-    for (const ref of ["R41485", "r41485\n", ""]) {
-      const url = `http://localhost/anywhere?place=Rome&place_ref=${encodeURIComponent(ref)}&lang=en`;
+    for (const query of ["place=Rome&place_ref=R41485", "place=Rome&place_ref=r41485%0A", "place=Rome&place_ref=", "place_ref=R41485", "place_ref=r41485%0A", "place_ref=", "place_ref=&place_ref=r41485", "place_ref=R41485&lat=55&lng=13"]) {
+      const url = `http://localhost/anywhere?${query}&lang=en`;
       const h = await mountPlanner({ url, storage });
       try {
         await h.clock.advance(1000);
@@ -206,6 +206,74 @@ test("ref-only arrival requests its identity before stored-day fallback and adop
       assert.equal(adjusted.body.place, stored.inputs.place);
     } finally { await h.unmount(); }
   }
+});
+
+test("valid first reference and first non-near anchor retain first-value URL semantics", async () => {
+  for (const query of ["place_ref=r41485&place_ref=R41485", "place_ref=r41485&anchor=other&anchor=near"]) {
+    const h = await mountPlanner({ url: `http://localhost/anywhere?${query}&lang=en` });
+    try {
+      await h.clock.advance(500);
+      assert.equal(composeCalls(h).length, 1);
+      assert.equal(composeCalls(h)[0].body.place_ref, "r41485");
+      assert.equal(composeCalls(h)[0].body.lat, undefined);
+      assert.doesNotMatch(h.text(), /conflicting place anchors|invalid place reference/i);
+    } finally { await h.unmount(); }
+  }
+});
+
+test("valid ref plus explicit coordinate-field intent fails closed before planning or stored-day restore", async () => {
+  const last = await rememberedDay();
+  for (const storage of [{}, { [LAST_KEY]: last }]) {
+    for (const fields of ["lat=55&lng=13", "lat=999&lng=13", "lat=55", "lng=13", "lat=&lng=", "lat=NaN&lng=13", "lat=&lat=55&lng=13"]) {
+      const url = `http://localhost/anywhere?place_ref=r41485&${fields}&lang=en`;
+      const h = await mountPlanner({ url, storage });
+      try {
+        await h.clock.advance(1000);
+        assert.equal(h.fetchMock.calls.length, 0, fields);
+        assert.match(h.text(), /conflicting place anchors/i, fields);
+        assert.doesNotMatch(h.text(), /invalid place reference|Saved day/i);
+        assert.equal(h.window.location.search, new URL(url).search);
+        assert.deepEqual(h.readStorage(LAST_KEY), storage[LAST_KEY] ?? null);
+        assert.equal(h.container.querySelector("form"), null);
+        assert.ok(h.container.querySelector('a[href="/?lang=en"]'));
+      } finally { await h.unmount(); }
+    }
+  }
+});
+
+test("ref plus near handoff is an anchor conflict without consuming consented coordinates", async () => {
+  const last = await rememberedDay();
+  const coords = { lat: 55, lng: 13, at: Date.now() };
+  for (const storage of [{}, { [LAST_KEY]: last }]) {
+    for (const query of ["place_ref=r41485&anchor=near", "place=Rome&place_ref=r41485&anchor=near", "place_ref=r41485&anchor=near&anchor=other"]) {
+      const url = `http://localhost/anywhere?${query}&lang=sv`;
+      const h = await mountPlanner({ url, storage, props: { lang: "sv" }, sessionStorage: { "parranda:anchor:coords": coords } });
+      try {
+        await h.clock.advance(1000);
+        assert.equal(h.fetchMock.calls.length, 0, query);
+        assert.match(h.text(), /motstridiga platsankare/);
+        assert.equal(h.window.location.search, new URL(url).search);
+        assert.deepEqual(JSON.parse(h.window.sessionStorage.getItem("parranda:anchor:coords")), coords);
+        assert.deepEqual(h.readStorage(LAST_KEY), storage[LAST_KEY] ?? null);
+        assert.doesNotMatch(h.text(), /Saved day|Sparad dag/);
+      } finally { await h.unmount(); }
+    }
+  }
+});
+
+test("no-ref near consumes consented coordinates once without asking for GPS", async () => {
+  let gpsCalls = 0;
+  const h = await mountPlanner({ url: "http://localhost/anywhere?anchor=near&lang=en", sessionStorage: { "parranda:anchor:coords": { lat: 55, lng: 13 } } });
+  try {
+    Object.defineProperty(h.window.navigator, "geolocation", { value: { getCurrentPosition() { gpsCalls++; } } });
+    await h.clock.advance(500);
+    assert.equal(composeCalls(h).length, 1);
+    assert.equal(composeCalls(h)[0].body.lat, 55);
+    assert.equal(composeCalls(h)[0].body.lng, 13);
+    assert.equal(composeCalls(h)[0].body.place_ref, undefined);
+    assert.equal(h.window.sessionStorage.getItem("parranda:anchor:coords"), null);
+    assert.equal(gpsCalls, 0);
+  } finally { await h.unmount(); }
 });
 
 test("an unavailable ref-only arrival retains the last safe day without displaying it under the new identity", async () => {

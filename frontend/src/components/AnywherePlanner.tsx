@@ -177,6 +177,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // other languages and new sessions; the server re-validates it.
   const [placeRef, setPlaceRef] = useState<string | null>(null);
   const [invalidPlaceLink, setInvalidPlaceLink] = useState(false);
+  const [conflictingPlaceLink, setConflictingPlaceLink] = useState(false);
   const [narrowingPlace, setNarrowingPlace] = useState(false);
   const [narrowingFailed, setNarrowingFailed] = useState(false);
   const [mode, setMode] = useState<"typed" | "near_me">("typed"); // start context
@@ -910,6 +911,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // A malformed identity must never turn into a namesake search or a saved day.
     if (shared.invalidPlaceRef) {
       setInvalidPlaceLink(true);
+      return;
+    }
+    // Field presence is anchor intent even when coordinate parsing fails.
+    // Never discard a durable identity in favour of caller-supplied geography.
+    const params = new URLSearchParams(window.location.search);
+    if (shared.placeRef && (params.has("lat") || params.has("lng") || entry.near)) {
+      setConflictingPlaceLink(true);
       return;
     }
     // Only values that differ are set (the same picks in a new array are not a
@@ -1779,6 +1787,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         <div className="flex flex-col items-start gap-3 pt-8" role="status">
           <p>{invalidPlaceLink
             ? t("Länken har en ogiltig platsreferens. Välj en plats på startsidan — ingen annan plats väljs automatiskt.", "This link has an invalid place reference. Choose a place on the home page — no other place is selected automatically.")
+            : conflictingPlaceLink
+            ? t("Länken har motstridiga platsankare. Välj en plats på startsidan — ingen annan plats väljs automatiskt.", "This link has conflicting place anchors. Choose a place on the home page — no other place is selected automatically.")
             : t("Förbereder din dag. Om ingen sparad dag finns, välj en plats på startsidan.", "Preparing your day. If no saved day is available, choose a place on the home page.")}</p>
           <a href={`/?lang=${lang}`} onClick={() => leavePlanner("home")} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
             {t("Till startsidan", "Go to home")}
