@@ -77,6 +77,31 @@ test("a mounted status line announces the composed day", async (t) => {
   assert.ok(statuses.includes("A day in Testville is ready: 3 stops."), JSON.stringify(statuses));
 });
 
+test("near-me sentences use near you while named anchors retain in-place copy", async () => {
+  for (const lang of ["en", "sv"]) {
+    for (const named of [false, true]) {
+      const h = await mountPlanner({
+        url: `http://localhost/anywhere?anchor=near&lang=${lang}`,
+        props: { lang },
+        sessionStorage: { "parranda:anchor:coords": { lat: 55.6, lng: 13 } },
+      });
+      try {
+        await h.clock.advance(500);
+        const context = lang === "en" ? (named ? "in Testville" : "near you") : (named ? "i Testville" : "nära dig");
+        assert.equal(h.container.querySelector("h1").textContent, `${lang === "en" ? "Your day" : "Din dag"} ${lang === "en" ? "near you" : "nära dig"}`);
+        const compose = h.fetchMock.pending().find((call) => call.url.startsWith("/api/route-recommendations"));
+        assert.ok(compose, "coordinates compose without another permission prompt");
+        await h.fetchMock.respond(compose, { ...composedDay(), ...(named ? { resolved_place_label: "Testville, Region, Country" } : {}) });
+        await h.clock.advance(50);
+        const expected = lang === "en" ? `A day ${context} is ready: 3 stops.` : `En dag ${context} är klar: 3 stopp.`;
+        assert.ok([...h.container.querySelectorAll('[role="status"]')].some((s) => s.textContent === expected), expected);
+      } finally {
+        await h.unmount();
+      }
+    }
+  }
+});
+
 test("one h1, then h2 sections and h3 dayparts", async (t) => {
   const h = await planner(t);
   const headings = [...h.container.querySelectorAll("h1, h2, h3")].map((e) => `${e.tagName} ${e.textContent.trim()}`);
@@ -108,6 +133,72 @@ test("a place with no day says so as a status, not silently", async (t) => {
   const statuses = [...h.container.querySelectorAll('[role="status"]')].map((s) => s.textContent.trim());
   assert.ok(statuses.some((s) => /couldn't compose a day|couldn't pin down/.test(s)), JSON.stringify(statuses));
   assert.equal(h.container.querySelectorAll("h1").length, 1, "the page is still named");
+});
+
+test("the pre-mounted status receives final unavailable copy without another failure region", async () => {
+  const resolved = { status: "resolved", resolved: { label: "Testville, Region, Country" } };
+  const cases = [
+    { intake: { status: "unresolved" }, expected: "Parranda couldn't pin down “Testville” right now. Try another spelling or add a country or region — nothing is invented in its place." },
+    { intake: resolved, expected: "Parranda couldn't compose a day for Testville yet — nothing is invented in its place." },
+    { intake: resolved, candidate_readiness: { real_place_count: 2 }, readiness_blockers: ["insufficient_geocoded_candidates"], expected: "Parranda found 2 real places near Testville, but not enough for a reliable day yet — nothing is invented in its place." },
+    { intake: resolved, candidate_readiness: { real_place_count: 8 }, readiness_blockers: ["walking_validation_failed"], expected: "Parranda couldn't compose a day for Testville yet — nothing is invented in its place." },
+  ];
+  for (const { expected, ...experiment } of cases) {
+    const h = await mountPlanner({ url: PLACE_URL });
+    try {
+      const status = h.container.querySelector('p[role="status"].sr-only');
+      assert.ok(status, "the result region exists before completion");
+      assert.equal(status.textContent, "");
+      await h.clock.advance(500);
+      const compose = h.fetchMock.pending().find((call) => call.url.startsWith("/api/route-recommendations"));
+      await h.fetchMock.respond(compose, { days: [], agnostic_route_output_experiment: experiment });
+      await h.clock.advance(50);
+      assert.equal(h.container.querySelector('p[role="status"].sr-only'), status, "the original node survives completion");
+      assert.equal(status.textContent, expected, "the mounted region receives the classified absence");
+      const failureRegions = [...h.container.querySelectorAll('[role="status"], [aria-live], [role="alert"]')].filter((node) => node.textContent.includes(expected));
+      assert.deepEqual(failureRegions, [status], "only one live region carries the failure");
+      assert.ok([...h.container.querySelectorAll("div")].some((node) => node.textContent === expected && !node.closest('[role="status"], [aria-live], [role="alert"]')), "the notice remains visible outside the live region");
+      assert.equal(h.container.querySelector("h1").textContent, "Your day in Testville");
+    } finally {
+      await h.unmount();
+    }
+  }
+});
+
+test("choices, service refusals and pending upgrades keep their own truthful status", async () => {
+  const resolved = { status: "resolved", resolved: { label: "Testville" } };
+  const cases = [
+    { body: { days: [], agnostic_route_output_experiment: { intake: { status: "unresolved", candidates: [{ label: "Testville, Country", selection_id: "choice-token" }] } } }, expected: "Which place do you mean?" },
+    { body: { days: [], agnostic_route_output_experiment: { intake: { status: "unresolved", blockers: ["place_selection_invalid"] } } }, expected: "Your previous place choice needs confirming again." },
+    { body: { error: "busy", retry_after_seconds: 5 }, httpStatus: 429, expected: "Parranda is composing as many days as it safely can right now. Try again shortly." },
+    { body: { error: "rate_limited", retry_after_seconds: 12 }, httpStatus: 429, expected: "Parranda needs to pause new requests briefly — try again in about 12 seconds." },
+    { body: { days: [], live_events: { pending: true }, agnostic_route_output_experiment: { intake: resolved, source_status: { status: "error_failed_closed" } } }, upgrade: true, expected: "Reading more from the sources — updates automatically in a moment." },
+  ];
+  for (const { body, httpStatus = 200, expected, upgrade } of cases) {
+    const h = await mountPlanner({ url: PLACE_URL });
+    try {
+      const status = h.container.querySelector('p[role="status"].sr-only');
+      await h.clock.advance(500);
+      await h.fetchMock.respond(h.fetchMock.pending().find((call) => call.url.startsWith("/api/route-recommendations")), body, httpStatus);
+      await h.clock.advance(50);
+      assert.equal(status.textContent, "", "no final failure or ready announcement replaces the real status");
+      assert.ok(h.text().includes(expected), h.text());
+      assert.doesNotMatch(h.text(), /couldn't pin down|couldn't compose a day/);
+      if (upgrade) {
+        await h.clock.advance(9000);
+        const followup = h.fetchMock.pending().find((call) => call.url.startsWith("/api/route-recommendations"));
+        assert.ok(followup, "the pending upgrade follows through");
+        await h.fetchMock.respond(followup, { days: [], agnostic_route_output_experiment: { intake: resolved } });
+        await h.clock.advance(50);
+        assert.equal(h.container.querySelector('p[role="status"].sr-only'), status);
+        assert.match(status.textContent, /couldn't compose a day for Testville/);
+      } else {
+        assert.ok([...h.container.querySelectorAll('[role="status"]')].some((node) => node !== status && node.textContent === expected), "the original choices/refusal surface still owns its status");
+      }
+    } finally {
+      await h.unmount();
+    }
+  }
 });
 
 test("how the day was assembled is one closed line beside the map", async (t) => {
