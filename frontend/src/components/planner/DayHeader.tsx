@@ -115,6 +115,25 @@ function Note({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * How the day was assembled, in the order a reader needs it: where the places
+ * came from, then how it sits on the clock. Said once, in "About this day".
+ */
+export function dayAssemblyNotes(t: Translate, { sourceBackedDay, timeAnchoring }: { sourceBackedDay: boolean; timeAnchoring: string | null }): string[] {
+  const notes: string[] = [];
+  if (sourceBackedDay) {
+    notes.push(t(
+      "Byggd från källstödda platser — Parranda har inte full kurering här ännu.",
+      "Built from source-backed places — Parranda does not have full curation here yet.",
+    ));
+  }
+  // Time-anchoring truth (#429): a today request at 22:00 must not read as a
+  // doable midday plan. Quietly note the trimmed variant too.
+  if (timeAnchoring === "full_arc_not_now") notes.push(t("En hel dags båge — inte förankrad till klockan just nu.", "A full-day arc — not anchored to right now."));
+  if (timeAnchoring === "anchored_trimmed") notes.push(t("Förankrad till nu — tidigare dagdelar borttagna.", "Anchored to now — earlier dayparts trimmed."));
+  return notes;
+}
+
 export default function DayHeader({
   t,
   lang,
@@ -129,9 +148,7 @@ export default function DayHeader({
   coreCount,
   wovenCount,
   pickCoverage,
-  sourceBackedDay,
   dayLimitationNote,
-  timeAnchoring,
   restoredAt,
   resolveAndRun,
 }: {
@@ -148,9 +165,7 @@ export default function DayHeader({
   coreCount: number;
   wovenCount: number;
   pickCoverage: PickCoverage[];
-  sourceBackedDay: boolean;
   dayLimitationNote: string | null | undefined;
-  timeAnchoring: string | null;
   restoredAt: string | null;
   resolveAndRun: () => void;
 }) {
@@ -249,24 +264,9 @@ export default function DayHeader({
           ))}
         </ul>
       )}
-      {sourceBackedDay && (
-        <Note>
-          {t(
-            "Byggd från källstödda platser — Parranda har inte full kurering här ännu",
-            "Built from source-backed places — Parranda does not have full curation here yet",
-          )}
-        </Note>
-      )}
+      {/* What the day CONTAINS stays under the title (a thin day says so);
+          how it was ASSEMBLED is one "About this day" line beside the map. */}
       {dayLimitationNote && <Note>{dayLimitationNote}</Note>}
-      {/* Time-anchoring truth (#429): say when the arc is not anchored to
-          the local clock — a today request at 22:00 must not read as a
-          doable midday plan. Quietly note the trimmed variant too. */}
-      {timeAnchoring === "full_arc_not_now" && (
-        <Note>{t("En hel dags båge — inte förankrad till klockan just nu", "A full-day arc — not anchored to right now")}</Note>
-      )}
-      {timeAnchoring === "anchored_trimmed" && (
-        <Note>{t("Förankrad till nu — tidigare dagdelar borttagna", "Anchored to now — earlier dayparts trimmed")}</Note>
-      )}
       {restoredAt && (
         <p className="text-xs text-parranda-ink/68">
           {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE")} —{" "}

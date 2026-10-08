@@ -119,13 +119,16 @@ test("how the day was assembled sits with the route evidence, said once", async 
     composedDay({ caps: ["capped_by_external_only_sources", "capped_by_derived_timezone", "capped_by_heuristic_walking"] }),
   );
 
-  // The trust line leads, under the title.
-  assert.match(header(h).textContent, /Built from source-backed places — Parranda does not have full curation here yet/);
-  // Assembly caveats are not stacked under the title...
-  assert.doesNotMatch(header(h).textContent, /Local time|external sources|estimates/);
-  // ...they are stated beside the map and its estimates, without repeating
-  // what the trust line and the estimates sentence already say.
-  const card = routeCard(h).textContent;
+  // Nothing about how the day was assembled stacks under the title...
+  assert.doesNotMatch(header(h).textContent, /source-backed|Local time|external sources|estimates/);
+  // ...it is one "About this day and map" line beside the map, every fact
+  // still stated once: the trust line first, then the estimates and context.
+  const about = routeCard(h).querySelector("details");
+  assert.ok(about, "the assembly notes are one disclosure");
+  assert.match(about.querySelector("summary").textContent, /About this day and map/);
+  assert.equal(about.open, false, "closed until asked for");
+  const card = about.textContent;
+  assert.match(card, /Built from source-backed places — Parranda does not have full curation here yet/);
   assert.match(card, /Distances and walking times are estimates\./);
   assert.match(card, /Local time is inferred from the location\./);
   assert.doesNotMatch(card, /external sources|walking distances are estimates/i);
@@ -137,7 +140,7 @@ test("a day without source-backed provenance still names where its places came f
     composedDay({ caps: ["capped_by_external_only_sources"], sourceBacked: false }),
   );
 
-  assert.doesNotMatch(header(h).textContent, /Built from source-backed places/);
+  assert.doesNotMatch(h.text(), /Built from source-backed places/);
   assert.match(routeCard(h).textContent, /Places come from external sources\./);
 });
 
@@ -249,6 +252,6 @@ test('a nearby curated day does not claim Parranda lacks full curation', async t
   const body = composedDay();
   body.days[0].primary_route.trust_summary = { human_verified: true, source_tiers: ['curated'] };
   const h = await plannerWith(t, body);
-  assert.doesNotMatch(header(h).textContent, /does not have full curation here yet/);
+  assert.doesNotMatch(h.text(), /does not have full curation here yet/);
   assert.match(routeCard(h).textContent, /Distances and walking times are estimates/);
 });

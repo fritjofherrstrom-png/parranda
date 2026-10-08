@@ -97,3 +97,25 @@ test("Maps, Save and Share follow the stops", async (t) => {
   assert.equal(h.container.querySelector("header").querySelector('a[href*="google.com/maps/dir/"]'), null, "the title block carries no Maps link");
   assert.match(actions.textContent, /Google Maps works out the walking path/);
 });
+
+test("a place with no day says so as a status, not silently", async (t) => {
+  const h = await mountPlanner({ url: PLACE_URL });
+  t.after(() => h.unmount());
+  await h.clock.advance(500);
+  const compose = h.fetchMock.pending().find((call) => call.url.startsWith("/api/route-recommendations"));
+  await h.fetchMock.respond(compose, { days: [], agnostic_route_output_experiment: { promotion: { promote: false, readiness: "non_promotable" } } });
+  await h.clock.advance(50);
+  const statuses = [...h.container.querySelectorAll('[role="status"]')].map((s) => s.textContent.trim());
+  assert.ok(statuses.some((s) => /couldn't compose a day|couldn't pin down/.test(s)), JSON.stringify(statuses));
+  assert.equal(h.container.querySelectorAll("h1").length, 1, "the page is still named");
+});
+
+test("how the day was assembled is one closed line beside the map", async (t) => {
+  const h = await planner(t);
+  const route = h.container.querySelector('section[aria-label="The route"]');
+  const about = route.querySelectorAll("details");
+  assert.equal(about.length, 1);
+  assert.equal(about[0].open, false);
+  assert.match(about[0].textContent, /Built from source-backed places/);
+  assert.doesNotMatch(h.container.querySelector("header").textContent, /source-backed/);
+});

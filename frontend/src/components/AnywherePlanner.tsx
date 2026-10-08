@@ -79,7 +79,7 @@ import { useMediaQuery } from "./shared/useMediaQuery";
 import AnchorCard from "./planner/AnchorCard";
 import BlitzCard from "./planner/BlitzCard";
 import CandidateAreas from "./planner/CandidateAreas";
-import DayHeader, { DayActions } from "./planner/DayHeader";
+import DayHeader, { DayActions, dayAssemblyNotes } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
 import LiveSheet from "./planner/LiveSheet";
@@ -1598,6 +1598,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // How the day was assembled, minus what another line already says in full:
   // the trust line names the source-backed places, the map caption the
   // estimates. What is left sits with the map, not under the title.
+  const unavailableHasChoices = Boolean(anchorUnresolved && (safeResponse?.agnostic_route_output_experiment?.intake?.candidates?.some((c: any) => c.selection_id) || safeResponse?.agnostic_route_output_experiment?.intake?.blockers?.includes("place_selection_invalid")));
   const dayContextNote = contextNote(dayLimitations, t, {
     sourceCompletion: safeResponse?.agnostic_route_output_experiment?.source_status?.collection?.source_completion,
     statedElsewhere: sourceBackedDay
@@ -1903,7 +1904,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               compose. The count comes from the classifier's trusted-loader
               evidence, never from copy. The label follows the pill rule:
               primary locality, not the resolver's full admin chain. */}
-          <div className="text-[15px] text-parranda-ink">
+          {/* Announced like the ready line: a reader waiting on a day must
+              hear that none came. Place choices carry their own status. */}
+          <div className="text-[15px] text-parranda-ink" role={unavailableHasChoices ? undefined : "status"}>
             {anchorUnresolved && (safeResponse?.agnostic_route_output_experiment?.intake?.candidates?.some((c: any) => c.selection_id) || safeResponse?.agnostic_route_output_experiment?.intake?.blockers?.includes("place_selection_invalid")) ? (
               <PlaceChoices intake={safeResponse?.agnostic_route_output_experiment?.intake}
                 pending={false} locationPending={narrowingPlace} locationFailed={narrowingFailed} t={t}
@@ -1991,9 +1994,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           coreCount={split.core.length}
           wovenCount={split.woven.length}
           pickCoverage={pickCoverage}
-          sourceBackedDay={sourceBackedDay}
           dayLimitationNote={dayLimitationNote}
-          timeAnchoring={timeAnchoring}
           restoredAt={restoredAt}
           resolveAndRun={() => resolveAndRun()}
         />
@@ -2042,6 +2043,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           stale={staleNotice === "updating"}
           routeLineIsSketch={routeLineIsSketch}
           dayContextNote={dayContextNote}
+          assemblyNotes={dayAssemblyNotes(t, { sourceBackedDay, timeAnchoring })}
           split={split}
           routeStops={routeStops}
           legForStop={legForStop}

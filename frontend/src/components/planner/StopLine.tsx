@@ -83,6 +83,7 @@ export default function StopLine({
   stale,
   routeLineIsSketch,
   dayContextNote,
+  assemblyNotes = [],
   split,
   routeStops,
   legForStop,
@@ -111,6 +112,8 @@ export default function StopLine({
   stale: boolean;
   routeLineIsSketch: boolean;
   dayContextNote: string | null | undefined;
+  /** Where the places came from and how the day sits on the clock. */
+  assemblyNotes?: string[];
   split: { core: any[]; woven: any[] };
   routeStops: any[];
   legForStop: (stop: any) => Leg | null;
@@ -189,15 +192,24 @@ export default function StopLine({
       {map && <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/4 p-4 sm:p-5">{map}</div>}
       {/* The route's evidence, stated beside it: what the line is, what the
           numbers are, and how the day was assembled. */}
-      {/* One quiet line: what the drawn line is, and that the numbers are
-          estimates. How Maps walks it is said beside the Maps action. */}
-      <p className="mt-2 text-[11px] leading-snug text-parranda-ink/68">
-        {routeLineIsSketch && t("Den prickade linjen visar stoppens ordning, inte gatorna. ", "The dotted line shows the order of the stops, not the streets. ")}
-        {t("Avstånd och gångtider är uppskattningar.", "Distances and walking times are estimates.")}
-        {dayContextNote && ` ${dayContextNote}`}
-      </p>
+      {/* HOW THE DAY WAS ASSEMBLED — one line, opened on request. Every fact
+          is still on the page (and read by assistive tech when opened); it
+          no longer stacks between the title, the map and the stops. How Maps
+          walks the route is said beside the Maps action. */}
+      <details className="group mt-2">
+        <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-parranda-ink/72 transition hover:text-parranda-ink [&::-webkit-details-marker]:hidden">
+          {t("Om dagen och kartan", "About this day and map")}
+          <ChevronDownIcon className="h-3.5 w-3.5 transition group-open:rotate-180" />
+        </summary>
+        <ul className="mb-1 flex flex-col gap-1.5 text-xs leading-relaxed text-parranda-ink/72">
+          {assemblyNotes.map((note) => <li key={note}>{note}</li>)}
+          {routeLineIsSketch && <li>{t("Den prickade linjen visar stoppens ordning, inte gatorna.", "The dotted line shows the order of the stops, not the streets.")}</li>}
+          <li>{t("Avstånd och gångtider är uppskattningar.", "Distances and walking times are estimates.")}</li>
+          {dayContextNote && <li>{dayContextNote}</li>}
+        </ul>
+      </details>
 
-      <div className="mb-2 mt-10 flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      <div className="mb-2 mt-8 flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <Eyebrow as="h2">{t("Stoppen i ordning", "The stops, in order")}</Eyebrow>
         {canFollow && (
           <button
