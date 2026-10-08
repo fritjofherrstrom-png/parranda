@@ -129,7 +129,9 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
     e?.preventDefault?.();
     // Every selected suggestion uses the shared any-place intake, including
     // registered cities. Keep its receipt bound to the qualified query.
-    const route = selectedPlace ? routeForInput({}, selectedPlace.query, lang) : routeForInput(registry, value, lang);
+    const route = selectedPlace
+      ? routeForInput({}, selectedPlace.query, lang, { placeRef: selectedPlace.place_ref ?? null })
+      : routeForInput(registry, value, lang);
     if (selectedPlace) storePlaceChoice({ place: selectedPlace.query, selection: selectedPlace.selection_id, label: selectedPlace.query });
     // Empty submit isn't a dead end: focus the field so the next keystroke lands
     // where it should (the CTA stays visually live rather than reading as broken).

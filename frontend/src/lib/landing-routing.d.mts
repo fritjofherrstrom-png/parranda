@@ -18,4 +18,5 @@ export declare function routeForInput(
   registry: CityRegistry | null | undefined,
   raw: string,
   lang?: string,
+  options?: { placeRef?: string | null },
 ): { type: "anywhere"; href: string } | null;

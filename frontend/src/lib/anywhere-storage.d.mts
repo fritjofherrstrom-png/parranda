@@ -11,6 +11,7 @@ export interface SavedInputs {
   place?: string | null;
   placeLabel?: string | null;
   placeSelection?: string | null;
+  placeRef?: string | null;
   mode?: string;
   dayOffset?: number;
   walkKey?: string;

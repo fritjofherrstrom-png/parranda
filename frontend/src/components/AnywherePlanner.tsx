@@ -53,7 +53,7 @@ import {
 import { planComposeFollowup } from "../lib/compose-followup.mjs";
 import { composeServiceRefusal, type ComposeServiceRefusal } from "../lib/compose-service-refusal.mjs";
 import plannerEntry from "../../../planner-entry.js";
-import { buildShareUrl, decodeShareParams, encodeShareParams, shareablePlace } from "../lib/anywhere-share.mjs";
+import { buildShareUrl, decodeShareParams, encodeShareParams, shareablePlace, validPlaceRef } from "../lib/anywhere-share.mjs";
 import { consumeAnchorCoords, requestPosition, storeAnchorCoords } from "../lib/location-anchor.mjs";
 import { consumePlaceChoice, storePlaceChoice } from "../lib/place-choice.mjs";
 import { PlaceChoices } from "./planner/PlaceChoices";
@@ -173,6 +173,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [place, setPlace] = useState("");
   const [placeSelection, setPlaceSelection] = useState<string | null>(null);
   const [selectionLabel, setSelectionLabel] = useState<string | undefined>();
+  // The chosen place's OSM identity. Unlike the receipt it survives reloads,
+  // other languages and new sessions; the server re-validates it.
+  const [placeRef, setPlaceRef] = useState<string | null>(null);
   const [narrowingPlace, setNarrowingPlace] = useState(false);
   const [narrowingFailed, setNarrowingFailed] = useState(false);
   const [mode, setMode] = useState<"typed" | "near_me">("typed"); // start context
@@ -341,7 +344,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     return () => timers.forEach(clearTimeout);
   }, [phase]);
 
-  type Anchor = { place?: string; coords?: { lat: number; lng: number }; placeSelection?: string | null; selectionLabel?: string; placeBias?: { lat: number; lng: number }; placeContextSelection?: string };
+  type Anchor = { place?: string; coords?: { lat: number; lng: number }; placeSelection?: string | null; selectionLabel?: string; placeRef?: string | null; placeBias?: { lat: number; lng: number }; placeContextSelection?: string };
   const lastRequestedAnchorRef = useRef<Anchor | null>(null);
   function resetBlitz() {
     blitzRequestRef.current?.abort();
@@ -464,6 +467,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         place: anchor.place,
         coords: anchor.coords ?? null,
         placeSelection: anchor.placeSelection,
+        placeRef: anchor.placeRef,
         placeBias: anchor.placeBias,
         placeContextSelection: anchor.placeContextSelection,
         dates: [effectiveDateIso],
@@ -528,10 +532,16 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const authoritativePlace = anchor.place;
       const resolution = body?.agnostic_route_output_experiment?.intake?.resolved;
       if (!anchor.coords && typeof resolution?.selection_id === "string") {
-        anchor = { ...anchor, placeSelection: resolution.selection_id, selectionLabel: resolution.label || anchor.selectionLabel };
+        anchor = {
+          ...anchor,
+          placeSelection: resolution.selection_id,
+          selectionLabel: resolution.label || anchor.selectionLabel,
+          placeRef: validPlaceRef(resolution.place_ref) ?? anchor.placeRef,
+        };
         lastRequestedAnchorRef.current = anchor;
         setPlaceSelection(anchor.placeSelection ?? null);
         setSelectionLabel(anchor.selectionLabel);
+        setPlaceRef(anchor.placeRef ?? null);
       }
       // Atomic replacement. If the new verdict is structure_only/unavailable,
       // the held day disappears here — it no longer answers the request.
@@ -573,7 +583,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           classification: cls,
           // The mode is the anchor's, not this render's: an arrival composes
           // from the first render, before the near-me mode it set has landed.
-          inputs: { city: null, place: authoritativePlace ?? null, placeSelection: anchor.placeSelection, placeLabel: anchor.selectionLabel, mode: anchor.coords ? "near_me" : "typed", dayOffset: effectiveDayOffset, walkKey: effectiveWalkKey, selected: prefs },
+          inputs: { city: null, place: authoritativePlace ?? null, placeSelection: anchor.placeSelection, placeRef: anchor.placeRef ?? null, placeLabel: anchor.selectionLabel, mode: anchor.coords ? "near_me" : "typed", dayOffset: effectiveDayOffset, walkKey: effectiveWalkKey, selected: prefs },
           // Frozen from the SAME request that produced this day: the ledger it
           // carried and the verdict that came back. Recorded here rather than
           // at save time, because by then the live ledger may have moved on
@@ -745,6 +755,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (i) {
       if (typeof i.place === "string") setPlace(i.place);
       setPlaceSelection(i.placeSelection ?? null);
+      setPlaceRef(validPlaceRef(i.placeRef));
       setSelectionLabel(i.placeLabel ?? undefined);
       if (i.mode === "typed" || i.mode === "near_me") setMode(i.mode);
       if (i.dayOffset === 0 || i.dayOffset === 1) setDayOffset(i.dayOffset);
@@ -924,9 +935,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (entry.place) {
       shared.place = entry.place;
       setPlace(shared.place);
+      setPlaceRef(shared.placeRef);
       adoptLinkInputs();
       execute(
-        { place: shared.place, ...consumePlaceChoice(shared.place) },
+        { place: shared.place, placeRef: shared.placeRef, ...consumePlaceChoice(shared.place) },
         {
           langOverride: shared.lang ?? undefined,
           preferencesOverride: shared.preferences.length ? shared.preferences : undefined,
@@ -990,6 +1002,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (!i || !sharedPlace) return;
     const url = buildShareUrl(window.location.origin, {
       place: sharedPlace,
+      placeRef: i.placeRef ?? null,
       city: null,
       preferences: Array.isArray(i.selected) ? i.selected : [],
       dayOffset: i.dayOffset ?? 0,
@@ -1043,7 +1056,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
     const trimmed = place.trim();
     if (!trimmed) return;
-    await execute({ place: trimmed, placeSelection, selectionLabel }, opts);
+    await execute({ place: trimmed, placeSelection, selectionLabel, placeRef }, opts);
   }
 
   async function plan(event?: { preventDefault?: () => void }) {
@@ -1071,7 +1084,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     try {
       const anchor = nearMeAnchor
         ? { lat: nearMeAnchor.lat, lng: nearMeAnchor.lng }
-        : { place: typedAnchor, ...(placeSelection ? { place_selection: placeSelection } : {}) };
+        : { place: typedAnchor, ...(placeSelection ? { place_selection: placeSelection } : {}), ...(placeRef ? { place_ref: placeRef } : {}) };
       const response = await fetch(`/api/blitz?anywhere_blitz=1&lang=${lang}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1110,7 +1123,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           encodeShareParams(
             mode === "near_me"
               ? { preferences: selected, dayOffset, walkKey, lang: option }
-              : { place, preferences: selected, dayOffset, walkKey, lang: option },
+              : { place, placeRef, preferences: selected, dayOffset, walkKey, lang: option },
           ),
         );
         if (mode === "near_me") query.set("anchor", "near");
@@ -1911,8 +1924,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 pending={false} locationPending={narrowingPlace} locationFailed={narrowingFailed} t={t}
                 onNarrow={() => { narrowPlaceSearch().catch(() => {}); }}
                 onChoose={(choice) => {
-                  setPlaceSelection(choice.selection_id); setSelectionLabel(choice.label);
-                  execute({ place: place.trim(), placeSelection: choice.selection_id, selectionLabel: choice.label }).catch(() => {});
+                  const choiceRef = validPlaceRef(choice.place_ref);
+                  setPlaceSelection(choice.selection_id); setSelectionLabel(choice.label); setPlaceRef(choiceRef);
+                  execute({ place: place.trim(), placeSelection: choice.selection_id, selectionLabel: choice.label, placeRef: choiceRef }).catch(() => {});
                 }} />
             ) : anchorUnresolved ? (
               t(
