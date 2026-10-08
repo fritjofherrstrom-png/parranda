@@ -12,7 +12,9 @@ Parranda är platsagnostisk i sin produktinriktning: städer, stadsdelar och min
 
 [MVP-PRD för Parranda](docs/PRD-Parranda-MVP.md) samlar produktutfall, kärnresa, scope, fel-/osäkerhetstillstånd och observerbara acceptanskriterier. Dokumentet är ett kravutkast; planerade kontroller är inte utförd QA. Överenskomna beslut och öppna frågor är markerade separat.
 
-## Nuvarande alpha
+## Befintliga ytor och leveransstatus
+
+Följande omfattar även äldre city-shell-ytor på `main`. Nyare stagingintegrationer använder det gemensamma Planner/Live-flödet och ska bedömas på sin exakta SHA, inte på denna historiska funktionslista.
 
 - Inline planner via `/:city?planner=open`, med `/:city/plan` bevarad som deep link till samma city-shell/planner-state
 - Multi-city shell med Rome, Barcelona och Athens preview i stället för en Rom-låst app
@@ -170,10 +172,7 @@ Det ger både kodgranskning och riktig produktfeedback.
 
 ## Dela appen — din maskin är servern
 
-Parranda behöver ingen databas och inga hemligheter, så hostingen får vara lika
-enkel som appen: **din egen maskin kör servern, och en tunnel ger den en publik
-HTTPS-adress.** Inget hostingbolag håller appen, och cachen ligger på en riktig
-disk — en plats som slagits upp en gång förblir snabb för alla som frågar sedan.
+En enkel utvärderingsprofil kan köras på din egen maskin, med en tunnel som ger en publik HTTPS-adress och en skrivbar diskcache. Den fulla Source Catalog-profilen använder även PostgreSQL och operatörskonfiguration; databas- och credentialbehov beror alltså på vald profil, inte på ett generellt löfte om att appen aldrig behöver dem.
 
 ```bash
 npm run share
