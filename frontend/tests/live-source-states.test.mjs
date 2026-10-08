@@ -162,8 +162,8 @@ const EMPTY_STATES = [
       responding_source_count: 1, raw_event_count: 4, normalized_event_count: 4,
       rejected_event_count: 4, reasons: ['all_event_evidence_rejected'] },
     { feeds: [{ id: 'calendar', label: 'Official calendar', status: 'empty' }] }),
-    en: 'Listings existed, but none were reliable or current enough to show.',
-    sv: 'Det fanns listningar, men inga var pålitliga eller aktuella nog att visa.',
+    en: 'We found listings, but none met the checks for this view.',
+    sv: 'Vi hittade listningar, men inga klarade kontrollerna för den här vyn.',
   },
   {
     name: 'unavailable without source-failure counts',

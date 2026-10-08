@@ -46,6 +46,8 @@ const {
 const { parseRequestedDates } = require("./planner/requested-dates");
 const { createPlannerLifecycle, lifecycleLoader } = require('./planner/cold-lifecycle');
 const { nearbyCuratedSupply } = require('./planner/nearby-curated-supply');
+const { createPlaceSelectionStore, placeResolutionInputs } = require('./place-candidates/place-selection');
+const { resolveDefaultPlaceSuggestions } = require('./place-candidates/place-suggestions');
 const { attributeToWithheldDay } = require("./planner/pin-refusal-reasons");
 const {
   markCommitmentEligibility,
@@ -1486,6 +1488,8 @@ function selectPublishedEventWeave({ promotionPromote, eventWeave, publicResult 
 function buildApp({
   openDataLoader = resolveDefaultOpenDataLoader(),
   placeResolver = resolveDefaultPlaceResolver(),
+  placeSelectionStore = createPlaceSelectionStore({ cacheDir: process.env.PARRANDA_CACHE_DIR }),
+  placeSuggestions = resolveDefaultPlaceSuggestions(),
   eventSupply,
   sourceCatalog,
   reviewedPlaceSource,
@@ -1527,6 +1531,27 @@ function buildApp({
   // from the open data the whole app depends on. On by default, generous
   // enough that a person planning days never notices it.
   app.use(createPublicAccessGuard({ env: process.env }));
+  app.post('/api/place-suggestions', async (request, response) => {
+    const query = typeof request.body?.query === 'string' ? request.body.query.trim().replace(/\s+/g, ' ') : '';
+    if (query.length > 200) return response.status(400).json({ error: 'invalid_query' });
+    if (query.length < 3) return response.json({ status: 'ready', choices: [] });
+    if (typeof placeSuggestions !== 'function') return response.json({ status: 'unavailable', choices: [] });
+    const previous = placeSelectionStore.read(request.body?.context_selection);
+    try {
+      const result = await placeSuggestions(query, { language: normalizeLanguage(request.query?.lang), ...(previous ? { near: { lat: previous.lat, lng: previous.lng } } : {}) });
+      const registry = buildLandingCityRegistry(normalizeLanguage(request.query?.lang));
+      const choices = (result.choices || []).slice(0, 5).flatMap(choice => {
+        const selection = placeSelectionStore.issue(choice.candidate, choice.query);
+        if (!selection) return [];
+        const entry = registry[choice.title.toLowerCase()];
+        const point = choice.candidate;
+        const distance = entry?.center ? Math.hypot((point.lat - entry.center.lat) * 111, (point.lng - entry.center.lng) * 111 * Math.cos(point.lat * Math.PI / 180)) : Infinity;
+        const cityKey = choice.kind === 'settlement' && distance <= 10 ? entry?.key : null;
+        return [{ title: choice.title, context: choice.context, query: choice.query, selection_id: selection, attribution: point.attribution, license: point.license, ...(cityKey ? { city_key: cityKey } : {}) }];
+      });
+      response.json({ status: result.status, choices, ...(result.retry_after_ms ? { retry_after_ms: result.retry_after_ms } : {}) });
+    } catch (_) { response.json({ status: 'unavailable', choices: [] }); }
+  });
   // GET / — the new frontend IS the landing (sole owner since the old shell was
   // retired). The committed frontend/dist makes the build always present; if a
   // deployment somehow lacks it, fail LOUDLY — never a silently wrong page.
@@ -1577,6 +1602,20 @@ function buildApp({
   });
   app.get("/anywhere", (request, response) => {
     const params = entryParams(request);
+    // Canonicalize old curated shares/bookmarks before the UI loads. Registry
+    // identity supplies a label, never route templates or public coordinates.
+    if (params.has("city")) {
+      const entry = readPlannerEntry(params);
+      const registered = resolveCityConfig(params.get("city"), { allowFallback: false });
+      params.delete("city");
+      if (entry.coords || entry.near) {
+        params.delete("place");
+      } else if (registered.found && ["public", "beta", "preview"].includes(registered.cityConfig.visibility || "public")) {
+        params.set("place", resolveDisplayLabel(registered.cityConfig, null, normalizeLanguage(params.get("lang"))));
+      }
+      response.redirect(302, readPlannerEntry(params).hasIntent ? `/anywhere?${params.toString()}` : landingHref(params));
+      return;
+    }
     if (!readPlannerEntry(params).hasIntent) {
       response.redirect(302, landingHref(params));
       return;
@@ -1863,6 +1902,7 @@ function buildApp({
       now: eventsNow,
       placeResolver,
       placeLanguage: normalizeLanguage(request.query?.lang),
+      placeSelectionStore,
     });
     response.status(result.status).json(result.body);
   });
@@ -2240,6 +2280,8 @@ function buildApp({
         placeQuery,
         placeResolver,
         placeLanguage: lang,
+        placeSelectionStore,
+        ...placeResolutionInputs(request.body),
       });
 
       if (!anchor) {
@@ -2294,6 +2336,7 @@ function buildApp({
             anchorMode: intake.mode,
             spatialScope,
             walkingTargetBand: requestedRhythm ? null : resolveAgnosticWalkingTargetBand(payload.walkingKmTarget),
+            ...(requestedRhythm ? { dayRhythm: requestedRhythm } : {}),
           });
           const structureCandidates = [...curatedCandidates, ...(Array.isArray(records) ? records : [])].filter(
             (c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng),
@@ -2598,6 +2641,8 @@ function buildApp({
           coords: parseBlitzCoordinates(request),
           placeQuery: parsePlaceQuery(request),
           placeResolver,
+          placeSelectionStore,
+          ...placeResolutionInputs(request.body),
           openDataLoader,
           eventSupply,
           weatherProvider,
@@ -2813,6 +2858,22 @@ function buildApp({
     }
     if (!isCityRoot && !isPlannerEntry) {
       response.status(404).type("text/plain").send("Not found");
+      return;
+    }
+
+    const config = cityResolution.cityConfig;
+    if (["public", "beta", "preview"].includes(config.visibility || "public")) {
+      const params = entryParams(request);
+      const lang = normalizeLanguage(params.get("lang"));
+      params.delete("city");
+      // Keep an explicit position/session handoff; otherwise the registered
+      // path supplies a label and its query label cannot rename the place.
+      const entry = readPlannerEntry(params);
+      if (entry.coords || entry.near) params.delete("place");
+      else params.set("place", resolveDisplayLabel(config, null, lang));
+      params.set("planner", "open");
+      params.set("lang", lang);
+      response.redirect(302, `/anywhere?${params.toString()}`);
       return;
     }
 

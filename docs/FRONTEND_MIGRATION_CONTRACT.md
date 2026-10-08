@@ -124,6 +124,46 @@ surface has a citypack-aware Blitz adapter and recognized-city commitment
 handling, it hides those actions in curated mode rather than silently invoking
 the freeform contracts.
 
+## Shared place Planner entry (2026-10-07)
+
+This supersedes the modern curated entry section above for public/beta/preview
+citypacks. Exact registered names/aliases now send only the canonical place
+label to `/anywhere`; all modern UI requests use freeform/coordinate intake,
+modern rhythm, the existing engine-compose flags and the shared honesty gate.
+Old `/:city`, `/:city/plan` and `/anywhere?city=…` links redirect to that same
+Planner, preserving language, day/rhythm/preferences and an explicit coordinate
+or session GPS handoff. A registered key supplies a server-owned label only;
+unknown paths remain 404 and internal test-city shells stay internal previews.
+
+The catalog files are retained. After trusted place resolution, their individual
+nearby real places enter the existing five-kilometre curated-supply boundary,
+with original identities, provenance, weekday closures and normal shared gates.
+A citypack never selects a template or an alternate UI in the modern flow.
+Unmodified legacy recognized-city API clients retain their compatibility path.
+
+MapLibre, candidate Add/Keep/Remove, Live exploration and Blitz now have the same
+UI/UX and contracts for every modern place. Source coverage remains independent:
+the shared UI cannot promise events or a day when the server cannot verify them.
+Old saved snapshots remain stored/displayable; recompose and newly shared links
+use place intake. No storage, catalog or deploy settings are removed. The existing active city
+Live sources migrate to geographic rows in the reviewed feed manifest: BCN
+CKAN, Turismo Roma listing and Athens city/venue calendars. Reuse terms remain
+explicitly unknown; collection contains only factual atoms and attribution.
+BCN/Rome single dates are listed occurrences, ranges stay periods and both
+feeds remain Pulse-only. Geometry, selected-date and duration gates remain
+shared. Venue clocks use an IANA timezone, including Athens winter time. Rollback is a source revert plus rebuild of committed `frontend/dist`.
+
+Verification: `tests/unified-city-entry.test.js` exercises redirects and real
+composition for registered catalogs and a source-backed control;
+`tests/unified-city-planner-browser.test.js` drives the built UI in Chromium for
+Rome, Barcelona, Athens and Stockholm (map, Keep/Remove/Add, selected-day Live).
+`tests/unified-city-live-sources.test.js` proves geographic source selection,
+selected-day supply through the real Live API, date-only semantics, IANA winter
+and summer conversion, final geometry/duration rejection and acquisition bounds.
+Legacy contrast audits use explicit internal renderer fixtures.
+The browser uses controlled API responses and refuses external hosts. This is
+UI contract evidence, not live-provider, phone or deployed-runtime acceptance.
+
 ## Surface migration rule
 
 Every later migrated surface must prove parity before takeover:

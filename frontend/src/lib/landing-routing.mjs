@@ -1,8 +1,8 @@
 /**
  * Landing search routing — pure + testable. Same product contract as the
  * current landing (landing.js):
- *   - a REGISTERED city (exact name or alias) → the modern planner carrying
- *     the exact server-owned citypack identity;
+ *   - a REGISTERED city (exact name or alias) → the modern planner with
+ *     its canonical place label and shared any-place engine;
  *   - any other non-empty text → the any-city planner `/anywhere?place=…`
  *     (freeform place, never a recognized city key);
  *   - empty input → nothing.
@@ -52,7 +52,6 @@ export function inlineCompletion(registry, typed) {
 export function curatedCityHref(entry, lang = "en") {
   if (!entry || !entry.key) return null;
   const params = new URLSearchParams();
-  params.set("city", String(entry.key));
   params.set("place", String(entry.label || entry.key));
   params.set("planner", "open");
   params.set("lang", lang === "sv" ? "sv" : "en");
@@ -72,7 +71,7 @@ export function routeForInput(registry, raw, lang = "en") {
   // value, but otherwise the user's text belongs to the any-city planner.
   const entry = resolveEntry(registry, value);
   if (entry && entry.key) {
-    return { type: "city", href: curatedCityHref(entry, uiLang) };
+    return { type: "anywhere", href: curatedCityHref(entry, uiLang) };
   }
   const params = new URLSearchParams();
   params.set("place", value);

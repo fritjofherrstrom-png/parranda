@@ -16,6 +16,7 @@ const { buildBlitzDecision } = require("./blitz-engine");
 const { buildAgnosticCityContext } = require("./candidates/agnostic-context");
 const { haversineKm } = require("./candidates/area-intelligence");
 const { getIsoWeekday } = require("./lib/iso-date");
+const { buildLocalDayAvailabilityWindow, evaluateOpeningHoursForWindow } = require("./place-candidates/opening-hours");
 const { resolveAgnosticIntake } = require("./planner/agnostic-place-intake");
 const { resolveAgnosticContext } = require("./planner/agnostic-route-context");
 const {
@@ -96,7 +97,7 @@ function loaderResult(records) {
   return { dataset: records, status: `loaded:${records.length}` };
 }
 
-async function loadTrustedCandidates(openDataLoader, { anchor, anchorMode, spatialScope, requestedIntents }) {
+async function loadTrustedCandidates(openDataLoader, { anchor, anchorMode, spatialScope, requestedIntents, availabilityWindow }) {
   if (typeof openDataLoader !== "function") {
     return { dataset: null, status: "no_trusted_loader" };
   }
@@ -106,6 +107,7 @@ async function loadTrustedCandidates(openDataLoader, { anchor, anchorMode, spati
       requestedIntents,
       anchorMode,
       spatialScope,
+      availabilityWindow,
     }));
   } catch (_error) {
     return { dataset: null, status: "trusted_loader_failed" };
@@ -218,6 +220,10 @@ async function buildAnywhereBlitzDecision({
   coords = null,
   placeQuery = null,
   placeResolver = null,
+  placeSelectionStore = null,
+  placeSelection,
+  placeContextSelection = null,
+  placeBias = null,
   openDataLoader = null,
   eventSupply = null,
   weatherProvider = null,
@@ -231,6 +237,10 @@ async function buildAnywhereBlitzDecision({
     coords,
     placeQuery,
     placeResolver,
+    placeSelectionStore,
+    placeSelection,
+    placeContextSelection,
+    placeBias,
     placeLanguage: lang,
   });
   if (!resolved.anchor) {
@@ -252,11 +262,19 @@ async function buildAnywhereBlitzDecision({
     instant,
     lang,
   });
+  const dayWindow = trustedContext.timezoneKnown
+    ? buildLocalDayAvailabilityWindow({ requestedDate: trustedContext.date, nowLocalIso: trustedContext.now })
+    : null;
+  // A next move is about this local minute, not any opening later today.
+  const availabilityWindow = dayWindow
+    ? { ...dayWindow, endMinute: Math.min(1440, dayWindow.startMinute + 1) }
+    : null;
   const candidateLoad = await loadTrustedCandidates(openDataLoader, {
     anchor: resolved.anchor,
     anchorMode: resolved.intake?.mode || "unknown",
     spatialScope: resolved.spatialScope,
     requestedIntents: [...preferences, ...intentKeys],
+    availabilityWindow,
   });
   const cityConfig = buildAgnosticCityContext({
     label: resolved.intake?.resolved?.label || placeQuery || "Nearby",
@@ -287,6 +305,10 @@ async function buildAnywhereBlitzDecision({
     },
     {
       ...(candidateLoad.dataset ? { external_provider: { dataset: candidateLoad.dataset } } : {}),
+      ...(availabilityWindow ? {
+        evaluateCandidateAvailability: ({ candidate }) =>
+          evaluateOpeningHoursForWindow(candidate.opening_hours, availabilityWindow),
+      } : {}),
       resolveNowContext: trustedNowContext,
       resolveTimeBand: () => trustedContext.timeBand,
     },

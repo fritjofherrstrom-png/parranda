@@ -93,6 +93,7 @@ async function resolveTrustedHelpers({
   anchorMode = "unknown",
   spatialScope = null,
   walkingTargetBand = null,
+  dayRhythm = null,
 }) {
   const baseStatus = {
     status: "skipped",
@@ -115,6 +116,7 @@ async function resolveTrustedHelpers({
       anchorMode: normalizeAnchorMode(anchorMode),
       spatialScope,
       walkingTargetBand,
+      ...(dayRhythm ? { dayRhythm } : {}),
     });
     const loaderStatus = typeof records?.loader_status === "string" ? records.loader_status : null;
     const loaderError = records?.loader_error || null;
@@ -980,6 +982,7 @@ async function composeAgnosticRouteOutput({
     anchorMode,
     spatialScope,
     walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
+    dayRhythm,
   });
   const helpers = { ...resolvedTrusted.helpers, curated_candidates: curatedCandidates };
   const loadedCandidateIds = [
@@ -1485,6 +1488,23 @@ async function composeAgnosticRouteViaEngine({
     ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, pinnedStopIds, preferences, Boolean(dayRhythm))
     : { anchored: false, candidates: sourceCandidates, trimmedDayparts: [] };
 
+  function profileForCandidates(candidates) {
+    if (dayRhythm === 'calm') return 'light';
+    if (dayRhythm === 'balanced') return 'variation';
+    if (dayRhythm === 'full') return 'peak';
+    if (dayRhythm !== 'free') return (Number.isFinite(walkingKmTarget) ? walkingKmTarget : 6) <= 4 ? 'light' : 'peak';
+    // Free grants the engine a choice; do not force a full day from sparse
+    // eligible supply or the last hours of a trusted same-day window.
+    const window = contextBlock?.time?.timezone_known
+      ? buildLocalDayAvailabilityWindow({ requestedDate: effectiveDate, nowLocalIso: contextBlock.time.now })
+      : null;
+    const remaining = window ? window.endMinute - window.startMinute : null;
+    const count = new Set(candidates.map(candidate => candidate.id)).size;
+    if (count < 4 || (remaining !== null && remaining <= 180)) return 'light';
+    if (count < 6 || (remaining !== null && remaining <= 360)) return 'variation';
+    return 'peak';
+  }
+
   async function runEngine(candidates, pins = pinnedStopIds) {
     const engineCityConfig = buildAgnosticEngineCityConfig({
       anchor: origin,
@@ -1493,9 +1513,7 @@ async function composeAgnosticRouteViaEngine({
       todayIsoDate: agnosticContext.todayIsoDate,
       label: safeAgnosticPlaceLabel(placeLabel) || agnosticContext.label,
       key: agnosticContext.key,
-      dayProfile: dayRhythm === 'calm' ? 'light' : dayRhythm === 'balanced' ? 'variation' :
-        dayRhythm === 'full' || dayRhythm === 'free' ? 'peak' :
-        (Number.isFinite(walkingKmTarget) ? walkingKmTarget : 6) <= 4 ? 'light' : 'peak',
+      dayProfile: profileForCandidates(candidates),
     });
     const engineResult = await generateAgnosticRecommendations({
       cityConfig: engineCityConfig,

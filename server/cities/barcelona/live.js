@@ -363,7 +363,8 @@ function buildSourceUrl(record) {
     return OPEN_DATA_AGENDA_EVENT_URL;
   }
 
-  return `${OPEN_DATA_AGENDA_EVENT_URL}/${encodeURIComponent(record.register_id)}`;
+  // Guia BCN detail pages use /detall/_ID.html; /detall/ID returns 404.
+  return `${OPEN_DATA_AGENDA_EVENT_URL}/_${encodeURIComponent(record.register_id)}.html`;
 }
 
 function normalizeOpenDataAgendaRecord(record) {

@@ -49,7 +49,7 @@ test("old persisted ambiguity is bypassed and the new decision survives restart"
   const candidates = await resolver("Stockholm");
   assert.equal(fetches, 1, "v2 medium-confidence ambiguity must not survive the semantics change");
   assert.deepEqual(candidates.map((c) => c.confidence), ["medium", "low"]);
-  assert.ok(readdirSync(join(cacheDir, "place-resolver-nominatim-v3")).some((file) => file.startsWith("v3_")));
+  assert.ok(readdirSync(join(cacheDir, "place-resolver-nominatim-v5")).some((file) => file.startsWith("v5_")));
   const restarted = resolverFor([], { cacheDir, fetcher: async () => { throw new Error("cache miss"); } });
   assert.deepEqual(await restarted("Stockholm"), candidates);
 });

@@ -61,8 +61,11 @@ route engine composes eligible any-place supply. Broad OSM/Wikidata/Overture
 loaders, Sweden-bounded official NAPI supply and the revision-bound reviewed
 local-source reservoir supply it.
 
-Rich citypacks remain curated-first, and Pulse keeps a separate signal/event
-path with a bounded route-interrupt boundary. Supply breadth and quality remain
+Modern Planner entry uses the same any-place composition and UI for every
+place, including registered cities. Rich citypack places remain higher-trust
+nearby supply under the shared gates; only legacy recognized-city API requests
+retain template compatibility. Pulse keeps a separate signal/event path with
+a bounded route-interrupt boundary. Supply breadth and quality remain
 major gaps, but supplied candidates can also be lost at role/combination cuts.
 Bounded same-role walking-fit selection now tests comparable alternatives through
 the existing engine; see `BOUNDED_WALKING_FIT_SELECTION.md`. This is not another
@@ -78,8 +81,9 @@ Current status:
 
 - Blitz: strong.
 - Planner / Your Day: source-backed any-place and thin-preview composition is
-  live behind reviewed boundaries; rich citypacks remain deliberately
-  curated/template-first.
+  live behind reviewed boundaries; modern registered-city entry now uses
+  that same path with nearby curated catalog supply. Legacy recognized-city API
+  requests retain template compatibility.
 - Pulse/live: normalized source events feed gated Pulse surfaces and may affect
   a route only through the explicit geometry/walking-validated interrupt
   contract.

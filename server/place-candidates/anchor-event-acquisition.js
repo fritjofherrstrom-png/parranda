@@ -238,10 +238,12 @@ function buildAnchorEventSourceHealth(
   const statusCounts = { ok: 0, empty: 0, failed: 0, unavailable: 0 };
   let eventBearingSourceCount = 0;
   let rawEventCount = 0;
+  let truncatedSourceCount = 0;
 
   for (const row of rows) {
     const status = Object.hasOwn(statusCounts, row?.status) ? row.status : "failed";
     statusCounts[status] += 1;
+    if (row?.reason === "source_collection_truncated") truncatedSourceCount += 1;
     const eventRows = Array.isArray(row?.raw) ? row.raw.length : 0;
     rawEventCount += eventRows;
     if (eventRows > 0) eventBearingSourceCount += 1;
@@ -252,6 +254,7 @@ function buildAnchorEventSourceHealth(
   if (rows.length > 0 && respondingSourceCount === rows.length) status = "healthy";
   else if (respondingSourceCount > 0) status = "partial";
   else if (rows.length > 0) status = "unavailable";
+  if (status === "healthy" && truncatedSourceCount > 0) status = "partial";
 
   const accepted = Math.max(0, Math.floor(Number(acceptedEventCount) || 0));
   const surfaced = Math.max(0, Math.floor(Number(surfacedEventCount) || 0));
@@ -263,6 +266,7 @@ function buildAnchorEventSourceHealth(
   else if (respondingSourceCount > 0) result = "empty";
 
   const reasons = [];
+  if (truncatedSourceCount > 0) reasons.push("source_collection_truncated");
   if (rows.length === 0) reasons.push("no_approved_sources");
   if (statusCounts.failed > 0) reasons.push("source_failures_present");
   if (statusCounts.unavailable > 0) reasons.push("source_unavailable_present");

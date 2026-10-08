@@ -1,0 +1,365 @@
+{
+  "attribution": "© OpenStreetMap contributors, ODbL 1.0",
+  "english": [
+    {
+      "place_id": 163767992,
+      "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+      "osm_type": "relation",
+      "osm_id": 7858199,
+      "lat": "57.7079260",
+      "lon": "11.9731500",
+      "category": "place",
+      "type": "square",
+      "place_rank": 25,
+      "importance": 0.35263345776344923,
+      "addresstype": "square",
+      "name": "Drottningtorget",
+      "display_name": "Drottningtorget, North Town, Inom Vallgraven, Centrum, Gothenburg, Göteborgs Stad, Västra Götaland County, Sweden",
+      "address": {
+        "square": "Drottningtorget",
+        "suburb": "North Town",
+        "city_district": "Centrum",
+        "city": "Gothenburg",
+        "municipality": "Göteborgs Stad",
+        "county": "Västra Götaland County",
+        "ISO3166-2-lvl4": "SE-O",
+        "country": "Sweden",
+        "country_code": "se"
+      },
+      "namedetails": {
+        "name": "Drottningtorget"
+      },
+      "boundingbox": [
+        "57.7074893",
+        "57.7083493",
+        "11.9719015",
+        "11.9741604"
+      ]
+    },
+    {
+      "place_id": 163664580,
+      "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+      "osm_type": "way",
+      "osm_id": 205747357,
+      "lat": "57.7080335",
+      "lon": "11.9741246",
+      "category": "highway",
+      "type": "pedestrian",
+      "place_rank": 26,
+      "importance": 0.05341108339055463,
+      "addresstype": "road",
+      "name": "Drottningtorget",
+      "display_name": "Drottningtorget, Gullbergsvass, Stampen, Centrum, Gothenburg, Göteborgs Stad, Västra Götaland County, 411 03, Sweden",
+      "address": {
+        "road": "Drottningtorget",
+        "suburb": "Gullbergsvass",
+        "city_district": "Centrum",
+        "city": "Gothenburg",
+        "municipality": "Göteborgs Stad",
+        "county": "Västra Götaland County",
+        "ISO3166-2-lvl4": "SE-O",
+        "postcode": "411 03",
+        "country": "Sweden",
+        "country_code": "se"
+      },
+      "namedetails": {
+        "name": "Drottningtorget"
+      },
+      "boundingbox": [
+        "57.7076395",
+        "57.7084273",
+        "11.9739174",
+        "11.9743313"
+      ]
+    },
+    {
+      "place_id": 162933191,
+      "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+      "osm_type": "way",
+      "osm_id": 165306876,
+      "lat": "57.7082739",
+      "lon": "11.9731221",
+      "category": "highway",
+      "type": "secondary",
+      "place_rank": 26,
+      "importance": 0.05341108339055463,
+      "addresstype": "road",
+      "name": "Drottningtorget",
+      "display_name": "Drottningtorget, North Town, Inom Vallgraven, Centrum, Gothenburg, Göteborgs Stad, Västra Götaland County, 411 03, Sweden",
+      "address": {
+        "road": "Drottningtorget",
+        "suburb": "North Town",
+        "city_district": "Centrum",
+        "city": "Gothenburg",
+        "municipality": "Göteborgs Stad",
+        "county": "Västra Götaland County",
+        "ISO3166-2-lvl4": "SE-O",
+        "postcode": "411 03",
+        "country": "Sweden",
+        "country_code": "se"
+      },
+      "namedetails": {
+        "name": "Drottningtorget"
+      },
+      "boundingbox": [
+        "57.7082693",
+        "57.7084273",
+        "11.9723199",
+        "11.9739174"
+      ]
+    },
+    {
+      "place_id": 163874924,
+      "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+      "osm_type": "way",
+      "osm_id": 26103418,
+      "lat": "57.7083527",
+      "lon": "11.9728663",
+      "category": "highway",
+      "type": "secondary",
+      "place_rank": 26,
+      "importance": 0.05341108339055463,
+      "addresstype": "road",
+      "name": "Drottningtorget",
+      "display_name": "Drottningtorget, Gullbergsvass, Stampen, Centrum, Gothenburg, Göteborgs Stad, Västra Götaland County, 411 06, Sweden",
+      "address": {
+        "road": "Drottningtorget",
+        "suburb": "Gullbergsvass",
+        "city_district": "Centrum",
+        "city": "Gothenburg",
+        "municipality": "Göteborgs Stad",
+        "county": "Västra Götaland County",
+        "ISO3166-2-lvl4": "SE-O",
+        "postcode": "411 06",
+        "country": "Sweden",
+        "country_code": "se"
+      },
+      "namedetails": {
+        "name": "Drottningtorget"
+      },
+      "boundingbox": [
+        "57.7083429",
+        "57.7084500",
+        "11.9723524",
+        "11.9733853"
+      ]
+    },
+    {
+      "place_id": 163834959,
+      "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+      "osm_type": "way",
+      "osm_id": 1259687158,
+      "lat": "57.7084448",
+      "lon": "11.9736503",
+      "category": "highway",
+      "type": "secondary",
+      "place_rank": 26,
+      "importance": 0.05341108339055463,
+      "addresstype": "road",
+      "name": "Drottningtorget",
+      "display_name": "Drottningtorget, Gullbergsvass, Stampen, Centrum, Gothenburg, Göteborgs Stad, Västra Götaland County, 411 03, Sweden",
+      "address": {
+        "road": "Drottningtorget",
+        "suburb": "Gullbergsvass",
+        "city_district": "Centrum",
+        "city": "Gothenburg",
+        "municipality": "Göteborgs Stad",
+        "county": "Västra Götaland County",
+        "ISO3166-2-lvl4": "SE-O",
+        "postcode": "411 03",
+        "country": "Sweden",
+        "country_code": "se"
+      },
+      "namedetails": {
+        "name": "Drottningtorget"
+      },
+      "boundingbox": [
+        "57.7083922",
+        "57.7085060",
+        "11.9733853",
+        "11.9739134"
+      ]
+    }
+  ],
+  "native": [
+    {
+      "place_id": 163767992,
+      "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+      "osm_type": "relation",
+      "osm_id": 7858199,
+      "lat": "57.7079260",
+      "lon": "11.9731500",
+      "category": "place",
+      "type": "square",
+      "place_rank": 25,
+      "importance": 0.35263345776344923,
+      "addresstype": "square",
+      "name": "Drottningtorget",
+      "display_name": "Drottningtorget, Nordstaden, Inom Vallgraven, Centrum, Göteborg, Göteborgs Stad, Västra Götalands län, Sverige",
+      "address": {
+        "square": "Drottningtorget",
+        "suburb": "Nordstaden",
+        "city_district": "Centrum",
+        "city": "Göteborg",
+        "municipality": "Göteborgs Stad",
+        "county": "Västra Götalands län",
+        "ISO3166-2-lvl4": "SE-O",
+        "country": "Sverige",
+        "country_code": "se"
+      },
+      "namedetails": {
+        "name": "Drottningtorget"
+      },
+      "boundingbox": [
+        "57.7074893",
+        "57.7083493",
+        "11.9719015",
+        "11.9741604"
+      ]
+    },
+    {
+      "place_id": 163664580,
+      "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+      "osm_type": "way",
+      "osm_id": 205747357,
+      "lat": "57.7080335",
+      "lon": "11.9741246",
+      "category": "highway",
+      "type": "pedestrian",
+      "place_rank": 26,
+      "importance": 0.05341108339055463,
+      "addresstype": "road",
+      "name": "Drottningtorget",
+      "display_name": "Drottningtorget, Gullbergsvass, Stampen, Centrum, Göteborg, Göteborgs Stad, Västra Götalands län, 411 03, Sverige",
+      "address": {
+        "road": "Drottningtorget",
+        "suburb": "Gullbergsvass",
+        "city_district": "Centrum",
+        "city": "Göteborg",
+        "municipality": "Göteborgs Stad",
+        "county": "Västra Götalands län",
+        "ISO3166-2-lvl4": "SE-O",
+        "postcode": "411 03",
+        "country": "Sverige",
+        "country_code": "se"
+      },
+      "namedetails": {
+        "name": "Drottningtorget"
+      },
+      "boundingbox": [
+        "57.7076395",
+        "57.7084273",
+        "11.9739174",
+        "11.9743313"
+      ]
+    },
+    {
+      "place_id": 162933191,
+      "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+      "osm_type": "way",
+      "osm_id": 165306876,
+      "lat": "57.7082739",
+      "lon": "11.9731221",
+      "category": "highway",
+      "type": "secondary",
+      "place_rank": 26,
+      "importance": 0.05341108339055463,
+      "addresstype": "road",
+      "name": "Drottningtorget",
+      "display_name": "Drottningtorget, Nordstaden, Inom Vallgraven, Centrum, Göteborg, Göteborgs Stad, Västra Götalands län, 411 03, Sverige",
+      "address": {
+        "road": "Drottningtorget",
+        "suburb": "Nordstaden",
+        "city_district": "Centrum",
+        "city": "Göteborg",
+        "municipality": "Göteborgs Stad",
+        "county": "Västra Götalands län",
+        "ISO3166-2-lvl4": "SE-O",
+        "postcode": "411 03",
+        "country": "Sverige",
+        "country_code": "se"
+      },
+      "namedetails": {
+        "name": "Drottningtorget"
+      },
+      "boundingbox": [
+        "57.7082693",
+        "57.7084273",
+        "11.9723199",
+        "11.9739174"
+      ]
+    },
+    {
+      "place_id": 163874924,
+      "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+      "osm_type": "way",
+      "osm_id": 26103418,
+      "lat": "57.7083527",
+      "lon": "11.9728663",
+      "category": "highway",
+      "type": "secondary",
+      "place_rank": 26,
+      "importance": 0.05341108339055463,
+      "addresstype": "road",
+      "name": "Drottningtorget",
+      "display_name": "Drottningtorget, Gullbergsvass, Stampen, Centrum, Göteborg, Göteborgs Stad, Västra Götalands län, 411 06, Sverige",
+      "address": {
+        "road": "Drottningtorget",
+        "suburb": "Gullbergsvass",
+        "city_district": "Centrum",
+        "city": "Göteborg",
+        "municipality": "Göteborgs Stad",
+        "county": "Västra Götalands län",
+        "ISO3166-2-lvl4": "SE-O",
+        "postcode": "411 06",
+        "country": "Sverige",
+        "country_code": "se"
+      },
+      "namedetails": {
+        "name": "Drottningtorget"
+      },
+      "boundingbox": [
+        "57.7083429",
+        "57.7084500",
+        "11.9723524",
+        "11.9733853"
+      ]
+    },
+    {
+      "place_id": 163834959,
+      "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+      "osm_type": "way",
+      "osm_id": 1259687158,
+      "lat": "57.7084448",
+      "lon": "11.9736503",
+      "category": "highway",
+      "type": "secondary",
+      "place_rank": 26,
+      "importance": 0.05341108339055463,
+      "addresstype": "road",
+      "name": "Drottningtorget",
+      "display_name": "Drottningtorget, Gullbergsvass, Stampen, Centrum, Göteborg, Göteborgs Stad, Västra Götalands län, 411 03, Sverige",
+      "address": {
+        "road": "Drottningtorget",
+        "suburb": "Gullbergsvass",
+        "city_district": "Centrum",
+        "city": "Göteborg",
+        "municipality": "Göteborgs Stad",
+        "county": "Västra Götalands län",
+        "ISO3166-2-lvl4": "SE-O",
+        "postcode": "411 03",
+        "country": "Sverige",
+        "country_code": "se"
+      },
+      "namedetails": {
+        "name": "Drottningtorget"
+      },
+      "boundingbox": [
+        "57.7083922",
+        "57.7085060",
+        "11.9733853",
+        "11.9739134"
+      ]
+    }
+  ]
+}

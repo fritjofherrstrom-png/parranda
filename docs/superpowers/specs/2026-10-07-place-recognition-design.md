@@ -1,0 +1,29 @@
+# Generic place recognition
+
+User outcome: entering a neighbourhood, suburb, settlement or named area should resolve the intended geography without a citypack. Genuine ambiguity offers a small choice; a chosen geography remains the same during Planner, Live, Blitz and rebuilding saved days. Examples are fixtures only. The user approved this direction and execution and explicitly said dated skill files must not obstruct progress.
+
+Owner: Codex (implementation/integration and runtime QA). Target: codex/place-recognition, PR against current GitHub main 4b55cb091256e27a793f5c849f1c52b48c896ace. Open #563/#564 overlap the UI but are excluded, not parents. Delivery: reviewable candidate with focused regressions, full required checks and frozen local runtime evidence; no deployment change or automatic main merge.
+
+## Resolution
+
+Keep the provider query intact. Match provider-owned names/aliases and administrative qualifiers independently (including a city without a comma); every qualifier must match provider address or display-label context. A verified district/settlement/region is preferred to a same-name station. Qualifiers never become trusted geography by themselves. Preserve venue resolution and existing explicit-coordinate precedence. Source-address event lookups carry a server-only event_venue purpose, isolated in the resolver cache, so a venue need not appear by name in its address. Never deduplicate a district with a nearby station before structural preference.
+
+Request provider-owned namedetails and language; cache keys include language and normalized geographic bias. A previous server-issued place choice or explicitly consented coordinates can supply a soft 30 km search bias. Exactly one structurally exact match inside that circle may resolve competing distant names; a tie remains a choice. An explicitly qualified query takes precedence over proximity. Language is not country evidence. Autocomplete was added following the user correction: suggestions must appear directly at the landing field while typing. No additional request-time scraping.
+
+## Choice and continuity
+
+Server issues bounded HMAC-authenticated place_selection tokens containing only allowlisted trusted resolution facts, the original query and a seven-day expiry. A process key is persisted as one mode-0600 file under PARRANDA_CACHE_DIR when available; otherwise tokens live for this process. No public coordinates/context/confidence can mint a token. Malformed, changed-query or expired selections fail closed with a distinct blocker and may offer freshly resolved choices. A token cannot be used to switch a GPS-anchored day.
+
+Intake returns selection_id for resolved places and ambiguous candidates. Planner adopts the resolved token and carries it through adjustments, saved inputs, language changes and Blitz. Live uses the same token for place attestation; bad tokens do not fall back to a different identity or widen geography. Saved identities distinguish selected namesakes using the selected label, not token bytes. Expired saved choices explicitly require selection again. Share links use the qualified selected label, not secret tokens. Sharing is unavailable when that label exceeds the 200-character resolver budget; a selected namesake is never silently shared as its bare original query.
+
+UI presents labelled candidate buttons and distinct ambiguity/expired/unresolved messages. Optional “Use my location to narrow the search” requests consent only on tap, keeps typed destination mode, and sends coordinates solely as a hint. The existing “Use my location” day-anchor flow remains separate.
+
+## Verification
+
+Regression cases: qualified district versus higher-ranked station; non-Latin aliases; mismatching qualifiers; distant namesakes and close ties; proximity and explicit qualifier precedence; context/language cache isolation; token tampering/query mismatch/expiry/persistent-key restart; explicit GPS wins; Planner selection and rebuild, saved restore, language change, Live/Blitz continuity; near_me/near_route cannot use place tokens. Deterministic tests use provider-shaped fixtures with network blocked. Full npm test, frontend tests/typecheck/build/dist guard, an independent code review and bounded frozen local runtime evidence are required. Recognition success does not certify route supply.
+
+## Landing autocomplete amendment
+
+As of the user correction, a 200 ms debounce after three characters requests up to five geographic Photon suggestions, with a short source-backed locality/country context. Public Nominatim is not used for autocomplete. Provider order and previous server-verified selection supply relevance; UI language never selects a country. Unsupported public Photon languages use local names. Arrow keys, Enter, Escape and pointer selection work at the field. Choosing a row fills the field; submitting hands a query-bound signed receipt to Planner. A same-named distant result cannot inherit a citypack merely from its name: server checks provider geographic settlement kind and proximity to registry data. Free text remains available on provider failure.
+
+Photon requests are serialized, paced, coalesced and cached in a bounded memory cache (prefixes never create persistent cache files). Prefix requests have a separate allowance in the existing opt-in public guard. Default public endpoint is replaceable with PARRANDA_PLACE_SUGGESTIONS_ENDPOINT; PARRANDA_PLACE_SUGGESTIONS=disabled switches off remote suggestions. No location permission is requested while typing.

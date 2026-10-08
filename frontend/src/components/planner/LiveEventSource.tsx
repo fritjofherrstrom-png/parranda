@@ -18,6 +18,7 @@ export function liveEventSource(event: PulseEvent, lang: Lang) {
     .filter(Boolean))];
   const recurring = event.recurrence?.occurrence_status === "unconfirmed";
   const holiday = event.calendar_fact?.kind === "public_holiday" ? event.calendar_fact : null;
+  const sourceArea = !holiday && event.source_scope_verified === true && event.geographic_relevance === "source_scope";
   const holidayFlags = Array.isArray(holiday?.flags) ? holiday.flags : [];
   const scope = holiday && (lang === "en"
     ? { national: "National", regional: "Regional", local: "Local" }
@@ -33,6 +34,7 @@ export function liveEventSource(event: PulseEvent, lang: Lang) {
       {recurring && <> · {lang === "en"
         ? "Recurring schedule — occurrence unconfirmed"
         : "Återkommande schema — tillfället är inte bekräftat"}</>}
+      {sourceArea && <> · {lang === "en" ? "Source calendar area — exact location unverified" : "Källans kalenderområde — exakt plats ej verifierad"}</>}
       {listedBy && <>{" · "}via&nbsp;{listedBy}</>}
       {credits.length > 0 && <>{" · "}{credits.join(" · ")}</>}
       {link && (

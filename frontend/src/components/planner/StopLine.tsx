@@ -92,7 +92,6 @@ export default function StopLine({
   expandedCandidateKey,
   setExpandedCandidateKey,
   commitments,
-  cityKey,
   selected,
   releaseCommitment,
   keepStop,
@@ -121,7 +120,6 @@ export default function StopLine({
   expandedCandidateKey: string | null;
   setExpandedCandidateKey: (key: string | null) => void;
   commitments: Commitments;
-  cityKey: string | null;
   selected: string[];
   releaseCommitment: (identity: string) => void;
   keepStop: (identity: string, stopLabel: string) => void;
@@ -397,7 +395,7 @@ export default function StopLine({
                         mutually exclusive by construction — the ledger
                         holds one commitment per candidate — so a kept stop
                         offers release rather than the opposite verb. */}
-                    {!cityKey && hasRealId && (commitments[stopIdentity]?.kind === "pin" ? (
+                    {hasRealId && (commitments[stopIdentity]?.kind === "pin" ? (
                       <button
                         type="button"
                         onClick={() => releaseCommitment(stopIdentity)}
@@ -416,7 +414,7 @@ export default function StopLine({
                         {t("Behåll den här", "Keep this one")}
                       </button>
                     ))}
-                    {!cityKey && hasRealId && commitments[stopIdentity]?.kind !== "pin" && (
+                    {hasRealId && commitments[stopIdentity]?.kind !== "pin" && (
                       <button
                         type="button"
                         onClick={() => dismissStop(stopIdentity, name)}
@@ -592,7 +590,7 @@ export default function StopLine({
                             a candidate the day did not choose. The server
                             still has to resolve it against its own loaded
                             pool — an unhonoured pin is reported, not faked. */}
-                        {!cityKey && candidateId && (commitments[candidateId]?.kind === "pin" || canCommitTo(stop)) && (
+                        {candidateId && (commitments[candidateId]?.kind === "pin" || canCommitTo(stop)) && (
                           <button
                             type="button"
                             onClick={() =>
