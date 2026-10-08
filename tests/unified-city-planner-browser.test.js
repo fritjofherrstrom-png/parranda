@@ -117,10 +117,9 @@ for (const [label, path, anchor] of [
   await page.getByRole('button', { name: /See all live|Explore live/ }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('button', { name: 'Whole area', exact: true }).click();
-  // A weekly fixture is outside the selected-day tab; changing area must not
-  // silently change the reader's time filter. Choose the weekly tab explicitly.
+  // This fixture is on the selected day. Changing area must preserve that
+  // tab, and a same-day event must not require a switch to following days.
   assert.equal(await dialog.getByRole('button', { name: 'Following 7 days', exact: true }).getAttribute('aria-pressed'), 'false');
-  await dialog.getByRole('button', { name: 'Following 7 days', exact: true }).click();
   await dialog.getByText(`${label} concert`, { exact: true }).waitFor();
   assert.equal(liveQueries[0].selected_date, DATE);
   assert.equal(liveQueries[0].place_query, label);
