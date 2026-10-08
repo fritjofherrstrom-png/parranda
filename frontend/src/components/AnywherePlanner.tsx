@@ -1118,7 +1118,21 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       }
     : (option: Lang) => `?restore=last&lang=${option}`;
 
-  const leavePlanner = (target: "home" | "language") => {
+  // The address bar follows the day as it is now, through the same encoder, so
+  // a reload or a copied address reopens the adjusted day rather than the
+  // arrival's. A restored snapshot keeps its restore address: reloading it
+  // shows the saved day again instead of composing a fresh one.
+  const liveHref = hasAnchor && !restoredAt && (mode !== "near_me" || nearMeCoords) ? languageHref(lang) : null;
+  useEffect(() => {
+    if (!liveHref || window.location.search === liveHref) return;
+    try {
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${liveHref}${window.location.hash}`);
+    } catch {
+      // A document that may not rewrite its own address keeps the arrival's.
+    }
+  }, [liveHref]);
+
+  const leavePlanner =(target: "home" | "language") => {
     if (mode === "typed" && placeSelection) storePlaceChoice({ place, selection: placeSelection, label: selectionLabel });
     if (target === "language" && mode === "near_me") {
       const coords = nearMeCoords;
