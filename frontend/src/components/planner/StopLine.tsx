@@ -189,14 +189,16 @@ export default function StopLine({
       {map && <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/4 p-4 sm:p-5">{map}</div>}
       {/* The route's evidence, stated beside it: what the line is, what the
           numbers are, and how the day was assembled. */}
-      <p className="mt-3 text-xs leading-relaxed text-parranda-ink/68">
+      {/* One quiet line: what the drawn line is, and that the numbers are
+          estimates. How Maps walks it is said beside the Maps action. */}
+      <p className="mt-2 text-[11px] leading-snug text-parranda-ink/68">
         {routeLineIsSketch && t("Den prickade linjen visar stoppens ordning, inte gatorna. ", "The dotted line shows the order of the stops, not the streets. ")}
-        {t("Avstånd och gångtider är uppskattningar. Google Maps beräknar gångvägen när du öppnar rutten.", "Distances and walking times are estimates. Google Maps calculates the walking path when you open the route.")}
+        {t("Avstånd och gångtider är uppskattningar.", "Distances and walking times are estimates.")}
         {dayContextNote && ` ${dayContextNote}`}
       </p>
 
       <div className="mb-2 mt-10 flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <Eyebrow>{t("Stoppen i ordning", "The stops, in order")}</Eyebrow>
+        <Eyebrow as="h2">{t("Stoppen i ordning", "The stops, in order")}</Eyebrow>
         {canFollow && (
           <button
             type="button"
@@ -283,10 +285,10 @@ export default function StopLine({
                 </span>
               )}
               {daypartHeading && (
-                <p className="type-eyebrow relative mb-1 mt-6 flex min-h-6 items-center pl-14 text-parranda-glow">
+                <h3 className="type-eyebrow relative mb-1 mt-6 flex min-h-6 items-center pl-14 text-parranda-glow">
                   <span aria-hidden="true" className="absolute left-3.5 top-1/2 h-1 w-4 -translate-y-1/2 rounded-full bg-parranda-ink" />
                   {daypartHeading}
-                </p>
+                </h3>
               )}
               {/* The stop row is a DISCLOSURE, not an external link: tapping
                   it opens an inline panel instead of ejecting to Google Maps.
@@ -473,7 +475,7 @@ export default function StopLine({
                 {routeNumber}
               </span>
               <div className="min-w-0 flex-1 rounded-parranda border-[1.5px] border-parranda-live/45 bg-parranda-live/8 p-4">
-                <Eyebrow tone="live" dot>{t("Live i din rutt", "Live in your route")}</Eyebrow>
+                <Eyebrow as="h3" tone="live" dot>{t("Live i din rutt", "Live in your route")}</Eyebrow>
                 <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-parranda-ink">
                   {pin ? (
                     <a href={pin} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center gap-1.5 text-[17px] font-extrabold transition hover:text-parranda-live">

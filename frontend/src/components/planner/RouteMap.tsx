@@ -197,6 +197,16 @@ export default function RouteMap({
   const [tilesFailed, setTilesFailed] = useState(false);
   const [layoutCrowded, setLayoutCrowded] = useState(false);
   const [tip, setTip] = useState<Tip>(null);
+  // A tooltip opened by hover or focus can be dismissed without moving the
+  // pointer or focus (WCAG 1.4.13).
+  useEffect(() => {
+    if (!tip) return;
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTip(null);
+    };
+    document.addEventListener("keydown", dismiss);
+    return () => document.removeEventListener("keydown", dismiss);
+  }, [tip]);
   const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; move: (x: number, y: number, direction: "left" | "right") => void; showOrigin: (visible: boolean) => void }>>([]);
   const layoutRef = useRef<() => void>(() => {});
   const refitRef = useRef<() => void>(() => {});
@@ -296,6 +306,8 @@ export default function RouteMap({
             maxPitch: 0,
             renderWorldCopies: false,
             fadeDuration: 0,
+            // The canvas region's accessible name; MapLibre's default is "Map".
+            locale: { "Map.Title": t("Karta över dagen", "Map of the day") },
           });
         } catch {
           // No WebGL2, or the GPU refused: the day stays, the map does not.

@@ -134,19 +134,6 @@ export default function DayHeader({
   timeAnchoring,
   restoredAt,
   resolveAndRun,
-  routeParts,
-  routeUrls,
-  routeEndLabel,
-  saveDay,
-  isSaved,
-  canShare,
-  shareDay,
-  shareCopied,
-  routeOrigin,
-  routeDestination,
-  routeAnchorCoords,
-  publishedStart,
-  publishedEnd,
 }: {
   t: Translate;
   lang: Lang;
@@ -166,19 +153,6 @@ export default function DayHeader({
   timeAnchoring: string | null;
   restoredAt: string | null;
   resolveAndRun: () => void;
-  routeParts: RoutePart[];
-  routeUrls: string[];
-  routeEndLabel: (end: RouteEnd) => string;
-  saveDay: () => void;
-  isSaved: boolean;
-  canShare: boolean;
-  shareDay: () => void;
-  shareCopied: boolean;
-  routeOrigin: unknown;
-  routeDestination: unknown;
-  routeAnchorCoords: unknown;
-  publishedStart: any;
-  publishedEnd: any;
 }) {
   return (
     <header className="@container flex flex-col gap-5" aria-busy={staleNotice === "updating"}>
@@ -215,7 +189,7 @@ export default function DayHeader({
           </>
         )}
       </div>
-      <h2 className="type-title text-[2.5rem] text-parranda-ink sm:text-5xl lg:text-[3.25rem]">
+      <h1 className="type-title text-[2.5rem] text-parranda-ink sm:text-5xl lg:text-[3.25rem]">
         {mode === "near_me" && !placeLabel ? (
           <>
             {t("En dag", "A day")} <PlaceSign text={t("nära dig", "near you")} />
@@ -225,7 +199,7 @@ export default function DayHeader({
             {t("En dag i", "A day in")} <PlaceSign text={anchorLabel} />
           </>
         )}
-      </h2>
+      </h1>
       {/* Each fact wraps as a unit: "5 STOPS" never splits across lines. */}
       <p className="type-data text-xs text-parranda-ink/72">
         <span className="whitespace-nowrap">{dayWord}</span>
@@ -301,12 +275,59 @@ export default function DayHeader({
           </button>
         </p>
       )}
+    </header>
+  );
+}
+
+/**
+ * TAKING THE DAY WITH YOU — Maps, save and share. They follow the stops: the
+ * page leads with the day itself, and these act on the day once it has been
+ * read. Maps computes the real walking path, so that is said here, beside it.
+ */
+export function DayActions({
+  t,
+  routeParts,
+  routeUrls,
+  routeEndLabel,
+  saveDay,
+  isSaved,
+  canShare,
+  shareDay,
+  shareCopied,
+  routeOrigin,
+  routeDestination,
+  routeAnchorCoords,
+  publishedStart,
+  publishedEnd,
+  stale = false,
+}: {
+  t: Translate;
+  routeParts: RoutePart[];
+  routeUrls: string[];
+  routeEndLabel: (end: RouteEnd) => string;
+  saveDay: () => void;
+  isSaved: boolean;
+  canShare: boolean;
+  shareDay: () => void;
+  shareCopied: boolean;
+  routeOrigin: unknown;
+  routeDestination: unknown;
+  routeAnchorCoords: unknown;
+  publishedStart: any;
+  publishedEnd: any;
+  stale?: boolean;
+}) {
+  return (
+    <section
+      aria-label={t("Ta med dagen", "Take the day with you")}
+      className={`${stale ? "opacity-60 motion-safe:transition-opacity" : ""} flex flex-col gap-3`}
+    >
       {/* THE WALK IN MAPS. One link when Maps can take the whole walk. When
           it can't (Maps takes a few stops per link), a numbered sequence of
           named stretches: only the first is the primary action, the rest
           are the next steps of the same walk — never alternatives to it. */}
       {routeParts.length > 1 && (
-        <div className="mt-3 flex flex-col gap-2.5">
+        <div className="flex flex-col gap-2.5">
           <Eyebrow>
             {t(`Promenaden i Maps · ${routeParts.length} delar`, `The walk in Maps · ${routeParts.length} parts`)}
           </Eyebrow>
@@ -359,7 +380,7 @@ export default function DayHeader({
           </p>
         </div>
       )}
-      <div className="mt-1 grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap">
+      <div className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap">
         {routeParts.length === 1 && (
           <a
             href={routeUrls[0]}
@@ -406,6 +427,11 @@ export default function DayHeader({
           {t("Hela rutten kan inte öppnas i Maps. Öppna platserna var för sig där kartlänk finns.", "The whole route cannot be opened in Maps. Open places individually where a map link is available.")}
         </p>
       )}
-    </header>
+      {routeUrls.length > 0 && (
+        <p className="text-xs text-parranda-ink/68">
+          {t("Google Maps beräknar gångvägen när du öppnar rutten.", "Google Maps works out the walking path when you open the route.")}
+        </p>
+      )}
+    </section>
   );
 }

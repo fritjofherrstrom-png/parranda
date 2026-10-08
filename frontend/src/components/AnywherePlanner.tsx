@@ -79,7 +79,7 @@ import { useMediaQuery } from "./shared/useMediaQuery";
 import AnchorCard from "./planner/AnchorCard";
 import BlitzCard from "./planner/BlitzCard";
 import CandidateAreas from "./planner/CandidateAreas";
-import DayHeader from "./planner/DayHeader";
+import DayHeader, { DayActions } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
 import LiveSheet from "./planner/LiveSheet";
@@ -1735,6 +1735,20 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         />
       )}
 
+      {/* One status line that stays mounted, so "the day is ready" is
+          announced when it arrives (and again after each recompose — it is
+          cleared while composing). The loading line above it is removed on
+          arrival, which a screen reader does not announce. */}
+      <p role="status" className="sr-only">
+        {phase === "done" && dayWithRoute && staleNotice !== "updating"
+          ? t(
+              `En dag i ${anchorLabel} är klar: ${routeStops.length} stopp.`,
+              `A day in ${anchorLabel} is ready: ${routeStops.length} ${routeStops.length === 1 ? "stop" : "stops"}.`,
+            )
+          : ""}
+      </p>
+      {hasAnchor && !dayWithRoute && <h1 className="sr-only">{t(`Din dag i ${anchorLabel}`, `Your day in ${anchorLabel}`)}</h1>}
+
       {/* Static hydration and unavailable snapshots must not become another
           place-entry step. Root is the only place picker. */}
       {!hasAnchor && (
@@ -1982,19 +1996,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           timeAnchoring={timeAnchoring}
           restoredAt={restoredAt}
           resolveAndRun={() => resolveAndRun()}
-          routeParts={routeParts}
-          routeUrls={routeUrls}
-          routeEndLabel={routeEndLabel}
-          saveDay={saveDay}
-          isSaved={isSaved}
-          canShare={canShare}
-          shareDay={shareDay}
-          shareCopied={shareCopied}
-          routeOrigin={routeOrigin}
-          routeDestination={routeDestination}
-          routeAnchorCoords={routeAnchorCoords}
-          publishedStart={publishedStart}
-          publishedEnd={publishedEnd}
         />
       )}
 
@@ -2061,6 +2062,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           routeContextSuggestions={routeContextSuggestions}
           detoursOpen={detoursOpen}
           setDetoursOpen={setDetoursOpen}
+        />
+      )}
+
+      {dayWithRoute && (
+        <DayActions
+          t={t}
+          routeParts={routeParts}
+          routeUrls={routeUrls}
+          routeEndLabel={routeEndLabel}
+          saveDay={saveDay}
+          isSaved={isSaved}
+          canShare={canShare}
+          shareDay={shareDay}
+          shareCopied={shareCopied}
+          routeOrigin={routeOrigin}
+          routeDestination={routeDestination}
+          routeAnchorCoords={routeAnchorCoords}
+          publishedStart={publishedStart}
+          publishedEnd={publishedEnd}
+          stale={staleNotice === "updating"}
         />
       )}
 

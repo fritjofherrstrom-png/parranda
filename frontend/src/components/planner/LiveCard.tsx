@@ -64,7 +64,7 @@ export default function LiveCard({
     <section
       className="rounded-parranda border-[1.5px] border-parranda-live/35 bg-parranda-live/8 p-5 sm:p-6"
     >
-      <Eyebrow tone="live" dot>
+      <Eyebrow as="h2" tone="live" dot>
         {mode === "near_me"
           ? t("Live nära dig", "Live near you")
           : anchorLabel
