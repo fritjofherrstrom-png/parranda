@@ -73,6 +73,42 @@ test('prefix cache stays in bounded memory even when the deployment has a persis
  try{const p=createPlaceSuggestions({cacheDir:dir,minIntervalMs:0,fetcher:async()=>({ok:true,json:async()=>({features:rows})})});await p('har');assert.deepEqual(fs.readdirSync(dir),[]);}
  finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+// Shapes recorded from live Photon reads on 2026-10-08 (no network here).
+const place=(name,osm_value,type,id,country='Country',osm_key='place')=>({type:'Feature',geometry:{type:'Point',coordinates:[13+id%100/100,55+id%100/100]},properties:{name,state:`State ${id}`,country,countrycode:'XX',type,osm_key,osm_value,osm_type:'R',osm_id:id}});
+test('a major city survives same-name hamlets that the provider ranks first',async()=>{
+ const urls=[];
+ const page=[place('Malmo','village','city',1),place('Malmo','village','city',2),place('Malmo','hamlet','district',3),place('Malmoe','administrative','district',4,'Country','boundary'),
+  place('Malmö','city','city',5,'Sverige'),place('Malmo Plains','quarter','locality',6),place('Malmok','hamlet','district',7),place('Malmø','suburb','district',8)];
+ const out=await provider(page,urls)('Malmo');
+ assert.equal(urls[0].searchParams.get('limit'),'20');
+ assert.deepEqual(out.choices.map(choice=>choice.title),['Malmö','Malmo','Malmo','Malmo','Malmoe']);
+});
+test('a major city beyond the visible five is lifted instead of cut off',async()=>{
+ const page=[place('Gotem','village','city',1),place('Gotein','administrative','locality',2,'Country','boundary'),place('Gotești','village','district',3),
+  place('Gotelp','village','city',4),place('Gotebo','town','city',5),place('Göteborg','city','city',6,'Sverige'),place('Göteborgs Stad','municipality','city',7,'Sverige')];
+ const out=await provider(page)('Gote');
+ assert.equal(out.choices[0].title,'Göteborg');assert.equal(out.choices.length,5);
+});
+test('an exonym query keeps the major city that only matched another language name',async()=>{
+ const towns=Array.from({length:10},(_,i)=>place('Lisbon',i%2?'village':'town','city',i+1,'United States'));
+ const out=await provider([...towns,place('Lisboa','city','city',11,'Portugal'),place('Lisboa','administrative','county',12,'Portugal','boundary')])('Lisbon');
+ assert.equal(out.choices[0].title,'Lisboa');assert.equal(out.choices[0].kind,'settlement');
+});
+test('without a major place the provider order is kept, so neighbourhood searches are not reshuffled',async()=>{
+ const page=[place('Montmartre','suburb','locality',1,'France'),place('Montmartre','village','city',2,'Canada'),place('Montmartre No. 126','administrative','county',3,'Canada','boundary'),place('Montmartre','hamlet','district',4,'France')];
+ const out=await provider(page)('Montmartre');
+ assert.deepEqual(out.choices.map(choice=>choice.context.split(' · ').pop()),['France','Canada','Canada','France']);
+});
+test('a same-name region and city stay separate identities and the public row says which is which',async()=>{
+ const region=place('Lisbon','administrative','county',2897141,'Portugal','boundary');
+ const city=place('Lisbon','city','city',5400890,'Portugal');
+ const app=buildApp({placeSuggestions:provider([region,city])});const server=app.listen(0);
+ try{
+  const out=await requestJson(server,{path:'/api/place-suggestions?lang=en',body:{query:'Lisbon'}});
+  assert.deepEqual(out.body.choices.map(choice=>[choice.title,choice.kind]),[['Lisbon','settlement'],['Lisbon','region']]);
+  assert.equal(out.body.choices.some(choice=>'major' in choice),false);
+ }finally{await new Promise(r=>server.close(r));}
+});
 test('a trusted city node can use its registry pack without inventing missing area bounds',async()=>{
  const city=feature('Rome',null,41.9,30);city.geometry.coordinates=[12.5,41.9];city.properties.type='city';city.properties.osm_value='city';delete city.properties.extent;
  const app=buildApp({placeSuggestions:provider([city])});const server=app.listen(0);

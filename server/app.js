@@ -1547,7 +1547,7 @@ function buildApp({
         const point = choice.candidate;
         const distance = entry?.center ? Math.hypot((point.lat - entry.center.lat) * 111, (point.lng - entry.center.lng) * 111 * Math.cos(point.lat * Math.PI / 180)) : Infinity;
         const cityKey = choice.kind === 'settlement' && distance <= 10 ? entry?.key : null;
-        return [{ title: choice.title, context: choice.context, query: choice.query, selection_id: selection, attribution: point.attribution, license: point.license, ...(cityKey ? { city_key: cityKey } : {}) }];
+        return [{ title: choice.title, context: choice.context, query: choice.query, kind: choice.kind, selection_id: selection, attribution: point.attribution, license: point.license, ...(cityKey ? { city_key: cityKey } : {}) }];
       });
       response.json({ status: result.status, choices, ...(result.retry_after_ms ? { retry_after_ms: result.retry_after_ms } : {}) });
     } catch (_) { response.json({ status: 'unavailable', choices: [] }); }

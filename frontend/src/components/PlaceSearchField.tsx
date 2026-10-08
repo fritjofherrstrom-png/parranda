@@ -7,6 +7,7 @@ export interface PlaceSuggestion {
   context: string;
   query: string;
   selection_id: string;
+  kind?: "settlement" | "district" | "region";
   city_key?: string;
   attribution?: string;
 }
@@ -39,6 +40,9 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
   const dismissed = useRef(false);
   const sequence = useRef(0);
   const t = (sv: string, en: string) => lang === "sv" ? sv : en;
+  // A region and its city can share a name and country; settlements stay unmarked.
+  const kindLabel = (kind?: PlaceSuggestion["kind"]) =>
+    kind === "region" ? t("Region", "Region") : kind === "district" ? t("Stadsdel", "District") : "";
 
   useEffect(() => {
     const generation = ++sequence.current;
@@ -119,7 +123,9 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
             onMouseDown={event => event.preventDefault()} onClick={() => choose(choice)} onMouseEnter={() => setActive(index)}
             className={"cursor-pointer px-5 py-3 text-parranda-ink " + (active === index ? "bg-parranda-ink/8" : "hover:bg-parranda-ink/4")}>
             <span className="block text-base font-bold">{choice.title}</span>
-            {choice.context && <span className="block text-sm text-parranda-ink/68">{choice.context}</span>}
+            {(choice.context || kindLabel(choice.kind)) && <span className="block text-sm text-parranda-ink/68">
+              {[kindLabel(choice.kind), choice.context].filter(Boolean).join(" · ")}
+            </span>}
           </li>)}
         </ul>
         {choices.some(choice => choice.attribution) && <div className="border-t border-parranda-ink/10 px-5 py-1.5 text-[11px] text-parranda-ink/60">
