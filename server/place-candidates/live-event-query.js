@@ -2,6 +2,7 @@
 
 const { haversineKm } = require("../candidates/area-intelligence");
 const { resolveAgnosticIntake } = require("../planner/agnostic-place-intake");
+const { parsePlaceRef } = require("./place-ref");
 const { normalizeSourceEventDate } = require("../pulse-sources/source-event-time");
 const { pointWithinTrustedSpatialScope } = require("./spatial-scope");
 const {
@@ -177,6 +178,12 @@ function normalizeLiveEventQuery(payload = {}) {
   if (["around_place", "in_place"].includes(scopeKind) && payload.place_selection !== undefined) {
     if (typeof payload.place_selection !== "string" || !payload.place_selection || payload.place_selection.length > 8192 || !query.place_query) return { error: "invalid_place_selection" };
     query.place_selection = payload.place_selection;
+  }
+  // The day's OSM identity names the same place again; it never moves the
+  // collection anchor or widens a scope.
+  if (["around_place", "in_place"].includes(scopeKind) && payload.place_ref !== undefined) {
+    if (!query.place_query || !parsePlaceRef(payload.place_ref)) return { error: "place_ref_invalid" };
+    query.place_ref = payload.place_ref;
   }
   return { value: query, public: publicQueryShape(query) };
 }
@@ -402,7 +409,7 @@ function liveEventQueryBody(normalized, liveEvents) {
 }
 
 async function attestLivePlaceContext(query, placeResolver, placeLanguage, placeSelectionStore) {
-  if (query?.scope?.kind === "near_route" || (typeof placeResolver !== "function" && !query.place_selection)) return null;
+  if (query?.scope?.kind === "near_route" || (typeof placeResolver !== "function" && !query.place_selection && !query.place_ref)) return null;
   const reverseOnly = !query.place_query;
   if (reverseOnly && typeof placeResolver.resolveCoordinates !== "function") return null;
   const resolved = await resolveAgnosticIntake({
@@ -410,8 +417,10 @@ async function attestLivePlaceContext(query, placeResolver, placeLanguage, place
     placeResolver,
     placeLanguage,
     placeSelection: query.place_selection,
+    ...(query.place_ref && !reverseOnly ? { placeRef: query.place_ref } : {}),
     placeSelectionStore,
   });
+  if (query.place_ref && resolved.intake?.status !== "resolved") return { invalidRef: resolved.intake?.blockers?.[0] || "place_ref_unavailable" };
   if (query.place_selection && resolved.intake?.status !== "resolved") return { invalidSelection: true };
   if (!resolved.anchor) return null;
   const driftKm = haversineKm(query.collection_anchor, resolved.anchor);
@@ -443,7 +452,11 @@ async function executeLiveEventQuery({ payload, eventSupply, now, placeResolver 
 
   const query = normalized.value;
   try {
-    const attested = await attestLivePlaceContext(query, placeResolver, placeLanguage, placeSelectionStore).catch(() => query.place_selection ? { invalidSelection: true } : null);
+    const attested = await attestLivePlaceContext(query, placeResolver, placeLanguage, placeSelectionStore)
+      .catch(() => query.place_ref ? { invalidRef: "place_ref_unavailable" } : query.place_selection ? { invalidSelection: true } : null);
+    if (attested?.invalidRef) return { status: 400, body: { error: attested.invalidRef } };
+    // The named place resolved, but the collection geometry is not inside it.
+    if (query.place_ref && !attested) return { status: 400, body: { error: "place_ref_conflict" } };
     if (attested?.invalidSelection || (query.place_selection && !attested)) return { status: 400, body: { error: "place_selection_invalid" } };
     if (query.scope.kind === "in_place") {
       const scope = attested?.spatialScope;

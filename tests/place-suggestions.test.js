@@ -81,7 +81,7 @@ test('a major city survives same-name hamlets that the provider ranks first',asy
   place('Malmö','city','city',5,'Sverige'),place('Malmo Plains','quarter','locality',6),place('Malmok','hamlet','district',7),place('Malmø','suburb','district',8)];
  const out=await provider(page,urls)('Malmo');
  assert.equal(urls[0].searchParams.get('limit'),'20');
- assert.deepEqual(out.choices.map(choice=>choice.title),['Malmö','Malmo','Malmo','Malmo','Malmoe']);
+ assert.deepEqual(out.choices.map(choice=>choice.title),['Malmö','Malmo','Malmo','Malmo','Malmø'],'exact and folded-exact names before longer prefix names');
 });
 test('a major city beyond the visible five is lifted instead of cut off',async()=>{
  const page=[place('Gotem','village','city',1),place('Gotein','administrative','locality',2,'Country','boundary'),place('Gotești','village','district',3),
@@ -94,10 +94,21 @@ test('an exonym query keeps the major city that only matched another language na
  const out=await provider([...towns,place('Lisboa','city','city',11,'Portugal'),place('Lisboa','administrative','county',12,'Portugal','boundary')])('Lisbon');
  assert.equal(out.choices[0].title,'Lisboa');assert.equal(out.choices[0].kind,'settlement');
 });
-test('without a major place the provider order is kept, so neighbourhood searches are not reshuffled',async()=>{
+test('an exact smaller place is never pushed below a larger place that only starts the same way',async()=>{
+ const out=await provider([place('Gotemba','city','city',1,'Japan'),place('Gotem','village','city',2,'Belgium'),place('Gotemburgo','hamlet','district',3,'Spain')])('Gotem');
+ assert.deepEqual(out.choices.map(choice=>choice.title),['Gotem','Gotemba','Gotemburgo']);
+ const equal=await provider([place('Rom','village','city',4,'France'),place('Roma','city','city',5,'Italia'),place('Rom','village','city',6,'Deutschland')])('Rom');
+ assert.deepEqual(out.choices.length,3);
+ assert.deepEqual(equal.choices.map(choice=>choice.title),['Rom','Rom','Roma'],'a longer major name stays behind exact namesakes');
+});
+test('the Photon class travels with the choice so a link only names geographic places',async()=>{
+ const out=await provider([place('Lisbon','city','city',5400890,'Portugal')])('Lisbon');
+ assert.equal(out.choices[0].candidate.osm_class,'place');
+});
+test('without a major place exact names keep provider order, so a neighbourhood search keeps its first row',async()=>{
  const page=[place('Montmartre','suburb','locality',1,'France'),place('Montmartre','village','city',2,'Canada'),place('Montmartre No. 126','administrative','county',3,'Canada','boundary'),place('Montmartre','hamlet','district',4,'France')];
  const out=await provider(page)('Montmartre');
- assert.deepEqual(out.choices.map(choice=>choice.context.split(' · ').pop()),['France','Canada','Canada','France']);
+ assert.deepEqual(out.choices.map(choice=>choice.title+' / '+choice.context.split(' · ').pop()),['Montmartre / France','Montmartre / Canada','Montmartre / France','Montmartre No. 126 / Canada']);
 });
 test('a same-name region and city stay separate identities and the public row says which is which',async()=>{
  const region=place('Lisbon','administrative','county',2897141,'Portugal','boundary');

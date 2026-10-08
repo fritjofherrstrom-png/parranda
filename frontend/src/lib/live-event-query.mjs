@@ -108,7 +108,13 @@ export function buildLiveEventQueryPayload({
   const placeQuery = ["around_place", "in_place"].includes(scope) ? trustedPlaceQuery(response) : null;
   if (scope === "in_place" && !placeQuery) return null;
   const selection = response?.agnostic_route_output_experiment?.intake?.resolved?.selection_id;
-  return placeQuery ? { ...base, anchor, place_query: placeQuery, ...(typeof selection === "string" ? { place_selection: selection } : {}) } : { ...base, anchor };
+  const placeRef = response?.agnostic_route_output_experiment?.intake?.resolved?.place_ref;
+  const validPlaceRef = typeof placeRef === "string" && /^[nwr][1-9]\d{0,11}$/.test(placeRef) && !/[\r\n]/.test(placeRef);
+  return placeQuery ? {
+    ...base, anchor, place_query: placeQuery,
+    ...(typeof selection === "string" ? { place_selection: selection } : {}),
+    ...(validPlaceRef ? { place_ref: placeRef } : {}),
+  } : { ...base, anchor };
 }
 
 export function acceptedLiveEventQuery(response) {

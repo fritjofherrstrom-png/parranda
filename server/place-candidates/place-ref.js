@@ -15,4 +15,15 @@ function parsePlaceRef(value) {
   return match ? { ref: value, osmRef: `${PLACE_REF_TYPES[match[1]]}/${match[2]}`, lookupId: `${match[1].toUpperCase()}${match[2]}` } : null;
 }
 
-module.exports = { toPlaceRef, parsePlaceRef };
+// Only a geographic place can be named by a link: an area (OSM class
+// `boundary`) or a settlement/district/locality (class `place`). A venue or a
+// street found by free text still anchors a day, but a link does not carry it.
+const LINKABLE_CLASSES = new Set(['place', 'boundary']);
+function isLinkablePlace(candidate) {
+  return LINKABLE_CLASSES.has(candidate?.osm_class) && Boolean(toPlaceRef(candidate?.osm_ref));
+}
+function linkRefFor(candidate) {
+  return isLinkablePlace(candidate) ? toPlaceRef(candidate.osm_ref) : null;
+}
+
+module.exports = { toPlaceRef, parsePlaceRef, isLinkablePlace, linkRefFor };

@@ -10,11 +10,22 @@ const LAYERS=['city','district','locality','county','state','country'];
 const KINDS={city:'settlement',district:'district',locality:'settlement',county:'region',state:'region',country:'region'};
 // Photon ranks exact default-name matches ahead of importance, so five hamlets
 // called "Malmo" can push Malmö (or every US "Lisbon" push Lisboa) past the
-// visible rows. Read a wider page and lift only major places — cities and
-// countries by their own OSM tag — keeping Photon's order everywhere else.
+// visible rows. Read a wider page; rank by match first, and only within an
+// equal match lift major places — cities and countries by their own OSM tag —
+// keeping Photon's order everywhere else.
 const PROVIDER_LIMIT=20;
 const VISIBLE_LIMIT=5;
 const MAJOR_PLACES=['city','country'];
+const LETTERS={ø:'o',æ:'ae',œ:'oe',ß:'ss',đ:'d',ł:'l',ı:'i',þ:'th'};
+const fold=value=>String(value||'').normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase().replace(/[øæœßđłıþ]/g,letter=>LETTERS[letter]).replace(/\s+/g,' ').trim();
+// A title that only extends the typed text ("Gotemba" for "Gote") is a weaker
+// match than one equal to it or matched through another name (an exonym, so
+// Photon returns "Lisboa" for "Lisbon"). An exact small place is never pushed
+// below a larger place that merely starts the same way.
+function matchTier(title,query) {
+ const t=fold(title),q=fold(query);
+ return q&&t!==q&&t.startsWith(q)?1:0;
+}
 const compact=value=>typeof value==='string' ? value.trim().replace(/\s+/g,' ').slice(0,160) : '';
 
 function mapFeature(feature) {
@@ -32,7 +43,7 @@ function mapFeature(feature) {
  const hierarchy=distinct([compact(p.city),compact(p.county),compact(p.state),country]);
  const query=[title,...hierarchy].join(', ');
  if(query.length>200)return null;
- const candidate={label:query,lat:coordinates[1],lng:coordinates[0],confidence:'medium',provenance:'photon_osm',osm_ref:`${osmType}/${p.osm_id}`,attribution:'© OpenStreetMap contributors',license:'ODbL',admin_context:{locality:compact(p.city)||null,county:compact(p.county)||null,region:compact(p.state)||null,country:country||null,country_code:compact(p.countrycode).toLowerCase()||null}};
+ const candidate={label:query,lat:coordinates[1],lng:coordinates[0],confidence:'medium',provenance:'photon_osm',osm_ref:`${osmType}/${p.osm_id}`,osm_class:p.osm_key,attribution:'© OpenStreetMap contributors',license:'ODbL',admin_context:{locality:compact(p.city)||null,county:compact(p.county)||null,region:compact(p.state)||null,country:country||null,country_code:compact(p.countrycode).toLowerCase()||null}};
  if(Array.isArray(p.extent)&&p.extent.length===4) {
   const [west,north,east,south]=p.extent;
   const scope=sanitizeTrustedSpatialScope({source:'photon_bounds',kind:KINDS[layer],bounds:{west,north,east,south}});
@@ -41,9 +52,11 @@ function mapFeature(feature) {
  return {title,context:qualifiers.join(' · '),query,kind:KINDS[layer],major:p.osm_key==='place'&&MAJOR_PLACES.includes(p.osm_value),candidate};
 }
 
-// Stable: major places first in provider order, then everything else in provider order.
-function rankChoices(choices) {
- return [...choices.filter(choice=>choice.major),...choices.filter(choice=>!choice.major)].slice(0,VISIBLE_LIMIT);
+// Stable: match tier first, then major places, then provider order.
+function rankChoices(choices,query) {
+ return choices.map((choice,index)=>({choice,index,tier:matchTier(choice.title,query)}))
+  .sort((a,b)=>a.tier-b.tier||Number(b.choice.major)-Number(a.choice.major)||a.index-b.index)
+  .map(entry=>entry.choice).slice(0,VISIBLE_LIMIT);
 }
 
 function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fetch,now=()=>Date.now(),sleep=ms=>new Promise(r=>setTimeout(r,ms)),minIntervalMs=750,timeoutMs=2500}={}) {
@@ -72,7 +85,7 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
        const choice=mapFeature(feature);if(!choice||seen.has(choice.candidate.osm_ref))continue;
        seen.add(choice.candidate.osm_ref);choices.push(choice);
       }
-      return {status:'ready',choices:rankChoices(choices)};
+      return {status:'ready',choices:rankChoices(choices,query)};
      })(),
      new Promise(resolve=>{timer=setTimeout(()=>{controller.abort();resolve({status:'unavailable',choices:[]});},timeoutMs);}),
     ]);
@@ -93,4 +106,4 @@ function resolveDefaultPlaceSuggestions(env=process.env) {
  if(['disabled','0','false'].includes(String(env.PARRANDA_PLACE_SUGGESTIONS||'').toLowerCase()))return null;
  return createPlaceSuggestions({endpoint:env.PARRANDA_PLACE_SUGGESTIONS_ENDPOINT||DEFAULT_ENDPOINT});
 }
-module.exports={createPlaceSuggestions,resolveDefaultPlaceSuggestions,mapFeature};
+module.exports={createPlaceSuggestions,resolveDefaultPlaceSuggestions,mapFeature,matchTier};
