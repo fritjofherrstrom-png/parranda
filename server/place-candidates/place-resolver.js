@@ -42,7 +42,7 @@ const { isValidCoordinate } = require("../planner/agnostic-place-intake");
 const { normalizeNominatimSpatialScope } = require("./spatial-scope");
 const { createWikidataPlaceResolver } = require("./wikidata-place-resolver");
 const { createSourceCache } = require("./source-cache");
-const { parsePlaceRef } = require("./place-ref");
+const { parsePlaceRef, isLinkablePlace } = require("./place-ref");
 const { createHash } = require("node:crypto");
 
 const NOMINATIM_ENDPOINT = "https://nominatim.openstreetmap.org/search";
@@ -176,6 +176,7 @@ function toRawCandidate(result) {
         : null;
   const name = typeof result.name === "string" && result.name.trim() ? result.name.trim() : null;
   const osmRef = result.osm_type && result.osm_id ? `${result.osm_type}/${result.osm_id}` : null;
+  const osmClass = typeof (result.category ?? result.class) === "string" ? (result.category ?? result.class) : null;
   return {
     lat,
     lng,
@@ -188,6 +189,7 @@ function toRawCandidate(result) {
     admin_names: [...new Set([...ADMIN_NAME_FIELDS.map(key => normalizeNameForMatch(result.address?.[key])),
       ...String(result.display_name || '').split(',').slice(1).map(normalizeNameForMatch)])].filter(Boolean),
     osm_ref: osmRef,
+    osm_class: osmClass,
     admin_context: normalizeAdminContext(result.address),
     spatial_scope: normalizeNominatimSpatialScope(result),
   };
@@ -404,6 +406,7 @@ function finalizeCandidate(candidate) {
     license: "ODbL",
     source_tier: "inferred",
     osm_ref: candidate.osm_ref,
+    ...(candidate.osm_class ? { osm_class: candidate.osm_class } : {}),
     // Deliberately NO timezone — the resolver does not do coordinate→timezone lookup.
   };
   if (candidate.admin_context) out.admin_context = candidate.admin_context;
@@ -609,10 +612,13 @@ function createNominatimPlaceResolver({
       return url;
     });
     if (!result.ok || !Array.isArray(result.data)) return { ok: false };
+    // Exact type and id before anything else: no dedupe, classification or
+    // dominance logic may swap the identity the link named.
     const raw = result.data.map(toRawCandidate).find((candidate) => candidate?.osm_ref === parsed.osmRef);
-    // The identity is exact by construction, but an id lookup never claims more
-    // than the resolver's automatic ceiling.
-    return { ok: true, candidate: raw ? finalizeCandidate({ ...raw, confidence: "medium" }) : null };
+    if (!raw) return { ok: true, outcome: "not_found" };
+    if (!isLinkablePlace(raw)) return { ok: true, outcome: "unsupported" };
+    // Exact by construction, but never above the resolver's automatic ceiling.
+    return { ok: true, outcome: "resolved", candidate: finalizeCandidate({ ...raw, confidence: "medium" }) };
   }
 
   async function drainQueue() {
@@ -686,17 +692,17 @@ function createNominatimPlaceResolver({
   // provider no longer has ("not_found") stay distinct.
   resolvePlace.lookupRef = async function lookupRef(rawRef, context = {}) {
     const parsed = parsePlaceRef(rawRef);
-    if (!parsed) return { status: "unsupported" };
+    if (!parsed) return { status: "invalid" };
     if (!lookupEndpointValid || typeof fetcher !== "function") return { status: "unavailable" };
     const language = normalizeLanguage(context.language);
-    const key = `lookup-v1:${lookupEndpointIdentity}:${parsed.lookupId}:${language || "default"}`;
+    const key = `lookup-v2:${lookupEndpointIdentity}:${parsed.lookupId}:${language || "default"}`;
     const result = await cache.get(
       key,
       () => enqueueProviderTask(() => fetchRefQueued(parsed, language)),
       { shouldStore: (value) => value && value.ok === true },
     );
     if (!result?.ok) return { status: "unavailable" };
-    return result.candidate ? { status: "resolved", candidate: clone(result.candidate) } : { status: "not_found" };
+    return result.outcome === "resolved" ? { status: "resolved", candidate: clone(result.candidate) } : { status: result.outcome };
   };
 
   return resolvePlace;
