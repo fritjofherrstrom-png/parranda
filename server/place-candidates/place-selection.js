@@ -28,7 +28,7 @@ function selectionSecret(cacheDir) {
 function snapshot(candidate) {
   if (!candidate || !isValidCoordinate(candidate.lat, candidate.lng) || !isStrongConfidence(candidate.confidence)) return null;
   const out = { lat: candidate.lat, lng: candidate.lng, confidence: candidate.confidence };
-  for (const field of ['label', 'provenance', 'attribution', 'license', 'timezone', 'osm_ref', 'wikidata_ref', 'source_tier']) {
+  for (const field of ['label', 'provenance', 'attribution', 'license', 'timezone', 'osm_ref', 'osm_class', 'wikidata_ref', 'source_tier']) {
     if (typeof candidate[field] === 'string') out[field] = candidate[field].slice(0, field === 'label' ? 600 : 160);
   }
   if (candidate.admin_context && typeof candidate.admin_context === 'object') {
@@ -74,6 +74,7 @@ function placeResolutionInputs(body = {}) {
     placeSelection: body.place_selection,
     placeContextSelection: body.place_context_selection,
     placeBias: body.place_bias,
+    placeRef: body.place_ref,
   };
 }
 

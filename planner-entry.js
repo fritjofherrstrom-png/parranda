@@ -19,6 +19,6 @@ function readPlannerEntry(search) {
   const coords = lat !== null && lng !== null ? { lat, lng } : null;
   const near = params.get("anchor") === "near";
   const restore = params.get("restore") === "last";
-  return { place, coords, near, restore, hasIntent: Boolean(place || coords || near || restore) };
+  return { place, coords, near, restore, hasIntent: Boolean(params.has("place_ref") || place || coords || near || restore) };
 }
 module.exports = { readPlannerEntry };

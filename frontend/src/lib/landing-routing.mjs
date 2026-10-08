@@ -62,7 +62,7 @@ export function curatedCityHref(entry, lang = "en") {
  * The submit decision: where does this input take the user?
  * @returns {{ type: "city"|"anywhere", href: string } | null}
  */
-export function routeForInput(registry, raw, lang = "en") {
+export function routeForInput(registry, raw, lang = "en", { placeRef = null } = {}) {
   const value = String(raw || "").trim();
   if (!value) return null;
   const uiLang = lang === "sv" ? "sv" : "en";
@@ -75,6 +75,9 @@ export function routeForInput(registry, raw, lang = "en") {
   }
   const params = new URLSearchParams();
   params.set("place", value);
+  // A chosen suggestion's OSM identity keeps the exact place on reload and in
+  // other languages; the server re-validates it.
+  if (typeof placeRef === "string" && /^[nwr][1-9]\d{0,11}$/.test(placeRef)) params.set("place_ref", placeRef);
   params.set("planner", "open");
   params.set("lang", uiLang);
   return { type: "anywhere", href: `/anywhere?${params.toString()}` };
