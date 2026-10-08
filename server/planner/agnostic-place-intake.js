@@ -139,7 +139,7 @@ function anchoredOn(best, { mode, placeQuery, selectionId, candidatesConsidered 
  * a receipt this server signed for the same identity, or from the server's
  * own lookup of it.
  */
-async function resolvePlaceRefIntake({ coords, placeQuery, placeRef, placeResolver, placeLanguage, placeSelection, placeSelectionStore }) {
+async function resolvePlaceRefIntake({ coords, explicitCoordinatesPresent, placeQuery, placeRef, placeResolver, placeLanguage, placeSelection, placeSelectionStore }) {
   const blocked = (blocker, fields = {}) => ({
     anchor: null,
     placeContext: null,
@@ -149,7 +149,7 @@ async function resolvePlaceRefIntake({ coords, placeQuery, placeRef, placeResolv
   if (!ref) return blocked("place_ref_invalid");
   // A position and an identity are two anchors. This first version refuses to
   // choose between them; position-only requests keep their own path.
-  if (coords !== null && coords !== undefined) return blocked("place_ref_conflict");
+  if (explicitCoordinatesPresent || (coords !== null && coords !== undefined)) return blocked("place_ref_conflict");
 
   // A receipt binds by the identity it signed, not by the (possibly
   // translated) text it was issued for. A valid receipt for another place is a
@@ -157,7 +157,10 @@ async function resolvePlaceRefIntake({ coords, placeQuery, placeRef, placeResolv
   if (placeSelection !== undefined) {
     const receipt = placeSelectionStore?.read(placeSelection);
     if (receipt && receipt.osm_ref !== ref.osmRef) return blocked("place_ref_conflict");
-    if (receipt && isValidCoordinate(Number(receipt.lat), Number(receipt.lng))) {
+    if (receipt && receipt.osm_class !== undefined && !linkRefFor(receipt)) return blocked("place_ref_unsupported");
+    // Older v1 receipts lack class evidence: revalidate this exact ref, never
+    // reuse their geography or silently lose the response's place_ref.
+    if (receipt && linkRefFor(receipt) && isValidCoordinate(Number(receipt.lat), Number(receipt.lng))) {
       return anchoredOn(receipt, { mode: "place", placeQuery, selectionId: placeSelection, candidatesConsidered: 1 });
     }
   }
@@ -213,6 +216,7 @@ function placeChoice(candidate, placeQuery, placeSelectionStore) {
  */
 async function resolveAgnosticIntake({
   coords = null,
+  explicitCoordinatesPresent = false,
   placeQuery = null,
   placeResolver = null,
   placeLanguage = null,
@@ -224,8 +228,8 @@ async function resolveAgnosticIntake({
 } = {}) {
   // 0. A link's OSM identity, when present, is resolved on its own terms
   // before the legacy coordinate/receipt/free-text chain below.
-  if (placeRef !== undefined && placeRef !== null) {
-    return resolvePlaceRefIntake({ coords, placeQuery, placeRef, placeResolver, placeLanguage, placeSelection, placeSelectionStore });
+  if (placeRef !== undefined) {
+    return resolvePlaceRefIntake({ coords, explicitCoordinatesPresent, placeQuery, placeRef, placeResolver, placeLanguage, placeSelection, placeSelectionStore });
   }
 
   // 1. Explicit valid coordinates always win. The place-search function is

@@ -436,6 +436,14 @@ function resolveRequestCity(city) {
  * invalid coordinates are IGNORED (predictable fall-through to normal city
  * behavior), they never throw or 400 the request.
  */
+// Preserve raw anchor intent before parsing can erase malformed values.
+// Private server-computed input; never read this flag from the public body.
+function hasExplicitCoordinateFields(request) {
+  const owns = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key);
+  return [request.body, request.query, request.body?.origin].some(object =>
+    owns(object, "lat") || owns(object, "lng"));
+}
+
 function parseBlitzCoordinates(request) {
   const body = request.body || {};
   const query = request.query || {};
@@ -2284,6 +2292,7 @@ function buildApp({
         placeLanguage: lang,
         placeSelectionStore,
         ...placeResolutionInputs(request.body),
+        explicitCoordinatesPresent: hasExplicitCoordinateFields(request),
       });
 
       if (!anchor) {
@@ -2645,6 +2654,7 @@ function buildApp({
           placeResolver,
           placeSelectionStore,
           ...placeResolutionInputs(request.body),
+          explicitCoordinatesPresent: hasExplicitCoordinateFields(request),
           openDataLoader,
           eventSupply,
           weatherProvider,

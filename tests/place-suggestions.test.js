@@ -89,10 +89,16 @@ test('a major city beyond the visible five is lifted instead of cut off',async()
  const out=await provider(page)('Gote');
  assert.equal(out.choices[0].title,'Göteborg');assert.equal(out.choices.length,5);
 });
-test('an exonym query keeps the major city that only matched another language name',async()=>{
+test('without source-backed alias evidence an exonym cannot displace exact namesakes',async()=>{
  const towns=Array.from({length:10},(_,i)=>place('Lisbon',i%2?'village':'town','city',i+1,'United States'));
  const out=await provider([...towns,place('Lisboa','city','city',11,'Portugal'),place('Lisboa','administrative','county',12,'Portugal','boundary')])('Lisbon');
- assert.equal(out.choices[0].title,'Lisboa');assert.equal(out.choices[0].kind,'settlement');
+ assert.deepEqual(out.choices.map(choice=>choice.title),Array(5).fill('Lisbon'),'unsupported-language exonyms retain provider relevance, not inferred exact status');
+});
+test('exact York outranks New York and fuzzy major names; nonprefix names retain provider relevance',async()=>{
+ const out=await provider([place('New York','city','city',1),place('Yorik','city','city',2),place('York','village','city',3)])('York');
+ assert.equal(out.choices[0].title,'York');
+ const fuzzy=await provider([place('Lisboa','administrative','county',4,'Portugal','boundary'),place('Lisboa','city','city',5,'Portugal')])('Lisbon');
+ assert.deepEqual(fuzzy.choices.map(choice=>choice.candidate.osm_ref),['relation/4','relation/5'],'no unsupported exonym-based major promotion');
 });
 test('an exact smaller place is never pushed below a larger place that only starts the same way',async()=>{
  const out=await provider([place('Gotemba','city','city',1,'Japan'),place('Gotem','village','city',2,'Belgium'),place('Gotemburgo','hamlet','district',3,'Spain')])('Gotem');
