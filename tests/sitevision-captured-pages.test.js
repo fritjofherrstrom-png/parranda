@@ -135,20 +135,28 @@ test("captured weekly entries reach Live on their stated days; every other week 
   const row = (event) => liveRow(event, "2026-09-26", "2026-10-03");
 
   // A pin is not an accepted entry: only in-period rows inside the radius count.
-  assert.deepEqual(result.tonight.map((event) => [event.title, event.lat, event.route_eligible]), [
+  assert.deepEqual(result.tonight.filter(event => event.geographic_relevance !== "source_scope").map((event) => [event.title, event.lat, event.route_eligible]), [
     ["Ta hand om dig! Beredskapsdagen 2026", 55.556437, true],
   ]);
   // "Detta evenemang äger rum; varje måndag och torsdag": the lead-in states no
   // day, the rule after it does. "Varannan tisdag" never says which weeks, so
   // that entry stays a range. Every series spans months: Pulse context, never
   // a route stop.
-  assert.deepEqual(result.this_week.map(row).sort(), [
+  assert.deepEqual(result.this_week.filter(event => event.geographic_relevance !== "source_scope").map(row).sort(), [
     ["Bénka-dí: Lappa & laga tillsammans", "occurrences", ["2026-09-28"], "17:00–18:30", false],
     ["SUMO Robot med Waynes Industrier – Simrishamns space för unga makers", "period", null, "15:30–17:30", false],
     ["Samtalskafé för gemenskap", "occurrences", ["2026-09-28", "2026-10-01"], "13:00–14:30", false],
     ["Tisdagshäng", "occurrences", ["2026-09-29"], "14:00–16:00", false],
   ]);
-  assert.deepEqual(result.acquisition.rejection_summary, [{ reason: "missing_event_coordinates", count: 6 }]);
+  assert.deepEqual(result.acquisition.rejection_summary, []);
+  const maplessToday = result.tonight.filter(event => event.geographic_relevance === "source_scope");
+  assert.deepEqual(maplessToday.map(event => event.title).sort(), [
+    "Curatorvisning av utställningen PRE DROM – På väg", "I love you two med Circus I love you",
+  ].sort());
+  assert.ok(maplessToday.every(event => event.lat === null && event.lng === null && event.route_eligible === false));
+  assert.ok(result.tonight.every(event => event.time_window.kind !== "period"), "source ranges never claim a selected-day occurrence");
+  assert.ok(result.this_week.filter(event => event.geographic_relevance === "source_scope").every(event =>
+    event.time_window.kind === "period" && event.route_eligible === false && event.lat === null));
 });
 
 test("a selected Monday lists the captured Monday entries; a range never claims it", async () => {
@@ -160,18 +168,25 @@ test("a selected Monday lists the captured Monday entries; a range never claims 
     ["Bénka-dí: Lappa & laga tillsammans", "occurrences", ["2026-09-28", "2026-10-05"], "17:00–18:30", false],
     ["Samtalskafé för gemenskap", "occurrences", ["2026-09-28", "2026-10-01", "2026-10-05"], "13:00–14:30", false],
   ]);
-  assert.deepEqual(result.this_week.map(row).sort(), [
+  assert.deepEqual(result.this_week.filter(event => event.geographic_relevance !== "source_scope").map(row).sort(), [
     ["SUMO Robot med Waynes Industrier – Simrishamns space för unga makers", "period", null, "15:30–17:30", false],
     ["Tisdagshäng", "occurrences", ["2026-09-29"], "14:00–16:00", false],
   ]);
   // Rows that ended before the selected day leave the listing, so three later
   // rows enter the eight-page detail budget. Their pages are not in the
   // capture: they keep their listing ranges without a pin and, like the
-  // mapless Mötesplats row, are rejected for missing coordinates.
+  // mapless Mötesplats row, remain explicitly source-area context only.
   assert.deepEqual(uncaptured.map((url) => url.split("/").pop()).sort(), [
     "anhorigcirkel", "benka-di-bakning", "benka-di-pingis",
   ]);
-  assert.deepEqual(result.acquisition.rejection_summary, [{ reason: "missing_event_coordinates", count: 4 }]);
+  assert.deepEqual(result.acquisition.rejection_summary, []);
+  const mapless = result.this_week.filter(event => event.geographic_relevance === "source_scope");
+  assert.deepEqual(mapless.map(event => event.title).sort(), [
+    "Anhörigcirkel", "Bénka-dí: Bakning", "Bénka-dí: Pingis", "Mötesplats Rosenborg September",
+  ].sort());
+  assert.ok(mapless.every(event => event.time_window.kind === "period" && event.route_eligible === false &&
+    event.lat === null && event.lng === null && event.source_scope_verified === true));
+  assert.ok(result.tonight.every(event => event.time_window.kind !== "period"), "a mapless range still does not assert Monday attendance");
 });
 
 // Malmö's listing prints a session clock in its own "Tid" spans; a row without

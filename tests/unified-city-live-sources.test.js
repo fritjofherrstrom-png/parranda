@@ -105,6 +105,8 @@ test('Rome pagination shares one acquisition deadline across every page', async 
     });
     return response(romeHtml+'<a href="/en/romalive?page=2">Next</a>');
   }});
-  await assert.rejects(provider.create().collect({date:'2026-10-08'}));
+  const result = await provider.create().collect({date:'2026-10-08'});
+  assert.equal(result.time_sensitive_events.length,1,'completed first-page evidence survives the later deadline');
+  assert.equal(result.collection_status.reason,'source_collection_truncated');
   assert.equal(calls,2,'a third page must not receive a fresh timeout');
 });

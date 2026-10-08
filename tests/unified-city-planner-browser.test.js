@@ -107,12 +107,21 @@ for (const [label, path, anchor] of [
   await page.getByRole('button', { name: 'Not this one', exact: true }).click();
   await removeResponse;
   assert.deepEqual(composes.at(-1).excluded_candidate_ids, ['b']);
+  // The map must follow the new route, not merely the request ledger.
+  await page.waitForFunction(label => {
+    const labels = Array.from(document.querySelectorAll('.route-map-marker-shell')).map(e => e.getAttribute('aria-label'));
+    return JSON.stringify(labels) === JSON.stringify([`1. ${label} a`, `2. ${label} c`]);
+  }, label);
   await page.getByRole('button', { name: /detour idea.*near your route/ }).click();
   await page.getByRole('button', { name: `${label} extra`, exact: true }).click();
   const addResponse = page.waitForResponse(r => new URL(r.url()).pathname === '/api/route-recommendations');
   await page.getByRole('button', { name: 'Add to my day', exact: true }).click();
   await addResponse;
   assert.deepEqual(composes.at(-1).pinned_candidate_ids, ['a', 'extra']);
+  await page.waitForFunction(label => {
+    const labels = Array.from(document.querySelectorAll('.route-map-marker-shell')).map(e => e.getAttribute('aria-label'));
+    return JSON.stringify(labels) === JSON.stringify([`1. ${label} a`, `2. ${label} c`, `3. ${label} extra`]);
+  }, label);
   const beforeLive = composes.length;
   await page.getByRole('button', { name: /See all live|Explore live/ }).click();
   const dialog = page.getByRole('dialog');
@@ -121,6 +130,7 @@ for (const [label, path, anchor] of [
   // tab, and a same-day event must not require a switch to following days.
   assert.equal(await dialog.getByRole('button', { name: 'Following 7 days', exact: true }).getAttribute('aria-pressed'), 'false');
   await dialog.getByText(`${label} concert`, { exact: true }).waitFor();
+  assert.equal(liveQueries.at(-1).time, 'tonight', 'selected-day fixture is queried in the selected-day bucket');
   assert.equal(liveQueries[0].selected_date, DATE);
   assert.equal(liveQueries[0].place_query, label);
   assert.deepEqual(liveQueries[0].anchor, anchor);

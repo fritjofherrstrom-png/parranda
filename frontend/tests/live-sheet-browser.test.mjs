@@ -171,3 +171,18 @@ test('native mounted LiveSheet distinguishes captured uncovered and healthy cont
     assert.equal(await page.locator('a[href="https://www.openstreetmap.org/node/42"]').count(),1);
   }
 });
+
+test('mapless reviewed calendar rows disclose source area rather than implying exact local distance',async t=>{
+  const {render}=await browserHarness(t);
+  const row={id:'mapless',title:'Dated source event',source_label:'Reviewed calendar',source_url:'https://calendar.example/event',
+    geographic_relevance:'source_scope',source_scope_verified:true,geometry_status:'unresolved',route_eligible:false,
+    time_window:{kind:'occurrences',dates:['2026-10-08']}};
+  const events={coverage:'covered',selected_date:'2026-10-08',tonight:[row],this_week:[],acquisition:{source_health:{status:'healthy',result:'events_found',selected_source_count:1,responding_source_count:1}}};
+  for(const lang of ['en','sv']){
+    const text=await render(events,lang);
+    assert.match(text,lang==='en'?/Source calendar area — exact location unverified/:/Källans kalenderområde — exakt plats ej verifierad/);
+    assert.doesNotMatch(text,/0 km|0,0 km/);
+    const partial=await render({...events,acquisition:{source_health:{...events.acquisition.source_health,status:'partial',reasons:['source_collection_truncated']}}},lang);
+    assert.match(partial,lang==='en'?/Some calendars were only partly read — more events may be listed at the source/:/Vissa kalendrar kunde bara läsas delvis — fler händelser kan finnas hos källan/);
+  }
+});

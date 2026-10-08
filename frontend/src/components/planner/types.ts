@@ -75,6 +75,8 @@ export interface PulseEvent {
   lat?: number;
   lng?: number;
   live_proximity?: "nearby" | "local" | "in_place";
+  geographic_relevance?: string | null;
+  source_scope_verified?: boolean;
   anchor_distance_km?: number;
   // The server's preference fit for this row, in canonical intents.
   preference_match?: string;

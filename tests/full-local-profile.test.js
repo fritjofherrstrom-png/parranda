@@ -322,9 +322,14 @@ test("both reviewed manifests collect normalized evidence through their generic 
   assert.equal(result.acquisition.source_health.event_bearing_source_count, 2);
   assert.equal(result.acquisition.source_health.status, "healthy");
   assert.equal(result.tonight.some((event) => event.title === "Summer market"), true);
-  assert.deepEqual(result.acquisition.rejection_summary, [
-    { reason: "missing_event_coordinates", count: 1 },
-  ]);
+  assert.deepEqual(result.acquisition.rejection_summary, []);
+  const harbour = result.tonight.find(event => event.title === "Harbour concert");
+  assert.ok(harbour, "the mapless reviewed listing remains useful Pulse evidence");
+  assert.equal(harbour.lat, null);
+  assert.equal(harbour.lng, null);
+  assert.equal(harbour.route_eligible, false);
+  assert.equal(harbour.geographic_relevance, "source_scope");
+  assert.equal(harbour.source_scope_verified, true);
 });
 
 function textResponse(url, body) {

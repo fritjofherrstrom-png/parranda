@@ -170,7 +170,9 @@ export default function LiveCard({
       )}
       {pulseState === "partial" && (
         <p className="mt-2 text-xs text-parranda-ink/68">
-          {t("Alla källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
+          {liveEvents?.acquisition?.source_health?.reasons?.includes("source_collection_truncated")
+            ? t("Vissa kalendrar kunde bara läsas delvis — fler händelser kan finnas hos källan.", "Some calendars were only partly read — more events may be listed at the source.")
+            : t("Alla källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
         </p>
       )}
 

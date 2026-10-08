@@ -309,7 +309,14 @@ function normalizeEventFeedRow(f, index = 0) {
       : null,
     runtime_trust: f.runtime_trust != null ? String(f.runtime_trust) : null,
     pulse_only: f.pulse_only === true,
-    source_scoped_pulse: f.source_scoped_pulse === true,
+    // A reviewed, bounded local calendar attests its publisher area, not a
+    // point/radius or attendance. Keep mapless dated evidence in Pulse only.
+    source_scoped_pulse: f.source_scoped_pulse === true || (
+      f.reviewed_at && ['official', 'verified'].includes(f.source_tier) &&
+      Array.isArray(f.bbox) && f.bbox.length === 4 && f.bbox.every(Number.isFinite) &&
+      f.bbox[0] < f.bbox[2] && f.bbox[1] < f.bbox[3] &&
+      /^official_(?:municipal|tourism)_/.test(f.source_family || '')
+    ) === true,
   };
 }
 

@@ -41,6 +41,7 @@ async function collectDateRange(date, options) {
   if (!start) return collection([], 'unavailable', 'collection_context_unavailable');
   const end = new Date(Date.parse(`${start}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10);
   let rows;
+  let truncated = false;
   if (options.adapter === 'ckan_agenda') {
     // Resource IDs are server-owned config; never interpolate public input.
     if (!/^[a-zA-Z0-9-]+$/.test(options.resourceId || '')) throw new Error('source_payload_invalid');
@@ -58,7 +59,16 @@ async function collectDateRange(date, options) {
     for (let page = 1; page < pages; page++) {
       const url = new URL(options.endpoint);
       url.searchParams.set('page', String(page));
-      rows.push(...parseLiveEventBlocks(await fetchBounded(url.href, options)));
+      try {
+        rows.push(...parseLiveEventBlocks(await fetchBounded(url.href, options)));
+      } catch (error) {
+        // The shared deadline/byte limit still ends acquisition. It must not
+        // erase valid, source-owned evidence from an earlier completed page.
+        // If no relevant dated evidence exists, preserve the original failure.
+        if (!rows.some(row => row.start_date <= end && (row.end_date || row.start_date) >= start)) throw error;
+        truncated = true;
+        break;
+      }
     }
   }
   const seen = new Set();
@@ -68,7 +78,7 @@ async function collectDateRange(date, options) {
       seen.add(event.id);
       return true;
     }).slice(0, options.limit || 40);
-  return collection(events, events.length ? 'ok' : 'empty', events.length ? null : 'source_empty');
+  return collection(events, events.length ? 'ok' : 'empty', truncated ? 'source_collection_truncated' : events.length ? null : 'source_empty');
 }
 
 function toDateRangeEvent(row, options) {
