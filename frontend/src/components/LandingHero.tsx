@@ -18,7 +18,7 @@ import { routeForInput, inlineCompletion, type CityRegistry } from "../lib/landi
 import { storeAnchorCoords, requestPosition } from "../lib/location-anchor.mjs";
 import PlaceSearchField, { type PlaceSuggestion } from "./PlaceSearchField";
 import { storePlaceChoice } from "../lib/place-choice.mjs";
-import { LAST_KEY } from "../lib/anywhere-storage.mjs";
+import { isComposedEntry, LAST_KEY } from "../lib/anywhere-storage.mjs";
 import { liveDateLabel } from "../lib/live-event-query.mjs";
 import AppBar from "./shared/AppBar";
 import { ChevronRightIcon, LocationIcon } from "./shared/icons";
@@ -53,7 +53,7 @@ function lastDay(): { place: string | null; dateIso: string | null } | null {
   try {
     const raw = window.localStorage.getItem(LAST_KEY);
     const entry = raw ? JSON.parse(raw) : null;
-    if (!entry || typeof entry !== "object" || !entry.safeResponse || !entry.classification) return null;
+    if (!isComposedEntry(entry)) return null;
     const place = typeof entry.place === "string" && entry.place.trim() ? entry.place.trim() : null;
     const dateIso = typeof entry.dateIso === "string" ? entry.dateIso : null;
     return { place, dateIso };

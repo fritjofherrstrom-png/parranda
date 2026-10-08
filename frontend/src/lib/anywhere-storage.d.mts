@@ -30,6 +30,8 @@ export interface SavedEntry {
   commitments: CommitmentSnapshot | null;
 }
 
+export declare function isComposedEntry(entry: unknown): boolean;
+
 export declare function savedEntryId(options?: {
   placeLabel?: string | null;
   city?: string | null;

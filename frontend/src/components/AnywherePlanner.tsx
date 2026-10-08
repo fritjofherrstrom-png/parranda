@@ -598,7 +598,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           }),
         });
         lastEntryRef.current = entry;
-        writeLS(LAST_KEY, entry);
+        // Only a day may replace the remembered day: a place that could not be
+        // resolved or composed must not take over "Continue" on the landing.
+        if (composedNow) writeLS(LAST_KEY, entry);
         if (!silent) setRestoredAt(null);
         if (!silent) {
           // Only an adjustment leaves a baseline behind, and only for the place

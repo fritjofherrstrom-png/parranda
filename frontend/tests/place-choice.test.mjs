@@ -37,7 +37,7 @@ test('ambiguous place offers choices, then retains selected identity for an adju
  await click(h,button(h,'Harbour, Second City'));
  const chosen=h.fetchMock.pending().find(x=>x.url.startsWith('/api/route-recommendations'));
  assert.equal(chosen.body.place,'Harbour');assert.equal(chosen.body.place_selection,'selected-token');
- await h.fetchMock.respond(chosen,response);await h.clock.advance(30);
+ await h.fetchMock.respond(chosen,composed);await h.clock.advance(30);
  const stored=JSON.parse(h.window.localStorage.getItem('parranda:anywhere:last'));
  assert.equal(stored.inputs.placeSelection,'selected-token');
  await click(h,button(h,'Adjust'));await click(h,button(h,'Easy'));await h.clock.advance(500);
