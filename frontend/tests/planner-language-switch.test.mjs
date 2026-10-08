@@ -94,7 +94,7 @@ test("a Swedish near-me day asks in Swedish and names the reader's position", as
   await h.fetchMock.respond(call, composedDay());
   await h.clock.advance(50);
 
-  assert.match(h.container.querySelector("header h2").textContent, /^En dag nära dig$/);
+  assert.match(h.container.querySelector("header h1").textContent, /^En dag nära dig$/);
   assert.match(h.text(), /Nära dig · idag/);
   assert.doesNotMatch(h.text(), /your position|din position/i, "no baked-in label, in either language");
 });

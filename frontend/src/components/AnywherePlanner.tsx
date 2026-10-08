@@ -79,7 +79,7 @@ import { useMediaQuery } from "./shared/useMediaQuery";
 import AnchorCard from "./planner/AnchorCard";
 import BlitzCard from "./planner/BlitzCard";
 import CandidateAreas from "./planner/CandidateAreas";
-import DayHeader from "./planner/DayHeader";
+import DayHeader, { DayActions, dayAssemblyNotes } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
 import LiveSheet from "./planner/LiveSheet";
@@ -1598,6 +1598,25 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // How the day was assembled, minus what another line already says in full:
   // the trust line names the source-backed places, the map caption the
   // estimates. What is left sits with the map, not under the title.
+  const unavailableHasChoices = Boolean(anchorUnresolved && (safeResponse?.agnostic_route_output_experiment?.intake?.candidates?.some((c: any) => c.selection_id) || safeResponse?.agnostic_route_output_experiment?.intake?.blockers?.includes("place_selection_invalid")));
+  // Preserve the classifier's three absences; choices announce themselves,
+  // and an outstanding upgrade or service refusal is not a final no-day verdict.
+  const unavailableMessage = phase === "done" && classification?.status === "unavailable" && !upgradePending && !serviceRefusal && !unavailableHasChoices
+    ? anchorUnresolved
+      ? t(
+          `Parranda kunde inte hitta ”${typedPlaceLabel}” just nu. Prova en annan stavning eller lägg till land eller region — inget hittas på.`,
+          `Parranda couldn't pin down “${typedPlaceLabel}” right now. Try another spelling or add a country or region — nothing is invented in its place.`,
+        )
+      : classification.unavailableReason === "sparse_supply" && classification.realPlaceCount
+        ? t(
+            `Parranda hittade ${classification.realPlaceCount === 1 ? "1 riktig plats" : `${classification.realPlaceCount} riktiga platser`} ${anchorIsPosition ? "nära dig" : `nära ${placeName}`}, men inte tillräckligt för en pålitlig dag ännu — inget hittas på.`,
+            `Parranda found ${classification.realPlaceCount === 1 ? "1 real place" : `${classification.realPlaceCount} real places`} ${anchorIsPosition ? "near you" : `near ${placeName}`}, but not enough for a reliable day yet — nothing is invented in its place.`,
+          )
+        : t(
+            `Parranda kunde inte komponera en dag ${anchorIsPosition ? "nära dig" : `för ${placeName}`} ännu — inget hittas på, inget fejkas.`,
+            `Parranda couldn't compose a day ${anchorIsPosition ? "near you" : `for ${placeName}`} yet — nothing is invented in its place.`,
+          )
+    : "";
   const dayContextNote = contextNote(dayLimitations, t, {
     sourceCompletion: safeResponse?.agnostic_route_output_experiment?.source_status?.collection?.source_completion,
     statedElsewhere: sourceBackedDay
@@ -1734,6 +1753,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           onChangePlace={cancelActivePlannerForNavigation}
         />
       )}
+
+      {/* One permanently mounted result region: ready or final unavailable.
+          Cleared while composing; PlaceChoices carries its own status. */}
+      <p role="status" className="sr-only">
+        {phase === "done" && dayWithRoute && staleNotice !== "updating"
+          ? t(
+              `En dag ${anchorIsPosition ? "nära dig" : `i ${anchorLabel}`} är klar: ${routeStops.length} stopp.`,
+              `A day ${anchorIsPosition ? "near you" : `in ${anchorLabel}`} is ready: ${routeStops.length} ${routeStops.length === 1 ? "stop" : "stops"}.`,
+            )
+          : unavailableMessage}
+      </p>
+      {hasAnchor && !dayWithRoute && <h1 className="sr-only">{t(`Din dag ${anchorIsPosition ? "nära dig" : `i ${anchorLabel}`}`, `Your day ${anchorIsPosition ? "near you" : `in ${anchorLabel}`}`)}</h1>}
 
       {/* Static hydration and unavailable snapshots must not become another
           place-entry step. Root is the only place picker. */}
@@ -1889,8 +1920,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               compose. The count comes from the classifier's trusted-loader
               evidence, never from copy. The label follows the pill rule:
               primary locality, not the resolver's full admin chain. */}
+          {/* Plain visible copy is announced by the permanent result region;
+              PlaceChoices instead owns its interactive status. */}
           <div className="text-[15px] text-parranda-ink">
-            {anchorUnresolved && (safeResponse?.agnostic_route_output_experiment?.intake?.candidates?.some((c: any) => c.selection_id) || safeResponse?.agnostic_route_output_experiment?.intake?.blockers?.includes("place_selection_invalid")) ? (
+            {unavailableHasChoices ? (
               <PlaceChoices intake={safeResponse?.agnostic_route_output_experiment?.intake}
                 pending={false} locationPending={narrowingPlace} locationFailed={narrowingFailed} t={t}
                 onNarrow={() => { narrowPlaceSearch().catch(() => {}); }}
@@ -1898,22 +1931,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   setPlaceSelection(choice.selection_id); setSelectionLabel(choice.label);
                   execute({ place: place.trim(), placeSelection: choice.selection_id, selectionLabel: choice.label }).catch(() => {});
                 }} />
-            ) : anchorUnresolved ? (
-              t(
-                `Parranda kunde inte hitta ”${typedPlaceLabel}” just nu. Prova en annan stavning eller lägg till land eller region — inget hittas på.`,
-                `Parranda couldn't pin down “${typedPlaceLabel}” right now. Try another spelling or add a country or region — nothing is invented in its place.`,
-              )
-            ) : classification.unavailableReason === "sparse_supply" && classification.realPlaceCount ? (
-              t(
-                `Parranda hittade ${classification.realPlaceCount === 1 ? "1 riktig plats" : `${classification.realPlaceCount} riktiga platser`} ${anchorIsPosition ? "nära dig" : `nära ${placeName}`}, men inte tillräckligt för en pålitlig dag ännu — inget hittas på.`,
-                `Parranda found ${classification.realPlaceCount === 1 ? "1 real place" : `${classification.realPlaceCount} real places`} ${anchorIsPosition ? "near you" : `near ${placeName}`}, but not enough for a reliable day yet — nothing is invented in its place.`,
-              )
-            ) : (
-              t(
-                `Parranda kunde inte komponera en dag ${anchorIsPosition ? "nära dig" : `för ${placeName}`} ännu — inget hittas på, inget fejkas.`,
-                `Parranda couldn't compose a day ${anchorIsPosition ? "near you" : `for ${placeName}`} yet — nothing is invented in its place.`,
-              )
-            )}
+            ) : unavailableMessage}
           </div>
           {!anchorUnresolved && selected.length > 0 && (
             <p>{t(
@@ -1977,24 +1995,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           coreCount={split.core.length}
           wovenCount={split.woven.length}
           pickCoverage={pickCoverage}
-          sourceBackedDay={sourceBackedDay}
           dayLimitationNote={dayLimitationNote}
-          timeAnchoring={timeAnchoring}
           restoredAt={restoredAt}
           resolveAndRun={() => resolveAndRun()}
-          routeParts={routeParts}
-          routeUrls={routeUrls}
-          routeEndLabel={routeEndLabel}
-          saveDay={saveDay}
-          isSaved={isSaved}
-          canShare={canShare}
-          shareDay={shareDay}
-          shareCopied={shareCopied}
-          routeOrigin={routeOrigin}
-          routeDestination={routeDestination}
-          routeAnchorCoords={routeAnchorCoords}
-          publishedStart={publishedStart}
-          publishedEnd={publishedEnd}
         />
       )}
 
@@ -2041,6 +2044,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           stale={staleNotice === "updating"}
           routeLineIsSketch={routeLineIsSketch}
           dayContextNote={dayContextNote}
+          assemblyNotes={dayAssemblyNotes(t, { sourceBackedDay, timeAnchoring })}
           split={split}
           routeStops={routeStops}
           legForStop={legForStop}
@@ -2061,6 +2065,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           routeContextSuggestions={routeContextSuggestions}
           detoursOpen={detoursOpen}
           setDetoursOpen={setDetoursOpen}
+        />
+      )}
+
+      {dayWithRoute && (
+        <DayActions
+          t={t}
+          routeParts={routeParts}
+          routeUrls={routeUrls}
+          routeEndLabel={routeEndLabel}
+          saveDay={saveDay}
+          isSaved={isSaved}
+          canShare={canShare}
+          shareDay={shareDay}
+          shareCopied={shareCopied}
+          routeOrigin={routeOrigin}
+          routeDestination={routeDestination}
+          routeAnchorCoords={routeAnchorCoords}
+          publishedStart={publishedStart}
+          publishedEnd={publishedEnd}
+          stale={staleNotice === "updating"}
         />
       )}
 
