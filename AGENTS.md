@@ -71,3 +71,16 @@ Remaining blocker or accepted observation limit:
 Landing condition / next action / next owner:
 Dependent PRs to reconcile:
 ```
+
+## MVP-underlag och kontinuitet
+
+Läs `MEMORY.md` när detta MVP-arbete fortsätter. Repoankrade fynd finns i
+`docs/research-Parranda.md`; befintligt PRD är bevarat som oförändrad snapshot i
+`docs/mvp-readiness/PRD-Parranda-MVP-bf91fa9.md`. Teknisk design för review finns i
+`docs/TechDesign-Parranda-MVP.md`. Dessa är underlag/utkast, inte nya godkända
+produktkrav eller runtimeacceptans. Kontrollera alltid aktuell main/PR-head.
+
+Använd relevanta `agent_docs/project_brief.md`, `agent_docs/tech_stack.md`,
+`agent_docs/testing.md` och `REVIEW-CHECKLIST.md` för scope och checks. Behåll
+befintliga kontrakt och leveransregler ovan; mallarnas exempel tillför inte
+nya tjänster, godkännanden eller implementationsuppdrag.
