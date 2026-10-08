@@ -74,6 +74,7 @@ function placeResolutionInputs(body = {}) {
     placeSelection: body.place_selection,
     placeContextSelection: body.place_context_selection,
     placeBias: body.place_bias,
+    placeRef: body.place_ref,
   };
 }
 

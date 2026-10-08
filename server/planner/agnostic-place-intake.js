@@ -24,6 +24,7 @@
  */
 
 const { sanitizeTrustedSpatialScope } = require("../place-candidates/spatial-scope");
+const { parsePlaceRef, toPlaceRef } = require("../place-candidates/place-ref");
 
 // Confidence labels the resolver may return for a candidate. Anything outside
 // this set (or a number below the threshold) is treated as too weak to anchor.
@@ -115,6 +116,7 @@ async function resolveAgnosticIntake({
   placeSelectionStore = null,
   placeContextSelection = null,
   placeBias = null,
+  placeRef,
 } = {}) {
   // 1. Explicit valid coordinates always win. The place-search function is
   // never called. A separately trusted reverse-context method may enrich only
@@ -174,7 +176,29 @@ async function resolveAgnosticIntake({
   // Explicit coordinates above remain authoritative, including with a token.
   const hasSelection = placeSelection !== undefined;
   const selected = hasSelection ? placeSelectionStore?.read(placeSelection, placeQuery) : null;
-  const selectionInvalid = hasSelection && !selected;
+  // A link's OSM identity re-validates the place through the server's own
+  // lookup: the caller supplies an id, never geography. It also rescues an
+  // expired receipt instead of failing it.
+  const hasRef = placeRef !== undefined && placeRef !== null && placeRef !== "";
+  const ref = parsePlaceRef(placeRef);
+  const selectionInvalid = hasSelection && !selected && !hasRef;
+  let refOutcome = null;
+  if (!selected && hasRef) {
+    if (!ref) refOutcome = { status: "unsupported" };
+    else if (typeof placeResolver?.lookupRef !== "function") refOutcome = { status: "unavailable" };
+    else {
+      try {
+        refOutcome = await placeResolver.lookupRef(ref.ref, { language: placeLanguage });
+      } catch (_error) {
+        refOutcome = { status: "unavailable" };
+      }
+    }
+  }
+  const refCandidate = refOutcome?.status === "resolved" ? refOutcome.candidate : null;
+  const pinned = selected || refCandidate;
+  const refBlocker = refOutcome && !refCandidate
+    ? `place_ref_${["unsupported", "not_found"].includes(refOutcome.status) ? refOutcome.status : "unavailable"}`
+    : null;
   const previous = placeContextSelection ? placeSelectionStore?.read(placeContextSelection) : null;
   const near = previous || (placeBias && isValidCoordinate(placeBias.lat, placeBias.lng) ? placeBias : null);
   const candidateChoice = candidate => ({
@@ -183,17 +207,18 @@ async function resolveAgnosticIntake({
     provenance: candidate.provenance || null,
     attribution: typeof candidate.attribution === "string" ? candidate.attribution : null,
     license: typeof candidate.license === "string" ? candidate.license : null,
+    ...(toPlaceRef(candidate.osm_ref) ? { place_ref: toPlaceRef(candidate.osm_ref) } : {}),
     ...(placeSelectionStore ? { selection_id: placeSelectionStore.issue(candidate, placeQuery) } : {}),
   });
 
   // 3. Freeform place → trusted server resolver ONLY.
-  if (!selected && typeof placeResolver !== "function") {
-    return { anchor: null, placeContext: null, intake: intake("place", placeQuery, { blockers: [selectionInvalid ? "place_selection_invalid" : "place_resolver_unavailable"] }) };
+  if (!pinned && typeof placeResolver !== "function") {
+    return { anchor: null, placeContext: null, intake: intake("place", placeQuery, { blockers: [selectionInvalid ? "place_selection_invalid" : refBlocker || "place_resolver_unavailable"] }) };
   }
 
   let resolved;
   try {
-    resolved = selected ? [selected] : await placeResolver(placeQuery, { language: placeLanguage, ...(near ? { near: { lat: near.lat, lng: near.lng } } : {}) });
+    resolved = pinned ? [pinned] : await placeResolver(placeQuery, { language: placeLanguage, ...(near ? { near: { lat: near.lat, lng: near.lng } } : {}) });
   } catch (_error) {
     return { anchor: null, placeContext: null, intake: intake("place", placeQuery, { blockers: [selectionInvalid ? "place_selection_invalid" : "place_resolver_error"] }) };
   }
@@ -203,7 +228,24 @@ async function resolveAgnosticIntake({
     return { anchor: null, placeContext: null, intake: intake("place", placeQuery, { blockers: [selectionInvalid ? "place_selection_invalid" : "place_not_resolved"] }) };
   }
 
-  const strong = candidates.filter((candidate) => candidate && isStrongConfidence(candidate.confidence));
+  let strong = candidates.filter((candidate) => candidate && isStrongConfidence(candidate.confidence));
+
+  // The link named an identity the lookup could not confirm. A failed read may
+  // still be confirmed by free text — but only by that exact identity; anything
+  // else is offered as a choice, never picked for the reader.
+  if (refBlocker) {
+    const confirmed = ref && refOutcome.status === "unavailable"
+      ? strong.filter((candidate) => candidate.osm_ref === ref.osmRef)
+      : [];
+    if (confirmed.length !== 1) {
+      return { anchor: null, placeContext: null, intake: intake("place", placeQuery, {
+        candidates_considered: candidates.length,
+        candidates: strong.slice(0, 5).map(candidateChoice),
+        blockers: [refBlocker],
+      }) };
+    }
+    strong = confirmed;
+  }
 
   if (selectionInvalid) {
     return { anchor: null, placeContext: null, intake: intake("place", placeQuery, {
@@ -266,6 +308,7 @@ async function resolveAgnosticIntake({
       candidates_considered: candidates.length,
       resolved: {
         ...(placeSelectionStore ? { selection_id: selected ? placeSelection : placeSelectionStore.issue(best, placeQuery) } : {}),
+        ...(toPlaceRef(best.osm_ref) ? { place_ref: toPlaceRef(best.osm_ref) } : {}),
         label: best.label || null,
         lat,
         lng,

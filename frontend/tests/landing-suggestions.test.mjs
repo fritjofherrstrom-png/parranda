@@ -43,6 +43,15 @@ test('only saved receipts provide context; unavailable lookup still permits free
  }finally{await h.unmount();}
 });
 
+test('a same-name region is marked so it cannot read as a duplicate of the city', async () => {
+ const h=await mount({url:'http://localhost/?lang=sv'});try {
+  await type(h,'Lisbon');await h.clock.advance(200);
+  await h.fetchMock.respond(h.fetchMock.calls[0],{status:'ready',choices:[{...choice('Lisbon','Portugal'),kind:'settlement'},{...choice('Lisbon','Portugal'),selection_id:'signed-region',kind:'region'}]});
+  const rows=[...h.document.querySelectorAll('[role=option]')].map(row=>row.textContent);
+  assert.deepEqual(rows,['LisbonPortugal','LisbonRegion · Portugal']);
+ }finally{await h.unmount();}
+});
+
 test('a registered-city suggestion carries its qualified choice into shared any-place intake', async () => {
  const h=await mount({injected:{__PARRANDA_CITIES__:{rome:{key:'rome',label:'Rome'}}}});try {
   const selected={...choice('Rome','Lazio · Italy'),city_key:'rome'};

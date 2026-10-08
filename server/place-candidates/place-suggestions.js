@@ -8,6 +8,13 @@ const {isValidCoordinate}=require('../planner/agnostic-place-intake');
 const DEFAULT_ENDPOINT='https://photon.komoot.io/api/';
 const LAYERS=['city','district','locality','county','state','country'];
 const KINDS={city:'settlement',district:'district',locality:'settlement',county:'region',state:'region',country:'region'};
+// Photon ranks exact default-name matches ahead of importance, so five hamlets
+// called "Malmo" can push Malmö (or every US "Lisbon" push Lisboa) past the
+// visible rows. Read a wider page and lift only major places — cities and
+// countries by their own OSM tag — keeping Photon's order everywhere else.
+const PROVIDER_LIMIT=20;
+const VISIBLE_LIMIT=5;
+const MAJOR_PLACES=['city','country'];
 const compact=value=>typeof value==='string' ? value.trim().replace(/\s+/g,' ').slice(0,160) : '';
 
 function mapFeature(feature) {
@@ -31,11 +38,16 @@ function mapFeature(feature) {
   const scope=sanitizeTrustedSpatialScope({source:'photon_bounds',kind:KINDS[layer],bounds:{west,north,east,south}});
   if(scope)candidate.spatial_scope=scope;
  }
- return {title,context:qualifiers.join(' · '),query,kind:KINDS[layer],candidate};
+ return {title,context:qualifiers.join(' · '),query,kind:KINDS[layer],major:p.osm_key==='place'&&MAJOR_PLACES.includes(p.osm_value),candidate};
+}
+
+// Stable: major places first in provider order, then everything else in provider order.
+function rankChoices(choices) {
+ return [...choices.filter(choice=>choice.major),...choices.filter(choice=>!choice.major)].slice(0,VISIBLE_LIMIT);
 }
 
 function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fetch,now=()=>Date.now(),sleep=ms=>new Promise(r=>setTimeout(r,ms)),minIntervalMs=750,timeoutMs=2500}={}) {
- const cache=createSourceCache({namespace:'place-suggestions-v1',ttlMs:60*60*1000,maxEntries:256,now});
+ const cache=createSourceCache({namespace:'place-suggestions-v2',ttlMs:60*60*1000,maxEntries:256,now});
  let pending=0,lastStarted=0,tail=Promise.resolve();
  async function acquire(query,context) {
   if(pending>=4)return {status:'busy',choices:[],retry_after_ms:1000};
@@ -44,7 +56,7 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
    const wait=Math.max(0,lastStarted+minIntervalMs-now());if(wait)await sleep(wait);lastStarted=now();
    const controller=new AbortController();let timer;
    try {
-    const url=new URL(endpoint);url.searchParams.set('q',query);url.searchParams.set('limit','8');
+    const url=new URL(endpoint);url.searchParams.set('q',query);url.searchParams.set('limit',String(PROVIDER_LIMIT));
     LAYERS.forEach(layer=>url.searchParams.append('layer',layer));
     // The public index only supports these languages; others use local names.
     if(['en','de','fr'].includes(context.language))url.searchParams.set('lang',context.language);
@@ -58,9 +70,9 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
       const seen=new Set();const choices=[];
       for(const feature of data.features.slice(0,30)) {
        const choice=mapFeature(feature);if(!choice||seen.has(choice.candidate.osm_ref))continue;
-       seen.add(choice.candidate.osm_ref);choices.push(choice);if(choices.length===5)break;
+       seen.add(choice.candidate.osm_ref);choices.push(choice);
       }
-      return {status:'ready',choices};
+      return {status:'ready',choices:rankChoices(choices)};
      })(),
      new Promise(resolve=>{timer=setTimeout(()=>{controller.abort();resolve({status:'unavailable',choices:[]});},timeoutMs);}),
     ]);
