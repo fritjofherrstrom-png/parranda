@@ -2275,7 +2275,7 @@ function buildApp({
       // can supply only the query string — resolved coordinates/confidence/
       // provenance come solely from the trusted resolver. Any missing/invalid/
       // ambiguous/low-confidence outcome fails closed with an explicit blocker.
-      const { anchor, intake, placeContext, spatialScope } = await resolveAgnosticIntake({
+      const { anchor, intake, placeContext, spatialScope, discoverySpatialScope } = await resolveAgnosticIntake({
         coords: experimentCoords,
         placeQuery,
         placeResolver,
@@ -2392,6 +2392,7 @@ function buildApp({
             placeContext,
             placeLabel: intake?.resolved?.label || null,
             spatialScope,
+            discoverySpatialScope,
             now: eventsNow,
             selectedDate: resolveSelectedRouteDate(payload, baselineBody, cityConfig),
             // Preferences may reorder only the already trusted, normalized

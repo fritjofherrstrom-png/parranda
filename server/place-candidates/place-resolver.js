@@ -174,6 +174,7 @@ function toRawCandidate(result) {
         : null;
   const name = typeof result.name === "string" && result.name.trim() ? result.name.trim() : null;
   const osmRef = result.osm_type && result.osm_id ? `${result.osm_type}/${result.osm_id}` : null;
+  const spatialScope = normalizeNominatimSpatialScope(result);
   return {
     lat,
     lng,
@@ -187,7 +188,8 @@ function toRawCandidate(result) {
       ...String(result.display_name || '').split(',').slice(1).map(normalizeNameForMatch)])].filter(Boolean),
     osm_ref: osmRef,
     admin_context: normalizeAdminContext(result.address),
-    spatial_scope: normalizeNominatimSpatialScope(result),
+    spatial_scope: spatialScope,
+    ...(result.boundingbox != null && !spatialScope ? { spatial_scope_invalid: true } : {}),
   };
 }
 
@@ -218,6 +220,7 @@ function toCoordinateContext(result) {
   };
   const spatialScope = normalizeNominatimSpatialScope(result);
   if (spatialScope) context.spatial_scope = spatialScope;
+  else if (result.boundingbox != null) context.spatial_scope_invalid = true;
   return context;
 }
 
@@ -406,6 +409,7 @@ function finalizeCandidate(candidate) {
   };
   if (candidate.admin_context) out.admin_context = candidate.admin_context;
   if (candidate.spatial_scope) out.spatial_scope = candidate.spatial_scope;
+  if (candidate.spatial_scope_invalid) out.spatial_scope_invalid = true;
   return out;
 }
 
@@ -462,7 +466,8 @@ function createNominatimPlaceResolver({
     .digest("hex")
     .slice(0, 16);
   const cache = sourceCache || createSourceCache({
-    namespace: "place-resolver-nominatim-v5",
+    // Preserve bounds-validity semantics independently of prior geocoder caches.
+    namespace: "place-resolver-nominatim-v6",
     ttlMs: cacheTtlMs,
     dir: cacheDir,
     now,
@@ -626,7 +631,7 @@ function createNominatimPlaceResolver({
     if (!endpointValid) return [];
     const context = { language: normalizeLanguage(options.language), near: normalizeBias(options.near), purpose: options.purpose === "event_venue" ? "event_venue" : "place" };
     const queryIdentity = createHash("sha256").update(JSON.stringify([query.toLowerCase(), context.language, context.near, context.purpose])).digest("hex");
-    const key = `v5:${endpointIdentity}:${queryIdentity}`;
+    const key = `v6:${endpointIdentity}:${queryIdentity}`;
     const result = await cache.get(
       key,
       () => enqueueProviderTask(() => fetchAndMapQueued(query, context)),
@@ -643,7 +648,7 @@ function createNominatimPlaceResolver({
     const coordinateIdentity = createHash("sha256")
       .update(`${lat.toFixed(5)},${lng.toFixed(5)}:${language || "default"}`)
       .digest("hex");
-    const key = `reverse-v1:${reverseEndpointIdentity}:${coordinateIdentity}`;
+    const key = `reverse-v2:${reverseEndpointIdentity}:${coordinateIdentity}`;
     const result = await cache.get(
       key,
       () => enqueueProviderTask(() => fetchCoordinateContextQueued({ lat, lng }, language)),

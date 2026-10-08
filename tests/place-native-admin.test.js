@@ -56,5 +56,5 @@ test('pre-alias cached weak verdict cannot answer the new semantics',async()=>{
   keys.push(key);return key.startsWith('v4:')?{ok:true,candidates:[{confidence:'low'}]}:producer();}},
   fetcher:async url=>({ok:true,json:async()=>new URL(url).searchParams.has('accept-language')?captured.english:captured.native})});
  const out=await resolver('Drottningtorget, Göteborg, Sweden',{language:'en'});
- assert.equal(out[0].confidence,'medium');assert.ok(keys[0].startsWith('v5:'));
+ assert.equal(out[0].confidence,'medium');assert.ok(!keys[0].startsWith('v4:'),'pre-alias cache key stays bypassed after later semantics changes');
 });

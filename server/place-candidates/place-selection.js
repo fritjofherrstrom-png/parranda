@@ -40,6 +40,8 @@ function snapshot(candidate) {
   }
   const scope = sanitizeTrustedSpatialScope(candidate.spatial_scope);
   if (scope) out.spatial_scope = scope;
+  if (candidate.spatial_scope_invalid === true || (candidate.spatial_scope != null && !scope)) out.spatial_scope_invalid = true;
+  if (candidate.discovery_aperture_unavailable === true) out.discovery_aperture_unavailable = true;
   return out;
 }
 
@@ -50,7 +52,7 @@ function createPlaceSelectionStore({ cacheDir = null, secret, now = () => Date.n
     const selected = snapshot(candidate);
     const q = normalizeQuery(query);
     if (!selected || !q || q.length > 200) return null;
-    const data = Buffer.from(JSON.stringify({ v: 1, q, exp: now() + TTL_MS, selected })).toString('base64url');
+    const data = Buffer.from(JSON.stringify({ v: 2, q, exp: now() + TTL_MS, selected })).toString('base64url');
     const token = `${data}.${sign(data)}`;
     return token.length <= MAX_TOKEN_LENGTH ? token : null;
   }
@@ -62,8 +64,12 @@ function createPlaceSelectionStore({ cacheDir = null, secret, now = () => Date.n
     if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return null;
     try {
       const receipt = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
-      if (receipt.v !== 1 || !Number.isFinite(receipt.exp) || receipt.exp <= now() || receipt.exp > now() + TTL_MS || !receipt.q || (query !== undefined && receipt.q !== normalizeQuery(query))) return null;
-      return snapshot(receipt.selected);
+      if (![1, 2].includes(receipt.v) || !Number.isFinite(receipt.exp) || receipt.exp <= now() || receipt.exp > now() + TTL_MS || !receipt.q || (query !== undefined && receipt.q !== normalizeQuery(query))) return null;
+      const selected = snapshot(receipt.selected);
+      // v1 dropped malformed bounds. Preserve its destination and ordinary Live,
+      // but only a freshly issued receipt can attest genuinely absent bounds.
+      if (selected && receipt.v === 1 && !selected.spatial_scope) selected.discovery_aperture_unavailable = true;
+      return selected;
     } catch (_) { return null; }
   }
   return { issue, read };
