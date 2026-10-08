@@ -7,7 +7,7 @@
 **Spec:** CODEX.md, docs/PARRANDA_ENGINE_GOALS.md, docs/AGNOSTIC_ENGINE_NORTH_STAR.md.
 **Owner / target:** Codex / codex/trusted-point-discovery / main-targeted draft PR.
 **Base:** GitHub main 4b55cb091256e27a793f5c849f1c52b48c896ace. Independent change; no parent PR or staging ancestry included.
-**Landing condition:** focused deterministic checks and CI green; fresh review; inspect unpublished staging 525606d and reconcile #569 selected-place intake before landing. No deployment in scope. Integration owner Codex; exact-head runtime QA owner unassigned, Hermes's bf91fa9 observation is historical evidence only.
+**Landing condition:** focused deterministic checks and CI green; fresh integration review. Publication gate resolved:525606d landed through #572 into main759ca8d. This branch merges that main and verifies signed-place intake. No deployment in scope. Integration and deterministic QA owner Codex; production/cold runtime acceptance still unproven. Hermes's bf91fa9 observation is historical evidence only.
 
 ## Constraints and review focus
 
@@ -41,3 +41,11 @@ Verification: RED 7 failed / 3 passed before implementation; GREEN 10/10 regress
 Review correction: independent review found malformed Nominatim bounds were discarded before intake. Actual forward/reverse provider-fixture replay reproduced the issue (RED). Preserve a private invalid-bounds marker and reject the aperture; version the forward/reverse cache keys and namespace so old entries cannot erase that state. Provider normalization, restart-cache and affected tests now PASS 174/174. Existing cache-layout assertion updated for the new namespace. Only this focused review delta was changed; no new telemetry.
 
 Current public 525606d suggestion observation: the Uppsala settlement still has county/country/code and no spatial scope; this confirms the input shape only. No cold route, queue, coverage or speed inference from that observation. CI and unpublished-source reconciliation remain landing conditions.
+
+## 2026-10-08 published-main integration
+
+525606d is published on release/approved-staging-525606d and included by main759ca8d through #572. Delta bf91fa9→525606d contains Live evidence retention, refreshed frontend dist and #570 docs; it does not fix point discovery. #563–570 heads are included in main and reconciled by the release owner. Merge main into this branch, preserve context-aware query/cache identity and signed-Live rejection semantics. Geocoder cache becomes v6 (v5 was introduced by staging); reverse cache remains v2.
+
+Signed-path correction: preserve malformed Photon extent/snapshot bounds state. Fresh v2 selection receipts carry it. Existing v1 receipts still bind the destination and serve ordinary Live, but a bounds-free v1 receipt cannot newly attest an aperture, because its old snapshot discarded malformed bounds. A fresh suggestion or forward resolver establishes that state. Provider/receipt secrets, tokens and raw logs are never committed.
+
+RED: two signed-path guard failures, with the positive suggestion→Planner/Live→catalog mapping already passing. GREEN:218 affected checks, including3 signed-path tests, no external network. Queue SQL is intercepted for deterministic verification; this is not database-worker/provider acceptance. Final candidate review and CI are next.

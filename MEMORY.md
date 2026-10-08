@@ -40,3 +40,11 @@ prioritet. Enligt #569:s body äger Jean Bob dess runtime-QA. Inget nytt uppdrag
 har skickats till den ägaren. Vid fortsatt arbete: läs aktuell GitHub main,
 heads/CI och dokument-PR, inte denna daterade snapshot som releasebevis.
 Se `docs/research-Parranda.md` för exakt ancestryinventering och evidensgräns.
+
+## Fortsättning 2026-10-08 — discovery från betrodda punktplatser
+
+Fritjof har därefter uttryckligen bett att starta den prioriterade implementationen. Tidigare dokument-only-gräns ovan beskriver det tidigare uppdraget. PR #572 har nu landat525606d inklusive #563–570; main759ca8d är bas för integrationen i PR #571 (`codex/trusted-point-discovery`, Codex äger implementation/integration och deterministic QA).
+
+Separat privat lokal discovery-aperture låter en betrodd punktplats utan provider-bounds köa källsökning. Planner/Live behåller rutt/helplats-geografin. Signerade v2-kvitton bevarar invalid-bounds-state; v1 behåller identiteten men ett boundsfritt gammalt kvitto måste förnyas för ny aperture. Geocoder cache-v6 bevarar stagingens context-aware identity och undviker gamla förlorade bounds-state; inga gamla filer tas bort.
+
+218 berörda deterministic tests PASS med extern nätverkstrafik blockerad. Publik runtime525606d saknar denna nya fix. Ingen merge/deployment av #571; ingen latens-, rikare-dag- eller workeracceptans. Slutreview och aktuell kandidat-CI behövs före landingbeslut. Exakta aktuella SHA/evidens hålls i #571 body, inte i denna daterade historik.

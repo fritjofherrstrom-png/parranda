@@ -31,6 +31,7 @@ function mapFeature(feature) {
   const scope=sanitizeTrustedSpatialScope({source:'photon_bounds',kind:KINDS[layer],bounds:{west,north,east,south}});
   if(scope)candidate.spatial_scope=scope;
  }
+ if(p.extent!=null&&!candidate.spatial_scope)candidate.spatial_scope_invalid=true;
  return {title,context:qualifiers.join(' · '),query,kind:KINDS[layer],candidate};
 }
 

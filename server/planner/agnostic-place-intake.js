@@ -108,6 +108,7 @@ function trustedDiscoveryScope(candidate, anchor, placeContext, spatialScope) {
   if (candidate?.spatial_scope != null) {
     return pointWithinTrustedSpatialScope(anchor, spatialScope) ? spatialScope : null;
   }
+  if (candidate?.discovery_aperture_unavailable === true) return null;
   const label = typeof candidate?.label === "string" ? candidate.label.trim() : "";
   if (!label || label.length > 160 || !placeContext?.country_code ||
       !["locality", "municipality", "county", "region"].some((field) => placeContext[field])) return null;
