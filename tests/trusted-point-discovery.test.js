@@ -2,11 +2,17 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const { createHash } = require("node:crypto");
+const { mkdtempSync, rmSync } = require("node:fs");
+const { tmpdir } = require("node:os");
+const { join } = require("node:path");
 const { resolveAgnosticIntake } = require("../server/planner/agnostic-place-intake");
 const { pointWithinTrustedSpatialScope } = require("../server/place-candidates/spatial-scope");
 const { createSourceProfileCatalog } = require("../server/pulse-sources/source-profile-catalog");
 const { executeLiveEventQuery } = require("../server/place-candidates/live-event-query");
 const { buildApp } = require("../server/app");
+const { createNominatimPlaceResolver } = require("../server/place-candidates/place-resolver");
+const { createSourceCache } = require("../server/place-candidates/source-cache");
 const { makeLoader, requestJson, mockStableWeatherFetch } = require("./helpers/planner-reservoir-compare");
 
 const NOW = "2026-10-08T02:19:03Z";
@@ -64,6 +70,46 @@ test("provider bounds remain authoritative and malformed or detached bounds do n
   for (const spatial_scope of [{ ...scope, bounds: {} }, { ...scope, bounds: { south: 10, north: 11, west: 10, east: 11 } }]) {
     assert.equal((await resolve({ ...observed, spatial_scope })).discoverySpatialScope, null);
   }
+});
+
+test("real provider normalization preserves missing versus invalid bounds for forward and reverse discovery", async () => {
+  for (const boundingbox of [undefined, ["bad", "59.9", "17.6", "17.7"], ["59.9", "59.8", "17.6", "17.7"], []]) {
+    const raw = { lat: String(observed.lat), lon: String(observed.lng), display_name: observed.label, importance: 0.7,
+      osm_type: "node", osm_id: 25735371, address: { county: "Uppsala län", country: "Sverige", country_code: "se" },
+      ...(boundingbox === undefined ? {} : { boundingbox }) };
+    const resolver = createNominatimPlaceResolver({ minIntervalMs: 0, fetcher: async (url) => ({ ok: true, status: 200,
+      json: async () => url.includes("/reverse") ? raw : [raw] }) });
+    for (const input of [{ placeQuery: observed.label }, { coords: point() }]) {
+      const result = await resolveAgnosticIntake({ ...input, placeResolver: resolver });
+      assert.ok(result.anchor);
+      assert.equal(result.spatialScope, null);
+      if (boundingbox === undefined) assert.equal(result.discoverySpatialScope.source, "trusted_point_aperture");
+      else assert.equal(result.discoverySpatialScope, null, "supplied malformed bounds remain unusable after provider normalization");
+      assert.doesNotMatch(JSON.stringify(result.intake), /spatial_scope_invalid|boundingbox/);
+    }
+  }
+});
+
+test("legacy cached points cannot erase invalid provider bounds and the new decision survives restart", async (t) => {
+  const cacheDir = mkdtempSync(join(tmpdir(), "parranda-point-scope-"));
+  t.after(() => rmSync(cacheDir, { recursive: true, force: true }));
+  const endpointId = createHash("sha256").update("https://nominatim.openstreetmap.org/search|limit:5").digest("hex").slice(0, 16);
+  const queryId = createHash("sha256").update(observed.label.toLowerCase()).digest("hex");
+  const oldCache = createSourceCache({ namespace: "place-resolver-nominatim-v3", dir: cacheDir });
+  await oldCache.get(`v3:${endpointId}:${queryId}`, async () => ({ ok: true, candidates: [observed] }));
+  let calls = 0;
+  const resolver = createNominatimPlaceResolver({ cacheDir, minIntervalMs: 0, fetcher: async () => {
+    calls++;
+    return { ok: true, status: 200, json: async () => [{ lat: observed.lat, lon: observed.lng, display_name: observed.label, importance: 0.7,
+      address: { county: "Uppsala län", country: "Sverige", country_code: "se" }, boundingbox: [] }] };
+  } });
+  const result = await resolveAgnosticIntake({ placeQuery: observed.label, placeResolver: resolver });
+  assert.equal(calls, 1, "old entries without invalid-bounds state must be bypassed");
+  assert.equal(result.discoverySpatialScope, null);
+  const restarted = createNominatimPlaceResolver({ cacheDir, fetcher: async () => { throw new Error("cache miss"); } });
+  const warm = await resolveAgnosticIntake({ placeQuery: observed.label, placeResolver: restarted });
+  assert.ok(warm.anchor);
+  assert.equal(warm.discoverySpatialScope, null);
 });
 
 test("trusted reverse context can scope discovery while GPS remains fixed", async () => {

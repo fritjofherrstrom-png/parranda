@@ -20,7 +20,7 @@
 
 ### Task 1: intake, geometry and queue contract
 
-Files: server/place-candidates/spatial-scope.js; server/planner/agnostic-place-intake.js; tests/trusted-point-discovery.test.js.
+Files: server/place-candidates/spatial-scope.js; server/place-candidates/place-resolver.js; server/planner/agnostic-place-intake.js; tests/trusted-point-discovery.test.js; tests/place-resolver-dominance.test.js.
 - [x] RED: observed Uppsala point metadata must queue a bounded demand; unrelated point also works; private scope stays outside public intake and ordinary spatialScope; missing context and rejected resolutions remain closed; bounds retain authority.
 - [x] Implement a clamped local aperture using the existing 5 km policy; mint it only after accepted trusted resolution and allowlisted local context.
 - [x] GREEN: run the focused regression tests and existing intake/catalog tests.
@@ -37,3 +37,7 @@ Files: server/app.js; server/place-candidates/live-event-query.js; tests/trusted
 Archive SHA256SUMS checked. Uppsala cold run on bf91fa9: 40.8615 s, one submission plus 11 polls, two provisional Overture stops, no recorded scout target. Captured trusted Photon point has county/country/country_code but no bounds. Deterministic replay rejects that demand; a synthetic bounded control is accepted. NAPI was disabled; Live background work was stopped before completion. Loader error cause remains unknown.
 
 Verification: RED 7 failed / 3 passed before implementation; GREEN 10/10 regressions and 110/110 affected tests. No live provider calls. Code review, CI and publication pending.
+
+Review correction: independent review found malformed Nominatim bounds were discarded before intake. Actual forward/reverse provider-fixture replay reproduced the issue (RED). Preserve a private invalid-bounds marker and reject the aperture; version the forward/reverse cache keys and namespace so old entries cannot erase that state. Provider normalization, restart-cache and affected tests now PASS 174/174. Existing cache-layout assertion updated for the new namespace. Only this focused review delta was changed; no new telemetry.
+
+Current public 525606d suggestion observation: the Uppsala settlement still has county/country/code and no spatial scope; this confirms the input shape only. No cold route, queue, coverage or speed inference from that observation. CI and unpublished-source reconciliation remain landing conditions.

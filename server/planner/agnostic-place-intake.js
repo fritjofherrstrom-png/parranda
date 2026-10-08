@@ -102,6 +102,7 @@ function trustedPlaceContext(value) {
 }
 
 function trustedDiscoveryScope(candidate, anchor, placeContext, spatialScope) {
+  if (candidate?.spatial_scope_invalid === true) return null;
   // Present provider bounds retain authority, including when unusable. Never
   // disguise invalid/detached bounds by replacing them with a guessed area.
   if (candidate?.spatial_scope != null) {
