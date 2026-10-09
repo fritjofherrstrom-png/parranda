@@ -63,3 +63,9 @@ test('an already cancelled window performs no metadata or native work',async()=>
  assert.equal((await source.acquire({lat:51,lng:0,signal:controller.signal})).source_error,'fetch_error');assert.equal(calls,0);
 });
 for(const bad of ['s3://evil/part-x.zstd.parquet',asset('00000')+"' OR true --",asset('00000').replace(release,'2026-08-19.0')])test('SQL refuses untrusted explicit asset '+bad,()=>{assert.equal(buildOvertureQuery({release,lat:51,lng:0,parquetPaths:[bad]}),null);});
+test('release lookup and file manifest share the original five-second metadata budget',async()=>{
+ const originalNow=Date.now;let now=originalNow(),queries=0;Date.now=()=>now;
+ try{const fixture=fixtureFetcher([[-1,50,1,52]]);const source=createOvertureSource({releaseResolver:async()=>{now+=4000;return release;},assetFetcher:async(...args)=>{now+=1500;return fixture.fetcher(...args);},queryRows:async()=>{queries++;return [];}});
+ const rows=await source.acquire({lat:51,lng:0});assert.equal(rows.source_error,'fetch_error');assert.equal(queries,0);
+ }finally{Date.now=originalNow;}
+});

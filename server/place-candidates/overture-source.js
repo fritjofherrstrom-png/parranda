@@ -545,11 +545,12 @@ function createOvertureSource({
   async function acquire({ lat, lng, signal } = {}) {
     if (!validCoordinate(lat, lng)) return [];
     try {
+      const metadataDeadlineMs = Date.now() + DEFAULT_STAC_TIMEOUT_MS;
       const release = await releaseResolver({ signal });
-      if (!RELEASE_PATTERN.test(String(release || '')) || signal?.aborted) throw new Error('overture_release_unavailable');
+      if (!RELEASE_PATTERN.test(String(release || '')) || signal?.aborted || Date.now() >= metadataDeadlineMs) throw new Error('overture_release_unavailable');
       const parquetPaths = resolveAssets
-        ? await resolveAssets({ release, lat, lng, radiusKm: boundedRadius, signal }) : null;
-      if (signal?.aborted) throw new Error('overture_cancelled');
+        ? await resolveAssets({ release, lat, lng, radiusKm: boundedRadius, signal, deadlineMs: metadataDeadlineMs }) : null;
+      if (signal?.aborted || Date.now() >= metadataDeadlineMs) throw new Error('overture_cancelled');
       if (resolveAssets && !Array.isArray(parquetPaths)) throw new Error('overture_stac_unavailable');
       if (Array.isArray(parquetPaths) && parquetPaths.length === 0) return [];
       const query = buildOvertureQuery({

@@ -24,10 +24,10 @@ function canonicalAsset(item,release){
 }
 function createOvertureAssetResolver({fetcher=globalThis.fetch,timeoutMs=5000}={}){
  const cache=new Map();
- async function manifest(release,signal){
-  if(signal?.aborted)throw new Error('overture_cancelled');
+ async function manifest(release,signal,deadlineMs){
+  if(signal?.aborted || (Number.isFinite(deadlineMs)&&Date.now()>=deadlineMs))throw new Error('overture_cancelled');
   if(cache.has(release))return cache.get(release);
-  const controller=new AbortController();const abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});const timer=setTimeout(abort,Math.min(5000,Math.max(1,timeoutMs)));let bytes=0;
+  const controller=new AbortController();const abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});const timer=setTimeout(abort,Math.min(5000,Math.max(1,timeoutMs),Number.isFinite(deadlineMs)?Math.max(1,deadlineMs-Date.now()):5000));let bytes=0;
   async function read(url){
    const response=await fetcher(url,{signal:controller.signal,redirect:'error',headers:{Accept:'application/json'}});
    if(!response?.ok)throw new Error('overture_stac_unavailable');
@@ -45,13 +45,13 @@ function createOvertureAssetResolver({fetcher=globalThis.fetch,timeoutMs=5000}={
    for(const link of links){const prefix=`${ROOT}${release}/places/place/`;const tail=typeof link.href==='string'&&link.href.startsWith(prefix)?link.href.slice(prefix.length):'';const match=tail.match(/^(\d{5})\/\1\.json$/);if(!match||seen.has(match[1]))throw new Error('invalid_overture_stac_link');seen.add(match[1]);entries.push({id:match[1],url:link.href});}
    const items=new Array(entries.length);let cursor=0;
    await Promise.all(Array.from({length:Math.min(4,entries.length)},async()=>{for(;;){const n=cursor++;if(n>=entries.length)return;const entry=entries[n],item=await read(entry.url);if(item.id!==entry.id||!validBbox(item.bbox))throw new Error('invalid_overture_stac_item');items[n]=Object.freeze({bbox:Object.freeze([...item.bbox]),path:canonicalAsset(item,release)});}}));
-   if(controller.signal.aborted||signal?.aborted)throw new Error('overture_cancelled');
+   if(controller.signal.aborted||signal?.aborted||(Number.isFinite(deadlineMs)&&Date.now()>=deadlineMs))throw new Error('overture_cancelled');
    const result=Object.freeze(items);cache.set(release,result);while(cache.size>2)cache.delete(cache.keys().next().value);return result;
   }finally{clearTimeout(timer);signal?.removeEventListener('abort',abort);controller.abort();}
  }
  return async request=>{
   if(!releasePattern.test(request.release)||request.signal?.aborted)throw new Error('invalid_overture_release');
-  const windows=windowBboxes(request),items=await manifest(request.release,request.signal);
+  const windows=windowBboxes(request),items=await manifest(request.release,request.signal,request.deadlineMs);
   if(request.signal?.aborted)throw new Error('overture_cancelled');
   return [...new Set(items.filter(item=>windows.some(w=>overlaps(item.bbox,w))).map(item=>item.path))];
  };
