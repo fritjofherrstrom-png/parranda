@@ -38,6 +38,7 @@ function createBackgroundSource({
   };
   const source = {
     eager,
+    waitForCompletion,
     readCached(anchor, request) { return cache.peek(keyFor(anchor, request)) || []; },
     load(anchor, request) {
       if (request?.signal?.aborted) return failedValue();
@@ -74,9 +75,10 @@ function createBackgroundSource({
       } else {
         attachConsumer(operation, request?.signal);
       }
-      // Optional corroboration has the same consumer ownership but must not
-      // extend a composition's wait for primary supply.
-      return waitForCompletion ? pendingValue(operation.completion) : [];
+      // Always retain the original job privately. Composition decides whether
+      // optional corroboration should wait: it stays non-blocking with healthy
+      // primary supply, but can rescue a failed/empty primary without reacquiring.
+      return pendingValue(operation.completion);
     },
   };
   return source;

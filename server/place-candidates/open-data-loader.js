@@ -1341,8 +1341,10 @@ function resolveDefaultOpenDataLoader(env = process.env) {
         keyFor: ({ lat, lng } = {}) => `${Number(lat).toFixed(3)},${Number(lng).toFixed(3)}`,
         load: wikiRaw,
         // Start only after the primary has selected its regional cluster.
-        // Wikidata remains optional, non-blocking corroboration. Its producer
-        // is nevertheless owned by the active lifecycle consumers and aborted
+        // Wikidata remains optional, non-blocking corroboration when primary
+        // supply exists; an empty/failed primary can await this same job as
+        // fallback within the existing lifecycle deadline (never reacquire it).
+        // Its producer is owned by active lifecycle consumers and aborted
         // when the last one leaves, just like primary background supply.
         eager: false,
         waitForCompletion: false,
@@ -1459,6 +1461,12 @@ function settleWithin(promise, timeoutMs) {
     .finally(() => clearTimeout(timer));
 }
 
+function failedSourceValue() {
+  const failed = [];
+  Object.defineProperty(failed, 'source_error', { value: 'fetch_error' });
+  return failed;
+}
+
 // Compose the OSM loader (returns a `withLoaderStatus` array) with bounded
 // background sources (plain arrays). OSM runs first so a selected regional
 // cluster anchors every other source to the SAME place. A legacy function gets
@@ -1520,7 +1528,7 @@ function composeOpenDataLoaders(
     for (const source of sources.filter((candidate) => candidate?.eager === true)) {
       eagerLoads.set(
         source,
-        Promise.resolve(source.load(primaryAnchor, request)).catch(() => []),
+        Promise.resolve().then(() => source.load(primaryAnchor, request)).catch(failedSourceValue),
       );
     }
     const osmPromise = Promise.resolve(osmLoader(request))
@@ -1610,6 +1618,7 @@ function composeOpenDataLoaders(
       ? osmLoader.readNeighbouring(primaryAnchor, request) : null;
     const mapRecords = neighbour?.length ? neighbour : osmRecords;
     const backgroundRecords = [];
+    const backgroundFailures = [];
     const completions = [];
     for (const source of sources) {
       const sameAsPrimary =
@@ -1647,25 +1656,30 @@ function composeOpenDataLoaders(
         continue;
       }
       const eagerWasEmpty = Array.isArray(eagerRecords) && eagerRecords.length === 0;
-      const rescue = primaryFailed && eagerWasEmpty;
+      const rescue = primaryFailed && eagerWasEmpty && !eagerRecords?.source_error;
       // An eager bounded API has already spent this composition's live budget
       // at the original anchor. A regional move may read the selected anchor's
       // cache, but must not acquire a second coordinate window or mix clusters.
       const liveRescueBarred = source?.primaryRescue === false &&
         (rescue || (!sameAsPrimary && eagerLoads.has(source)));
-      const loaded = await Promise.resolve(
+      const loaded = await Promise.resolve().then(() =>
         liveRescueBarred
           ? (typeof source.readCached === "function" ? source.readCached(wikiAnchor, request) : [])
           : rescue
             ? (typeof source === "function" ? source(wikiAnchor) : source.load(wikiAnchor, request))
             : eagerResult || (typeof source === "function" ? source(wikiAnchor) : source.load(wikiAnchor, request)),
-      ).catch(() => []);
+      ).catch(failedSourceValue);
       if (Array.isArray(loaded)) backgroundRecords.push(...loaded);
-      if (loaded?.[SOURCE_COMPLETION]) completions.push(loaded[SOURCE_COMPLETION]);
+      if (loaded?.source_error) backgroundFailures.push(safeLoaderToken(loaded.source_error));
+      if (loaded?.[SOURCE_COMPLETION] && (primaryFailed || source.waitForCompletion !== false)) {
+        completions.push(loaded[SOURCE_COMPLETION]);
+      }
     }
     if (osm?.[SOURCE_COMPLETION]) completions.push(osm[SOURCE_COMPLETION]);
     const records = [...mapRecords, ...backgroundRecords];
-    const status = records.length > 0 ? `loaded:${records.length}` : (osm.loader_status || "loaded:0");
+    const status = records.length > 0 ? `loaded:${records.length}`
+      : backgroundFailures.length ? 'error_failed_closed' : (osm.loader_status || "loaded:0");
+    const collectionError = osm.loader_error || backgroundFailures[0] || null;
     const mapMetadata = neighbour?.length
       ? {
           ...neighbour.loader_metadata,
@@ -1685,7 +1699,7 @@ function composeOpenDataLoaders(
         }
       : null;
     const result = withLoaderMetadata(
-      withLoaderStatus(records, status, osm.loader_error || null),
+      withLoaderStatus(records, status, collectionError),
       metadata,
     );
     if (completions.length) {
@@ -1703,7 +1717,7 @@ function composeOpenDataLoaders(
         const failed = groups.some(rows => rows?.source_error || rows?.loader_status === 'error_failed_closed');
         return withLoaderMetadata(withLoaderStatus(unique,
           unique.length ? `loaded:${unique.length}` : failed ? 'error_failed_closed' : status,
-          unique.length ? null : failed ? 'fetch_error' : osm.loader_error || null), {
+          collectionError || (failed ? 'fetch_error' : null)), {
           ...metadata,
           source_completion: {
             status: finished.size === completions.length ? 'complete' : 'partial',
