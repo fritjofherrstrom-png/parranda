@@ -272,6 +272,96 @@ test("a resolved place without a day for other reasons keeps the choices advice 
   }
 });
 
+test("the retry keeps the failed request's date even when the clock has moved past midnight", async () => {
+  const h = await mountPlanner({ url: PLACE_URL });
+  const RealDate = globalThis.Date;
+  try {
+    await h.clock.advance(500);
+    await h.fetchMock.respond(composeCalls(h)[0], sourceOutage());
+    await h.clock.advance(50);
+    const failedDates = composeCalls(h)[0].body.dates;
+    // A day later, as far as the page's clock is concerned.
+    class Tomorrow extends RealDate {
+      constructor(...args) { super(...(args.length ? args : [RealDate.now() + 86_400_000])); }
+      static now() { return RealDate.now() + 86_400_000; }
+    }
+    globalThis.Date = Tomorrow;
+    h.window.Date = Tomorrow;
+    const retry = buttonNamed(h, "Try again");
+    await h.act(() => retry.dispatchEvent(new h.window.Event("click", { bubbles: true })));
+    await h.clock.advance(50);
+    assert.deepEqual(composeCalls(h)[1].body.dates, failedDates, "the same question, for the same date");
+  } finally {
+    globalThis.Date = RealDate;
+    h.window.Date = RealDate;
+    await h.unmount();
+  }
+});
+
+test("one failed place source among answering ones is named without claiming a total outage", async () => {
+  const h = await mountPlanner({ url: PLACE_URL });
+  try {
+    await h.clock.advance(500);
+    await h.fetchMock.respond(composeCalls(h)[0], {
+      days: [],
+      agnostic_route_output_experiment: {
+        intake: { status: "resolved", resolved: { label: "Testville" } },
+        candidate_readiness: { real_place_count: 10 },
+        readiness_blockers: ["insufficient_geocoded_candidates"],
+        // As on staging: the map source failed, the knowledge source answered.
+        source_status: { status: "loaded:10", error: "fetch_error", collection: { selection_reason: "loader_error" } },
+      },
+    });
+    await h.clock.advance(50);
+    assert.match(h.text(), /Parranda found 10 real places near Testville, but not enough for a reliable day yet/);
+    assert.match(h.text(), /One of the place sources didn't answer just now, so the evidence may be incomplete\. Try again in a moment\./);
+    assert.doesNotMatch(h.text(), /The place sources didn't answer just now, so Parranda couldn't fetch/, "not a total outage");
+    assert.doesNotMatch(h.text(), /with your choices/);
+    const retry = buttonNamed(h, "Try again");
+    assert.ok(retry, h.text());
+    await h.act(() => retry.dispatchEvent(new h.window.Event("click", { bubbles: true })));
+    await h.clock.advance(50);
+    assert.equal(composeCalls(h).length, 2);
+  } finally {
+    await h.unmount();
+  }
+});
+
+test("a retry is judged by its own answer: a second failure still says so, a later day replaces it", async () => {
+  const h = await mountPlanner({ url: PLACE_URL });
+  try {
+    await h.clock.advance(500);
+    await h.fetchMock.respond(composeCalls(h)[0], composedDay());
+    await h.clock.advance(50);
+    assert.match(h.text(), /Place a/);
+    // The same place asked again (an adjustment) now meets a source outage:
+    // the healthy day before it does not vouch for this answer.
+    const adjust = buttonNamed(h, "Adjust");
+    await h.act(() => adjust.dispatchEvent(new h.window.Event("click", { bubbles: true })));
+    const views = buttonNamed(h, "Views");
+    await h.act(() => views.dispatchEvent(new h.window.Event("click", { bubbles: true })));
+    await h.clock.advance(500);
+    await h.fetchMock.respond(composeCalls(h)[1], sourceOutage());
+    await h.clock.advance(50);
+    assert.match(h.text(), /The place sources didn't answer just now/);
+    assert.doesNotMatch(h.text(), /Place a/);
+    await h.act(() => buttonNamed(h, "Try again").dispatchEvent(new h.window.Event("click", { bubbles: true })));
+    await h.clock.advance(50);
+    await h.fetchMock.respond(composeCalls(h)[2], sourceOutage());
+    await h.clock.advance(50);
+    assert.match(h.text(), /The place sources didn't answer just now/, "a failed retry is still a failure");
+    assert.ok(buttonNamed(h, "Try again"));
+    await h.act(() => buttonNamed(h, "Try again").dispatchEvent(new h.window.Event("click", { bubbles: true })));
+    await h.clock.advance(50);
+    await h.fetchMock.respond(composeCalls(h)[3], composedDay());
+    await h.clock.advance(50);
+    assert.match(h.text(), /Place a/);
+    assert.doesNotMatch(h.text(), /didn't answer just now/);
+  } finally {
+    await h.unmount();
+  }
+});
+
 test("how the day was assembled is one closed line beside the map", async (t) => {
   const h = await planner(t);
   const route = h.container.querySelector('section[aria-label="The route"]');

@@ -359,6 +359,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   type Anchor = { place?: string; coords?: { lat: number; lng: number }; placeSelection?: string | null; selectionLabel?: string; placeRef?: string | null; placeBias?: { lat: number; lng: number }; placeContextSelection?: string };
   const lastRequestedAnchorRef = useRef<Anchor | null>(null);
+  // The date the latest compose asked about, so a retry asks the same question.
+  const lastComposeDateIsoRef = useRef<string | null>(null);
   function resetBlitz() {
     blitzRequestRef.current?.abort();
     blitzRequestRef.current = null;
@@ -464,6 +466,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         dayOffset: effectiveDayOffset,
         dateIsoOverride,
       });
+      lastComposeDateIsoRef.current = effectiveDateIso;
       const rhythm = DAY_RHYTHMS.find((p: { key: string }) => p.key === effectiveWalkKey) ?? DAY_RHYTHMS[1];
       // Frozen here, beside the request that carries them: whatever the ledger
       // does while this is in flight, THIS is what the answer will have
@@ -1667,10 +1670,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setSupplyPending(false);
     setUpgradePending(false);
   };
-  const retryPlan = () => {
+  // `sameDate` re-asks the failed request's own date: a source retry is the
+  // same question again, even if the clock has crossed midnight meanwhile.
+  const retryPlan = ({ sameDate = false }: { sameDate?: boolean } = {}) => {
     if (retryInFlightRef.current) return;
     const anchor = lastRequestedAnchorRef.current;
     if (!anchor) return;
+    const dateIsoOverride = sameDate ? lastComposeDateIsoRef.current ?? undefined : undefined;
     if (recomposeTimerRef.current) {
       clearTimeout(recomposeTimerRef.current);
       recomposeTimerRef.current = null;
@@ -1681,7 +1687,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
     const retryGeneration = ++retryGenerationRef.current;
     retryInFlightRef.current = true;
-    execute(anchor).catch(() => {}).finally(() => {
+    execute(anchor, dateIsoOverride ? { dateIsoOverride } : {}).catch(() => {}).finally(() => {
       if (retryGenerationRef.current === retryGeneration) retryInFlightRef.current = false;
     });
   };
@@ -1763,6 +1769,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // picks, and since the page no longer retries on its own it offers the retry.
   const sourceUnavailable = phase === "done" && classification?.status === "unavailable" && !anchorUnresolved
     && anywhereDecision().shouldRetryTransientSource(safeResponse, classification);
+  // Some place sources answered and one failed (the loader's own verdict): the
+  // day may be missing only for that reason. Named as such — never as a total
+  // outage, never as the reader's picks.
+  const loadedSourceStatus = safeResponse?.agnostic_route_output_experiment?.source_status;
+  const sourcePartlyUnavailable = phase === "done" && classification?.status === "unavailable" && !anchorUnresolved
+    && !sourceUnavailable && typeof loadedSourceStatus?.error === "string" && loadedSourceStatus.error.trim() !== ""
+    && loadedSourceStatus?.collection?.selection_reason === "loader_error";
   // Preserve the classifier's absences; choices announce themselves, and an
   // outstanding upgrade or service refusal is not a final no-day verdict.
   const unavailableMessage = phase === "done" && classification?.status === "unavailable" && !upgradePending && !serviceRefusal && !unavailableHasChoices
@@ -2066,7 +2079,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           <p>{navigationInterrupted
             ? t("Planeringen pausades när du lämnade sidan. Dina val finns kvar.", "Planning paused when you left. Your choices are still here.")
             : t("Motorn svarar inte just nu.", "The engine isn't answering right now.")}</p>
-          <button type="button" onClick={retryPlan} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
+          <button type="button" onClick={() => retryPlan()} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
             {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök bygga dagen igen", "Try building the day again")}
           </button>
         </div>
@@ -2114,12 +2127,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 }} />
             ) : unavailableMessage}
           </div>
-          {sourceUnavailable && (
-            <button type="button" onClick={retryPlan} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
+          {sourcePartlyUnavailable && (
+            <p>{t(
+              "En av platskällorna svarade inte just nu, så underlaget kan vara ofullständigt. Försök igen om en stund.",
+              "One of the place sources didn't answer just now, so the evidence may be incomplete. Try again in a moment.",
+            )}</p>
+          )}
+          {(sourceUnavailable || sourcePartlyUnavailable) && (
+            <button type="button" onClick={() => retryPlan({ sameDate: true })} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
               {t("Försök igen", "Try again")}
             </button>
           )}
-          {!anchorUnresolved && !sourceUnavailable && selected.length > 0 && (
+          {!anchorUnresolved && !sourceUnavailable && !sourcePartlyUnavailable && selected.length > 0 && (
             <p>{t(
               "Vi kunde inte bekräfta en gångbar dag med dina val. Andra intressen läggs inte till automatiskt. Du kan ändra datum, dagens rytm eller själv välja fler intressen.",
               "We could not confirm a walkable day with your choices. Other interests are not added automatically. You can change the date, day rhythm or choose more interests yourself.",
