@@ -31,13 +31,17 @@ function createBackgroundSource({
     if (signal.aborted) release();
     else signal.addEventListener('abort', release, { once: true });
   };
-  const pendingValue = completion => {
+  const pendingValue = operation => {
     const pending = [];
-    Object.defineProperty(pending, SOURCE_COMPLETION, { value: completion });
+    Object.defineProperty(pending, SOURCE_COMPLETION, { value: operation.completion });
+    Object.defineProperty(pending, SOURCE_SNAPSHOT, {
+      value: () => operation.settled ? operation.value : null,
+    });
     return pending;
   };
   const source = {
     eager,
+    waitForCompletion,
     readCached(anchor, request) { return cache.peek(keyFor(anchor, request)) || []; },
     load(anchor, request) {
       if (request?.signal?.aborted) return failedValue();
@@ -63,7 +67,13 @@ function createBackgroundSource({
         operation.completion = cache.get(key, () => load(producerAnchor, producerRequest), {
           signal: controller.signal,
           shouldStore: value => !controller.signal.aborted && shouldStore(value),
-        }).catch(() => failedValue()).finally(() => {
+        }).then(value => {
+          operation.value = value;
+          return value;
+        }).catch(() => {
+          operation.value = failedValue();
+          return operation.value;
+        }).finally(() => {
           operation.settled = true;
           for (const [signal, release] of operation.consumers) {
             signal.removeEventListener('abort', release);
@@ -74,9 +84,10 @@ function createBackgroundSource({
       } else {
         attachConsumer(operation, request?.signal);
       }
-      // Optional corroboration has the same consumer ownership but must not
-      // extend a composition's wait for primary supply.
-      return waitForCompletion ? pendingValue(operation.completion) : [];
+      // Always retain the original job privately. Composition decides whether
+      // optional corroboration should wait: it stays non-blocking with healthy
+      // primary supply, but can rescue a failed/empty primary without reacquiring.
+      return pendingValue(operation);
     },
   };
   return source;

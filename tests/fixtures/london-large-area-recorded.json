@@ -1,0 +1,961 @@
+{
+  "provenance": {
+    "kind": "recorded_staging_cache_replay",
+    "build_sha": "c8670cfc4ada967b4f4675bd1c392e10145f9a98",
+    "response_artifact": "staging-live-c8670cf-20261009/london-responses.json",
+    "cache_read": "read-only snapshot of matching overpass v9 + Wikidata cache; no provider request",
+    "expected_pipeline": {
+      "coordinate_ready_real_place_count": 35,
+      "identity_resolved_candidate_count": 35,
+      "eligible_pool_candidate_count": 31,
+      "rejected_candidate_count": 4,
+      "availability_evaluated_candidate_count": 10,
+      "availability_excluded_candidate_count": 4,
+      "availability_unresolved_candidate_count": 1,
+      "role_relevant_candidate_count": 31,
+      "role_surface_candidate_count": 20,
+      "reach_eligible_candidate_count": 31,
+      "reach_excluded_candidate_count": 0,
+      "combination_selected_candidate_count": 3,
+      "combination_geocoded_stop_count": 3,
+      "engine_reservoir_geocoded_stop_count": 4
+    }
+  },
+  "records": [
+    {
+      "id": "osm-node-5551916749",
+      "name": "Soho Vegan Market",
+      "type": "market",
+      "lat": 51.5120132,
+      "lng": -0.1334829,
+      "tags": [
+        "market"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/5551916749"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_opening_hours_present",
+        "operational_website_present"
+      ],
+      "website": "https://www.streetfoodunion.com/",
+      "opening_hours": "Sa 11:00-16:00",
+      "osm_marketplace": true,
+      "osm_market_hall": false
+    },
+    {
+      "id": "osm-node-267406074",
+      "name": "Riverside Terrace Cafe",
+      "type": "cafe",
+      "lat": 51.5059312,
+      "lng": -0.1171709,
+      "tags": [
+        "fika"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/267406074"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_opening_hours_present",
+        "operational_website_present"
+      ],
+      "website": "https://www.southbankcentre.co.uk/visit/cafes-restaurants-bars/riverside-terrace-cafe",
+      "opening_hours": "Mo-Tu 10:00-18:00; We-Su 10:00-20:30"
+    },
+    {
+      "id": "osm-node-472152158",
+      "name": "Topolski Century",
+      "type": "museum",
+      "lat": 51.5048027,
+      "lng": -0.1156513,
+      "tags": [
+        "kultur",
+        "museum"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/472152158"
+        },
+        {
+          "provider": "wikidata",
+          "family": "open_knowledge",
+          "tier": "inferred",
+          "url": "https://www.wikidata.org/wiki/Q7825056"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_website_present"
+      ],
+      "website": "http://www.topolskicentury.org.uk/"
+    },
+    {
+      "id": "osm-node-259774384",
+      "name": "Sketch",
+      "type": "restaurant",
+      "lat": 51.5127342,
+      "lng": -0.1414857,
+      "tags": [
+        "mat"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/259774384"
+        },
+        {
+          "provider": "wikidata",
+          "family": "open_knowledge",
+          "tier": "inferred",
+          "url": "https://www.wikidata.org/wiki/Q14955160"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_website_present"
+      ],
+      "website": "https://sketch.london/",
+      "source_address": {
+        "street": "Conduit Street",
+        "house_number": "9"
+      }
+    },
+    {
+      "id": "osm-node-25746185",
+      "name": "The Cheshire Cheese",
+      "type": "bar",
+      "lat": 51.5123895,
+      "lng": -0.1131849,
+      "tags": [
+        "nattliv"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/25746185"
+        },
+        {
+          "provider": "wikidata",
+          "family": "open_knowledge",
+          "tier": "inferred",
+          "url": "https://www.wikidata.org/wiki/Q27087707"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_opening_hours_present",
+        "operational_website_present"
+      ],
+      "website": "https://www.cheshirecheese.pub/",
+      "opening_hours": "Mo-Sa 11:23:00; Su 12:00-22:00"
+    },
+    {
+      "id": "osm-node-1832688363",
+      "name": "The London Silver Vaults",
+      "type": "vintage-shop",
+      "lat": 51.5172003,
+      "lng": -0.1125776,
+      "tags": [
+        "vintage",
+        "antique"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/1832688363"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_opening_hours_present",
+        "operational_website_present"
+      ],
+      "website": "https://silvervaultslondon.com/",
+      "opening_hours": "Mo-Fr 09:00-17:30; Sa 09:00-13:00"
+    },
+    {
+      "id": "osm-node-6582725771",
+      "name": "Levita House Plantation",
+      "type": "garden",
+      "lat": 51.5292528,
+      "lng": -0.1288306,
+      "tags": [
+        "garden",
+        "green"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/6582725771"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_opening_hours_present"
+      ],
+      "opening_hours": "24/7"
+    },
+    {
+      "id": "osm-way-23607683",
+      "name": "Serpentine Lido",
+      "type": "beach",
+      "lat": 51.5048594,
+      "lng": -0.1683796,
+      "tags": [
+        "coast",
+        "bathing"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/way/23607683"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_website_present"
+      ],
+      "website": "https://www.royalparks.org.uk/parks/hyde-park/things-to-see-and-do/sports-and-leisure/serpentine-lido"
+    },
+    {
+      "id": "osm-node-7277566692",
+      "name": "Seven Dials Market",
+      "type": "market",
+      "lat": 51.5141152,
+      "lng": -0.1258096,
+      "tags": [
+        "market"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/7277566692"
+        },
+        {
+          "provider": "wikidata",
+          "family": "open_knowledge",
+          "tier": "inferred",
+          "url": "https://www.wikidata.org/wiki/Q79104732"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_website_present"
+      ],
+      "website": "https://www.sevendialsmarket.com/",
+      "osm_marketplace": true,
+      "osm_market_hall": false
+    },
+    {
+      "id": "osm-node-256497884",
+      "name": "The Garrick",
+      "type": "cafe",
+      "lat": 51.5134807,
+      "lng": -0.1165232,
+      "tags": [
+        "fika"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/256497884"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_opening_hours_present",
+        "operational_website_present"
+      ],
+      "website": "http://www.lse.ac.uk/intranet/LSEServices/cateringServices/restaurantsAndCafes/garrick.aspx",
+      "source_address": {
+        "street": "Aldwych",
+        "house_number": "69"
+      },
+      "source_name_aliases": [
+        "LSE Garrick"
+      ],
+      "opening_hours": "Mo-Fr 08:00-19:00"
+    },
+    {
+      "id": "osm-node-456718348",
+      "name": "Helly Nahmad Gallery",
+      "type": "gallery",
+      "lat": 51.5105962,
+      "lng": -0.1418878,
+      "tags": [
+        "kultur"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/456718348"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_website_present"
+      ],
+      "website": "https://nahmadprojects.com/",
+      "source_address": {
+        "street": "Cork Street",
+        "house_number": "2-4"
+      }
+    },
+    {
+      "id": "osm-node-169368767",
+      "name": "Bank Restaurant & Bar",
+      "type": "restaurant",
+      "lat": 51.4986304,
+      "lng": -0.1372558,
+      "tags": [
+        "mat"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/169368767"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_website_present"
+      ],
+      "website": "https://www.individualrestaurants.com/",
+      "source_address": {
+        "street": "Buckingham Gate",
+        "house_number": "45"
+      },
+      "source_name_aliases": [
+        "Zander Bar"
+      ]
+    },
+    {
+      "id": "osm-node-25510381",
+      "name": "Crown & Cushion",
+      "type": "bar",
+      "lat": 51.4994616,
+      "lng": -0.1139642,
+      "tags": [
+        "nattliv"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/25510381"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_opening_hours_present",
+        "operational_website_present"
+      ],
+      "website": "https://www.thecrownandcushion-london.foodanddrinksites.co.uk/",
+      "source_address": {
+        "street": "Westminster Bridge Road",
+        "house_number": "133-135"
+      },
+      "opening_hours": "Mo-Sa 11:00-23:00; Su 11:00-22:30"
+    },
+    {
+      "id": "osm-node-3561854961",
+      "name": "Geranium Shop",
+      "type": "vintage-shop",
+      "lat": 51.5180741,
+      "lng": -0.1519534,
+      "tags": [
+        "second_hand",
+        "charity"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/3561854961"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_website_present"
+      ],
+      "website": "https://www.glfb.org.uk/shops/marylebone/",
+      "source_address": {
+        "street": "George Street",
+        "house_number": "4"
+      }
+    },
+    {
+      "id": "osm-node-12156767568",
+      "name": "Onion Garden",
+      "type": "garden",
+      "lat": 51.4979232,
+      "lng": -0.1370762,
+      "tags": [
+        "garden",
+        "green"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/12156767568"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "unknown",
+      "operational_reasons": []
+    },
+    {
+      "id": "osm-way-164405550",
+      "name": "Southbank Centre Food Market",
+      "type": "market",
+      "lat": 51.5054559,
+      "lng": -0.1160792,
+      "tags": [
+        "market"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/way/164405550"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_opening_hours_present",
+        "operational_website_present"
+      ],
+      "website": "https://www.southbankcentre.co.uk/visit/cafes-restaurants-bars/scfood-market",
+      "opening_hours": "Fr 12:00-20:00; Sa 11:00-20:00; Su 12:00-18:00",
+      "osm_marketplace": true,
+      "osm_market_hall": false
+    },
+    {
+      "id": "osm-node-273217510",
+      "name": "Cafe Nuvo",
+      "type": "cafe",
+      "lat": 51.4964968,
+      "lng": -0.1357931,
+      "tags": [
+        "fika"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/273217510"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_opening_hours_present"
+      ],
+      "source_address": {
+        "street": "Artillery Row",
+        "house_number": "12"
+      },
+      "opening_hours": "Mo-Fr 06:00-16:00; Sa 07:00-14:00"
+    },
+    {
+      "id": "osm-node-452238452",
+      "name": "The Fine Art Society",
+      "type": "gallery",
+      "lat": 51.5113416,
+      "lng": -0.1436595,
+      "tags": [
+        "kultur"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/452238452"
+        },
+        {
+          "provider": "wikidata",
+          "family": "open_knowledge",
+          "tier": "inferred",
+          "url": "https://www.wikidata.org/wiki/Q1416883"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_website_present"
+      ],
+      "website": "https://thefineartsociety.com/",
+      "source_address": {
+        "street": "New Bond Street",
+        "house_number": "148"
+      }
+    },
+    {
+      "id": "osm-node-180403503",
+      "name": "Spaghetti House",
+      "type": "restaurant",
+      "lat": 51.5186204,
+      "lng": -0.1214512,
+      "tags": [
+        "mat"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/180403503"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_website_present"
+      ],
+      "website": "https://www.spaghettihouse.co.uk/location/holborn/",
+      "source_address": {
+        "street": "Sicilian Avenue",
+        "house_number": "20"
+      }
+    },
+    {
+      "id": "osm-node-21686579",
+      "name": "White Haus",
+      "type": "bar",
+      "lat": 51.5154029,
+      "lng": -0.1043348,
+      "tags": [
+        "nattliv"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/21686579"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_website_present"
+      ],
+      "website": "https://www.whitehauslondon.com/",
+      "source_address": {
+        "street": "Farringdon Street",
+        "house_number": "17"
+      }
+    },
+    {
+      "id": "osm-node-647512857",
+      "name": "The Dresser",
+      "type": "vintage-shop",
+      "lat": 51.5149141,
+      "lng": -0.1651525,
+      "tags": [
+        "second_hand"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/647512857"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_website_present"
+      ],
+      "website": "https://www.dresseronline.co.uk/",
+      "source_address": {
+        "street": "Porchester Place",
+        "house_number": "10"
+      }
+    },
+    {
+      "id": "osm-node-4880465176",
+      "name": "Switch House",
+      "type": "viewpoint",
+      "lat": 51.5071355,
+      "lng": -0.1002938,
+      "tags": [
+        "utsikt"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/4880465176"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "unknown",
+      "operational_reasons": []
+    },
+    {
+      "id": "osm-node-12718772295",
+      "name": "Lower Marsh Market",
+      "type": "market",
+      "lat": 51.5009141,
+      "lng": -0.1125576,
+      "tags": [
+        "market"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/12718772295"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_opening_hours_present",
+        "operational_website_present"
+      ],
+      "website": "https://www.lowermarshmarket.com/",
+      "opening_hours": "Mo-Fr 10:00-15:00; Sa-Su off",
+      "osm_marketplace": true,
+      "osm_market_hall": false
+    },
+    {
+      "id": "osm-node-275402055",
+      "name": "Tachbrook Bakery & Patisserie",
+      "type": "cafe",
+      "lat": 51.4895905,
+      "lng": -0.1347848,
+      "tags": [
+        "fika"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/275402055"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_opening_hours_present"
+      ],
+      "source_address": {
+        "street": "Tachbrook Street",
+        "house_number": "101"
+      },
+      "opening_hours": "Mo-Fr 07:00-16:00; Sa 08:00-16:00"
+    },
+    {
+      "id": "osm-node-456717384",
+      "name": "Beaux Arts",
+      "type": "gallery",
+      "lat": 51.5125682,
+      "lng": -0.1438088,
+      "tags": [
+        "kultur"
+      ],
+      "sources": [
+        {
+          "provider": "osm",
+          "family": "map",
+          "tier": "inferred",
+          "url": "https://www.openstreetmap.org/node/456717384"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "source_indicated_active",
+      "operational_reasons": [
+        "operational_website_present"
+      ],
+      "website": "https://www.beauxartslondon.uk/",
+      "source_address": {
+        "street": "Maddox Street",
+        "house_number": "48"
+      }
+    },
+    {
+      "id": "wikidata-Q111983683",
+      "name": "British Optical Association Museum",
+      "type": "museum",
+      "lat": 51.5079,
+      "lng": -0.1255,
+      "tags": [],
+      "sources": [
+        {
+          "provider": "wikidata",
+          "family": "open_knowledge",
+          "tier": "inferred",
+          "url": "https://www.wikidata.org/wiki/Q111983683",
+          "license": "CC0-1.0"
+        }
+      ],
+      "city_pack_owned": false,
+      "human_verified": false,
+      "website": "https://www.college-optometrists.org/the-british-optical-association-museum"
+    },
+    {
+      "id": "wikidata-Q180788",
+      "name": "National Gallery",
+      "type": "museum",
+      "lat": 51.508888888,
+      "lng": -0.128333333,
+      "tags": [],
+      "sources": [
+        {
+          "provider": "wikidata",
+          "family": "open_knowledge",
+          "tier": "inferred",
+          "url": "https://www.wikidata.org/wiki/Q180788",
+          "license": "CC0-1.0"
+        }
+      ],
+      "city_pack_owned": false,
+      "human_verified": false,
+      "website": "https://www.nationalgallery.org.uk/"
+    },
+    {
+      "id": "wikidata-Q52984670",
+      "name": "Sainsbury Wing",
+      "type": "museum",
+      "lat": 51.5086,
+      "lng": -0.129822,
+      "tags": [],
+      "sources": [
+        {
+          "provider": "wikidata",
+          "family": "open_knowledge",
+          "tier": "inferred",
+          "url": "https://www.wikidata.org/wiki/Q52984670",
+          "license": "CC0-1.0"
+        }
+      ],
+      "city_pack_owned": false,
+      "human_verified": false
+    },
+    {
+      "id": "wikidata-Q4888645",
+      "name": "Benjamin Franklin House",
+      "type": "museum",
+      "lat": 51.5076,
+      "lng": -0.1249,
+      "tags": [],
+      "sources": [
+        {
+          "provider": "wikidata",
+          "family": "open_knowledge",
+          "tier": "inferred",
+          "url": "https://www.wikidata.org/wiki/Q4888645",
+          "license": "CC0-1.0"
+        }
+      ],
+      "city_pack_owned": false,
+      "human_verified": false,
+      "website": "https://benjaminfranklinhouse.org/"
+    },
+    {
+      "id": "wikidata-Q1665153",
+      "name": "Institute of Contemporary Arts",
+      "type": "museum",
+      "lat": 51.5066,
+      "lng": -0.13061,
+      "tags": [],
+      "sources": [
+        {
+          "provider": "wikidata",
+          "family": "open_knowledge",
+          "tier": "inferred",
+          "url": "https://www.wikidata.org/wiki/Q1665153",
+          "license": "CC0-1.0"
+        }
+      ],
+      "city_pack_owned": false,
+      "human_verified": false,
+      "website": "https://www.ica.art/"
+    },
+    {
+      "id": "wikidata-Q238587",
+      "name": "National Portrait Gallery",
+      "type": "museum",
+      "lat": 51.509444444,
+      "lng": -0.128055555,
+      "tags": [],
+      "sources": [
+        {
+          "provider": "wikidata",
+          "family": "open_knowledge",
+          "tier": "inferred",
+          "url": "https://www.wikidata.org/wiki/Q238587",
+          "license": "CC0-1.0"
+        }
+      ],
+      "city_pack_owned": false,
+      "human_verified": false,
+      "website": "http://www.npg.org.uk/"
+    },
+    {
+      "id": "wikidata-Q20876003",
+      "name": "Arthur Tooth & Sons",
+      "type": "gallery",
+      "lat": 51.5084,
+      "lng": -0.1315,
+      "tags": [],
+      "sources": [
+        {
+          "provider": "wikidata",
+          "family": "open_knowledge",
+          "tier": "inferred",
+          "url": "https://www.wikidata.org/wiki/Q20876003",
+          "license": "CC0-1.0"
+        }
+      ],
+      "city_pack_owned": false,
+      "human_verified": false
+    },
+    {
+      "id": "wikidata-Q99783571",
+      "name": "Household Cavalry Museum",
+      "type": "museum",
+      "lat": 51.504949,
+      "lng": -0.127156,
+      "tags": [],
+      "sources": [
+        {
+          "provider": "wikidata",
+          "family": "open_knowledge",
+          "tier": "inferred",
+          "url": "https://www.wikidata.org/wiki/Q99783571",
+          "license": "CC0-1.0"
+        }
+      ],
+      "city_pack_owned": false,
+      "human_verified": false,
+      "website": "https://householdcavalry.co.uk/museum/"
+    },
+    {
+      "id": "wikidata-Q14993546",
+      "name": "Leverian collection",
+      "type": "museum",
+      "lat": 51.510278,
+      "lng": -0.130278,
+      "tags": [],
+      "sources": [
+        {
+          "provider": "wikidata",
+          "family": "open_knowledge",
+          "tier": "inferred",
+          "url": "https://www.wikidata.org/wiki/Q14993546",
+          "license": "CC0-1.0"
+        }
+      ],
+      "city_pack_owned": false,
+      "human_verified": false,
+      "website": "http://australianmuseum.net.au/A-collection-of-drawings-by-Miss-Sarah-Stone"
+    },
+    {
+      "id": "wikidata-Q1464767",
+      "name": "Royal United Services Institute",
+      "type": "museum",
+      "lat": 51.5043,
+      "lng": -0.1258,
+      "tags": [],
+      "sources": [
+        {
+          "provider": "wikidata",
+          "family": "open_knowledge",
+          "tier": "inferred",
+          "url": "https://www.wikidata.org/wiki/Q1464767",
+          "license": "CC0-1.0"
+        }
+      ],
+      "city_pack_owned": false,
+      "human_verified": false,
+      "website": "https://www.rusi.org/"
+    }
+  ]
+}

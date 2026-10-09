@@ -7268,6 +7268,9 @@ module.exports = {
   optimizeStopOrder,
   permuteStops,
   generateAgnosticRecommendations,
+  // Shared by the any-place final walking validation so published leg metrics
+  // describe the same measured walk as its distance and path.
+  buildLegMetrics,
   // Exported for focused testing of the agnostic_compose daypart post-pass.
   composeStopDaypartSlot,
   applyAgnosticDaypartOrder,
