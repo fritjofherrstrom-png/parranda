@@ -46,8 +46,28 @@ function failed(blockers, checks) {
   return { valid: false, blockers, checks, result: null };
 }
 
+const MAX_PATH_SNAP_KM = 0.1;
 function isValidPathPoint(point) {
-  return Boolean(point) && isFiniteCoordinate(Number(point.lat), Number(point.lng));
+  return Boolean(point) && isFiniteCoordinate(point.lat, point.lng);
+}
+
+function pointDistanceKm(a, b) {
+  const rad = Math.PI / 180;
+  const latDelta = (b.lat - a.lat) * rad;
+  const lngDelta = (b.lng - a.lng) * rad;
+  const value = Math.sin(latDelta / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(lngDelta / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.min(1, Math.sqrt(value)));
+}
+
+function pathVisitsStops(path, points) {
+  if (pointDistanceKm(path[0], points[0]) > MAX_PATH_SNAP_KM ||
+      pointDistanceKm(path[path.length - 1], points[points.length - 1]) > MAX_PATH_SNAP_KM) return false;
+  let cursor = 0;
+  for (const point of points) {
+    while (cursor < path.length && pointDistanceKm(path[cursor], point) > MAX_PATH_SNAP_KM) cursor += 1;
+    if (cursor === path.length) return false;
+  }
+  return true;
 }
 
 /**
@@ -117,7 +137,8 @@ async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfi
   if (
     !Array.isArray(result.pathPoints) ||
     result.pathPoints.length < points.length ||
-    !result.pathPoints.every(isValidPathPoint)
+    !result.pathPoints.every(isValidPathPoint) ||
+    !pathVisitsStops(result.pathPoints, points)
   ) {
     return failed(["invalid_walking_path_points"], { ...checks, leg_count: result.legs.length });
   }
@@ -127,9 +148,28 @@ async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfi
     return failed(["walking_validation_failed"], { ...checks, leg_count: result.legs.length });
   }
 
-  const totalKm = hasRouterEstimatedKm
-    ? result.estimatedKm
-    : Number(legDistances.reduce((sum, value) => sum + value, 0).toFixed(1));
+  const legSumKm = legDistances.reduce((sum, value) => sum + value, 0);
+  // Native adapters round each leg and the total independently to 0.1 km.
+  // Permit only that accumulated rounding error, not contradictory metrics.
+  const roundingToleranceKm = (legDistances.length + 1) * 0.05 + 1e-9;
+  if (hasRouterEstimatedKm && Math.abs(result.estimatedKm - legSumKm) > roundingToleranceKm) {
+    return failed(["walking_validation_failed"], { ...checks, leg_count: result.legs.length });
+  }
+  // The polyline is an independent lower bound on distance: visiting the
+  // stops in order does not make an arbitrarily long detour trustworthy.
+  const pathLengthKm = result.pathPoints.slice(1).reduce((sum, point, index) =>
+    sum + pointDistanceKm(result.pathPoints[index], point), 0);
+  const attestedKm = Math.max(hasRouterEstimatedKm ? result.estimatedKm : 0, legSumKm);
+  // Allow independent metric rounding, endpoint snapping and a 1% spherical
+  // geometry approximation; never silently expand acquisition/user budgets.
+  const pathToleranceKm = roundingToleranceKm + 2 * MAX_PATH_SNAP_KM + attestedKm * 0.01;
+  if (!Number.isFinite(pathLengthKm) || pathLengthKm > attestedKm + pathToleranceKm) {
+    return failed(["walking_validation_failed"], { ...checks, leg_count: result.legs.length });
+  }
+  // Neither a lower rounded total nor a slightly longer accepted polyline may
+  // bypass the user's walking budget.
+  const rawTotalKm = Math.max(attestedKm, pathLengthKm);
+  const totalKm = Number(rawTotalKm.toFixed(1));
   const maxLegKm = Math.max(...legDistances);
   const totalMinutes = legMinutes.reduce((sum, value) => sum + value, 0);
 
@@ -144,7 +184,10 @@ async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfi
   };
 
   // 5. Budget gates (total + per-leg).
-  if (!Number.isFinite(totalKm) || totalKm > totalBudgetKm) {
+  // Check the unrounded distance with a scale-dependent floating-point bound,
+  // not a fixed allowance in kilometres. Display rounding never grants budget.
+  const budgetPrecisionKm = Number.EPSILON * totalBudgetKm * 8;
+  if (!Number.isFinite(rawTotalKm) || rawTotalKm > totalBudgetKm + budgetPrecisionKm) {
     return { valid: false, blockers: ["walking_budget_exceeded"], checks: fullChecks, result: null };
   }
   if (maxLegKm > maxLegBudgetKm) {

@@ -55,7 +55,7 @@ const { classifyUnhonouredPins } = require("./pin-refusal-reasons");
 const { collectCommitmentUpstreamEligibleIds } = require("./commitment-eligibility");
 const { EXCLUDED_LOADED_IDS } = require("./excluded-candidates");
 const { weaveEveningEventRouteStop } = require("../candidates/event-route-stop-weave");
-const { generateAgnosticRecommendations } = require("../route-engine");
+const { generateAgnosticRecommendations, buildLegMetrics } = require("../route-engine");
 const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
 const { replacementKeepsOtherStops } = require("./walking-fit-selection");
 const {
@@ -400,6 +400,7 @@ function evaluateEligibility({
   plannerRoles = null,
   candidateCombination = null,
   curatedCandidateCount = 0,
+  geometryAuthority = "combination",
 }) {
   const blockers = [];
   // Walking-order honesty is decided downstream by the #261 walking-budget
@@ -455,7 +456,17 @@ function evaluateEligibility({
   if (outsideOriginReach) {
     blockers.push("candidate_cluster_outside_origin_reach");
   } else if (!ACCEPTABLE_COHERENCE.has(coherence)) {
-    blockers.push(coherence === "incomplete" ? "incomplete_geometry" : "weak_geometry");
+    // Pairwise span describes a role-ordered seed, not the walk the engine
+    // selects and sequences. A fixed 2.5 km seed veto made even no-limit days
+    // impossible before that authoritative selection ran. Only the engine may
+    // defer a complete, geocoded seed's spread verdict; its FINISHED public
+    // chain must pass the existing independent walking budgets before mutation.
+    if (geometryAuthority === "engine" && coherence === "weak" &&
+        combinationGeocodedStops.length === stops.length && stops.length >= MIN_VIABLE_GEOCODED_STOPS) {
+      checks.geometry_validation = "engine_walk_pending";
+    } else {
+      blockers.push(coherence === "incomplete" ? "incomplete_geometry" : "weak_geometry");
+    }
   }
 
   // Readiness reuse — honest SOFT caveat. A real, coherent trusted pair still
@@ -1179,6 +1190,7 @@ async function composeAgnosticRouteOutput({
     plannerRoles,
     candidateCombination,
     curatedCandidateCount: curatedCandidates.length,
+    geometryAuthority: synthesizeVia === "engine" ? "engine" : "combination",
   });
 
   if (!eligibility.eligible) {
@@ -1742,6 +1754,59 @@ async function composeAgnosticRouteViaEngine({
     return { result: baselineResult, experiment };
   }
 
+  // A deferred seed-span verdict is not permission to publish. Validate the
+  // final (post-selection, post-weave, public) stop chain with the SAME safety
+  // budgets used by agnostic walking validation. Never validate the unordered
+  // reservoir or invent a compactness label for the seed.
+  const deferredWalking = eligibility.checks?.geometry_validation === "engine_walk_pending"
+    ? await validateAgnosticWalkingOrder({
+        stops: engineRoute.map_route_points,
+        walkingRouter,
+        walkingConfig: walkingConfig || {},
+        targetKm: distanceMode === "no_limit" ? null : walkingKmTarget,
+      })
+    : null;
+  if (deferredWalking && !deferredWalking.valid) {
+    const rejectedEligibility = {
+      ...eligibility,
+      eligible: false,
+      blockers: dedupe([...(eligibility.blockers || []), ...deferredWalking.blockers]),
+      checks: { ...eligibility.checks, geometry_validation: "engine_walk_rejected" },
+    };
+    const experiment = buildExperimentBlock({
+      routeMutation: false, eligibility: rejectedEligibility, baselineResult,
+      candidateReadiness, experimentalRoute: null, sourceStatus,
+      walkingValidation: deferredWalking, context: contextBlock,
+      requestedDate: effectiveDate, plannerRoles, walkingKmTarget,
+    });
+    experiment.walking_validation = deferredWalking;
+    experiment.synthesized_via = "agnostic_compose_engine";
+    return { result: baselineResult, experiment, pinnedRefusals };
+  }
+  if (deferredWalking) {
+    const metrics = buildLegMetrics(deferredWalking.result.legs, "balanced", {
+      shape: engineRoute.route_shape || "arc", lang,
+    });
+    const legMinutes = deferredWalking.result.legs.map(leg => Number(leg.estimated_walk_minutes));
+    Object.assign(engineRoute, {
+      estimated_km: deferredWalking.result.estimatedKm,
+      legs: deferredWalking.result.legs,
+      map_path_points: deferredWalking.result.pathPoints,
+      longest_leg_km: metrics.longestLegKm,
+      longest_leg_minutes: Math.max(...legMinutes),
+      average_leg_minutes: Math.round(legMinutes.reduce((sum, value) => sum + value, 0) / legMinutes.length),
+      long_leg_count: metrics.longLegCount,
+      route_continuity_score: metrics.routeContinuityScore,
+      dead_walk_penalty: metrics.deadWalkPenalty,
+      leg_fit_note: metrics.note,
+      route_quality_warnings: metrics.warnings,
+    });
+    eligibility.checks.geometry_validation = "engine_walk_validated";
+    if (deferredWalking.checks.walking_source === "heuristic" || deferredWalking.checks.fallback_used) {
+      eligibility.caveats = dedupe([...eligibility.caveats, "heuristic_walking_estimate"]);
+    }
+  }
+
   // Engine geometry owns the actual stop order. Daypart rhythm (#274–278) is a
   // label here, not the sequencer — promoting it into compose ordering is a
   // follow-up, so we record the intent honestly rather than fabricate an arc.
@@ -1761,11 +1826,13 @@ async function composeAgnosticRouteViaEngine({
   // The engine only returns a route after its own walking-truth pass, so a
   // present route is walking-coherent. We do not claim a budget check the engine
   // did not run; the source string marks where validation came from.
-  const walkingSummary = {
-    valid: true,
-    blockers: [],
-    checks: { walking_source: engineRoute.routing_source || "agnostic_compose" },
-  };
+  const walkingSummary = deferredWalking
+    ? { valid: deferredWalking.valid, blockers: deferredWalking.blockers, checks: deferredWalking.checks }
+    : {
+        valid: true,
+        blockers: [],
+        checks: { walking_source: engineRoute.routing_source || "agnostic_compose" },
+      };
   const dayflowContextPresent = Boolean(engineDay.dayflow_context);
 
   const experiment = buildExperimentBlock({

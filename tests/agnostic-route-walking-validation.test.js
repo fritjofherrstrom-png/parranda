@@ -449,8 +449,10 @@ test(
       if (signature === originalRoleOrder) {
         return {
           source: "heuristic",
-          estimatedKm: 0.8,
-          legs: points.slice(1).map(() => ({ distance_km: 0.4, estimated_walk_minutes: 6 })),
+          // This fallback covers the fixture's real multi-kilometre stop
+          // chain; it must not claim 0.8 km for a path longer than 4 km.
+          estimatedKm: 5,
+          legs: points.slice(1).map(() => ({ distance_km: 2.5, estimated_walk_minutes: 30 })),
           pathPoints: points.map((p) => ({ lat: p.lat, lng: p.lng })),
           fallbackUsed: false,
         };
