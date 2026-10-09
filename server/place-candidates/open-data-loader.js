@@ -69,7 +69,8 @@ const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 // faster/self-hosted Overpass. A deploy that runs such mirrors lists them via
 // PARRANDA_OVERPASS_ENDPOINTS to get HA failover.
 //
-// Measured correction: when overpass-api.de became globally unreachable, the
+// Measured correction: when overpass-api.de became unreachable for us (an
+// automatic IP ban from 2026-10-09, while it answered everyone else), the
 // disk cache did NOT carry a cold place — a cold cache plus a dead primary lost
 // the request outright. What actually kept days alive was a second SOURCE
 // (Overture), not a second Overpass mirror. Cross-source rescue is therefore
@@ -93,6 +94,16 @@ const OVERPASS_FETCH_CAP = 150;
 // before Overpass has exhausted the budget we explicitly gave it.
 const OVERPASS_QUERY_TIMEOUT_SECONDS = 25;
 const DEFAULT_TIMEOUT_MS = 30000;
+// Overpass bans an IP automatically when it keeps querying after a 429/406 or
+// runs too many queries at once (2 slots per IP on overpass-api.de; measured
+// 2026-10-10 as a TCP-level "connection refused" for our whole network while
+// the service answered everyone else). These are that service's own signals,
+// so the loader obeys them per endpoint instead of letting every request retry.
+const OVERPASS_MAX_CONCURRENT_QUERIES = 1;
+const OVERPASS_RATE_LIMIT_BACKOFF_MS = 60 * 1000;
+const OVERPASS_RATE_LIMIT_BACKOFF_CAP_MS = 30 * 60 * 1000;
+const OVERPASS_REJECTED_PAUSE_MS = 6 * 60 * 60 * 1000;
+const OVERPASS_UNREACHABLE_PAUSE_MS = 5 * 60 * 1000;
 // Stable map/place facts can safely bridge a short provider outage, but stale
 // data must stay bounded and visible in source/readiness metadata.
 const DEFAULT_STALE_IF_ERROR_MS = 7 * 24 * 60 * 60 * 1000;
@@ -322,6 +333,7 @@ function createOpenDataLoader({
   userAgent = DEFAULT_USER_AGENT,
   cache = null,
   staleIfErrorMs = 0,
+  now = () => Date.now(),
 } = {}) {
   if (typeof fetcher !== "function") {
     return null; // honest fail closed: no fetcher → no loader
@@ -342,9 +354,22 @@ function createOpenDataLoader({
         ? [endpoint]
         : [DEFAULT_OVERPASS_ENDPOINT, ...DEFAULT_OVERPASS_FALLBACKS];
 
+  const gate = createOverpassGate({ now, maxWaitMs: boundedTimeoutMs });
+
   // One attempt against one mirror. Returns { ok, payload } on a usable response,
   // or { ok:false, status, error } so the caller can fail over to the next mirror.
   async function attemptOverpass(targetEndpoint, query) {
+    const paused = gate.pausedReason(targetEndpoint);
+    if (paused) return { ok: false, status: "error_failed_closed", error: paused };
+    if (!(await gate.acquire(targetEndpoint))) {
+      return { ok: false, status: "error_failed_closed", error: "provider_slot_busy" };
+    }
+    // The endpoint may have paused while this query waited for its slot.
+    const pausedWhileWaiting = gate.pausedReason(targetEndpoint);
+    if (pausedWhileWaiting) {
+      gate.release(targetEndpoint);
+      return { ok: false, status: "error_failed_closed", error: pausedWhileWaiting };
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), boundedTimeoutMs);
     try {
@@ -359,17 +384,21 @@ function createOpenDataLoader({
         signal: controller.signal,
       });
       if (!response || response.ok !== true) {
+        gate.observeStatus(targetEndpoint, response);
         return { ok: false, status: "error_failed_closed", error: "http_non_200" };
       }
+      gate.observeSuccess(targetEndpoint);
       try {
         return { ok: true, payload: await response.json() };
       } catch (_error) {
         return { ok: false, status: "error_failed_closed", error: "parse_error" };
       }
     } catch (error) {
+      gate.observeError(targetEndpoint, error);
       return { ok: false, status: "error_failed_closed", error: classifyFetchError(error) };
     } finally {
       clearTimeout(timer);
+      gate.release(targetEndpoint);
     }
   }
 
@@ -1116,6 +1145,107 @@ function distanceKm(a, b) {
   const lat2 = toRad(b.lat);
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+// Per-endpoint politeness for one loader (one per process in the app): at most
+// OVERPASS_MAX_CONCURRENT_QUERIES in flight, and a pause after the provider says
+// "slow down" (429/503/504, honouring Retry-After and doubling while it
+// repeats), "not you" (403/406, manual bans) or cannot be connected to at all
+// (refused or connect timeout: how an IP ban looks, and each attempt otherwise
+// costs a request ~10 s). Query timeouts and other errors keep today's
+// behaviour. A paused endpoint fails fast, so cached, stale and other-source
+// rescue paths still answer.
+function createOverpassGate({ now, maxWaitMs }) {
+  const endpoints = new Map();
+  const state = (endpoint) => {
+    if (!endpoints.has(endpoint)) {
+      endpoints.set(endpoint, { pausedUntil: 0, reason: null, strikes: 0, active: 0, waiters: [] });
+    }
+    return endpoints.get(endpoint);
+  };
+  const pause = (entry, ms, reason) => {
+    entry.strikes += 1;
+    entry.pausedUntil = Math.max(entry.pausedUntil, now() + ms);
+    entry.reason = reason;
+  };
+  return {
+    pausedReason(endpoint) {
+      const entry = state(endpoint);
+      return now() < entry.pausedUntil ? entry.reason : null;
+    },
+    acquire(endpoint) {
+      const entry = state(endpoint);
+      if (entry.active < OVERPASS_MAX_CONCURRENT_QUERIES) {
+        entry.active += 1;
+        return Promise.resolve(true);
+      }
+      return new Promise((resolve) => {
+        const waiter = { resolve };
+        waiter.timer = setTimeout(() => {
+          entry.waiters = entry.waiters.filter((candidate) => candidate !== waiter);
+          resolve(false);
+        }, maxWaitMs);
+        entry.waiters.push(waiter);
+      });
+    },
+    release(endpoint) {
+      const entry = state(endpoint);
+      const next = entry.waiters.shift();
+      if (next) {
+        clearTimeout(next.timer);
+        next.resolve(true);
+      } else {
+        entry.active = Math.max(0, entry.active - 1);
+      }
+    },
+    observeSuccess(endpoint) {
+      const entry = state(endpoint);
+      entry.strikes = 0;
+      entry.reason = null;
+    },
+    observeStatus(endpoint, response) {
+      const entry = state(endpoint);
+      const status = Number(response?.status);
+      if (status === 429 || status === 503 || status === 504) {
+        const backoff = Math.min(
+          OVERPASS_RATE_LIMIT_BACKOFF_MS * 2 ** Math.min(entry.strikes, 10),
+          OVERPASS_RATE_LIMIT_BACKOFF_CAP_MS,
+        );
+        pause(entry, Math.max(backoff, retryAfterMs(response, now())), "provider_rate_limited");
+      } else if (status === 403 || status === 406) {
+        pause(entry, OVERPASS_REJECTED_PAUSE_MS, "provider_rejected_client");
+      }
+    },
+    observeError(endpoint, error) {
+      if (!isConnectFailure(error)) return;
+      const entry = state(endpoint);
+      pause(
+        entry,
+        Math.min(OVERPASS_UNREACHABLE_PAUSE_MS * 2 ** Math.min(entry.strikes, 10), OVERPASS_REJECTED_PAUSE_MS),
+        "provider_unreachable",
+      );
+    },
+  };
+}
+
+function retryAfterMs(response, nowMs) {
+  const raw = response?.headers?.get?.("retry-after");
+  if (typeof raw !== "string" || !raw.trim()) return 0;
+  const seconds = Number(raw.trim());
+  if (Number.isFinite(seconds)) return Math.max(0, Math.min(seconds * 1000, OVERPASS_REJECTED_PAUSE_MS));
+  const at = Date.parse(raw);
+  return Number.isFinite(at) ? Math.max(0, Math.min(at - nowMs, OVERPASS_REJECTED_PAUSE_MS)) : 0;
+}
+
+// No TCP connection at all, as Node's fetch reports it: refused, or (when an
+// address family hangs) undici's connect timeout. Never a slow query.
+const CONNECT_FAILURE_CODES = new Set(["ECONNREFUSED", "UND_ERR_CONNECT_TIMEOUT"]);
+function isConnectFailure(error) {
+  for (let current = error, depth = 0; current && depth < 4; current = current.cause, depth += 1) {
+    if (CONNECT_FAILURE_CODES.has(current.code)) return true;
+    if (Array.isArray(current.errors) && current.errors.some((inner) => CONNECT_FAILURE_CODES.has(inner?.code))) return true;
+  }
+  return false;
 }
 
 function classifyFetchError(error) {

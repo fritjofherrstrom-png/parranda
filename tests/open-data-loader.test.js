@@ -423,6 +423,182 @@ test("invalid coordinates return no records without calling the fetcher", async 
   assert.equal(called, false);
 });
 
+// --- Overpass politeness: obey the provider's own slow-down signals ---------
+
+function clockAt(start = 1_000_000) {
+  const clock = { value: start, now: () => clock.value };
+  return clock;
+}
+function headersOf(values = {}) {
+  return { get: (name) => values[String(name).toLowerCase()] ?? null };
+}
+const EMPTY_OK = () => ({ ok: true, status: 200, json: async () => ({ elements: [] }) });
+// Rich and varied, so a success never triggers a second, wider pass.
+const RICH_KINDS = [{ amenity: "cafe" }, { amenity: "bar" }, { tourism: "museum" }, { leisure: "park" }];
+const RICH_OK = () => ({
+  ok: true,
+  status: 200,
+  json: async () => ({
+    elements: Array.from({ length: 15 }, (_, i) => ({
+      type: "node", id: i + 1, lat: 41.9 + i * 0.001, lon: 12.5, tags: { name: `P${i}`, ...RICH_KINDS[i % RICH_KINDS.length] },
+    })),
+  }),
+});
+
+test("a 429 pauses the endpoint for Retry-After, then queries again", async () => {
+  const clock = clockAt();
+  let calls = 0;
+  let limited = true;
+  const loader = createOpenDataLoader({
+    now: clock.now,
+    fetcher: async () => {
+      calls += 1;
+      return limited ? { ok: false, status: 429, headers: headersOf({ "retry-after": "120" }) } : RICH_OK();
+    },
+  });
+  assert.equal((await loader({ lat: 41.9, lng: 12.5 })).loader_status, "error_failed_closed");
+  assert.equal(calls, 1);
+  const paused = await loader({ lat: 41.9, lng: 12.5 });
+  assert.equal(paused.loader_error, "provider_rate_limited");
+  assert.equal(calls, 1, "no query while the provider asked us to wait");
+  limited = false;
+  clock.value += 119_000;
+  await loader({ lat: 41.9, lng: 12.5 });
+  assert.equal(calls, 1, "Retry-After is honoured to the second");
+  clock.value += 2_000;
+  assert.match((await loader({ lat: 41.9, lng: 12.5 })).loader_status, /^loaded:[1-9]/);
+  assert.equal(calls, 2);
+});
+
+test("repeated rate limiting doubles the pause; success resets it", async () => {
+  const clock = clockAt();
+  let calls = 0;
+  let status = 429;
+  const loader = createOpenDataLoader({
+    now: clock.now,
+    fetcher: async () => {
+      calls += 1;
+      return status === 200 ? RICH_OK() : { ok: false, status, headers: headersOf() };
+    },
+  });
+  await loader({ lat: 41.9, lng: 12.5 });
+  clock.value += 61_000;
+  await loader({ lat: 41.9, lng: 12.5 });
+  assert.equal(calls, 2, "first pause is a minute");
+  clock.value += 61_000;
+  await loader({ lat: 41.9, lng: 12.5 });
+  assert.equal(calls, 2, "second pause is longer");
+  clock.value += 60_000;
+  status = 200;
+  await loader({ lat: 41.9, lng: 12.5 });
+  assert.equal(calls, 3);
+  status = 504;
+  await loader({ lat: 41.9, lng: 12.5 });
+  clock.value += 61_000;
+  await loader({ lat: 41.9, lng: 12.5 });
+  assert.equal(calls, 5, "after a success the pause starts from a minute again");
+});
+
+test("a rejected client (406/403) is not retried for hours", async () => {
+  const clock = clockAt();
+  let calls = 0;
+  const loader = createOpenDataLoader({
+    now: clock.now,
+    fetcher: async () => {
+      calls += 1;
+      return { ok: false, status: 406, headers: headersOf() };
+    },
+  });
+  await loader({ lat: 41.9, lng: 12.5 });
+  clock.value += 5 * 60 * 60 * 1000;
+  assert.equal((await loader({ lat: 41.9, lng: 12.5 })).loader_error, "provider_rejected_client");
+  assert.equal(calls, 1);
+});
+
+test("no connection at all pauses the endpoint; query timeouts and other errors do not", async () => {
+  const connectFailure = (code) => Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error(code), { code }) });
+  for (const code of ["ECONNREFUSED", "UND_ERR_CONNECT_TIMEOUT"]) {
+    const clock = clockAt();
+    let calls = 0;
+    const loader = createOpenDataLoader({ now: clock.now, fetcher: async () => { calls += 1; throw connectFailure(code); } });
+    await loader({ lat: 41.9, lng: 12.5 });
+    assert.equal((await loader({ lat: 41.9, lng: 12.5 })).loader_error, "provider_unreachable", code);
+    assert.equal(calls, 1, code);
+    clock.value += 5 * 60 * 1000 + 1;
+    await loader({ lat: 41.9, lng: 12.5 });
+    assert.equal(calls, 2, `${code} pause is bounded`);
+  }
+  const refusedViaAggregate = Object.assign(new TypeError("fetch failed"), {
+    cause: Object.assign(new AggregateError([Object.assign(new Error("refused"), { code: "ECONNREFUSED" })]), {}),
+  });
+  let aggregateCalls = 0;
+  const aggregate = createOpenDataLoader({ fetcher: async () => { aggregateCalls += 1; throw refusedViaAggregate; } });
+  await aggregate({ lat: 41.9, lng: 12.5 });
+  await aggregate({ lat: 41.9, lng: 12.5 });
+  assert.equal(aggregateCalls, 1, "every address refused counts as refused");
+
+  let calls = 0;
+  const ordinary = createOpenDataLoader({
+    fetcher: async () => {
+      calls += 1;
+      if (calls === 1) throw Object.assign(new Error("AbortError"), { name: "AbortError" });
+      if (calls === 2) throw new Error("socket hang up");
+      return { ok: false, status: 500, headers: headersOf() };
+    },
+  });
+  for (let i = 0; i < 4; i += 1) await ordinary({ lat: 41.9, lng: 12.5 });
+  assert.equal(calls, 4, "a slow query or a one-off error keeps today's retry behaviour");
+});
+
+test("at most one query per endpoint is in flight at a time", async () => {
+  let active = 0;
+  let peak = 0;
+  const loader = createOpenDataLoader({
+    fetcher: async () => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      active -= 1;
+      return EMPTY_OK();
+    },
+  });
+  const results = await Promise.all([
+    loader({ lat: 41.9, lng: 12.5 }),
+    loader({ lat: 48.86, lng: 2.35 }),
+    loader({ lat: 52.5, lng: 13.4 }),
+  ]);
+  assert.ok(results.every((records) => records.loader_status === "loaded:0"));
+  assert.equal(peak, 1);
+});
+
+test("a query waiting for the slot is not sent once the provider has asked us to wait", async () => {
+  let calls = 0;
+  const loader = createOpenDataLoader({
+    fetcher: async () => {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return { ok: false, status: 429, headers: headersOf() };
+    },
+  });
+  const [, queued] = await Promise.all([loader({ lat: 41.9, lng: 12.5 }), loader({ lat: 48.86, lng: 2.35 })]);
+  assert.equal(calls, 1);
+  assert.equal(queued.loader_error, "provider_rate_limited");
+});
+
+test("a paused endpoint does not pause a configured mirror", async () => {
+  const calls = [];
+  const loader = createOpenDataLoader({
+    endpoints: ["https://m1/overpass", "https://m2/overpass"],
+    fetcher: async (endpoint) => {
+      calls.push(endpoint);
+      return endpoint.includes("m1") ? { ok: false, status: 429, headers: headersOf() } : RICH_OK();
+    },
+  });
+  await loader({ lat: 41.9, lng: 12.5 });
+  await loader({ lat: 48.86, lng: 2.35 });
+  assert.deepEqual(calls, ["https://m1/overpass", "https://m2/overpass", "https://m2/overpass"]);
+});
+
 // --- configurable Overpass mirror failover (deploy-set HA, default single) --
 
 test("a configured mirror set fails over on error (HA) — second mirror rescues the load", async () => {

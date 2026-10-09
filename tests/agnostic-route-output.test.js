@@ -1397,7 +1397,9 @@ test(
 
 test(
   "api: real loader non-200 surfaces loader_error instead of genuine empty",
-  withServer(createOpenDataLoader({ fetcher: async () => ({ ok: false, status: 429 }) }), async (server) => {
+  // An ordinary server error: a 429 additionally pauses the endpoint (covered
+  // in open-data-loader.test.js), which would change the second pass's token.
+  withServer(createOpenDataLoader({ fetcher: async () => ({ ok: false, status: 500 }) }), async (server) => {
     const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
     const exp = r.body.agnostic_route_output_experiment;
     assert.equal(exp.route_mutation, false);
