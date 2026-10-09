@@ -177,6 +177,21 @@ test('published walking-time aggregates use the validated router minutes', async
   assert.equal(route.average_leg_minutes,120);
 });
 
+test('mixed validated leg times retain the longest and rounded average', async () => {
+  const minutes=[0,'120',15.5];
+  const out=await replay({walkingRouter:async(points,opts)=>{
+    const routed=await routeWalkingPath(points,opts);
+    return {...routed,source:'osrm',legs:routed.legs.map((leg,index)=>({...leg,
+      estimated_walk_minutes:minutes[index % minutes.length]}))};
+  }});
+  const route=out.result.days[0]?.primary_route;
+  assert.ok(route);
+  assert.ok(route.legs.length>=2);
+  const actualMinutes=route.legs.map(leg=>Number(leg.estimated_walk_minutes));
+  assert.equal(route.longest_leg_minutes,120);
+  assert.equal(route.average_leg_minutes,Math.round(actualMinutes.reduce((sum,value)=>sum+value,0)/actualMinutes.length));
+});
+
 test('rhythm variants on identical recorded preferences remain source-backed and walking-validated', async () => {
   for (const dayRhythm of ['calm','balanced','full','free']) {
     const out = await replay({dayRhythm});

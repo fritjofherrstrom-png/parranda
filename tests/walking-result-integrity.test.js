@@ -21,6 +21,18 @@ test('walking integrity permits independent tenth-kilometre rounding',async()=>{
 test('walking budget uses the larger attested sum at rounding boundary',async()=>{
  const out=await validateAgnosticWalkingOrder({stops,budget:{totalKm:5.4},walkingRouter:router(5.4,[2.7,2.8])});assert.equal(out.valid,false);assert.deepEqual(out.blockers,['walking_budget_exceeded']);
 });
+for(const [latitude,valid] of [
+ [0.04847343455901957,true], // 5.39 km
+ [0.04892309536197895,false], // 5.44 km: would display 5.4, but exceeds the budget
+ [0.04910295968316269,false], // 5.46 km
+])test('walking budget checks the unrounded polyline at latitude '+latitude,async()=>{
+ const points=[{lat:0,lng:0},{lat:latitude,lng:0}];
+ const out=await validateAgnosticWalkingOrder({stops:points,targetKm:4,
+  walkingRouter:async routed=>({source:'osrm',estimatedKm:5.4,
+   legs:[{distance_km:5.4,estimated_walk_minutes:120}],pathPoints:routed,fallbackUsed:false})});
+ assert.equal(out.valid,valid);
+ if(!valid){assert.equal(out.result,null);assert.deepEqual(out.blockers,['walking_budget_exceeded']);}
+});
 const withPath=path=>async points=>({...await router(1,[0.5,0.5])(points),pathPoints:path});
 for(const [name,path] of [
  ['unrelated path',stops.map(()=>({lat:0,lng:0}))],

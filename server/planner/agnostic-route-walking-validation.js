@@ -168,7 +168,8 @@ async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfi
   }
   // Neither a lower rounded total nor a slightly longer accepted polyline may
   // bypass the user's walking budget.
-  const totalKm = Number(Math.max(attestedKm, pathLengthKm).toFixed(1));
+  const rawTotalKm = Math.max(attestedKm, pathLengthKm);
+  const totalKm = Number(rawTotalKm.toFixed(1));
   const maxLegKm = Math.max(...legDistances);
   const totalMinutes = legMinutes.reduce((sum, value) => sum + value, 0);
 
@@ -183,7 +184,8 @@ async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfi
   };
 
   // 5. Budget gates (total + per-leg).
-  if (!Number.isFinite(totalKm) || totalKm > totalBudgetKm) {
+  // Check the unrounded distance; 1e-9 km permits only floating-point noise.
+  if (!Number.isFinite(rawTotalKm) || rawTotalKm > totalBudgetKm + 1e-9) {
     return { valid: false, blockers: ["walking_budget_exceeded"], checks: fullChecks, result: null };
   }
   if (maxLegKm > maxLegBudgetKm) {
