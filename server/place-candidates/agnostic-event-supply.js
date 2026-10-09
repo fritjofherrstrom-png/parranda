@@ -1851,45 +1851,48 @@ function resolveDefaultEventSupply(
       collection = { result: null, settled: false };
       activeCollections.set(key, collection);
       cache.warm(key, async () => {
-        let collected;
         try {
-          collected = await collectEvents({
-            anchor,
-            sourceAnchors,
-            now,
-            selectedDate,
-            time,
-            registry: requestRegistry,
-            radiusM: effectiveRadiusM,
-            timeoutMs: WARM_TIMEOUT_MS,
-            sourceCollectionCache,
-            eventReader,
-            datatourismeKey,
-            marketLoader,
-            calendarReferenceCache,
-            sourceBounds: scope?.kind === "in_place" ? scope.trusted_place_scope?.bounds : null,
-            globalKey,
-            venueResolver,
-            spatialScope,
-            placeContext,
-          });
-        } catch (error) {
-          collection.result = withDiscoveryHealth(failedEventCollection({
-            sourcePlan,
-            selectedDate,
-            radiusM: effectiveRadiusM,
-          }));
-          failedRefreshes.remember(key, collection.result);
+          let collected;
+          try {
+            collected = await collectEvents({
+              anchor,
+              sourceAnchors,
+              now,
+              selectedDate,
+              time,
+              registry: requestRegistry,
+              radiusM: effectiveRadiusM,
+              timeoutMs: WARM_TIMEOUT_MS,
+              sourceCollectionCache,
+              eventReader,
+              datatourismeKey,
+              marketLoader,
+              calendarReferenceCache,
+              sourceBounds: scope?.kind === "in_place" ? scope.trusted_place_scope?.bounds : null,
+              globalKey,
+              venueResolver,
+              spatialScope,
+              placeContext,
+            });
+          } catch (error) {
+            collection.result = withDiscoveryHealth(failedEventCollection({
+              sourcePlan,
+              selectedDate,
+              radiusM: effectiveRadiusM,
+            }));
+            failedRefreshes.remember(key, collection.result);
+            throw error;
+          }
+          collection.result = withDiscoveryHealth(collected);
+          if (isFailedEventRefresh(collected)) failedRefreshes.remember(key, collected);
+          else failedRefreshes.forget(key);
+          return collection.result;
+        } finally {
+          // Normalization failures are terminal invalid evidence, not source
+          // failures or an abandoned pending producer. Always release ownership.
           collection.settled = true;
           activeCollections.delete(key);
-          throw error;
         }
-        if (isFailedEventRefresh(collected)) failedRefreshes.remember(key, collected);
-        else failedRefreshes.forget(key);
-        collection.result = withDiscoveryHealth(collected);
-        collection.settled = true;
-        activeCollections.delete(key);
-        return collection.result;
       }, {
         // A proven healthy empty result is cacheable so a quiet calendar does not
         // cause refresh loops. Empty results with source failures are never
