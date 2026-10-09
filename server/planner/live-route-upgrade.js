@@ -5,48 +5,89 @@ const { matchesPreferenceFocus } = require('./preference-focus');
 const { composeAgnosticRouteOutput } = require('./agnostic-route-output');
 const MAX_CONTEXT_BYTES = 2 * 1024 * 1024;
 
-// Preserve private array/symbol metadata (including excluded loaded IDs), not
-// merely JSON rows. No retained array or context can follow a provider mutation.
-function cloneTrusted(value) {
-  if (!value || typeof value !== 'object') return value;
-  if (value instanceof Date) return new Date(value);
-  const clone = Array.isArray(value) ? [] : {};
-  for (const key of Reflect.ownKeys(value)) {
-    if (Array.isArray(value) && key === 'length') continue;
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (!('value' in descriptor)) throw new Error('unsupported_retained_accessor');
-    Object.defineProperty(clone, key, { ...descriptor, value: cloneTrusted(descriptor.value) });
+// Preserve private descriptors and aliases without expanding a DAG into a tree.
+// Validation and copying use the same iterative, identity-based budget. Debit
+// before allocating each clone/property; active identities are cycles, not aliases.
+function walkTrusted(value, copy) {
+  const memo = new Map();
+  const active = new Set();
+  const stack = [];
+  let bytes = 0;
+  const debit = amount => {
+    bytes += amount;
+    if (bytes > MAX_CONTEXT_BYTES) throw new Error('oversized_retained_context');
+  };
+  const stringBytes = text => {
+    // JSON escaping is counted without constructing an unbounded JSON string.
+    if (text.length > MAX_CONTEXT_BYTES) throw new Error('oversized_retained_context');
+    let size = Buffer.byteLength(text) + 2;
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i);
+      if (code === 34 || code === 92) size++;
+      else if (code < 32) size += [8, 9, 10, 12, 13].includes(code) ? 1 : 5;
+      else if (code >= 0xd800 && code <= 0xdfff) {
+        if (code <= 0xdbff && text.charCodeAt(i + 1) >= 0xdc00 && text.charCodeAt(i + 1) <= 0xdfff) i++;
+        else size += 3; // JSON escapes lone surrogates rather than UTF-8 replacement.
+      }
+      if (size > MAX_CONTEXT_BYTES) throw new Error('oversized_retained_context');
+    }
+    return size;
+  };
+  const visit = item => {
+    if (!item || typeof item !== 'object') {
+      if (typeof item !== 'function') debit((typeof item === 'string' ? stringBytes(item) : Buffer.byteLength(JSON.stringify(item) || 'null')) + 8);
+      return item;
+    }
+    if (active.has(item)) throw new Error('cyclic_retained_context');
+    if (memo.has(item)) return memo.get(item);
+    debit(8); // Empty objects also consume bounded traversal/allocation work.
+    const keys = Reflect.ownKeys(item);
+    // Debit all queued keys before allocating a clone/frame or descending;
+    // otherwise wide ancestors can accumulate unbounded pending key arrays.
+    debit(keys.length * 8);
+    for (const key of keys) debit(Buffer.byteLength(String(key)));
+    const clone = copy ? (Array.isArray(item) ? [] : item instanceof Date ? new Date(Date.prototype.getTime.call(item)) : {}) : null;
+    memo.set(item, clone);
+    active.add(item);
+    stack.push({ item, clone, keys, index: 0 });
+    return clone;
+  };
+  const result = visit(value);
+  while (stack.length) {
+    const frame = stack[stack.length - 1];
+    if (frame.index === frame.keys.length) {
+      active.delete(frame.item);
+      stack.pop();
+      continue;
+    }
+    const key = frame.keys[frame.index++];
+    const descriptor = Object.getOwnPropertyDescriptor(frame.item, key);
+    if (!descriptor || !('value' in descriptor)) throw new Error('unsupported_retained_accessor');
+    const child = visit(descriptor.value);
+    if (copy) Object.defineProperty(frame.clone, key, { ...descriptor, value: child });
   }
-  return clone;
+  return result;
 }
 
-// Count non-enumerable/symbol array metadata too; JSON length omits it.
+function cloneTrusted(value) {
+  return walkTrusted(value, true);
+}
+
 function contextFits(value) {
-  const stack = [value];
-  let bytes = 0;
-  const ancestors = new Set();
-  while (stack.length) {
-    const item = stack.pop();
-    if (item && typeof item === 'object') {
-      if (ancestors.has(item)) continue;
-      ancestors.add(item);
-      for (const key of Reflect.ownKeys(item)) {
-        bytes += Buffer.byteLength(String(key)) + 8;
-        const descriptor = Object.getOwnPropertyDescriptor(item, key);
-        if (!('value' in descriptor)) return false;
-        stack.push(descriptor.value);
-      }
-    } else if (typeof item !== 'function') {
-      bytes += Buffer.byteLength(JSON.stringify(item) || 'null') + 8;
-    }
-    if (bytes > MAX_CONTEXT_BYTES) return false;
+  try {
+    walkTrusted(value, false);
+    return true;
+  } catch {
+    return false;
   }
-  return true;
 }
 
 function retainComposition(snapshot) {
-  if (!contextFits(snapshot)) return null;
-  return cloneTrusted(snapshot);
+  try {
+    return cloneTrusted(snapshot);
+  } catch {
+    return null;
+  }
 }
 
 function occurrenceKey(event) {
