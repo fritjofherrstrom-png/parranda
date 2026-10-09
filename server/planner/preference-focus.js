@@ -22,6 +22,13 @@ function preferenceFit(candidate) {
   };
   const item = { ...candidate, type: candidate?.type || candidate?.kind };
   const matches = Object.keys(CANONICAL_INTENTS).map((intent) => [intent, matchCandidateToIntent(item, intent).level]);
+  // Normalized cultural event anchors have no stable-place type. Their explicit
+  // source classification supplies culture fit, not trust or route eligibility.
+  // An authoritative spine verdict above (including empty) always takes priority.
+  if (candidate?.cultural_tier === "cultural") {
+    const culture = matches.find(([intent]) => intent === "museums");
+    if (culture) culture[1] = "strong";
+  }
   return {
     coveredPreferences: matches.filter(([, level]) => level === "strong").map(([intent]) => intent),
     partialPreferences: matches.filter(([, level]) => level === "weak").map(([intent]) => intent),
