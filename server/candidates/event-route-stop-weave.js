@@ -156,6 +156,9 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
     drawer_query: eventLabel,
     daypart: "evening",
     is_live_event: true,
+    // Preserve classified experience evidence through final promotion; do not
+    // manufacture a stable-place type for an ephemeral event.
+    cultural_tier: event.cultural_tier || null,
     event_id: event.id || null,
     starts_at: event.starts_at || null,
     ends_at: event.ends_at || null,
