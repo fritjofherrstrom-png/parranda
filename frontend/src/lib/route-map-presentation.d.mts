@@ -23,3 +23,10 @@ export function screenMarkerPresentation(
   points: Array<{ x: number; y: number }>,
   options: { width: number; height: number; keepouts?: Array<{ left: number; top: number; right: number; bottom: number }>; radius?: number; gap?: number },
 ): RouteMarkerPresentation[] | null;
+
+export function screenCallouts(input: {
+  anchors: Array<{ lat: number; lng: number }>;
+  points: Array<{ x: number; y: number }>;
+  offsets: Array<{ shift_x_px: number; shift_y_px: number }> | null;
+  unproject: (point: [number, number]) => { lat: number; lng: number };
+}): { type: "FeatureCollection"; features: any[] };
