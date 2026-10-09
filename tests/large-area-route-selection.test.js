@@ -186,7 +186,7 @@ test('mixed validated leg times retain the longest and rounded average', async (
   }});
   const route=out.result.days[0]?.primary_route;
   assert.ok(route);
-  assert.ok(route.legs.length>=2);
+  assert.deepEqual(route.legs.map(leg=>leg.estimated_walk_minutes),minutes);
   const actualMinutes=route.legs.map(leg=>Number(leg.estimated_walk_minutes));
   assert.equal(route.longest_leg_minutes,120);
   assert.equal(route.average_leg_minutes,Math.round(actualMinutes.reduce((sum,value)=>sum+value,0)/actualMinutes.length));

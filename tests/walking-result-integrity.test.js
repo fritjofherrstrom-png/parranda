@@ -33,6 +33,20 @@ for(const [latitude,valid] of [
  assert.equal(out.valid,valid);
  if(!valid){assert.equal(out.result,null);assert.deepEqual(out.blockers,['walking_budget_exceeded']);}
 });
+for(const {label,offsetKm,valid} of [
+ {label:'exact boundary',offsetKm:0,valid:true},
+ {label:'machine rounding',offsetKm:Number.EPSILON*5.4*4,valid:true},
+ {label:'beyond machine rounding',offsetKm:Number.EPSILON*5.4*32,valid:false},
+ {label:'previous fixed tolerance',offsetKm:5e-10,valid:false},
+])test('walking budget precision: '+label,async()=>{
+ const latitude=(5.4+offsetKm)/6371*180/Math.PI;
+ const points=[{lat:0,lng:0},{lat:latitude,lng:0}];
+ const out=await validateAgnosticWalkingOrder({stops:points,targetKm:4,
+  walkingRouter:async routed=>({source:'osrm',estimatedKm:5.4,
+   legs:[{distance_km:5.4,estimated_walk_minutes:120}],pathPoints:routed,fallbackUsed:false})});
+ assert.equal(out.valid,valid);
+ if(!valid){assert.equal(out.result,null);assert.deepEqual(out.blockers,['walking_budget_exceeded']);}
+});
 const withPath=path=>async points=>({...await router(1,[0.5,0.5])(points),pathPoints:path});
 for(const [name,path] of [
  ['unrelated path',stops.map(()=>({lat:0,lng:0}))],

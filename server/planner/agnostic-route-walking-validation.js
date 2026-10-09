@@ -184,8 +184,10 @@ async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfi
   };
 
   // 5. Budget gates (total + per-leg).
-  // Check the unrounded distance; 1e-9 km permits only floating-point noise.
-  if (!Number.isFinite(rawTotalKm) || rawTotalKm > totalBudgetKm + 1e-9) {
+  // Check the unrounded distance with a scale-dependent floating-point bound,
+  // not a fixed allowance in kilometres. Display rounding never grants budget.
+  const budgetPrecisionKm = Number.EPSILON * totalBudgetKm * 8;
+  if (!Number.isFinite(rawTotalKm) || rawTotalKm > totalBudgetKm + budgetPrecisionKm) {
     return { valid: false, blockers: ["walking_budget_exceeded"], checks: fullChecks, result: null };
   }
   if (maxLegKm > maxLegBudgetKm) {
