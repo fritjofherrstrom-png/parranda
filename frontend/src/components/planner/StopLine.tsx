@@ -184,32 +184,32 @@ export default function StopLine({
                 ? t("Du är inte nära rutten just nu.", "You're not near the route right now.")
                 : null;
 
+  // HOW THE DAY WAS ASSEMBLED — one line, opened on request, beside the map
+  // it qualifies. Every fact is still on the page (and read by assistive tech
+  // when opened). How Maps walks the route is said beside the Maps action.
+  const about = (
+    <details className="group mt-2">
+      <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-parranda-ink/72 transition hover:text-parranda-ink [&::-webkit-details-marker]:hidden">
+        {t("Om dagen och kartan", "About this day and map")}
+        <ChevronDownIcon className="h-3.5 w-3.5 transition group-open:rotate-180" />
+      </summary>
+      <ul className="mb-1 flex flex-col gap-1.5 text-xs leading-relaxed text-parranda-ink/72">
+        {assemblyNotes.map((note) => <li key={note}>{note}</li>)}
+        {routeLineIsSketch && <li>{t("Den prickade linjen visar stoppens ordning, inte gatorna.", "The dotted line shows the order of the stops, not the streets.")}</li>}
+        <li>{t("Avstånd och gångtider är uppskattningar.", "Distances and walking times are estimates.")}</li>
+        {dayContextNote && <li>{dayContextNote}</li>}
+      </ul>
+    </details>
+  );
+
   return (
     <section
       aria-label={t("Rutten", "The route")}
       className={`${stale ? "opacity-60 motion-safe:transition-opacity" : ""} flex flex-col`}
     >
-      {map && <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/4 p-4 sm:p-5">{map}</div>}
-      {/* The route's evidence, stated beside it: what the line is, what the
-          numbers are, and how the day was assembled. */}
-      {/* HOW THE DAY WAS ASSEMBLED — one line, opened on request. Every fact
-          is still on the page (and read by assistive tech when opened); it
-          no longer stacks between the title, the map and the stops. How Maps
-          walks the route is said beside the Maps action. */}
-      <details className="group mt-2">
-        <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-parranda-ink/72 transition hover:text-parranda-ink [&::-webkit-details-marker]:hidden">
-          {t("Om dagen och kartan", "About this day and map")}
-          <ChevronDownIcon className="h-3.5 w-3.5 transition group-open:rotate-180" />
-        </summary>
-        <ul className="mb-1 flex flex-col gap-1.5 text-xs leading-relaxed text-parranda-ink/72">
-          {assemblyNotes.map((note) => <li key={note}>{note}</li>)}
-          {routeLineIsSketch && <li>{t("Den prickade linjen visar stoppens ordning, inte gatorna.", "The dotted line shows the order of the stops, not the streets.")}</li>}
-          <li>{t("Avstånd och gångtider är uppskattningar.", "Distances and walking times are estimates.")}</li>
-          {dayContextNote && <li>{dayContextNote}</li>}
-        </ul>
-      </details>
+      {!map && about}
 
-      <div className="mb-2 mt-8 flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      <div className={(map ? "" : "mt-8 ") + "mb-2 flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1"}>
         <Eyebrow as="h2">{t("Stoppen i ordning", "The stops, in order")}</Eyebrow>
         {canFollow && (
           <button
@@ -531,6 +531,21 @@ export default function StopLine({
           </div>
         );
       })}
+
+      {/* ON A PHONE THE DAY COMES FIRST. The stops are the day; the map is its
+          overview, so inline (phones) it follows the line, edge to edge in the
+          column without a card of its own. A tall map above the stops kept
+          them off the first screen and caught the thumb that meant to scroll.
+          Wide screens keep the map beside the day (`map` is null here) and
+          the disclosure at the top. */}
+      {map && (
+        <>
+          <div role="region" aria-label={t("Karta över dagen", "Map of the day")} className="mt-8">
+            {map}
+          </div>
+          {about}
+        </>
+      )}
 
       {/* Detours — collapsed by default (design handoff §3): optional ideas
           must never read as part of the route, and the caption stays visible

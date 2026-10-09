@@ -238,8 +238,17 @@ export default function DayHeader({
       </p>
       {/* What the day did for each pick, in the pick's own words. A pick
           the route only partly covers, or does not cover, says so here
-          rather than at the foot of the page. */}
-      {pickCoverage.length > 0 && (
+          rather than at the foot of the page. When every pick is in the day
+          the anchor card already names them, so one line says so instead of
+          repeating the picks; a partial or missing pick always shows them all. */}
+      {pickCoverage.length > 0 && pickCoverage.every(({ state }) => state === "covered") ? (
+        <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-parranda-ink/72">
+          <CheckIcon className="h-3 w-3 text-parranda-ember" />
+          {pickCoverage.length === 1
+            ? t("Ditt val finns med i dagen", "Your pick is in this day")
+            : t("Alla dina val finns med i dagen", "All your picks are in this day")}
+        </p>
+      ) : pickCoverage.length > 0 && (
         <ul className="flex flex-wrap gap-2" aria-label={t("Dina val i dagen", "Your picks in this day")}>
           {pickCoverage.map(({ key, state }) => (
             <li

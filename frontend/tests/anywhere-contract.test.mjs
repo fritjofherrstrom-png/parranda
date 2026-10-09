@@ -454,7 +454,8 @@ test("adjustments collapse to a summary and re-compose themselves — no submit 
   // Root owns the only place-entry submit, including no-anchor fallback.
   assert.match(anywherePlannerSource, /recomposeTimerRef\.current = setTimeout\(/);
   assert.match(anywherePlannerSource, /\}, 400\);/);
-  assert.match(anywherePlannerSource, /Changes apply on their own/);
+  // The panel says so where it starts: there is nothing to submit.
+  assert.match(anywherePlannerSource, /t\("Dagen byggs om direkt när du ändrar\.", "The day rebuilds as you change it\."\)/);
   assert.equal((anywherePlannerSource.match(/type="submit"/g) || []).length, 0, "no second entry submit, even without an anchor");
 });
 

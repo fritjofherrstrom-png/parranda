@@ -104,6 +104,37 @@ test("a pick no stop covers is named as missing, not silently dropped", async (t
   assert.deepEqual(picks(h), ["Food & drink — in this day", "Culture — in this day", "Views · not in this day"]);
 });
 
+test("when every pick is in the day, one line says so instead of repeating the picks", async (t) => {
+  const h = await plannerWith(
+    t,
+    composedDay({
+      stops: [
+        stop("a", "Place a", 55.6, { covered_preferences: ["museums"] }),
+        stop("b", "Place b", 55.601, { type: "restaurant", covered_preferences: ["food"] }),
+        stop("c", "Place c", 55.602, { type: "park", covered_preferences: ["scenic"] }),
+      ],
+    }),
+  );
+
+  // The anchor card already names the picks; the header confirms them once.
+  assert.equal(h.container.querySelector('ul[aria-label="Your picks in this day"]'), null);
+  assert.match(header(h).textContent, /All your picks are in this day/);
+});
+
+test("on a phone the stops come before the map, and the map has no card of its own", async (t) => {
+  const h = await plannerWith(t, composedDay());
+  const route = routeCard(h);
+  const stops = route.querySelector('ol[aria-label="The stops, in order"]');
+  const map = route.querySelector('[role="region"][aria-label="Map of the day"]');
+  const about = route.querySelector("details");
+  assert.ok(stops && map && about, "stops, map and the About line are all in the route");
+  const FOLLOWING = h.window.Node.DOCUMENT_POSITION_FOLLOWING;
+  assert.ok(stops.compareDocumentPosition(map) & FOLLOWING, "the map follows the stops");
+  assert.ok(map.compareDocumentPosition(about) & FOLLOWING, "About this day and map sits under the map it qualifies");
+  // No card around the map: it is the map's own frame, edge to edge in the column.
+  assert.doesNotMatch(map.className, /\bp-4\b|bg-parranda-ink\/4/);
+});
+
 test("without stop-level coverage evidence the header claims nothing about the picks", async (t) => {
   const h = await plannerWith(
     t,
