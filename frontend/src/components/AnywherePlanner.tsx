@@ -1758,14 +1758,24 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     ? referenceBlockers.find((blocker: string) => Object.hasOwn(referenceFailures, blocker)) : null;
   const referenceFailureMessage = referenceFailure ? referenceFailures[referenceFailure]
     : t("Den valda platsreferensen kunde inte bekräftas. Välj en plats igen — ingen annan plats väljs automatiskt.", "The selected place reference could not be confirmed. Choose a place again — no other place is selected automatically.");
-  // Preserve the classifier's three absences; choices announce themselves,
-  // and an outstanding upgrade or service refusal is not a final no-day verdict.
+  // A resolved place whose place sources failed to answer is not a place
+  // without places: the verdict is about the sources, never the reader's
+  // picks, and since the page no longer retries on its own it offers the retry.
+  const sourceUnavailable = phase === "done" && classification?.status === "unavailable" && !anchorUnresolved
+    && anywhereDecision().shouldRetryTransientSource(safeResponse, classification);
+  // Preserve the classifier's absences; choices announce themselves, and an
+  // outstanding upgrade or service refusal is not a final no-day verdict.
   const unavailableMessage = phase === "done" && classification?.status === "unavailable" && !upgradePending && !serviceRefusal && !unavailableHasChoices
     ? anchorUnresolved
       ? placeRef ? referenceFailureMessage : t(
           `Parranda kunde inte hitta ”${typedPlaceLabel}” just nu. Prova en annan stavning eller lägg till land eller region — inget hittas på.`,
           `Parranda couldn't pin down “${typedPlaceLabel}” right now. Try another spelling or add a country or region — nothing is invented in its place.`,
         )
+      : sourceUnavailable
+        ? t(
+            `Platskällorna svarade inte just nu, så Parranda kunde inte hämta platser ${anchorIsPosition ? "nära dig" : `för ${placeName}`} — inget hittas på. Försök igen om en stund.`,
+            `The place sources didn't answer just now, so Parranda couldn't fetch places ${anchorIsPosition ? "near you" : `for ${placeName}`} — nothing is invented in its place. Try again in a moment.`,
+          )
       : classification.unavailableReason === "sparse_supply" && classification.realPlaceCount
         ? t(
             `Parranda hittade ${classification.realPlaceCount === 1 ? "1 riktig plats" : `${classification.realPlaceCount} riktiga platser`} ${anchorIsPosition ? "nära dig" : `nära ${placeName}`}, men inte tillräckligt för en pålitlig dag ännu — inget hittas på.`,
@@ -2104,7 +2114,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 }} />
             ) : unavailableMessage}
           </div>
-          {!anchorUnresolved && selected.length > 0 && (
+          {sourceUnavailable && (
+            <button type="button" onClick={retryPlan} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
+              {t("Försök igen", "Try again")}
+            </button>
+          )}
+          {!anchorUnresolved && !sourceUnavailable && selected.length > 0 && (
             <p>{t(
               "Vi kunde inte bekräfta en gångbar dag med dina val. Andra intressen läggs inte till automatiskt. Du kan ändra datum, dagens rytm eller själv välja fler intressen.",
               "We could not confirm a walkable day with your choices. Other interests are not added automatically. You can change the date, day rhythm or choose more interests yourself.",

@@ -190,23 +190,83 @@ test("choices, service refusals and pending upgrades keep their own truthful sta
   }
 });
 
-test("a dayless transient source failure is announced at once; pending Live no longer buys it a silent retry", async () => {
-  // On main before the Live completion contract, this response retried after
-  // 9 s only because its Live was pending — the Live ladder carried the source
-  // retry. The server lifecycle has already waited for supply, so the honest
-  // answer is the failure itself, with the explicit retry the page offers.
-  const resolved = { status: "resolved", resolved: { label: "Testville" } };
+// A resolved place whose place sources did not answer (staging, 9 October:
+// overpass-api.de unreachable, `source_status.status: error_failed_closed`).
+// The verdict is about the sources, not the reader's picks, and since #583 the
+// page no longer retries on its own — so it says what failed and offers the
+// retry itself.
+const sourceOutage = (intake = { status: "resolved", resolved: { label: "Testville" } }) => ({
+  days: [],
+  live_events: { pending: true },
+  agnostic_route_output_experiment: { intake, source_status: { status: "error_failed_closed" } },
+});
+const composeCalls = (h) => h.fetchMock.calls.filter((call) => call.url.startsWith("/api/route-recommendations"));
+const buttonNamed = (h, name) => [...h.container.querySelectorAll("button")].find((b) => b.textContent.trim() === name);
+
+test("a dayless place-source failure says the sources did not answer and offers the retry itself", async () => {
   const h = await mountPlanner({ url: PLACE_URL });
   try {
     const status = h.container.querySelector('p[role="status"].sr-only');
     await h.clock.advance(500);
-    await h.fetchMock.respond(h.fetchMock.pending().find((call) => call.url.startsWith("/api/route-recommendations")),
-      { days: [], live_events: { pending: true }, agnostic_route_output_experiment: { intake: resolved, source_status: { status: "error_failed_closed" } } });
+    await h.fetchMock.respond(composeCalls(h)[0], sourceOutage());
     await h.clock.advance(50);
-    assert.match(status.textContent, /couldn't compose a day for Testville/);
+    assert.equal(
+      status.textContent,
+      "The place sources didn't answer just now, so Parranda couldn't fetch places for Testville — nothing is invented in its place. Try again in a moment.",
+    );
+    assert.doesNotMatch(h.text(), /with your choices/, "a source outage is not blamed on the reader's picks");
     assert.doesNotMatch(h.text(), /Reading more from the sources/);
     await h.clock.advance(60000);
-    assert.equal(h.fetchMock.calls.filter((call) => call.url.startsWith("/api/route-recommendations")).length, 1, "no timer-driven recompose");
+    assert.equal(composeCalls(h).length, 1, "no timer-driven recompose");
+
+    const retry = buttonNamed(h, "Try again");
+    assert.ok(retry, h.text());
+    await h.act(() => retry.dispatchEvent(new h.window.Event("click", { bubbles: true })));
+    await h.clock.advance(50);
+    assert.equal(composeCalls(h).length, 2, "one explicit retry, one compose");
+    assert.deepEqual(composeCalls(h)[1].body, composeCalls(h)[0].body, "the retry asks the same question again");
+    await h.fetchMock.respond(composeCalls(h)[1], composedDay());
+    await h.clock.advance(50);
+    assert.doesNotMatch(h.text(), /didn't answer just now/);
+    assert.match(h.text(), /Place a/);
+  } finally {
+    await h.unmount();
+  }
+});
+
+test("near me, a place-source failure keeps the position and retries around it", async () => {
+  const h = await mountPlanner({
+    url: "http://localhost/anywhere?anchor=near&planner=open&lang=sv",
+    sessionStorage: { "parranda:anchor:coords": { lat: 48.8867, lng: 2.3431 } },
+  });
+  try {
+    await h.clock.advance(500);
+    await h.fetchMock.respond(composeCalls(h)[0], sourceOutage({ mode: "coordinates", status: "resolved", resolved: { label: null, lat: 48.8867, lng: 2.3431 } }));
+    await h.clock.advance(50);
+    assert.match(h.text(), /Platskällorna svarade inte just nu, så Parranda kunde inte hämta platser nära dig — inget hittas på\. Försök igen om en stund\./);
+    assert.doesNotMatch(h.text(), /med dina val/);
+    const retry = buttonNamed(h, "Försök igen");
+    assert.ok(retry, h.text());
+    await h.act(() => retry.dispatchEvent(new h.window.Event("click", { bubbles: true })));
+    await h.clock.advance(50);
+    assert.equal(composeCalls(h).length, 2);
+    assert.equal(composeCalls(h)[1].body.lat, 48.8867, "the retry is about the same position");
+    assert.equal(composeCalls(h)[1].body.lng, 2.3431);
+  } finally {
+    await h.unmount();
+  }
+});
+
+test("a resolved place without a day for other reasons keeps the choices advice and no source claim", async () => {
+  const h = await mountPlanner({ url: PLACE_URL });
+  try {
+    await h.clock.advance(500);
+    await h.fetchMock.respond(composeCalls(h)[0], { days: [], agnostic_route_output_experiment: { intake: { status: "resolved", resolved: { label: "Testville" } }, source_status: { status: "loaded:12" } } });
+    await h.clock.advance(50);
+    assert.match(h.text(), /couldn't compose a day for Testville yet/);
+    assert.match(h.text(), /We could not confirm a walkable day with your choices/);
+    assert.doesNotMatch(h.text(), /didn't answer just now/);
+    assert.equal(buttonNamed(h, "Try again"), undefined);
   } finally {
     await h.unmount();
   }

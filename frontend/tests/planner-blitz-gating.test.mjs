@@ -95,7 +95,8 @@ test("without a day on screen, Blitz makes no promise about one", async (t) => {
   const h = await planner(t, "http://localhost/anywhere?anchor=near&planner=open&lang=en", resolvedButEmpty, {
     sessionStorage: { [COORDS_KEY]: { lat: 55.6, lng: 13 } },
   });
-  assert.match(h.text(), /Parranda couldn't compose a day near you yet/);
+  // The fixture is a place-source outage, so the no-day copy says so.
+  assert.match(h.text(), /The place sources didn't answer just now, so Parranda couldn't fetch places near you/);
   assert.match(h.text(), /One next move near you, right now\./);
   assert.doesNotMatch(h.text(), /your day stays as it is|Your day is unchanged/);
 
