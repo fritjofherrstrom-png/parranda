@@ -164,3 +164,34 @@ export function screenMarkerPresentation(points, { width, height, keepouts = [],
   }
   return result;
 }
+
+/**
+ * Callouts for numbers drawn beside their stop: a dot on the stop's own
+ * coordinate and a line from it to where the number is drawn. Returned as
+ * GeoJSON for a map layer, so the callout lies beneath every number. A number
+ * drawn on its coordinate gets none; an impossible layout (null offsets) gets
+ * none, because no number was moved.
+ *
+ * @param {{ anchors: Array<{lat:number,lng:number}>, points: Array<{x:number,y:number}>,
+ *           offsets: Array<{shift_x_px:number,shift_y_px:number}> | null,
+ *           unproject: (point: [number, number]) => {lat:number,lng:number} }} input
+ */
+export function screenCallouts({ anchors, points, offsets, unproject }) {
+  const features = [];
+  if (Array.isArray(offsets) && Array.isArray(anchors) && Array.isArray(points) && typeof unproject === "function") {
+    offsets.forEach((offset, i) => {
+      const anchor = anchors[i];
+      const point = points[i];
+      if (!anchor || !point || !Number.isFinite(anchor.lat) || !Number.isFinite(anchor.lng)) return;
+      if (!(Math.hypot(offset?.shift_x_px, offset?.shift_y_px) > 0.5)) return;
+      const drawn = unproject([point.x + offset.shift_x_px, point.y + offset.shift_y_px]);
+      if (!drawn || !Number.isFinite(drawn.lat) || !Number.isFinite(drawn.lng)) return;
+      const coordinate = [anchor.lng, anchor.lat];
+      features.push(
+        { type: "Feature", properties: { stop: i }, geometry: { type: "LineString", coordinates: [coordinate, [drawn.lng, drawn.lat]] } },
+        { type: "Feature", properties: { stop: i }, geometry: { type: "Point", coordinates: coordinate } },
+      );
+    });
+  }
+  return { type: "FeatureCollection", features };
+}

@@ -265,7 +265,10 @@ test("route result has one authoritative route and keeps broader candidates seco
 test("map hierarchy mirrors route authority instead of numbering two competing plans", () => {
   assert.match(anywherePlannerSource, /routeMarkerPresentation\(routeStops\)/);
   assert.match(anywherePlannerSource, /shell\.className = "route-map-marker-shell"/);
-  assert.match(anywherePlannerSource, /origin\.style\.setProperty\("--route-marker-x", `\$\{shiftX\}px`\)/);
+  // A number drawn beside its stop is tied to the stop's coordinate by a
+  // callout drawn on the map, beneath every number (route-map-callouts.test.mjs).
+  assert.match(anywherePlannerSource, /setData\(screenCallouts\(\{ anchors: badgesRef\.current, points, offsets/);
+  assert.doesNotMatch(anywherePlannerSource, /route-map-marker-origin/);
   assert.match(anywherePlannerSource, /routeContextSuggestions\.filter/);
   assert.match(anywherePlannerSource, /if \(hasPrimaryRoute\)/);
   // Candidates are NEVER sequenced: the no-route branch draws plain dots only —

@@ -26,6 +26,8 @@
  */
 
 const SIDES = ["left", "top", "right", "bottom"];
+// The fit's zoom resolution inside a whole level.
+const ZOOM_PRECISION = 0.01;
 
 function finite(...values) {
   return values.every(Number.isFinite);
@@ -121,8 +123,11 @@ export function controlAwareView({
 
   const onMap = { top: edge, right: edge, bottom: edge, left: edge };
   const options = paddingOptions({ width, height, keepouts, edge, gap });
+  const INVALID = Symbol("invalid");
 
-  for (let zoom = Math.floor(maxZoom); zoom >= Math.ceil(minZoom); zoom -= 1) {
+  // The view at one zoom: null when the day does not fit, INVALID when the
+  // projection cannot place a mark.
+  const viewAt = (zoom) => {
     // Each mark's footprint in world pixels at this zoom, as the extremes of
     // the two kinds: marks that avoid the controls, and marks that only stay on
     // the map. The origin (the world pixel at the container's top-left) must
@@ -133,7 +138,7 @@ export function controlAwareView({
     };
     for (const mark of drawable) {
       const point = project(mark, zoom);
-      if (!finite(point?.x, point?.y)) return null;
+      if (!finite(point?.x, point?.y)) return INVALID;
       const radius = Number.isFinite(mark.radius) ? Math.max(0, mark.radius) : 0;
       const x = point.x + (Number.isFinite(mark.offsetX) ? mark.offsetX : 0);
       const y = point.y + (Number.isFinite(mark.offsetY) ? mark.offsetY : 0);
@@ -164,11 +169,39 @@ export function controlAwareView({
         best = { slack, padding, origin: { x: (low.x + high.x) / 2, y: (low.y + high.y) / 2 } };
       }
     }
-    if (!best) continue;
+    if (!best) return null;
 
     const center = unproject({ x: best.origin.x + width / 2, y: best.origin.y + height / 2 }, zoom);
-    if (!finite(center?.lat, center?.lng)) return null;
+    if (!finite(center?.lat, center?.lng)) return INVALID;
     return { center: { lat: center.lat, lng: center.lng }, zoom, padding: best.padding };
+  };
+
+  for (let zoom = Math.floor(maxZoom); zoom >= Math.ceil(minZoom); zoom -= 1) {
+    const whole = viewAt(zoom);
+    if (whole === INVALID) return null;
+    if (!whole) continue;
+    // Vector tiles draw sharp between whole levels, so the closest fit is
+    // found inside the level too: a day that misses the next level by a
+    // little is not shown at half the scale it could have. Fitting only gets
+    // harder as the zoom grows, so a bisection finds the edge.
+    let fits = zoom;
+    let misses = Math.min(zoom + 1, maxZoom);
+    if (misses > fits) {
+      const atMax = viewAt(misses);
+      if (atMax === INVALID) return null;
+      if (atMax) return atMax;
+    }
+    for (let step = 0; step < 10 && misses - fits > ZOOM_PRECISION; step += 1) {
+      const middle = (fits + misses) / 2;
+      const view = viewAt(middle);
+      if (view === INVALID) return null;
+      if (view) fits = middle;
+      else misses = middle;
+    }
+    // Rounded down, so the reported zoom is one that was proven to fit.
+    const zoomFit = Math.floor(fits / ZOOM_PRECISION) * ZOOM_PRECISION;
+    const view = viewAt(Math.max(zoom, Math.min(zoomFit, fits)));
+    return view && view !== INVALID ? view : whole;
   }
   return null;
 }

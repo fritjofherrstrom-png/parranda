@@ -26,13 +26,15 @@
  * every marker's disc is kept clear of them at the position it is drawn at.
  *
  * A tap on a stop's visible number opens that stop. Screen-space placement
- * keeps badge footprints apart and clear of controls at the current zoom.
- * Displaced badges retain a dot at their authoritative geographic coordinate.
+ * keeps badge footprints apart and clear of controls at the current zoom. A
+ * displaced number is tied to its authoritative coordinate by a callout: a
+ * dot on the coordinate and a thin line to the number, drawn on the map
+ * itself, so it always lies beneath every number and never covers one.
  * Stops, their order, route geometry and the Maps handoff remain unchanged.
  */
 import { useEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { routeMarkerPresentation, screenMarkerPresentation } from "../../lib/route-map-presentation.mjs";
+import { routeMarkerPresentation, screenCallouts, screenMarkerPresentation } from "../../lib/route-map-presentation.mjs";
 import { controlAwareView, type FitMark, type MapBox } from "../../lib/route-map-fit.mjs";
 import { BASEMAP_PROVIDER, basemapPaint, basemapStyle, type BasemapTheme } from "../../lib/route-map-style.mjs";
 import type { RouteContextSuggestion } from "../../lib/route-context-view.mjs";
@@ -57,6 +59,7 @@ const FIT_MAX_ZOOM = 14;
 const ROUTE_SOURCE = "parranda-route";
 const CONTEXT_SOURCE = "parranda-context";
 const CANDIDATE_SOURCE = "parranda-candidates";
+const CALLOUT_SOURCE = "parranda-callouts";
 
 type MapLibre = typeof import("maplibre-gl");
 type Tip = { name: string; x: number; y: number; direction: "left" | "right" } | null;
@@ -150,6 +153,7 @@ function fitToControls(map: any, frame: HTMLElement | null, container: HTMLEleme
 }
 
 const emptyCollection = { type: "FeatureCollection", features: [] as any[] };
+
 const pointCollection = (points: Array<{ lat: number; lng: number; name?: string | null }>) => ({
   type: "FeatureCollection",
   features: points.map((point) => ({
@@ -207,7 +211,7 @@ export default function RouteMap({
     document.addEventListener("keydown", dismiss);
     return () => document.removeEventListener("keydown", dismiss);
   }, [tip]);
-  const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; move: (x: number, y: number, direction: "left" | "right") => void; showOrigin: (visible: boolean) => void }>>([]);
+  const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; move: (x: number, y: number, direction: "left" | "right") => void }>>([]);
   const layoutRef = useRef<() => void>(() => {});
   const refitRef = useRef<() => void>(() => {});
   layoutRef.current = () => {
@@ -222,16 +226,10 @@ export default function RouteMap({
     setLayoutCrowded(offsets === null);
     offsets?.forEach((offset, i) => badgesRef.current[i].move(offset.shift_x_px, offset.shift_y_px,
       points[i].x + offset.shift_x_px < width / 2 ? "right" : "left"));
-    // Origin dots are optional coordinate hints, never relocated coordinates.
-    // Suppress a hint when it would paint over any station (including its own).
-    if (offsets) badgesRef.current.forEach((badge, i) => badge.showOrigin(
-      (Math.abs(offsets[i].shift_x_px) > 0.5 || Math.abs(offsets[i].shift_y_px) > 0.5)
-      && points.every((point, j) => Math.hypot(
-        points[i].x - point.x - offsets[j].shift_x_px,
-        points[i].y - point.y - offsets[j].shift_y_px,
-      ) >= 26),
-    ));
-    else badgesRef.current.forEach((badge) => badge.showOrigin(false));
+    // A number drawn beside its stop keeps a callout to the stop's own
+    // coordinate. Drawn on the map, beneath every number: a dense cluster is
+    // exactly where the link is needed, and nothing it draws can cover a stop.
+    map.getSource(CALLOUT_SOURCE)?.setData(screenCallouts({ anchors: badgesRef.current, points, offsets, unproject: (point) => map.unproject(point) }));
   };
   // The open name follows its marker while the map moves.
   const tipAnchorRef = useRef<{ index: number } | null>(null);
@@ -246,6 +244,11 @@ export default function RouteMap({
     const paper = roleColour("--p-color-paper", "#eeece7");
     const ink = roleColour("--p-color-ink", "#161411");
     if (map.getLayer("route-line")) map.setPaintProperty("route-line", "line-color", ember);
+    if (map.getLayer("callout-lines")) map.setPaintProperty("callout-lines", "line-color", ink);
+    if (map.getLayer("callout-origins")) {
+      map.setPaintProperty("callout-origins", "circle-color", ink);
+      map.setPaintProperty("callout-origins", "circle-stroke-color", paper);
+    }
     if (map.getLayer("context-dots")) {
       map.setPaintProperty("context-dots", "circle-stroke-color", ember);
       map.setPaintProperty("context-dots", "circle-color", paper);
@@ -276,7 +279,7 @@ export default function RouteMap({
         clearDrawn();
         marksRef.current = [];
         const map = instanceRef.current?.map;
-        for (const source of [ROUTE_SOURCE, CONTEXT_SOURCE, CANDIDATE_SOURCE]) map?.getSource(source)?.setData(emptyCollection);
+        for (const source of [ROUTE_SOURCE, CONTEXT_SOURCE, CANDIDATE_SOURCE, CALLOUT_SOURCE]) map?.getSource(source)?.setData(emptyCollection);
         setLayoutCrowded(false);
         setMapDrawn(true); // nothing to draw — clear the placeholder
         return;
@@ -341,7 +344,10 @@ export default function RouteMap({
           map.addSource(ROUTE_SOURCE, { type: "geojson", data: emptyCollection });
           map.addSource(CONTEXT_SOURCE, { type: "geojson", data: emptyCollection });
           map.addSource(CANDIDATE_SOURCE, { type: "geojson", data: emptyCollection });
+          map.addSource(CALLOUT_SOURCE, { type: "geojson", data: emptyCollection });
           map.addLayer({ id: "route-line", type: "line", source: ROUTE_SOURCE, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-width": 5, "line-opacity": 0.95 } });
+          map.addLayer({ id: "callout-lines", type: "line", source: CALLOUT_SOURCE, filter: ["==", ["geometry-type"], "LineString"], layout: { "line-cap": "round" }, paint: { "line-width": 1.5, "line-opacity": 0.8 } });
+          map.addLayer({ id: "callout-origins", type: "circle", source: CALLOUT_SOURCE, filter: ["==", ["geometry-type"], "Point"], paint: { "circle-radius": 3.5, "circle-stroke-width": 1.5 } });
           map.addLayer({ id: "context-dots", type: "circle", source: CONTEXT_SOURCE, paint: { "circle-radius": 5, "circle-stroke-width": 1.5, "circle-opacity": 0.6, "circle-stroke-opacity": 0.75 } });
           map.addLayer({ id: "candidate-dots", type: "circle", source: CANDIDATE_SOURCE, paint: { "circle-radius": 5, "circle-stroke-width": 2 } });
           applyTheme(map);
@@ -440,12 +446,7 @@ export default function RouteMap({
           const disc = document.createElement("span");
           disc.className = `route-map-marker${eventClass}`;
           disc.textContent = String(index + 1);
-          const origin = document.createElement("span");
-          origin.className = "route-map-marker-origin";
-          origin.hidden = !presentation?.clustered;
-          origin.style.setProperty("--route-marker-x", `${shiftX}px`);
-          origin.style.setProperty("--route-marker-y", `${shiftY}px`);
-          shell.append(disc, origin);
+          shell.append(disc);
           disc.addEventListener("mouseenter", open);
           disc.addEventListener("mouseleave", close);
           disc.addEventListener("click", open);
@@ -465,16 +466,11 @@ export default function RouteMap({
             x: shiftX,
             y: shiftY,
             direction: "right",
-            showOrigin: (visible: boolean) => { origin.hidden = !visible; },
             move: (x: number, y: number, direction: "left" | "right") => {
               const key = `${x}:${y}:${direction}`;
               if (key === last) return;
               last = key;
               badge.x = x; badge.y = y; badge.direction = direction;
-              const shifted = Math.abs(x) > 0.5 || Math.abs(y) > 0.5;
-              origin.hidden = !shifted;
-              origin.style.setProperty("--route-marker-x", `${x}px`);
-              origin.style.setProperty("--route-marker-y", `${y}px`);
               targetMarker.setOffset([x, y]);
               discMarker.setOffset([x, y]);
               if (tipAnchorRef.current?.index === badgeIndex) {

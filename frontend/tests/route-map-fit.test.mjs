@@ -118,10 +118,14 @@ test("stops in every corner clear every control at once", () => {
   assertClear(fit(CORNER_DAY), CORNER_DAY);
 });
 
-test("the closest zoom that keeps every stop clear is chosen", () => {
+test("the closest zoom that keeps every stop clear is chosen, inside a whole level too", () => {
   const view = fit(NORTH_EAST_DAY);
   assert.ok(view.zoom < 15, "this day cannot be shown at the zoom cap");
-  const closer = view.zoom + 1;
+  // Vector tiles draw sharp between levels: a day that misses the next whole
+  // level is not shown at the scale of the level below it.
+  assert.ok(view.zoom > Math.floor(view.zoom), `fractional zoom expected, got ${view.zoom}`);
+  assertClear(view, NORTH_EAST_DAY);
+  const closer = view.zoom + 0.02;
   const points = NORTH_EAST_DAY.map((mark) => project(mark, closer));
   const width = Math.max(...points.map((p) => p.x)) - Math.min(...points.map((p) => p.x)) + 2 * MARKER;
   const height = Math.max(...points.map((p) => p.y)) - Math.min(...points.map((p) => p.y)) + 2 * MARKER;
@@ -179,12 +183,12 @@ test("the route line's own points only have to stay on the map", () => {
   const withEnd = [...DIAGONAL_DAY, { lat: 55.6085, lng: 13.0235, avoidControls: false }];
   const view = fit(withEnd);
   assertClear(view, withEnd);
-  // The line may run under the button; the stops still may not.
-  const [end] = footprints(view, withEnd).slice(-1);
-  assert.ok(overlaps(end, PHONE.button), "the line's end is allowed under the control");
-  // Holding the line to the stops' rule would cost a zoom level.
+  // The line may run under the button; the stops still may not. So the
+  // line's end costs the view nothing…
+  assert.equal(view.zoom, fit(DIAGONAL_DAY).zoom);
+  // …while holding the line to the stops' rule would cost zoom.
   const strict = fit(withEnd.map((mark) => ({ ...mark, avoidControls: true })));
-  assert.equal(strict.zoom, view.zoom - 1);
+  assert.ok(strict.zoom < view.zoom, `${strict.zoom} < ${view.zoom}`);
 });
 
 test("controls off the map, or without size, are ignored", () => {

@@ -229,25 +229,6 @@
 .route-map-frame .maplibregl-marker.route-map-marker-shell {
   pointer-events: none;
 }
-.route-map-marker-origin[hidden] {
-  display: none;
-}
-
-/* A clustered stop's disc is drawn beside its coordinate; this dot marks the
-   coordinate. */
-.route-map-marker-origin {
-  position: absolute;
-  left: calc(50% - var(--route-marker-x, 0px));
-  top: calc(50% - var(--route-marker-y, 0px));
-  width: 7px;
-  height: 7px;
-  border: 1.5px solid rgb(var(--p-color-paper));
-  border-radius: 999px;
-  background: rgb(var(--p-color-ink));
-  transform: translate(-50%, -50%);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
-}
-
 .route-map-marker {
   position: absolute;
   left: 50%;
