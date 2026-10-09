@@ -1650,9 +1650,20 @@ function composeOpenDataLoaders(
       // Retain the original acquisition even if it settled between reads. A
       // failed acquisition must not silently be started again by rescue.
       if (sameAsPrimary && eagerRecords?.[SOURCE_COMPLETION]) {
-        const ready = typeof source.readCached === 'function' ? await source.readCached(wikiAnchor, request) : [];
-        if (ready.length) { backgroundRecords.push(...ready); continue; }
-        completions.push(eagerRecords[SOURCE_COMPLETION]);
+        // A same-key cache hit may belong to a newer producer. Only this
+        // composition's retained job can attest its result and failure health.
+        const originalSnapshot = typeof eagerRecords[SOURCE_SNAPSHOT] === 'function'
+          ? eagerRecords[SOURCE_SNAPSHOT]() : null;
+        if (Array.isArray(originalSnapshot)) {
+          backgroundRecords.push(...originalSnapshot);
+          if (originalSnapshot.source_error) backgroundFailures.push(safeLoaderToken(originalSnapshot.source_error));
+          continue;
+        }
+        backgroundRecords.push(...eagerRecords);
+        if (eagerRecords.source_error) backgroundFailures.push(safeLoaderToken(eagerRecords.source_error));
+        if (primaryFailed || source.waitForCompletion !== false) {
+          completions.push(eagerRecords[SOURCE_COMPLETION]);
+        }
         continue;
       }
       const eagerWasEmpty = Array.isArray(eagerRecords) && eagerRecords.length === 0;

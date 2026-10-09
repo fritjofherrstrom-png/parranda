@@ -31,9 +31,12 @@ function createBackgroundSource({
     if (signal.aborted) release();
     else signal.addEventListener('abort', release, { once: true });
   };
-  const pendingValue = completion => {
+  const pendingValue = operation => {
     const pending = [];
-    Object.defineProperty(pending, SOURCE_COMPLETION, { value: completion });
+    Object.defineProperty(pending, SOURCE_COMPLETION, { value: operation.completion });
+    Object.defineProperty(pending, SOURCE_SNAPSHOT, {
+      value: () => operation.settled ? operation.value : null,
+    });
     return pending;
   };
   const source = {
@@ -64,7 +67,13 @@ function createBackgroundSource({
         operation.completion = cache.get(key, () => load(producerAnchor, producerRequest), {
           signal: controller.signal,
           shouldStore: value => !controller.signal.aborted && shouldStore(value),
-        }).catch(() => failedValue()).finally(() => {
+        }).then(value => {
+          operation.value = value;
+          return value;
+        }).catch(() => {
+          operation.value = failedValue();
+          return operation.value;
+        }).finally(() => {
           operation.settled = true;
           for (const [signal, release] of operation.consumers) {
             signal.removeEventListener('abort', release);
@@ -78,7 +87,7 @@ function createBackgroundSource({
       // Always retain the original job privately. Composition decides whether
       // optional corroboration should wait: it stays non-blocking with healthy
       // primary supply, but can rescue a failed/empty primary without reacquiring.
-      return pendingValue(operation.completion);
+      return pendingValue(operation);
     },
   };
   return source;
