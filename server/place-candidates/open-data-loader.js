@@ -1725,15 +1725,22 @@ function composeOpenDataLoaders(
         const primarySnapshot = typeof osm?.[SOURCE_SNAPSHOT] === 'function' ? osm[SOURCE_SNAPSHOT]() : [];
         const settled = [...records, ...(Array.isArray(primarySnapshot) ? primarySnapshot : []), ...groups.flatMap(rows => Array.isArray(rows) ? rows : [])];
         const unique = [...new Map(settled.map(row => [row.id, row])).values()];
-        const failed = groups.some(rows => rows?.source_error || rows?.loader_status === 'error_failed_closed');
+        const hasFailure = rows => Boolean(rows?.source_error || rows?.loader_error ||
+          rows?.loader_status === 'error_failed_closed' ||
+          (Number.isFinite(rows?.loader_metadata?.source_completion?.failed) &&
+            rows.loader_metadata.source_completion.failed > 0));
+        const failedGroups = groups.filter(hasFailure);
+        const failed = failedGroups.length > 0 || hasFailure(primarySnapshot);
+        const completionError = [...groups, primarySnapshot].map(rows =>
+          rows?.source_error || rows?.loader_error).filter(Boolean).map(safeLoaderToken).find(Boolean);
         return withLoaderMetadata(withLoaderStatus(unique,
           unique.length ? `loaded:${unique.length}` : failed ? 'error_failed_closed' : status,
-          collectionError || (failed ? 'fetch_error' : null)), {
+          collectionError || completionError || (failed ? 'fetch_error' : null)), {
           ...metadata,
           source_completion: {
             status: finished.size === completions.length ? 'complete' : 'partial',
             completed: finished.size, pending: completions.length - finished.size,
-            failed: groups.filter(rows => rows?.source_error || rows?.loader_status === 'error_failed_closed').length,
+            failed: failedGroups.length,
           },
           selected_profile: supplyProfile(unique, requestedIntents),
           selected_day_capacity: dayCapacityProfile(unique, { origin: wikiAnchor, walkingTargetBand: request.walkingTargetBand }),

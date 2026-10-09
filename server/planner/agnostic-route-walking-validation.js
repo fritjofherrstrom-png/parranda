@@ -155,8 +155,20 @@ async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfi
   if (hasRouterEstimatedKm && Math.abs(result.estimatedKm - legSumKm) > roundingToleranceKm) {
     return failed(["walking_validation_failed"], { ...checks, leg_count: result.legs.length });
   }
-  // Rounding must not let a lower total bypass the user's walking budget.
-  const totalKm = Number(Math.max(hasRouterEstimatedKm ? result.estimatedKm : 0, legSumKm).toFixed(1));
+  // The polyline is an independent lower bound on distance: visiting the
+  // stops in order does not make an arbitrarily long detour trustworthy.
+  const pathLengthKm = result.pathPoints.slice(1).reduce((sum, point, index) =>
+    sum + pointDistanceKm(result.pathPoints[index], point), 0);
+  const attestedKm = Math.max(hasRouterEstimatedKm ? result.estimatedKm : 0, legSumKm);
+  // Allow independent metric rounding, endpoint snapping and a 1% spherical
+  // geometry approximation; never silently expand acquisition/user budgets.
+  const pathToleranceKm = roundingToleranceKm + 2 * MAX_PATH_SNAP_KM + attestedKm * 0.01;
+  if (!Number.isFinite(pathLengthKm) || pathLengthKm > attestedKm + pathToleranceKm) {
+    return failed(["walking_validation_failed"], { ...checks, leg_count: result.legs.length });
+  }
+  // Neither a lower rounded total nor a slightly longer accepted polyline may
+  // bypass the user's walking budget.
+  const totalKm = Number(Math.max(attestedKm, pathLengthKm).toFixed(1));
   const maxLegKm = Math.max(...legDistances);
   const totalMinutes = legMinutes.reduce((sum, value) => sum + value, 0);
 

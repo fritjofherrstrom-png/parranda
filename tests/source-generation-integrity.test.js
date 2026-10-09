@@ -90,6 +90,24 @@ test('independent: same completion reused by two sources deduplicates rows and p
  assert.equal(final.length,1);assert.equal(initial[SOURCE_SNAPSHOT]().length,1);assert.equal(final.loader_metadata.source_completion.pending,0);assert.equal(JSON.stringify(final).includes('source_completion'),false);
 });
 
+test('nested completion keeps a failed source visible alongside usable primary rows',async()=>{
+ const work=deferred();let calls=0;
+ const source=createBackgroundSource({cache:createSourceCache(),keyFor:()=> 'nested',eager:false,
+  load:()=>{calls++;return work.promise;}});
+ const inner=composeOpenDataLoaders(healthy,source);
+ const outer=composeOpenDataLoaders(inner,()=>[]);
+ const initial=await outer(anchor);
+ assert.ok(initial[SOURCE_COMPLETION]);
+ work.resolve(Object.defineProperty([],'source_error',{value:'fetch_error'}));
+ const final=await initial[SOURCE_COMPLETION];
+ assert.equal(final.length,1);
+ assert.equal(final.loader_status,'loaded:1');
+ assert.equal(final.loader_error,'fetch_error');
+ assert.equal(final.loader_metadata.source_completion.failed,1);
+ assert.equal(initial[SOURCE_SNAPSHOT]().loader_error,'fetch_error');
+ assert.equal(calls,1);
+});
+
 test('independent characterization: shared rows and result snapshots are mutable references, not isolated copies',async()=>{
  const work=deferred();const source=createBackgroundSource({cache:createSourceCache(),keyFor:()=> 'one',load:()=>work.promise});
  const initial=await composeOpenDataLoaders(failed,null,source)(anchor);work.resolve([{id:'shared',type:'park',...anchor}]);const final=await initial[SOURCE_COMPLETION];

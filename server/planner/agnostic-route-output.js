@@ -1787,13 +1787,14 @@ async function composeAgnosticRouteViaEngine({
     const metrics = buildLegMetrics(deferredWalking.result.legs, "balanced", {
       shape: engineRoute.route_shape || "arc", lang,
     });
+    const legMinutes = deferredWalking.result.legs.map(leg => Number(leg.estimated_walk_minutes));
     Object.assign(engineRoute, {
       estimated_km: deferredWalking.result.estimatedKm,
       legs: deferredWalking.result.legs,
       map_path_points: deferredWalking.result.pathPoints,
       longest_leg_km: metrics.longestLegKm,
-      longest_leg_minutes: metrics.longestLegMinutes,
-      average_leg_minutes: metrics.averageLegMinutes,
+      longest_leg_minutes: Math.max(...legMinutes),
+      average_leg_minutes: Math.round(legMinutes.reduce((sum, value) => sum + value, 0) / legMinutes.length),
       long_leg_count: metrics.longLegCount,
       route_continuity_score: metrics.routeContinuityScore,
       dead_walk_penalty: metrics.deadWalkPenalty,

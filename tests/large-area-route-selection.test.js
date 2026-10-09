@@ -100,6 +100,16 @@ test('an invalid routed path cannot become a published day', async () => {
   assert.ok(out.experiment.eligibility.blockers.includes('invalid_walking_path_points'));
 });
 
+test('an ordered path with an enormous detour cannot publish a day', async () => {
+  const out = await replay({walkingRouter:async(points,opts)=>({
+    ...await routeWalkingPath(points,opts),
+    pathPoints:[points[0],{lat:60,lng:0},...points.slice(1)],
+  })});
+  assert.deepEqual(out.result.days,[]);
+  assert.equal(out.experiment.walking_validation.valid,false);
+  assert.ok(out.experiment.eligibility.blockers.includes('walking_validation_failed'));
+});
+
 test('identical preferences and rhythm retain the requested distance budget', async () => {
   const out = await replay({distanceMode:'soft_target',walkingKmTarget:1});
   assert.deepEqual(out.result.days,[]);
@@ -153,6 +163,18 @@ test('the validated final walking result is the geometry and distance actually p
   assert.equal(out.experiment.walking_validation.checks.total_walk_km,7);
   assert.equal(route.estimated_km,7,'publish the distance validated, not the old heuristic distance');
   assert.ok(route.legs.every(leg=>leg.distance_km>=1));
+});
+
+test('published walking-time aggregates use the validated router minutes', async () => {
+  const out = await geometryReplay(pair(0.029),{walkingRouter:async(points,opts)=>{
+    const routed=await routeWalkingPath(points,opts);
+    return {...routed,source:'osrm',legs:routed.legs.map(leg=>({...leg,estimated_walk_minutes:120}))};
+  }});
+  const route=out.result.days[0]?.primary_route;
+  assert.ok(route);
+  assert.equal(route.legs[0].estimated_walk_minutes,120);
+  assert.equal(route.longest_leg_minutes,120);
+  assert.equal(route.average_leg_minutes,120);
 });
 
 test('rhythm variants on identical recorded preferences remain source-backed and walking-validated', async () => {

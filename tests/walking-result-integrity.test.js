@@ -3,7 +3,9 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const {validateAgnosticWalkingOrder}=require('../server/planner/agnostic-route-walking-validation');
 const {routeWalkingPath}=require('../server/walking-router');
-const stops=[{lat:51.51,lng:-0.14},{lat:51.52,lng:-0.13},{lat:51.53,lng:-0.12}];
+// Keep the positive path fixtures physically compatible with their claimed
+// 0.5 km legs; the earlier degree spacing already exceeded the claimed total.
+const stops=[{lat:51.51,lng:-0.14},{lat:51.512,lng:-0.139},{lat:51.514,lng:-0.138}];
 const router=(total,distances)=>async points=>({source:'osrm',estimatedKm:total,legs:distances.map(distance_km=>({distance_km,estimated_walk_minutes:30})),pathPoints:points,fallbackUsed:false});
 test('walking integrity rejects a claimed 1km total with 12km legs',async()=>{
  const out=await validateAgnosticWalkingOrder({stops,targetKm:4,walkingRouter:router(1,[6,6])});
