@@ -17,7 +17,7 @@ import {
   freezeComposeDateIso,
 } from "../lib/anywhere-payload.mjs";
 import { anywhereBlitzView, type AnywhereBlitzView } from "../lib/blitz-view.mjs";
-import { contextNote, limitationNote } from "../lib/day-limitations.mjs";
+import { contextNote, limitationNote, placesStillArriving } from "../lib/day-limitations.mjs";
 import { dayChangeSegments, describeDayChange, type DayChange } from "../lib/day-change.mjs";
 import {
   anchorKey,
@@ -1735,7 +1735,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Some caps have no sentence of their own because a more specific surface
   // already states them (see day-limitations.mjs). Guard on the rendered note,
   // never on the cap count, or those days render an empty bullet.
-  const dayLimitationNote = limitationNote(dayLimitations, split.core.length, t);
+  // A place source still fetching when the server answered: more places are on
+  // their way, so the place is not judged on what has arrived so far.
+  const sourceCompletion = safeResponse?.agnostic_route_output_experiment?.source_status?.collection?.source_completion;
+  const placesArriving = phase === "done" && placesStillArriving(sourceCompletion);
+  const dayLimitationNote = limitationNote(dayLimitations, split.core.length, t, { placesStillArriving: placesArriving });
 
   // The route line joins the stops' own coordinates unless the route carries
   // walking geometry; the map draws that sketch dotted and the caption says so.
@@ -1770,7 +1774,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // outage, never as the reader's picks.
   const loadedSourceStatus = safeResponse?.agnostic_route_output_experiment?.source_status;
   const sourcePartlyUnavailable = phase === "done" && classification?.status === "unavailable" && !anchorUnresolved
-    && !sourceUnavailable && typeof loadedSourceStatus?.error === "string" && loadedSourceStatus.error.trim() !== ""
+    && !sourceUnavailable && !placesArriving && typeof loadedSourceStatus?.error === "string" && loadedSourceStatus.error.trim() !== ""
     && loadedSourceStatus?.collection?.selection_reason === "loader_error";
   // Preserve the classifier's absences; choices announce themselves, and an
   // outstanding upgrade or service refusal is not a final no-day verdict.
@@ -1785,6 +1789,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             `Platskällorna svarade inte just nu, så Parranda kunde inte hämta platser ${anchorIsPosition ? "nära dig" : `för ${placeName}`} — inget hittas på. Försök igen om en stund.`,
             `The place sources didn't answer just now, so Parranda couldn't fetch places ${anchorIsPosition ? "near you" : `for ${placeName}`} — nothing is invented in its place. Try again in a moment.`,
           )
+      : placesArriving
+        ? t(
+            `Fler platser är på väg. Platserna ${anchorIsPosition ? "nära dig" : `för ${placeName}`} hämtas fortfarande, så Parranda har ingen dag ännu — inget hittas på. Försök igen om en stund.`,
+            `More places are on their way. Places ${anchorIsPosition ? "near you" : `for ${placeName}`} are still being fetched, so Parranda has no day yet — nothing is invented in its place. Try again in a moment.`,
+          )
       : classification.unavailableReason === "sparse_supply" && classification.realPlaceCount
         ? t(
             `Parranda hittade ${classification.realPlaceCount === 1 ? "1 riktig plats" : `${classification.realPlaceCount} riktiga platser`} ${anchorIsPosition ? "nära dig" : `nära ${placeName}`}, men inte tillräckligt för en pålitlig dag ännu — inget hittas på.`,
@@ -1796,7 +1805,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           )
     : "";
   const dayContextNote = contextNote(dayLimitations, t, {
-    sourceCompletion: safeResponse?.agnostic_route_output_experiment?.source_status?.collection?.source_completion,
+    sourceCompletion,
     statedElsewhere: sourceBackedDay
       ? ["capped_by_external_only_sources", "capped_by_heuristic_walking"]
       : ["capped_by_heuristic_walking"],
@@ -2129,12 +2138,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               "One of the place sources didn't answer just now, so the evidence may be incomplete. Try again in a moment.",
             )}</p>
           )}
-          {(sourceUnavailable || sourcePartlyUnavailable) && (
+          {(sourceUnavailable || sourcePartlyUnavailable || placesArriving) && (
             <button type="button" onClick={() => retryPlan({ sameDate: true })} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
               {t("Försök igen", "Try again")}
             </button>
           )}
-          {!anchorUnresolved && !sourceUnavailable && !sourcePartlyUnavailable && selected.length > 0 && (
+          {!anchorUnresolved && !sourceUnavailable && !sourcePartlyUnavailable && !placesArriving && selected.length > 0 && (
             <p>{t(
               "Vi kunde inte bekräfta en gångbar dag med dina val. Andra intressen läggs inte till automatiskt. Du kan ändra datum, dagens rytm eller själv välja fler intressen.",
               "We could not confirm a walkable day with your choices. Other interests are not added automatically. You can change the date, day rhythm or choose more interests yourself.",
@@ -2197,6 +2206,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           wovenCount={split.woven.length}
           pickCoverage={pickCoverage}
           dayLimitationNote={dayLimitationNote}
+          placesArriving={placesArriving}
+          onUpdateDay={() => retryPlan({ sameDate: true })}
           restoredAt={restoredAt}
           resolveAndRun={() => resolveAndRun()}
         />

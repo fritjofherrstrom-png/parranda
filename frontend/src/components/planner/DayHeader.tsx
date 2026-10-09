@@ -161,6 +161,8 @@ export default function DayHeader({
   wovenCount,
   pickCoverage,
   dayLimitationNote,
+  placesArriving = false,
+  onUpdateDay,
   restoredAt,
   resolveAndRun,
 }: {
@@ -179,6 +181,9 @@ export default function DayHeader({
   wovenCount: number;
   pickCoverage: PickCoverage[];
   dayLimitationNote: string | null | undefined;
+  /** A place source is still fetching: more places can arrive. */
+  placesArriving?: boolean;
+  onUpdateDay?: () => void;
   restoredAt: string | null;
   resolveAndRun: () => void;
 }) {
@@ -294,6 +299,25 @@ export default function DayHeader({
             </li>
           ))}
         </ul>
+      )}
+      {/* The server answered within its bounded wait while a place source is
+          still fetching. The day is real but provisional: say that more is on
+          its way and let the reader ask again, rather than judging the place. */}
+      {placesArriving && (
+        <div role="status" className="flex flex-col items-start gap-2 rounded-parranda border-[1.5px] border-parranda-ember/40 bg-parranda-ember/8 px-4 py-3">
+          <p className="text-sm font-bold text-parranda-ink">{t("Fler platser är på väg", "More places are on their way")}</p>
+          <p className="text-[13px] leading-relaxed text-parranda-ink/80">
+            {t(
+              "En källa hämtar fortfarande platser här. Dagen nedan bygger på det som hunnit komma — uppdatera om en stund för en rikare dag.",
+              "A source is still fetching places here. The day below uses what has arrived so far — update in a moment for a fuller day.",
+            )}
+          </p>
+          {onUpdateDay && (
+            <button type="button" onClick={onUpdateDay} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
+              {t("Uppdatera dagen", "Update the day")}
+            </button>
+          )}
+        </div>
       )}
       {/* What the day CONTAINS stays under the title (a thin day says so);
           how it was ASSEMBLED is one "About this day" line beside the map. */}
