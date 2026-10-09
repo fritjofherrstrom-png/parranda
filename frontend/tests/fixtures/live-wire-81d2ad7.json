@@ -1,0 +1,2161 @@
+{
+  "sha": "81d2ad7132a38dbf644864143962d1c29aead46d",
+  "evidence": "actual local endpoint/store with injected collector transport; no live providers",
+  "fixtures": {
+    "completion_pending": {
+      "status": 202,
+      "body": {
+        "live_events": {
+          "coverage": "covered",
+          "selected_date": "2026-06-28",
+          "feed": {
+            "id": "linkedevents-helsinki",
+            "label": "Helsinki Region Linked Events",
+            "license": "CC-BY 4.0",
+            "family": "municipal_open",
+            "adapter": "linked_events",
+            "source_identity": "hel.fi",
+            "status": "pending",
+            "reason": null,
+            "event_rows": 0
+          },
+          "feeds": [
+            {
+              "id": "linkedevents-helsinki",
+              "label": "Helsinki Region Linked Events",
+              "license": "CC-BY 4.0",
+              "family": "municipal_open",
+              "adapter": "linked_events",
+              "source_identity": "hel.fi",
+              "status": "pending",
+              "reason": null,
+              "event_rows": 0
+            }
+          ],
+          "acquisition": {
+            "mode": "bounded_multi_source",
+            "radius_m": 3000,
+            "source_cap": 4,
+            "selected_source_count": 1,
+            "normalized_event_count": 0,
+            "out_of_period_event_count": 0,
+            "fused_event_count": 0,
+            "rejected_event_count": 0,
+            "rejection_summary": [],
+            "source_health": {
+              "status": "pending",
+              "result": "pending",
+              "selected_source_count": 1,
+              "responding_source_count": 0,
+              "event_bearing_source_count": 0,
+              "empty_source_count": 0,
+              "failed_source_count": 0,
+              "unavailable_source_count": 0,
+              "raw_event_count": 0,
+              "normalized_event_count": 0,
+              "out_of_period_event_count": 0,
+              "accepted_event_count": 0,
+              "surfaced_event_count": 0,
+              "rejected_event_count": 0,
+              "reasons": [
+                "background_refresh_pending"
+              ]
+            }
+          },
+          "tonight": [],
+          "this_week": [],
+          "browse": {
+            "contract": "live_event_browse_v1",
+            "max_rows_per_bucket": 24,
+            "tonight": {
+              "ranked_event_count": 0,
+              "highlight_count": 0,
+              "more_count": 0,
+              "hidden_count": 0,
+              "more": []
+            },
+            "this_week": {
+              "ranked_event_count": 0,
+              "highlight_count": 0,
+              "more_count": 0,
+              "hidden_count": 0,
+              "more": []
+            }
+          },
+          "pending": true
+        },
+        "live_completion": {
+          "version": 1,
+          "state": "pending",
+          "route_upgrade": "explicit_request"
+        }
+      }
+    },
+    "completion_ready": {
+      "status": 200,
+      "body": {
+        "live_events": {
+          "coverage": "covered",
+          "selected_date": "2026-06-28",
+          "feed": null,
+          "acquisition": {
+            "radius_m": 3000,
+            "source_health": {
+              "status": "healthy",
+              "result": "events_found",
+              "selected_source_count": 0,
+              "responding_source_count": 1,
+              "event_bearing_source_count": 0,
+              "empty_source_count": 0,
+              "failed_source_count": 0,
+              "unavailable_source_count": 0,
+              "raw_event_count": 0,
+              "normalized_event_count": 0,
+              "out_of_period_event_count": 0,
+              "accepted_event_count": 1,
+              "surfaced_event_count": 1,
+              "rejected_event_count": 0,
+              "reasons": []
+            },
+            "out_of_period_event_count": 0
+          },
+          "tonight": [
+            {
+              "id": "original-generation-concert",
+              "title": "Concert",
+              "starts_at": "2026-06-28T18:00:00Z",
+              "ends_at": "2026-06-28T20:00:00Z",
+              "timezone": "Europe/Helsinki",
+              "lat": 60.173,
+              "lng": 24.943,
+              "route_eligible": true,
+              "cultural_tier": "cultural",
+              "source_label": "Verified fixture transport",
+              "source_url": "https://example.org/concert",
+              "source_link_kind": "page",
+              "source_link_host": "example.org"
+            }
+          ],
+          "this_week": [],
+          "browse": {
+            "contract": "live_event_browse_v1",
+            "max_rows_per_bucket": 24,
+            "tonight": {
+              "ranked_event_count": 1,
+              "highlight_count": 1,
+              "more_count": 0,
+              "hidden_count": 0,
+              "more": []
+            },
+            "this_week": {
+              "ranked_event_count": 0,
+              "highlight_count": 0,
+              "more_count": 0,
+              "hidden_count": 0,
+              "more": []
+            }
+          }
+        },
+        "live_completion": {
+          "version": 1,
+          "state": "ready",
+          "route_upgrade": "explicit_request"
+        }
+      }
+    },
+    "upgrade_applied": {
+      "status": 200,
+      "body": {
+        "live_route_upgrade": {
+          "version": 1,
+          "state": "applied"
+        },
+        "result": {
+          "city": null,
+          "days": [
+            {
+              "date": "2026-06-28",
+              "experimental": true,
+              "experimental_agnostic_day": true,
+              "source": "agnostic_route_output_experiment",
+              "note": "Experimental any-place candidate day — not a finalized Parranda planner day.",
+              "primary_route": {
+                "id": "__agnostic_compose__",
+                "title": "Plan for this place",
+                "summary": "Built from source-backed places near this place; coverage may be thinner than in a fully curated Parranda city.",
+                "estimated_km": 1.1,
+                "start_label": "Nearby",
+                "end_label": "Nearby",
+                "route_shape": "open",
+                "uses_provisional_sources": true,
+                "provisional_stop_count": 5,
+                "trust_summary": {
+                  "source_tiers": [
+                    "inferred"
+                  ],
+                  "confidence": "low",
+                  "human_verified": false,
+                  "freshness": "unknown"
+                },
+                "credibility_tier": "low",
+                "main_stops": [
+                  {
+                    "id": "upgrade-viewpoint-0",
+                    "label": "Fixture viewpoint 0",
+                    "lat": 60.172000000000004,
+                    "lng": 24.94,
+                    "type": "viewpoint",
+                    "area": null,
+                    "tags": [
+                      "scenic"
+                    ],
+                    "summary": null,
+                    "drawer_query": "Fixture viewpoint 0",
+                    "is_live_event": false,
+                    "event_id": null,
+                    "anchor_weight": 1,
+                    "trust": {
+                      "source_tier": "inferred",
+                      "confidence": "medium",
+                      "human_verified": false,
+                      "freshness": "unknown"
+                    },
+                    "provisional": true,
+                    "source": {
+                      "kind": "open_geo_source",
+                      "label": "osm",
+                      "url": "https://www.openstreetmap.org/node/upgrade-viewpoint-0"
+                    },
+                    "provenance": {
+                      "why_included": "Source-backed candidate admitted to the agnostic route.",
+                      "provider_id": "open-data-osm-wikidata-v1",
+                      "attribution": [
+                        {
+                          "provider_id": "osm",
+                          "label": "osm",
+                          "source_family": "map",
+                          "url": "https://www.openstreetmap.org/node/upgrade-viewpoint-0"
+                        },
+                        {
+                          "provider_id": "wikidata",
+                          "label": "wikidata",
+                          "source_family": "open_knowledge",
+                          "url": "https://www.wikidata.org/wiki/Q212263196"
+                        }
+                      ],
+                      "corroborated_by_external": false,
+                      "weatherTags": []
+                    },
+                    "role": "scenic_anchor",
+                    "route_roles": [
+                      "scenic_anchor"
+                    ],
+                    "candidate_status": "partial",
+                    "planner_usable": true,
+                    "origin": "external_open",
+                    "covered_preferences": [],
+                    "partial_preferences": [],
+                    "missing_preferences": [],
+                    "fit_reasons": [
+                      "covers:scenic(type:viewpoint)"
+                    ],
+                    "lens_reasons": [
+                      "lens_neutral"
+                    ],
+                    "weather_reasons": [],
+                    "time_reasons": [],
+                    "also_covers": [
+                      {
+                        "role": "green_walk_stop",
+                        "status": "partial",
+                        "match": "partial"
+                      }
+                    ],
+                    "reconciliation": null,
+                    "daypart": "midday"
+                  },
+                  {
+                    "id": "upgrade-viewpoint-1",
+                    "label": "Fixture viewpoint 1",
+                    "lat": 60.17230000000001,
+                    "lng": 24.9403,
+                    "type": "viewpoint",
+                    "area": null,
+                    "tags": [
+                      "scenic"
+                    ],
+                    "summary": null,
+                    "drawer_query": "Fixture viewpoint 1",
+                    "is_live_event": false,
+                    "event_id": null,
+                    "anchor_weight": 1,
+                    "trust": {
+                      "source_tier": "inferred",
+                      "confidence": "medium",
+                      "human_verified": false,
+                      "freshness": "unknown"
+                    },
+                    "provisional": true,
+                    "source": {
+                      "kind": "open_geo_source",
+                      "label": "osm",
+                      "url": "https://www.openstreetmap.org/node/upgrade-viewpoint-1"
+                    },
+                    "provenance": {
+                      "why_included": "Source-backed candidate admitted to the agnostic route.",
+                      "provider_id": "open-data-osm-wikidata-v1",
+                      "attribution": [
+                        {
+                          "provider_id": "osm",
+                          "label": "osm",
+                          "source_family": "map",
+                          "url": "https://www.openstreetmap.org/node/upgrade-viewpoint-1"
+                        },
+                        {
+                          "provider_id": "wikidata",
+                          "label": "wikidata",
+                          "source_family": "open_knowledge",
+                          "url": "https://www.wikidata.org/wiki/Q212263197"
+                        }
+                      ],
+                      "corroborated_by_external": false,
+                      "weatherTags": []
+                    },
+                    "role": "scenic_anchor",
+                    "route_roles": [
+                      "scenic_anchor"
+                    ],
+                    "candidate_status": "partial",
+                    "planner_usable": true,
+                    "origin": "external_open",
+                    "covered_preferences": [],
+                    "partial_preferences": [],
+                    "missing_preferences": [],
+                    "fit_reasons": [
+                      "covers:scenic(type:viewpoint)"
+                    ],
+                    "lens_reasons": [
+                      "lens_neutral"
+                    ],
+                    "weather_reasons": [],
+                    "time_reasons": [],
+                    "also_covers": [
+                      {
+                        "role": "green_walk_stop",
+                        "status": "partial",
+                        "match": "partial"
+                      }
+                    ],
+                    "reconciliation": null,
+                    "daypart": "midday"
+                  },
+                  {
+                    "id": "upgrade-viewpoint-2",
+                    "label": "Fixture viewpoint 2",
+                    "lat": 60.1726,
+                    "lng": 24.9406,
+                    "type": "viewpoint",
+                    "area": null,
+                    "tags": [],
+                    "summary": null,
+                    "drawer_query": "Fixture viewpoint 2",
+                    "is_live_event": false,
+                    "event_id": null,
+                    "anchor_weight": 1,
+                    "trust": {
+                      "source_tier": "inferred",
+                      "confidence": "medium",
+                      "human_verified": false,
+                      "freshness": "unknown"
+                    },
+                    "provisional": true,
+                    "source": {
+                      "kind": "open_geo_source",
+                      "label": "osm",
+                      "url": "https://www.openstreetmap.org/node/upgrade-viewpoint-2"
+                    },
+                    "provenance": {
+                      "why_included": "Source-backed candidate admitted to the agnostic route.",
+                      "provider_id": "open-data-osm-wikidata-v1",
+                      "attribution": [
+                        {
+                          "provider_id": "osm",
+                          "label": "osm",
+                          "source_family": "map",
+                          "url": "https://www.openstreetmap.org/node/upgrade-viewpoint-2"
+                        },
+                        {
+                          "provider_id": "wikidata",
+                          "label": "wikidata",
+                          "source_family": "open_knowledge",
+                          "url": "https://www.wikidata.org/wiki/Q212263198"
+                        }
+                      ],
+                      "corroborated_by_external": false,
+                      "weatherTags": []
+                    },
+                    "role": "green_walk_stop",
+                    "route_roles": [
+                      "green_walk_stop"
+                    ],
+                    "candidate_status": "partial",
+                    "planner_usable": true,
+                    "origin": "external_open",
+                    "covered_preferences": [],
+                    "partial_preferences": [],
+                    "missing_preferences": [],
+                    "fit_reasons": [
+                      "partial:green"
+                    ],
+                    "lens_reasons": [
+                      "lens_neutral"
+                    ],
+                    "weather_reasons": [],
+                    "time_reasons": [],
+                    "also_covers": [
+                      {
+                        "role": "scenic_anchor",
+                        "status": "partial",
+                        "match": "covered"
+                      }
+                    ],
+                    "reconciliation": null,
+                    "daypart": "midday"
+                  },
+                  {
+                    "id": "upgrade-restaurant-0",
+                    "label": "Fixture restaurant 0",
+                    "lat": 60.17,
+                    "lng": 24.94,
+                    "type": "restaurant",
+                    "area": null,
+                    "tags": [
+                      "food"
+                    ],
+                    "summary": null,
+                    "drawer_query": "Fixture restaurant 0",
+                    "is_live_event": false,
+                    "event_id": null,
+                    "anchor_weight": 1,
+                    "trust": {
+                      "source_tier": "inferred",
+                      "confidence": "medium",
+                      "human_verified": false,
+                      "freshness": "unknown"
+                    },
+                    "provisional": true,
+                    "source": {
+                      "kind": "open_geo_source",
+                      "label": "osm",
+                      "url": "https://www.openstreetmap.org/node/upgrade-restaurant-0"
+                    },
+                    "provenance": {
+                      "why_included": "Source-backed candidate admitted to the agnostic route.",
+                      "provider_id": "open-data-osm-wikidata-v1",
+                      "attribution": [
+                        {
+                          "provider_id": "osm",
+                          "label": "osm",
+                          "source_family": "map",
+                          "url": "https://www.openstreetmap.org/node/upgrade-restaurant-0"
+                        },
+                        {
+                          "provider_id": "wikidata",
+                          "label": "wikidata",
+                          "source_family": "open_knowledge",
+                          "url": "https://www.wikidata.org/wiki/Q353811662"
+                        }
+                      ],
+                      "corroborated_by_external": false,
+                      "weatherTags": []
+                    },
+                    "role": "food_anchor",
+                    "route_roles": [
+                      "food_anchor"
+                    ],
+                    "candidate_status": "partial",
+                    "planner_usable": true,
+                    "origin": "external_open",
+                    "covered_preferences": [],
+                    "partial_preferences": [],
+                    "missing_preferences": [],
+                    "fit_reasons": [
+                      "covers:food(type:restaurant)"
+                    ],
+                    "lens_reasons": [
+                      "lens_neutral"
+                    ],
+                    "weather_reasons": [],
+                    "time_reasons": [],
+                    "also_covers": [],
+                    "reconciliation": null,
+                    "daypart": "afternoon"
+                  },
+                  {
+                    "id": "upgrade-restaurant-1",
+                    "label": "Fixture restaurant 1",
+                    "lat": 60.170300000000005,
+                    "lng": 24.9403,
+                    "type": "restaurant",
+                    "area": null,
+                    "tags": [
+                      "food"
+                    ],
+                    "summary": null,
+                    "drawer_query": "Fixture restaurant 1",
+                    "is_live_event": false,
+                    "event_id": null,
+                    "anchor_weight": 1,
+                    "trust": {
+                      "source_tier": "inferred",
+                      "confidence": "medium",
+                      "human_verified": false,
+                      "freshness": "unknown"
+                    },
+                    "provisional": true,
+                    "source": {
+                      "kind": "open_geo_source",
+                      "label": "osm",
+                      "url": "https://www.openstreetmap.org/node/upgrade-restaurant-1"
+                    },
+                    "provenance": {
+                      "why_included": "Source-backed candidate admitted to the agnostic route.",
+                      "provider_id": "open-data-osm-wikidata-v1",
+                      "attribution": [
+                        {
+                          "provider_id": "osm",
+                          "label": "osm",
+                          "source_family": "map",
+                          "url": "https://www.openstreetmap.org/node/upgrade-restaurant-1"
+                        },
+                        {
+                          "provider_id": "wikidata",
+                          "label": "wikidata",
+                          "source_family": "open_knowledge",
+                          "url": "https://www.wikidata.org/wiki/Q353811661"
+                        }
+                      ],
+                      "corroborated_by_external": false,
+                      "weatherTags": []
+                    },
+                    "role": "food_anchor",
+                    "route_roles": [
+                      "food_anchor"
+                    ],
+                    "candidate_status": "partial",
+                    "planner_usable": true,
+                    "origin": "external_open",
+                    "covered_preferences": [],
+                    "partial_preferences": [],
+                    "missing_preferences": [],
+                    "fit_reasons": [
+                      "covers:food(type:restaurant)"
+                    ],
+                    "lens_reasons": [
+                      "lens_neutral"
+                    ],
+                    "weather_reasons": [],
+                    "time_reasons": [],
+                    "also_covers": [],
+                    "reconciliation": null,
+                    "daypart": "afternoon"
+                  },
+                  {
+                    "id": "live-event-original-generation-concert",
+                    "label": "Concert",
+                    "lat": 60.173,
+                    "lng": 24.943,
+                    "type": null,
+                    "area": null,
+                    "tags": [],
+                    "summary": null,
+                    "drawer_query": "Concert",
+                    "daypart": "evening",
+                    "is_live_event": true,
+                    "event_id": "original-generation-concert",
+                    "starts_at": "2026-06-28T18:00:00Z",
+                    "ends_at": "2026-06-28T20:00:00Z",
+                    "starts_on": "2026-06-28",
+                    "ends_on": "2026-06-28",
+                    "time_window": null,
+                    "occurrence_date": "2026-06-28",
+                    "timezone": "Europe/Helsinki",
+                    "anchor_weight": 1,
+                    "trust": {
+                      "source_tier": "official",
+                      "confidence": "medium",
+                      "human_verified": false,
+                      "freshness": "fresh"
+                    },
+                    "provisional": false,
+                    "source": {
+                      "kind": "live_event_feed",
+                      "label": "Verified fixture transport",
+                      "url": "https://example.org/concert",
+                      "link_kind": "page",
+                      "link_host": "example.org"
+                    },
+                    "provenance": {
+                      "why_included": "Genuine selected-day event near the day's end — woven as the evening stop after walking validation.",
+                      "attribution": [
+                        {
+                          "label": "Verified fixture transport",
+                          "url": "https://example.org/concert",
+                          "license": null
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "hidden_mentions": [],
+                "bar_mentions": [],
+                "map_route_points": [
+                  {
+                    "label": "Nearby",
+                    "lat": 60.17,
+                    "lng": 24.94,
+                    "role": "start"
+                  },
+                  {
+                    "label": "Fixture viewpoint 0",
+                    "lat": 60.172000000000004,
+                    "lng": 24.94,
+                    "role": "first-stop"
+                  },
+                  {
+                    "label": "Fixture viewpoint 1",
+                    "lat": 60.17230000000001,
+                    "lng": 24.9403,
+                    "role": "stop"
+                  },
+                  {
+                    "label": "Fixture viewpoint 2",
+                    "lat": 60.1726,
+                    "lng": 24.9406,
+                    "role": "stop"
+                  },
+                  {
+                    "label": "Fixture restaurant 0",
+                    "lat": 60.17,
+                    "lng": 24.94,
+                    "role": "stop"
+                  },
+                  {
+                    "label": "Fixture restaurant 1",
+                    "lat": 60.170300000000005,
+                    "lng": 24.9403,
+                    "role": "stop"
+                  },
+                  {
+                    "label": "Concert",
+                    "lat": 60.173,
+                    "lng": 24.943,
+                    "role": "evening_event"
+                  }
+                ],
+                "map_path_points": [
+                  {
+                    "lat": 60.17,
+                    "lng": 24.94
+                  },
+                  {
+                    "lat": 60.172000000000004,
+                    "lng": 24.94
+                  },
+                  {
+                    "lat": 60.17230000000001,
+                    "lng": 24.9403
+                  },
+                  {
+                    "lat": 60.1726,
+                    "lng": 24.9406
+                  },
+                  {
+                    "lat": 60.17,
+                    "lng": 24.94
+                  },
+                  {
+                    "lat": 60.170300000000005,
+                    "lng": 24.9403
+                  },
+                  {
+                    "lat": 60.173,
+                    "lng": 24.943
+                  }
+                ],
+                "legs": [
+                  {
+                    "from_label": "Nearby",
+                    "to_label": "Fixture viewpoint 0",
+                    "distance_km": 0.3,
+                    "estimated_walk_minutes": 4
+                  },
+                  {
+                    "from_label": "Fixture viewpoint 0",
+                    "to_label": "Fixture viewpoint 1",
+                    "distance_km": 0,
+                    "estimated_walk_minutes": 2
+                  },
+                  {
+                    "from_label": "Fixture viewpoint 1",
+                    "to_label": "Fixture viewpoint 2",
+                    "distance_km": 0,
+                    "estimated_walk_minutes": 2
+                  },
+                  {
+                    "from_label": "Fixture viewpoint 2",
+                    "to_label": "Fixture restaurant 0",
+                    "distance_km": 0.4,
+                    "estimated_walk_minutes": 5
+                  },
+                  {
+                    "from_label": "Fixture restaurant 0",
+                    "to_label": "Fixture restaurant 1",
+                    "distance_km": 0,
+                    "estimated_walk_minutes": 2
+                  },
+                  {
+                    "from_label": "Fixture restaurant 1",
+                    "to_label": "Concert",
+                    "distance_km": 0.4,
+                    "estimated_walk_minutes": 5
+                  }
+                ],
+                "routing_source": "agnostic_compose",
+                "geo_profile": {
+                  "area_tokens": [],
+                  "macros": [],
+                  "dominant_token": null,
+                  "dominant_macro": null,
+                  "start_token": null,
+                  "start_macro": null,
+                  "end_token": null,
+                  "end_macro": null
+                },
+                "longest_leg_km": 0.4,
+                "longest_leg_minutes": 5,
+                "average_leg_minutes": 3,
+                "long_leg_count": 0,
+                "route_continuity_score": 10,
+                "dead_walk_penalty": 0,
+                "leg_fit_note": "The walking legs stay even and easy to follow on foot.",
+                "route_quality_warnings": [],
+                "geo_fit_note": "Loop around Nearby: the stop order minimizes backtracking and stays mainly around Nearby. The walking legs stay even and easy to follow on foot. Walking legs currently use heuristic routing.",
+                "anchor_zone": "Nearby",
+                "day_profile": "variation",
+                "geo_quality_score": 13,
+                "pool_fit_penalty": 0,
+                "daypart_arc": [
+                  "midday",
+                  "midday",
+                  "midday",
+                  "afternoon",
+                  "afternoon",
+                  "evening"
+                ],
+                "agnostic_daypart_ordering": {
+                  "applied": true,
+                  "fallback": false,
+                  "reason": "daypart_rhythm"
+                },
+                "local_truth": {
+                  "score_adjustments": [],
+                  "caution_notes": [],
+                  "verify_opening_hours": [],
+                  "route_context_notes": [],
+                  "live_context_notes": [],
+                  "prefer_tags": [],
+                  "avoid_tags": [],
+                  "score_delta": 0
+                },
+                "weather_note": null,
+                "budget_note": null,
+                "pulse_note": null,
+                "live_event_fit_note": null,
+                "pulse_anchor": null,
+                "area_note": null,
+                "opening_hours_warnings": [],
+                "venue_specials": [],
+                "why_recommended": "The route uses source-backed stops that match your choices near this place, with provisional trust where the catalog is thin.",
+                "curator_voice": null,
+                "confidence": "low",
+                "agnostic_route_prose": true,
+                "live_event_stop": {
+                  "event_id": "original-generation-concert",
+                  "leg_km": 0.4,
+                  "leg_minutes": 5
+                },
+                "current_local_time_band": null,
+                "anchored_to_local_time": false,
+                "trimmed_dayparts": [],
+                "caveats": []
+              },
+              "alternatives": [],
+              "date_signals": []
+            }
+          ],
+          "resolved_home_base": null,
+          "resolved_start": null,
+          "resolved_end": null,
+          "requested_city": null,
+          "city_fallback_used": false,
+          "baseline_skipped": "no_applicable_citypack",
+          "city_label": null,
+          "readiness": null,
+          "place_structure": {
+            "provenance": "agnostic_anchor",
+            "area_count": 2,
+            "scattered_count": 0,
+            "areas": [
+              {
+                "size": 8,
+                "center": {
+                  "lat": 60.1711,
+                  "lng": 24.9406
+                },
+                "dominant_types": [
+                  "restaurant",
+                  "viewpoint"
+                ],
+                "dominant_intents": [
+                  "mat",
+                  "utsikt"
+                ],
+                "daypart_hint": "midday",
+                "daypart_weights": {
+                  "midday": 3,
+                  "afternoon": 2
+                },
+                "member_ids": [
+                  "upgrade-restaurant-0",
+                  "upgrade-restaurant-1",
+                  "upgrade-restaurant-2",
+                  "upgrade-restaurant-3",
+                  "upgrade-restaurant-4",
+                  "upgrade-restaurant-5",
+                  "upgrade-viewpoint-0",
+                  "upgrade-viewpoint-1"
+                ]
+              },
+              {
+                "size": 4,
+                "center": {
+                  "lat": 60.17305,
+                  "lng": 24.94105
+                },
+                "dominant_types": [
+                  "viewpoint"
+                ],
+                "dominant_intents": [
+                  "utsikt"
+                ],
+                "daypart_hint": "afternoon",
+                "daypart_weights": {
+                  "afternoon": 4
+                },
+                "member_ids": [
+                  "upgrade-viewpoint-2",
+                  "upgrade-viewpoint-3",
+                  "upgrade-viewpoint-4",
+                  "upgrade-viewpoint-5"
+                ]
+              }
+            ],
+            "district_day": {
+              "areas": [
+                {
+                  "center": {
+                    "lat": 60.1711,
+                    "lng": 24.9406
+                  },
+                  "daypart_hint": "midday",
+                  "character": [
+                    "restaurant",
+                    "viewpoint"
+                  ],
+                  "covers": [],
+                  "size": 8,
+                  "stop_ids": [
+                    "upgrade-restaurant-0",
+                    "upgrade-restaurant-1",
+                    "upgrade-restaurant-2",
+                    "upgrade-restaurant-3",
+                    "upgrade-restaurant-4",
+                    "upgrade-restaurant-5",
+                    "upgrade-viewpoint-0",
+                    "upgrade-viewpoint-1"
+                  ],
+                  "stop_names": [
+                    "Fixture restaurant 0",
+                    "Fixture restaurant 1",
+                    "Fixture restaurant 2",
+                    "Fixture restaurant 3"
+                  ],
+                  "stops": [
+                    {
+                      "id": "upgrade-restaurant-0",
+                      "name": "Fixture restaurant 0",
+                      "lat": 60.17,
+                      "lng": 24.94,
+                      "type": "restaurant",
+                      "tags": [
+                        "mat"
+                      ],
+                      "chain": false,
+                      "brand": null,
+                      "local_feel_rank": null,
+                      "candidate_origin": null,
+                      "commitment_eligible": true
+                    },
+                    {
+                      "id": "upgrade-restaurant-1",
+                      "name": "Fixture restaurant 1",
+                      "lat": 60.170300000000005,
+                      "lng": 24.9403,
+                      "type": "restaurant",
+                      "tags": [
+                        "mat"
+                      ],
+                      "chain": false,
+                      "brand": null,
+                      "local_feel_rank": null,
+                      "candidate_origin": null,
+                      "commitment_eligible": true
+                    },
+                    {
+                      "id": "upgrade-restaurant-2",
+                      "name": "Fixture restaurant 2",
+                      "lat": 60.1706,
+                      "lng": 24.9406,
+                      "type": "restaurant",
+                      "tags": [
+                        "mat"
+                      ],
+                      "chain": false,
+                      "brand": null,
+                      "local_feel_rank": null,
+                      "candidate_origin": null,
+                      "commitment_eligible": true
+                    },
+                    {
+                      "id": "upgrade-restaurant-3",
+                      "name": "Fixture restaurant 3",
+                      "lat": 60.1709,
+                      "lng": 24.940900000000003,
+                      "type": "restaurant",
+                      "tags": [
+                        "mat"
+                      ],
+                      "chain": false,
+                      "brand": null,
+                      "local_feel_rank": null,
+                      "candidate_origin": null,
+                      "commitment_eligible": true
+                    },
+                    {
+                      "id": "upgrade-restaurant-4",
+                      "name": "Fixture restaurant 4",
+                      "lat": 60.1712,
+                      "lng": 24.941200000000002,
+                      "type": "restaurant",
+                      "tags": [
+                        "mat"
+                      ],
+                      "chain": false,
+                      "brand": null,
+                      "local_feel_rank": null,
+                      "candidate_origin": null,
+                      "commitment_eligible": true
+                    },
+                    {
+                      "id": "upgrade-restaurant-5",
+                      "name": "Fixture restaurant 5",
+                      "lat": 60.1715,
+                      "lng": 24.9415,
+                      "type": "restaurant",
+                      "tags": [
+                        "mat"
+                      ],
+                      "chain": false,
+                      "brand": null,
+                      "local_feel_rank": null,
+                      "candidate_origin": null,
+                      "commitment_eligible": true
+                    },
+                    {
+                      "id": "upgrade-viewpoint-0",
+                      "name": "Fixture viewpoint 0",
+                      "lat": 60.172000000000004,
+                      "lng": 24.94,
+                      "type": "viewpoint",
+                      "tags": [
+                        "utsikt"
+                      ],
+                      "chain": false,
+                      "brand": null,
+                      "local_feel_rank": null,
+                      "candidate_origin": null,
+                      "commitment_eligible": true
+                    },
+                    {
+                      "id": "upgrade-viewpoint-1",
+                      "name": "Fixture viewpoint 1",
+                      "lat": 60.17230000000001,
+                      "lng": 24.9403,
+                      "type": "viewpoint",
+                      "tags": [
+                        "utsikt"
+                      ],
+                      "chain": false,
+                      "brand": null,
+                      "local_feel_rank": null,
+                      "candidate_origin": null,
+                      "commitment_eligible": true
+                    }
+                  ]
+                },
+                {
+                  "center": {
+                    "lat": 60.17305,
+                    "lng": 24.94105
+                  },
+                  "daypart_hint": "afternoon",
+                  "character": [
+                    "viewpoint"
+                  ],
+                  "covers": [],
+                  "size": 4,
+                  "stop_ids": [
+                    "upgrade-viewpoint-2",
+                    "upgrade-viewpoint-3",
+                    "upgrade-viewpoint-4",
+                    "upgrade-viewpoint-5"
+                  ],
+                  "stop_names": [
+                    "Fixture viewpoint 2",
+                    "Fixture viewpoint 3",
+                    "Fixture viewpoint 4",
+                    "Fixture viewpoint 5"
+                  ],
+                  "stops": [
+                    {
+                      "id": "upgrade-viewpoint-2",
+                      "name": "Fixture viewpoint 2",
+                      "lat": 60.1726,
+                      "lng": 24.9406,
+                      "type": "viewpoint",
+                      "tags": [
+                        "utsikt"
+                      ],
+                      "chain": false,
+                      "brand": null,
+                      "local_feel_rank": null,
+                      "candidate_origin": null,
+                      "commitment_eligible": true
+                    },
+                    {
+                      "id": "upgrade-viewpoint-3",
+                      "name": "Fixture viewpoint 3",
+                      "lat": 60.172900000000006,
+                      "lng": 24.940900000000003,
+                      "type": "viewpoint",
+                      "tags": [
+                        "utsikt"
+                      ],
+                      "chain": false,
+                      "brand": null,
+                      "local_feel_rank": null,
+                      "candidate_origin": null,
+                      "commitment_eligible": true
+                    },
+                    {
+                      "id": "upgrade-viewpoint-4",
+                      "name": "Fixture viewpoint 4",
+                      "lat": 60.1732,
+                      "lng": 24.941200000000002,
+                      "type": "viewpoint",
+                      "tags": [
+                        "utsikt"
+                      ],
+                      "chain": false,
+                      "brand": null,
+                      "local_feel_rank": null,
+                      "candidate_origin": null,
+                      "commitment_eligible": true
+                    },
+                    {
+                      "id": "upgrade-viewpoint-5",
+                      "name": "Fixture viewpoint 5",
+                      "lat": 60.173500000000004,
+                      "lng": 24.9415,
+                      "type": "viewpoint",
+                      "tags": [
+                        "utsikt"
+                      ],
+                      "chain": false,
+                      "brand": null,
+                      "local_feel_rank": null,
+                      "candidate_origin": null,
+                      "commitment_eligible": true
+                    }
+                  ]
+                }
+              ],
+              "legs": [
+                {
+                  "from_area": 0,
+                  "to_area": 1,
+                  "distance_km": 0.22
+                }
+              ],
+              "covered_intents": [],
+              "missing_intents": [],
+              "evening_event": {
+                "id": "original-generation-concert",
+                "title": "Concert",
+                "starts_at": "2026-06-28T18:00:00Z",
+                "ends_at": "2026-06-28T20:00:00Z",
+                "starts_on": "2026-06-28",
+                "ends_on": "2026-06-28",
+                "time_window": null,
+                "occurrence_date": "2026-06-28",
+                "place": null,
+                "source_label": "Verified fixture transport",
+                "source_url": "https://example.org/concert",
+                "source_link_kind": "page",
+                "source_link_host": "example.org",
+                "license": null,
+                "cultural_tier": "cultural",
+                "salience_score": null,
+                "timezone": "Europe/Helsinki",
+                "lat": 60.173,
+                "lng": 24.943,
+                "near_area_index": 1,
+                "near_area_km": 0.11,
+                "woven_into_route": true,
+                "route_leg_km": 0.4,
+                "route_leg_minutes": 5
+              }
+            }
+          },
+          "pulse_route_interrupt": {
+            "contract": "pulse_route_interrupt_v1",
+            "status": "applied",
+            "route_mutation": true,
+            "route_anchor_unchanged": true,
+            "requires_user_action": false,
+            "action": "evening_extension_applied",
+            "proposed_position": "after_final_stop",
+            "event": {
+              "id": "original-generation-concert",
+              "title": "Concert",
+              "lat": 60.173,
+              "lng": 24.943,
+              "starts_at": "2026-06-28T18:00:00Z",
+              "ends_at": "2026-06-28T20:00:00Z",
+              "occurrence_date": "2026-06-28",
+              "timezone": "Europe/Helsinki",
+              "source_label": "Verified fixture transport",
+              "source_url": "https://example.org/concert",
+              "source_link_kind": "page",
+              "source_link_host": "example.org"
+            },
+            "walking_impact": {
+              "from_stop_id": "upgrade-restaurant-1",
+              "from_stop_label": "Fixture restaurant 1",
+              "leg_km": 0.4,
+              "leg_minutes": 5,
+              "auto_weave_limit_km": 2.5
+            },
+            "reasons": [
+              "walking_validated_evening_extension"
+            ]
+          },
+          "live_events": {
+            "coverage": "covered",
+            "selected_date": "2026-06-28",
+            "feed": null,
+            "acquisition": {
+              "radius_m": 3000,
+              "source_health": {
+                "status": "healthy",
+                "result": "events_found",
+                "selected_source_count": 0,
+                "responding_source_count": 1,
+                "event_bearing_source_count": 0,
+                "empty_source_count": 0,
+                "failed_source_count": 0,
+                "unavailable_source_count": 0,
+                "raw_event_count": 0,
+                "normalized_event_count": 0,
+                "out_of_period_event_count": 0,
+                "accepted_event_count": 1,
+                "surfaced_event_count": 1,
+                "rejected_event_count": 0,
+                "reasons": []
+              },
+              "out_of_period_event_count": 0
+            },
+            "tonight": [
+              {
+                "id": "original-generation-concert",
+                "title": "Concert",
+                "starts_at": "2026-06-28T18:00:00Z",
+                "ends_at": "2026-06-28T20:00:00Z",
+                "timezone": "Europe/Helsinki",
+                "lat": 60.173,
+                "lng": 24.943,
+                "route_eligible": true,
+                "cultural_tier": "cultural",
+                "source_label": "Verified fixture transport",
+                "source_url": "https://example.org/concert",
+                "source_link_kind": "page",
+                "source_link_host": "example.org"
+              }
+            ],
+            "this_week": [],
+            "browse": {
+              "contract": "live_event_browse_v1",
+              "max_rows_per_bucket": 24,
+              "tonight": {
+                "ranked_event_count": 1,
+                "highlight_count": 1,
+                "more_count": 0,
+                "hidden_count": 0,
+                "more": []
+              },
+              "this_week": {
+                "ranked_event_count": 0,
+                "highlight_count": 0,
+                "more_count": 0,
+                "hidden_count": 0,
+                "more": []
+              }
+            }
+          },
+          "agnostic_route_output_experiment": {
+            "experimental": true,
+            "route_mutation": true,
+            "selected_variant": "experimental_agnostic",
+            "source": "trusted_candidate_pool",
+            "source_status": {
+              "status": "loaded:12",
+              "external_candidates_requested": true,
+              "anchor": {
+                "lat": 60.17,
+                "lng": 24.94
+              },
+              "error": null
+            },
+            "eligibility": {
+              "eligible": true,
+              "blockers": [],
+              "caveats": [
+                "below_planner_candidate_threshold"
+              ],
+              "checks": {
+                "external_candidates_requested": true,
+                "trusted_loader_status": "loaded:12",
+                "geocoded_stop_count": 5,
+                "combination_geocoded_stop_count": 2,
+                "engine_reservoir_geocoded_stop_count": 5,
+                "geometry_coherence": "strong",
+                "can_support_planner": false,
+                "real_place_count": 12,
+                "coordinate_coverage": 1,
+                "candidate_pipeline": {
+                  "coordinate_ready_real_place_count": 12,
+                  "identity_resolved_candidate_count": 12,
+                  "eligible_pool_candidate_count": 12,
+                  "rejected_candidate_count": 0,
+                  "availability_evaluated_candidate_count": 0,
+                  "availability_excluded_candidate_count": 0,
+                  "availability_unresolved_candidate_count": 0,
+                  "role_relevant_candidate_count": 12,
+                  "role_surface_candidate_count": 6,
+                  "reach_eligible_candidate_count": 12,
+                  "reach_excluded_candidate_count": 0,
+                  "combination_selected_candidate_count": 2,
+                  "combination_geocoded_stop_count": 2,
+                  "engine_reservoir_geocoded_stop_count": 5
+                },
+                "candidate_reach_policy": {
+                  "policy": "exact_anchor",
+                  "max_origin_distance_km": 3,
+                  "scope_kind": null
+                }
+              }
+            },
+            "baseline": {
+              "had_primary_route": false,
+              "had_readiness": false
+            },
+            "candidate_readiness": {
+              "city": "agnostic-area",
+              "total_candidates": 12,
+              "real_place_count": 12,
+              "structural_count": 0,
+              "coordinate_ready_real_place_count": 12,
+              "coordinate_coverage": 1,
+              "by_candidate_kind": {
+                "real_place": 12
+              },
+              "by_trust_tier": {
+                "inferred": 12
+              },
+              "by_provider": {
+                "curated-catalog": {
+                  "provider_id": "curated-catalog",
+                  "source_family": "catalog",
+                  "source_tier": "curated",
+                  "source_policy": "parranda_curated",
+                  "count": 0,
+                  "by_candidate_kind": {},
+                  "by_trust_tier": {}
+                },
+                "open-data-osm-wikidata-v1": {
+                  "provider_id": "open-data-osm-wikidata-v1",
+                  "source_family": "map",
+                  "source_tier": "inferred",
+                  "source_policy": "open_data_attribution_required",
+                  "count": 12,
+                  "by_candidate_kind": {
+                    "real_place": 12
+                  },
+                  "by_trust_tier": {
+                    "inferred": 12
+                  }
+                }
+              },
+              "has_minimum_real_places": true,
+              "has_coordinates_coverage": true,
+              "can_support_blitz": true,
+              "can_support_planner": false,
+              "warnings": [
+                "insufficient_real_places_for_planner",
+                "low_trust_candidates_dominate"
+              ]
+            },
+            "experimental_route": {
+              "id": "__agnostic_compose__",
+              "title": "Plan for this place",
+              "summary": "Built from source-backed places near this place; coverage may be thinner than in a fully curated Parranda city.",
+              "estimated_km": 1.1,
+              "start_label": "Nearby",
+              "end_label": "Nearby",
+              "route_shape": "open",
+              "uses_provisional_sources": true,
+              "provisional_stop_count": 5,
+              "trust_summary": {
+                "source_tiers": [
+                  "inferred"
+                ],
+                "confidence": "low",
+                "human_verified": false,
+                "freshness": "unknown"
+              },
+              "credibility_tier": "low",
+              "main_stops": [
+                {
+                  "id": "upgrade-viewpoint-0",
+                  "label": "Fixture viewpoint 0",
+                  "lat": 60.172000000000004,
+                  "lng": 24.94,
+                  "type": "viewpoint",
+                  "area": null,
+                  "tags": [
+                    "scenic"
+                  ],
+                  "summary": null,
+                  "drawer_query": "Fixture viewpoint 0",
+                  "is_live_event": false,
+                  "event_id": null,
+                  "anchor_weight": 1,
+                  "trust": {
+                    "source_tier": "inferred",
+                    "confidence": "medium",
+                    "human_verified": false,
+                    "freshness": "unknown"
+                  },
+                  "provisional": true,
+                  "source": {
+                    "kind": "open_geo_source",
+                    "label": "osm",
+                    "url": "https://www.openstreetmap.org/node/upgrade-viewpoint-0"
+                  },
+                  "provenance": {
+                    "why_included": "Source-backed candidate admitted to the agnostic route.",
+                    "provider_id": "open-data-osm-wikidata-v1",
+                    "attribution": [
+                      {
+                        "provider_id": "osm",
+                        "label": "osm",
+                        "source_family": "map",
+                        "url": "https://www.openstreetmap.org/node/upgrade-viewpoint-0"
+                      },
+                      {
+                        "provider_id": "wikidata",
+                        "label": "wikidata",
+                        "source_family": "open_knowledge",
+                        "url": "https://www.wikidata.org/wiki/Q212263196"
+                      }
+                    ],
+                    "corroborated_by_external": false,
+                    "weatherTags": []
+                  },
+                  "role": "scenic_anchor",
+                  "route_roles": [
+                    "scenic_anchor"
+                  ],
+                  "candidate_status": "partial",
+                  "planner_usable": true,
+                  "origin": "external_open",
+                  "covered_preferences": [],
+                  "partial_preferences": [],
+                  "missing_preferences": [],
+                  "fit_reasons": [
+                    "covers:scenic(type:viewpoint)"
+                  ],
+                  "lens_reasons": [
+                    "lens_neutral"
+                  ],
+                  "weather_reasons": [],
+                  "time_reasons": [],
+                  "also_covers": [
+                    {
+                      "role": "green_walk_stop",
+                      "status": "partial",
+                      "match": "partial"
+                    }
+                  ],
+                  "reconciliation": null,
+                  "daypart": "midday"
+                },
+                {
+                  "id": "upgrade-viewpoint-1",
+                  "label": "Fixture viewpoint 1",
+                  "lat": 60.17230000000001,
+                  "lng": 24.9403,
+                  "type": "viewpoint",
+                  "area": null,
+                  "tags": [
+                    "scenic"
+                  ],
+                  "summary": null,
+                  "drawer_query": "Fixture viewpoint 1",
+                  "is_live_event": false,
+                  "event_id": null,
+                  "anchor_weight": 1,
+                  "trust": {
+                    "source_tier": "inferred",
+                    "confidence": "medium",
+                    "human_verified": false,
+                    "freshness": "unknown"
+                  },
+                  "provisional": true,
+                  "source": {
+                    "kind": "open_geo_source",
+                    "label": "osm",
+                    "url": "https://www.openstreetmap.org/node/upgrade-viewpoint-1"
+                  },
+                  "provenance": {
+                    "why_included": "Source-backed candidate admitted to the agnostic route.",
+                    "provider_id": "open-data-osm-wikidata-v1",
+                    "attribution": [
+                      {
+                        "provider_id": "osm",
+                        "label": "osm",
+                        "source_family": "map",
+                        "url": "https://www.openstreetmap.org/node/upgrade-viewpoint-1"
+                      },
+                      {
+                        "provider_id": "wikidata",
+                        "label": "wikidata",
+                        "source_family": "open_knowledge",
+                        "url": "https://www.wikidata.org/wiki/Q212263197"
+                      }
+                    ],
+                    "corroborated_by_external": false,
+                    "weatherTags": []
+                  },
+                  "role": "scenic_anchor",
+                  "route_roles": [
+                    "scenic_anchor"
+                  ],
+                  "candidate_status": "partial",
+                  "planner_usable": true,
+                  "origin": "external_open",
+                  "covered_preferences": [],
+                  "partial_preferences": [],
+                  "missing_preferences": [],
+                  "fit_reasons": [
+                    "covers:scenic(type:viewpoint)"
+                  ],
+                  "lens_reasons": [
+                    "lens_neutral"
+                  ],
+                  "weather_reasons": [],
+                  "time_reasons": [],
+                  "also_covers": [
+                    {
+                      "role": "green_walk_stop",
+                      "status": "partial",
+                      "match": "partial"
+                    }
+                  ],
+                  "reconciliation": null,
+                  "daypart": "midday"
+                },
+                {
+                  "id": "upgrade-viewpoint-2",
+                  "label": "Fixture viewpoint 2",
+                  "lat": 60.1726,
+                  "lng": 24.9406,
+                  "type": "viewpoint",
+                  "area": null,
+                  "tags": [],
+                  "summary": null,
+                  "drawer_query": "Fixture viewpoint 2",
+                  "is_live_event": false,
+                  "event_id": null,
+                  "anchor_weight": 1,
+                  "trust": {
+                    "source_tier": "inferred",
+                    "confidence": "medium",
+                    "human_verified": false,
+                    "freshness": "unknown"
+                  },
+                  "provisional": true,
+                  "source": {
+                    "kind": "open_geo_source",
+                    "label": "osm",
+                    "url": "https://www.openstreetmap.org/node/upgrade-viewpoint-2"
+                  },
+                  "provenance": {
+                    "why_included": "Source-backed candidate admitted to the agnostic route.",
+                    "provider_id": "open-data-osm-wikidata-v1",
+                    "attribution": [
+                      {
+                        "provider_id": "osm",
+                        "label": "osm",
+                        "source_family": "map",
+                        "url": "https://www.openstreetmap.org/node/upgrade-viewpoint-2"
+                      },
+                      {
+                        "provider_id": "wikidata",
+                        "label": "wikidata",
+                        "source_family": "open_knowledge",
+                        "url": "https://www.wikidata.org/wiki/Q212263198"
+                      }
+                    ],
+                    "corroborated_by_external": false,
+                    "weatherTags": []
+                  },
+                  "role": "green_walk_stop",
+                  "route_roles": [
+                    "green_walk_stop"
+                  ],
+                  "candidate_status": "partial",
+                  "planner_usable": true,
+                  "origin": "external_open",
+                  "covered_preferences": [],
+                  "partial_preferences": [],
+                  "missing_preferences": [],
+                  "fit_reasons": [
+                    "partial:green"
+                  ],
+                  "lens_reasons": [
+                    "lens_neutral"
+                  ],
+                  "weather_reasons": [],
+                  "time_reasons": [],
+                  "also_covers": [
+                    {
+                      "role": "scenic_anchor",
+                      "status": "partial",
+                      "match": "covered"
+                    }
+                  ],
+                  "reconciliation": null,
+                  "daypart": "midday"
+                },
+                {
+                  "id": "upgrade-restaurant-0",
+                  "label": "Fixture restaurant 0",
+                  "lat": 60.17,
+                  "lng": 24.94,
+                  "type": "restaurant",
+                  "area": null,
+                  "tags": [
+                    "food"
+                  ],
+                  "summary": null,
+                  "drawer_query": "Fixture restaurant 0",
+                  "is_live_event": false,
+                  "event_id": null,
+                  "anchor_weight": 1,
+                  "trust": {
+                    "source_tier": "inferred",
+                    "confidence": "medium",
+                    "human_verified": false,
+                    "freshness": "unknown"
+                  },
+                  "provisional": true,
+                  "source": {
+                    "kind": "open_geo_source",
+                    "label": "osm",
+                    "url": "https://www.openstreetmap.org/node/upgrade-restaurant-0"
+                  },
+                  "provenance": {
+                    "why_included": "Source-backed candidate admitted to the agnostic route.",
+                    "provider_id": "open-data-osm-wikidata-v1",
+                    "attribution": [
+                      {
+                        "provider_id": "osm",
+                        "label": "osm",
+                        "source_family": "map",
+                        "url": "https://www.openstreetmap.org/node/upgrade-restaurant-0"
+                      },
+                      {
+                        "provider_id": "wikidata",
+                        "label": "wikidata",
+                        "source_family": "open_knowledge",
+                        "url": "https://www.wikidata.org/wiki/Q353811662"
+                      }
+                    ],
+                    "corroborated_by_external": false,
+                    "weatherTags": []
+                  },
+                  "role": "food_anchor",
+                  "route_roles": [
+                    "food_anchor"
+                  ],
+                  "candidate_status": "partial",
+                  "planner_usable": true,
+                  "origin": "external_open",
+                  "covered_preferences": [],
+                  "partial_preferences": [],
+                  "missing_preferences": [],
+                  "fit_reasons": [
+                    "covers:food(type:restaurant)"
+                  ],
+                  "lens_reasons": [
+                    "lens_neutral"
+                  ],
+                  "weather_reasons": [],
+                  "time_reasons": [],
+                  "also_covers": [],
+                  "reconciliation": null,
+                  "daypart": "afternoon"
+                },
+                {
+                  "id": "upgrade-restaurant-1",
+                  "label": "Fixture restaurant 1",
+                  "lat": 60.170300000000005,
+                  "lng": 24.9403,
+                  "type": "restaurant",
+                  "area": null,
+                  "tags": [
+                    "food"
+                  ],
+                  "summary": null,
+                  "drawer_query": "Fixture restaurant 1",
+                  "is_live_event": false,
+                  "event_id": null,
+                  "anchor_weight": 1,
+                  "trust": {
+                    "source_tier": "inferred",
+                    "confidence": "medium",
+                    "human_verified": false,
+                    "freshness": "unknown"
+                  },
+                  "provisional": true,
+                  "source": {
+                    "kind": "open_geo_source",
+                    "label": "osm",
+                    "url": "https://www.openstreetmap.org/node/upgrade-restaurant-1"
+                  },
+                  "provenance": {
+                    "why_included": "Source-backed candidate admitted to the agnostic route.",
+                    "provider_id": "open-data-osm-wikidata-v1",
+                    "attribution": [
+                      {
+                        "provider_id": "osm",
+                        "label": "osm",
+                        "source_family": "map",
+                        "url": "https://www.openstreetmap.org/node/upgrade-restaurant-1"
+                      },
+                      {
+                        "provider_id": "wikidata",
+                        "label": "wikidata",
+                        "source_family": "open_knowledge",
+                        "url": "https://www.wikidata.org/wiki/Q353811661"
+                      }
+                    ],
+                    "corroborated_by_external": false,
+                    "weatherTags": []
+                  },
+                  "role": "food_anchor",
+                  "route_roles": [
+                    "food_anchor"
+                  ],
+                  "candidate_status": "partial",
+                  "planner_usable": true,
+                  "origin": "external_open",
+                  "covered_preferences": [],
+                  "partial_preferences": [],
+                  "missing_preferences": [],
+                  "fit_reasons": [
+                    "covers:food(type:restaurant)"
+                  ],
+                  "lens_reasons": [
+                    "lens_neutral"
+                  ],
+                  "weather_reasons": [],
+                  "time_reasons": [],
+                  "also_covers": [],
+                  "reconciliation": null,
+                  "daypart": "afternoon"
+                },
+                {
+                  "id": "live-event-original-generation-concert",
+                  "label": "Concert",
+                  "lat": 60.173,
+                  "lng": 24.943,
+                  "type": null,
+                  "area": null,
+                  "tags": [],
+                  "summary": null,
+                  "drawer_query": "Concert",
+                  "daypart": "evening",
+                  "is_live_event": true,
+                  "event_id": "original-generation-concert",
+                  "starts_at": "2026-06-28T18:00:00Z",
+                  "ends_at": "2026-06-28T20:00:00Z",
+                  "starts_on": "2026-06-28",
+                  "ends_on": "2026-06-28",
+                  "time_window": null,
+                  "occurrence_date": "2026-06-28",
+                  "timezone": "Europe/Helsinki",
+                  "anchor_weight": 1,
+                  "trust": {
+                    "source_tier": "official",
+                    "confidence": "medium",
+                    "human_verified": false,
+                    "freshness": "fresh"
+                  },
+                  "provisional": false,
+                  "source": {
+                    "kind": "live_event_feed",
+                    "label": "Verified fixture transport",
+                    "url": "https://example.org/concert",
+                    "link_kind": "page",
+                    "link_host": "example.org"
+                  },
+                  "provenance": {
+                    "why_included": "Genuine selected-day event near the day's end — woven as the evening stop after walking validation.",
+                    "attribution": [
+                      {
+                        "label": "Verified fixture transport",
+                        "url": "https://example.org/concert",
+                        "license": null
+                      }
+                    ]
+                  }
+                }
+              ],
+              "hidden_mentions": [],
+              "bar_mentions": [],
+              "map_route_points": [
+                {
+                  "label": "Nearby",
+                  "lat": 60.17,
+                  "lng": 24.94,
+                  "role": "start"
+                },
+                {
+                  "label": "Fixture viewpoint 0",
+                  "lat": 60.172000000000004,
+                  "lng": 24.94,
+                  "role": "first-stop"
+                },
+                {
+                  "label": "Fixture viewpoint 1",
+                  "lat": 60.17230000000001,
+                  "lng": 24.9403,
+                  "role": "stop"
+                },
+                {
+                  "label": "Fixture viewpoint 2",
+                  "lat": 60.1726,
+                  "lng": 24.9406,
+                  "role": "stop"
+                },
+                {
+                  "label": "Fixture restaurant 0",
+                  "lat": 60.17,
+                  "lng": 24.94,
+                  "role": "stop"
+                },
+                {
+                  "label": "Fixture restaurant 1",
+                  "lat": 60.170300000000005,
+                  "lng": 24.9403,
+                  "role": "stop"
+                },
+                {
+                  "label": "Concert",
+                  "lat": 60.173,
+                  "lng": 24.943,
+                  "role": "evening_event"
+                }
+              ],
+              "map_path_points": [
+                {
+                  "lat": 60.17,
+                  "lng": 24.94
+                },
+                {
+                  "lat": 60.172000000000004,
+                  "lng": 24.94
+                },
+                {
+                  "lat": 60.17230000000001,
+                  "lng": 24.9403
+                },
+                {
+                  "lat": 60.1726,
+                  "lng": 24.9406
+                },
+                {
+                  "lat": 60.17,
+                  "lng": 24.94
+                },
+                {
+                  "lat": 60.170300000000005,
+                  "lng": 24.9403
+                },
+                {
+                  "lat": 60.173,
+                  "lng": 24.943
+                }
+              ],
+              "legs": [
+                {
+                  "from_label": "Nearby",
+                  "to_label": "Fixture viewpoint 0",
+                  "distance_km": 0.3,
+                  "estimated_walk_minutes": 4
+                },
+                {
+                  "from_label": "Fixture viewpoint 0",
+                  "to_label": "Fixture viewpoint 1",
+                  "distance_km": 0,
+                  "estimated_walk_minutes": 2
+                },
+                {
+                  "from_label": "Fixture viewpoint 1",
+                  "to_label": "Fixture viewpoint 2",
+                  "distance_km": 0,
+                  "estimated_walk_minutes": 2
+                },
+                {
+                  "from_label": "Fixture viewpoint 2",
+                  "to_label": "Fixture restaurant 0",
+                  "distance_km": 0.4,
+                  "estimated_walk_minutes": 5
+                },
+                {
+                  "from_label": "Fixture restaurant 0",
+                  "to_label": "Fixture restaurant 1",
+                  "distance_km": 0,
+                  "estimated_walk_minutes": 2
+                },
+                {
+                  "from_label": "Fixture restaurant 1",
+                  "to_label": "Concert",
+                  "distance_km": 0.4,
+                  "estimated_walk_minutes": 5
+                }
+              ],
+              "routing_source": "agnostic_compose",
+              "geo_profile": {
+                "area_tokens": [],
+                "macros": [],
+                "dominant_token": null,
+                "dominant_macro": null,
+                "start_token": null,
+                "start_macro": null,
+                "end_token": null,
+                "end_macro": null
+              },
+              "longest_leg_km": 0.4,
+              "longest_leg_minutes": 5,
+              "average_leg_minutes": 3,
+              "long_leg_count": 0,
+              "route_continuity_score": 10,
+              "dead_walk_penalty": 0,
+              "leg_fit_note": "The walking legs stay even and easy to follow on foot.",
+              "route_quality_warnings": [],
+              "geo_fit_note": "Loop around Nearby: the stop order minimizes backtracking and stays mainly around Nearby. The walking legs stay even and easy to follow on foot. Walking legs currently use heuristic routing.",
+              "anchor_zone": "Nearby",
+              "day_profile": "variation",
+              "geo_quality_score": 13,
+              "pool_fit_penalty": 0,
+              "daypart_arc": [
+                "midday",
+                "midday",
+                "midday",
+                "afternoon",
+                "afternoon",
+                "evening"
+              ],
+              "agnostic_daypart_ordering": {
+                "applied": true,
+                "fallback": false,
+                "reason": "daypart_rhythm"
+              },
+              "local_truth": {
+                "score_adjustments": [],
+                "caution_notes": [],
+                "verify_opening_hours": [],
+                "route_context_notes": [],
+                "live_context_notes": [],
+                "prefer_tags": [],
+                "avoid_tags": [],
+                "score_delta": 0
+              },
+              "weather_note": null,
+              "budget_note": null,
+              "pulse_note": null,
+              "live_event_fit_note": null,
+              "pulse_anchor": null,
+              "area_note": null,
+              "opening_hours_warnings": [],
+              "venue_specials": [],
+              "why_recommended": "The route uses source-backed stops that match your choices near this place, with provisional trust where the catalog is thin.",
+              "curator_voice": null,
+              "confidence": "low",
+              "agnostic_route_prose": true,
+              "live_event_stop": {
+                "event_id": "original-generation-concert",
+                "leg_km": 0.4,
+                "leg_minutes": 5
+              },
+              "current_local_time_band": null,
+              "anchored_to_local_time": false,
+              "trimmed_dayparts": [],
+              "caveats": []
+            },
+            "readiness_blockers": [],
+            "caveats": [
+              "below_planner_candidate_threshold"
+            ],
+            "readiness_calibration": {
+              "status": "thin_usable",
+              "level": "low",
+              "summary": "The experimental agnostic route is usable for dogfood, but evidence or context is thin.",
+              "reasons": [
+                "experimental_route_produced",
+                "walking_validated",
+                "timezone_unavailable",
+                "below_planner_candidate_threshold"
+              ],
+              "caps": [
+                "experimental_agnostic_route",
+                "capped_by_partial_context",
+                "capped_by_below_planner_candidate_threshold"
+              ],
+              "inputs": {
+                "loader_status": "loaded:12",
+                "real_place_count": 12,
+                "coordinate_coverage": 1,
+                "can_support_planner": false,
+                "selected_stop_count": 6,
+                "unresolved_role_count": null,
+                "source_family_count": 1,
+                "all_external_stops": false,
+                "walking_valid": true,
+                "walking_source": "agnostic_compose",
+                "walking_fallback_used": false,
+                "route_ordering_mode": "engine_geometry",
+                "timezone_source": null,
+                "timezone_trust": "unavailable",
+                "time_band": null,
+                "computed_signal_count": 0,
+                "weather_fed_into_selection": false,
+                "time_fed_into_selection": false,
+                "dayflow_context_present": false,
+                "stale_candidate_cache": false,
+                "stale_candidate_cache_age_seconds": null,
+                "stale_candidate_refresh_reason": null,
+                "primary_collection": null,
+                "requested_date": "2026-06-28",
+                "current_local_date": null
+              }
+            },
+            "constraint_negotiation": {
+              "status": "satisfied",
+              "route_present": true,
+              "preference_coverage": {
+                "requested_preferences": [],
+                "covered_preferences": [],
+                "partial_preferences": [],
+                "missing_preferences": []
+              },
+              "walking": {
+                "status": "not_requested",
+                "target_km": null,
+                "estimated_km": 1.1,
+                "target_floor_km": null,
+                "target_ceiling_km": null,
+                "validation_status": "validated"
+              },
+              "tradeoffs": [],
+              "reasons": [
+                "requested_constraints_satisfied_by_selected_route"
+              ]
+            },
+            "walking_validation": {
+              "valid": true,
+              "blockers": [],
+              "checks": {
+                "walking_source": "agnostic_compose"
+              }
+            },
+            "route_ordering": {
+              "source": "engine_geometry",
+              "applied": false,
+              "changed": false,
+              "confidence": "engine_compose",
+              "daypart_arc": null,
+              "capacity_repair_applied": false,
+              "reasons": [
+                "engine_geometry_ordering",
+                "daypart_promotion_pending"
+              ]
+            },
+            "context": {
+              "status": "unavailable",
+              "time": {
+                "timezone": null,
+                "timezone_known": false,
+                "timezone_source": null,
+                "timezone_trust": "unavailable",
+                "status": "timezone_unavailable",
+                "now": null,
+                "time_band": null,
+                "requested_date_is_today": null
+              },
+              "weather": {
+                "status": "unavailable",
+                "read": null
+              },
+              "computed_signals": [],
+              "live": {
+                "available": false,
+                "reason": "no_any_place_live_source"
+              },
+              "influence": {
+                "weather_fed_into_selection": false,
+                "time_fed_into_selection": false,
+                "weather_fit_reasons": [],
+                "time_fit_reasons": []
+              }
+            },
+            "synthesized_via": "agnostic_compose_engine",
+            "intake": {
+              "mode": "coordinates",
+              "query": null,
+              "status": "resolved",
+              "resolved": {
+                "label": null,
+                "lat": 60.17,
+                "lng": 24.94,
+                "confidence": "explicit",
+                "provenance": "explicit_request_coordinates",
+                "context_provenance": null,
+                "attribution": null,
+                "license": null,
+                "timezone": null
+              },
+              "candidates_considered": 0,
+              "blockers": []
+            },
+            "promotion": {
+              "readiness": "promotable_limited",
+              "promote": true,
+              "qualifying_caps": [
+                "capped_by_partial_context",
+                "capped_by_below_planner_candidate_threshold"
+              ],
+              "disqualifying_caps": [],
+              "unmet_requested_intents": [],
+              "reasons": [
+                "promoted_with_limitations"
+              ],
+              "blocked_caps": []
+            },
+            "excluded_candidates": {
+              "requested_count": 0
+            },
+            "pinned_candidates": {
+              "requested_count": 0,
+              "honored_count": 0,
+              "unhonored_count": 0,
+              "unhonored": []
+            },
+            "engine_readiness": {
+              "engine_path_active": true,
+              "synthesized_via": "agnostic_compose_engine",
+              "promotion_decision": "eligible",
+              "promotion_blockers": [
+                "promoted_with_limitations"
+              ],
+              "daypart": {
+                "applied": true,
+                "fallback": false,
+                "reason": "daypart_rhythm"
+              },
+              "daypart_arc": [
+                "midday",
+                "midday",
+                "midday",
+                "afternoon",
+                "afternoon",
+                "evening"
+              ],
+              "calibration": {
+                "status": "thin_usable",
+                "level": "low"
+              },
+              "retirement_ready": true,
+              "remaining_for_default": []
+            }
+          }
+        }
+      }
+    },
+    "completion_expired_unknown": {
+      "status": 410,
+      "body": {
+        "error": "live_completion_expired"
+      }
+    },
+    "upgrade_not_eligible": {
+      "status": 200,
+      "body": {
+        "live_route_upgrade": {
+          "version": 1,
+          "state": "not_eligible"
+        }
+      }
+    },
+    "completion_invalid": {
+      "status": 503,
+      "body": {
+        "error": "live_completion_unavailable"
+      }
+    }
+  }
+}

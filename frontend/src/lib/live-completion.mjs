@@ -65,36 +65,47 @@ export function takeLiveCompletion(body) {
 }
 
 /**
- * One read of the completion endpoint, classified.
- *
- * ASSUMED SHAPE (pending the backend fixtures): a terminal 200 carries
- * `live_events` in the same form as a route response, no longer pending, and
- * `route_upgrade`. Kept in this one function so the real fixtures replace it.
+ * One read of the completion endpoint, classified. The envelope is the
+ * backend's (#584): a terminal 200 is
+ *   { live_events, live_completion: { version: 1, state: "ready", route_upgrade } }
+ * and the route-upgrade authorization is read from that envelope only.
  */
 export function readLiveCompletionResponse(status, body) {
   if (status === 202) return { kind: "pending" };
   if (status === 410) return { kind: "expired" };
-  if (status === 200 && isRecord(body) && isRecord(body.live_events) && body.live_events.pending !== true) {
+  const envelope = isRecord(body) ? body.live_completion : null;
+  if (
+    status === 200 &&
+    isRecord(envelope) &&
+    envelope.version === 1 &&
+    envelope.state === "ready" &&
+    isRecord(body.live_events) &&
+    body.live_events.pending !== true
+  ) {
     return {
       kind: "terminal",
       liveEvents: body.live_events,
-      routeUpgrade: body.route_upgrade === "explicit_request" ? "explicit_request" : "not_supported",
+      routeUpgrade: envelope.route_upgrade === "explicit_request" ? "explicit_request" : "not_supported",
     };
   }
   return { kind: "unavailable" };
 }
 
-/** One answer from the explicit upgrade endpoint, classified. */
+/**
+ * One answer from the explicit upgrade endpoint, classified. An applied
+ * upgrade's published day is the top-level `result`, beside the state:
+ *   { live_route_upgrade: { version: 1, state: "applied" }, result }
+ */
 export function readLiveRouteUpgradeResponse(status, body) {
   if (status === 202) return { kind: "pending" };
   if (status === 410) return { kind: "expired" };
   if (status === 409) return { kind: "not_authorized" };
   const upgrade = isRecord(body) ? body.live_route_upgrade : null;
   if (status === 200 && isRecord(upgrade) && upgrade.version === 1) {
-    if (upgrade.state === "applied" && isRecord(upgrade.result) && Array.isArray(upgrade.result.days)) {
+    if (upgrade.state === "applied" && isRecord(body.result) && Array.isArray(body.result.days)) {
       // The upgraded day is a full published response. It must not smuggle a
       // bearer token through to storage either.
-      return { kind: "applied", result: takeLiveCompletion(upgrade.result).body };
+      return { kind: "applied", result: takeLiveCompletion(body.result).body };
     }
     if (upgrade.state === "not_eligible" || upgrade.state === "rejected") return { kind: upgrade.state };
   }
@@ -137,17 +148,42 @@ export async function followLiveCompletion({
   delays = LIVE_COMPLETION_POLL_DELAYS_MS,
 }) {
   const deadline = now() + capability.expiresInMs;
+  // The capability's lifetime bounds every read, including one whose answer
+  // never arrives or whose body stalls: when it runs out, the read is aborted
+  // and the run ends as expired.
+  const lifetime = new AbortController();
+  const forward = () => lifetime.abort();
+  if (signal.aborted) lifetime.abort();
+  else signal.addEventListener("abort", forward, { once: true });
+  let lifetimeEnded = false;
+  const lifetimeTimer = setTimeout(() => {
+    lifetimeEnded = true;
+    lifetime.abort();
+  }, Math.max(0, deadline - now()));
+  const abortable = (promise) =>
+    new Promise((resolve, reject) => {
+      const onAbort = () => reject(new Error("live_completion_aborted"));
+      // Settled either way, so a read that loses to the abort never surfaces
+      // as an unhandled rejection.
+      Promise.resolve(promise).then(
+        (value) => { lifetime.signal.removeEventListener("abort", onAbort); resolve(value); },
+        (error) => { lifetime.signal.removeEventListener("abort", onAbort); reject(error); },
+      );
+      if (lifetime.signal.aborted) return onAbort();
+      lifetime.signal.addEventListener("abort", onAbort, { once: true });
+    });
   const post = async (url) => {
-    const response = await fetcher(url, {
+    const response = await abortable(fetcher(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token: capability.token }),
-      signal,
-    });
+      signal: lifetime.signal,
+    }));
     let body = null;
     try {
-      body = await response.json();
-    } catch {
+      body = await abortable(response.json());
+    } catch (error) {
+      if (lifetime.signal.aborted) throw error;
       body = null;
     }
     return { status: response.status, body };
@@ -160,7 +196,7 @@ export async function followLiveCompletion({
     const delay = delays[Math.min(attempt, delays.length - 1)];
     attempt += 1;
     if (now() + delay >= deadline) return false;
-    await wait(delay, signal);
+    await wait(delay, lifetime.signal);
     return true;
   };
 
@@ -174,6 +210,7 @@ export async function followLiveCompletion({
         read = readLiveCompletionResponse(status, body);
       } catch {
         if (signal.aborted) return cancelled();
+        if (lifetimeEnded) return { live: "expired", upgrade: null };
         continue; // a dropped read is retried inside the same lifetime
       }
       if (read.kind === "pending") continue;
@@ -195,12 +232,15 @@ export async function followLiveCompletion({
         upgrade = readLiveRouteUpgradeResponse(status, body);
       } catch {
         if (signal.aborted) return cancelled();
-        upgrade = { kind: "failed" };
+        upgrade = { kind: lifetimeEnded ? "expired" : "failed" };
       }
       if (upgrade.kind !== "pending") return { live: "terminal", upgrade };
     }
   } catch {
     // Only the abortable wait throws here.
-    return cancelled();
+    return signal.aborted ? cancelled() : { live: lifetimeEnded ? "expired" : "cancelled", upgrade: null };
+  } finally {
+    clearTimeout(lifetimeTimer);
+    signal.removeEventListener("abort", forward);
   }
 }

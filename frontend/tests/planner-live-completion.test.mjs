@@ -2,22 +2,22 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mountPlanner } from './helpers/planner-harness.mjs';
 import { LAST_KEY } from '../src/lib/anywhere-storage.mjs';
+import { readFileSync } from 'node:fs';
 
 // Mounted Planner + real React with controlled transport and clock. Fixture
 // evidence for the client side of the Live completion contract; the endpoint
 // shapes follow the backend handoff and are not live-provider acceptance.
 const TOKEN = 'opaque-live-token-1';
+// The completion and upgrade answers are the backend's own (#584 81d2ad7,
+// real endpoint/store/engine with injected collector transport).
+const wire = JSON.parse(readFileSync(new URL('./fixtures/live-wire-81d2ad7.json', import.meta.url), 'utf8')).fixtures;
+const wireBody = (name, edit = (body) => body) => edit(structuredClone(wire[name].body));
 const COUNTS = ['selected_source_count', 'responding_source_count', 'event_bearing_source_count', 'empty_source_count',
   'failed_source_count', 'unavailable_source_count', 'raw_event_count', 'normalized_event_count',
   'accepted_event_count', 'surfaced_event_count', 'rejected_event_count'];
 const health = (extra) => ({ ...Object.fromEntries(COUNTS.map((k) => [k, 0])), selected_source_count: 1, ...extra });
 const pendingLive = () => ({ coverage: 'covered', pending: true, tonight: [], this_week: [],
   acquisition: { source_health: health({ status: 'pending', result: 'pending', reasons: [] }) } });
-const concert = { id: 'ev-late', title: 'Late concert', timezone: 'Europe/Helsinki', starts_at: '2026-09-25T17:00:00Z',
-  source_label: 'Visit Example', source_url: 'https://venue.example/late', source_link_kind: 'page', source_link_host: 'venue.example' };
-const terminalLive = () => ({ coverage: 'covered', tonight: [concert], this_week: [],
-  acquisition: { source_health: health({ status: 'healthy', result: 'events_found', reasons: [], responding_source_count: 1,
-    event_bearing_source_count: 1, accepted_event_count: 1 }) } });
 const stops = [{ id: 'a', label: 'Museum', lat: 60.17, lng: 24.94 }, { id: 'b', label: 'Cafe', lat: 60.172, lng: 24.942 }];
 const day = (live, { capability, extraStops = [], km = 2 } = {}) => ({
   days: [{ experimental_agnostic_route_applied: true, primary_route: { id: '__agnostic_compose__', title: 'Published day',
@@ -27,9 +27,6 @@ const day = (live, { capability, extraStops = [], km = 2 } = {}) => ({
     source_status: { anchor: { lat: 60.17, lng: 24.94 } } },
   ...(capability ? { live_completion: { version: 1, token: TOKEN, expires_in_ms: 120000, ...capability } } : {}),
 });
-const woven = { id: 'live-event-ev-late', label: 'Late concert', lat: 60.173, lng: 24.943, daypart: 'evening',
-  is_live_event: true, event_id: 'ev-late', starts_at: '2026-09-25T17:00:00Z', timezone: 'Europe/Helsinki' };
-
 const routeCalls = (h) => h.fetchMock.calls.filter((c) => c.url.startsWith('/api/route-recommendations'));
 const completionCalls = (h) => h.fetchMock.calls.filter((c) => c.url === '/api/planner-live-completion');
 const upgradeCalls = (h) => h.fetchMock.calls.filter((c) => c.url === '/api/planner-live-route-upgrade');
@@ -62,16 +59,19 @@ test('pending Live is read through the capability; the route is never recomposed
   const first = pendingTo(h, '/api/planner-live-completion');
   assert.ok(first, 'the first completion read leaves after 2 s');
   assert.deepEqual(first.body, { token: TOKEN }, 'exactly {token}');
-  await h.fetchMock.respond(first, {}, 202);
+  await h.fetchMock.respond(first, wireBody('completion_pending'), 202);
   await h.clock.advance(3000);
   const second = pendingTo(h, '/api/planner-live-completion');
   assert.ok(second);
-  await h.fetchMock.respond(second, { live_events: terminalLive(), route_upgrade: 'not_supported' });
+  await h.fetchMock.respond(second, wireBody('completion_ready', (body) => {
+    body.live_completion.route_upgrade = 'not_supported';
+    return body;
+  }));
   await h.clock.advance(50);
 
-  assert.match(h.text(), /Late concert/, 'the terminal Live result reaches the Live card');
+  assert.match(h.text(), /Concert/, 'the terminal Live result reaches the Live card');
   assert.doesNotMatch(h.text(), /Checking the calendars/);
-  assert.equal(h.readStorage(LAST_KEY).safeResponse.live_events.tonight[0].title, 'Late concert', 'the remembered day carries it too');
+  assert.equal(h.readStorage(LAST_KEY).safeResponse.live_events.tonight[0].title, 'Concert', 'the remembered day carries it too');
   assert.doesNotMatch(JSON.stringify(h.readStorage(LAST_KEY)), new RegExp(TOKEN));
 
   await h.clock.advance(120000);
@@ -104,7 +104,7 @@ test('an expired capability ends as unavailable, never as an empty calendar', as
 async function toUpgrade(t) {
   const h = await arrive(t, day(pendingLive(), { capability: { route_upgrade: 'explicit_request' } }));
   await h.clock.advance(2000);
-  await h.fetchMock.respond(pendingTo(h, '/api/planner-live-completion'), { live_events: terminalLive(), route_upgrade: 'explicit_request' });
+  await h.fetchMock.respond(pendingTo(h, '/api/planner-live-completion'), wireBody('completion_ready'));
   await h.clock.advance(50);
   const upgrade = pendingTo(h, '/api/planner-live-route-upgrade');
   assert.ok(upgrade, 'an authorized terminal read asks for the upgrade');
@@ -112,8 +112,7 @@ async function toUpgrade(t) {
   return { h, upgrade };
 }
 
-const applied = () => ({ live_route_upgrade: { version: 1, state: 'applied',
-  result: day(terminalLive(), { extraStops: [woven], km: 2.6 }) } });
+const applied = () => wireBody('upgrade_applied');
 
 test('an applied upgrade replaces the day visibly, and Undo puts the original back', async (t) => {
   const { h, upgrade } = await toUpgrade(t);
@@ -121,9 +120,12 @@ test('an applied upgrade replaces the day visibly, and Undo puts the original ba
   await h.clock.advance(50);
 
   assert.match(h.text(), /Changed: Live: event added/);
-  assert.match(h.text(), /\+1 stop: Late concert/);
+  assert.match(h.text(), /Concert/);
   const stored = h.readStorage(LAST_KEY);
-  assert.equal(stored.safeResponse.days[0].primary_route.main_stops.length, 3, 'save and share use the upgraded day');
+  const storedStops = stored.safeResponse.days[0].primary_route.main_stops;
+  assert.equal(storedStops.length, 6, 'save and share use the upgraded day');
+  assert.equal(storedStops.at(-1).is_live_event, true);
+  assert.equal(stored.place, 'Testville', 'the saved identity is the original question, not the event stop');
   assert.doesNotMatch(JSON.stringify(stored), new RegExp(TOKEN));
 
   await click(h, /^Undo$/);

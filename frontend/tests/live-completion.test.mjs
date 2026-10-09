@@ -39,7 +39,7 @@ test("completion reads: pending, terminal, expired, and anything else is unavail
   assert.deepEqual(readLiveCompletionResponse(202, {}), { kind: "pending" });
   assert.deepEqual(readLiveCompletionResponse(410, {}), { kind: "expired" });
   const live = { coverage: "covered", tonight: [] };
-  assert.deepEqual(readLiveCompletionResponse(200, { live_events: live, route_upgrade: "explicit_request" }), {
+  assert.deepEqual(readLiveCompletionResponse(200, { live_events: live, live_completion: { version: 1, state: "ready", route_upgrade: "explicit_request" } }), {
     kind: "terminal",
     liveEvents: live,
     routeUpgrade: "explicit_request",
@@ -51,12 +51,12 @@ test("completion reads: pending, terminal, expired, and anything else is unavail
 
 test("upgrade answers: only an applied v1 result carries a day, and never a token", () => {
   const result = { days: [{ primary_route: {} }], live_completion: { version: 1, token: "t", expires_in_ms: 1 } };
-  const applied = readLiveRouteUpgradeResponse(200, { live_route_upgrade: { version: 1, state: "applied", result } });
+  const applied = readLiveRouteUpgradeResponse(200, { live_route_upgrade: { version: 1, state: "applied" }, result });
   assert.equal(applied.kind, "applied");
   assert.equal("live_completion" in applied.result, false);
   assert.equal(readLiveRouteUpgradeResponse(200, { live_route_upgrade: { version: 1, state: "not_eligible" } }).kind, "not_eligible");
   assert.equal(readLiveRouteUpgradeResponse(200, { live_route_upgrade: { version: 1, state: "rejected" } }).kind, "rejected");
-  assert.equal(readLiveRouteUpgradeResponse(200, { live_route_upgrade: { version: 1, state: "applied" } }).kind, "failed");
+  assert.equal(readLiveRouteUpgradeResponse(200, { live_route_upgrade: { version: 1, state: "applied" } }).kind, "failed", "applied without a day is not applied");
   assert.equal(readLiveRouteUpgradeResponse(503, { live_route_upgrade: { version: 1, state: "failed" } }).kind, "failed");
   assert.equal(readLiveRouteUpgradeResponse(409, {}).kind, "not_authorized");
   assert.equal(readLiveRouteUpgradeResponse(410, {}).kind, "expired");
@@ -89,9 +89,9 @@ test("follows pending reads to a terminal result, then asks for the upgrade exac
   const result = { days: [{ primary_route: { main_stops: [] } }] };
   const h = harness([
     { url: LIVE_COMPLETION_ENDPOINT, status: 202, body: {} },
-    { url: LIVE_COMPLETION_ENDPOINT, status: 200, body: { live_events: live, route_upgrade: "explicit_request" } },
+    { url: LIVE_COMPLETION_ENDPOINT, status: 200, body: { live_events: live, live_completion: { version: 1, state: "ready", route_upgrade: "explicit_request" } } },
     { url: LIVE_ROUTE_UPGRADE_ENDPOINT, status: 202, body: {} },
-    { url: LIVE_ROUTE_UPGRADE_ENDPOINT, status: 200, body: { live_route_upgrade: { version: 1, state: "applied", result } } },
+    { url: LIVE_ROUTE_UPGRADE_ENDPOINT, status: 200, body: { live_route_upgrade: { version: 1, state: "applied" }, result } },
   ]);
   const seen = [];
   const outcome = await followLiveCompletion({
@@ -109,14 +109,14 @@ test("follows pending reads to a terminal result, then asks for the upgrade exac
 });
 
 test("an unauthorized capability reads Live and never touches the upgrade endpoint", async () => {
-  const h = harness([{ url: LIVE_COMPLETION_ENDPOINT, status: 200, body: { live_events: { coverage: "covered" }, route_upgrade: "not_supported" } }]);
+  const h = harness([{ url: LIVE_COMPLETION_ENDPOINT, status: 200, body: { live_events: { coverage: "covered" }, live_completion: { version: 1, state: "ready", route_upgrade: "not_supported" } } }]);
   const outcome = await followLiveCompletion({ capability: capability("not_supported"), signal: new AbortController().signal, ...h });
   assert.deepEqual(outcome, { live: "terminal", upgrade: null });
   assert.equal(h.calls.length, 1);
 });
 
 test("the server's own route_upgrade answer decides, not the original flag", async () => {
-  const h = harness([{ url: LIVE_COMPLETION_ENDPOINT, status: 200, body: { live_events: { coverage: "covered" }, route_upgrade: "not_supported" } }]);
+  const h = harness([{ url: LIVE_COMPLETION_ENDPOINT, status: 200, body: { live_events: { coverage: "covered" }, live_completion: { version: 1, state: "ready", route_upgrade: "not_supported" } } }]);
   const outcome = await followLiveCompletion({ capability: capability("explicit_request"), signal: new AbortController().signal, ...h });
   assert.deepEqual(outcome, { live: "terminal", upgrade: null });
 });
@@ -140,7 +140,7 @@ test("410 and an unreadable answer end the run as expired and unavailable", asyn
 test("a dropped read is retried within the same lifetime", async () => {
   const h = harness([
     new Error("network"),
-    { url: LIVE_COMPLETION_ENDPOINT, status: 200, body: { live_events: { coverage: "covered" } } },
+    { url: LIVE_COMPLETION_ENDPOINT, status: 200, body: { live_events: { coverage: "covered" }, live_completion: { version: 1, state: "ready", route_upgrade: "not_supported" } } },
   ]);
   const outcome = await followLiveCompletion({ capability: capability("not_supported"), signal: new AbortController().signal, ...h });
   assert.equal(outcome.live, "terminal");
@@ -163,4 +163,68 @@ test("cancellation stops the run without reporting Live", async () => {
   });
   assert.deepEqual(outcome, { live: "cancelled", upgrade: null });
   assert.deepEqual(seen, []);
+});
+
+// Backend wire fixtures captured by Jean Bob from the real endpoint/store at
+// #584 81d2ad7 (injected collector transport, no live providers). They pin the
+// envelope the parsers read; the events and places in them are test data.
+import { readFileSync } from "node:fs";
+const wire = JSON.parse(readFileSync(new URL("./fixtures/live-wire-81d2ad7.json", import.meta.url), "utf8"));
+const fixture = (name) => structuredClone(wire.fixtures[name]);
+
+test("backend 81d2ad7: completion reads the authorization from live_completion, with version and state", () => {
+  assert.equal(wire.sha, "81d2ad7132a38dbf644864143962d1c29aead46d");
+  const pending = fixture("completion_pending");
+  assert.deepEqual(readLiveCompletionResponse(pending.status, pending.body), { kind: "pending" });
+
+  const ready = fixture("completion_ready");
+  const read = readLiveCompletionResponse(ready.status, ready.body);
+  assert.equal(read.kind, "terminal");
+  assert.equal(read.routeUpgrade, "explicit_request", "authorization lives in body.live_completion.route_upgrade");
+  assert.deepEqual(read.liveEvents, ready.body.live_events);
+
+  const unsupported = fixture("completion_ready");
+  unsupported.body.live_completion.route_upgrade = "not_supported";
+  assert.equal(readLiveCompletionResponse(200, unsupported.body).routeUpgrade, "not_supported");
+
+  const topLevelOnly = fixture("completion_ready");
+  topLevelOnly.body.route_upgrade = "explicit_request";
+  topLevelOnly.body.live_completion.route_upgrade = "not_supported";
+  assert.equal(readLiveCompletionResponse(200, topLevelOnly.body).routeUpgrade, "not_supported", "a top-level flag is not the contract");
+
+  for (const broken of [{ version: 2 }, { state: "pending" }, { state: "unknown" }]) {
+    const body = fixture("completion_ready").body;
+    Object.assign(body.live_completion, broken);
+    assert.equal(readLiveCompletionResponse(200, body).kind, "unavailable", JSON.stringify(broken));
+  }
+  const missing = fixture("completion_ready").body;
+  delete missing.live_completion;
+  assert.equal(readLiveCompletionResponse(200, missing).kind, "unavailable", "no envelope, no terminal read");
+
+  const expired = fixture("completion_expired_unknown");
+  assert.deepEqual(readLiveCompletionResponse(expired.status, expired.body), { kind: "expired" });
+  const invalid = fixture("completion_invalid");
+  assert.deepEqual(readLiveCompletionResponse(invalid.status, invalid.body), { kind: "unavailable" });
+});
+
+test("backend 81d2ad7: an applied upgrade's day is the top-level result", () => {
+  const applied = fixture("upgrade_applied");
+  const read = readLiveRouteUpgradeResponse(applied.status, applied.body);
+  assert.equal(read.kind, "applied", "result sits beside live_route_upgrade, not inside it");
+  assert.deepEqual(read.result, applied.body.result);
+  const stops = read.result.days[0].primary_route.main_stops;
+  assert.equal(stops.at(-1).is_live_event, true, "the published day carries the woven event");
+  assert.equal("live_completion" in read.result, false);
+
+  const nested = fixture("upgrade_applied");
+  nested.body.live_route_upgrade.result = nested.body.result;
+  delete nested.body.result;
+  assert.equal(readLiveRouteUpgradeResponse(200, nested.body).kind, "failed", "a day nested in the state object is not the contract");
+
+  const notEligible = fixture("upgrade_not_eligible");
+  assert.deepEqual(readLiveRouteUpgradeResponse(notEligible.status, notEligible.body), { kind: "not_eligible" });
+  assert.deepEqual(
+    readLiveRouteUpgradeResponse(503, { error: "live_route_upgrade_unavailable", live_route_upgrade: { version: 1, state: "failed" } }),
+    { kind: "failed" },
+  );
 });

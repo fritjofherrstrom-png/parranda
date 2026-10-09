@@ -238,6 +238,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // capability. Pending Live that nothing is following reads as unavailable,
   // never as "still loading".
   const [liveFollowing, setLiveFollowing] = useState(false);
+  // The terminal Live result read for the day on screen. Kept beside that day
+  // rather than replacing it: the day is still the same published day, so
+  // nothing keyed to it (the Live sheet's own queries) starts over.
+  const [completedLive, setCompletedLive] = useState<{ day: any; liveEvents: LiveEvents } | null>(null);
   const [savedDays, setSavedDays] = useState<SavedEntry[]>([]);
   const [restoredAt, setRestoredAt] = useState<string | null>(null); // set when showing a SNAPSHOT
   // What the last adjustment changed, beside the day it replaced. An adjustment
@@ -724,34 +728,33 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const controller = new AbortController();
     liveCompletionAbortRef.current = controller;
     setLiveFollowing(true);
-    let shown = installed;
+    // The remembered entry for this day, while it is still the remembered one.
+    let entry = lastEntryRef.current?.safeResponse === installed ? lastEntryRef.current : null;
     const current = () =>
       !controller.signal.aborted &&
       requestId === requestSequenceRef.current &&
       intentId === intentSequenceRef.current &&
-      liveResponseRef.current === shown;
+      liveResponseRef.current === installed;
     followLiveCompletion({
       capability,
       signal: controller.signal,
       onLiveEvents: (liveEvents) => {
         if (!current()) return;
-        const next = { ...shown, live_events: liveEvents };
-        const entry = lastEntryRef.current;
-        if (entry && entry.safeResponse === shown) {
-          const updated = { ...entry, safeResponse: next };
-          lastEntryRef.current = updated;
-          writeLS(LAST_KEY, updated);
+        setCompletedLive({ day: installed, liveEvents });
+        if (entry && lastEntryRef.current === entry) {
+          entry = { ...entry, safeResponse: { ...installed, live_events: liveEvents } };
+          lastEntryRef.current = entry;
+          writeLS(LAST_KEY, entry);
         }
-        shown = next;
-        liveResponseRef.current = next;
-        setSafeResponse(next);
       },
     })
       .then((outcome) => {
         if (liveCompletionAbortRef.current === controller) liveCompletionAbortRef.current = null;
         if (!current()) return;
         setLiveFollowing(false);
-        if (outcome.upgrade?.kind === "applied") installLiveUpgrade(outcome.upgrade.result, shown);
+        if (outcome.upgrade?.kind === "applied" && entry && lastEntryRef.current === entry) {
+          installLiveUpgrade(outcome.upgrade.result, entry);
+        }
       })
       .catch(() => {});
   }
@@ -759,10 +762,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Called only while the run's generation is current: every adjustment,
   // commitment, restore, undo and compose bumps the generation first, so a
   // newer question always wins over this answer.
-  function installLiveUpgrade(result: any, original: any) {
-    if (liveResponseRef.current !== original) return;
-    const previous = lastEntryRef.current;
-    if (!previous || previous.safeResponse !== original) return;
+  function installLiveUpgrade(result: any, previous: SavedEntry) {
     const decision = anywhereDecision();
     const cls = decision.classifyAnywhereResult(result, { place: previous.place ?? "" });
     if (!decision.isComposedStatus(cls.status)) return;
@@ -1410,7 +1410,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   const structure: PlaceStructure | null = safeResponse?.place_structure ?? null;
   const day = structure?.district_day;
-  const liveEvents: LiveEvents | null = safeResponse?.live_events ?? null;
+  const liveEvents: LiveEvents | null =
+    (completedLive && completedLive.day === safeResponse ? completedLive.liveEvents : safeResponse?.live_events) ?? null;
   const liveDayLabel = liveDateLabel(liveEvents?.selected_date, lang);
   const routeStops = useMemo(() => primaryRouteStops(safeResponse), [safeResponse]);
   const hasPrimaryRoute = routeStops.length > 0;
@@ -1644,6 +1645,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // exclude and pin unable to contradict each other: the newest action wins.
   const invalidateCommitmentIntent = () => {
     intentSequenceRef.current += 1;
+    // The day's completion read answers the old intent: stop it now, not when
+    // the adjustment's debounce sends the next compose.
+    abortLiveCompletion();
     liveQueryAbortRef.current?.abort();
     liveQueryAbortRef.current = null;
     setLiveQueryPending(false);
