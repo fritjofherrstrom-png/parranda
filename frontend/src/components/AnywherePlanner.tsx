@@ -359,6 +359,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   type Anchor = { place?: string; coords?: { lat: number; lng: number }; placeSelection?: string | null; selectionLabel?: string; placeRef?: string | null; placeBias?: { lat: number; lng: number }; placeContextSelection?: string };
   const lastRequestedAnchorRef = useRef<Anchor | null>(null);
+  // The date the latest compose asked about, so a retry asks the same question.
+  const lastComposeDateIsoRef = useRef<string | null>(null);
   function resetBlitz() {
     blitzRequestRef.current?.abort();
     blitzRequestRef.current = null;
@@ -464,6 +466,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         dayOffset: effectiveDayOffset,
         dateIsoOverride,
       });
+      lastComposeDateIsoRef.current = effectiveDateIso;
       const rhythm = DAY_RHYTHMS.find((p: { key: string }) => p.key === effectiveWalkKey) ?? DAY_RHYTHMS[1];
       // Frozen here, beside the request that carries them: whatever the ledger
       // does while this is in flight, THIS is what the answer will have
@@ -1380,19 +1383,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     };
   }, [liveSheetOpen]);
 
-  // The anchor's display label — never a faked place name: a coords anchor
-  // reads "Near you" until the engine attests a real one. A resolver label is a
-  // full display chain ("Lyon, Métropole de Lyon, Rhône, …, France"); the pill
-  // shows the primary locality only, the same rule the engine applies to route
-  // prose (server-side safeAgnosticPlaceLabel).
+  // A coordinate anchor describes the user's position, not the whole city.
+  // A reverse city label does not attest a precise neighborhood. Keep the
+  // authoritative label in the response; only project near-me UI as Near you.
   const primaryLocality = (value?: string | null) => String(value || "").split(",")[0].trim();
   const anchorLabel =
     mode === "near_me"
-      ? primaryLocality(classification?.placeLabel) || t("Nära dig", "Near you")
+      ? t("Nära dig", "Near you")
       : primaryLocality(classification?.placeLabel) || typedPlaceLabel;
-  // A near-me day without an attested label is about the reader's own
-  // position, so sentences say "near you" rather than naming a place.
-  const anchorIsPosition = mode === "near_me" && !primaryLocality(classification?.placeLabel);
+  const anchorIsPosition = mode === "near_me";
   const placeName = primaryLocality(classification?.placeLabel) || typedPlaceLabel || t("den här platsen", "this place");
   // A typed place with no trusted anchor (unresolved, ambiguous, or a resolver
   // that could not be reached): nothing downstream — Blitz included — has a
@@ -1667,10 +1666,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setSupplyPending(false);
     setUpgradePending(false);
   };
-  const retryPlan = () => {
+  // `sameDate` re-asks the failed request's own date: a source retry is the
+  // same question again, even if the clock has crossed midnight meanwhile.
+  const retryPlan = ({ sameDate = false }: { sameDate?: boolean } = {}) => {
     if (retryInFlightRef.current) return;
     const anchor = lastRequestedAnchorRef.current;
     if (!anchor) return;
+    const dateIsoOverride = sameDate ? lastComposeDateIsoRef.current ?? undefined : undefined;
     if (recomposeTimerRef.current) {
       clearTimeout(recomposeTimerRef.current);
       recomposeTimerRef.current = null;
@@ -1681,7 +1683,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
     const retryGeneration = ++retryGenerationRef.current;
     retryInFlightRef.current = true;
-    execute(anchor).catch(() => {}).finally(() => {
+    execute(anchor, dateIsoOverride ? { dateIsoOverride } : {}).catch(() => {}).finally(() => {
       if (retryGenerationRef.current === retryGeneration) retryInFlightRef.current = false;
     });
   };
@@ -1758,14 +1760,31 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     ? referenceBlockers.find((blocker: string) => Object.hasOwn(referenceFailures, blocker)) : null;
   const referenceFailureMessage = referenceFailure ? referenceFailures[referenceFailure]
     : t("Den valda platsreferensen kunde inte bekräftas. Välj en plats igen — ingen annan plats väljs automatiskt.", "The selected place reference could not be confirmed. Choose a place again — no other place is selected automatically.");
-  // Preserve the classifier's three absences; choices announce themselves,
-  // and an outstanding upgrade or service refusal is not a final no-day verdict.
+  // A resolved place whose place sources failed to answer is not a place
+  // without places: the verdict is about the sources, never the reader's
+  // picks, and since the page no longer retries on its own it offers the retry.
+  const sourceUnavailable = phase === "done" && classification?.status === "unavailable" && !anchorUnresolved
+    && anywhereDecision().shouldRetryTransientSource(safeResponse, classification);
+  // Some place sources answered and one failed (the loader's own verdict): the
+  // day may be missing only for that reason. Named as such — never as a total
+  // outage, never as the reader's picks.
+  const loadedSourceStatus = safeResponse?.agnostic_route_output_experiment?.source_status;
+  const sourcePartlyUnavailable = phase === "done" && classification?.status === "unavailable" && !anchorUnresolved
+    && !sourceUnavailable && typeof loadedSourceStatus?.error === "string" && loadedSourceStatus.error.trim() !== ""
+    && loadedSourceStatus?.collection?.selection_reason === "loader_error";
+  // Preserve the classifier's absences; choices announce themselves, and an
+  // outstanding upgrade or service refusal is not a final no-day verdict.
   const unavailableMessage = phase === "done" && classification?.status === "unavailable" && !upgradePending && !serviceRefusal && !unavailableHasChoices
     ? anchorUnresolved
       ? placeRef ? referenceFailureMessage : t(
           `Parranda kunde inte hitta ”${typedPlaceLabel}” just nu. Prova en annan stavning eller lägg till land eller region — inget hittas på.`,
           `Parranda couldn't pin down “${typedPlaceLabel}” right now. Try another spelling or add a country or region — nothing is invented in its place.`,
         )
+      : sourceUnavailable
+        ? t(
+            `Platskällorna svarade inte just nu, så Parranda kunde inte hämta platser ${anchorIsPosition ? "nära dig" : `för ${placeName}`} — inget hittas på. Försök igen om en stund.`,
+            `The place sources didn't answer just now, so Parranda couldn't fetch places ${anchorIsPosition ? "near you" : `for ${placeName}`} — nothing is invented in its place. Try again in a moment.`,
+          )
       : classification.unavailableReason === "sparse_supply" && classification.realPlaceCount
         ? t(
             `Parranda hittade ${classification.realPlaceCount === 1 ? "1 riktig plats" : `${classification.realPlaceCount} riktiga platser`} ${anchorIsPosition ? "nära dig" : `nära ${placeName}`}, men inte tillräckligt för en pålitlig dag ännu — inget hittas på.`,
@@ -2056,7 +2075,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           <p>{navigationInterrupted
             ? t("Planeringen pausades när du lämnade sidan. Dina val finns kvar.", "Planning paused when you left. Your choices are still here.")
             : t("Motorn svarar inte just nu.", "The engine isn't answering right now.")}</p>
-          <button type="button" onClick={retryPlan} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
+          <button type="button" onClick={() => retryPlan()} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
             {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök bygga dagen igen", "Try building the day again")}
           </button>
         </div>
@@ -2104,7 +2123,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 }} />
             ) : unavailableMessage}
           </div>
-          {!anchorUnresolved && selected.length > 0 && (
+          {sourcePartlyUnavailable && (
+            <p>{t(
+              "En av platskällorna svarade inte just nu, så underlaget kan vara ofullständigt. Försök igen om en stund.",
+              "One of the place sources didn't answer just now, so the evidence may be incomplete. Try again in a moment.",
+            )}</p>
+          )}
+          {(sourceUnavailable || sourcePartlyUnavailable) && (
+            <button type="button" onClick={() => retryPlan({ sameDate: true })} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
+              {t("Försök igen", "Try again")}
+            </button>
+          )}
+          {!anchorUnresolved && !sourceUnavailable && !sourcePartlyUnavailable && selected.length > 0 && (
             <p>{t(
               "Vi kunde inte bekräfta en gångbar dag med dina val. Andra intressen läggs inte till automatiskt. Du kan ändra datum, dagens rytm eller själv välja fler intressen.",
               "We could not confirm a walkable day with your choices. Other interests are not added automatically. You can change the date, day rhythm or choose more interests yourself.",
@@ -2159,7 +2189,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           navigationInterrupted={navigationInterrupted}
           retryPlan={retryPlan}
           mode={mode}
-          placeLabel={classification?.placeLabel}
+          placeLabel={mode === "near_me" ? null : classification?.placeLabel}
           anchorLabel={anchorLabel}
           primaryRoute={primaryRoute}
           weather={dayflow?.weather ?? null}
