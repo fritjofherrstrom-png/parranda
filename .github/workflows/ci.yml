@@ -10,6 +10,8 @@ jobs:
   test:
     name: npm test
     runs-on: ubuntu-latest
+    env:
+      PARRANDA_CI_INPUT_DIR: ${{ runner.temp }}/parranda-ci-images
 
     steps:
       - name: Checkout
@@ -55,6 +57,11 @@ jobs:
       - name: Check committed frontend/dist matches the build
         run: node scripts/check-frontend-dist-drift.js
 
+      # Original Dockerfile/Compose stay unchanged. Only registry locations
+      # change in CI; every mirrored image is pinned to a verified digest.
+      - name: Prepare digest-pinned CI image mirrors
+        run: node scripts/prepare-ci-image-mirrors.js "$PARRANDA_CI_INPUT_DIR"
+
       - name: Validate self-hosted production contract
         run: npm run validate:self-hosted
 
@@ -71,11 +78,12 @@ jobs:
           PARRANDA_SOURCE_CATALOG: enabled
           PARRANDA_SOURCE_CATALOG_PASSWORD: ci-source-catalog-password
           PARRANDA_SOURCE_CATALOG_DATABASE_URL: postgresql://parranda:ci-source-catalog-password@postgres:5432/parranda
-        run: docker compose --profile source-catalog -f compose.production.yml config --quiet
+        run: docker compose --profile source-catalog -f compose.production.yml -f "$PARRANDA_CI_INPUT_DIR/compose.ci-images.json" config --quiet
 
       - name: Build self-hosted image
         run: >-
           docker build
+          --file "$PARRANDA_CI_INPUT_DIR/Dockerfile"
           --build-arg PARRANDA_BUILD_SHA=0000000000000000000000000000000000000000
           --tag parranda:self-hosted-ci
           .
@@ -89,15 +97,15 @@ jobs:
           PARRANDA_SOURCE_CATALOG_DATABASE_URL: postgresql://parranda:ci-source-catalog-password@postgres:5432/parranda
         run: |
           cleanup() {
-            docker compose --profile source-catalog -f compose.production.yml down --volumes
+            docker compose --profile source-catalog -f compose.production.yml -f "$PARRANDA_CI_INPUT_DIR/compose.ci-images.json" down --volumes
           }
           trap cleanup EXIT
-          docker compose --profile source-catalog -f compose.production.yml up --detach postgres
-          docker compose --profile source-catalog -f compose.production.yml run --rm source-catalog-migrate
-          docker compose --profile source-catalog -f compose.production.yml run --rm source-scout-worker node scripts/run-source-scout-worker.js --limit 1
+          docker compose --profile source-catalog -f compose.production.yml -f "$PARRANDA_CI_INPUT_DIR/compose.ci-images.json" up --detach postgres
+          docker compose --profile source-catalog -f compose.production.yml -f "$PARRANDA_CI_INPUT_DIR/compose.ci-images.json" run --rm source-catalog-migrate
+          docker compose --profile source-catalog -f compose.production.yml -f "$PARRANDA_CI_INPUT_DIR/compose.ci-images.json" run --rm source-scout-worker node scripts/run-source-scout-worker.js --limit 1
           # Exercise the actual SQL lifecycle in an isolated, self-cleaning
           # schema. Synthetic HTML only; this is not provider acceptance.
-          docker compose --profile source-catalog -f compose.production.yml run --rm \
+          docker compose --profile source-catalog -f compose.production.yml -f "$PARRANDA_CI_INPUT_DIR/compose.ci-images.json" run --rm \
             -v "$PWD/tests/simpleview-catalog-postgres.test.js:/app/tests/simpleview-catalog-postgres.test.js:ro" \
             -e PARRANDA_TEST_DATABASE_URL="$PARRANDA_SOURCE_CATALOG_DATABASE_URL" \
             source-scout-worker node --test tests/simpleview-catalog-postgres.test.js
