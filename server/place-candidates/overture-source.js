@@ -30,6 +30,7 @@
  */
 
 const { createBoundedOvertureQuery } = require('./bounded-overture-query');
+const { createOvertureAssetResolver } = require('./overture-stac-assets');
 const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
 const {
   WALKING_REACH_RING_EDGES_KM,
@@ -334,7 +335,7 @@ function sampleDistanceKm(anchor, point) {
   return Math.sqrt(dLat ** 2 + dLng ** 2);
 }
 
-function buildOvertureQuery({ release, lat, lng, radiusKm = DEFAULT_RADIUS_KM, rowLimit = QUERY_ROW_LIMIT, minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
+function buildOvertureQuery({ release, lat, lng, radiusKm = DEFAULT_RADIUS_KM, rowLimit = QUERY_ROW_LIMIT, minConfidence = DEFAULT_MIN_CONFIDENCE, parquetPaths = null } = {}) {
   if (!RELEASE_PATTERN.test(String(release || "")) || !validCoordinate(lat, lng)) return null;
   const radius = clamp(radiusKm, 0.1, MAX_RADIUS_KM, DEFAULT_RADIUS_KM);
   const limit = Math.max(1, Math.min(Math.floor(Number(rowLimit) || QUERY_ROW_LIMIT), QUERY_ROW_LIMIT));
@@ -345,6 +346,11 @@ function buildOvertureQuery({ release, lat, lng, radiusKm = DEFAULT_RADIUS_KM, r
   const latMin = Math.max(-90, lat - latDelta);
   const latMax = Math.min(90, lat + latDelta);
   const path = `${OVERTURE_S3_ROOT}/${release}/theme=places/type=place/*`;
+  const prefix = `${OVERTURE_S3_ROOT}/${release}/theme=places/type=place/`;
+  if (parquetPaths !== null && (!Array.isArray(parquetPaths) || !parquetPaths.length || parquetPaths.length > 64
+    || parquetPaths.some(p => typeof p !== 'string' || !p.startsWith(prefix)
+      || !/^part-[A-Za-z0-9_-]+\.zstd\.parquet$/.test(p.slice(prefix.length))))) return null;
+  const parquetInput = parquetPaths === null ? `'${path}'` : `[${[...new Set(parquetPaths)].map(p => `'${p}'`).join(', ')}]`;
   const distance = `sqrt(pow((bbox.ymin - ${lat.toFixed(7)}) * ${KM_PER_DEGREE_LAT}, 2)`
     + ` + pow(((((bbox.xmin - ${lng.toFixed(7)}) + 540) % 360) - 180) * ${lngKm.toFixed(7)}, 2))`;
   // The shared walking-reach rings (day-capacity.js); the last runs to the edge.
@@ -366,7 +372,7 @@ function buildOvertureQuery({ release, lat, lng, radiusKm = DEFAULT_RADIUS_KM, r
     bbox.xmin AS lng,
     bbox.ymin AS lat,
     ${distance} AS distance_km
-  FROM read_parquet('${path}', hive_partitioning=1)
+  FROM read_parquet(${parquetInput}, hive_partitioning=1)
   WHERE bbox.ymin BETWEEN ${latMin.toFixed(7)} AND ${latMax.toFixed(7)}
     AND ${longitudeClause(lng, lngDelta)}
     AND confidence >= ${confidence.toFixed(3)}
@@ -517,12 +523,18 @@ function selectRecords(records, { anchor, requestedIntents = [], walkingTargetBa
 function createOvertureSource({
   queryRows = null,
   releaseResolver = resolveLatestOvertureRelease,
+  assetResolver = null,
+  assetFetcher = null,
   cacheDir = null,
   radiusKm = DEFAULT_RADIUS_KM,
   limit = DEFAULT_LIMIT,
   minConfidence = DEFAULT_MIN_CONFIDENCE,
 } = {}) {
   const executeQuery = typeof queryRows === "function" ? queryRows : createDuckDbQueryRows({ cacheDir });
+  // Injectable row fixtures own their offline query seam. Native acquisition
+  // always uses the complete official release manifest, never a wildcard rescue.
+  const resolveAssets = typeof assetResolver === 'function' ? assetResolver
+    : (!queryRows || assetFetcher ? createOvertureAssetResolver({ fetcher: assetFetcher || globalThis.fetch }) : null);
   const boundedRadius = clamp(radiusKm, 0.1, MAX_RADIUS_KM, DEFAULT_RADIUS_KM);
   const boundedLimit = Math.max(1, Math.min(Math.floor(Number(limit) || DEFAULT_LIMIT), MAX_LIMIT));
   const boundedConfidence = clamp(minConfidence, 0.5, 1, DEFAULT_MIN_CONFIDENCE);
@@ -533,9 +545,17 @@ function createOvertureSource({
   async function acquire({ lat, lng, signal } = {}) {
     if (!validCoordinate(lat, lng)) return [];
     try {
+      const metadataDeadlineMs = Date.now() + DEFAULT_STAC_TIMEOUT_MS;
       const release = await releaseResolver({ signal });
+      if (!RELEASE_PATTERN.test(String(release || '')) || signal?.aborted || Date.now() >= metadataDeadlineMs) throw new Error('overture_release_unavailable');
+      const parquetPaths = resolveAssets
+        ? await resolveAssets({ release, lat, lng, radiusKm: boundedRadius, signal, deadlineMs: metadataDeadlineMs }) : null;
+      if (signal?.aborted || Date.now() >= metadataDeadlineMs) throw new Error('overture_cancelled');
+      if (resolveAssets && !Array.isArray(parquetPaths)) throw new Error('overture_stac_unavailable');
+      if (Array.isArray(parquetPaths) && parquetPaths.length === 0) return [];
       const query = buildOvertureQuery({
         release,
+        parquetPaths,
         lat,
         lng,
         radiusKm: boundedRadius,
