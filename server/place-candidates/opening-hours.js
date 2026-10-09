@@ -46,6 +46,89 @@ function evaluateOpeningHoursForWindow(value, { weekday, startMinute = 0, endMin
   return overlaps ? available() : closed();
 }
 
+// When each route role is visited, as local wall-clock windows in minutes.
+// Generic and role-shaped, not a clock schedule: a meal is lunch OR dinner, an
+// evening bar is the evening, a museum is daytime. The day-arc labels a role
+// with one daypart ("afternoon" for the main meal) but that label is an arc
+// position; judging a bistro that opens 12-14:30 and 19-22:30 against 14-18
+// would call an open restaurant closed. Roles without a window are not judged.
+const ROLE_VISIT_WINDOWS = Object.freeze({
+  coffee_fika_stop: [[8 * 60, 16 * 60]],
+  scenic_anchor: [[9 * 60, 20 * 60]],
+  culture_stop: [[10 * 60, 18 * 60]],
+  market_stop: [[8 * 60, 15 * 60]],
+  green_walk_stop: [[8 * 60, 20 * 60]],
+  food_anchor: [[11 * 60 + 30, 14 * 60 + 30], [18 * 60, 22 * 60]],
+  evening_bar_option: [[18 * 60, 24 * 60]],
+  swimming_coast_option: [[9 * 60, 19 * 60]],
+  vintage_second_hand_option: [[10 * 60, 18 * 60]],
+});
+// Long enough to arrive and actually use the place, not just catch it open.
+const MIN_VISIT_MINUTES = 45;
+
+/**
+ * Can a source-backed place be reached open at the time its route role is
+ * visited, and stay open for a real visit?
+ *
+ * Arrival falls inside the role's visit window on the selected local day and
+ * never before now. Once every window has passed (a day started at 22:20 still
+ * has a meal), arrival is "from now on" instead: a stop planned now is visited
+ * now. The place must then stay open MIN_VISIT_MINUTES in a row, across local
+ * midnight when its own hours run on. Unknown or unsupported hours stay
+ * unknown and never exclude a candidate.
+ */
+function evaluateOpeningHoursForRole(value, role, { weekday, startMinute = 0, endMinute = 1440 } = {}) {
+  const windows = Object.prototype.hasOwnProperty.call(ROLE_VISIT_WINDOWS, role) ? ROLE_VISIT_WINDOWS[role] : null;
+  if (!windows) return unknown("role_visit_window_unavailable");
+  const openingHours = normalizeOpeningHours(value);
+  if (!openingHours) return unknown("opening_hours_unavailable");
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return unknown("opening_hours_local_day_unavailable");
+  if (!Number.isFinite(startMinute) || !Number.isFinite(endMinute) || startMinute < 0 || endMinute > 1440 || endMinute <= startMinute) {
+    return unknown("opening_hours_query_window_invalid");
+  }
+  if (openingHours === "24/7") return roleAvailable();
+  const schedule = parseWeeklySchedule(openingHours);
+  if (!schedule) return unknown("opening_hours_unresolved");
+
+  const roleArrivals = windows
+    .map(([start, end]) => [Math.max(start, startMinute), Math.min(end, endMinute)])
+    .filter(([start, end]) => end > start);
+  const arrivals = roleArrivals.length ? roleArrivals : [[startMinute, endMinute]];
+  const open = openIntervalsAroundLocalDay(schedule, weekday);
+  const reachableOpen = arrivals.some(([firstArrival, lastArrival]) =>
+    open.some(([opens, closes]) => {
+      const arrival = Math.max(firstArrival, opens);
+      return arrival < lastArrival && arrival + MIN_VISIT_MINUTES <= closes;
+    }),
+  );
+  return reachableOpen
+    ? roleAvailable()
+    : { eligible: false, status: "closed_at_role_time", reason: "opening_hours_closed_at_role_visit_time" };
+}
+
+// Open intervals for the local day in minutes, continued into the next day
+// (minutes past 1440) so a visit can run past midnight, merged so that
+// "18:00-24:00" followed by "00:00-02:00" is one stretch.
+function openIntervalsAroundLocalDay(schedule, weekday) {
+  const nextDay = (weekday + 1) % 7;
+  const intervals = [
+    ...intervalsForLocalDay(schedule, weekday).filter(([, end]) => end < 1440),
+    ...schedule[weekday].intervals.filter(([, end]) => end >= 1440),
+    ...schedule[nextDay].intervals.map(([start, end]) => [start + 1440, end + 1440]),
+  ].sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const [start, end] of intervals) {
+    const last = merged[merged.length - 1];
+    if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+    else merged.push([start, end]);
+  }
+  return merged;
+}
+
+function roleAvailable() {
+  return { eligible: true, status: "available_at_role_time", reason: "opening_hours_cover_role_visit_time" };
+}
+
 /**
  * Convert a supported source-owned weekly schedule into a bounded local-day
  * fact suitable for a route-stop contract. This deliberately does not answer
@@ -292,8 +375,10 @@ function unknown(reason) {
 }
 
 module.exports = {
+  ROLE_VISIT_WINDOWS,
   buildSelectedDayHoursFact,
   buildLocalDayAvailabilityWindow,
+  evaluateOpeningHoursForRole,
   evaluateOpeningHoursForWindow,
   normalizeOpeningHours,
   normalizeSelectedDayHoursFact,

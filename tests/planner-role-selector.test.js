@@ -344,6 +344,38 @@ test("selected-day hours pass through availability only as a normalized bounded 
   assert.equal("raw_schedule" in availability.selected_day_hours, false);
 });
 
+test("a place closed at a role's visit time does not fill that role", () => {
+  const records = [
+    record("lunch-only", "Lunch Only", "restaurant", 41.901, 12.491, {
+      tags: ["mat"],
+      sources: OFFICIAL_TWO_FAMILIES,
+      opening_hours: "lunch",
+    }),
+    record("dinner", "Dinner Place", "restaurant", 41.9012, 12.4912, { tags: ["mat"], opening_hours: "dinner" }),
+  ];
+  const out = selectPlannerRoleCandidates(
+    city([]),
+    { date: DATE, preferences: ["food"], include_external_candidates: 1 },
+    {
+      external_provider: { dataset: loaderOf(records) },
+      evaluateCandidateAvailability: ({ candidate }) => ({
+        eligible: true,
+        status: "available_in_window",
+        reason: "opening_hours_overlap_query_window",
+        closed_for_roles: candidate.opening_hours === "lunch" ? ["food_anchor"] : ["evening_bar_option"],
+      }),
+    },
+  );
+  const food = role(out, "food_anchor");
+  const ids = food.candidates.map((candidate) => candidate.candidate_id);
+  assert.ok(ids.includes("dinner"), "a place open at the visit time still fills the role");
+  assert.equal(ids.includes("lunch-only"), false);
+  assert.ok(
+    food.candidates.every((candidate) => !("closed_for_roles" in candidate.availability)),
+    "per-role closures steer selection and stay off the published candidate",
+  );
+});
+
 test("anchor roles require may_anchor_route; medium external scenic is partial, not filled", () => {
   const out = decide(
     city([]),

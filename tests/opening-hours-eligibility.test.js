@@ -4,6 +4,7 @@ const test = require("node:test");
 const {
   buildSelectedDayHoursFact,
   buildLocalDayAvailabilityWindow,
+  evaluateOpeningHoursForRole,
   evaluateOpeningHoursForWindow,
   normalizeOpeningHours,
   normalizeSelectedDayHoursFact,
@@ -197,4 +198,59 @@ test("local availability window uses trusted local now only for the selected cur
     }),
     null,
   );
+});
+
+// Friday 2026-10-09, local wall clock. A role is judged at the time it is
+// visited, not at "some point in the rest of the day".
+const FRIDAY = 5;
+function at(hour, minute = 0) {
+  return { weekday: FRIDAY, startMinute: hour * 60 + minute, endMinute: 1440 };
+}
+function roleStatus(hours, role, window) {
+  return evaluateOpeningHoursForRole(hours, role, window).status;
+}
+
+test("a meal is judged at lunch or dinner, not at any open minute of the day", () => {
+  const lunchOnly = "Mo-Fr 11:30-14:30";
+  assert.equal(roleStatus(lunchOnly, "food_anchor", at(9)), "available_at_role_time");
+  assert.deepEqual(evaluateOpeningHoursForRole(lunchOnly, "food_anchor", at(15)), {
+    eligible: false,
+    status: "closed_at_role_time",
+    reason: "opening_hours_closed_at_role_visit_time",
+  });
+  assert.equal(roleStatus("Mo-Su 12:00-14:30,19:00-22:30", "food_anchor", at(15)), "available_at_role_time");
+  assert.equal(
+    roleStatus(lunchOnly, "food_anchor", { weekday: FRIDAY, startMinute: 0, endMinute: 1440 }),
+    "available_at_role_time",
+    "a later date is planned from the start of its day",
+  );
+});
+
+test("arrival needs a real visit before closing, also late in the evening", () => {
+  assert.equal(roleStatus("Mo-Su 12:00-22:30", "food_anchor", at(22, 20)), "closed_at_role_time");
+  assert.equal(roleStatus("Mo-Su 12:00-23:30", "food_anchor", at(22, 20)), "available_at_role_time");
+  assert.equal(roleStatus("Mo-Su 18:00-23:00", "evening_bar_option", at(22, 20)), "closed_at_role_time");
+  assert.equal(roleStatus("Mo-Su 16:00-19:00", "evening_bar_option", at(15)), "available_at_role_time");
+  assert.equal(roleStatus("Mo-Su 12:00-18:30", "evening_bar_option", at(15)), "closed_at_role_time");
+  assert.equal(roleStatus("Tu-Su 10:00-18:00", "culture_stop", at(17, 30)), "closed_at_role_time");
+  assert.equal(roleStatus("Mo-Su 08:00-16:00", "coffee_fika_stop", at(23)), "closed_at_role_time");
+});
+
+test("a visit may run past local midnight when the place's own hours do", () => {
+  assert.equal(roleStatus("Mo-Su 18:00-02:00", "evening_bar_option", at(23, 30)), "available_at_role_time");
+  assert.equal(
+    roleStatus("Mo-Fr 18:00-24:00; Sa 00:00-02:00,18:00-24:00; Su off", "evening_bar_option", at(23, 30)),
+    "available_at_role_time",
+  );
+  assert.equal(roleStatus("Mo-Fr 18:00-24:00; Sa,Su off", "evening_bar_option", at(23, 30)), "closed_at_role_time");
+  assert.equal(roleStatus("24/7", "food_anchor", at(23, 30)), "available_at_role_time");
+});
+
+test("unknown hours, unsupported syntax and unjudged roles never exclude", () => {
+  assert.equal(evaluateOpeningHoursForRole("PH off; Mo-Su 10:00-18:00", "food_anchor", at(15)).eligible, true);
+  assert.equal(roleStatus("sunrise-sunset", "scenic_anchor", at(15)), "unknown");
+  assert.equal(roleStatus(null, "food_anchor", at(15)), "unknown");
+  assert.equal(roleStatus("Mo-Su 10:00-18:00", "not_a_route_role", at(10)), "unknown");
+  assert.equal(roleStatus("Mo-Su 10:00-18:00", "toString", at(10)), "unknown");
+  assert.equal(roleStatus("Mo-Su 10:00-18:00", "food_anchor", { weekday: 9, startMinute: 0, endMinute: 1440 }), "unknown");
 });

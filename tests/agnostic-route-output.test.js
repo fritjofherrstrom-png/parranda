@@ -1809,6 +1809,100 @@ test(
   },
 );
 
+function closingSoonFixtureNear(base) {
+  const recs = [];
+  const point = (i) => ({
+    lat: base.lat + (i % 5) * 0.0005,
+    lng: base.lng + Math.floor(i / 5) * 0.0005,
+  });
+  // Open "today" but not long enough to arrive and eat or drink at 19:30.
+  for (let i = 0; i < 5; i += 1) {
+    const c = point(i);
+    recs.push(singleFamilyExternalRecord(`closing-food-${i}`, `Closing Food ${i}`, "restaurant", c.lat, c.lng, ["mat"], {
+      opening_hours: "Mo 10:00-19:50",
+    }));
+  }
+  for (let i = 0; i < 5; i += 1) {
+    const c = point(i + 5);
+    recs.push(singleFamilyExternalRecord(`closing-bar-${i}`, `Closing Bar ${i}`, "bar", c.lat, c.lng, ["bar"], {
+      opening_hours: "Mo 12:00-20:00",
+    }));
+  }
+  for (let i = 0; i < 5; i += 1) {
+    const c = point(i + 10);
+    recs.push(singleFamilyExternalRecord(`dinner-food-${i}`, `Dinner Food ${i}`, "restaurant", c.lat, c.lng, ["mat"], {
+      opening_hours: "Mo 18:00-23:00",
+    }));
+  }
+  for (let i = 0; i < 5; i += 1) {
+    const c = point(i + 15);
+    recs.push(singleFamilyExternalRecord(`late-bar-${i}`, `Late Bar ${i}`, "bar", c.lat, c.lng, ["bar"], {
+      opening_hours: "Mo 18:00-02:00",
+    }));
+  }
+  for (let i = 0; i < 5; i += 1) {
+    const c = point(i + 20);
+    recs.push(singleFamilyExternalRecord(`unknown-cafe-${i}`, `Unknown Cafe ${i}`, "cafe", c.lat, c.lng, ["fika"], {
+      opening_hours: "sunrise-sunset",
+    }));
+  }
+  return recs;
+}
+
+test(
+  "api: a stop is never planned where its own hours close before a real visit at arrival",
+  async () => {
+    global.fetch = mockStableWeatherFetch();
+    const server = buildApp({
+      openDataLoader: makeLoader(closingSoonFixtureNear({ lat: 41.9, lng: 12.49 })),
+      weatherProvider: async () => ({
+        condition: "sun",
+        maxTemp: 24,
+        minTemp: 14,
+        apparentTempMax: 23,
+        precipitationProbabilityMax: 5,
+        precipitationSum: 0,
+        windSpeedMax: 8,
+        source: "test",
+        stale: false,
+      }),
+      // 17:30Z = 19:30 Europe/Rome on Monday 2026-05-25.
+      clock: eveningClock,
+      placeResolver: async () => [{
+        label: "Resolver place",
+        lat: 41.9,
+        lng: 12.49,
+        confidence: "high",
+        provenance: "test_resolver",
+        timezone: "Europe/Rome",
+      }],
+    }).listen(0);
+    try {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: {
+          city: "unknown-place",
+          dates: [DATE],
+          place: "Resolver place",
+          preferences: ["food", "coffee", "bars"],
+          include_external_candidates: 1,
+        },
+      });
+      const experiment = r.body.agnostic_route_output_experiment;
+      const route = r.body.days[0].primary_route;
+      const stopIds = route.main_stops.map((stop) => stop.id);
+
+      assert.equal(experiment.route_mutation, true);
+      assert.equal(stopIds.some((id) => id.startsWith("closing-")), false, "closes before a real visit at arrival");
+      assert.ok(stopIds.some((id) => id.startsWith("dinner-food-")), "a place open through dinner still fills the meal");
+      assert.equal(JSON.stringify(r.body).includes("closed_for_roles"), false, "per-role closures stay internal");
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      global.fetch = ORIGINAL_FETCH;
+    }
+  },
+);
+
 // --- API: #276 time-anchored selection (proves ctx.timeBand reaches the route)
 
 test(

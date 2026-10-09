@@ -38,8 +38,10 @@ const { assessCityCandidateReadiness } = require("../place-candidates/readiness"
 const {
   buildSelectedDayHoursFact,
   buildLocalDayAvailabilityWindow,
+  evaluateOpeningHoursForRole,
   evaluateOpeningHoursForWindow,
   normalizeSelectedDayHoursFact,
+  ROLE_VISIT_WINDOWS,
 } = require("../place-candidates/opening-hours");
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
 const { operatorClosureForWindow } = require('../place-candidates/operator-visit-evidence');
@@ -1078,9 +1080,17 @@ async function composeAgnosticRouteOutput({
           if (typeof candidate?.opening_hours !== "string") return null;
           const availability = evaluateOpeningHoursForWindow(candidate.opening_hours, availabilityWindow);
           const selectedDayHours = buildSelectedDayHoursFact(candidate.opening_hours, availabilityWindow);
-          return selectedDayHours
-            ? { ...availability, selected_day_hours: selectedDayHours }
-            : availability;
+          // Open at SOME point today is not open when the stop is visited:
+          // each route role is judged against its own visit time (a meal is
+          // lunch or dinner, a bar the evening), no earlier than now.
+          const closedForRoles = Object.keys(ROLE_VISIT_WINDOWS).filter(
+            (role) => evaluateOpeningHoursForRole(candidate.opening_hours, role, availabilityWindow).status === "closed_at_role_time",
+          );
+          return {
+            ...availability,
+            ...(selectedDayHours ? { selected_day_hours: selectedDayHours } : {}),
+            ...(closedForRoles.length ? { closed_for_roles: closedForRoles } : {}),
+          };
         },
       }
     : {};
