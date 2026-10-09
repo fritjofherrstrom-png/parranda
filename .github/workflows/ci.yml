@@ -10,8 +10,6 @@ jobs:
   test:
     name: npm test
     runs-on: ubuntu-latest
-    env:
-      PARRANDA_CI_INPUT_DIR: ${{ runner.temp }}/parranda-ci-images
 
     steps:
       - name: Checkout
@@ -60,7 +58,9 @@ jobs:
       # Original Dockerfile/Compose stay unchanged. Only registry locations
       # change in CI; every mirrored image is pinned to a verified digest.
       - name: Prepare digest-pinned CI image mirrors
-        run: node scripts/prepare-ci-image-mirrors.js "$PARRANDA_CI_INPUT_DIR"
+        run: |
+          node scripts/prepare-ci-image-mirrors.js "$RUNNER_TEMP/parranda-ci-images"
+          printf 'PARRANDA_CI_INPUT_DIR=%s\n' "$RUNNER_TEMP/parranda-ci-images" >> "$GITHUB_ENV"
 
       - name: Validate self-hosted production contract
         run: npm run validate:self-hosted

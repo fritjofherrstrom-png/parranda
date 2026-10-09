@@ -8,6 +8,13 @@ const { spawnSync } = require('node:child_process');
 const root = resolve(__dirname, '..');
 const script = join(root, 'scripts/prepare-ci-image-mirrors.js');
 
+test('runner temporary directory is resolved inside a step and persisted for subsequent steps', () => {
+  const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
+  assert.doesNotMatch(workflow, /^ {6}PARRANDA_CI_INPUT_DIR:.*\$\{\{ runner\.temp \}\}/m);
+  assert.ok(workflow.includes('"$RUNNER_TEMP/parranda-ci-images"'));
+  assert.ok(workflow.includes('>> "$GITHUB_ENV"'));
+});
+
 test('CI uses generated inputs for build and every Source Catalog Compose command without skipping checks', () => {
   const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
   assert.match(workflow, /node scripts\/prepare-ci-image-mirrors\.js/);
