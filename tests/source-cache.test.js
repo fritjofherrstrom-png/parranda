@@ -230,10 +230,11 @@ test("a failed Overpass response is not cached (the next lookup retries)", async
   let calls = 0;
   const fetcher = async () => {
     calls += 1;
-    return { ok: false, status: 429 };
+    return { ok: false, status: 500 };
   };
   // Single explicit endpoint so this stays a CACHE test (mirror failover, which
-  // would multiply the call count, is covered in open-data-loader.test.js).
+  // would multiply the call count, is covered in open-data-loader.test.js). An
+  // ordinary error: a 429 deliberately pauses the endpoint, tested there too.
   const loader = createOpenDataLoader({
     fetcher,
     endpoint: "https://example.org/overpass",
