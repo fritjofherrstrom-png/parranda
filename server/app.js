@@ -45,6 +45,7 @@ const {
 } = require("./planner/pinned-candidates");
 const { parseRequestedDates } = require("./planner/requested-dates");
 const { createPlannerLifecycle, lifecycleLoader } = require('./planner/cold-lifecycle');
+const { createLiveCompletionStore } = require('./planner/live-completion');
 const { nearbyCuratedSupply } = require('./planner/nearby-curated-supply');
 const { createPlaceSelectionStore, placeResolutionInputs } = require('./place-candidates/place-selection');
 const { toPlaceRef } = require('./place-candidates/place-ref');
@@ -1532,6 +1533,7 @@ function buildApp({
     openDataLoader = composeOpenDataLoaders(primaryLoader, reviewedPlaceSource);
   }
   const app = express();
+  const liveCompletion = createLiveCompletionStore();
 
   app.use(express.json());
   // Inbound half of the politeness contract Parranda already keeps outbound.
@@ -1915,6 +1917,17 @@ function buildApp({
       placeSelectionStore,
     });
     response.status(result.status).json(result.body);
+  });
+
+  // Read only the original planner collection. Never normalize/replay a Live
+  // query here: that could select a different geometry, date or source plan.
+  app.post('/api/planner-live-completion', (request, response) => {
+    const body = request.body;
+    if (!body || Object.keys(body).some(key => key !== 'token')) {
+      return response.set('Cache-Control', 'no-store').status(400).json({ error: 'invalid_live_completion_request' });
+    }
+    const result = liveCompletion.read(body.token);
+    response.set('Cache-Control', 'no-store').status(result.status).json(result.body);
   });
 
   app.post("/api/geocode", async (request, response) => {
@@ -2392,6 +2405,7 @@ function buildApp({
       // unaffected. Same generic shape regardless of place; the engine works
       // without any event provider.
       let liveEvents = null;
+      let liveCompletionIdentity = null;
       if (typeof eventSupply === "function" && anchor) {
         try {
           const eventsNow = clock && typeof clock.now === "function" ? clock.now() : new Date().toISOString();
@@ -2411,11 +2425,20 @@ function buildApp({
             preferences,
           });
           liveEvents = shapeCollectedLiveEvents(collected);
+          // Legacy clients persist the whole response. Only a completion-aware
+          // client that extracts this bearer capability into transient state
+          // may opt in; default saved/share snapshots must not gain a token.
+          if (liveEvents && request.query?.include_live_completion === '1') {
+            liveCompletionIdentity = liveCompletion.issue(collected);
+          }
         } catch (_error) {
           liveEvents = null; // fail soft: live events never block the route
         }
       }
-      const liveEventsSidecar = liveEvents ? { live_events: liveEvents } : {};
+      const liveEventsSidecar = liveEvents ? {
+        live_events: liveEvents,
+        ...(liveCompletionIdentity ? { live_completion: liveCompletionIdentity } : {}),
+      } : {};
 
       // EVENTS INTO THE DAY: materialize and weave the top genuine event for the
       // SELECTED route date into the composed day as an honest EVENING ANCHOR.

@@ -55,6 +55,7 @@ const {
 const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensitive-events");
 const { scoreEventPreferenceFit } = require("../pulse-engine/event-preference-fit");
 const { createSourceCache } = require("./source-cache");
+const { LIVE_COLLECTION_READ } = require('../planner/live-completion');
 const {
   resolveReviewedEventSourceProfileFeeds,
 } = require("./reviewed-event-source-profile");
@@ -1714,6 +1715,7 @@ function resolveDefaultEventSupply(
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   });
   const failedRefreshes = createFailedRefreshHold({ clock: failedRefreshClock });
+  const activeCollections = new Map();
   return async ({
     anchor,
     sourceAnchors = [],
@@ -1844,47 +1846,58 @@ function resolveDefaultEventSupply(
     const failed = failedRefreshes.read(key);
     if (failed) return rankCollectedEventsForPreferences(withDiscoveryHealth(failed), preferences, scope, now);
     // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
-    cache.warm(key, async () => {
-      let collected;
-      try {
-        collected = await collectEvents({
-          anchor,
-          sourceAnchors,
-          now,
-          selectedDate,
-          time,
-          registry: requestRegistry,
-          radiusM: effectiveRadiusM,
-          timeoutMs: WARM_TIMEOUT_MS,
-          sourceCollectionCache,
-          eventReader,
-          datatourismeKey,
-          marketLoader,
-          calendarReferenceCache,
-          sourceBounds: scope?.kind === "in_place" ? scope.trusted_place_scope?.bounds : null,
-          globalKey,
-          venueResolver,
-          spatialScope,
-          placeContext,
-        });
-      } catch (error) {
-        failedRefreshes.remember(key, failedEventCollection({
-          sourcePlan,
-          selectedDate,
-          radiusM: effectiveRadiusM,
-        }));
-        throw error;
-      }
-      if (isFailedEventRefresh(collected)) failedRefreshes.remember(key, collected);
-      else failedRefreshes.forget(key);
-      return withDiscoveryHealth(collected);
-    }, {
-      // A proven healthy empty result is cacheable so a quiet calendar does not
-      // cause refresh loops. Empty results with source failures are never
-      // cached: they are only held briefly above, then retried.
-      shouldStore: shouldCacheEventSupplyResult,
-    });
-    return {
+    let collection = activeCollections.get(key);
+    if (!collection) {
+      collection = { result: null, settled: false };
+      activeCollections.set(key, collection);
+      cache.warm(key, async () => {
+        let collected;
+        try {
+          collected = await collectEvents({
+            anchor,
+            sourceAnchors,
+            now,
+            selectedDate,
+            time,
+            registry: requestRegistry,
+            radiusM: effectiveRadiusM,
+            timeoutMs: WARM_TIMEOUT_MS,
+            sourceCollectionCache,
+            eventReader,
+            datatourismeKey,
+            marketLoader,
+            calendarReferenceCache,
+            sourceBounds: scope?.kind === "in_place" ? scope.trusted_place_scope?.bounds : null,
+            globalKey,
+            venueResolver,
+            spatialScope,
+            placeContext,
+          });
+        } catch (error) {
+          collection.result = withDiscoveryHealth(failedEventCollection({
+            sourcePlan,
+            selectedDate,
+            radiusM: effectiveRadiusM,
+          }));
+          failedRefreshes.remember(key, collection.result);
+          collection.settled = true;
+          activeCollections.delete(key);
+          throw error;
+        }
+        if (isFailedEventRefresh(collected)) failedRefreshes.remember(key, collected);
+        else failedRefreshes.forget(key);
+        collection.result = withDiscoveryHealth(collected);
+        collection.settled = true;
+        activeCollections.delete(key);
+        return collection.result;
+      }, {
+        // A proven healthy empty result is cacheable so a quiet calendar does not
+        // cause refresh loops. Empty results with source failures are never
+        // cached: they are only held briefly above, then retried.
+        shouldStore: shouldCacheEventSupplyResult,
+      });
+    }
+    const pending = {
       coverage: "covered",
       ...(selectedDate ? { selected_date: selectedDate } : {}),
       feed: descriptors[0] || null,
@@ -1923,6 +1936,15 @@ function resolveDefaultEventSupply(
         },
       },
     };
+    // Capture this producer, not its cache key: a later refresh of the same key
+    // must never replace an older planner's completion. Ranking remains frozen
+    // to the original request; this reader performs no acquisition or catalog IO.
+    Object.defineProperty(pending, LIVE_COLLECTION_READ, { value: () =>
+      collection.settled
+        ? rankCollectedEventsForPreferences(collection.result, preferences, scope, now)
+        : pending,
+    });
+    return pending;
   };
 }
 
