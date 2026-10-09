@@ -32,7 +32,7 @@ function createLiveCompletionStore({ now = () => Date.now() } = {}) {
       if (!liveEvents) throw new Error('invalid_live_completion');
       const result = { status: liveEvents.pending ? 202 : 200, body: {
         live_events: liveEvents,
-        live_completion: { version: 1, state: liveEvents.pending ? 'pending' : 'ready', route_upgrade: 'not_supported' },
+        live_completion: { version: 1, state: liveEvents.pending ? 'pending' : 'ready', route_upgrade: entry.authorizedUpgrade ? 'explicit_request' : 'not_supported' },
       } };
       if (Buffer.byteLength(JSON.stringify(result.body)) > MAX_RESULT_BYTES) throw new Error('large_live_completion');
       if (!liveEvents.pending) entry.terminal = JSON.parse(JSON.stringify(result));
@@ -42,7 +42,51 @@ function createLiveCompletionStore({ now = () => Date.now() } = {}) {
       return entry.terminal;
     }
   }
-  return { issue, read };
+  function bindUpgrade(token, upgrade) {
+    sweep();
+    const entry = entries.get(token);
+    if (!entry || typeof upgrade !== 'function') return false;
+    entry.upgrade = upgrade;
+    entry.authorizedUpgrade = true;
+    return true;
+  }
+  async function upgrade(token) {
+    sweep();
+    const entry = typeof token === 'string' && /^[a-f0-9]{48}$/.test(token) && entries.get(token);
+    if (!entry) return { status: 410, body: { error: 'live_completion_expired' } };
+    if (!entry.upgrade && !entry.attempt) return { status: 409, body: { error: 'live_route_upgrade_not_authorized' } };
+    const completed = read(token);
+    if (completed.status !== 200) return completed;
+    // Reserve BEFORE any awaited work. Duplicates share even a failed attempt.
+    if (!entry.attempt) {
+      let timer;
+      const expiry = new Promise(resolve => {
+        timer = setTimeout(() => {
+          entries.delete(token);
+          entry.upgrade = null;
+          resolve({ status: 410, body: { error: 'live_completion_expired' } });
+        }, Math.max(0, entry.expiresAt - now()));
+        timer.unref?.();
+      });
+      const run = entry.upgrade;
+      const execution = Promise.resolve().then(async () => {
+        try {
+          const body = await run(completed.body.live_events);
+          if (Buffer.byteLength(JSON.stringify(body)) > MAX_RESULT_BYTES) throw new Error('large_live_upgrade');
+          return { status: 200, body: JSON.parse(JSON.stringify(body)) };
+        } catch (_) {
+          return { status: 503, body: { error: 'live_route_upgrade_unavailable', live_route_upgrade: { version: 1, state: 'failed' } } };
+        } finally {
+          entry.upgrade = null;
+        }
+      });
+      entry.attempt = Promise.race([execution, expiry]).finally(() => clearTimeout(timer));
+    }
+    const result = await entry.attempt;
+    if (entry.expiresAt <= now() || entries.get(token) !== entry) return { status: 410, body: { error: 'live_completion_expired' } };
+    return result;
+  }
+  return { issue, read, bindUpgrade, upgrade };
 }
 
 module.exports = { LIVE_COLLECTION_READ, createLiveCompletionStore };

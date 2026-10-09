@@ -962,6 +962,9 @@ async function composeAgnosticRouteOutput({
   // are unchanged). The legacy synthesizer is staged for removal once the engine
   // path is proven in production.
   synthesizeVia = "legacy",
+  // Private server-owned replay context; never populated by HTTP intake.
+  retainedContext = undefined,
+  onRetainComposition = null,
 }) {
   const agnosticLabel = safeAgnosticPlaceLabel(placeLabel);
   const agnosticContext = buildAgnosticCityContext({
@@ -1012,7 +1015,7 @@ async function composeAgnosticRouteOutput({
   const loaderStatus = (sourceStatus && sourceStatus.status) || "skipped";
   const willRunTrustedSelection =
     Boolean(externalRequested) && typeof loaderStatus === "string" && (curatedCandidates.length > 0 || (loaderStatus.startsWith("loaded:") && loaderStatus !== "loaded:0"));
-  const ctx = willRunTrustedSelection
+  const ctx = retainedContext !== undefined ? structuredClone(retainedContext) : willRunTrustedSelection
     ? await resolveAgnosticContext({
         coords: selectionOrigin,
         date: effectiveDate,
@@ -1023,6 +1026,7 @@ async function composeAgnosticRouteOutput({
         cityLabel: agnosticContext.label,
       })
     : null;
+  if (typeof onRetainComposition === 'function') onRetainComposition({ records: resolvedTrusted.trustedRecords, context: ctx });
 
   const focusedRhythm = Boolean(dayRhythm) && normalizeUserIntents(preferences).intents.length === 1;
   const rolePayload = {

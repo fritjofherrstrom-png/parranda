@@ -46,6 +46,7 @@ const {
 const { parseRequestedDates } = require("./planner/requested-dates");
 const { createPlannerLifecycle, lifecycleLoader } = require('./planner/cold-lifecycle');
 const { createLiveCompletionStore } = require('./planner/live-completion');
+const { retainComposition, createRouteUpgrade } = require('./planner/live-route-upgrade');
 const { nearbyCuratedSupply } = require('./planner/nearby-curated-supply');
 const { createPlaceSelectionStore, placeResolutionInputs } = require('./place-candidates/place-selection');
 const { toPlaceRef } = require('./place-candidates/place-ref');
@@ -1930,6 +1931,15 @@ function buildApp({
     response.set('Cache-Control', 'no-store').status(result.status).json(result.body);
   });
 
+  app.post('/api/planner-live-route-upgrade', async (request, response) => {
+    const body = request.body;
+    if (!body || Object.keys(body).some(key => key !== 'token')) {
+      return response.set('Cache-Control', 'no-store').status(400).json({ error: 'invalid_live_route_upgrade_request' });
+    }
+    const result = await liveCompletion.upgrade(body.token);
+    response.set('Cache-Control', 'no-store').status(result.status).json(result.body);
+  });
+
   app.post("/api/geocode", async (request, response) => {
     try {
       const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.body?.city);
@@ -2464,14 +2474,9 @@ function buildApp({
       // candidate opt-in + the trusted server openDataLoader are still required
       // inside composeAgnosticRouteOutput. Public payload never becomes trusted.
       const useEngineCompose = isAgnosticEngineComposeRequested(request);
-      const {
-        result: experimentResult,
-        experiment,
-        eventWeave,
-        pinnedRefusals,
-        precompositionPinnedRefusals,
-        commitmentEligibleIds,
-      } = await composeAgnosticRouteOutput({
+      let retainedComposition = null;
+      const upgradeRequested = Boolean(liveCompletionIdentity && request.query?.include_live_route_upgrade === '1' && useEngineCompose);
+      const compositionArgs = {
         coords: anchor,
         baselineResult: baselineBody,
         externalRequested: isExternalCandidatesRequested(request),
@@ -2508,7 +2513,14 @@ function buildApp({
         anchorMode: intake.mode,
         spatialScope,
         synthesizeVia: useEngineCompose ? "engine" : "legacy",
+      };
+      const composition = await composeAgnosticRouteOutput({
+        ...compositionArgs,
+        onRetainComposition: upgradeRequested ? snapshot => {
+          try { retainedComposition = retainComposition(snapshot); } catch (_) { retainedComposition = null; }
+        } : null,
       });
+      const { result: experimentResult, experiment } = composition;
       experiment.intake = intake;
 
       // Promotion gate (engine-compose path only). The legacy path keeps its
@@ -2519,88 +2531,101 @@ function buildApp({
       // this is a defensive re-check). Otherwise the baseline is returned and the
       // route stays in the diagnostic experiment block.
       if (useEngineCompose) {
-        const strongAnchor =
-          intake.resolved?.confidence === "explicit" ||
-          ["high", "medium"].includes(String(intake.resolved?.confidence ?? "").toLowerCase());
-        // Grading needs two things the calibration score cannot express: which
-        // roles went unresolved, and which intents the user actually asked for.
-        // A role nobody requested is breadth we did not reach; a requested one
-        // is a question the day fails to answer.
-        const promotion = classifyPromotionReadiness({
-          calibration: experiment.readiness_calibration,
-          strongAnchor,
-          unresolvedRoles: experiment.experimental_route?.unresolved_roles,
-          requestedIntents: normalizeUserIntents(preferences).intents,
-          preferenceCoverage: experiment.constraint_negotiation?.preference_coverage,
-          primaryStops: experimentResult?.days?.[0]?.primary_route?.main_stops,
-          pinnedIds: pinnedCandidateIds,
-        });
-        experiment.promotion = promotion;
-        // Bounded, count-only echo so an operator can see the day was composed
-        // against a reduced reservoir. The ids are the user's own input and are
-        // never re-published as evidence.
-        experiment.excluded_candidates = excludedCandidateSummary(excludedCandidateIds);
-        // Derived from the day that was actually composed, not from the request:
-        // an unhonoured pin is a fact about the output, never an intention.
-        // The reasons compose produced describe the ENGINE's day. When
-        // promotion is withheld the baseline is published instead, and that day
-        // never had a commitment applied to it — so attributing a refusal to
-        // the reservoir or the walk would describe a day nobody received.
-        const publishedStops = (promotion.promote ? experimentResult : baselineBody)
-          ?.days?.[0]?.primary_route?.main_stops;
-        experiment.pinned_candidates = summarizePinnedOutcome(
-          pinnedCandidateIds,
-          publishedStops,
-          promotion.promote
-            ? pinnedRefusals
-            : Array.isArray(precompositionPinnedRefusals)
-              ? precompositionPinnedRefusals
-              : attributeToWithheldDay(pinnedCandidateIds, publishedStops),
-        );
-        // Retirement-readiness observability: a consolidated, honest verdict on
-        // whether the engine path is ready to become the default synthesizer,
-        // and if not, exactly what remains. Read-only; promotes nothing.
-        experiment.engine_readiness = buildEngineReadinessVerdict(experiment);
-        const publicResult = buildAgnosticPublicResult({
-          result: promotion.promote ? experimentResult : baselineBody,
-          routeApplied: promotion.promote,
-          requestedCity,
-          cityFallbackUsed,
-        });
-        // Compose already applied this weave INSIDE its authoritative
-        // finalisation, so the route it settled on is the route below. Weaving
-        // again here would either be a no-op or a second, unjudged mutation.
-        const engineWoven = selectPublishedEventWeave({
-          promotionPromote: promotion.promote,
-          eventWeave,
-          publicResult,
-        }) ?? await weaveEventStopFailSoft({
-          result: publicResult,
-          requestedPreferences: preferences,
-          placeStructure: wovenPlaceStructure,
-          walkingRouter,
-          walkingConfig,
-        });
-        reconcileConstraintAfterEventWeave({
-          experiment,
-          woven: engineWoven,
-          walkingKmTarget: requestedRhythm ? null : payload.walkingKmTarget,
-        });
-        // The eligibility verdict belongs to the candidate context that was
-        // actually PUBLISHED. When the gate withholds the engine's day, the
-        // baseline goes out instead and the engine's reservoir describes a day
-        // nobody received — so nothing may be declared committable from it.
-        const publishedPlaceStructure = markCommitmentEligibility(
-          engineWoven.placeStructure,
-          publishedEligibleIds({ promotionPromote: promotion.promote, commitmentEligibleIds }),
-        );
-        response.json({
-          ...engineWoven.result,
-          ...(publishedPlaceStructure ? { place_structure: publishedPlaceStructure } : {}),
-          ...(engineWoven.interrupt ? { pulse_route_interrupt: engineWoven.interrupt } : {}),
-          ...liveEventsSidecar,
-          agnostic_route_output_experiment: experiment,
-        });
+        // Original publication and authorized replay share the identical gates.
+        async function publishComposition({ result: experimentResult, experiment, eventWeave, pinnedRefusals, precompositionPinnedRefusals, commitmentEligibleIds }, wovenPlaceStructure, liveEventsSidecar) {
+          experiment.intake = intake;
+          const strongAnchor =
+            intake.resolved?.confidence === "explicit" ||
+            ["high", "medium"].includes(String(intake.resolved?.confidence ?? "").toLowerCase());
+          // Grading needs two things the calibration score cannot express: which
+          // roles went unresolved, and which intents the user actually asked for.
+          // A role nobody requested is breadth we did not reach; a requested one
+          // is a question the day fails to answer.
+          const promotion = classifyPromotionReadiness({
+            calibration: experiment.readiness_calibration,
+            strongAnchor,
+            unresolvedRoles: experiment.experimental_route?.unresolved_roles,
+            requestedIntents: normalizeUserIntents(preferences).intents,
+            preferenceCoverage: experiment.constraint_negotiation?.preference_coverage,
+            primaryStops: experimentResult?.days?.[0]?.primary_route?.main_stops,
+            pinnedIds: pinnedCandidateIds,
+          });
+          experiment.promotion = promotion;
+          // Bounded, count-only echo so an operator can see the day was composed
+          // against a reduced reservoir. The ids are the user's own input and are
+          // never re-published as evidence.
+          experiment.excluded_candidates = excludedCandidateSummary(excludedCandidateIds);
+          // Derived from the day that was actually composed, not from the request:
+          // an unhonoured pin is a fact about the output, never an intention.
+          // The reasons compose produced describe the ENGINE's day. When
+          // promotion is withheld the baseline is published instead, and that day
+          // never had a commitment applied to it — so attributing a refusal to
+          // the reservoir or the walk would describe a day nobody received.
+          const publishedStops = (promotion.promote ? experimentResult : baselineBody)
+            ?.days?.[0]?.primary_route?.main_stops;
+          experiment.pinned_candidates = summarizePinnedOutcome(
+            pinnedCandidateIds,
+            publishedStops,
+            promotion.promote
+              ? pinnedRefusals
+              : Array.isArray(precompositionPinnedRefusals)
+                ? precompositionPinnedRefusals
+                : attributeToWithheldDay(pinnedCandidateIds, publishedStops),
+          );
+          // Retirement-readiness observability: a consolidated, honest verdict on
+          // whether the engine path is ready to become the default synthesizer,
+          // and if not, exactly what remains. Read-only; promotes nothing.
+          experiment.engine_readiness = buildEngineReadinessVerdict(experiment);
+          const publicResult = buildAgnosticPublicResult({
+            result: promotion.promote ? experimentResult : baselineBody,
+            routeApplied: promotion.promote,
+            requestedCity,
+            cityFallbackUsed,
+          });
+          // Compose already applied this weave INSIDE its authoritative
+          // finalisation, so the route it settled on is the route below. Weaving
+          // again here would either be a no-op or a second, unjudged mutation.
+          const engineWoven = selectPublishedEventWeave({
+            promotionPromote: promotion.promote,
+            eventWeave,
+            publicResult,
+          }) ?? await weaveEventStopFailSoft({
+            result: publicResult,
+            requestedPreferences: preferences,
+            placeStructure: wovenPlaceStructure,
+            walkingRouter,
+            walkingConfig,
+          });
+          reconcileConstraintAfterEventWeave({
+            experiment,
+            woven: engineWoven,
+            walkingKmTarget: requestedRhythm ? null : payload.walkingKmTarget,
+          });
+          // The eligibility verdict belongs to the candidate context that was
+          // actually PUBLISHED. When the gate withholds the engine's day, the
+          // baseline goes out instead and the engine's reservoir describes a day
+          // nobody received — so nothing may be declared committable from it.
+          const publishedPlaceStructure = markCommitmentEligibility(
+            engineWoven.placeStructure,
+            publishedEligibleIds({ promotionPromote: promotion.promote, commitmentEligibleIds }),
+          );
+          return {
+            ...engineWoven.result,
+            ...(publishedPlaceStructure ? { place_structure: publishedPlaceStructure } : {}),
+            ...(engineWoven.interrupt ? { pulse_route_interrupt: engineWoven.interrupt } : {}),
+            ...liveEventsSidecar,
+            agnostic_route_output_experiment: experiment,
+          };
+        }
+        const published = await publishComposition(composition, wovenPlaceStructure, liveEventsSidecar);
+        if (upgradeRequested) {
+          const upgrade = createRouteUpgrade({ args: compositionArgs, retained: retainedComposition,
+            structure: agnosticPlaceStructure, initialLive: liveEvents, published, publish: publishComposition });
+          if (upgrade && liveCompletion.bindUpgrade(liveCompletionIdentity.token, upgrade)) {
+            published.live_completion.route_upgrade = 'explicit_request';
+          }
+        }
+        response.json(published);
         return;
       }
 
