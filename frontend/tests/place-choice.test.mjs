@@ -120,3 +120,37 @@ test('restoring another selected place cancels old Blitz and requests the restor
  await click(h,button(h,'Blitz right now'));
  const fresh=h.fetchMock.pending().find(x=>x.url.startsWith('/api/blitz'));assert.equal(fresh.body.place_selection,'selected-token');
 });
+
+test('declined narrowing preserves the typed request and reports only the location failure', async t => {
+ const h=await mountPlanner({url:'http://localhost/anywhere?place=Harbour&lang=en'});t.after(()=>h.unmount());
+ Object.defineProperty(h.window.navigator,'geolocation',{configurable:true,value:{getCurrentPosition(ok,deny){deny({code:1,message:'denied'});}}});
+ await h.clock.advance(500);await h.fetchMock.respond(h.fetchMock.pending()[0],ambiguous);await h.clock.advance(30);
+ const count=h.fetchMock.calls.length;const address=h.window.location.search;
+ await click(h,button(h,'Use my location to narrow'));await h.clock.advance(30);
+ assert.equal(h.fetchMock.calls.length,count);assert.equal(h.window.location.search,address);
+ assert.match(h.text(),/location could not be obtained/);assert.ok(button(h,'Harbour, Second City'));
+});
+
+test('a location denial after navigation cannot publish a stale narrowing error', async t => {
+ const h=await mountPlanner({url:'http://localhost/anywhere?place=Harbour&lang=en'});t.after(()=>h.unmount());
+ let deny;Object.defineProperty(h.window.navigator,'geolocation',{configurable:true,value:{getCurrentPosition(ok,no){deny=no;}}});
+ await h.clock.advance(500);await h.fetchMock.respond(h.fetchMock.pending()[0],ambiguous);await h.clock.advance(30);
+ await click(h,button(h,'Use my location to narrow'));const count=h.fetchMock.calls.length;
+ await h.act(()=>h.window.dispatchEvent(new h.window.Event('pagehide')));
+ await h.act(()=>deny({code:1,message:'denied'}));await h.clock.advance(30);
+ assert.equal(h.fetchMock.calls.length,count);assert.doesNotMatch(h.text(),/location could not be obtained/);
+});
+
+for (const granted of [true, false]) test(`a ${granted ? 'granted' : 'denied'} old location callback cannot refine a newer day intent`, async t => {
+ const h=await mountPlanner({url:'http://localhost/anywhere?place=Harbour&lang=en'});t.after(()=>h.unmount());
+ let allow,deny;Object.defineProperty(h.window.navigator,'geolocation',{configurable:true,value:{getCurrentPosition(ok,no){allow=ok;deny=no;}}});
+ await h.clock.advance(500);await h.fetchMock.respond(h.fetchMock.pending()[0],ambiguous);await h.clock.advance(30);
+ await click(h,button(h,'Use my location to narrow'));await click(h,button(h,'Adjust'));await click(h,button(h,'Tomorrow'));
+ const count=h.fetchMock.calls.length;
+ await h.act(()=>granted?allow({coords:{latitude:51.5,longitude:2.32}}):deny({code:1,message:'denied'}));
+ assert.equal(h.fetchMock.calls.length,count,'no biased compose before the newer intent debounce');
+ assert.doesNotMatch(h.text(),/location could not be obtained/);
+ await h.clock.advance(500);
+ const newest=h.fetchMock.calls.filter(c=>c.url.startsWith('/api/route-recommendations')).at(-1);
+ assert.equal(newest.body.place_bias,undefined,'the new day request keeps its own typed anchor');
+});

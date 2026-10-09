@@ -1172,15 +1172,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   };
 
   async function narrowPlaceSearch() {
-    if (narrowingPlace) return;
+    if (placeRef || narrowingPlace) return;
     const generation = requestSequenceRef.current;
+    const intent = intentSequenceRef.current;
+    const stillCurrent = () => generation === requestSequenceRef.current
+      && intent === intentSequenceRef.current && !navigationSuspendedRef.current;
     setNarrowingPlace(true);
     setNarrowingFailed(false);
     try {
       const coords = await requestPosition();
-      if (generation !== requestSequenceRef.current || navigationSuspendedRef.current) return;
+      if (!stillCurrent()) return;
       await execute({ place: place.trim(), placeBias: coords });
-    } catch { setNarrowingFailed(true); }
+    } catch { if (stillCurrent()) setNarrowingFailed(true); }
     finally { setNarrowingPlace(false); }
   }
 
@@ -1645,11 +1648,25 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // the trust line names the source-backed places, the map caption the
   // estimates. What is left sits with the map, not under the title.
   const unavailableHasChoices = Boolean(anchorUnresolved && (safeResponse?.agnostic_route_output_experiment?.intake?.candidates?.some((c: any) => c.selection_id) || safeResponse?.agnostic_route_output_experiment?.intake?.blockers?.includes("place_selection_invalid")));
+  // Reference failures describe the server's verdict, not a misspelt name.
+  // Neither optional URL text nor a previous saved day's label attests this ref.
+  const referenceFailures: Record<string, string> = {
+    place_ref_not_found: t("Den valda platsreferensen kunde inte hittas. Välj en plats igen — ingen annan plats väljs automatiskt.", "The selected place reference could not be found. Choose a place again — no other place is selected automatically."),
+    place_ref_unavailable: t("Platsreferensen kunde inte kontrolleras just nu. Försök igen senare eller välj en annan plats — ingen annan plats väljs automatiskt.", "The place reference could not be checked right now. Try again later or choose another place — no other place is selected automatically."),
+    place_ref_unsupported: t("Platsreferensen avser en geografisk identitet som inte stöds för att planera en dag. Välj en annan plats.", "This place reference identifies a geographic type that is not supported for planning a day. Choose another place."),
+    place_ref_conflict: t("Platsreferensen och övriga platsval stämmer inte överens. Välj en plats igen för att få ett entydigt platsval.", "The place reference conflicts with the other place choices. Choose a place again to make the selection unambiguous."),
+    place_ref_invalid: t("Platsreferensen är ogiltig. Välj en plats igen — ingen annan plats väljs automatiskt.", "The place reference is invalid. Choose a place again — no other place is selected automatically."),
+  };
+  const referenceBlockers = safeResponse?.agnostic_route_output_experiment?.intake?.blockers;
+  const referenceFailure = Array.isArray(referenceBlockers)
+    ? referenceBlockers.find((blocker: string) => Object.hasOwn(referenceFailures, blocker)) : null;
+  const referenceFailureMessage = referenceFailure ? referenceFailures[referenceFailure]
+    : t("Den valda platsreferensen kunde inte bekräftas. Välj en plats igen — ingen annan plats väljs automatiskt.", "The selected place reference could not be confirmed. Choose a place again — no other place is selected automatically.");
   // Preserve the classifier's three absences; choices announce themselves,
   // and an outstanding upgrade or service refusal is not a final no-day verdict.
   const unavailableMessage = phase === "done" && classification?.status === "unavailable" && !upgradePending && !serviceRefusal && !unavailableHasChoices
     ? anchorUnresolved
-      ? t(
+      ? placeRef ? referenceFailureMessage : t(
           `Parranda kunde inte hitta ”${typedPlaceLabel}” just nu. Prova en annan stavning eller lägg till land eller region — inget hittas på.`,
           `Parranda couldn't pin down “${typedPlaceLabel}” right now. Try another spelling or add a country or region — nothing is invented in its place.`,
         )
@@ -1810,7 +1827,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             )
           : unavailableMessage}
       </p>
-      {hasAnchor && !dayWithRoute && <h1 className="sr-only">{t(`Din dag ${anchorIsPosition ? "nära dig" : `i ${anchorLabel}`}`, `Your day ${anchorIsPosition ? "near you" : `in ${anchorLabel}`}`)}</h1>}
+      {hasAnchor && !dayWithRoute && <h1 className="sr-only">{anchorIsPosition
+        ? t("Din dag nära dig", "Your day near you")
+        : !anchorLabel || (placeRef && intakeStatus !== "resolved")
+          ? t("Din dag", "Your day")
+          : t(`Din dag i ${anchorLabel}`, `Your day in ${anchorLabel}`)}</h1>}
 
       {/* Static hydration and unavailable snapshots must not become another
           place-entry step. Root is the only place picker. */}
@@ -1976,11 +1997,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             {unavailableHasChoices ? (
               <PlaceChoices intake={safeResponse?.agnostic_route_output_experiment?.intake}
                 pending={false} locationPending={narrowingPlace} locationFailed={narrowingFailed} t={t}
-                onNarrow={() => { narrowPlaceSearch().catch(() => {}); }}
+                onNarrow={placeRef ? undefined : () => { narrowPlaceSearch().catch(() => {}); }}
                 onChoose={(choice) => {
                   const choiceRef = validPlaceRef(choice.place_ref);
+                  // Without a durable ref, the offered receipt is bound to
+                  // the original query; selectionLabel carries its identity.
+                  const nextPlace = placeRef && choiceRef ? choice.label : place.trim();
+                  if (placeRef) setPlace(nextPlace);
                   setPlaceSelection(choice.selection_id); setSelectionLabel(choice.label); setPlaceRef(choiceRef);
-                  execute({ place: place.trim(), placeSelection: choice.selection_id, selectionLabel: choice.label, placeRef: choiceRef }).catch(() => {});
+                  execute({ place: nextPlace, placeSelection: choice.selection_id, selectionLabel: choice.label, placeRef: choiceRef }).catch(() => {});
                 }} />
             ) : unavailableMessage}
           </div>
