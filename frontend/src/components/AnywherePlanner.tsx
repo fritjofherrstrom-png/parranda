@@ -1698,7 +1698,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         return [];
       })
     : [];
-  const dayWord = dayOffset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow");
   const dayChangeLine = useMemo(
     () =>
       dayChange
@@ -2066,8 +2065,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           mode={mode}
           placeLabel={classification?.placeLabel}
           anchorLabel={anchorLabel}
-          dayWord={dayWord}
           primaryRoute={primaryRoute}
+          weather={dayflow?.weather ?? null}
           coreCount={split.core.length}
           wovenCount={split.woven.length}
           pickCoverage={pickCoverage}

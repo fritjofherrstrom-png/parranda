@@ -132,6 +132,9 @@ async function openDay({ browser, origin }, { theme = "day", noWebGL2 = false } 
 // control: the basemap's background layer (no tiles load here).
 async function backgroundAt(page) {
   const canvas = page.locator('section[aria-label="Rutten"] canvas.maplibregl-canvas');
+  // On a phone the map follows the stops, below the first screen: bring it
+  // into view before reading a pixel of it.
+  await canvas.scrollIntoViewIfNeeded();
   const box = await canvas.boundingBox();
   const shot = await page.screenshot({ clip: { x: box.x + box.width - 60, y: box.y + box.height / 2, width: 4, height: 4 } });
   // A 4×4 PNG of one flat colour: decode its first pixel with the browser.

@@ -40,7 +40,7 @@ import {
   SightIcon,
   WalkIcon,
 } from "../shared/icons";
-import { buttonClass, Eyebrow } from "../shared/ui";
+import { buttonClass, compactPillTarget, Eyebrow } from "../shared/ui";
 import { DAYPART_LABELS, label, partialPreferenceLabels, typeLabel, type Lang, type Translate } from "./copy";
 import { canCommitTo, type Commitments } from "./commitments";
 import { useFollowPosition } from "./useFollowPosition";
@@ -205,11 +205,13 @@ export default function StopLine({
   return (
     <section
       aria-label={t("Rutten", "The route")}
-      className={`${stale ? "opacity-60 motion-safe:transition-opacity" : ""} flex flex-col`}
+      // On a phone the stops continue the day header directly above them,
+      // so they sit closer than the page's section rhythm.
+      className={`${stale ? "opacity-60 motion-safe:transition-opacity" : ""} ${map ? "-mt-6" : ""} flex flex-col`}
     >
       {!map && about}
 
-      <div className={(map ? "" : "mt-8 ") + "mb-2 flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1"}>
+      <div className={(map ? "" : "mt-8 ") + "mb-3 flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-1"}>
         <Eyebrow as="h2">{t("Stoppen i ordning", "The stops, in order")}</Eyebrow>
         {canFollow && (
           <button
@@ -217,13 +219,13 @@ export default function StopLine({
             aria-pressed={following}
             onClick={() => setFollowRequested((cur) => !cur)}
             className={
-              "inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-[13px] font-bold transition " +
+              `${compactPillTarget} gap-1.5 px-3.5 font-bold ` +
               (following
                 ? "bg-parranda-ink text-parranda-paper"
                 : "border-[1.5px] border-parranda-ink/20 text-parranda-ink hover:border-parranda-ink/50")
             }
           >
-            <LocationIcon className={"h-4 w-4 " + (following ? "" : "text-parranda-ember")} />
+            <LocationIcon className={"h-3.5 w-3.5 " + (following ? "" : "text-parranda-ember")} />
             {following ? t("Sluta följa", "Stop following") : t("Följ dagen", "Follow the day")}
           </button>
         )}

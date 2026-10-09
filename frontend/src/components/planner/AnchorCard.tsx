@@ -6,17 +6,12 @@
  */
 import { useEffect, useId, useRef } from "react";
 import { CheckIcon, ChevronDownIcon, LocationIcon } from "../shared/icons";
-import { Eyebrow, panelCard } from "../shared/ui";
+import { compactPillTarget, Eyebrow, panelCard } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 
 type Option = { key: string; sv: string; en: string };
 type RhythmOption = Option & { noteSv: string; noteEn: string };
 
-// A 36px pill that is still a 44px target: the invisible ::before reaches 4px
-// above and below the pill. Rows sit 8px apart, so two rows' targets meet
-// without overlapping. The pill reads lighter; the thumb gets the same room.
-const PILL_TARGET =
-  "relative inline-flex min-h-9 items-center rounded-full text-[13px] transition before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']";
 
 export default function AnchorCard({
   t,
@@ -154,7 +149,7 @@ export default function AnchorCard({
                     aria-pressed={active}
                     onClick={() => onToggleMood(pref.key)}
                     className={
-                      `${PILL_TARGET} gap-1.5 px-3.5 ` +
+                      `${compactPillTarget} gap-1.5 px-3.5 ` +
                       (active
                         ? "bg-parranda-ink font-bold text-parranda-paper"
                         : "border-[1.5px] border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45 hover:text-parranda-ink")
@@ -193,7 +188,7 @@ export default function AnchorCard({
                   aria-pressed={walkKey === free.key}
                   onClick={() => onSetRhythm(free.key)}
                   className={
-                    `${PILL_TARGET} shrink-0 gap-1.5 px-3 ` +
+                    `${compactPillTarget} shrink-0 gap-1.5 px-3 ` +
                     (walkKey === free.key
                       ? "bg-parranda-ink font-bold text-parranda-paper"
                       : "border-[1.5px] border-dashed border-parranda-ink/30 font-semibold text-parranda-ink/72 hover:border-parranda-ink/50 hover:text-parranda-ink")

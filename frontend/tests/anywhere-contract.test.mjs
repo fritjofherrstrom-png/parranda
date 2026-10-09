@@ -319,7 +319,8 @@ test("a tapped stop discloses route facts before an explicit Maps action", () =>
   assert.doesNotMatch(anywherePlannerSource, /worth a look before you go/, "no hand-holding instruction");
   // Routing jargon "leg" is gone from the header too.
   assert.doesNotMatch(anywherePlannerSource, /t\("längsta ben", "longest leg"\)/);
-  assert.match(anywherePlannerSource, /t\("längsta sträcka", "longest stretch"\)/);
+  // The header no longer states the longest stretch: each stop states its own walk.
+  assert.doesNotMatch(anywherePlannerSource, /t\("längsta sträcka", "longest stretch"\)/);
   // Do not invent a future availability payload in the view. Hours can render
   // only after the route-stop contract exposes reviewed availability facts.
   assert.doesNotMatch(anywherePlannerSource, /stop\?\.availability|closes_at_local|Open during your visit/);
