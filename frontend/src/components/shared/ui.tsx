@@ -43,6 +43,15 @@ export function pillClass(active = false, extra = ""): string {
   );
 }
 
+/**
+ * A 36px pill that is still a 44px target: the invisible ::before reaches 4px
+ * above and below the pill, so rows 8px apart meet without overlapping. For
+ * pills that sit in a row of their own kind (moods, a heading's one action);
+ * size, padding and colours are the caller's.
+ */
+export const compactPillTarget =
+  "relative inline-flex min-h-9 items-center rounded-full text-[13px] transition before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']";
+
 /** A plain informational card: notices, refusals, errors. */
 export const noticeCard =
   "rounded-parranda border-[1.5px] border-parranda-ink/12 bg-parranda-ink/4 p-4 text-sm leading-relaxed text-parranda-ink/80";

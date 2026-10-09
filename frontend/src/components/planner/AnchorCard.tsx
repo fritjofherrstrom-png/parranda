@@ -6,11 +6,12 @@
  */
 import { useEffect, useId, useRef } from "react";
 import { CheckIcon, ChevronDownIcon, LocationIcon } from "../shared/icons";
-import { Eyebrow, panelCard } from "../shared/ui";
+import { compactPillTarget, Eyebrow, panelCard } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 
 type Option = { key: string; sv: string; en: string };
 type RhythmOption = Option & { noteSv: string; noteEn: string };
+
 
 export default function AnchorCard({
   t,
@@ -116,15 +117,20 @@ export default function AnchorCard({
 
       {adjustOpen && (
         <div id={panelId} className="flex flex-col gap-4 border-t border-parranda-ink/10 p-4">
-          <div className="flex items-center justify-between">
-            <Eyebrow>{t("Justera dagen", "Adjust the day")}</Eyebrow>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-col gap-1">
+              <Eyebrow>{t("Justera dagen", "Adjust the day")}</Eyebrow>
+              <p className="text-xs text-parranda-ink/68">
+                {t("Dagen byggs om direkt när du ändrar.", "The day rebuilds as you change it.")}
+              </p>
+            </div>
             <button
               type="button"
               ref={doneButton}
               aria-expanded={true}
               aria-controls={panelId}
               onClick={() => toggleAdjust(false)}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-full border-[1.5px] border-parranda-ink/18 px-3.5 text-[13px] font-bold text-parranda-ink transition hover:border-parranda-ink/50"
+              className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-parranda-ink/18 px-3.5 text-[13px] font-bold text-parranda-ink transition hover:border-parranda-ink/50"
             >
               {t("Klar", "Done")}
               <ChevronDownIcon className="h-3.5 w-3.5 rotate-180" />
@@ -133,7 +139,7 @@ export default function AnchorCard({
 
           <div className="flex flex-col gap-2">
             <Eyebrow tone="glow">{t("Känsla", "Mood")}</Eyebrow>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-x-1.5 gap-y-2">
               {preferences.map((pref) => {
                 const active = selected.includes(pref.key);
                 return (
@@ -143,13 +149,13 @@ export default function AnchorCard({
                     aria-pressed={active}
                     onClick={() => onToggleMood(pref.key)}
                     className={
-                      "inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 text-[13px] transition " +
+                      `${compactPillTarget} gap-1.5 px-3.5 ` +
                       (active
                         ? "bg-parranda-ink font-bold text-parranda-paper"
                         : "border-[1.5px] border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45 hover:text-parranda-ink")
                     }
                   >
-                    {active && <CheckIcon className="h-3.5 w-3.5" />}
+                    {active && <CheckIcon className="h-3 w-3" />}
                     {lang === "en" ? pref.en : pref.sv}
                   </button>
                 );
@@ -174,7 +180,25 @@ export default function AnchorCard({
               Each tap sets one value and recomposes once (the orchestrator
               owns that and Undo); nothing is sent while choosing. */}
           <div className="flex flex-col gap-2 border-t border-parranda-ink/10 pt-4">
-            <Eyebrow tone="glow">{t("Dagens rytm", "Day rhythm")}</Eyebrow>
+            <div className="flex min-h-11 items-center justify-between gap-3">
+              <Eyebrow tone="glow">{t("Dagens rytm", "Day rhythm")}</Eyebrow>
+              {free && (
+                <button
+                  type="button"
+                  aria-pressed={walkKey === free.key}
+                  onClick={() => onSetRhythm(free.key)}
+                  className={
+                    `${compactPillTarget} shrink-0 gap-1.5 px-3 ` +
+                    (walkKey === free.key
+                      ? "bg-parranda-ink font-bold text-parranda-paper"
+                      : "border-[1.5px] border-dashed border-parranda-ink/30 font-semibold text-parranda-ink/72 hover:border-parranda-ink/50 hover:text-parranda-ink")
+                  }
+                >
+                  {walkKey === free.key && <CheckIcon className="h-3 w-3" />}
+                  {t("Låt Parranda välja", "Let Parranda choose")}
+                </button>
+              )}
+            </div>
             <div
               className="grid grid-cols-3 overflow-hidden rounded-full border-[1.5px] border-parranda-ink/18 sm:max-w-sm"
               role="group"
@@ -205,27 +229,8 @@ export default function AnchorCard({
                 {lang === "en" ? current.noteEn : current.noteSv}
               </p>
             )}
-            {free && (
-              <button
-                type="button"
-                aria-pressed={walkKey === free.key}
-                onClick={() => onSetRhythm(free.key)}
-                className={
-                  "inline-flex min-h-11 items-center gap-1.5 self-start rounded-full px-4 text-[13px] transition " +
-                  (walkKey === free.key
-                    ? "bg-parranda-ink font-bold text-parranda-paper"
-                    : "border-[1.5px] border-dashed border-parranda-ink/30 font-semibold text-parranda-ink/72 hover:border-parranda-ink/50 hover:text-parranda-ink")
-                }
-              >
-                {walkKey === free.key && <CheckIcon className="h-3.5 w-3.5" />}
-                {t("Låt Parranda välja", "Let Parranda choose")}
-              </button>
-            )}
           </div>
 
-          <p className="text-xs text-parranda-ink/68">
-            {t("Ändringar gäller av sig själva — dagen komponeras om medan du justerar.", "Changes apply on their own — the day recomposes as you adjust.")}
-          </p>
         </div>
       )}
     </section>

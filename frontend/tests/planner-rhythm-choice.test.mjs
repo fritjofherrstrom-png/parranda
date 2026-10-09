@@ -48,6 +48,9 @@ test("the scale has three steps and 'Let Parranda choose' sits apart from it", a
   const free = named(h, /^Let Parranda choose$/);
   assert.ok(free, "the free choice is offered");
   assert.equal(scale.contains(free), false, "and is not a fourth step of the scale");
+  // It sits beside the rhythm heading, above the scale, not on a row of its own below.
+  assert.ok(free.compareDocumentPosition(scale) & h.window.Node.DOCUMENT_POSITION_FOLLOWING, "offered before the scale");
+  assert.match(free.parentElement.textContent, /^Day rhythm/, "in the heading row");
   assert.equal(free.getAttribute("aria-pressed"), "false");
   assert.match(h.text(), /Balanced: A few stops with room in between\./);
 });

@@ -319,7 +319,8 @@ test("a tapped stop discloses route facts before an explicit Maps action", () =>
   assert.doesNotMatch(anywherePlannerSource, /worth a look before you go/, "no hand-holding instruction");
   // Routing jargon "leg" is gone from the header too.
   assert.doesNotMatch(anywherePlannerSource, /t\("längsta ben", "longest leg"\)/);
-  assert.match(anywherePlannerSource, /t\("längsta sträcka", "longest stretch"\)/);
+  // The header no longer states the longest stretch: each stop states its own walk.
+  assert.doesNotMatch(anywherePlannerSource, /t\("längsta sträcka", "longest stretch"\)/);
   // Do not invent a future availability payload in the view. Hours can render
   // only after the route-stop contract exposes reviewed availability facts.
   assert.doesNotMatch(anywherePlannerSource, /stop\?\.availability|closes_at_local|Open during your visit/);
@@ -454,7 +455,8 @@ test("adjustments collapse to a summary and re-compose themselves — no submit 
   // Root owns the only place-entry submit, including no-anchor fallback.
   assert.match(anywherePlannerSource, /recomposeTimerRef\.current = setTimeout\(/);
   assert.match(anywherePlannerSource, /\}, 400\);/);
-  assert.match(anywherePlannerSource, /Changes apply on their own/);
+  // The panel says so where it starts: there is nothing to submit.
+  assert.match(anywherePlannerSource, /t\("Dagen byggs om direkt när du ändrar\.", "The day rebuilds as you change it\."\)/);
   assert.equal((anywherePlannerSource.match(/type="submit"/g) || []).length, 0, "no second entry submit, even without an anchor");
 });
 

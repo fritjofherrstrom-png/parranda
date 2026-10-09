@@ -10,12 +10,24 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
 import { walkingDistanceLabel } from "../../lib/route-context-view.mjs";
-import { CheckIcon, ExternalIcon, HalfCircleIcon, MinusIcon, ShareIcon, StarIcon } from "../shared/icons";
+import { CheckIcon, ExternalIcon, HalfCircleIcon, MinusIcon, ShareIcon, StarIcon, SunIcon, WalkIcon } from "../shared/icons";
 import { buttonClass, Eyebrow } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
 
 type RoutePart = WalkingRoutePart;
 type PickCoverage = { key: string; state: "covered" | "partial" | "missing" };
+
+/** A quiet fact about the day, not a control. */
+const metaChip =
+  "inline-flex items-center gap-1.5 rounded-full bg-parranda-ink/[0.07] px-2.5 py-1 text-xs font-semibold text-parranda-ink/85";
+
+/** The weather source's daily summary (server/weather.js), in the reader's words. */
+const WEATHER_CONDITIONS: Record<string, [string, string]> = {
+  sun: ["Sol", "Sun"],
+  clouds: ["Moln", "Clouds"],
+  rain: ["Regn", "Rain"],
+  mixed: ["Växlande", "Mixed"],
+};
 
 /**
  * The place name is set like a station sign: as large as the column allows for
@@ -143,8 +155,8 @@ export default function DayHeader({
   mode,
   placeLabel,
   anchorLabel,
-  dayWord,
   primaryRoute,
+  weather,
   coreCount,
   wovenCount,
   pickCoverage,
@@ -160,8 +172,9 @@ export default function DayHeader({
   mode: "typed" | "near_me";
   placeLabel: string | null | undefined;
   anchorLabel: string;
-  dayWord: string;
   primaryRoute: any;
+  /** The selected date's weather read (dayflow_context), present only when the server has one. */
+  weather: any;
   coreCount: number;
   wovenCount: number;
   pickCoverage: PickCoverage[];
@@ -169,6 +182,21 @@ export default function DayHeader({
   restoredAt: string | null;
   resolveAndRun: () => void;
 }) {
+  // The day's facts as quiet chips: how far, how many stops, and the day's
+  // weather when the server read one for this date. The anchor card above
+  // already says which day; each stop states its own walk.
+  const distance = Number.isFinite(primaryRoute?.estimated_km)
+    ? `≈ ${walkingDistanceLabel(primaryRoute.estimated_km, lang)} ${t("till fots", "on foot")}`
+    : null;
+  const stops = `${coreCount} ${coreCount === 1 ? t("stopp", "stop") : t("stopp", "stops")}` +
+    (wovenCount > 0 ? ` + ${wovenCount} live${lang === "en" ? " event" : "-event"}` : "");
+  const observed = weather?.provenance?.observed;
+  const condition = WEATHER_CONDITIONS[String(observed?.condition || "")];
+  // Only a current read with a real temperature; a stale forecast is not shown as the day's weather.
+  const allPicksCovered = pickCoverage.length > 0 && pickCoverage.every(({ state }) => state === "covered");
+  const weatherChip = !weather?.provenance?.stale && Number.isFinite(observed?.max_temp)
+    ? [condition ? t(condition[0], condition[1]) : null, `${t("max", "high")} ${Math.round(observed.max_temp)}°`].filter(Boolean).join(" · ")
+    : null;
   return (
     <header className="@container flex flex-col gap-5" aria-busy={staleNotice === "updating"}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -215,31 +243,34 @@ export default function DayHeader({
           </>
         )}
       </h1>
-      {/* Each fact wraps as a unit: "5 STOPS" never splits across lines. */}
-      <p className="type-data text-xs text-parranda-ink/72">
-        <span className="whitespace-nowrap">{dayWord}</span>
-        {Number.isFinite(primaryRoute?.estimated_km) && (
-          <>
-            {" · "}
-            <span className="whitespace-nowrap">{`≈ ${walkingDistanceLabel(primaryRoute.estimated_km, lang)} ${t("till fots", "on foot")}`}</span>
-          </>
+      <ul className="flex flex-wrap gap-1.5" aria-label={t("Om dagen", "About the day")}>
+        {distance && (
+          <li className={metaChip}>
+            <WalkIcon className="h-3.5 w-3.5 text-parranda-ink/72" />
+            {distance}
+          </li>
         )}
-        {Number.isFinite(primaryRoute?.longest_leg_km) && (
-          <>
-            {" · "}
-            <span className="whitespace-nowrap">{`${t("längsta sträcka", "longest stretch")} ${walkingDistanceLabel(primaryRoute.longest_leg_km, lang)}`}</span>
-          </>
+        <li className={metaChip}>{stops}</li>
+        {weatherChip && (
+          <li className={metaChip}>
+            {observed?.condition === "sun" && <SunIcon className="h-3.5 w-3.5 text-parranda-ink/72" />}
+            {weatherChip}
+          </li>
         )}
-        {" · "}
-        <span className="whitespace-nowrap">
-          {`${coreCount} ${coreCount === 1 ? t("stopp", "stop") : t("stopp", "stops")}`}
-          {wovenCount > 0 ? ` + ${wovenCount} live${lang === "en" ? " event" : "-event"}` : ""}
-        </span>
-      </p>
+        {/* Every pick in the day: one fact here instead of repeating the picks
+            the anchor card names. A partial or missing pick lists them all. */}
+        {allPicksCovered && (
+          <li className={metaChip}>
+            <CheckIcon className="h-3 w-3 text-parranda-ember" />
+            {t("Alla val finns med", "All picks included")}
+          </li>
+        )}
+      </ul>
       {/* What the day did for each pick, in the pick's own words. A pick
           the route only partly covers, or does not cover, says so here
-          rather than at the foot of the page. */}
-      {pickCoverage.length > 0 && (
+          rather than at the foot of the page. When every pick is in the day
+          the facts row above says so in one chip instead. */}
+      {pickCoverage.length > 0 && !allPicksCovered && (
         <ul className="flex flex-wrap gap-2" aria-label={t("Dina val i dagen", "Your picks in this day")}>
           {pickCoverage.map(({ key, state }) => (
             <li

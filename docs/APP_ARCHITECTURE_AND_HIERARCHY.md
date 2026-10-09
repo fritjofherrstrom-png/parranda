@@ -67,8 +67,10 @@ cost with almost no product traffic.
 1. **Where and how?** — the anchor, the picks, the walking target (context).
 2. **What is my day?** — title, honest counts, what the day did for each pick,
    whether it is source-backed, whether it is thin (the plan and its trust).
-3. **How do I follow it?** — the map, the ordered stops, the walks between them,
-   a route-woven live event (the plan's geometry).
+3. **How do I follow it?** — the ordered stops, the walks between them, a
+   route-woven live event, and the map (the plan's geometry). On a phone the
+   stops come first and the map follows them; on a wide screen the map sits
+   beside the day.
 4. **What else is near it?** — optional detour ideas (explicitly not the route).
 5. **What is happening now?** — Live (weather, events) and Blitz (one next move).
 6. **What did I keep?** — saved days (navigation, not content).
@@ -80,7 +82,7 @@ cost with almost no product traffic.
 | Anchor + settings | Two stacked bars, "today" stated twice | One card: anchor row + settings row | One place answers "where and how" |
 | Honesty lines | Up to four grey lines under the title, two bullet colours, duplicated facts ("external sources" + "source-backed places") | Trust line + day-shape caveats under the title; assembly caveats beside the map | What the day **contains** leads; how it was **assembled** qualifies the evidence it sits next to. Each fact is said once |
 | "Local time is derived" | Engine wording | "Local time is inferred from the location" | Say what it means for the reader, not the mechanism |
-| Pick coverage | Italic line at the foot of the route card | Chips under the meta line: covered / partly / not in this day | The user's intent is part of "what is my day" |
+| Pick coverage | Italic line at the foot of the route card | Chips under the day facts: covered / partly / not in this day; when every pick is covered, one "All picks included" chip in the facts row instead of repeating the anchor card | The user's intent is part of "what is my day"; a partial or missing pick always shows all of them |
 | Estimates disclaimer | Between title and actions | Map caption | It qualifies the map and the leg numbers |
 | Route line | Solid straight segments across water and buildings | Dotted when it only joins the stops' own coordinates, with a caption | Honest geometry: it is an order, not a street path |
 | Detour dots | Always on the map, unexplained | Only while the detour list is open | No mark without its explanation |
@@ -96,6 +98,9 @@ cost with almost no product traffic.
 | Curated section | "Extra curated" beside the chips | "Hand-picked in" on its own line above them | Say what a visitor gets, and keep the chips on one row at 320 px |
 | Landing search | Two focus rings (square inside rounded); a placeholder cut off at 320 px | One ring on the field, also after a blocked position; "e.g. Lyon or Kyoto" | Visual noise; text that fits |
 | Returning visitor | No way back to the last day from the landing | "Continue · A day in …" | The planner already restores it; the landing now offers it |
+| Phone day order | Map (in its own tinted card) above "About this day and map" and the stops; no stop on the first screen of an iPhone 17 | Stops first, then the map edge to edge in the column with "About this day and map" under it | The stops are the day, the map its overview. A tall map above the stops pushed the day off the first screen and caught the thumb meant to scroll the page |
+| Day facts | One monospace line, "Today · ≈ 2.5 km on foot · longest stretch 1.3 km · 4 stops", that wrapped with a separator opening the second line | Quiet chips: distance on foot, number of stops, and the selected date's weather ("Rain · high 12°") when the server read one and it is not stale; no day word, no longest stretch | The anchor card already says which day and each stop states its own walk; weather is a fact the day is planned around, shown only when it is real |
+| Adjust panel | "Let Parranda choose" on a row of its own under the rhythm scale; "Changes apply on their own" as the panel's last line; 44px-tall mood pills over three rows | "Let Parranda choose" beside the rhythm heading, still apart from the three-step scale; "The day rebuilds as you change it" under the panel heading; 36px pills with a 44px touch target | Less height for the same choices, the explanation where the panel starts, no smaller target for the thumb |
 
 ### Principles for future surfaces
 
