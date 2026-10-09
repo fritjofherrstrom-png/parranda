@@ -51,6 +51,7 @@ import {
   pulseHealthState,
 } from "../lib/pulse-view.mjs";
 import { planComposeFollowup } from "../lib/compose-followup.mjs";
+import { extractLiveCompletion, readLiveCompletion } from "../lib/planner-live-completion.mjs";
 import { composeServiceRefusal, type ComposeServiceRefusal } from "../lib/compose-service-refusal.mjs";
 import plannerEntry from "../../../planner-entry.js";
 import { buildShareUrl, decodeShareParams, encodeShareParams, shareablePlace, validPlaceRef } from "../lib/anywhere-share.mjs";
@@ -194,6 +195,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [navigationInterrupted, setNavigationInterrupted] = useState(false);
   const [classification, setClassification] = useState<AnywhereClassification | null>(null);
   const [safeResponse, setSafeResponse] = useState<any>(null);
+  const publishedGenerationRef = useRef(0);
+  const [publishedGeneration, setPublishedGeneration] = useState(0);
+  function installPublishedResponse(response: any) {
+    publishedGenerationRef.current += 1;
+    setPublishedGeneration(publishedGenerationRef.current);
+    setSafeResponse(extractLiveCompletion(response).body);
+  }
   // The day on screen was composed for an earlier request and a newer one is in
   // flight. It stays visible, labelled, until the next verdict replaces it.
   const [dayIsStale, setDayIsStale] = useState(false);
@@ -308,10 +316,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const liveSheetDialogRef = useRef<HTMLDivElement | null>(null);
   const liveSheetCloseRef = useRef<HTMLButtonElement | null>(null);
   const liveQueryAbortRef = useRef<AbortController | null>(null);
+  const liveCompletionAbortRef = useRef<AbortController | null>(null);
   const liveSheetOpenedRef = useRef(false);
   const liveNearMeCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
-  const liveResponseRef = useRef(safeResponse);
-  liveResponseRef.current = safeResponse;
+
   // A scope request belongs to the published day it was built from. Intent
   // cancellation alone misses queries opened while the previous day is held.
   useEffect(() => {
@@ -324,7 +332,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     liveSheetOpenedRef.current = false;
     liveNearMeCoordsRef.current = null;
     setLiveSheetScope("around_place");
-  }, [safeResponse]);
+  }, [publishedGeneration]);
   const lastEntryRef = useRef<SavedEntry | null>(null); // the latest composed day, for "save"
 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
@@ -394,6 +402,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
     activeRequestRef.current?.abort();
     const controller = new AbortController();
+    liveCompletionAbortRef.current?.abort();
     const requestId = ++requestSequenceRef.current;
     // The intent this request is going out to answer. If the user changes a
     // commitment while it is in flight, this no longer matches and the answer
@@ -434,7 +443,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setDayChange(null);
       if (!retention.keepPrevious) {
         setClassification(null);
-        setSafeResponse(null);
+        installPublishedResponse(null);
         displayedAnchorKeyRef.current = null;
       }
       setServiceRefusal(null);
@@ -478,7 +487,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         excludedCandidateIds: excludedOverride ?? scopedLedger.excludedIds,
         pinnedCandidateIds: sentPinIds,
       });
-      const { response, body } = await fetchPlannerLifecycle(`/api/route-recommendations?lang=${langOverride ?? lang}`, {
+      const { response, body: rawBody } = await fetchPlannerLifecycle(`/api/route-recommendations?lang=${langOverride ?? lang}&include_live_completion=1`, {
         payload,
         signal: controller.signal,
         onCancellationReady: (cancel) => {
@@ -501,6 +510,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         requestId !== requestSequenceRef.current ||
         intentId !== intentSequenceRef.current
       ) return;
+      const { body, capability } = extractLiveCompletion(rawBody);
       setSupplyPending(false);
       const refusal = composeServiceRefusal(response.status, body);
       if (refusal) {
@@ -508,7 +518,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         setDayChange(null);
         setServiceRefusal(refusal);
         setClassification(null);
-        setSafeResponse(null);
+        installPublishedResponse(null);
         displayedAnchorKeyRef.current = null;
         // A transport or capacity refusal composed no day at all, so there is
         // no evidence that any commitment could not be met. Reporting one here
@@ -551,7 +561,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // Atomic replacement. If the new verdict is structure_only/unavailable,
       // the held day disappears here — it no longer answers the request.
       setClassification(cls);
-      setSafeResponse(safe);
+      installPublishedResponse(safe);
       displayedAnchorKeyRef.current = anchorKey(anchor);
       // This day answered exactly the pins this request carried. Recording them
       // here — beside the classification, not beside the click — is what ties
@@ -646,11 +656,30 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         structureOnly: cls.status === "structure_only",
         hasStructure: Boolean(safe?.place_structure),
         transientSourceRetry: decision.shouldRetryTransientSource(body, cls),
-        livePending: safe?.live_events?.pending === true,
+        // Live completion is events-only, never a reason to recompose.
+        livePending: false,
         silent,
         pollAttempt,
       });
       setLiveRefreshExhausted(followup.liveRefreshExhausted);
+      if (safe?.live_events?.pending === true) {
+        const completionController = new AbortController();
+        liveCompletionAbortRef.current = completionController;
+        const dayGeneration = publishedGenerationRef.current;
+        const isCurrent = () => requestId === requestSequenceRef.current
+          && intentId === intentSequenceRef.current && dayGeneration === publishedGenerationRef.current
+          && !navigationSuspendedRef.current;
+        readLiveCompletion({
+          capability, signal: completionController.signal,
+          selectedDate: safe.live_events.selected_date,
+          wait: waitForLiveQueryRetry, isCurrent,
+          onReady: (events: LiveEvents) => setSafeResponse((current: any) => ({ ...current, live_events: events })),
+        }).then((ready: boolean) => {
+          if (!completionController.signal.aborted && isCurrent()) setLiveRefreshExhausted(!ready);
+        }).catch(() => {
+          if (!completionController.signal.aborted && isCurrent()) setLiveRefreshExhausted(true);
+        });
+      }
       if (followup.schedule) {
         if (followup.upgradePending) setUpgradePending(true);
         if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
@@ -700,6 +729,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     interruptedPlannerRef.current ||= Boolean(activeRequestRef.current || recomposeTimerRef.current);
     requestSequenceRef.current += 1;
     intentSequenceRef.current += 1;
+    liveCompletionAbortRef.current?.abort();
+    liveCompletionAbortRef.current = null;
     retryGenerationRef.current += 1;
     retryInFlightRef.current = false;
     // BFCache freezes timers rather than unmounting React. Neither an old
@@ -787,11 +818,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // check but not yet applied.
     requestSequenceRef.current += 1;
     intentSequenceRef.current += 1;
+    liveCompletionAbortRef.current?.abort();
+    liveCompletionAbortRef.current = null;
     setUpgradePending(false);
 
     lastEntryRef.current = entry;
     setClassification(entry.classification);
-    setSafeResponse(entry.safeResponse);
+    installPublishedResponse(entry.safeResponse);
     // Saved days do not carry the commitments they were composed under, so a
     // restored snapshot cannot answer for any of them — not even when the
     // anchor happens to match and the ledger survives scoping below.
@@ -863,6 +896,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     activeRequestRef.current = null;
     requestSequenceRef.current += 1;
     intentSequenceRef.current += 1;
+    liveCompletionAbortRef.current?.abort();
+    liveCompletionAbortRef.current = null;
     setUpgradePending(false);
     setSupplyPending(false);
 
@@ -887,7 +922,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     lastEntryRef.current = previous;
     writeLS(LAST_KEY, previous);
     setClassification(previous.classification);
-    setSafeResponse(previous.safeResponse);
+    installPublishedResponse(previous.safeResponse);
     setDayIsStale(false);
     setServiceRefusal(null);
     setExpandedStopKey(null);
@@ -1427,6 +1462,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     reuseLocation = false,
   ) {
     const queryIntentId = intentSequenceRef.current;
+    const queryDayGeneration = publishedGenerationRef.current;
     liveQueryAbortRef.current?.abort();
     const controller = new AbortController();
     liveQueryAbortRef.current = controller;
@@ -1447,7 +1483,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           return;
         }
       }
-      if (controller.signal.aborted || queryIntentId !== intentSequenceRef.current || safeResponse !== liveResponseRef.current) return;
+      if (controller.signal.aborted || queryIntentId !== intentSequenceRef.current || queryDayGeneration !== publishedGenerationRef.current) return;
       const payload = buildLiveEventQueryPayload({
         scope: nextScope,
         time: nextTime === "week" ? "this_week" : "tonight",
@@ -1470,7 +1506,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           signal: controller.signal,
         });
         const body = await response.json();
-        if (controller.signal.aborted || queryIntentId !== intentSequenceRef.current || safeResponse !== liveResponseRef.current) return;
+        if (controller.signal.aborted || queryIntentId !== intentSequenceRef.current || queryDayGeneration !== publishedGenerationRef.current) return;
         if (!response.ok && body?.error === "place_scope_unavailable") throw new Error("place_scope_unavailable");
         const accepted = response.ok ? acceptedLiveEventQuery(body) : null;
         if (!accepted) throw new Error("live_event_query_contract_rejected");
@@ -1552,6 +1588,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // exclude and pin unable to contradict each other: the newest action wins.
   const invalidateCommitmentIntent = () => {
     intentSequenceRef.current += 1;
+    liveCompletionAbortRef.current?.abort();
+    liveCompletionAbortRef.current = null;
     liveQueryAbortRef.current?.abort();
     liveQueryAbortRef.current = null;
     setLiveQueryPending(false);
