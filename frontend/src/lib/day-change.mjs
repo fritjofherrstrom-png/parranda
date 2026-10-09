@@ -59,7 +59,7 @@ function isDayOffset(value) {
  * @param {object|null} previous  the saved entry of the day that was on screen
  * @param {object|null} next      the saved entry of the day that replaced it
  */
-export function describeDayChange(previous, next) {
+export function describeDayChange(previous, next, { cause = null } = {}) {
   const beforeStops = routeStops(previous);
   const afterStops = routeStops(next);
   const before = byIdentity(beforeStops);
@@ -107,6 +107,8 @@ export function describeDayChange(previous, next) {
     km,
     hasRoute: afterStops.length > 0,
     routeChanged: !sameSet || reordered || kmChanged,
+    // What moved the day when the user did not: a server-applied Live upgrade.
+    cause: cause === "live" ? "live" : null,
   };
 }
 
@@ -132,6 +134,8 @@ export function dayChangeSegments(change, { lang = "en", walkLabel = (key) => ke
   const sv = lang === "sv";
   const segments = [];
   const { inputs, stops, km } = change;
+
+  if (change.cause === "live") segments.push(sv ? "Live: evenemang tillagt" : "Live: event added");
 
   if (inputs.walk) segments.push(`${walkLabel(inputs.walk.from)} → ${walkLabel(inputs.walk.to)}`);
   if (inputs.day) segments.push(`${dayLabel(inputs.day.from)} → ${dayLabel(inputs.day.to)}`);

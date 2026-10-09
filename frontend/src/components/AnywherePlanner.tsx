@@ -51,6 +51,7 @@ import {
   pulseHealthState,
 } from "../lib/pulse-view.mjs";
 import { planComposeFollowup } from "../lib/compose-followup.mjs";
+import { LIVE_COMPLETION_QUERY, followLiveCompletion, takeLiveCompletion, type LiveCompletionCapability } from "../lib/live-completion.mjs";
 import { composeServiceRefusal, type ComposeServiceRefusal } from "../lib/compose-service-refusal.mjs";
 import plannerEntry from "../../../planner-entry.js";
 import { buildShareUrl, decodeShareParams, encodeShareParams, shareablePlace, validPlaceRef } from "../lib/anywhere-share.mjs";
@@ -233,7 +234,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [blitzPhase, setBlitzPhase] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [blitzResult, setBlitzResult] = useState<AnywhereBlitzView | null>(null);
   const [upgradePending, setUpgradePending] = useState(false); // cold-start: structure upgrade in flight
-  const [liveRefreshExhausted, setLiveRefreshExhausted] = useState(false);
+  // Whether the day on screen is still following its own Live completion
+  // capability. Pending Live that nothing is following reads as unavailable,
+  // never as "still loading".
+  const [liveFollowing, setLiveFollowing] = useState(false);
   const [savedDays, setSavedDays] = useState<SavedEntry[]>([]);
   const [restoredAt, setRestoredAt] = useState<string | null>(null); // set when showing a SNAPSHOT
   // What the last adjustment changed, beside the day it replaced. An adjustment
@@ -304,6 +308,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [liveQueryError, setLiveQueryError] = useState<string | null>(null);
   const [liveQueryGeoHint, setLiveQueryGeoHint] = useState<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The run following the current day's Live completion capability. The
+  // capability itself lives only inside that run.
+  const liveCompletionAbortRef = useRef<AbortController | null>(null);
   const liveSheetTriggerRef = useRef<HTMLButtonElement | null>(null);
   const liveSheetDialogRef = useRef<HTMLDivElement | null>(null);
   const liveSheetCloseRef = useRef<HTMLButtonElement | null>(null);
@@ -367,7 +374,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       walkKeyOverride,
       excludedOverride,
       pinnedOverride,
-      pollAttempt = 0,
     }: {
       silent?: boolean;
       langOverride?: Lang;
@@ -377,7 +383,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       walkKeyOverride?: string;
       excludedOverride?: string[];
       pinnedOverride?: string[];
-      pollAttempt?: number;
     } = {},
   ) {
     if (navigationSuspendedRef.current) return;
@@ -393,6 +398,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       pollTimerRef.current = null;
     }
     activeRequestRef.current?.abort();
+    // The day on screen keeps its Live state until a new day replaces it.
+    abortLiveCompletion();
     const controller = new AbortController();
     const requestId = ++requestSequenceRef.current;
     // The intent this request is going out to answer. If the user changes a
@@ -425,7 +432,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       resetBlitz();
       liveQueryAbortRef.current?.abort();
       liveQueryAbortRef.current = null;
-      setLiveRefreshExhausted(false);
       setUpgradePending(false);
       setPhase("loading");
       setDayIsStale(retention.keepPrevious);
@@ -478,7 +484,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         excludedCandidateIds: excludedOverride ?? scopedLedger.excludedIds,
         pinnedCandidateIds: sentPinIds,
       });
-      const { response, body } = await fetchPlannerLifecycle(`/api/route-recommendations?lang=${langOverride ?? lang}`, {
+      const { response, body: rawBody } = await fetchPlannerLifecycle(`/api/route-recommendations?lang=${langOverride ?? lang}&${LIVE_COMPLETION_QUERY}`, {
         payload,
         signal: controller.signal,
         onCancellationReady: (cancel) => {
@@ -502,6 +508,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         intentId !== intentSequenceRef.current
       ) return;
       setSupplyPending(false);
+      // The Live completion capability is a bearer token: it leaves the
+      // response here, before anything can store, share or render it.
+      const { body, capability: liveCapability } = takeLiveCompletion(rawBody);
       const refusal = composeServiceRefusal(response.status, body);
       if (refusal) {
         undoBaselineRef.current = null;
@@ -636,21 +645,21 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           );
         }
       }
-      // Bounded silent re-asks cover cold-start honesty gaps. The POLICY —
-      // which composes re-ask, with what delay, and when the live ladder is
-      // exhausted — is the pure, unit-tested planComposeFollowup; this block
-      // only owns the timer and state.
+      // Pending Live is read through the original compose's own capability,
+      // never by recomposing the route.
+      if (liveCapability && composedNow) startLiveCompletion(liveCapability, requestId, intentId, safe);
+      else setLiveFollowing(false);
+      // A bounded silent re-ask covers cold-start honesty gaps. The POLICY —
+      // which composes re-ask, and with what delay — is the pure, unit-tested
+      // planComposeFollowup; this block only owns the timer and state.
       const followup = planComposeFollowup({
         supplyLifecycleComplete: true,
         composed: cls.status === "composed",
         structureOnly: cls.status === "structure_only",
         hasStructure: Boolean(safe?.place_structure),
         transientSourceRetry: decision.shouldRetryTransientSource(body, cls),
-        livePending: safe?.live_events?.pending === true,
         silent,
-        pollAttempt,
       });
-      setLiveRefreshExhausted(followup.liveRefreshExhausted);
       if (followup.schedule) {
         if (followup.upgradePending) setUpgradePending(true);
         if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
@@ -670,7 +679,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             walkKeyOverride: effectiveWalkKey,
             excludedOverride: effectiveExcluded,
             pinnedOverride: effectivePinned,
-            pollAttempt: followup.nextPollAttempt,
           }).catch(() => {});
         }, followup.delayMs ?? 0);
       }
@@ -680,9 +688,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         requestId !== requestSequenceRef.current ||
         intentId !== intentSequenceRef.current
       ) return;
+      setLiveFollowing(false);
       if (silent) {
         setUpgradePending(false);
-        setLiveRefreshExhausted(true);
       } else {
         setPhase("error");
       }
@@ -693,6 +701,86 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         setSupplyPending(false);
       }
     }
+  }
+
+  function abortLiveCompletion() {
+    liveCompletionAbortRef.current?.abort();
+    liveCompletionAbortRef.current = null;
+  }
+
+  // For a day installed without a compose (restore, undo): nothing follows it.
+  function stopLiveCompletion() {
+    abortLiveCompletion();
+    setLiveFollowing(false);
+  }
+
+  // Follow the day's own Live completion capability. Its terminal Live result
+  // updates only the day it belongs to; an upgraded day, when the server
+  // authorized and applied one, replaces that day only while its generation is
+  // still the current one and it is still the day on screen. The route is
+  // never recomposed here.
+  function startLiveCompletion(capability: LiveCompletionCapability, requestId: number, intentId: number, installed: any) {
+    abortLiveCompletion();
+    const controller = new AbortController();
+    liveCompletionAbortRef.current = controller;
+    setLiveFollowing(true);
+    let shown = installed;
+    const current = () =>
+      !controller.signal.aborted &&
+      requestId === requestSequenceRef.current &&
+      intentId === intentSequenceRef.current &&
+      liveResponseRef.current === shown;
+    followLiveCompletion({
+      capability,
+      signal: controller.signal,
+      onLiveEvents: (liveEvents) => {
+        if (!current()) return;
+        const next = { ...shown, live_events: liveEvents };
+        const entry = lastEntryRef.current;
+        if (entry && entry.safeResponse === shown) {
+          const updated = { ...entry, safeResponse: next };
+          lastEntryRef.current = updated;
+          writeLS(LAST_KEY, updated);
+        }
+        shown = next;
+        liveResponseRef.current = next;
+        setSafeResponse(next);
+      },
+    })
+      .then((outcome) => {
+        if (liveCompletionAbortRef.current === controller) liveCompletionAbortRef.current = null;
+        if (!current()) return;
+        setLiveFollowing(false);
+        if (outcome.upgrade?.kind === "applied") installLiveUpgrade(outcome.upgrade.result, shown);
+      })
+      .catch(() => {});
+  }
+
+  // Called only while the run's generation is current: every adjustment,
+  // commitment, restore, undo and compose bumps the generation first, so a
+  // newer question always wins over this answer.
+  function installLiveUpgrade(result: any, original: any) {
+    if (liveResponseRef.current !== original) return;
+    const previous = lastEntryRef.current;
+    if (!previous || previous.safeResponse !== original) return;
+    const decision = anywhereDecision();
+    const cls = decision.classifyAnywhereResult(result, { place: previous.place ?? "" });
+    if (!decision.isComposedStatus(cls.status)) return;
+    const safe = decision.safeResponseFor(result, cls);
+    // Same question, same identity: only the day that answers it changed.
+    const upgraded: SavedEntry = { ...previous, savedAt: new Date().toISOString(), safeResponse: safe, classification: cls };
+    lastEntryRef.current = upgraded;
+    writeLS(LAST_KEY, upgraded);
+    liveResponseRef.current = safe;
+    setClassification(cls);
+    setSafeResponse(safe);
+    const unhonored = result?.agnostic_route_output_experiment?.pinned_candidates?.unhonored;
+    setAppliedRefusals(Array.isArray(unhonored) ? unhonored : []);
+    setExpandedStopKey(null);
+    setExpandedCandidateKey(null);
+    // Never silent: the change line says Live moved the day, and Undo puts the
+    // original day back.
+    setDayChange({ previous, summary: describeDayChange(previous, upgraded, { cause: "live" }) });
   }
 
   const cancelActivePlannerForNavigation = () => {
@@ -708,6 +796,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     recomposeTimerRef.current = null;
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     pollTimerRef.current = null;
+    abortLiveCompletion();
     const cancelLifecycle = activeLifecycleCancelRef.current;
     activeLifecycleCancelRef.current = null;
     // The lifecycle cancellation must be initiated synchronously before the
@@ -783,6 +872,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
     activeRequestRef.current?.abort();
     activeRequestRef.current = null;
+    stopLiveCompletion();
     // Bumping the sequence invalidates any response already past its abort
     // check but not yet applied.
     requestSequenceRef.current += 1;
@@ -861,6 +951,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
     activeRequestRef.current?.abort();
     activeRequestRef.current = null;
+    stopLiveCompletion();
     requestSequenceRef.current += 1;
     intentSequenceRef.current += 1;
     setUpgradePending(false);
@@ -1355,8 +1446,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     [liveEvents, routeStops],
   );
   const pulseState = useMemo(
-    () => (liveRefreshExhausted && liveEvents?.pending ? "unavailable" : pulseHealthState(liveEvents, pulseBuckets, split.woven)),
-    [liveEvents, pulseBuckets, split.woven, liveRefreshExhausted],
+    () =>
+      liveEvents?.pending && !liveFollowing ? "unavailable" : pulseHealthState(liveEvents, pulseBuckets, split.woven),
+    [liveEvents, pulseBuckets, split.woven, liveFollowing],
   );
   const liveFailure = useMemo(() => liveSourceFailure(liveEvents, pulseBuckets), [liveEvents, pulseBuckets]);
   // A failed source is neither "still loading" nor an empty calendar: say

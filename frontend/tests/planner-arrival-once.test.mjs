@@ -134,7 +134,7 @@ for (const permission of ["deny", "prompt"]) {
     await h.clock.advance(500);
     const calls = composeCalls(h);
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, "/api/route-recommendations?lang=sv");
+    assert.equal(calls[0].url, "/api/route-recommendations?lang=sv&include_live_completion=1&include_live_route_upgrade=1");
     assert.deepEqual([calls[0].body.lat, calls[0].body.lng], [55.6, 13]);
     assert.equal(calls[0].body.day_rhythm, "full");
     assert.ok(!("walking_km_target" in calls[0].body));

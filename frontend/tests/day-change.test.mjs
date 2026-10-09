@@ -106,3 +106,15 @@ test("nothing to describe is an empty list, never a throw", () => {
   assert.equal(change.hasRoute, false);
   assert.equal(change.km, null);
 });
+
+test("a server-applied Live upgrade says Live moved the day, with the same inputs", () => {
+  const before = entry({ stops: [stop("a", "Place a")], km: 1.2 });
+  const after = entry({ stops: [stop("a", "Place a"), stop("live-event-e1", "Late concert")], km: 1.9 });
+  const change = describeDayChange(before, after, { cause: "live" });
+  assert.equal(change.cause, "live");
+  assert.deepEqual(change.inputs.picksAdded, []);
+  assert.deepEqual(dayChangeSegments(change, labels("en")).slice(0, 1), ["Live: event added"]);
+  assert.deepEqual(dayChangeSegments(change, labels("sv")).slice(0, 1), ["Live: evenemang tillagt"]);
+  assert.match(dayChangeSegments(change, labels("en")).join(" · "), /\+1 stop: Late concert/);
+  assert.equal(describeDayChange(before, after).cause, null, "an adjustment has no cause of its own");
+});

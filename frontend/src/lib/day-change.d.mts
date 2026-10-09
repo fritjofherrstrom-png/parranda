@@ -16,9 +16,10 @@ export interface DayChange {
   km: { before: number; after: number } | null;
   hasRoute: boolean;
   routeChanged: boolean;
+  cause: "live" | null;
 }
 
-export function describeDayChange(previous: unknown, next: unknown): DayChange;
+export function describeDayChange(previous: unknown, next: unknown, options?: { cause?: "live" | null }): DayChange;
 
 export function dayChangeSegments(
   change: DayChange | null | undefined,

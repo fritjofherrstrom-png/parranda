@@ -90,7 +90,11 @@ test("a Swedish near-me day asks in Swedish and names the reader's position", as
   });
   const [call] = composeCalls(h);
   assert.ok(call, "the handed-over position composes on arrival");
-  assert.equal(call.url, "/api/route-recommendations?lang=sv", "the request carries the page's language, not the build's");
+  assert.equal(
+    call.url,
+    "/api/route-recommendations?lang=sv&include_live_completion=1&include_live_route_upgrade=1",
+    "the request carries the page's language, not the build's",
+  );
   await h.fetchMock.respond(call, composedDay());
   await h.clock.advance(50);
 
