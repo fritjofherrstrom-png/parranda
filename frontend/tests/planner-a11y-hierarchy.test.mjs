@@ -77,7 +77,7 @@ test("a mounted status line announces the composed day", async (t) => {
   assert.ok(statuses.includes("A day in Testville is ready: 3 stops."), JSON.stringify(statuses));
 });
 
-test("near-me sentences use near you while named anchors retain in-place copy", async () => {
+test("near-me headings and announcements stay near you even with a broad reverse city label", async () => {
   for (const lang of ["en", "sv"]) {
     for (const named of [false, true]) {
       const h = await mountPlanner({
@@ -87,12 +87,15 @@ test("near-me sentences use near you while named anchors retain in-place copy", 
       });
       try {
         await h.clock.advance(500);
-        const context = lang === "en" ? (named ? "in Testville" : "near you") : (named ? "i Testville" : "nära dig");
+        const context = lang === "en" ? "near you" : "nära dig";
         assert.equal(h.container.querySelector("h1").textContent, `${lang === "en" ? "Your day" : "Din dag"} ${lang === "en" ? "near you" : "nära dig"}`);
         const compose = h.fetchMock.pending().find((call) => call.url.startsWith("/api/route-recommendations"));
         assert.ok(compose, "coordinates compose without another permission prompt");
         await h.fetchMock.respond(compose, { ...composedDay(), ...(named ? { resolved_place_label: "Testville, Region, Country" } : {}) });
         await h.clock.advance(50);
+        assert.match(h.container.querySelector("h1").textContent, lang === "en" ? /^A day\s*near you$/ : /^En dag\s*nära dig$/);
+        assert.equal(compose.body.lat, 55.6);
+        assert.equal(compose.body.lng, 13);
         const expected = lang === "en" ? `A day ${context} is ready: 3 stops.` : `En dag ${context} är klar: 3 stopp.`;
         assert.ok([...h.container.querySelectorAll('[role="status"]')].some((s) => s.textContent === expected), expected);
       } finally {
@@ -241,7 +244,7 @@ test("near me, a place-source failure keeps the position and retries around it",
   });
   try {
     await h.clock.advance(500);
-    await h.fetchMock.respond(composeCalls(h)[0], sourceOutage({ mode: "coordinates", status: "resolved", resolved: { label: null, lat: 48.8867, lng: 2.3431 } }));
+    await h.fetchMock.respond(composeCalls(h)[0], sourceOutage({ mode: "coordinates", status: "resolved", resolved: { label: "Paris", lat: 48.8867, lng: 2.3431 } }));
     await h.clock.advance(50);
     assert.match(h.text(), /Platskällorna svarade inte just nu, så Parranda kunde inte hämta platser nära dig — inget hittas på\. Försök igen om en stund\./);
     assert.doesNotMatch(h.text(), /med dina val/);

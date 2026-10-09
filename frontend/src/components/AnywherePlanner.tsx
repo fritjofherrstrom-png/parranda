@@ -1383,19 +1383,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     };
   }, [liveSheetOpen]);
 
-  // The anchor's display label — never a faked place name: a coords anchor
-  // reads "Near you" until the engine attests a real one. A resolver label is a
-  // full display chain ("Lyon, Métropole de Lyon, Rhône, …, France"); the pill
-  // shows the primary locality only, the same rule the engine applies to route
-  // prose (server-side safeAgnosticPlaceLabel).
+  // A coordinate anchor describes the user's position, not the whole city.
+  // A reverse city label does not attest a precise neighborhood. Keep the
+  // authoritative label in the response; only project near-me UI as Near you.
   const primaryLocality = (value?: string | null) => String(value || "").split(",")[0].trim();
   const anchorLabel =
     mode === "near_me"
-      ? primaryLocality(classification?.placeLabel) || t("Nära dig", "Near you")
+      ? t("Nära dig", "Near you")
       : primaryLocality(classification?.placeLabel) || typedPlaceLabel;
-  // A near-me day without an attested label is about the reader's own
-  // position, so sentences say "near you" rather than naming a place.
-  const anchorIsPosition = mode === "near_me" && !primaryLocality(classification?.placeLabel);
+  const anchorIsPosition = mode === "near_me";
   const placeName = primaryLocality(classification?.placeLabel) || typedPlaceLabel || t("den här platsen", "this place");
   // A typed place with no trusted anchor (unresolved, ambiguous, or a resolver
   // that could not be reached): nothing downstream — Blitz included — has a
@@ -2193,7 +2189,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           navigationInterrupted={navigationInterrupted}
           retryPlan={retryPlan}
           mode={mode}
-          placeLabel={classification?.placeLabel}
+          placeLabel={mode === "near_me" ? null : classification?.placeLabel}
           anchorLabel={anchorLabel}
           primaryRoute={primaryRoute}
           weather={dayflow?.weather ?? null}
