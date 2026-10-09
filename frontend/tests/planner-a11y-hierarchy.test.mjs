@@ -172,9 +172,8 @@ test("choices, service refusals and pending upgrades keep their own truthful sta
     { body: { days: [], agnostic_route_output_experiment: { intake: { status: "unresolved", blockers: ["place_selection_invalid"] } } }, expected: "Your previous place choice needs confirming again." },
     { body: { error: "busy", retry_after_seconds: 5 }, httpStatus: 429, expected: "Parranda is composing as many days as it safely can right now. Try again shortly." },
     { body: { error: "rate_limited", retry_after_seconds: 12 }, httpStatus: 429, expected: "Parranda needs to pause new requests briefly — try again in about 12 seconds." },
-    { body: { days: [], live_events: { pending: true }, agnostic_route_output_experiment: { intake: resolved, source_status: { status: "error_failed_closed" } } }, upgrade: true, expected: "Reading more from the sources — updates automatically in a moment." },
   ];
-  for (const { body, httpStatus = 200, expected, upgrade } of cases) {
+  for (const { body, httpStatus = 200, expected } of cases) {
     const h = await mountPlanner({ url: PLACE_URL });
     try {
       const status = h.container.querySelector('p[role="status"].sr-only');
@@ -184,20 +183,32 @@ test("choices, service refusals and pending upgrades keep their own truthful sta
       assert.equal(status.textContent, "", "no final failure or ready announcement replaces the real status");
       assert.ok(h.text().includes(expected), h.text());
       assert.doesNotMatch(h.text(), /couldn't pin down|couldn't compose a day/);
-      if (upgrade) {
-        await h.clock.advance(9000);
-        const followup = h.fetchMock.pending().find((call) => call.url.startsWith("/api/route-recommendations"));
-        assert.ok(followup, "the pending upgrade follows through");
-        await h.fetchMock.respond(followup, { days: [], agnostic_route_output_experiment: { intake: resolved } });
-        await h.clock.advance(50);
-        assert.equal(h.container.querySelector('p[role="status"].sr-only'), status);
-        assert.match(status.textContent, /couldn't compose a day for Testville/);
-      } else {
-        assert.ok([...h.container.querySelectorAll('[role="status"]')].some((node) => node !== status && node.textContent === expected), "the original choices/refusal surface still owns its status");
-      }
+      assert.ok([...h.container.querySelectorAll('[role="status"]')].some((node) => node !== status && node.textContent === expected), "the original choices/refusal surface still owns its status");
     } finally {
       await h.unmount();
     }
+  }
+});
+
+test("a dayless transient source failure is announced at once; pending Live no longer buys it a silent retry", async () => {
+  // On main before the Live completion contract, this response retried after
+  // 9 s only because its Live was pending — the Live ladder carried the source
+  // retry. The server lifecycle has already waited for supply, so the honest
+  // answer is the failure itself, with the explicit retry the page offers.
+  const resolved = { status: "resolved", resolved: { label: "Testville" } };
+  const h = await mountPlanner({ url: PLACE_URL });
+  try {
+    const status = h.container.querySelector('p[role="status"].sr-only');
+    await h.clock.advance(500);
+    await h.fetchMock.respond(h.fetchMock.pending().find((call) => call.url.startsWith("/api/route-recommendations")),
+      { days: [], live_events: { pending: true }, agnostic_route_output_experiment: { intake: resolved, source_status: { status: "error_failed_closed" } } });
+    await h.clock.advance(50);
+    assert.match(status.textContent, /couldn't compose a day for Testville/);
+    assert.doesNotMatch(h.text(), /Reading more from the sources/);
+    await h.clock.advance(60000);
+    assert.equal(h.fetchMock.calls.filter((call) => call.url.startsWith("/api/route-recommendations")).length, 1, "no timer-driven recompose");
+  } finally {
+    await h.unmount();
   }
 });
 

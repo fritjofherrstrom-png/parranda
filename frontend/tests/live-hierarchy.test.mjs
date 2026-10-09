@@ -24,10 +24,13 @@ const button = (h, re) => [...h.container.querySelectorAll('button')].find(b => 
 const click = async (h, re) => { const b=button(h,re); assert.ok(b, `${re}: ${h.text()}`); await h.act(() => b.dispatchEvent(new h.window.Event('click',{bubbles:true}))); };
 const text = h => h.container.querySelector('[role="dialog"]')?.textContent || '';
 const queries = h => h.fetchMock.calls.filter(c => c.url.includes('/api/live-events'));
-async function composed(t, events=live(), lang='en') {
+// A server only leaves Live pending together with the capability that reads
+// its result; without one the client reports Live as unavailable.
+const FOLLOWED={live_completion:{version:1,token:'fixture-live-token',expires_in_ms:120000}};
+async function composed(t, events=live(), lang='en', extra={}) {
   const h=await mountPlanner({url:`http://localhost/anywhere?place=Testville&lang=${lang}`});
   t.after(() => h.unmount()); await h.clock.advance(500);
-  await h.fetchMock.respond(h.fetchMock.pending()[0],day(events)); await h.clock.advance(50); return h;
+  await h.fetchMock.respond(h.fetchMock.pending()[0],{...day(events),...extra}); await h.clock.advance(50); return h;
 }
 
 test('healthy empty selected day automatically shows separately labelled wider-area suggestions without changing Where/When or day', async t => {
@@ -52,7 +55,7 @@ test('healthy empty selected day automatically shows separately labelled wider-a
 });
 
 test('opening while local calendars are pending keeps the selected day instead of silently switching to following days', async t => {
-  const h=await composed(t,live({pending:true},{status:'pending',result:'pending'}));
+  const h=await composed(t,live({pending:true},{status:'pending',result:'pending'}),'en',FOLLOWED);
   await click(h,/Explore live|See all live/);
   assert.equal(button(h,/^Wed 7 Oct$/).getAttribute('aria-pressed'),'true');
   assert.equal(button(h,/^Following 7 days$/).getAttribute('aria-pressed'),'false');

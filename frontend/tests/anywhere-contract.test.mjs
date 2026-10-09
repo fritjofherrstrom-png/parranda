@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { buildAnywherePayload, ANYWHERE_PREFERENCES, DAY_RHYTHMS, isoDateFromOffset } from "../src/lib/anywhere-payload.mjs";
-import { LIVE_REFRESH_DELAYS_MS } from "../src/lib/compose-followup.mjs";
+import { LIVE_COMPLETION_QUERY } from "../src/lib/live-completion.mjs";
 import { routePreferenceCoverage } from "../src/lib/route-context-view.mjs";
 import { limitationNote } from "../src/lib/day-limitations.mjs";
 import { componentSource, plannerSurfaceSource } from "./helpers/planner-source.mjs";
@@ -137,24 +137,21 @@ test("public share capacity refusals render as capacity, never false place absen
 });
 
 test("cold-start refresh is bounded: the component delegates to the tested follow-up policy", () => {
-  // The POLICY (one-shot upgrade, bounded live ladder, exhaustion) lives in the
-  // pure planComposeFollowup — behavior-pinned by compose-followup.test.mjs.
-  // Here we pin the WIRING: the component consults the policy with the real
-  // inputs and consumes every output instead of re-deriving any of it inline.
+  // The POLICY (one-shot upgrade) lives in the pure planComposeFollowup —
+  // behavior-pinned by compose-followup.test.mjs. Here we pin the WIRING: the
+  // component consults the policy with the real inputs and consumes its output
+  // instead of re-deriving any of it inline.
   assert.match(anywherePlannerSource, /planComposeFollowup\(\{/);
   assert.match(anywherePlannerSource, /composed: cls\.status === "composed"/);
   assert.match(anywherePlannerSource, /structureOnly: cls\.status === "structure_only"/);
   assert.match(anywherePlannerSource, /hasStructure: Boolean\(safe\?\.place_structure\)/);
   assert.match(anywherePlannerSource, /transientSourceRetry: decision\.shouldRetryTransientSource\(body, cls\)/);
-  assert.match(anywherePlannerSource, /livePending: safe\?\.live_events\?\.pending === true/);
-  assert.match(anywherePlannerSource, /setLiveRefreshExhausted\(followup\.liveRefreshExhausted\)/);
-  assert.match(anywherePlannerSource, /pollAttempt: followup\.nextPollAttempt/);
-  // The ladder itself is the lib's contract.
-  assert.deepEqual([...LIVE_REFRESH_DELAYS_MS], [9000, 12000, 18000, 24000]);
-  assert.ok(
-    LIVE_REFRESH_DELAYS_MS.reduce((sum, delay) => sum + delay, 0) >= 60_000,
-    "the UI must keep listening through two bounded provider attempts",
-  );
+  // Pending Live is followed through the original compose's own capability,
+  // never by recomposing the route (planner-live-completion.test.mjs).
+  assert.doesNotMatch(anywherePlannerSource, /livePending/);
+  assert.match(anywherePlannerSource, /takeLiveCompletion\(rawBody\)/);
+  assert.match(anywherePlannerSource, /&\$\{LIVE_COMPLETION_QUERY\}/);
+  assert.equal(LIVE_COMPLETION_QUERY, "include_live_completion=1&include_live_route_upgrade=1");
   // The waiting state is honest and visible.
   assert.match(anywherePlannerSource, /Läser in mer från källorna — uppdateras automatiskt strax\./);
   // A silent UPGRADE refreshes the stored entry so save/share use the full day.

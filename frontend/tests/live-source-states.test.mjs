@@ -57,10 +57,13 @@ async function click(h, control) {
   assert.ok(control, 'control exists');
   await h.act(() => control.dispatchEvent(new h.window.Event('click', { bubbles: true })));
 }
-async function composed(liveEvents, lang = 'en') {
+// A server only leaves Live pending together with the capability that reads
+// its result; without one the client reports Live as unavailable.
+const FOLLOWED = { live_completion: { version: 1, token: 'fixture-live-token', expires_in_ms: 120000 } };
+async function composed(liveEvents, lang = 'en', extra = {}) {
   const h = await mountPlanner({ url: `http://localhost/anywhere?place=Testville&lang=${lang}` });
   await h.clock.advance(500);
-  await h.fetchMock.respond(h.fetchMock.pending()[0], day(liveEvents));
+  await h.fetchMock.respond(h.fetchMock.pending()[0], { ...day(liveEvents), ...extra });
   await h.clock.advance(50);
   return h;
 }
@@ -354,7 +357,7 @@ test('a route-woven event is not described as no verified events in the Live she
 });
 
 test('while waiting, the Live sheet does not print responded counts that read as a failure', async (t) => {
-  const h = await composed(live(PENDING, { pending: true, feeds: [{ id: 'calendar', label: 'Official calendar', status: 'pending' }] }));
+  const h = await composed(live(PENDING, { pending: true, feeds: [{ id: 'calendar', label: 'Official calendar', status: 'pending' }] }), 'en', FOLLOWED);
   t.after(() => h.unmount());
   assert.match(h.text(), /Checking the calendars — updates automatically in a moment\./);
   await click(h, button(h, /Explore live/));
