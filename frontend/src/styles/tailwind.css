@@ -120,6 +120,14 @@
 .route-map-frame .maplibregl-ctrl-group button:focus-visible {
   background: rgb(var(--p-color-ink) / 0.08);
 }
+/* MapLibre's own focus glow is clipped by the group's rounded overflow, so a
+   keyboard user saw only a hairline. Draw the shared focus colour inside the
+   button instead, where the group cannot clip it. MapLibre's stylesheet loads
+   after this one, so this out-specifies its `button:focus:focus-visible`. */
+.route-map-frame .maplibregl-ctrl-group button:focus:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 3px rgb(var(--p-color-glow));
+}
 /* The zoom glyphs are drawn in the theme's ink, not MapLibre's fixed grey. */
 .route-map-frame .maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon,
 .route-map-frame .maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon {

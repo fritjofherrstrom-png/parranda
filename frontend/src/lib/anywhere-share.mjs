@@ -7,12 +7,21 @@
  * (honest: events / "today" reflect when THEY open it, not when it was shared).
  */
 
-export function encodeShareParams({ city, place, preferences = [], dayOffset = 0, walkKey = "balanced", lang = "en" } = {}) {
+// A language-independent OSM identity the server re-validates itself
+// ("r5400890" = relation 5400890). It names the place; it is never geography.
+const PLACE_REF = /^[nwr][1-9]\d{0,11}$/;
+export function validPlaceRef(value) {
+  return typeof value === "string" && PLACE_REF.test(value) && !/[\r\n]/.test(value) ? value : null;
+}
+
+export function encodeShareParams({ city, place, placeRef, preferences = [], dayOffset = 0, walkKey = "balanced", lang = "en" } = {}) {
   const params = new URLSearchParams();
   const cityKey = String(city || "").trim().toLowerCase();
   if (/^[a-z0-9-]{1,64}$/.test(cityKey)) params.set("city", cityKey);
   const p = String(place || "").trim();
   if (p) params.set("place", p);
+  // Display text is optional; the server resolves the identity itself.
+  if (validPlaceRef(placeRef)) params.set("place_ref", placeRef);
   params.set("planner", "open");
   if (Array.isArray(preferences) && preferences.length) params.set("prefs", preferences.join(","));
   if (dayOffset === 1) params.set("day", "1");
@@ -42,6 +51,7 @@ export function decodeShareParams(search, allowedPrefKeys = null) {
   const rawCity = (params.get("city") || "").trim().toLowerCase();
   const city = /^[a-z0-9-]{1,64}$/.test(rawCity) ? rawCity : null;
   const place = (params.get("place") || "").trim();
+  const placeRef = validPlaceRef(params.get("place_ref"));
   const rawPrefs = (params.get("prefs") || "").split(",").map((s) => s.trim()).filter(Boolean);
   const preferences = allowedPrefKeys ? rawPrefs.filter((k) => allowedPrefKeys.includes(k)) : rawPrefs;
   const dayOffset = params.get("day") === "1" ? 1 : 0;
@@ -53,5 +63,6 @@ export function decodeShareParams(search, allowedPrefKeys = null) {
     : legacy === "short" ? "calm" : legacy === "long" ? "full" : "balanced";
   const langRaw = params.get("lang");
   const lang = langRaw === "sv" ? "sv" : langRaw === "en" ? "en" : null;
-  return { city, place, preferences, dayOffset, walkKey, lang };
+  const invalidPlaceRef = params.has("place_ref") && !validPlaceRef(params.get("place_ref"));
+  return { city, place, placeRef, invalidPlaceRef, preferences, dayOffset, walkKey, lang };
 }

@@ -76,7 +76,8 @@ test("the planner consumes the handoff and never re-prompts on arrival", () => {
   assert.match(plannerSource, /if \(coords\) execute\(\{ coords \}, arrivalInputs\)/);
   // Asking for the position again is only ever the answer to an explicit tap.
   assert.equal(plannerSource.match(/requestPosition\(/g)?.length, 2, "explicit location anchor and explicit search narrowing ask for position");
-  assert.match(plannerSource, /async function narrowPlaceSearch\(\) \{[\s\S]{0,350}await requestPosition\(\)/);
+  const narrowing = plannerSource.split("async function narrowPlaceSearch() {")[1]?.split("async function ")[0] ?? "";
+  assert.match(narrowing, /await requestPosition\(\)/);
   assert.match(plannerSource, /async function useLocationAgain\(\) \{[\s\S]{0,300}await requestPosition\(\)/);
   assert.match(plannerSource, /onClick=\{useLocationAgain\}/);
   // Recomposing a near-me day (an adjustment, a rebuild) reuses the chosen

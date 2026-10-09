@@ -133,7 +133,7 @@ const STORED_DAY = buildSavedEntry({
   label: "Barcelona",
   dateIso: "2026-08-23",
   savedAt: "2026-08-23T09:00:00.000Z",
-  classification: { kind: "curated_city", cityKey: "barcelona" },
+  classification: { status: "composed", hasStructure: false, placeLabel: "Barcelona" },
   inputs: { city: "barcelona", place: "Barcelona", selected: ["food", "culture"], walkKey: "balanced", dayOffset: 0 },
   safeResponse: {
     city: "barcelona",

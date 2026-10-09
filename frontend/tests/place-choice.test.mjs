@@ -29,7 +29,8 @@ test('saved days and commitment anchors distinguish same-name geographic choices
  assert.notEqual(anchorKey({place:'Harbour',selectionLabel:a.placeLabel}),anchorKey({place:'Harbour',selectionLabel:selected.label}));
 });
 
-test('ambiguous place offers choices, then retains selected identity for an adjustment',async t=>{
+for (const [outcome, result] of [['without a day', response], ['with a composed day', composed]]) {
+ test(`ambiguous place retains selected identity for an adjustment ${outcome}`,async t=>{
  const h=await mountPlanner({url:'http://localhost/anywhere?place=Harbour&lang=en'});t.after(()=>h.unmount());
  await h.clock.advance(500);
  await h.fetchMock.respond(h.fetchMock.pending()[0],ambiguous);await h.clock.advance(30);
@@ -37,13 +38,18 @@ test('ambiguous place offers choices, then retains selected identity for an adju
  await click(h,button(h,'Harbour, Second City'));
  const chosen=h.fetchMock.pending().find(x=>x.url.startsWith('/api/route-recommendations'));
  assert.equal(chosen.body.place,'Harbour');assert.equal(chosen.body.place_selection,'selected-token');
- await h.fetchMock.respond(chosen,response);await h.clock.advance(30);
+ await h.fetchMock.respond(chosen,result);await h.clock.advance(30);
  const stored=JSON.parse(h.window.localStorage.getItem('parranda:anywhere:last'));
- assert.equal(stored.inputs.placeSelection,'selected-token');
+ if (result === response) {
+  assert.equal(stored, null, 'a selected identity without a composed day must not become Continue');
+ } else {
+  assert.equal(stored.inputs.placeSelection,'selected-token');
+ }
  await click(h,button(h,'Adjust'));await click(h,button(h,'Easy'));await h.clock.advance(500);
  const adjusted=h.fetchMock.pending().find(x=>x.url.startsWith('/api/route-recommendations'));
  assert.equal(adjusted.body.place_selection,'selected-token');
-});
+ });
+}
 test('restored saved day rebuild retains its selected identity',async t=>{
  const entry=buildSavedEntry({place:'Harbour',placeLabel:selected.label,savedAt:'2026-10-07T09:00:00Z',safeResponse:composed,classification:{status:'composed',placeLabel:selected.label},inputs:{place:'Harbour',placeLabel:selected.label,placeSelection:'selected-token',mode:'typed',selected:['food'],walkKey:'balanced',dayOffset:0}});
  const h=await mountPlanner({url:'http://localhost/anywhere?restore=last&lang=en',storage:{'parranda:anywhere:last':entry}});t.after(()=>h.unmount());
@@ -113,4 +119,38 @@ test('restoring another selected place cancels old Blitz and requests the restor
  await click(h,button(h,'Saved Second City'));assert.equal(old.aborted,true);
  await click(h,button(h,'Blitz right now'));
  const fresh=h.fetchMock.pending().find(x=>x.url.startsWith('/api/blitz'));assert.equal(fresh.body.place_selection,'selected-token');
+});
+
+test('declined narrowing preserves the typed request and reports only the location failure', async t => {
+ const h=await mountPlanner({url:'http://localhost/anywhere?place=Harbour&lang=en'});t.after(()=>h.unmount());
+ Object.defineProperty(h.window.navigator,'geolocation',{configurable:true,value:{getCurrentPosition(ok,deny){deny({code:1,message:'denied'});}}});
+ await h.clock.advance(500);await h.fetchMock.respond(h.fetchMock.pending()[0],ambiguous);await h.clock.advance(30);
+ const count=h.fetchMock.calls.length;const address=h.window.location.search;
+ await click(h,button(h,'Use my location to narrow'));await h.clock.advance(30);
+ assert.equal(h.fetchMock.calls.length,count);assert.equal(h.window.location.search,address);
+ assert.match(h.text(),/location could not be obtained/);assert.ok(button(h,'Harbour, Second City'));
+});
+
+test('a location denial after navigation cannot publish a stale narrowing error', async t => {
+ const h=await mountPlanner({url:'http://localhost/anywhere?place=Harbour&lang=en'});t.after(()=>h.unmount());
+ let deny;Object.defineProperty(h.window.navigator,'geolocation',{configurable:true,value:{getCurrentPosition(ok,no){deny=no;}}});
+ await h.clock.advance(500);await h.fetchMock.respond(h.fetchMock.pending()[0],ambiguous);await h.clock.advance(30);
+ await click(h,button(h,'Use my location to narrow'));const count=h.fetchMock.calls.length;
+ await h.act(()=>h.window.dispatchEvent(new h.window.Event('pagehide')));
+ await h.act(()=>deny({code:1,message:'denied'}));await h.clock.advance(30);
+ assert.equal(h.fetchMock.calls.length,count);assert.doesNotMatch(h.text(),/location could not be obtained/);
+});
+
+for (const granted of [true, false]) test(`a ${granted ? 'granted' : 'denied'} old location callback cannot refine a newer day intent`, async t => {
+ const h=await mountPlanner({url:'http://localhost/anywhere?place=Harbour&lang=en'});t.after(()=>h.unmount());
+ let allow,deny;Object.defineProperty(h.window.navigator,'geolocation',{configurable:true,value:{getCurrentPosition(ok,no){allow=ok;deny=no;}}});
+ await h.clock.advance(500);await h.fetchMock.respond(h.fetchMock.pending()[0],ambiguous);await h.clock.advance(30);
+ await click(h,button(h,'Use my location to narrow'));await click(h,button(h,'Adjust'));await click(h,button(h,'Tomorrow'));
+ const count=h.fetchMock.calls.length;
+ await h.act(()=>granted?allow({coords:{latitude:51.5,longitude:2.32}}):deny({code:1,message:'denied'}));
+ assert.equal(h.fetchMock.calls.length,count,'no biased compose before the newer intent debounce');
+ assert.doesNotMatch(h.text(),/location could not be obtained/);
+ await h.clock.advance(500);
+ const newest=h.fetchMock.calls.filter(c=>c.url.startsWith('/api/route-recommendations')).at(-1);
+ assert.equal(newest.body.place_bias,undefined,'the new day request keeps its own typed anchor');
 });

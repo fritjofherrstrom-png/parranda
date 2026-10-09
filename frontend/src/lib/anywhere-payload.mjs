@@ -62,6 +62,7 @@ export function buildAnywherePayload({
   placeSelection,
   placeBias,
   placeContextSelection,
+  placeRef,
   dates,
   preferences = [],
   dayRhythm = "balanced",
@@ -83,6 +84,7 @@ export function buildAnywherePayload({
     ...anchor,
     ...(!coords ? {
       ...(placeSelection ? { place_selection: placeSelection } : {}),
+      ...(typeof placeRef === "string" && placeRef ? { place_ref: placeRef } : {}),
       ...(placeBias ? { place_bias: placeBias } : {}),
       ...(placeContextSelection ? { place_context_selection: placeContextSelection } : {}),
     } : {}),

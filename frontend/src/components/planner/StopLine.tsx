@@ -83,6 +83,7 @@ export default function StopLine({
   stale,
   routeLineIsSketch,
   dayContextNote,
+  assemblyNotes = [],
   split,
   routeStops,
   legForStop,
@@ -111,6 +112,8 @@ export default function StopLine({
   stale: boolean;
   routeLineIsSketch: boolean;
   dayContextNote: string | null | undefined;
+  /** Where the places came from and how the day sits on the clock. */
+  assemblyNotes?: string[];
   split: { core: any[]; woven: any[] };
   routeStops: any[];
   legForStop: (stop: any) => Leg | null;
@@ -189,14 +192,25 @@ export default function StopLine({
       {map && <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/4 p-4 sm:p-5">{map}</div>}
       {/* The route's evidence, stated beside it: what the line is, what the
           numbers are, and how the day was assembled. */}
-      <p className="mt-3 text-xs leading-relaxed text-parranda-ink/68">
-        {routeLineIsSketch && t("Den prickade linjen visar stoppens ordning, inte gatorna. ", "The dotted line shows the order of the stops, not the streets. ")}
-        {t("Avstånd och gångtider är uppskattningar. Google Maps beräknar gångvägen när du öppnar rutten.", "Distances and walking times are estimates. Google Maps calculates the walking path when you open the route.")}
-        {dayContextNote && ` ${dayContextNote}`}
-      </p>
+      {/* HOW THE DAY WAS ASSEMBLED — one line, opened on request. Every fact
+          is still on the page (and read by assistive tech when opened); it
+          no longer stacks between the title, the map and the stops. How Maps
+          walks the route is said beside the Maps action. */}
+      <details className="group mt-2">
+        <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-parranda-ink/72 transition hover:text-parranda-ink [&::-webkit-details-marker]:hidden">
+          {t("Om dagen och kartan", "About this day and map")}
+          <ChevronDownIcon className="h-3.5 w-3.5 transition group-open:rotate-180" />
+        </summary>
+        <ul className="mb-1 flex flex-col gap-1.5 text-xs leading-relaxed text-parranda-ink/72">
+          {assemblyNotes.map((note) => <li key={note}>{note}</li>)}
+          {routeLineIsSketch && <li>{t("Den prickade linjen visar stoppens ordning, inte gatorna.", "The dotted line shows the order of the stops, not the streets.")}</li>}
+          <li>{t("Avstånd och gångtider är uppskattningar.", "Distances and walking times are estimates.")}</li>
+          {dayContextNote && <li>{dayContextNote}</li>}
+        </ul>
+      </details>
 
-      <div className="mb-2 mt-10 flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <Eyebrow>{t("Stoppen i ordning", "The stops, in order")}</Eyebrow>
+      <div className="mb-2 mt-8 flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <Eyebrow as="h2">{t("Stoppen i ordning", "The stops, in order")}</Eyebrow>
         {canFollow && (
           <button
             type="button"
@@ -283,10 +297,10 @@ export default function StopLine({
                 </span>
               )}
               {daypartHeading && (
-                <p className="type-eyebrow relative mb-1 mt-6 flex min-h-6 items-center pl-14 text-parranda-glow">
+                <h3 className="type-eyebrow relative mb-1 mt-6 flex min-h-6 items-center pl-14 text-parranda-glow">
                   <span aria-hidden="true" className="absolute left-3.5 top-1/2 h-1 w-4 -translate-y-1/2 rounded-full bg-parranda-ink" />
                   {daypartHeading}
-                </p>
+                </h3>
               )}
               {/* The stop row is a DISCLOSURE, not an external link: tapping
                   it opens an inline panel instead of ejecting to Google Maps.
@@ -473,7 +487,7 @@ export default function StopLine({
                 {routeNumber}
               </span>
               <div className="min-w-0 flex-1 rounded-parranda border-[1.5px] border-parranda-live/45 bg-parranda-live/8 p-4">
-                <Eyebrow tone="live" dot>{t("Live i din rutt", "Live in your route")}</Eyebrow>
+                <Eyebrow as="h3" tone="live" dot>{t("Live i din rutt", "Live in your route")}</Eyebrow>
                 <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-parranda-ink">
                   {pin ? (
                     <a href={pin} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center gap-1.5 text-[17px] font-extrabold transition hover:text-parranda-live">

@@ -86,18 +86,24 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
       .map((other) => ({ other, verdict: matchIdentity(candidate, other) }))
       .filter(({ verdict }) => verdict.same);
     const entities = new Set(matches.map(({ other }) => wikidataIdOf(other)).filter(Boolean));
+    const addresses = !sourceAddressKey(candidate.source_address)
+      ? new Set(matches.map(({ other }) => sourceAddressKey(other.source_address)).filter(Boolean))
+      : new Set();
     return {
       aliases: matches.length > 1 && matches.some(({ verdict }) =>
         verdict.confidence === "source_alias_store_identity") ? matches.length : 0,
       entities: entities.size > 1 ? entities.size : 0,
+      sites: addresses.size > 1 ? addresses.size : 0,
     };
   };
   const ambiguousAliases = new Map();
   const conflictingEntities = new Map();
+  const ambiguousSites = new Map();
   for (const candidate of ordered) {
     const ambiguity = ambiguityOf(candidate);
     if (ambiguity.aliases) ambiguousAliases.set(candidate, ambiguity.aliases);
     if (ambiguity.entities) conflictingEntities.set(candidate, ambiguity.entities);
+    if (ambiguity.sites) ambiguousSites.set(candidate, ambiguity.sites);
   }
 
   const survivors = [];
@@ -106,8 +112,9 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
 
   for (const candidate of ordered) {
     const entityAmbiguous = conflictingEntities.has(candidate);
+    const siteAmbiguous = ambiguousSites.has(candidate);
     if (ambiguousAliases.has(candidate)) {
-      survivors.push({ candidate, aliasAmbiguous: true, entityAmbiguous });
+      survivors.push({ candidate, aliasAmbiguous: true, entityAmbiguous, siteAmbiguous });
       ambiguousKept += 1;
       merges.push({ duplicate_id: candidate.id, into_id: null,
         decision: "kept_separate_ambiguous", reason: "source_alias_matched_multiple",
@@ -120,9 +127,20 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
         decision: "kept_separate_ambiguous", reason: "matched_conflicting_entities",
         match_count: conflictingEntities.get(candidate) });
     }
+    if (siteAmbiguous) {
+      if (!entityAmbiguous) ambiguousKept += 1;
+      merges.push({ duplicate_id: candidate.id, into_id: null,
+        decision: "kept_separate_ambiguous", reason: "matched_conflicting_visit_addresses",
+        match_count: ambiguousSites.get(candidate) });
+    }
     const matchIndexes = [];
     for (let i = 0; i < survivors.length; i += 1) {
       const verdict = matchIdentity(survivors[i].candidate, candidate);
+      // A shared institution/entity row without its own visit address cannot
+      // lend evidence to one of several distinct sites, or bridge them through
+      // a canonical row that happens to be processed first.
+      if ((siteAmbiguous && sourceAddressKey(survivors[i].candidate.source_address)) ||
+          (survivors[i].siteAmbiguous && sourceAddressKey(candidate.source_address))) continue;
       if (verdict.confidence === "source_alias_store_identity" &&
           survivors[i].aliasAmbiguous) continue;
       // Unknown-name twins may still dedupe. They cannot transfer evidence to
@@ -134,14 +152,14 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
     }
 
     if (matchIndexes.length === 0) {
-      survivors.push({ candidate, entityAmbiguous });
+      survivors.push({ candidate, entityAmbiguous, siteAmbiguous });
       continue;
     }
 
     if (matchIndexes.length > 1) {
       // Matches more than one existing place → ambiguous. Keep separate rather
       // than guess which one it belongs to.
-      survivors.push({ candidate, entityAmbiguous });
+      survivors.push({ candidate, entityAmbiguous, siteAmbiguous });
       ambiguousKept += 1;
       merges.push({
         duplicate_id: candidate.id,
@@ -161,12 +179,14 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
     // Ambiguity belongs to the survivor, not its replaceable canonical object.
     survivors[i] = { ...survivors[i],
       entityAmbiguous: survivors[i].entityAmbiguous || entityAmbiguous,
+      siteAmbiguous: survivors[i].siteAmbiguous || siteAmbiguous,
       candidate: mergeInto(canonical, duplicate, { now }) };
     // Reconciliation can unlock aliases (notably by filling coordinates). Check
     // the full original universe again, excluding the identity already absorbed.
     // Once blocked, aliases stay blocked even through later canonical switches.
+    const ambiguity = ambiguityOf(survivors[i].candidate);
+    if (ambiguity.sites) survivors[i].siteAmbiguous = true;
     if (!survivors[i].aliasAmbiguous) {
-      const ambiguity = ambiguityOf(survivors[i].candidate);
       if (ambiguity.entities) survivors[i].entityAmbiguous = true;
       const count = ambiguity.aliases;
       if (count) {
@@ -219,7 +239,14 @@ function matchIdentity(a, b) {
   const wb = wikidataIdOf(b);
   const dist = distanceM(a, b);
 
-  // Hard identity: a shared Wikidata entity IS the same place by definition.
+  // Entity ids may describe an institution with several visitable branches.
+  // Two different complete source-owned addresses override that hard-id hint;
+  // neither shared branding nor proximity makes them the same physical stop.
+  const addressA = sourceAddressKey(a.source_address);
+  const addressB = sourceAddressKey(b.source_address);
+  if (addressA && addressB && addressA !== addressB) return no("conflicting_visit_addresses");
+
+  // With no conflicting site addresses, retain the bounded shared-id match.
   if (wa && wb && wa === wb) {
     if (dist === null || dist <= GEO_HARD_ID_M) {
       return yes("hard_wikidata", { wikidata: wa, distance_m: round(dist) });
@@ -373,6 +400,14 @@ function reconcileFields(canonical, duplicate) {
     }
   }
 
+  // Keep the full site discriminator when a richer addressless source becomes
+  // canonical; otherwise its newly absorbed institution id could merge the
+  // next branch after the original address was discarded.
+  if (!sourceAddressKey(canonical.source_address) && sourceAddressKey(duplicate.source_address)) {
+    patch.source_address = { ...duplicate.source_address };
+    filled.push("source_address");
+  }
+
   const canHas = hasCoords(canonical);
   const dupHas = hasCoords(duplicate);
 
@@ -520,18 +555,19 @@ function sameStoreWebsiteAndAddress(a, b) {
       return url.hostname.toLowerCase().replace(/^www\./, "") + url.pathname.replace(/\/$/, "");
     } catch (_error) { return null; }
   };
-  const addressKey = (value) => {
-    if (!value || typeof value.street !== "string" || typeof value.house_number !== "string" ||
-        value.street.length > 120 || value.house_number.length > 24 ||
-        /[\r\n]/.test(value.street + value.house_number)) return null;
-    const street = normalizeName(value.street);
-    const house = value.house_number.trim().toLowerCase();
-    return street && house ? `${street}|${house}` : null;
-  };
   const website = websiteKey(a.website);
-  const address = addressKey(a.source_address);
+  const address = sourceAddressKey(a.source_address);
   return Boolean(website && address && website === websiteKey(b.website) &&
-    address === addressKey(b.source_address));
+    address === sourceAddressKey(b.source_address));
+}
+
+function sourceAddressKey(value) {
+  if (!value || typeof value.street !== "string" || typeof value.house_number !== "string" ||
+      value.street.length > 120 || value.house_number.length > 24 ||
+      /[\u0000-\u001f\u007f]/.test(value.street + value.house_number)) return null;
+  const street = normalizeName(value.street);
+  const house = value.house_number.trim().toLowerCase();
+  return street && house ? `${street}|${house}` : null;
 }
 
 function wikidataIdOf(candidate) {

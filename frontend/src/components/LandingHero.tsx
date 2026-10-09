@@ -18,7 +18,7 @@ import { routeForInput, inlineCompletion, type CityRegistry } from "../lib/landi
 import { storeAnchorCoords, requestPosition } from "../lib/location-anchor.mjs";
 import PlaceSearchField, { type PlaceSuggestion } from "./PlaceSearchField";
 import { storePlaceChoice } from "../lib/place-choice.mjs";
-import { LAST_KEY } from "../lib/anywhere-storage.mjs";
+import { isComposedEntry, LAST_KEY } from "../lib/anywhere-storage.mjs";
 import { liveDateLabel } from "../lib/live-event-query.mjs";
 import AppBar from "./shared/AppBar";
 import { ChevronRightIcon, LocationIcon } from "./shared/icons";
@@ -53,7 +53,7 @@ function lastDay(): { place: string | null; dateIso: string | null } | null {
   try {
     const raw = window.localStorage.getItem(LAST_KEY);
     const entry = raw ? JSON.parse(raw) : null;
-    if (!entry || typeof entry !== "object" || !entry.safeResponse || !entry.classification) return null;
+    if (!isComposedEntry(entry)) return null;
     const place = typeof entry.place === "string" && entry.place.trim() ? entry.place.trim() : null;
     const dateIso = typeof entry.dateIso === "string" ? entry.dateIso : null;
     return { place, dateIso };
@@ -129,7 +129,9 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
     e?.preventDefault?.();
     // Every selected suggestion uses the shared any-place intake, including
     // registered cities. Keep its receipt bound to the qualified query.
-    const route = selectedPlace ? routeForInput({}, selectedPlace.query, lang) : routeForInput(registry, value, lang);
+    const route = selectedPlace
+      ? routeForInput({}, selectedPlace.query, lang, { placeRef: selectedPlace.place_ref ?? null })
+      : routeForInput(registry, value, lang);
     if (selectedPlace) storePlaceChoice({ place: selectedPlace.query, selection: selectedPlace.selection_id, label: selectedPlace.query });
     // Empty submit isn't a dead end: focus the field so the next keystroke lands
     // where it should (the CTA stays visually live rather than reading as broken).

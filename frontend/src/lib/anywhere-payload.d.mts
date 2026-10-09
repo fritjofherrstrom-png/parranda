@@ -31,6 +31,7 @@ export declare function buildAnywherePayload(options?: {
   placeSelection?: string | null;
   placeBias?: { lat: number; lng: number } | null;
   placeContextSelection?: string | null;
+  placeRef?: string | null;
   dates?: string[];
   preferences?: string[];
   dayRhythm?: "calm" | "balanced" | "full" | "free";
@@ -42,6 +43,7 @@ export declare function buildAnywherePayload(options?: {
   place_selection?: string;
   place_bias?: { lat: number; lng: number };
   place_context_selection?: string;
+  place_ref?: string;
   excluded_candidate_ids?: string[];
   pinned_candidate_ids?: string[];
   lat?: number;

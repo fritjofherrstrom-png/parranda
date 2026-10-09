@@ -80,6 +80,17 @@ export function buildSavedEntry({
   };
 }
 
+/**
+ * Whether a stored entry holds a day at all. Mirrors the shared honesty rule
+ * (anywhere-render-decision's isComposedStatus) so the landing can name a
+ * remembered day without loading the planner's decision module. A place that
+ * could not be resolved or composed is not a day to continue.
+ */
+export function isComposedEntry(entry) {
+  const status = entry && typeof entry === "object" ? entry.classification?.status : null;
+  return Boolean(entry?.safeResponse) && (status === "composed" || status === "composed_limited");
+}
+
 // Newest-first, de-duplicated by id, capped.
 export function upsertSaved(list, entry) {
   const rest = (Array.isArray(list) ? list : []).filter((e) => e && e.id !== entry.id);

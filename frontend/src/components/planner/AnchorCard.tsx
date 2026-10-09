@@ -4,6 +4,7 @@
  * second form here. Adjusting is collapsed to one line by default; every change
  * recomposes on its own (no submit) — the orchestrator's handlers own that.
  */
+import { useEffect, useId, useRef } from "react";
 import { CheckIcon, ChevronDownIcon, LocationIcon } from "../shared/icons";
 import { Eyebrow, panelCard } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
@@ -47,6 +48,22 @@ export default function AnchorCard({
   /** A plain left-click on "Change": the planner cancels work it no longer needs. */
   onChangePlace: () => void;
 }) {
+  // Opening swaps "Adjust" for "Done" (and closing swaps back), so the button
+  // that had keyboard focus leaves the DOM. Move focus to its counterpart, but
+  // only after the person toggled it here, never on an outside state change.
+  const panelId = useId();
+  const adjustButton = useRef<HTMLButtonElement>(null);
+  const doneButton = useRef<HTMLButtonElement>(null);
+  const toggledHere = useRef(false);
+  useEffect(() => {
+    if (!toggledHere.current) return;
+    toggledHere.current = false;
+    (adjustOpen ? doneButton : adjustButton).current?.focus();
+  }, [adjustOpen]);
+  const toggleAdjust = (open: boolean) => {
+    toggledHere.current = true;
+    setAdjustOpen(open);
+  };
   const scale = rhythms.filter((preset) => preset.key !== "free");
   const free = rhythms.find((preset) => preset.key === "free");
   const current = rhythms.find((preset) => preset.key === walkKey);
@@ -86,8 +103,9 @@ export default function AnchorCard({
           </span>
           <button
             type="button"
+            ref={adjustButton}
             aria-expanded={false}
-            onClick={() => setAdjustOpen(true)}
+            onClick={() => toggleAdjust(true)}
             className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-parranda-ink/18 px-3.5 text-[13px] font-bold text-parranda-ink transition hover:border-parranda-ink/50"
           >
             {t("Justera", "Adjust")}
@@ -97,13 +115,15 @@ export default function AnchorCard({
       )}
 
       {adjustOpen && (
-        <div className="flex flex-col gap-4 border-t border-parranda-ink/10 p-4">
+        <div id={panelId} className="flex flex-col gap-4 border-t border-parranda-ink/10 p-4">
           <div className="flex items-center justify-between">
             <Eyebrow>{t("Justera dagen", "Adjust the day")}</Eyebrow>
             <button
               type="button"
+              ref={doneButton}
               aria-expanded={true}
-              onClick={() => setAdjustOpen(false)}
+              aria-controls={panelId}
+              onClick={() => toggleAdjust(false)}
               className="inline-flex min-h-11 items-center gap-1.5 rounded-full border-[1.5px] border-parranda-ink/18 px-3.5 text-[13px] font-bold text-parranda-ink transition hover:border-parranda-ink/50"
             >
               {t("Klar", "Done")}

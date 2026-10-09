@@ -69,6 +69,7 @@ export function Eyebrow({
   dot = false,
   id,
   className = "",
+  as: Tag = "p",
 }: {
   children: ReactNode;
   tone?: EyebrowTone;
@@ -76,13 +77,15 @@ export function Eyebrow({
   dot?: boolean;
   id?: string;
   className?: string;
+  /** A section title is a heading for assistive tech; it looks the same. */
+  as?: "p" | "h2" | "h3";
 }) {
   return (
-    <p id={id} className={`type-eyebrow flex items-center gap-2 ${EYEBROW_TONES[tone]} ${className}`.trim()}>
+    <Tag id={id} className={`type-eyebrow flex items-center gap-2 ${EYEBROW_TONES[tone]} ${className}`.trim()}>
       {line && <span aria-hidden="true" className="h-1 w-5 shrink-0 rounded-full bg-parranda-ember" />}
       {dot && <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-current motion-safe:animate-pulse" />}
       {children}
-    </p>
+    </Tag>
   );
 }
 

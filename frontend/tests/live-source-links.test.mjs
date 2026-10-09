@@ -84,7 +84,7 @@ const linkText = (anchor) => anchor.textContent.replace(/\s*↗$/, '');
 // The Live panel's own heading ("Live in Testville"), not the route's woven
 // "Live in your route" block.
 const livePanel = (h) => [...h.container.querySelectorAll('section')]
-  .find((section) => /^Live (i|in) Testville/.test(section.querySelector('p')?.textContent || ''));
+  .find((section) => /^Live (i|in) Testville/.test(section.querySelector('h2, p')?.textContent || ''));
 const occurrences = (text, pattern) => (text.match(pattern) || []).length;
 
 for (const lang of ['en', 'sv']) test(`${lang} Live credits survive without URLs and stay escaped in both periods`, async (t) => {
@@ -248,7 +248,7 @@ test('the route-woven Live stop keeps "Source: feed" apart from where its link l
   const h = await composed('en');
   t.after(() => h.unmount());
 
-  const heading = [...h.container.querySelectorAll('p')].find((p) => p.textContent.trim() === 'Live in your route');
+  const heading = [...h.container.querySelectorAll('h3, p')].find((p) => p.textContent.trim() === 'Live in your route');
   assert.ok(heading, 'the woven event renders as the route extension');
   const block = heading.parentElement;
   const [link] = anchorsTo(block, 'https://quay-festival.example/');

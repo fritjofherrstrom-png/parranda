@@ -47,6 +47,7 @@ const { parseRequestedDates } = require("./planner/requested-dates");
 const { createPlannerLifecycle, lifecycleLoader } = require('./planner/cold-lifecycle');
 const { nearbyCuratedSupply } = require('./planner/nearby-curated-supply');
 const { createPlaceSelectionStore, placeResolutionInputs } = require('./place-candidates/place-selection');
+const { toPlaceRef } = require('./place-candidates/place-ref');
 const { resolveDefaultPlaceSuggestions } = require('./place-candidates/place-suggestions');
 const { attributeToWithheldDay } = require("./planner/pin-refusal-reasons");
 const {
@@ -435,6 +436,14 @@ function resolveRequestCity(city) {
  * invalid coordinates are IGNORED (predictable fall-through to normal city
  * behavior), they never throw or 400 the request.
  */
+// Preserve raw anchor intent before parsing can erase malformed values.
+// Private server-computed input; never read this flag from the public body.
+function hasExplicitCoordinateFields(request) {
+  const owns = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key);
+  return [request.body, request.query, request.body?.origin].some(object =>
+    owns(object, "lat") || owns(object, "lng"));
+}
+
 function parseBlitzCoordinates(request) {
   const body = request.body || {};
   const query = request.query || {};
@@ -1547,7 +1556,8 @@ function buildApp({
         const point = choice.candidate;
         const distance = entry?.center ? Math.hypot((point.lat - entry.center.lat) * 111, (point.lng - entry.center.lng) * 111 * Math.cos(point.lat * Math.PI / 180)) : Infinity;
         const cityKey = choice.kind === 'settlement' && distance <= 10 ? entry?.key : null;
-        return [{ title: choice.title, context: choice.context, query: choice.query, selection_id: selection, attribution: point.attribution, license: point.license, ...(cityKey ? { city_key: cityKey } : {}) }];
+        const placeRef = toPlaceRef(point.osm_ref);
+        return [{ title: choice.title, context: choice.context, query: choice.query, kind: choice.kind, ...(placeRef ? { place_ref: placeRef } : {}), selection_id: selection, attribution: point.attribution, license: point.license, ...(cityKey ? { city_key: cityKey } : {}) }];
       });
       response.json({ status: result.status, choices, ...(result.retry_after_ms ? { retry_after_ms: result.retry_after_ms } : {}) });
     } catch (_) { response.json({ status: 'unavailable', choices: [] }); }
@@ -2282,6 +2292,7 @@ function buildApp({
         placeLanguage: lang,
         placeSelectionStore,
         ...placeResolutionInputs(request.body),
+        explicitCoordinatesPresent: hasExplicitCoordinateFields(request),
       });
 
       if (!anchor) {
@@ -2643,6 +2654,7 @@ function buildApp({
           placeResolver,
           placeSelectionStore,
           ...placeResolutionInputs(request.body),
+          explicitCoordinatesPresent: hasExplicitCoordinateFields(request),
           openDataLoader,
           eventSupply,
           weatherProvider,
