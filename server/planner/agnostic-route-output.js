@@ -1070,7 +1070,7 @@ async function composeAgnosticRouteOutput({
   const trustedTimezoneKnown = Boolean(ctx && ctx.timezoneKnown);
   const trustedTimeAppliesToRequestedDate = Boolean(ctx && ctx.timeAppliesToRequestedDate);
   const availabilityWindow = trustedTimezoneKnown
-    ? buildLocalDayAvailabilityWindow({ requestedDate: effectiveDate, nowLocalIso: ctx.now })
+    ? buildLocalDayAvailabilityWindow({ requestedDate: effectiveDate, nowLocalIso: ctx.now, timezone: ctx.contextBlock.time.timezone })
     : null;
   const availabilityHelpers = availabilityWindow
     ? {
@@ -1080,11 +1080,11 @@ async function composeAgnosticRouteOutput({
           if (typeof candidate?.opening_hours !== "string") return null;
           const availability = evaluateOpeningHoursForWindow(candidate.opening_hours, availabilityWindow);
           const selectedDayHours = buildSelectedDayHoursFact(candidate.opening_hours, availabilityWindow);
-          // Open at SOME point today is not open when the stop is visited:
-          // each route role is judged against its own visit time (a meal is
-          // lunch or dinner, a bar the evening), no earlier than now.
+          // Source-day facts and role eligibility are separate. Generic role
+          // windows rule out impossible potential visits, not actual arrival:
+          // final route order, walking legs and prior dwell are not checked.
           const closedForRoles = Object.keys(ROLE_VISIT_WINDOWS).filter(
-            (role) => evaluateOpeningHoursForRole(candidate.opening_hours, role, availabilityWindow).status === "closed_at_role_time",
+            (role) => evaluateOpeningHoursForRole(candidate.opening_hours, role, availabilityWindow).status === "closed_for_role_window",
           );
           return {
             ...availability,

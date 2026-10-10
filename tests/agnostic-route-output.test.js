@@ -1809,13 +1809,44 @@ test(
   },
 );
 
+test("api: trusted Santiago midnight gap keeps hours unresolved rather than attesting a visit", async () => {
+  global.fetch = mockStableWeatherFetch();
+  const records = fixtureNear({ lat: -33.45, lng: -70.66 }).map((record) => ({
+    ...record, opening_hours: "Sa 18:00-00:30",
+  }));
+  const server = buildApp({
+    openDataLoader: makeLoader(records),
+    weatherProvider: async () => SUN_AUTO_TZ,
+    // Real instant: 23:30 on September 5; the next 00:30 does not exist.
+    clock: () => new Date("2026-09-06T03:30:00Z"),
+    placeResolver: async () => [{ label: "Santiago", lat: -33.45, lng: -70.66,
+      confidence: "high", provenance: "test_resolver", timezone: "America/Santiago" }],
+  }).listen(0);
+  try {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}`,
+      body: { city: "unknown-place", dates: ["2026-09-05"], place: "Santiago",
+        preferences: ["food", "bars"], include_external_candidates: 1,
+        timezone: "UTC", now: "2026-09-05T12:00:00", closed_for_roles: ["food_anchor"] },
+    });
+    assert.equal(r.body.agnostic_route_output_experiment.context.time.timezone, "America/Santiago");
+    assert.equal(r.body.agnostic_route_output_experiment.context.time.now, "2026-09-05T23:30:00");
+    assert.ok(r.body.agnostic_route_output_experiment.context.influence.opening_hours_unresolved_candidate_count > 0);
+    assert.equal(r.body.agnostic_route_output_experiment.context.influence.opening_hours_excluded_candidate_count, 0);
+    assert.equal(JSON.stringify(r.body).includes("closed_for_roles"), false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    global.fetch = ORIGINAL_FETCH;
+  }
+});
+
 function closingSoonFixtureNear(base) {
   const recs = [];
   const point = (i) => ({
     lat: base.lat + (i % 5) * 0.0005,
     lng: base.lng + Math.floor(i / 5) * 0.0005,
   });
-  // Open "today" but not long enough to arrive and eat or drink at 19:30.
+  // Open "today" but no possible 45-minute role-window visit from 19:30.
   for (let i = 0; i < 5; i += 1) {
     const c = point(i);
     recs.push(singleFamilyExternalRecord(`closing-food-${i}`, `Closing Food ${i}`, "restaurant", c.lat, c.lng, ["mat"], {
@@ -1850,7 +1881,7 @@ function closingSoonFixtureNear(base) {
 }
 
 test(
-  "api: a stop is never planned where its own hours close before a real visit at arrival",
+  "api: role-window selection excludes places without a possible 45-minute visit",
   async () => {
     global.fetch = mockStableWeatherFetch();
     const server = buildApp({
@@ -1893,7 +1924,7 @@ test(
       const stopIds = route.main_stops.map((stop) => stop.id);
 
       assert.equal(experiment.route_mutation, true);
-      assert.equal(stopIds.some((id) => id.startsWith("closing-")), false, "closes before a real visit at arrival");
+      assert.equal(stopIds.some((id) => id.startsWith("closing-")), false, "cannot cover a possible 45-minute role-window visit");
       assert.ok(stopIds.some((id) => id.startsWith("dinner-food-")), "a place open through dinner still fills the meal");
       assert.equal(JSON.stringify(r.body).includes("closed_for_roles"), false, "per-role closures stay internal");
     } finally {

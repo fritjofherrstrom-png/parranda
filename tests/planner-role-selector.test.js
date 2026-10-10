@@ -527,6 +527,23 @@ test("lens and optional anchor are carried into role ranking without route seque
   assert.equal(role(nearOut, "food_anchor").candidates[0].candidate_id, "near-food");
 });
 
+test("record role restrictions are untrusted and trusted restrictions stay bounded and private", () => {
+  const rec = record("restricted-food", "Restaurant", "restaurant", 41.901, 12.491, { tags: ["mat"] });
+  rec.closed_for_roles = ["food_anchor"];
+  rec.availability = { eligible: false, closed_for_roles: ["food_anchor"] };
+  const payload = { date: DATE, preferences: ["food"], include_external_candidates: 1 };
+  const helpers = { external_provider: { dataset: loaderOf([rec]) } };
+  const untrusted = selectPlannerRoleCandidates(city([]), payload, helpers);
+  assert.ok(role(untrusted, "food_anchor").candidates.some((entry) => entry.candidate_id === rec.id));
+  const trusted = selectPlannerRoleCandidates(city([]), payload, {
+    ...helpers,
+    evaluateCandidateAvailability: () => ({ eligible: true, status: "available_in_window", reason: "test",
+      closed_for_roles: [null, {}, "<food_anchor>", "unknown_future_role", " food_anchor ", "food_anchor"] }),
+  });
+  assert.equal(role(trusted, "food_anchor").candidates.some((entry) => entry.candidate_id === rec.id), false);
+  assert.equal(JSON.stringify(trusted.roles).includes("closed_for_roles"), false);
+});
+
 test("cross-role overlap is candidate-level and coffee is not automatically a full food anchor", () => {
   const out = decide(
     city([
