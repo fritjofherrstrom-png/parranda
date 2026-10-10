@@ -164,6 +164,7 @@ export default function DayHeader({
   placesArriving = false,
   onUpdateDay,
   restoredAt,
+  canUpdateSaved = true,
   resolveAndRun,
 }: {
   t: Translate;
@@ -185,6 +186,7 @@ export default function DayHeader({
   placesArriving?: boolean;
   onUpdateDay?: () => void;
   restoredAt: string | null;
+  canUpdateSaved?: boolean;
   resolveAndRun: () => void;
 }) {
   // The day's facts as quiet chips: how far, how many stops, and the day's
@@ -305,14 +307,19 @@ export default function DayHeader({
           its way and let the reader ask again, rather than judging the place. */}
       {placesArriving && (
         <div role="status" className="flex flex-col items-start gap-2 rounded-parranda border-[1.5px] border-parranda-ember/40 bg-parranda-ember/8 px-4 py-3">
-          <p className="text-sm font-bold text-parranda-ink">{t("Fler platser är på väg", "More places are on their way")}</p>
+          <p className="text-sm font-bold text-parranda-ink">{restoredAt
+            ? t("Källorna hade inte hämtats klart när dagen skapades", "Sources had not finished when this day was created")
+            : t("Fler platser är på väg", "More places are on their way")}</p>
           <p className="text-[13px] leading-relaxed text-parranda-ink/80">
-            {t(
+            {restoredAt ? t(
+              "Den sparade dagen bygger på det som hade hunnit komma då. Det här är en ögonblicksbild, inte en pågående hämtning. Uppdatera uttryckligen för att läsa källorna igen.",
+              "This saved day uses what had arrived then. This is a snapshot, not an ongoing fetch. Update explicitly to read the sources again.",
+            ) : t(
               "En källa hämtar fortfarande platser här. Dagen nedan bygger på det som hunnit komma — uppdatera om en stund för en rikare dag.",
               "A source is still fetching places here. The day below uses what has arrived so far — update in a moment for a fuller day.",
             )}
           </p>
-          {onUpdateDay && (
+          {onUpdateDay && canUpdateSaved && (
             <button type="button" onClick={onUpdateDay} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
               {t("Uppdatera dagen", "Update the day")}
             </button>
@@ -325,9 +332,17 @@ export default function DayHeader({
       {restoredAt && (
         <p className="text-xs text-parranda-ink/68">
           {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE")} —{" "}
-          <button type="button" onClick={() => resolveAndRun()} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-parranda-clay">
-            {t("bygg om för färska events", "rebuild for fresh events")}
-          </button>
+          {canUpdateSaved ? (
+            <button type="button" onClick={() => resolveAndRun()} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-parranda-clay">
+              {t("bygg om för färska events", "rebuild for fresh events")}
+            </button>
+          ) : (
+            <span>{t("Den sparade dagen kan inte uppdateras säkert. ", "We cannot safely update this saved day. ")}
+              <a href={`/?lang=${lang}`} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">
+                {t("Välj startpunkt och datum", "Choose a starting point and date")}
+              </a>
+            </span>
+          )}
         </p>
       )}
     </header>
