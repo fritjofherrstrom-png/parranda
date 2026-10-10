@@ -23,6 +23,11 @@ present; an open licence is not a universal activation prerequisite. Explicit
 restricted / permission-required terms and robots exclusions remain blockers.
 Never label unknown rights as open data.
 
+A place without such a source also looks for one at request time, inside its
+out-of-band Live collection: bounded search, the ordinary scout, structured
+interfaces only, single-observation probationary feeds that stay Pulse-only
+(see `docs/MACHINE_VERIFIED_LIVE_SUPPLY.md`, "Request-time discovery lane").
+
 Country-wide provider layers are legitimate generic supply, not region hacks:
 DATAtourisme, festivos.io, OpenHolidays and source-backed OSM weekly schedules
 may use trusted country/admin identifiers and the ordinary acquisition path.

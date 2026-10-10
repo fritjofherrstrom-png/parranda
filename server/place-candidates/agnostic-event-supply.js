@@ -1678,6 +1678,21 @@ function failedEventCollection({ sourcePlan, selectedDate, radiusM }) {
  * A refresh that failed is held briefly and served as that failure, so a
  * failing source is reported as failed instead of as another `pending`.
  */
+// Sources found at request time carry their venues as text more often than
+// as coordinates; give their one collection a little more lookup room.
+const REQUEST_TIME_VENUE_RESOLUTION_LIMIT = 6;
+
+// Uses the same bounded source search the discovery worker uses; an operator
+// can switch the request-time lane off without touching the worker.
+function resolveRequestTimeDiscovery(env) {
+  const setting = String((env && env.PARRANDA_REQUEST_TIME_EVENT_DISCOVERY) || "").trim().toLowerCase();
+  if (["disabled", "0", "false", "off", "no"].includes(setting)) return null;
+  // Required here, not at the top: source-qualification requires this module.
+  const { resolveDefaultSourceSearch } = require("../pulse-sources/source-search-provider");
+  const { createRequestTimeEventDiscovery } = require("../pulse-sources/request-time-event-discovery");
+  return createRequestTimeEventDiscovery({ sourceSearch: resolveDefaultSourceSearch(env) });
+}
+
 function resolveDefaultEventSupply(
   env = process.env,
   {
@@ -1688,10 +1703,12 @@ function resolveDefaultEventSupply(
     failedRefreshClock,
     eventReader = resolveDefaultEventReader(env),
     marketLoader = null,
+    requestTimeDiscovery = undefined,
   } = {},
 ) {
   const flag = String((env && env.PARRANDA_AGNOSTIC_EVENTS) || "").trim().toLowerCase();
   if (!["enabled", "1", "true", "on", "yes"].includes(flag)) return null;
+  if (requestTimeDiscovery === undefined) requestTimeDiscovery = resolveRequestTimeDiscovery(env);
   const registry = resolveEventFeedRegistry(env);
   const globalKey = resolveGlobalEventKey(env);
   const datatourismeKey = String(env?.PARRANDA_DATATOURISME_KEY || "").trim() || null;
@@ -1807,7 +1824,10 @@ function resolveDefaultEventSupply(
       });
       if (!discoveryHealth) discoveryHealth = demandHealth;
     }
-    if (sourcePlan.length === 0) {
+    // A place without its own approved or qualified source looks for one now,
+    // inside the out-of-band collection below; the day never waits for it.
+    const discoverNow = !hasApprovedLocalSource && typeof requestTimeDiscovery === "function";
+    if (sourcePlan.length === 0 && !discoverNow) {
       return {
         coverage: "uncovered",
         ...(selectedDate ? { selected_date: selectedDate } : {}),
@@ -1853,6 +1873,9 @@ function resolveDefaultEventSupply(
       cache.warm(key, async () => {
         try {
           let collected;
+          const discovered = discoverNow
+            ? await requestTimeDiscovery({ anchor, placeLabel, placeContext }).catch(() => [])
+            : [];
           try {
             collected = await collectEvents({
               anchor,
@@ -1860,7 +1883,8 @@ function resolveDefaultEventSupply(
               now,
               selectedDate,
               time,
-              registry: requestRegistry,
+              registry: discovered.length ? [...requestRegistry, ...discovered] : requestRegistry,
+              ...(discovered.length ? { venueResolutionLimit: REQUEST_TIME_VENUE_RESOLUTION_LIMIT } : {}),
               radiusM: effectiveRadiusM,
               timeoutMs: WARM_TIMEOUT_MS,
               sourceCollectionCache,
@@ -2018,6 +2042,7 @@ module.exports = {
   isFailedEventRefresh,
   shouldCacheEventSupplyResult,
   resolveDefaultEventSupply,
+  resolveRequestTimeDiscovery,
   resolveEventFeedRegistry,
   resolveEventFeedForAnchor,
   resolveEventFeedsForAnchor,

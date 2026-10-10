@@ -31,6 +31,28 @@ catalog/search environment is not evidence that a place has no events. Code
 defaults do not themselves migrate a database, obtain credentials or deploy.
 The separate place-reservoir human-approval contract is unchanged.
 
+## Request-time discovery lane
+
+A place with no approved or machine-qualified local event source looks for one
+during its own Live collection, which already runs out of band while the day is
+built; the day never waits for it and Live may arrive later. The lane uses the
+same bounded source search as the discovery worker (at most two
+locality-scoped queries, at most six seeds), the ordinary source scout and the
+same manifest binding as qualification. Only structured event interfaces the
+scout recognises become feeds; prose and the model reader are not used here.
+Robots exclusions and restricted or permission-required terms remain blockers.
+
+A feed found this way is a single observation: `status: probationary`,
+`runtime_trust: request_time_single_observation`, Pulse-only, low confidence,
+never a route/day input or an approved catalog row, with its actual source URL
+kept. Local floating times use a source-declared zone, otherwise the zone
+derived offline from the trusted anchor coordinates. The ordinary time,
+geography, venue-resolution and display gates decide every event; nothing is
+invented. One discovery per ~1 km cell is reused for six hours, an empty one is
+not repeated for an hour, and the existing scout demand still asks the worker
+to qualify the source over two UTC days. `PARRANDA_REQUEST_TIME_EVENT_DISCOVERY=disabled`
+is an operator opt-out; without a configured source search the lane is off.
+
 ## Main reader for local documents
 
 `quoted_public_document` reads municipal news, association pages, notices,
