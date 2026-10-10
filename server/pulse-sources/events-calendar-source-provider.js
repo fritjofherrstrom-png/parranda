@@ -203,8 +203,11 @@ function mapTheEventsCalendarEventToRaw(event, options = {}) {
   const venue = extractTecVenue(event);
   const coords = extractTecCoordinates(event, venue);
   const sourceUrl = firstString(event.url, event.website, event.link, event.rest_url, event.permalink);
-  const timezone = normalizeIanaTimezone(options.timezone);
+  // The plugin's REST API publishes each event's own IANA zone; a reviewed
+  // descriptor zone still wins when one exists.
+  const timezone = normalizeIanaTimezone(options.timezone) || normalizeIanaTimezone(event.timezone);
   const utcStart = firstString(
+    event.utc_start_date,
     event.start_date_utc,
     event.startDateUtc,
     event.start_utc,
@@ -212,6 +215,7 @@ function mapTheEventsCalendarEventToRaw(event, options = {}) {
   );
   const localStart = firstString(event.starts_at, event.start_at, event.start_date, event.startDate, event.start);
   const utcEnd = firstString(
+    event.utc_end_date,
     event.end_date_utc,
     event.endDateUtc,
     event.end_utc,
@@ -236,6 +240,7 @@ function mapTheEventsCalendarEventToRaw(event, options = {}) {
       : null,
     source_url: sourceUrl,
     place_context: firstString(venue.name, venue.address),
+    address: venue.address ? [venue.address, venue.city].filter(Boolean).join(", ") : null,
     area: firstString(venue.city, venue.neighborhood),
     lat: coords.lat,
     lng: coords.lng,

@@ -35,6 +35,39 @@ function buildEventVenueQuery(event, { placeContext = null } = {}) {
   return appendBoundedQueryParts(sourceParts, contextParts);
 }
 
+// Geocoders answer a street address or a venue name, rarely both glued
+// together ("via X 5, Trieste, Risiera di San Sabba – Monumento Nazionale").
+// Try the source's own address first, then its venue name (and the name
+// before a descriptive dash suffix), each with the source's town, then the
+// combined query. Every variant is source-owned text; nothing is invented.
+function buildEventVenueQueries(event, { placeContext = null } = {}) {
+  const combined = buildEventVenueQuery(event, { placeContext });
+  if (!combined) return [];
+  const country = uniqueStrings([event.country])[0];
+  // Only an explicit source city counts as the town; `area` often carries the
+  // venue or a neighbourhood. Without one, the place context supplies it.
+  const town = uniqueStrings([event.city])[0] || null;
+  // The same context the combined query uses; without any, a bare street or
+  // venue name could match anywhere, so only the combined query is tried.
+  const contextParts = country ? [country] : town
+    ? [placeContext?.region, placeContext?.country]
+    : [placeContext?.locality, placeContext?.municipality, placeContext?.region, placeContext?.country];
+  const hasContext = Boolean(town) || uniqueStrings(contextParts).length > 0;
+  const variant = (head) => {
+    if (!head || !hasContext) return null;
+    const townPart = town && !head.toLocaleLowerCase("en").includes(town.toLocaleLowerCase("en")) ? [town] : [];
+    return appendBoundedQueryParts([head, ...townPart], contextParts);
+  };
+  const name = uniqueStrings([event.place_context])[0];
+  const shortName = name && /\s[–—-]\s/.test(name) ? name.split(/\s[–—-]\s/)[0].trim() : null;
+  return uniqueStrings([
+    variant(uniqueStrings([event.address])[0]),
+    variant(name),
+    shortName && shortName.split(/\s+/).length >= 2 ? variant(shortName) : null,
+    combined,
+  ]);
+}
+
 async function resolveEventVenueGeometry(
   events,
   {
@@ -74,23 +107,33 @@ async function resolveEventVenueGeometry(
       output.push(event);
       continue;
     }
-    const query = buildEventVenueQuery(event, { placeContext });
-    if (!query || (attempts >= cap && !resolutions.has(query))) {
+    const queries = buildEventVenueQueries(event, { placeContext });
+    let resolution = null;
+    let resolvedQuery = null;
+    for (const query of queries) {
+      if (attempts >= cap && !resolutions.has(query)) break;
+      if (!resolutions.has(query)) {
+        attempts += 1;
+        summary.attempted_count += 1;
+        resolutions.set(query, resolveVenueQuery(query, {
+          resolver,
+          anchor,
+          radiusKm,
+          regionalScope,
+        }));
+      }
+      resolution = await resolutions.get(query);
+      resolvedQuery = query;
+      // Found but outside the trusted area: another spelling of the same venue
+      // cannot change that, so stop spending lookups. Several matches may still
+      // narrow to one with the more specific variants that follow.
+      if (["resolved", "outside_scope"].includes(resolution.status)) break;
+    }
+    if (!resolution) {
       output.push(event);
       continue;
     }
-
-    if (!resolutions.has(query)) {
-      attempts += 1;
-      summary.attempted_count += 1;
-      resolutions.set(query, resolveVenueQuery(query, {
-        resolver,
-        anchor,
-        radiusKm,
-        regionalScope,
-      }));
-    }
-    const resolution = await resolutions.get(query);
+    const queryBasis = event.address && resolvedQuery?.startsWith(event.address.trim()) ? "source_address" : "source_venue";
     if (resolution.status === "resolved") {
       summary.resolved_count += 1;
       output.push({
@@ -104,12 +147,13 @@ async function resolveEventVenueGeometry(
           provenance: resolution.candidate.provenance || null,
           attribution: resolution.candidate.attribution || null,
           license: resolution.candidate.license || null,
-          query_basis: event.address ? "source_address" : "source_venue",
+          query_basis: queryBasis,
           geometry_scope: regionalScope ? "resolver_attested_region" : "anchor_radius",
         },
       });
       continue;
     }
+    if (resolution.status === "outside_scope") resolution = { ...resolution, status: "not_found" };
     if (resolution.status === "ambiguous") summary.ambiguous_count += 1;
     else if (resolution.status === "failed") summary.failed_count += 1;
     else summary.not_found_count += 1;
@@ -118,7 +162,7 @@ async function resolveEventVenueGeometry(
       venue_resolution: {
         status: resolution.status,
         source: "trusted_place_resolver",
-        query_basis: event.address ? "source_address" : "source_venue",
+        query_basis: queryBasis,
         geometry_scope: regionalScope ? "resolver_attested_region" : "anchor_radius",
       },
     });
@@ -130,14 +174,16 @@ async function resolveEventVenueGeometry(
 async function resolveVenueQuery(query, { resolver, anchor, radiusKm, regionalScope }) {
   try {
     const candidates = await resolver(query, { purpose: "event_venue" });
-    const trusted = (Array.isArray(candidates) ? candidates : [])
+    const confident = (Array.isArray(candidates) ? candidates : [])
       .filter(hasCoordinates)
-      .filter((candidate) => confidenceRank(candidate.confidence) >= confidenceRank("medium"))
+      .filter((candidate) => confidenceRank(candidate.confidence) >= confidenceRank("medium"));
+    const trusted = confident
       .filter((candidate) => regionalScope
         ? pointWithinTrustedSpatialScope(candidate, regionalScope)
         : haversineKm(anchor, candidate) <= radiusKm);
     if (trusted.length === 1) return { status: "resolved", candidate: trusted[0] };
     if (trusted.length > 1) return { status: "ambiguous", candidate: null };
+    if (confident.length) return { status: "outside_scope", candidate: null };
     return { status: "not_found", candidate: null };
   } catch (_error) {
     return { status: "failed", candidate: null };
@@ -186,6 +232,7 @@ function clampInteger(value, min, max, fallback) {
 
 module.exports = {
   DEFAULT_RESOLUTION_LIMIT,
+  buildEventVenueQueries,
   buildEventVenueQuery,
   resolveEventVenueGeometry,
 };

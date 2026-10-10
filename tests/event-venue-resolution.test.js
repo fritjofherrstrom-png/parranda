@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  buildEventVenueQueries,
   buildEventVenueQuery,
   resolveEventVenueGeometry,
 } = require("../server/place-candidates/event-venue-resolution");
@@ -61,7 +62,7 @@ test("one trusted in-radius match adds compact derived geometry", async () => {
     },
   });
 
-  assert.equal(query, "Square 1, Market Hall, Example City");
+  assert.equal(query, "Square 1, Example City", "the source's own address with its town is tried first");
   assert.equal(out.events[0].lat, ANCHOR.lat + 0.001);
   assert.equal(out.events[0].venue_resolution.source, "trusted_place_resolver");
   assert.equal(out.events[0].venue_resolution.query_basis, "source_address");
@@ -164,4 +165,55 @@ test("resolution is bounded, reuses duplicate venue queries and fails soft", asy
     not_found_count: 0,
     failed_count: 1,
   });
+});
+
+test("venue lookups try the address, then the venue name, then the combined query", () => {
+  assert.deepEqual(
+    buildEventVenueQueries(event({
+      address: "via Giovanni Palatucci, 5",
+      place_context: "Risiera di San Sabba – Monumento Nazionale",
+      city: "Trieste",
+    })),
+    [
+      "via Giovanni Palatucci, 5, Trieste",
+      "Risiera di San Sabba – Monumento Nazionale, Trieste",
+      "Risiera di San Sabba, Trieste",
+      "via Giovanni Palatucci, 5, Risiera di San Sabba – Monumento Nazionale, Trieste",
+    ],
+  );
+  assert.deepEqual(
+    buildEventVenueQueries(event({ city: null })),
+    ["Square 1, Market Hall"],
+    "without a town or place context a bare street is never sent on its own",
+  );
+  assert.deepEqual(
+    buildEventVenueQueries(event({ address: null, city: null }), { placeContext: { locality: "River City", country: "Italy" } }),
+    ["Market Hall, River City, Italy"],
+  );
+});
+
+test("a later variant recovers a venue the combined query misses; a venue outside the area stops the lookups", async () => {
+  const asked = [];
+  const out = await resolveEventVenueGeometry([event({ address: "Harbour Road 5", place_context: "Old Warehouse – Concert Hall" })], {
+    anchor: ANCHOR,
+    resolver: async (query) => {
+      asked.push(query);
+      return query === "Old Warehouse, Example City" ? [candidate()] : [];
+    },
+  });
+  assert.deepEqual(asked, ["Harbour Road 5, Example City", "Old Warehouse – Concert Hall, Example City", "Old Warehouse, Example City"]);
+  assert.equal(out.summary.resolved_count, 1);
+  assert.equal(out.events[0].venue_resolution.query_basis, "source_venue");
+
+  const far = [];
+  const outside = await resolveEventVenueGeometry([event()], {
+    anchor: ANCHOR,
+    resolver: async (query) => {
+      far.push(query);
+      return [candidate({ lat: ANCHOR.lat + 0.5 })];
+    },
+  });
+  assert.deepEqual(far, ["Square 1, Example City"], "the venue is known and too far; other spellings cannot change that");
+  assert.equal(outside.summary.not_found_count, 1);
+  assert.equal(outside.events[0].lat, undefined);
 });

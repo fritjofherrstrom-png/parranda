@@ -5,7 +5,9 @@ const { createHash } = require("node:crypto");
 /**
  * Trusted place -> local-event source discovery bridge.
  *
- * This is an operator/background capability, never a request-path collector.
+ * This is an operator/background capability. The request-time discovery lane
+ * (request-time-event-discovery.js) reuses its place and seed helpers inside
+ * the out-of-band Live collection, never in front of the day.
  * It resolves one place through the trusted resolver seam, combines source-
  * owned venue websites with optional bounded background-search seeds, then
  * hands only public website atoms to the source scout. Search results remain
@@ -915,7 +917,9 @@ function compactObject(value) {
 }
 
 module.exports = {
+  buildTrustedScoutPlace,
   combineSeeds,
   discoverLocalEventSourcesForPlace,
   reviewOnlyManifests,
+  sanitizeSearchSeeds,
 };
