@@ -1,3 +1,5 @@
+const { normalizeSourceEventDateTime } = require("../pulse-sources/source-event-time");
+
 const DAY_INDEX = Object.freeze({ Su: 0, Mo: 1, Tu: 2, We: 3, Th: 4, Fr: 5, Sa: 6 });
 const DAY_TOKEN = /^(Su|Mo|Tu|We|Th|Fr|Sa)$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -16,7 +18,7 @@ function normalizeOpeningHours(value) {
  * point in a local wall-clock window. Unsupported OSM syntax stays unknown and
  * therefore never excludes a candidate.
  */
-function evaluateOpeningHoursForWindow(value, { weekday, startMinute = 0, endMinute = 1440 } = {}) {
+function evaluateOpeningHoursForWindow(value, { weekday, startMinute = 0, endMinute = 1440, localDate, timezone } = {}) {
   const openingHours = normalizeOpeningHours(value);
   if (!openingHours) return unknown("opening_hours_unavailable");
   if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
@@ -32,6 +34,10 @@ function evaluateOpeningHoursForWindow(value, { weekday, startMinute = 0, endMin
     return unknown("opening_hours_query_window_invalid");
   }
 
+  if ((localDate !== undefined || timezone !== undefined) && !isStableLocalDay(localDate, timezone, weekday)) {
+    return unknown("opening_hours_local_clock_uncertain");
+  }
+
   if (openingHours === "24/7") {
     return available();
   }
@@ -44,6 +50,96 @@ function evaluateOpeningHoursForWindow(value, { weekday, startMinute = 0, endMin
     ([start, end]) => Math.max(start, startMinute) < Math.min(end, endMinute),
   );
   return overlaps ? available() : closed();
+}
+
+// Generic candidate role windows, as local wall-clock minutes (not an agenda).
+// Generic and role-shaped, not a clock schedule: a meal is lunch OR dinner, an
+// evening bar is the evening, a museum is daytime. The day-arc labels a role
+// with one daypart ("afternoon" for the main meal) but that label is an arc
+// position; judging a bistro that opens 12-14:30 and 19-22:30 against 14-18
+// would call an open restaurant closed. Roles without a window are not judged.
+const ROLE_VISIT_WINDOWS = Object.freeze({
+  coffee_fika_stop: [[8 * 60, 16 * 60]],
+  scenic_anchor: [[9 * 60, 20 * 60]],
+  culture_stop: [[10 * 60, 18 * 60]],
+  market_stop: [[8 * 60, 15 * 60]],
+  green_walk_stop: [[8 * 60, 20 * 60]],
+  food_anchor: [[11 * 60 + 30, 14 * 60 + 30], [18 * 60, 22 * 60]],
+  evening_bar_option: [[18 * 60, 24 * 60]],
+  swimming_coast_option: [[9 * 60, 19 * 60]],
+  vintage_second_hand_option: [[10 * 60, 18 * 60]],
+});
+// Minimum potential visit duration; travel/actual arrival is not evaluated.
+const MIN_VISIT_MINUTES = 45;
+
+/**
+ * Does any possible start in a generic role window leave 45 minutes open?
+ * This is candidate eligibility, NOT an actual arrival or reachability check:
+ * it has no final route order, walking legs, preceding dwell, or start instant.
+ * Possible starts are on the selected local date, no earlier than trusted now.
+ * Once all role windows have passed, use the remaining local day instead.
+ * Only unambiguous 24-hour local days attest wall-clock duration; transition
+ * days and missing trusted date/zone stay unknown. A possible overnight visit
+ * also needs the following local day to be stable. Unknown hours fail open.
+ */
+function evaluateOpeningHoursForRole(value, role, { weekday, startMinute = 0, endMinute = 1440, localDate, timezone } = {}) {
+  const windows = Object.prototype.hasOwnProperty.call(ROLE_VISIT_WINDOWS, role) ? ROLE_VISIT_WINDOWS[role] : null;
+  if (!windows) return unknown("role_visit_window_unavailable");
+  const openingHours = normalizeOpeningHours(value);
+  if (!openingHours) return unknown("opening_hours_unavailable");
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return unknown("opening_hours_local_day_unavailable");
+  if (!Number.isFinite(startMinute) || !Number.isFinite(endMinute) || startMinute < 0 || endMinute > 1440 || endMinute <= startMinute) {
+    return unknown("opening_hours_query_window_invalid");
+  }
+  if (!isStableLocalDay(localDate, timezone, weekday)) return unknown("opening_hours_local_clock_uncertain");
+  if (openingHours === "24/7") return roleAvailable();
+  const schedule = parseWeeklySchedule(openingHours);
+  if (!schedule) return unknown("opening_hours_unresolved");
+
+  const roleArrivals = windows
+    .map(([start, end]) => [Math.max(start, startMinute), Math.min(end, endMinute)])
+    .filter(([start, end]) => end > start);
+  const arrivals = roleArrivals.length ? roleArrivals : [[startMinute, endMinute]];
+  const open = openIntervalsAroundLocalDay(schedule, weekday);
+  let uncertainMidnight = false;
+  const reachableOpen = arrivals.some(([firstArrival, lastArrival]) =>
+    open.some(([opens, closes]) => {
+      const arrival = Math.max(firstArrival, opens);
+      const fits = arrival < lastArrival && arrival + MIN_VISIT_MINUTES <= closes;
+      if (fits && arrival + MIN_VISIT_MINUTES > 1440 && !isStableLocalDay(nextIsoDate(localDate), timezone, (weekday + 1) % 7)) {
+        uncertainMidnight = true;
+        return false;
+      }
+      return fits;
+    }),
+  );
+  if (!reachableOpen && uncertainMidnight) return unknown("opening_hours_local_clock_uncertain");
+  return reachableOpen
+    ? roleAvailable()
+    : { eligible: false, status: "closed_for_role_window", reason: "opening_hours_no_possible_role_window_visit" };
+}
+
+// Open intervals for the local day in minutes, continued into the next day
+// (minutes past 1440) so a visit can run past midnight, merged so that
+// "18:00-24:00" followed by "00:00-02:00" is one stretch.
+function openIntervalsAroundLocalDay(schedule, weekday) {
+  const nextDay = (weekday + 1) % 7;
+  const intervals = [
+    ...intervalsForLocalDay(schedule, weekday).filter(([, end]) => end < 1440),
+    ...schedule[weekday].intervals.filter(([, end]) => end >= 1440),
+    ...schedule[nextDay].intervals.map(([start, end]) => [start + 1440, end + 1440]),
+  ].sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const [start, end] of intervals) {
+    const last = merged[merged.length - 1];
+    if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+    else merged.push([start, end]);
+  }
+  return merged;
+}
+
+function roleAvailable() {
+  return { eligible: true, status: "available_in_role_window", reason: "opening_hours_cover_possible_role_window_visit" };
 }
 
 /**
@@ -111,7 +207,7 @@ function normalizeSelectedDayHoursFact(value) {
  * Build the local window used by same-day Planner eligibility. Today starts at
  * the trusted local clock; a future day evaluates the whole local date.
  */
-function buildLocalDayAvailabilityWindow({ requestedDate, nowLocalIso } = {}) {
+function buildLocalDayAvailabilityWindow({ requestedDate, nowLocalIso, timezone } = {}) {
   const date = typeof requestedDate === "string" ? requestedDate.trim() : "";
   if (!ISO_DATE.test(date) || !isValidIsoDate(date)) return null;
 
@@ -130,9 +226,34 @@ function buildLocalDayAvailabilityWindow({ requestedDate, nowLocalIso } = {}) {
   if (startMinute >= 1440) return null;
   return {
     weekday: weekdayForIsoDate(date),
+    ...(timezone !== undefined ? { localDate: date, timezone } : {}),
     startMinute,
     endMinute: 1440,
   };
+}
+
+// Only attest wall-clock durations on an unambiguous 24-hour local day.
+// Midnight gaps/folds (including skipped dates) and shorter/longer DST days
+// stay unknown. Reuse the existing IANA normalizer: never invent an offset.
+// Bound this cache because candidate/role evaluation repeats within a request.
+const stableLocalDays = new Map();
+function isStableLocalDay(localDate, timezone, weekday) {
+  if (typeof localDate !== "string" || !ISO_DATE.test(localDate) || !isValidIsoDate(localDate) ||
+      typeof timezone !== "string" || weekdayForIsoDate(localDate) !== weekday) return false;
+  const key = `${localDate}|${timezone}`;
+  if (stableLocalDays.has(key)) return stableLocalDays.get(key);
+  const start = normalizeSourceEventDateTime(`${localDate}T00:00:00`, { timezone });
+  const end = normalizeSourceEventDateTime(`${nextIsoDate(localDate)}T00:00:00`, { timezone });
+  const stable = Boolean(start && end && Date.parse(end) - Date.parse(start) === 86400000);
+  if (stableLocalDays.size >= 64) stableLocalDays.delete(stableLocalDays.keys().next().value);
+  stableLocalDays.set(key, stable);
+  return stable;
+}
+
+function nextIsoDate(localDate) {
+  const next = new Date(`${localDate}T12:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString().slice(0, 10);
 }
 
 function isValidIsoDate(value) {
@@ -292,8 +413,10 @@ function unknown(reason) {
 }
 
 module.exports = {
+  ROLE_VISIT_WINDOWS,
   buildSelectedDayHoursFact,
   buildLocalDayAvailabilityWindow,
+  evaluateOpeningHoursForRole,
   evaluateOpeningHoursForWindow,
   normalizeOpeningHours,
   normalizeSelectedDayHoursFact,

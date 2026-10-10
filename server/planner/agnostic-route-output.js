@@ -38,8 +38,10 @@ const { assessCityCandidateReadiness } = require("../place-candidates/readiness"
 const {
   buildSelectedDayHoursFact,
   buildLocalDayAvailabilityWindow,
+  evaluateOpeningHoursForRole,
   evaluateOpeningHoursForWindow,
   normalizeSelectedDayHoursFact,
+  ROLE_VISIT_WINDOWS,
 } = require("../place-candidates/opening-hours");
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
 const { operatorClosureForWindow } = require('../place-candidates/operator-visit-evidence');
@@ -1068,7 +1070,7 @@ async function composeAgnosticRouteOutput({
   const trustedTimezoneKnown = Boolean(ctx && ctx.timezoneKnown);
   const trustedTimeAppliesToRequestedDate = Boolean(ctx && ctx.timeAppliesToRequestedDate);
   const availabilityWindow = trustedTimezoneKnown
-    ? buildLocalDayAvailabilityWindow({ requestedDate: effectiveDate, nowLocalIso: ctx.now })
+    ? buildLocalDayAvailabilityWindow({ requestedDate: effectiveDate, nowLocalIso: ctx.now, timezone: ctx.contextBlock.time.timezone })
     : null;
   const availabilityHelpers = availabilityWindow
     ? {
@@ -1078,9 +1080,17 @@ async function composeAgnosticRouteOutput({
           if (typeof candidate?.opening_hours !== "string") return null;
           const availability = evaluateOpeningHoursForWindow(candidate.opening_hours, availabilityWindow);
           const selectedDayHours = buildSelectedDayHoursFact(candidate.opening_hours, availabilityWindow);
-          return selectedDayHours
-            ? { ...availability, selected_day_hours: selectedDayHours }
-            : availability;
+          // Source-day facts and role eligibility are separate. Generic role
+          // windows rule out impossible potential visits, not actual arrival:
+          // final route order, walking legs and prior dwell are not checked.
+          const closedForRoles = Object.keys(ROLE_VISIT_WINDOWS).filter(
+            (role) => evaluateOpeningHoursForRole(candidate.opening_hours, role, availabilityWindow).status === "closed_for_role_window",
+          );
+          return {
+            ...availability,
+            ...(selectedDayHours ? { selected_day_hours: selectedDayHours } : {}),
+            ...(closedForRoles.length ? { closed_for_roles: closedForRoles } : {}),
+          };
         },
       }
     : {};
