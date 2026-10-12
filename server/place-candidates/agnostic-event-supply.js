@@ -32,6 +32,8 @@ const { createHtmlVenueCalendarProvider } = require("../pulse-sources/html-venue
 const { createSitevisionCalendarProvider } = require("../pulse-sources/sitevision-calendar-provider");
 const { createWixEventSitemapProvider } = require("../pulse-sources/wix-event-sitemap-provider");
 const { createLocalizedEventsApiProvider } = require("../pulse-sources/localized-events-api-provider");
+const { createMappedEventSourceProvider } = require("../pulse-sources/mapped-event-source-provider");
+const { trustedReviewedVenueResolution } = require("../pulse-sources/reviewed-event-venues");
 const { createEmbeddedProgramRscProvider } = require("../pulse-sources/embedded-program-rsc-provider");
 const { createScheduledEventCardProvider } = require("../pulse-sources/scheduled-event-card-provider");
 const {
@@ -118,6 +120,7 @@ const LOCAL_EVENT_ADAPTERS = new Set([
   "sitevision_calendar",
   "wix_event_sitemap",
   "localized_events_api",
+  "mapped_events",
   "embedded_program_rsc",
   "official_program_article",
   "scheduled_event_cards",
@@ -281,6 +284,7 @@ function normalizeEventFeedRow(f, index = 0) {
       ? Math.max(1, Math.floor(Number(f.horizon_days)))
       : null,
     event_path_prefix: firstString(f.event_path_prefix, f.eventPathPrefix),
+    wire_profile: firstString(f.wire_profile, f.wireProfile),
     // Configuring an endpoint proves collection intent, not ownership or
     // official status. Missing review metadata stays conservative.
     source_tier: f.source_tier != null ? String(f.source_tier) : "unknown",
@@ -951,6 +955,11 @@ async function collectAnchorEvents({
       });
       if (!normalized) continue;
       if (rawEvent.timezone) normalized.timezone = rawEvent.timezone;
+      // A reviewed venue-registry point keeps its geocoder attribution.
+      const reviewedVenue = trustedReviewedVenueResolution(rawEvent.venue_resolution);
+      if (reviewedVenue && Number.isFinite(normalized.lat) && Number.isFinite(normalized.lng)) {
+        normalized.venue_resolution = reviewedVenue;
+      }
       normalizedEvidence.push(normalized);
     }
   }
@@ -1384,6 +1393,17 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
       supportedLanguages: source.supported_languages || undefined,
       limit: source.page_size || undefined,
       maxPages: source.max_pages || 10,
+    });
+  }
+  if (adapter === "mapped_events") {
+    return createMappedEventSourceProvider({
+      ...common,
+      status: "active",
+      wireProfile: source.wire_profile || undefined,
+      timezone: source.timezone || undefined,
+      sourceLanguage: source.source_language || undefined,
+      limit: source.page_size || undefined,
+      horizonDays: source.horizon_days || undefined,
     });
   }
   if (adapter === "embedded_program_rsc") {

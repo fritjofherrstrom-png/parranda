@@ -67,6 +67,13 @@ test("reviewed local profile selects two independent event publishers around Sim
       "rome-tourism-live-listing",
       "athens-city-events-calendar",
       "athens-megaron-calendar",
+      "goteborg-co-event-calendar",
+      "dpl-copenhagen-libraries",
+      "dpl-aarhus-libraries",
+      "dpl-odense-libraries",
+      "dpl-aalborg-libraries",
+      "dpl-randers-libraries",
+      "dpl-vejle-libraries",
     ],
   );
   assert.equal(new Set(feeds.map((feed) => feed.source_identity)).size, feeds.length);
@@ -77,6 +84,12 @@ test("reviewed local profile selects two independent event publishers around Sim
     "rome-tourism-live-listing": "Europe/Rome",
     "athens-city-events-calendar": "Europe/Athens",
     "athens-megaron-calendar": "Europe/Athens",
+    "dpl-copenhagen-libraries": "Europe/Copenhagen",
+    "dpl-aarhus-libraries": "Europe/Copenhagen",
+    "dpl-odense-libraries": "Europe/Copenhagen",
+    "dpl-aalborg-libraries": "Europe/Copenhagen",
+    "dpl-randers-libraries": "Europe/Copenhagen",
+    "dpl-vejle-libraries": "Europe/Copenhagen",
   };
   assert.ok(feeds.every((feed) => feed.timezone === (migratedTimezones[feed.id] || "Europe/Stockholm")));
   assert.equal(feeds.find((feed) => feed.adapter === "wix_event_sitemap")?.event_path_prefix, "/evenemang-1/");

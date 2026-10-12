@@ -1,0 +1,1661 @@
+{
+  "schema": "parranda.reviewed_event_venues.v1",
+  "venues": [
+    {
+      "country": "DK",
+      "postal_code": "1172",
+      "street": "Krystalgade 15",
+      "name": "Hovedbiblioteket",
+      "locality": "København K",
+      "lat": 55.680876,
+      "lng": 12.573653,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/340526209",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "1420",
+      "street": "Dronningensgade 53, 1.",
+      "name": "Christianshavns Bibliotek",
+      "locality": "København K",
+      "lat": 55.672321,
+      "lng": 12.592121,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/3787780208",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "1758",
+      "street": "Lyrskovgade 4",
+      "name": "Vesterbro Bibliotek og Kulturhus",
+      "locality": "København V",
+      "lat": 55.667827,
+      "lng": 12.543715,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/340529932",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2100",
+      "street": "Bellmansgade 3C",
+      "name": "Kildevæld Kulturcenter",
+      "locality": "København Ø",
+      "lat": 55.715583,
+      "lng": 12.568404,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/4327028670",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2100",
+      "street": "Dag Hammarskjölds Allé 19",
+      "name": "Østerbro Bibliotek",
+      "locality": "København Ø",
+      "lat": 55.694573,
+      "lng": 12.581745,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/340498656",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2100",
+      "street": "Jagtvej 227",
+      "name": "Øbro Jagtvej Bibliotek",
+      "locality": "København Ø",
+      "lat": 55.709166,
+      "lng": 12.576495,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/340521136",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2200",
+      "street": "Blågårds Plads 5",
+      "name": "Blågårdens Bibliotek",
+      "locality": "København N",
+      "lat": 55.686091,
+      "lng": 12.55677,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/340492308",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2200",
+      "street": "Nørrebrogade 208",
+      "name": "Nørrebro Bibliotek",
+      "locality": "København N",
+      "lat": 55.699199,
+      "lng": 12.542721,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/340536031",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2300",
+      "street": "Arne Jacobsens Allé 19",
+      "name": "Ørestad Bibliotek",
+      "locality": "København S",
+      "lat": 55.631286,
+      "lng": 12.580964,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/1524343743",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2300",
+      "street": "Asger Jorns Allé 20",
+      "name": "Ørestad Bibliotek",
+      "locality": "København S",
+      "lat": 55.620236,
+      "lng": 12.5701,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/5643833274",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2300",
+      "street": "Jemtelandsgade 3, st.",
+      "name": "Sundby Bibliotek",
+      "locality": "København S",
+      "lat": 55.665204,
+      "lng": 12.603936,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/340521258",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2300",
+      "street": "Njalsgade 15",
+      "name": "Islands Brygge Bibliotek",
+      "locality": "København S",
+      "lat": 55.666467,
+      "lng": 12.579376,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/340533746",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2300",
+      "street": "Remisevej 14",
+      "name": "Solvang Bibliotek",
+      "locality": "København S",
+      "lat": 55.648722,
+      "lng": 12.595484,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/1335234877",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2300",
+      "street": "Rodosvej 4",
+      "name": "Bibliotekshuset",
+      "locality": "København S",
+      "lat": 55.650349,
+      "lng": 12.613151,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/344021253",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2400",
+      "street": "Rentemestervej 76",
+      "name": "BIBLIOTEKET Rentemestervej",
+      "locality": "København NV",
+      "lat": 55.708412,
+      "lng": 12.522916,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/340540863",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2450",
+      "street": "Wagnersvej 19",
+      "name": "Sydhavnens Bibliotek",
+      "locality": "København SV",
+      "lat": 55.646783,
+      "lng": 12.529608,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/5641872285",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2500",
+      "street": "Annexstræde 2",
+      "name": "Valby Bibliotek",
+      "locality": "Valby",
+      "lat": 55.665343,
+      "lng": 12.513107,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/340486535",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2500",
+      "street": "Kirsebærhaven 23",
+      "name": "Vigerslev Bibliotek",
+      "locality": "Valby",
+      "lat": 55.649231,
+      "lng": 12.503313,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/340523617",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2700",
+      "street": "Frederikssundsvej 290",
+      "name": "Husum Bibliotek",
+      "locality": "Brønshøj",
+      "lat": 55.710839,
+      "lng": 12.477274,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/340506681",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2700",
+      "street": "Krabbesholmvej 3",
+      "name": "Brønshøj Bibliotek",
+      "locality": "Brønshøj",
+      "lat": 55.704141,
+      "lng": 12.499259,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/340525619",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2700",
+      "street": "Skolesiden 4",
+      "name": "Tingbjerg Bibliotek\\Kulturhus",
+      "locality": "Brønshøj",
+      "lat": 55.719113,
+      "lng": 12.484316,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/7264465491",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "2720",
+      "street": "Jernbane Allé 38",
+      "name": "Kulturstationen Vanløse",
+      "locality": "Vanløse",
+      "lat": 55.686522,
+      "lng": 12.491309,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/340521532",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-copenhagen-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "5000",
+      "street": "Brandts Passage 8",
+      "name": "Hovedbiblioteket",
+      "locality": "Odense C",
+      "lat": 55.394909,
+      "lng": 10.38145,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/341629649",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-odense-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "5000",
+      "street": "Farvergården 7",
+      "name": "Hovedbiblioteket",
+      "locality": "Odense C",
+      "lat": 55.39487,
+      "lng": 10.381043,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/984664193",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-odense-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "5000",
+      "street": "Klosterbakken 2",
+      "name": "Lokalhistorisk Bibliotek (i Historiens Hus)",
+      "locality": "Odense C",
+      "lat": 55.394865,
+      "lng": 10.388603,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/341654323",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-odense-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "5000",
+      "street": "Østre Stationsvej 15, st.",
+      "name": "Hovedbiblioteket",
+      "locality": "Odense C",
+      "lat": 55.401194,
+      "lng": 10.388347,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/341690841",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-odense-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "5000",
+      "street": "Risingsvej 67",
+      "name": "Vollsmose Bibliotek",
+      "locality": "Odense C",
+      "lat": 55.404061,
+      "lng": 10.424581,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/341669756",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-odense-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "5200",
+      "street": "Middelfartvej 81",
+      "name": "Bolbro Bibliotek",
+      "locality": "Odense V",
+      "lat": 55.394184,
+      "lng": 10.351614,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/341660643",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-odense-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "5210",
+      "street": "Præstevej 12",
+      "name": "Korup Bibliotek",
+      "locality": "Odense NV",
+      "lat": 55.421492,
+      "lng": 10.266588,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/341668518",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-odense-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "5210",
+      "street": "Rugvang 40",
+      "name": "Tarup Bibliotek",
+      "locality": "Odense NV",
+      "lat": 55.410081,
+      "lng": 10.336398,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/341670714",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-odense-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "5220",
+      "street": "Nøglens Kvarter 10B",
+      "name": "Holluf Pile Bibliotek",
+      "locality": "Odense SØ",
+      "lat": 55.366111,
+      "lng": 10.449848,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/5657470357",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-odense-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "5240",
+      "street": "Risingsvej 122",
+      "name": "Vollsmose Bibliotek",
+      "locality": "Odense NØ",
+      "lat": 55.406948,
+      "lng": 10.438174,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/341688031",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-odense-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "5250",
+      "street": "Dalumvej 112 b ,",
+      "name": null,
+      "locality": "Odense SV",
+      "lat": 55.363591,
+      "lng": 10.376505,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/2025289240",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-odense-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "5250",
+      "street": "Dalumvej 95",
+      "name": "Dalum Bibliotek",
+      "locality": "Odense SV",
+      "lat": 55.365684,
+      "lng": 10.373514,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/341634112",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-odense-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "5260",
+      "street": "Højbyvej 66",
+      "name": "Højby Bibliotek",
+      "locality": "Odense S",
+      "lat": 55.332036,
+      "lng": 10.441429,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/4960358927",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-odense-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "6040",
+      "street": "Tybovej 2",
+      "name": "Egtved Bibliotek",
+      "locality": "Egtved",
+      "lat": 55.619872,
+      "lng": 9.311335,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/974132811",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-vejle-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "7080",
+      "street": "Ågade 6",
+      "name": "Børkop Bibliotek",
+      "locality": "Børkop",
+      "lat": 55.643393,
+      "lng": 9.65423,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/972635081",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-vejle-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "7100",
+      "street": "Søndertorv 2, 1. 232",
+      "name": "Børnebiblioteket i Bryggen",
+      "locality": "Vejle",
+      "lat": 55.705576,
+      "lng": 9.531953,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/976385708",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-vejle-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "7100",
+      "street": "Spinderigade 11G",
+      "name": "Vejle Bibliotek - Spinderiet",
+      "locality": "Vejle",
+      "lat": 55.713744,
+      "lng": 9.530059,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/972319814",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-vejle-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "7100",
+      "street": "Willy Sørensens Plads 1",
+      "name": "Vejle Bibliotek - Spinderiet",
+      "locality": "Vejle",
+      "lat": 55.706408,
+      "lng": 9.520069,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/972385562",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-vejle-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "7300",
+      "street": "Møllegade 10",
+      "name": "Jelling Bibliotek",
+      "locality": "Jelling",
+      "lat": 55.754789,
+      "lng": 9.418136,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/972210769",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-vejle-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "7323",
+      "street": "Rådhusbakken 9",
+      "name": "Give Bibliotek",
+      "locality": "Give",
+      "lat": 55.845478,
+      "lng": 9.235564,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/964857848",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-vejle-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8000",
+      "street": "Hack Kampmanns Plads 2",
+      "name": "Hovedbiblioteket",
+      "locality": "Aarhus C",
+      "lat": 56.153436,
+      "lng": 10.213776,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/5664913157",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8210",
+      "street": "Kappelvænget 2",
+      "name": "Hasle Bibliotek",
+      "locality": "Aarhus V",
+      "lat": 56.179517,
+      "lng": 10.167339,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/737278360",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8210",
+      "street": "Torpevænget 1",
+      "name": "Hasle Bibliotek",
+      "locality": "Aarhus V",
+      "lat": 56.180248,
+      "lng": 10.16757,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/342078689",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8220",
+      "street": "Gudrunsvej 10A",
+      "name": "Gellerup Bibliotek",
+      "locality": "Brabrand",
+      "lat": 56.162105,
+      "lng": 10.138774,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/342012207",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8220",
+      "street": "Karen Blixens Boulevard 23",
+      "name": "Gellerup Bibliotek",
+      "locality": "Brabrand",
+      "lat": 56.159721,
+      "lng": 10.134661,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/4960315864",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8230",
+      "street": "Ludvig Feilbergs Vej 7",
+      "name": "Åby Bibliotek",
+      "locality": "Åbyhøj",
+      "lat": 56.15642,
+      "lng": 10.162587,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/342036552",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8240",
+      "street": "Fortebakken 1",
+      "name": "Risskov Bibliotek",
+      "locality": "Risskov",
+      "lat": 56.193697,
+      "lng": 10.223497,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/1320156112",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8260",
+      "street": "Skanderborgvej 170",
+      "name": "Viby Bibliotek",
+      "locality": "Viby J",
+      "lat": 56.130549,
+      "lng": 10.16473,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/342061694",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8270",
+      "street": "Oddervej 74",
+      "name": "Højbjerg Bibliotek",
+      "locality": "Højbjerg",
+      "lat": 56.114174,
+      "lng": 10.207649,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/342046666",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8310",
+      "street": "Kirketorvet 6B, st. 6",
+      "name": "Tranbjerg Bibliotek",
+      "locality": "Tranbjerg J",
+      "lat": 56.090815,
+      "lng": 10.135891,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/342029603",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8330",
+      "street": "Byagervej 115",
+      "name": "Beder-Malling Bibliotek",
+      "locality": "Beder",
+      "lat": 56.057244,
+      "lng": 10.207393,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/341993310",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8330",
+      "street": "Kirkebakken 41",
+      "name": "Beder-Malling Bibliotek",
+      "locality": "Beder",
+      "lat": 56.060369,
+      "lng": 10.215845,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/342029467",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8355",
+      "street": "Kærgårdsvej 4",
+      "name": "Solbjerg Bibliotek",
+      "locality": "Solbjerg",
+      "lat": 56.042147,
+      "lng": 10.084158,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/342033030",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8361",
+      "street": "Koltvej 19",
+      "name": "Bavnehøj Bibliotek",
+      "locality": "Hasselager",
+      "lat": 56.10659,
+      "lng": 10.095978,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/342031415",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8380",
+      "street": "Smedebroen 21D",
+      "name": "Trige Kombi-bibliotek",
+      "locality": "Trige",
+      "lat": 56.252848,
+      "lng": 10.147594,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/4960324291",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8381",
+      "street": "Tilst Skolevej 13A",
+      "name": "Tilst Bibliotek",
+      "locality": "Tilst",
+      "lat": 56.18833,
+      "lng": 10.110108,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/342076971",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8462",
+      "street": "Næshøjvej 2D",
+      "name": "Harlev Bibliotek",
+      "locality": "Harlev J",
+      "lat": 56.14541,
+      "lng": 9.998096,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/5666339022",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8471",
+      "street": "Sabro Skolevej 4A",
+      "name": "Sabro Bibliotek",
+      "locality": "Sabro",
+      "lat": 56.211238,
+      "lng": 10.023423,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/4960328542",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8520",
+      "street": "Bystævnet 4B",
+      "name": "Lystrup Bibliotek",
+      "locality": "Lystrup",
+      "lat": 56.234347,
+      "lng": 10.228018,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/341994280",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8520",
+      "street": "Lystrup Centervej 78",
+      "name": "Lystrup Bibliotek",
+      "locality": "Lystrup",
+      "lat": 56.236184,
+      "lng": 10.233541,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/342037398",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8520",
+      "street": "Lystrup Centervej 80",
+      "name": "Lystrup Bibliotek",
+      "locality": "Lystrup",
+      "lat": 56.235531,
+      "lng": 10.234078,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/342037400",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8530",
+      "street": "Virupvej 73",
+      "name": "Hjortshøj Kombi-bibliotek",
+      "locality": "Hjortshøj",
+      "lat": 56.243761,
+      "lng": 10.271122,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/8182613319",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8530",
+      "street": "Virupvej 75",
+      "name": "Hjortshøj Kombi-bibliotek",
+      "locality": "Hjortshøj",
+      "lat": 56.243192,
+      "lng": 10.272163,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/342086253",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8541",
+      "street": "Kirkepladsen 2A",
+      "name": "Skødstrup Kombi-bibliotek",
+      "locality": "Skødstrup",
+      "lat": 56.262312,
+      "lng": 10.308068,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/1334095850",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8541",
+      "street": "Rosenbakken 2C",
+      "name": "Skødstrup Kombi-bibliotek",
+      "locality": "Skødstrup",
+      "lat": 56.271203,
+      "lng": 10.308376,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/4452452388",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aarhus-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8870",
+      "street": "Bredgade 4",
+      "name": "4. Langå Bibliotek",
+      "locality": "Langå",
+      "lat": 56.391728,
+      "lng": 9.894151,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/967042488",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-randers-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8870",
+      "street": "Bredgade 44",
+      "name": "4. Langå Bibliotek",
+      "locality": "Langå",
+      "lat": 56.38863,
+      "lng": 9.896149,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/4135725155",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-randers-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8870",
+      "street": "Bymarksvej 18",
+      "name": null,
+      "locality": "Langå",
+      "lat": 56.434777,
+      "lng": 9.935234,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/973113603",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-randers-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8900",
+      "street": "Stemannsgade 2",
+      "name": "1. Hovedbiblioteket",
+      "locality": "Randers C",
+      "lat": 56.460458,
+      "lng": 10.040943,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/956902463",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-randers-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8900",
+      "street": "Tørvebryggen 11",
+      "name": "1. Hovedbiblioteket",
+      "locality": "Randers C",
+      "lat": 56.457179,
+      "lng": 10.032601,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/955541321",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-randers-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8900",
+      "street": "Vestergade 15",
+      "name": "1. Hovedbiblioteket",
+      "locality": "Randers C",
+      "lat": 56.460955,
+      "lng": 10.029857,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/956863938",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-randers-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8930",
+      "street": "Udbyhøjvej 81",
+      "name": "2. Dronningborg Bibliotek",
+      "locality": "Randers NØ",
+      "lat": 56.471793,
+      "lng": 10.065798,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/754262941",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-randers-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8960",
+      "street": "Kristrupvej 68",
+      "name": "3. Kristrup Bibliotek",
+      "locality": "Randers SØ",
+      "lat": 56.446876,
+      "lng": 10.056616,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/754294578",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-randers-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8960",
+      "street": "Stadionvej 41",
+      "name": "5. Bogbussen",
+      "locality": "Randers SØ",
+      "lat": 56.44641,
+      "lng": 10.161077,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/973686603",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-randers-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "8970",
+      "street": "Kirkevej 2 B,",
+      "name": "5. Bogbussen",
+      "locality": "Havndal",
+      "lat": 56.653783,
+      "lng": 10.199917,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/966791145",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-randers-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "9000",
+      "street": "Arkivstræde 1",
+      "name": "Aalborg Stadsarkiv",
+      "locality": "Aalborg",
+      "lat": 57.045864,
+      "lng": 9.923665,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/342991367",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aalborg-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "9000",
+      "street": "Gammel Kærvej 11",
+      "name": "Hovedbiblioteket i Aalborg",
+      "locality": "Aalborg",
+      "lat": 57.041442,
+      "lng": 9.91311,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/343007722",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aalborg-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "9000",
+      "street": "Hadsundvej 35",
+      "name": "Vejgaard Bibliotek",
+      "locality": "Aalborg",
+      "lat": 57.041371,
+      "lng": 9.951591,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/343012988",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aalborg-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "9000",
+      "street": "Rendsburggade 2",
+      "name": "Hovedbiblioteket i Aalborg",
+      "locality": "Aalborg",
+      "lat": 57.047249,
+      "lng": 9.92764,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/343867642",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aalborg-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "9000",
+      "street": "Thulebakken 46",
+      "name": "Hasseris Bibliotek",
+      "locality": "Aalborg",
+      "lat": 57.035598,
+      "lng": 9.884524,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/1787238829",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aalborg-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "9220",
+      "street": "Sebbersundvej 2A",
+      "name": "Trekanten - Bibliotek og Kulturhus",
+      "locality": "Aalborg Øst",
+      "lat": 57.027712,
+      "lng": 10.000404,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/343052727",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aalborg-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "9230",
+      "street": "Godthåbsvej 14B",
+      "name": "Svenstrup Bibliotek",
+      "locality": "Svenstrup J",
+      "lat": 56.972732,
+      "lng": 9.851241,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/343009576",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aalborg-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "9230",
+      "street": "Tostrupvej 6",
+      "name": "Svenstrup Bibliotek",
+      "locality": "Svenstrup J",
+      "lat": 56.962422,
+      "lng": 9.809579,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/343067813",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aalborg-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "9230",
+      "street": "Tostrupvej 6, Godthåb",
+      "name": "Svenstrup Bibliotek",
+      "locality": "Svenstrup J",
+      "lat": 56.962422,
+      "lng": 9.809579,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/343067813",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aalborg-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "9240",
+      "street": "St Algade 4",
+      "name": "Nibe Bibliotek",
+      "locality": "Nibe",
+      "lat": 56.98208,
+      "lng": 9.636447,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/3375638890",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aalborg-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "9280",
+      "street": "Stationsvej 5",
+      "name": "Storvorde Bibliotek",
+      "locality": "Storvorde",
+      "lat": 57.001605,
+      "lng": 10.101583,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/923821163",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aalborg-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "9310",
+      "street": "Brorsonsvej 3B",
+      "name": "Vodskov Bibliotek",
+      "locality": "Vodskov",
+      "lat": 57.108752,
+      "lng": 10.022243,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/342995057",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aalborg-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "9362",
+      "street": "Bredgade 4",
+      "name": "Hals Bibliotek",
+      "locality": "Gandrup",
+      "lat": 57.058448,
+      "lng": 10.176348,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/967986801",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aalborg-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "9370",
+      "street": "Østergade 2A",
+      "name": "Hals Bibliotek",
+      "locality": "Hals",
+      "lat": 56.995022,
+      "lng": 10.309269,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/967841049",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aalborg-libraries"
+      ]
+    },
+    {
+      "country": "DK",
+      "postal_code": "9400",
+      "street": "Torvet 5",
+      "name": "Nørresundby Bibliotek",
+      "locality": "Nørresundby",
+      "lat": 57.058963,
+      "lng": 9.92316,
+      "geometry_source": "nominatim_osm",
+      "osm_ref": "node/343067803",
+      "match": "house_number_and_postcode",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "resolved_at": "2026-10-12",
+      "source_ids": [
+        "dpl-aalborg-libraries"
+      ]
+    }
+  ]
+}
