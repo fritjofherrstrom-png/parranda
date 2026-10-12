@@ -1,5 +1,16 @@
 # Parranda Codex Project Context
 
+## Current cost boundary (2026-10-12)
+
+Fritjof requires this Live delivery to use no newly activated paid APIs,
+paid search services or model-reader calls. Use the existing operator-owned
+SearXNG and cost-free factual source interfaces with deterministic parsing.
+The request-time scout keeps `eventReader: null`; its runtime QA must set
+`PARRANDA_EVENT_READER=disabled`. The optional model-reader capability below
+is outside this delivery and must not be activated as a fallback. Measure
+actual event yield and remaining gaps without inventing events or weakening
+source/date/geography gates.
+
 ## Live supply policy (2026-10-05)
 
 Machine verification, not per-source human approval, is the normal activation

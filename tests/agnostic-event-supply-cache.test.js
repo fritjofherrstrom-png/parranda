@@ -20,10 +20,36 @@ const {
 } = require("../server/place-candidates/agnostic-event-supply");
 
 const ORIGINAL_FETCH = global.fetch;
+const { createSourceCache } = require("../server/place-candidates/source-cache");
 
 // Coverage is opt-in — the product default has no baked-in city. A deployment
 // configures its region's open feed via env; here the Helsinki fixture stands in.
 const FEEDS_ENV = JSON.stringify([HELSINKI_LINKED_EVENTS_FEED]);
+
+test("a persisted empty pool from the old venue policy cannot suppress a corrected collection", async (t) => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-old-event-pool-"));
+  t.after(() => fs.rmSync(cacheDir, { recursive: true, force: true }));
+  const request = { anchor: { lat: 60.17, lng: 24.94 }, now: "2026-06-28T12:00:00Z", selectedDate: "2026-06-28" };
+  const key = eventCacheKey(request.anchor, request.now, [HELSINKI_LINKED_EVENTS_FEED.id], 3000, null, request.selectedDate);
+  await createSourceCache({ namespace: "agnostic-events-v10", dir: cacheDir }).get(key, async () => ({
+    coverage: "covered", tonight: [], this_week: [],
+    acquisition: { source_health: { status: "healthy", result: "empty" } },
+  }));
+  let collected = false;
+  const supply = resolveDefaultEventSupply({
+    PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_EVENT_FEEDS: FEEDS_ENV, PARRANDA_CACHE_DIR: cacheDir,
+  }, {
+    requestTimeDiscovery: null,
+    collectEvents: async () => {
+      collected = true;
+      return { coverage: "covered", tonight: [], this_week: [], acquisition: { source_health: { status: "healthy", result: "empty" } } };
+    },
+  });
+  const out = await supply(request);
+  assert.equal(out.pending, true, "an old healthy-empty pool must be refreshed under the new allocation policy");
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(collected, true);
+});
 
 test("default supply is null unless env-enabled, a function when enabled", () => {
   assert.equal(resolveDefaultEventSupply({}), null);
@@ -255,7 +281,7 @@ test("one neutral warm cache reranks for different preferences without refetchin
     assert.equal(culture.tonight[0].id, "a-concert");
     assert.equal(secondHand.tonight[0].id, "z-loppis");
     assert.equal(fetchCount, 1, "preference changes rerank cached evidence instead of recollecting providers");
-    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v10")), "persist corrected event-level clocks separately from stale result pools");
+    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v11")), "persist discovery and corrected venue allocation separately from stale result pools");
     assert.ok(!fs.existsSync(path.join(cacheDir, "agnostic-events-v6")), "v6 pools that widened recurring ranges into daily windows are never read or written");
     const restarted = resolveDefaultEventSupply({
       PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_EVENT_FEEDS: FEEDS_ENV,

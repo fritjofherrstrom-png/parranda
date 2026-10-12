@@ -217,3 +217,24 @@ test("a later variant recovers a venue the combined query misses; a venue outsid
   assert.equal(outside.summary.not_found_count, 1);
   assert.equal(outside.events[0].lat, undefined);
 });
+
+test("a difficult first venue cannot spend the whole lookup budget before a resolvable venue", async () => {
+  const asked = [];
+  const rows = [
+    event({ id: "unknown", address: "Unknown Road 1", place_context: "Unknown Hall – Long Description" }),
+    event({ id: "known", address: "Known Road 2", place_context: "Known Hall" }),
+  ];
+  const out = await resolveEventVenueGeometry(rows, {
+    anchor: ANCHOR,
+    resolver: async query => {
+      asked.push(query);
+      return query === "Known Road 2, Example City" ? [candidate()] : [];
+    },
+  });
+  assert.equal(out.events[1].venue_resolution?.status, "resolved", "a later source-backed venue receives its own first attempt");
+  assert.equal(out.events[1].lat, candidate().lat);
+  assert.equal(out.summary.limit, 4);
+  assert.ok(asked.length <= 4, "the global provider-call budget is unchanged");
+  assert.deepEqual(asked.slice(0, 2), ["Unknown Road 1, Example City", "Known Road 2, Example City"]);
+  assert.deepEqual(rows.map(row => row.id), out.events.map(row => row.id), "output retains the original event order");
+});

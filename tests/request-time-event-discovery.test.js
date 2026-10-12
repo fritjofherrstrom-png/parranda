@@ -5,7 +5,7 @@ const {
   createRequestTimeEventDiscovery,
   feedsFromScout,
 } = require("../server/pulse-sources/request-time-event-discovery");
-const { resolveDefaultEventSupply, HELSINKI_LINKED_EVENTS_FEED } = require("../server/place-candidates/agnostic-event-supply");
+const { collectAnchorEvents, resolveDefaultEventSupply, HELSINKI_LINKED_EVENTS_FEED } = require("../server/place-candidates/agnostic-event-supply");
 
 const ANCHOR = { lat: 45.6496, lng: 13.7773 };
 const PLACE_CONTEXT = { locality: "Trieste", region: "Friuli – Venezia Giulia", country: "Italy", country_code: "it" };
@@ -70,8 +70,9 @@ test("discovery searches locality-scoped queries once per place and reuses what 
       searches.push(input.queries);
       return { status: "ok", seeds: [{ url: "https://venue.example/agenda" }] };
     },
-    scout: async ({ seeds }) => {
+    scout: async ({ seeds, eventReader }) => {
       assert.deepEqual(seeds.map((seed) => seed.url), ["https://venue.example/agenda"]);
+      assert.equal(eventReader, null, "request-time discovery never invokes the paid document reader");
       return scoutResult([scoutedSource("venue")]);
     },
     timezoneForPoint: () => "Europe/Rome",
@@ -108,6 +109,38 @@ test("a place with nothing to find is not searched again within the hold, then i
 
 test("without a configured source search there is no request-time discovery", () => {
   assert.equal(createRequestTimeEventDiscovery({}), null);
+});
+
+test("a free discovered calendar surfaces source-backed Live facts without a model reader or route eligibility", async () => {
+  const discover = createRequestTimeEventDiscovery({
+    cache: memoryCache(),
+    sourceSearch: async () => ({ status: "ok", seeds: [{ url: "https://venue.example/agenda" }] }),
+    scout: async input => {
+      assert.equal(input.eventReader, null);
+      return scoutResult([scoutedSource("venue")]);
+    },
+    timezoneForPoint: () => "Europe/Rome",
+  });
+  const feeds = await discover({ anchor: ANCHOR, placeContext: PLACE_CONTEXT });
+  const calendar = [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT", "UID:free-calendar-event",
+    "DTSTART:20261013T170000Z", "DTEND:20261013T180000Z", "SUMMARY:Evening concert",
+    "LOCATION:Source-owned venue", "GEO:45.650;13.778", "URL:https://venue.example/concert",
+    "END:VEVENT", "END:VCALENDAR", "",
+  ].join("\r\n");
+  const result = await collectAnchorEvents({
+    anchor: ANCHOR, registry: feeds, now: "2026-10-13T08:00:00Z", selectedDate: "2026-10-13",
+    eventReader: { read: async () => assert.fail("a paid reader must never be invoked") },
+    fetcher: async () => ({ ok: true, status: 200, text: async () => calendar }),
+  });
+  assert.equal(result.tonight.length, 1, "the actual calendar, normalization and geographic gates deliver the event");
+  const event = result.tonight[0];
+  assert.equal(event.title, "Evening concert");
+  assert.equal(event.source_url, "https://venue.example/concert");
+  assert.equal(event.trust_level, "low");
+  assert.equal(event.pulse_display_eligible, true);
+  assert.equal(event.route_eligible, false);
+  assert.equal(result.acquisition.source_health.accepted_event_count, 1);
 });
 
 function supplyWith({ env = {}, discovery }) {

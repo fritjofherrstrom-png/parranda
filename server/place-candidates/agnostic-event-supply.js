@@ -1585,7 +1585,9 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // v7 excludes recurring ranges that v6 normalized as every-day daily windows.
 // v9 prevents non-displayable listings from exhausting the bounded venue budget.
 // v10 applies source-owned event timezones during normalization, not afterward.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v10";
+// Old empty pools must not bypass request-time discovery or retain the previous
+// venue-variant allocation after this code is deployed.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v11";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read

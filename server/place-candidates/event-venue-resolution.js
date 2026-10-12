@@ -101,17 +101,23 @@ async function resolveEventVenueGeometry(
   const resolutions = new Map();
   let attempts = 0;
   const output = [];
+  const work = rows.map(event => ({
+    event,
+    queries: !event || typeof event !== "object" || hasCoordinates(event)
+      ? [] : buildEventVenueQueries(event, { placeContext }),
+    resolution: null,
+    resolvedQuery: null,
+  }));
+  const rounds = Math.max(0, ...work.map(item => item.queries.length));
 
-  for (const event of rows) {
-    if (!event || typeof event !== "object" || hasCoordinates(event)) {
-      output.push(event);
-      continue;
-    }
-    const queries = buildEventVenueQueries(event, { placeContext });
-    let resolution = null;
-    let resolvedQuery = null;
-    for (const query of queries) {
-      if (attempts >= cap && !resolutions.has(query)) break;
+  // Give the next venue its first attempt before spending the whole shared
+  // budget on alternate spellings of one difficult venue. Duplicate queries
+  // still share an answer, including when the unique-call cap is exhausted.
+  for (let round = 0; round < rounds; round += 1) {
+    for (const item of work) {
+      if (["resolved", "outside_scope"].includes(item.resolution?.status)) continue;
+      const query = item.queries[round];
+      if (!query || (attempts >= cap && !resolutions.has(query))) continue;
       if (!resolutions.has(query)) {
         attempts += 1;
         summary.attempted_count += 1;
@@ -122,13 +128,14 @@ async function resolveEventVenueGeometry(
           regionalScope,
         }));
       }
-      resolution = await resolutions.get(query);
-      resolvedQuery = query;
-      // Found but outside the trusted area: another spelling of the same venue
-      // cannot change that, so stop spending lookups. Several matches may still
-      // narrow to one with the more specific variants that follow.
-      if (["resolved", "outside_scope"].includes(resolution.status)) break;
+      item.resolution = await resolutions.get(query);
+      item.resolvedQuery = query;
     }
+  }
+
+  for (const item of work) {
+    const { event, resolvedQuery } = item;
+    let { resolution } = item;
     if (!resolution) {
       output.push(event);
       continue;

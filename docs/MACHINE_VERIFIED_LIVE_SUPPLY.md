@@ -33,6 +33,13 @@ The separate place-reservoir human-approval contract is unchanged.
 
 ## Request-time discovery lane
 
+The 2026-10-12 delivery has an explicit no-paid-integration boundary: use the
+existing operator-owned SearXNG and deterministic factual source adapters.
+Set `PARRANDA_EVENT_READER=disabled` for runtime QA; the request-time scout
+already passes a null reader. No paid search/model reader is activated or
+used as a fallback. HTML calendars may need an additional deterministic
+adapter or a discoverable structured interface; a paid reader is not assumed.
+
 A place with no approved or machine-qualified local event source looks for one
 during its own Live collection, which already runs out of band while the day is
 built; the day never waits for it and Live may arrive later. The lane uses the
@@ -52,6 +59,18 @@ invented. One discovery per ~1 km cell is reused for six hours, an empty one is
 not repeated for an hour, and the existing scout demand still asks the worker
 to qualify the source over two UTC days. `PARRANDA_REQUEST_TIME_EVENT_DISCOVERY=disabled`
 is an operator opt-out; without a configured source search the lane is off.
+
+The production web service forwards the same operator search endpoint,
+timeout, pacing and identifying user agent as the scout worker. Search stays
+default-off until the operator configures that existing service; the web also
+forwards the request-time opt-out. Venue query variants share the existing
+collection budget in rounds: later venues get a first attempt before earlier
+venues spend the budget on alternate spellings. Answers are still deduplicated,
+output order retained, and a confident out-of-scope match stops that venue's
+variants. No provider limits or geography/confidence gates are widened.
+Result pools use `agnostic-events-v11` so old healthy-empty answers cannot
+bypass discovery or retain the previous venue allocation. Existing operator
+cache files are preserved.
 
 ## Main reader for local documents
 
