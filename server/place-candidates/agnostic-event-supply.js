@@ -753,7 +753,9 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
     projectedHealth = {
       accepted_event_count: projectedCount,
       out_of_period_event_count: (Number(baseHealth.out_of_period_event_count) || 0) + endedSinceCollection,
-      result: projectedCount > 0 ? "events_found" : baseHealth.responding_source_count > 0 ? "empty" : "unknown",
+      result: projectedCount > 0 ? "events_found"
+        : requestTimeDiscoveryFailed(collected) ? "unknown"
+        : baseHealth.responding_source_count > 0 ? "empty" : "unknown",
       reasons,
     };
   }
@@ -1624,10 +1626,22 @@ function requestTimeDiscoveryFailed(result) {
 // Which of found / verified empty / failed the request-time lane answered.
 function withRequestTimeDiscovery(collected, discovery) {
   if (!discovery || !collected || typeof collected !== "object") return collected;
+  const health = collected.acquisition?.source_health;
+  // Discovery is part of the acquisition outcome consumed by Live's existing
+  // health UI. Do not let a responding broad calendar prove local absence when
+  // the attempt to find local sources failed. Keep real events and source counts.
+  const discoveryFailed = discovery.status === "failed" && health;
+  const sourceHealth = discoveryFailed ? {
+    ...health,
+    status: health.result === "events_found" || health.responding_source_count > 0 ? "partial" : "unavailable",
+    result: health.result === "events_found" ? "events_found" : "unknown",
+    reasons: [...new Set([...(health.reasons || []), "request_time_discovery_failed"])],
+  } : health;
   return {
     ...collected,
     acquisition: {
       ...(collected.acquisition || {}),
+      ...(sourceHealth ? { source_health: sourceHealth } : {}),
       request_time_discovery: {
         status: discovery.status,
         reason: discovery.reason || null,
@@ -1936,7 +1950,7 @@ function resolveDefaultEventSupply(
             throw error;
           }
           collection.result = withDiscoveryHealth(withRequestTimeDiscovery(collected, discovery));
-          if (isFailedEventRefresh(collected)) failedRefreshes.remember(key, collected);
+          if (isFailedEventRefresh(collection.result)) failedRefreshes.remember(key, collection.result);
           else failedRefreshes.forget(key);
           return collection.result;
         } finally {
