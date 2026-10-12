@@ -68,6 +68,36 @@ function buildEventVenueQueries(event, { placeContext = null } = {}) {
   ]);
 }
 
+// A bare kind of place ("teatro", "museum") names no particular venue.
+const GENERIC_VENUE_NAMES = new Set([
+  "teatro", "theatre", "theater", "teater", "teatr", "museum", "museo", "musee", "museu", "muzeum",
+  "kino", "cinema", "biograf", "bibliothek", "biblioteca", "bibliotek", "library", "biblioteka",
+  "kirche", "chiesa", "kyrka", "church", "eglise", "iglesia", "kosciol", "park", "parco", "parque",
+  "piazza", "plaza", "square", "arena", "stadium", "stadion", "hall", "sala", "aula", "galleria",
+  "gallery", "galerie", "castle", "castello", "schloss", "centrum", "center", "centre", "club",
+  "auditorium", "markt", "market", "mercato", "mercado", "online",
+]);
+
+function isDistinctiveVenueName(value) {
+  return typeof value === "string" && value.length >= 5 && !GENERIC_VENUE_NAMES.has(value);
+}
+
+// Venue names are compared whole after folding case, accents and punctuation.
+function normalizeVenueName(value) {
+  return typeof value === "string"
+    ? value.normalize("NFKD").replace(/\p{M}/gu, "").toLocaleLowerCase("en")
+      .replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+    : "";
+}
+
+function venueNameVariants(event) {
+  const name = typeof event?.place_context === "string" ? event.place_context.trim() : "";
+  if (!name) return [];
+  const variants = [name];
+  if (/\s[–—-]\s/.test(name)) variants.push(name.split(/\s[–—-]\s/)[0]);
+  return [...new Set(variants.map(normalizeVenueName).filter(isDistinctiveVenueName))];
+}
+
 async function resolveEventVenueGeometry(
   events,
   {
@@ -120,6 +150,7 @@ async function resolveEventVenueGeometry(
           anchor,
           radiusKm,
           regionalScope,
+          venueNames: venueNameVariants(event),
         }));
       }
       resolution = await resolutions.get(query);
@@ -144,6 +175,7 @@ async function resolveEventVenueGeometry(
           status: "resolved",
           source: "trusted_place_resolver",
           confidence: normalizeConfidence(resolution.candidate.confidence),
+          ...(resolution.candidate.name_verified ? { name_verified: true } : {}),
           provenance: resolution.candidate.provenance || null,
           attribution: resolution.candidate.attribution || null,
           license: resolution.candidate.license || null,
@@ -171,23 +203,37 @@ async function resolveEventVenueGeometry(
   return { events: output, summary };
 }
 
-async function resolveVenueQuery(query, { resolver, anchor, radiusKm, regionalScope }) {
+async function resolveVenueQuery(query, { resolver, anchor, radiusKm, regionalScope, venueNames = [] }) {
   try {
     const candidates = await resolver(query, { purpose: "event_venue" });
-    const confident = (Array.isArray(candidates) ? candidates : [])
-      .filter(hasCoordinates)
-      .filter((candidate) => confidenceRank(candidate.confidence) >= confidenceRank("medium"));
-    const trusted = confident
-      .filter((candidate) => regionalScope
-        ? pointWithinTrustedSpatialScope(candidate, regionalScope)
-        : haversineKm(anchor, candidate) <= radiusKm);
+    const located = (Array.isArray(candidates) ? candidates : []).filter(hasCoordinates);
+    const inArea = (candidate) => regionalScope
+      ? pointWithinTrustedSpatialScope(candidate, regionalScope)
+      : haversineKm(anchor, candidate) <= radiusKm;
+    const confident = located.filter((candidate) => confidenceRank(candidate.confidence) >= confidenceRank("medium"));
+    const trusted = confident.filter(inArea);
     if (trusted.length === 1) return { status: "resolved", candidate: trusted[0] };
     if (trusted.length > 1) return { status: "ambiguous", candidate: null };
     if (confident.length) return { status: "outside_scope", candidate: null };
+    // A small venue is "low" only because the geocoder ranks it as little
+    // known. When the one place found in the area carries the very name the
+    // event source gives, that name is the evidence; nothing else is.
+    const named = located.filter((candidate) => inArea(candidate) && placeNamedAs(candidate, venueNames));
+    if (named.length === 1) return { status: "resolved", candidate: { ...named[0], name_verified: true } };
+    if (located.some((candidate) => placeNamedAs(candidate, venueNames))) return { status: "outside_scope", candidate: null };
     return { status: "not_found", candidate: null };
   } catch (_error) {
     return { status: "failed", candidate: null };
   }
+}
+
+// The resolved place's own name (first label segment) equals the source's
+// venue name, or appears in it as whole words ("biograf panora" ⊇ "panora").
+function placeNamedAs(candidate, venueNames) {
+  const own = normalizeVenueName(String(candidate?.name || candidate?.label || "").split(",")[0]);
+  if (!isDistinctiveVenueName(own)) return false;
+  return (Array.isArray(venueNames) ? venueNames : []).some((venue) =>
+    venue === own || ` ${venue} `.includes(` ${own} `));
 }
 
 function appendBoundedQueryParts(sourceParts, contextParts) {

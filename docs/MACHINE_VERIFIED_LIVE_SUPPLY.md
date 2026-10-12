@@ -48,7 +48,10 @@ never a route/day input or an approved catalog row, with its actual source URL
 kept. Local floating times use a source-declared zone, otherwise the zone
 derived offline from the trusted anchor coordinates. The ordinary time,
 geography, venue-resolution and display gates decide every event; nothing is
-invented. One discovery per ~1 km cell is reused for six hours, an empty one is
+invented. Venue resolution tries the source's address, then its venue name with
+the town; a geocoder hit the geocoder itself rates "low" (little-known venues)
+counts only when it is the one place in the trusted area and its own name is
+the source's venue name, never a bare kind of place such as "teatro". One discovery per ~1 km cell is reused for six hours, an empty one is
 not repeated for an hour, and the existing scout demand still asks the worker
 to qualify the source over two UTC days. `PARRANDA_REQUEST_TIME_EVENT_DISCOVERY=disabled`
 is an operator opt-out; without a configured source search the lane is off.
