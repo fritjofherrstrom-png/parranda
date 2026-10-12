@@ -76,6 +76,27 @@ test("query-form comment feeds are rejected the same way as path-form ones", () 
   assert.ok(result.reasons.includes("non_event_comment_feed"));
 });
 
+test("an explicit comments feed name overrides an event-shaped URL and calendar context", () => {
+  for (const name of ["Photo festival » Events Comments Feed", "Comments on: Events", "Events Comments Atom Feed"]) {
+    for (const field of ["title", "label", "aria_label"]) {
+      const result = classifyRssEventInterface({
+        link: link("https://kajscenen.example/events/feed/", { [field]: name }),
+        page: calendarPage(),
+      });
+      assert.equal(result.decision, "non_event", `${field}: ${name}`);
+      assert.ok(result.reasons.includes("non_event_comment_feed"));
+    }
+  }
+});
+
+test("comments mentioned in an event feed name do not alone identify a discussion feed", () => {
+  const result = classifyRssEventInterface({
+    link: link("https://kajscenen.example/events/feed/", { title: "Events: talks and comments from the stage" }),
+    page: calendarPage(),
+  });
+  assert.equal(result.decision, "event_interface");
+});
+
 test("OpenSearch descriptors are search plumbing, not event interfaces", () => {
   for (const url of [
     "https://reseblogg.example/opensearch.xml",
@@ -379,6 +400,21 @@ function inspect(html, seedOverrides = {}) {
     },
   });
 }
+
+test("scout keeps the site feed but never proposes the page's explicitly named comments feed", () => {
+  const result = inspect([
+    '<html><head><title>Events</title>',
+    '<link rel="alternate" type="application/rss+xml" title="Photo festival &raquo; Feed" href="/en/feed/">',
+    '<link rel="alternate" type="application/rss+xml" title="Photo festival &raquo; Events Comments Feed" href="/en/events/feed/">',
+    '</head><body><h1>Events</h1></body></html>',
+  ].join("\n"), { url: "https://kajscenen.example/en/events/" });
+
+  assert.deepEqual(result.candidates.filter(row => row.adapter === "rss_atom_event_detail")
+    .map(row => row.url), ["https://kajscenen.example/en/feed/"]);
+  assert.deepEqual(result.manifest_candidates.filter(row => row.adapter === "rss_atom_event_detail")
+    .map(row => row.endpoint), ["https://kajscenen.example/en/feed/"]);
+  assert.equal(result.rss_interface_decisions.find(row => row.url.endsWith('/en/events/feed/')).decision, "non_event");
+});
 
 test("discovery no longer proposes non-event feeds as event sources", () => {
   const html = [

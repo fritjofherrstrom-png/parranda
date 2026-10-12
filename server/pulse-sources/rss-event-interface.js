@@ -163,7 +163,7 @@ function classifyRssEventInterface({ link = {}, page = null } = {}) {
     return decision("non_event", ["transport_locator_unusable"], null);
   }
 
-  const negatives = detectNonEventEvidence({ url, type, rels });
+  const negatives = detectNonEventEvidence({ url, type, rels, link });
   if (negatives.length > 0) {
     return decision("non_event", [transport.token, ...negatives], transport.kind);
   }
@@ -219,7 +219,7 @@ function detectFeedTransport({ url, type }) {
   return null;
 }
 
-function detectNonEventEvidence({ url, type, rels }) {
+function detectNonEventEvidence({ url, type, rels, link }) {
   const reasons = [];
   if (OPENSEARCH_MIME_PATTERN.test(type)) {
     reasons.push("non_event_opensearch_descriptor");
@@ -248,7 +248,13 @@ function detectNonEventEvidence({ url, type, rels }) {
   if (ARCHIVE_SNAPSHOT_PATTERN.test(path) || url.hostname.toLowerCase() === "web.archive.org") {
     reasons.push("non_event_archive_snapshot");
   }
-  if (isCommentFeed(url, segments)) {
+  // Publishers also declare page discussion feeds by name: their locator can
+  // be /events/feed/ without a comments path or query marker. That explicit
+  // declaration wins over the surrounding calendar's positive event context.
+  const namedCommentFeed = [link?.title, link?.label, link?.aria_label].some((value) =>
+    /\bcomments?\s+(?:(?:rss|atom)\s+)?feed\b|^comments?\s+on\s*:/i.test(normalizeText(value)),
+  );
+  if (isCommentFeed(url, segments) || namedCommentFeed) {
     reasons.push("non_event_comment_feed");
   }
   if (isSearchFeed(url, segments)) {
