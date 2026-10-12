@@ -89,6 +89,31 @@ test('pending Live with no capability says unavailable and does not poll or reco
   assert.equal(completionCalls(h).length, 0);
 });
 
+test('cold Live updates its card and details when day composition was unavailable, without reload or storing a failed day', async (t) => {
+  const unavailable = day(pendingLive(), { capability: { route_upgrade: 'not_supported' } });
+  unavailable.days = [];
+  unavailable.agnostic_route_output_experiment.promotion = { promote: false };
+  unavailable.agnostic_route_output_experiment.intake.resolved = { label: 'Testville', lat: 60.17, lng: 24.94 };
+  const h = await arrive(t, unavailable);
+  assert.match(h.text(), /Checking the calendars/);
+  await h.clock.advance(2000);
+  const read = pendingTo(h, '/api/planner-live-completion');
+  assert.ok(read, 'independent Live collection follows its original capability even without a composed day');
+  await h.fetchMock.respond(read, wireBody('completion_ready', body => {
+    body.live_completion.route_upgrade = 'not_supported';
+    return body;
+  }));
+  await h.clock.advance(50);
+  assert.match(h.text(), /Concert/);
+  assert.doesNotMatch(h.text(), /Checking the calendars/);
+  await click(h, /See all live|Explore live/);
+  assert.match(h.container.querySelector('[role="dialog"]').textContent, /Concert/);
+  assert.equal(h.readStorage(LAST_KEY), null, 'a failed day is never installed as the remembered day');
+  await h.clock.advance(120000);
+  assert.equal(routeCalls(h).length, 1, 'Live does not recompose the unavailable day');
+  assert.equal(upgradeCalls(h).length, 0);
+});
+
 test('an expired capability ends as unavailable, never as an empty calendar', async (t) => {
   const h = await arrive(t, day(pendingLive(), { capability: {} }));
   await h.clock.advance(2000);
