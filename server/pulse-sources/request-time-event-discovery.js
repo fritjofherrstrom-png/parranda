@@ -118,7 +118,7 @@ function createRequestTimeEventDiscovery({
       const seeds = sanitizeSearchSeeds(searched?.seeds, place).slice(0, MAX_SEEDS);
       if (!seeds.length) {
         const searchStatus = typeof searched?.status === "string" ? searched.status : "failed";
-        return FAILED_SEARCH_STATUSES.has(searchStatus) || searched?.retry_recommended === true || !searched
+        return searchAcquisitionFailed(searched) || !searched
           ? outcome("failed", `source_search_${FAILED_SEARCH_STATUSES.has(searchStatus) ? searchStatus : "failed"}`)
           : outcome("empty", "no_search_results");
       }
@@ -146,7 +146,7 @@ function createRequestTimeEventDiscovery({
             (result?.robots?.status === "unknown" && String(result.robots.reason || "").startsWith("source_")))) {
         return outcome("failed", "source_scout_failed");
       }
-      if (FAILED_SEARCH_STATUSES.has(searched?.status) || searched?.retry_recommended === true) {
+      if (searchAcquisitionFailed(searched)) {
         return outcome("failed", "source_search_failed");
       }
       return outcome("empty", "no_structured_event_source");
@@ -156,6 +156,16 @@ function createRequestTimeEventDiscovery({
 
 function outcome(status, reason, feeds = []) {
   return { status, reason, feeds };
+}
+
+function searchAcquisitionFailed(searched) {
+  // The search provider retains useful seeds when another query fails, and
+  // reports partial/retry_recommended=false. That does not prove absence if
+  // the retained seeds yield no feeds. A partial result alone is not a failure.
+  return FAILED_SEARCH_STATUSES.has(searched?.status) || searched?.retry_recommended === true ||
+    Number(searched?.failed_query_count) > 0 || Number(searched?.degraded_query_count) > 0 ||
+    (Array.isArray(searched?.query_outcomes) && searched.query_outcomes.some(query =>
+      FAILED_SEARCH_STATUSES.has(query?.status)));
 }
 
 function feedsFromScout(scouted, { timezone = null } = {}) {
