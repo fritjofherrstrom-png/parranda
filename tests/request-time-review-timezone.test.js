@@ -50,3 +50,15 @@ for (const [format, body, expectedZone, expectedStart] of [
   assert.equal(result.tonight[0].timezone, expectedZone);
   assert.equal(result.tonight[0].starts_at, expectedStart);
 });
+
+test("coordinate fallback still reaches structured adapters that require a zone for their published slots",async()=>{
+  const payload={stages:[{id:10,title:"Source stage",gpsCoordinates:{lat:anchor.lat,lng:anchor.lng}}],
+    bookings:[{id:101,title:"Published local orchestra",tags:[{name:"Music"}],dates:[{scene:{id:10},startDate:"2026-10-13T17:00:00.000Z",endDate:"2026-10-13T18:00:00.000Z"}]}]};
+  const html=`<script>self.__next_f.push(${JSON.stringify([1,JSON.stringify(payload)])})</script>`;
+  const result=await collectAnchorEvents({anchor,now:"2026-10-13T08:00:00Z",selectedDate:"2026-10-13",
+    registry:[{id:"fallback-program",endpoint:"https://program.example/program",adapter:"embedded_program_rsc",bbox:[24,65.75,24.3,65.95],
+      fallback_timezone:"Europe/Stockholm",source_language:"en",status:"probationary",pulse_only:true}],
+    fetcher:async url=>response(url,html)});
+  assert.equal(result.tonight.length,1);
+  assert.equal(result.tonight[0].timezone,"Europe/Stockholm");
+});

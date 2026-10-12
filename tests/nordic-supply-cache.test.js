@@ -3,6 +3,17 @@ const assert=require("node:assert/strict"),test=require("node:test"),fs=require(
 const {resolveDefaultEventSupply,collectAnchorEvents}=require("../server/place-candidates/agnostic-event-supply");
 const {createRequestTimeEventDiscovery}=require("../server/pulse-sources/request-time-event-discovery");
 const {LIVE_COLLECTION_READ,createLiveCompletionStore}=require("../server/planner/live-completion");
+const {createLocalEventProvider}=require("../server/place-candidates/agnostic-event-supply");
+
+test("actual mapped provider binding cannot borrow a branch point reviewed for another source",async()=>{
+  const feed={id:"unrelated-publisher",adapter:"mapped_events",wire_profile:"dpl_cms_events_v1",timezone:"Europe/Copenhagen",endpoint:"https://other.example/events"};
+  const provider=createLocalEventProvider(feed,{fetcher:async()=>({ok:true,status:200,text:async()=>JSON.stringify([{uuid:"wrong-source",title:"Published event",
+    date_time:{start:"2026-10-13T18:00:00+02:00"},address:{country:"DK",zip_code:1172,street:"Krystalgade 15",locationType:"physical"}}])})});
+  const result=await provider.create().collect({date:"2026-10-13"});
+  assert.equal(result.time_sensitive_events.length,1);
+  assert.equal(result.time_sensitive_events[0].lat,undefined);
+  assert.equal(result.time_sensitive_events[0].venue_resolution,undefined);
+});
 
 test("mapped source, partial health, branch lookup, completion and persisted cache share one real supply chain",async t=>{
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),"parranda-nordic-cache-"));

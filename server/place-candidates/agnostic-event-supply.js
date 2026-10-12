@@ -950,7 +950,7 @@ async function collectAnchorEvents({
         source,
         anchor,
         nowDate,
-        startParam: selectedDate ? sourceWindowStart(selectedDate, source.timezone, nowDate) : startParam,
+        startParam: selectedDate ? sourceWindowStart(selectedDate, source.timezone || source.fallback_timezone, nowDate) : startParam,
         selectedDate,
         fetcher,
         sourceCollectionCache,
@@ -1324,7 +1324,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
   if (["ckan_agenda", "tourism_listing"].includes(adapter)) {
     return createDateRangeListingProvider({ ...common, adapter,
       resourceId: source.resource_id, maxPages: source.max_pages,
-      timezone: source.timezone, sourceLanguage: source.source_language });
+      timezone: source.timezone || source.fallback_timezone, sourceLanguage: source.source_language });
   }
   if (adapter === "datatourisme") {
     return createDatatourismeEventProvider({ key: datatourismeKey, anchor, fetcher: fetcher || undefined, radiusM, timeoutMs });
@@ -1337,7 +1337,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
   }
 
   if (adapter === "quoted_public_document") {
-    return createQuotedEventProvider({ ...common, eventReader, timezone: source.timezone, sourceLanguage: source.source_language });
+    return createQuotedEventProvider({ ...common, eventReader, timezone: source.timezone || source.fallback_timezone, sourceLanguage: source.source_language });
   }
   if (adapter === "linked_events") {
     return createLinkedEventsProvider({
@@ -1377,7 +1377,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
       status: "active",
       baseUrl: endpoint,
       timezoneOffset: source.timezone_offset || undefined,
-      timezone: source.timezone || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       routeRoleHint: source.route_role_hint || undefined,
       fetchDetails: source.fetch_details !== false,
@@ -1388,7 +1388,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
       ...common,
       status: "active",
       baseUrl: endpoint,
-      timezone: source.timezone || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       routeRoleHint: source.route_role_hint || undefined,
       fetchDetails: source.fetch_details !== false,
@@ -1400,7 +1400,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
       ...common,
       status: "active",
       sitemapUrl: endpoint,
-      timezone: source.timezone || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       routeRoleHint: source.route_role_hint || undefined,
       detailLimit: source.detail_limit || undefined,
@@ -1413,7 +1413,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
     return createLocalizedEventsApiProvider({
       ...common,
       status: "active",
-      timezone: source.timezone || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       supportedLanguages: source.supported_languages || undefined,
       limit: source.page_size || undefined,
@@ -1423,9 +1423,10 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
   if (adapter === "mapped_events") {
     return createMappedEventSourceProvider({
       ...common,
+      id: source.id,
       status: "active",
       wireProfile: source.wire_profile || undefined,
-      timezone: source.timezone || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       limit: source.page_size || undefined,
       horizonDays: source.horizon_days || undefined,
@@ -1435,7 +1436,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
     return createEmbeddedProgramRscProvider({
       ...common,
       status: "active",
-      timezone: source.timezone || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       sourceTier: source.source_tier || undefined,
       confidence: source.confidence || undefined,
@@ -1449,7 +1450,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
     return createScheduledEventCardProvider({
       ...common,
       status: "active",
-      timezone: source.timezone || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       sourceTier: source.source_tier || undefined,
       confidence: source.confidence || undefined,
@@ -1461,7 +1462,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
     return createOfficialProgramArticleProvider({
       ...common,
       status: "active",
-      timezone: source.timezone || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       sourceTier: source.source_tier || undefined,
       confidence: source.confidence || undefined,
