@@ -115,8 +115,26 @@ function sentencesFor(keys, limitations, copy, t, max) {
  * @param {(sv: string, en: string) => string} t  the caller's language picker
  * @returns {string} one or two sentences, or "" when there is nothing honest to add
  */
-export function limitationNote(limitations, stopCount, t) {
-  return sentencesFor(DAY_SHAPE_LIMITATIONS, limitations, phrases(stopCount), t, MAX_SHOWN);
+export function limitationNote(limitations, stopCount, t, { placesStillArriving: arriving = false } = {}) {
+  // While a place source is still answering, the place itself is not judged:
+  // "few places here" or "kinds we could not find" would be about half the
+  // evidence. What the day contains right now is still said.
+  const keys = arriving
+    ? DAY_SHAPE_LIMITATIONS.filter((key) => !PLACE_JUDGEMENTS.has(key))
+    : DAY_SHAPE_LIMITATIONS;
+  return sentencesFor(keys, limitations, phrases(stopCount), t, MAX_SHOWN);
+}
+
+const PLACE_JUDGEMENTS = new Set(["capped_by_below_planner_candidate_threshold", "capped_by_unresolved_roles"]);
+
+/**
+ * True while the server published with a place source still fetching (its
+ * bounded lifecycle answered with what had arrived; the rest keeps coming).
+ *
+ * @param {{status?: string, pending?: number}|null|undefined} sourceCompletion
+ */
+export function placesStillArriving(sourceCompletion) {
+  return sourceCompletion?.status === "partial" && Number(sourceCompletion?.pending) > 0;
 }
 
 /**
@@ -132,7 +150,9 @@ export function contextNote(limitations, t, { statedElsewhere = [], sourceComple
   const skip = new Set(Array.isArray(statedElsewhere) ? statedElsewhere : []);
   const keys = CONTEXT_LIMITATIONS.filter((key) => !skip.has(key));
   const note = sentencesFor(keys, limitations, phrases(null), t, CONTEXT_LIMITATIONS.length);
-  const partial = sourceCompletion?.status === 'partial'
+  // A source still fetching is announced at the top of the day; this line is
+  // for a partial answer that is not going to improve on its own.
+  const partial = sourceCompletion?.status === 'partial' && !placesStillArriving(sourceCompletion)
     ? sentence(t('Dagen bygger på de källor som hunnit svara; fler platser kan saknas', 'The day uses the sources that have answered; more places may be missing'))
     : '';
   return [partial, note].filter(Boolean).join(' ');
