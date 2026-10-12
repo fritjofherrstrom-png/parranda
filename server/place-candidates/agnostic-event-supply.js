@@ -1631,10 +1631,11 @@ function shouldCacheEventSupplyResult(result) {
   return health.status === "healthy" && health.result === "empty";
 }
 
-// Exactly the covered outcomes the event cache refuses because a source failed.
+// Failed acquisition stays terminal even with no source yet covering the place.
 function isFailedEventRefresh(result) {
-  if (!result || result.coverage !== "covered" || shouldCacheEventSupplyResult(result)) return false;
+  if (!result || shouldCacheEventSupplyResult(result)) return false;
   if (requestTimeDiscoveryFailed(result)) return true;
+  if (result.coverage !== "covered") return false;
   const status = result.acquisition?.source_health?.status;
   return status === "unavailable" || status === "partial";
 }
