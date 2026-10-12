@@ -444,7 +444,7 @@ function createNominatimPlaceResolver({
 } = {}) {
   const clampedLimit = clampInt(limit, 1, MAX_LIMIT, DEFAULT_LIMIT);
   const sharedGate = typeof sharedGateDir === "string" && sharedGateDir
-    ? createSharedRateGate({ dir: sharedGateDir, name: "nominatim", intervalMs: minIntervalMs, now })
+    ? createSharedRateGate({ dir: sharedGateDir, name: "nominatim", intervalMs: minIntervalMs, now, sleep })
     : null;
   const clampedMaxPending = clampInt(
     maxPendingRequests,
@@ -508,48 +508,58 @@ function createNominatimPlaceResolver({
     // Global rate gate: distinct queries are serialized so a provider cooldown
     // learned from one response also protects queries that were already queued.
     const current = now();
-    let start = Math.max(current, nextSlot, cooldownUntil);
+    const start = Math.max(current, nextSlot, cooldownUntil);
     nextSlot = start + minIntervalMs;
+    const execute = async (sharedTurn = null) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
+      try {
+        const url = buildUrl();
+        let pendingResponse;
+        try {
+          pendingResponse = fetcher(url.toString(), {
+            signal: controller.signal,
+            headers: { "User-Agent": userAgent, Accept: "application/json" },
+          });
+        } finally {
+          // Account for pauses between admission and invocation. The timestamp
+          // after fetch starts is conservative even if this process was delayed.
+          const dispatchedAt = now();
+          nextSlot = Math.max(nextSlot, dispatchedAt + minIntervalMs);
+          if (sharedTurn) sharedTurn.noteStarted(dispatchedAt);
+        }
+        const response = await pendingResponse;
+        if (!response || !response.ok) {
+          const cooldownMs = providerCooldownMs(
+            response,
+            now(),
+            clampInt(fallbackProviderCooldownMs, 0, MAX_PROVIDER_COOLDOWN_MS, DEFAULT_PROVIDER_COOLDOWN_MS),
+            clampInt(maxProviderCooldownMs, 0, MAX_PROVIDER_COOLDOWN_MS, MAX_PROVIDER_COOLDOWN_MS),
+          );
+          if (cooldownMs > 0) {
+            cooldownUntil = Math.max(cooldownUntil, now() + cooldownMs);
+            if (sharedTurn) sharedTurn.noteCooldown(cooldownUntil);
+          }
+          return { ok: false, data: null };
+        }
+        return { ok: true, data: await response.json() };
+      } catch (_error) {
+        return { ok: false, data: null };
+      } finally {
+        clearTimeout(timer);
+      }
+    };
     if (sharedGate) {
       try {
-        start = await sharedGate.reserve(start);
+        return await sharedGate.run(execute, { earliest: start });
       } catch (_error) {
-        // The shared limit cannot be confirmed: skip rather than risk it.
+        // Unconfirmed shared state or an occupied lock must never bypass the gate.
         return { ok: false, data: null };
       }
-      nextSlot = Math.max(nextSlot, start + minIntervalMs);
     }
     const wait = start - now();
     if (wait > 0) await sleep(wait);
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
-    try {
-      const url = buildUrl();
-
-      const response = await fetcher(url.toString(), {
-        signal: controller.signal,
-        headers: { "User-Agent": userAgent, Accept: "application/json" },
-      });
-      if (!response || !response.ok) {
-        const cooldownMs = providerCooldownMs(
-          response,
-          now(),
-          clampInt(fallbackProviderCooldownMs, 0, MAX_PROVIDER_COOLDOWN_MS, DEFAULT_PROVIDER_COOLDOWN_MS),
-          clampInt(maxProviderCooldownMs, 0, MAX_PROVIDER_COOLDOWN_MS, MAX_PROVIDER_COOLDOWN_MS),
-        );
-        if (cooldownMs > 0) {
-          cooldownUntil = Math.max(cooldownUntil, now() + cooldownMs);
-          if (sharedGate) sharedGate.noteCooldown(cooldownUntil).catch(() => {});
-        }
-        return { ok: false, data: null };
-      }
-      return { ok: true, data: await response.json() };
-    } catch (_error) {
-      return { ok: false, data: null };
-    } finally {
-      clearTimeout(timer);
-    }
+    return execute();
   }
 
   async function fetchAndMapQueued(query, context) {
