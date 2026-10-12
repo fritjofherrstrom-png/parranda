@@ -107,6 +107,7 @@ function bindManifestCandidate(manifest, candidate, { qualifiedRuntime = false }
     !candidateId ||
     !endpoint ||
     endpoint !== candidateEndpoint ||
+    (manifest.review?.robots_checked_url != null && safeHttpsUrl(manifest.review.robots_checked_url) !== endpoint) ||
     !adapter ||
     adapter !== candidateAdapter ||
     !sourceIdentity ||

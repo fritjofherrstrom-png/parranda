@@ -491,6 +491,27 @@ async function scoutLocalEventSources({
   }
 
   const robotsByOrigin = new Map();
+  let endpointRobotsOrigins = 0;
+  async function robotsForUrl(url, { endpoint = false } = {}) {
+    if (!isScoutablePublicUrl(url)) return { status: "unknown", reason: "robots_invalid_endpoint" };
+    const parsed = new URL(url);
+    const policy = robotsByOrigin.get(parsed.origin);
+    if (policy) {
+      // A failed fetch is not a policy text to evaluate for another path.
+      if (policy.status === "unknown" && String(policy.reason).startsWith("source_")) return policy;
+      return applyRobotsPolicy(policy.raw, parsed.pathname || "/");
+    }
+    if (endpoint && endpointRobotsOrigins >= clampInteger(maxSeeds, 1, MAX_SEEDS)) {
+      return { status: "unknown", reason: "robots_endpoint_budget_exhausted" };
+    }
+    if (endpoint) endpointRobotsOrigins += 1;
+    const fetched = await fetchRobotsPolicy({
+      origin: parsed.origin, path: parsed.pathname || "/", fetcher, timeoutMs,
+      maxBytes: Math.min(maxBytes, 128 * 1024), userAgent, cache,
+    });
+    robotsByOrigin.set(parsed.origin, fetched);
+    return fetched;
+  }
   const visitedPages = new Set(normalizedSeeds.map((seed) => normalizeHttpUrl(seed.url)));
   const linkedPageLimit = clampInteger(maxLinkedPages, 0, MAX_LINKED_PAGES);
   const perSeedLinkedPageLimit = clampInteger(
@@ -503,21 +524,7 @@ async function scoutLocalEventSources({
   for (const seed of normalizedSeeds) {
     const url = normalizeHttpUrl(seed.url);
     const parsed = new URL(url);
-    let robots = robotsByOrigin.get(parsed.origin);
-    if (!robots) {
-      robots = await fetchRobotsPolicy({
-        origin: parsed.origin,
-        path: parsed.pathname || "/",
-        fetcher,
-        timeoutMs,
-        maxBytes: Math.min(maxBytes, 128 * 1024),
-        userAgent,
-        cache,
-      });
-      robotsByOrigin.set(parsed.origin, robots);
-    } else {
-      robots = applyRobotsPolicy(robots.raw, parsed.pathname || "/");
-    }
+    const robots = await robotsForUrl(url);
 
     if (robots.status === "disallowed") {
       results.push({
@@ -567,7 +574,8 @@ async function scoutLocalEventSources({
     });
     const sourceResult = {
       ...inspection,
-      manifest_candidates: withManifestRobotsStatus(inspection.manifest_candidates, robots),
+      manifest_candidates: await withManifestRobotsStatus(inspection.manifest_candidates,
+        endpoint => robotsForUrl(endpoint, { endpoint: true })),
       place_manifest_candidates: withPlaceManifestRobotsStatus(
         inspection.place_manifest_candidates,
         robots,
@@ -673,9 +681,9 @@ async function scoutLocalEventSources({
       });
       results.push({
         ...linkedInspection,
-        manifest_candidates: withManifestRobotsStatus(
+        manifest_candidates: await withManifestRobotsStatus(
           linkedInspection.manifest_candidates,
-          linkedRobots,
+          endpoint => robotsForUrl(endpoint, { endpoint: true }),
         ),
         place_manifest_candidates: withPlaceManifestRobotsStatus(
           linkedInspection.place_manifest_candidates,
@@ -966,16 +974,18 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
   });
 }
 
-function withManifestRobotsStatus(manifests, robots) {
-  const status = firstString(robots?.status, "unknown");
-  return (Array.isArray(manifests) ? manifests : []).map((manifest) => ({
-    ...manifest,
-    review: {
+async function withManifestRobotsStatus(manifests, robotsForEndpoint) {
+  const checked = [];
+  for (const manifest of Array.isArray(manifests) ? manifests : []) {
+    const robots = await robotsForEndpoint(manifest.endpoint);
+    checked.push({ ...manifest, review: {
       ...(manifest.review || {}),
-      robots_status: status,
+      robots_status: firstString(robots?.status, "unknown"),
+      robots_checked_url: manifest.endpoint,
       ...(robots?.reason ? { robots_reason: robots.reason } : {}),
-    },
-  }));
+    } });
+  }
+  return checked;
 }
 
 function interleaveInterfaceLinks(...lanes) {

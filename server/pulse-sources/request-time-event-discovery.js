@@ -142,6 +142,8 @@ function createRequestTimeEventDiscovery({
       // The scout normally returns transport failures as data, not exceptions.
       // Without useful feeds, incomplete acquisition cannot prove absence.
       if (FAILED_SEARCH_STATUSES.has(scouted?.status) || Number(scouted?.failed_source_count) > 0 ||
+          scouted?.manifest_candidates?.some(manifest => manifest?.review?.robots_status === "unknown" &&
+            /^(?:source_|robots_endpoint_budget_)/.test(String(manifest.review.robots_reason || ""))) ||
           scouted?.results?.some(result => FAILED_SEARCH_STATUSES.has(result?.status) ||
             (result?.robots?.status === "unknown" && String(result.robots.reason || "").startsWith("source_")))) {
         return outcome("failed", "source_scout_failed");
