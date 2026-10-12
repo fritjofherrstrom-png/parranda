@@ -7,7 +7,10 @@ const en = (_sv, enText) => enText;
 const sv = (svText) => svText;
 
 test('partial acquisition is explained without claiming completeness or a later automatic day change', () => {
-  assert.match(contextNote([], en, { sourceCompletion: { status: 'partial', pending: 1 } }), /sources that have answered; more places may be missing/);
+  assert.match(contextNote([], en, { sourceCompletion: { status: 'partial', pending: 0 } }), /sources that have answered; more places may be missing/);
+  // Still fetching: the top of the day says more places are on their way, so
+  // the assembly note does not repeat it.
+  assert.equal(contextNote([], en, { sourceCompletion: { status: 'partial', pending: 1 } }), '');
   assert.match(contextNote([], sv, { sourceCompletion: { status: 'partial' } }), /källor som hunnit svara/);
   assert.equal(contextNote([], en, { sourceCompletion: { status: 'complete' } }), '');
   assert.equal(contextNote([], en), '');

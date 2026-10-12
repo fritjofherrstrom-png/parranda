@@ -51,7 +51,7 @@ for (const [outcome, result] of [['without a day', response], ['with a composed 
  });
 }
 test('restored saved day rebuild retains its selected identity',async t=>{
- const entry=buildSavedEntry({place:'Harbour',placeLabel:selected.label,savedAt:'2026-10-07T09:00:00Z',safeResponse:composed,classification:{status:'composed',placeLabel:selected.label},inputs:{place:'Harbour',placeLabel:selected.label,placeSelection:'selected-token',mode:'typed',selected:['food'],walkKey:'balanced',dayOffset:0}});
+ const entry=buildSavedEntry({place:'Harbour',placeLabel:selected.label,dateIso:'2026-10-07',savedAt:'2026-10-07T09:00:00Z',safeResponse:composed,classification:{status:'composed',placeLabel:selected.label},inputs:{place:'Harbour',placeLabel:selected.label,placeSelection:'selected-token',mode:'typed',selected:['food'],walkKey:'balanced',dayOffset:0}});
  const h=await mountPlanner({url:'http://localhost/anywhere?restore=last&lang=en',storage:{'parranda:anywhere:last':entry}});t.after(()=>h.unmount());
  await h.clock.advance(500);
  const rebuild=[...h.container.querySelectorAll('button')].find(x=>/rebuild/i.test(x.textContent));assert.ok(rebuild);

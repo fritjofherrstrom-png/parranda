@@ -169,7 +169,7 @@ test("adjusting a near-me day reuses the chosen position and asks no one", async
   assert.equal(asked.count, 0);
 });
 
-test("a restored near-me day asks for the position only on the explicit tap", async (t) => {
+test("a restored near-me day requires explicit replanning instead of replacing the saved position", async (t) => {
   const first = await mountPlanner({
     url: "http://localhost/anywhere?anchor=near&planner=open&lang=en",
     sessionStorage: { [COORDS_KEY]: { lat: 55.6, lng: 13 } },
@@ -184,17 +184,14 @@ test("a restored near-me day asks for the position only on the explicit tap", as
   await h.clock.advance(50);
   assert.match(h.text(), /Saved day/, "the snapshot is on screen");
 
-  await click(h, button(h, /^rebuild for fresh events$/));
+  assert.ok(!button(h, /^rebuild for fresh events$/), "a saved GPS day cannot rebuild at an unknown position");
   await h.clock.advance(100);
-  assert.equal(asked.count, 0, "a rebuild does not ask in the background");
+  assert.equal(asked.count, 0, "restoration never asks for a new position");
   assert.equal(composeCalls(h).length, 0);
-  assert.match(h.text(), /Your position isn't kept when the page reloads/);
-
-  await click(h, button(h, /^Use my location$/));
-  await h.clock.advance(10);
-  assert.equal(asked.count, 1, "the tap asks");
-  const [call] = composeCalls(h);
-  assert.deepEqual([call.body.lat, call.body.lng], [55.61, 13.01]);
+  assert.match(h.text(), /cannot safely update this saved day/);
+  const replan = [...h.container.querySelectorAll('a')].find(a => a.textContent.trim() === 'Choose a starting point and date');
+  assert.ok(replan, "a new position requires an explicit new planning journey");
+  assert.equal(replan.getAttribute('href'), '/?lang=en');
 });
 
 test("refusing the new consent after a reload leaves no empty place and no day", async (t) => {
