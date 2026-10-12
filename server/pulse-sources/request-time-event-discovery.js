@@ -138,7 +138,18 @@ function createRequestTimeEventDiscovery({
         return outcome("failed", "source_scout_failed");
       }
       const feeds = feedsFromScout(scouted, { timezone: timezoneForPoint(anchor.lat, anchor.lng) });
-      return feeds.length ? outcome("found", null, feeds) : outcome("empty", "no_structured_event_source");
+      if (feeds.length) return outcome("found", null, feeds);
+      // The scout normally returns transport failures as data, not exceptions.
+      // Without useful feeds, incomplete acquisition cannot prove absence.
+      if (FAILED_SEARCH_STATUSES.has(scouted?.status) || Number(scouted?.failed_source_count) > 0 ||
+          scouted?.results?.some(result => FAILED_SEARCH_STATUSES.has(result?.status) ||
+            (result?.robots?.status === "unknown" && String(result.robots.reason || "").startsWith("source_")))) {
+        return outcome("failed", "source_scout_failed");
+      }
+      if (FAILED_SEARCH_STATUSES.has(searched?.status) || searched?.retry_recommended === true) {
+        return outcome("failed", "source_search_failed");
+      }
+      return outcome("empty", "no_structured_event_source");
     }
   };
 }

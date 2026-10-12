@@ -188,6 +188,68 @@ test("without a configured source search there is no request-time discovery", ()
   assert.equal(createRequestTimeEventDiscovery({}), null);
 });
 
+test("a returned scout HTTP failure stays failed and is retried after the short hold", async () => {
+  let clock = 0;
+  let pageCalls = 0;
+  const discover = createRequestTimeEventDiscovery({
+    cache: memoryCache(), now: () => clock,
+    sourceSearch: async () => ({ status: "complete", seeds: [{ url: "https://venue.example/agenda" }] }),
+    // Real deterministic scout: an allowed robots response, then a failing page.
+    fetcher: async url => {
+      if (String(url).endsWith("/robots.txt")) return {
+        ok: true, status: 200, headers: { get: () => "text/plain" },
+        text: async () => "User-agent: *\nAllow: /",
+      };
+      pageCalls += 1;
+      return { ok: false, status: 503 };
+    },
+    timezoneForPoint: () => "Europe/Rome",
+  });
+  const request = { anchor: ANCHOR, placeContext: PLACE_CONTEXT };
+  const first = await discover(request);
+  assert.equal(first.status, "failed", "the scout returns HTTP failures as data, without throwing");
+  assert.equal(first.reason, "source_scout_failed");
+  await discover(request);
+  assert.equal(pageCalls, 1);
+  clock = 5 * 60 * 1000;
+  assert.equal((await discover(request)).status, "failed");
+  assert.equal(pageCalls, 2, "the page outage must not acquire the one-hour verified-empty hold");
+});
+
+test("degraded search with retained seeds cannot prove absence when no feed is found", async () => {
+  const discover = createRequestTimeEventDiscovery({
+    cache: memoryCache(),
+    sourceSearch: async () => ({ status: "degraded", retry_recommended: true, seeds: [{ url: "https://venue.example/agenda" }] }),
+    scout: async () => ({ status: "complete", results: [], manifest_candidates: [] }),
+  });
+  assert.equal((await discover({ anchor: ANCHOR, placeContext: PLACE_CONTEXT })).status, "failed");
+});
+
+test("a robots transport outage is failed rather than a verified empty source", async () => {
+  const discover = createRequestTimeEventDiscovery({
+    cache: memoryCache(),
+    sourceSearch: async () => ({ status: "complete", seeds: [{ url: "https://venue.example/agenda" }] }),
+    fetcher: async url => String(url).endsWith("/robots.txt") ? { ok: false, status: 503 } : {
+      ok: true, status: 200, headers: { get: () => "text/html" }, text: async () => "<html><body>Venue programme</body></html>",
+    },
+  });
+  const result = await discover({ anchor: ANCHOR, placeContext: PLACE_CONTEXT });
+  assert.equal(result.status, "failed");
+  assert.equal(result.reason, "source_scout_failed");
+});
+
+test("an explicit robots exclusion remains an empty policy decision without fetching the page", async () => {
+  const discover = createRequestTimeEventDiscovery({
+    cache: memoryCache(),
+    sourceSearch: async () => ({ status: "complete", seeds: [{ url: "https://venue.example/agenda" }] }),
+    fetcher: async url => {
+      assert.ok(String(url).endsWith("/robots.txt"), "excluded page must not be fetched");
+      return { ok: true, status: 200, headers: { get: () => "text/plain" }, text: async () => "User-agent: *\nDisallow: /" };
+    },
+  });
+  assert.equal((await discover({ anchor: ANCHOR, placeContext: PLACE_CONTEXT })).status, "empty");
+});
+
 test("a free discovered calendar surfaces source-backed Live facts without a model reader or route eligibility", async () => {
   const discover = createRequestTimeEventDiscovery({
     cache: memoryCache(),
