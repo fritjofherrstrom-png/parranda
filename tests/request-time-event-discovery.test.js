@@ -62,6 +62,26 @@ test("a source's own zone wins; robots exclusions and restricted terms never bec
   assert.equal(feeds[0].timezone, "Europe/Vienna");
 });
 
+function scoutedInterface(publisher, adapter) {
+  const id = `${publisher}-${adapter}`;
+  const url = `https://${publisher}.example/${adapter}`;
+  return {
+    candidate: { id, url, adapter, source_identity: `${publisher}.example`, status: "viable_provider_probe", maps_to_existing_provider: true, family: "venue_calendar" },
+    manifest: { id, endpoint: url, adapter, source_identity: `${publisher}.example`, bbox: [13.6, 45.6, 13.9, 45.75], label: publisher, review: { robots_status: "allowed", terms_status: "unknown" } },
+  };
+}
+
+test("event-specific interfaces are read before blog feeds, one per publisher", () => {
+  const feeds = feedsFromScout(scoutResult([
+    scoutedInterface("blog", "rss_atom_event_detail"),
+    scoutedInterface("venue", "rss_atom_event_detail"),
+    scoutedInterface("venue", "events_calendar"),
+    scoutedInterface("venue", "ical"),
+    scoutedInterface("listing", "schema_org_html"),
+  ]), { timezone: "Europe/Rome" });
+  assert.deepEqual(feeds.map((feed) => feed.id), ["venue-events_calendar", "listing-schema_org_html", "blog-rss_atom_event_detail"]);
+});
+
 test("discovery searches locality-scoped queries once per place and reuses what it found", async () => {
   const searches = [];
   const discover = createRequestTimeEventDiscovery({

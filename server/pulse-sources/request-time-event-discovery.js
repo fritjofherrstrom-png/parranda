@@ -34,6 +34,20 @@ const FOUND_TTL_MS = 6 * 60 * 60 * 1000;
 const EMPTY_HOLD_MS = 60 * 60 * 1000;
 const BOUNDS_HALF_SPAN_DEG = 0.08;
 const ALLOWED_TERMS = new Set(["open_license", "api_terms_compatible"]);
+// Only three local sources are read per collection, so the event-specific
+// structured interfaces go first; RSS is often a site's blog, not its events.
+const ADAPTER_PRIORITY = Object.freeze({
+  events_calendar: 184,
+  ical: 185,
+  schema_org_html: 185,
+  scheduled_event_cards: 186,
+  venue_calendar: 186,
+  sitevision_calendar: 186,
+  wix_event_sitemap: 186,
+  embedded_program_rsc: 186,
+  rss_atom_event_detail: 192,
+});
+const DEFAULT_ADAPTER_PRIORITY = 190;
 const LOCALITY_SCOPES = new Set(["locality", "resolved_label"]);
 
 function createRequestTimeEventDiscovery({
@@ -108,22 +122,23 @@ function feedsFromScout(scouted, { timezone = null } = {}) {
       if (candidate?.id && !candidates.has(candidate.id)) candidates.set(candidate.id, candidate);
     }
   }
-  const feeds = [];
-  const seen = new Set();
+  const bestByPublisher = new Map();
   for (const manifest of Array.isArray(scouted?.manifest_candidates) ? scouted.manifest_candidates : []) {
     const binding = bindManifestCandidate(manifest, candidates.get(manifest?.id));
     if (!binding) continue;
     if (binding.robotsStatus !== "allowed") continue;
     if (!(ALLOWED_TERMS.has(binding.termsStatus) || binding.termsStatus === "unknown")) continue;
-    const identity = `${binding.candidateId}|${binding.endpoint}`.toLowerCase();
-    if (seen.has(identity)) continue;
-    seen.add(identity);
-    feeds.push({
+    const priority = ADAPTER_PRIORITY[binding.adapter] ?? DEFAULT_ADAPTER_PRIORITY;
+    // One feed per publisher: several interfaces of one site are one source.
+    const publisher = binding.sourceIdentity.toLowerCase();
+    const current = bestByPublisher.get(publisher);
+    if (current && current.priority <= priority) continue;
+    bestByPublisher.set(publisher, {
       ...sourceRowForBinding(binding),
       // Local floating times need a zone; the coordinate-derived zone of the
       // trusted anchor is server-owned, a source-declared zone still wins.
       ...(!binding.timezone && timezone ? { timezone } : {}),
-      priority: 190,
+      priority,
       status: "probationary",
       source_health: "request_time_single_observation",
       runtime_trust: "request_time_single_observation",
@@ -131,7 +146,7 @@ function feedsFromScout(scouted, { timezone = null } = {}) {
       source_scoped_pulse: false,
     });
   }
-  return feeds;
+  return [...bestByPublisher.values()].sort((left, right) => left.priority - right.priority || left.id.localeCompare(right.id));
 }
 
 function anchorBucket(anchor) {

@@ -238,3 +238,72 @@ test("a difficult first venue cannot spend the whole lookup budget before a reso
   assert.deepEqual(asked.slice(0, 2), ["Unknown Road 1, Example City", "Known Road 2, Example City"]);
   assert.deepEqual(rows.map(row => row.id), out.events.map(row => row.id), "output retains the original event order");
 });
+
+test("a little-known venue counts when the one place found carries the source's venue name", async () => {
+  const small = (label, overrides = {}) => candidate({ label, confidence: "low", ...overrides });
+  const named = await resolveEventVenueGeometry([event({ address: null, place_context: "Biograf Panora" })], {
+    anchor: ANCHOR,
+    resolver: async () => [small("Panora, 19D, Friisgatan, Example City")],
+  });
+  assert.equal(named.summary.resolved_count, 1);
+  assert.equal(named.events[0].venue_resolution.confidence, "low");
+  assert.equal(named.events[0].venue_resolution.name_verified, true);
+
+  const otherName = await resolveEventVenueGeometry([event({ address: null, place_context: "Biograf Panora" })], {
+    anchor: ANCHOR,
+    resolver: async () => [small("Friisgatan 19, Example City")],
+  });
+  assert.equal(otherName.summary.resolved_count, 0, "a weak hit with another name is not the venue");
+
+  const twoNamed = await resolveEventVenueGeometry([event({ address: null, place_context: "Panora" })], {
+    anchor: ANCHOR,
+    resolver: async () => [small("Panora, A"), small("Panora, B", { lat: ANCHOR.lat - 0.002 })],
+  });
+  assert.equal(twoNamed.summary.resolved_count, 0, "two places with that name stay unresolved");
+  assert.equal(twoNamed.events[0].venue_resolution.status, "ambiguous");
+
+  const generic = await resolveEventVenueGeometry([event({ address: null, place_context: "Teatro" })], {
+    anchor: ANCHOR,
+    resolver: async () => [small("Teatro, Via Roma 1, Example City")],
+  });
+  assert.equal(generic.summary.resolved_count, 0, "a bare kind of place names no particular venue");
+
+  const asked = [];
+  const farNamed = await resolveEventVenueGeometry([event({ place_context: "Panora" })], {
+    anchor: ANCHOR,
+    resolver: async (query) => {
+      asked.push(query);
+      return [small("Panora, Elsewhere", { lat: ANCHOR.lat + 0.5 })];
+    },
+  });
+  assert.equal(farNamed.summary.resolved_count, 0);
+  assert.equal(asked.length, 1, "the named venue is known to be outside the area; no more lookups");
+});
+
+test("a matching name cannot make a needs-review coordinate trusted", async () => {
+  const out = await resolveEventVenueGeometry([event({ address: null, place_context: "Known Hall" })], {
+    anchor: ANCHOR,
+    resolver: async () => [candidate({ label: "Known Hall, Example City", confidence: "needs_review" })],
+  });
+  assert.equal(out.events[0].lat, undefined);
+  assert.equal(out.summary.resolved_count, 0);
+});
+
+test("shared address results verify each event's venue name independently", async () => {
+  const calls = [];
+  const out = await resolveEventVenueGeometry([
+    event({ id: "alpha", address: "Shared Road 1", place_context: "Alpha Hall" }),
+    event({ id: "beta", address: "Shared Road 1", place_context: "Beta Hall" }),
+  ], {
+    anchor: ANCHOR,
+    resolver: async query => {
+      calls.push(query);
+      return query === "Shared Road 1, Example City"
+        ? [candidate({ label: "Alpha Hall, Example City", confidence: "low" })] : [];
+    },
+  });
+  assert.equal(out.events[0].venue_resolution?.name_verified, true);
+  assert.equal(out.events[1].lat, undefined, "Beta cannot borrow Alpha's low-confidence name match");
+  assert.equal(out.summary.resolved_count, 1);
+  assert.equal(calls.filter(query => query === "Shared Road 1, Example City").length, 1, "the actual provider result is still shared");
+});
