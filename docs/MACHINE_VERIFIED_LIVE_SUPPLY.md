@@ -58,8 +58,12 @@ geography, venue-resolution and display gates decide every event; nothing is
 invented. Venue resolution tries the source's address, then its venue name with
 the town; a geocoder hit the geocoder itself rates "low" (little-known venues)
 counts only when it is the one place in the trusted area and its own name is
-the source's venue name, never a bare kind of place such as "teatro". One discovery per ~1 km cell is reused for six hours, an empty one is
-not repeated for an hour, and the existing scout demand still asks the worker
+the source's venue name, never a bare kind of place such as "teatro". One discovery per ~1 km cell is reused for six hours. Its answer is
+typed: found, verified empty (a working search with no usable source, held for
+an hour) or failed (search or scout failed, held five minutes to spare the
+search service). A failed discovery never becomes a cached healthy-empty Live
+pool; the collection is held briefly as a failed refresh and retried. The
+existing scout demand still asks the worker
 to qualify the source over two UTC days. `PARRANDA_REQUEST_TIME_EVENT_DISCOVERY=disabled`
 is an operator opt-out; without a configured source search the lane is off.
 

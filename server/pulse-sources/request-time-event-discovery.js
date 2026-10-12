@@ -30,8 +30,12 @@ const MAX_QUERIES = 2;
 const MAX_SEEDS = 6;
 const SCOUT_TIMEOUT_MS = 8_000;
 const FOUND_TTL_MS = 6 * 60 * 60 * 1000;
-// A place with nothing to find is not searched again for a while.
+// A place with nothing to find is not searched again for a while. A failed
+// search or scout is a different answer: the absence is unproven, so it is
+// retried after minutes, and only held that long to spare the search service.
 const EMPTY_HOLD_MS = 60 * 60 * 1000;
+const FAILED_HOLD_MS = 5 * 60 * 1000;
+const FAILED_SEARCH_STATUSES = new Set(["failed", "degraded", "unavailable"]);
 const BOUNDS_HALF_SPAN_DEG = 0.08;
 const ALLOWED_TERMS = new Set(["open_license", "api_terms_compatible"]);
 // Only three local sources are read per collection, so the event-specific
@@ -54,18 +58,31 @@ function createRequestTimeEventDiscovery({
   sourceSearch,
   scout = scoutLocalEventSources,
   fetcher,
-  cache = createSourceCache({ namespace: "request-time-event-discovery-v1", ttlMs: FOUND_TTL_MS }),
+  cache = createSourceCache({ namespace: "request-time-event-discovery-v2", ttlMs: FOUND_TTL_MS }),
   timezoneForPoint = coordinateTimezone,
   now = () => Date.now(),
 } = {}) {
   if (typeof sourceSearch !== "function") return null;
-  const emptyUntil = new Map();
+  const holds = new Map();
 
+  // Resolves to { status: "found" | "empty" | "failed", reason, feeds }.
   return async function discoverRequestTimeEventFeeds({ anchor, placeLabel = null, placeContext = null } = {}) {
-    if (!validPoint(anchor)) return [];
+    if (!validPoint(anchor)) return outcome("empty", "invalid_anchor");
     const key = `rt-discovery:${anchorBucket(anchor)}`;
-    if ((emptyUntil.get(key) || 0) > now()) return [];
-    const feeds = await cache.get(key, async () => {
+    const held = holds.get(key);
+    if (held && held.until > now()) return held.outcome;
+    let result;
+    try {
+      result = await cache.get(key, () => discoverOnce(), { shouldStore: (found) => found?.status === "found" });
+    } catch (_error) {
+      result = outcome("failed", "request_time_discovery_failed");
+    }
+    if (result.status === "empty") holds.set(key, { until: now() + EMPTY_HOLD_MS, outcome: result });
+    else if (result.status === "failed") holds.set(key, { until: now() + FAILED_HOLD_MS, outcome: result });
+    else holds.delete(key);
+    return result;
+
+    async function discoverOnce() {
       const bounds = {
         south: anchor.lat - BOUNDS_HALF_SPAN_DEG,
         north: anchor.lat + BOUNDS_HALF_SPAN_DEG,
@@ -81,38 +98,53 @@ function createRequestTimeEventDiscovery({
         localDiscoveryTerms: [],
         localPlaceDiscoveryTerms: [],
       });
-      if (!place.name) return [];
+      if (!place.name) return outcome("empty", "no_locality_name");
       const queryPlan = buildLocalEventDiscoveryQueryPlan({ place, localDiscoveryTerms: place.local_discovery_terms })
         .filter((item) => LOCALITY_SCOPES.has(item.label_scope))
         .slice(0, MAX_QUERIES);
-      if (!queryPlan.length) return [];
-      const searched = await sourceSearch({
-        queries: queryPlan.map((item) => item.query),
-        query_plan: queryPlan,
-        place,
-        anchor,
-        bounds,
-      });
+      if (!queryPlan.length) return outcome("empty", "no_locality_query");
+      let searched;
+      try {
+        searched = await sourceSearch({
+          queries: queryPlan.map((item) => item.query),
+          query_plan: queryPlan,
+          place,
+          anchor,
+          bounds,
+        });
+      } catch (_error) {
+        return outcome("failed", "source_search_failed");
+      }
       const seeds = sanitizeSearchSeeds(searched?.seeds, place).slice(0, MAX_SEEDS);
-      if (!seeds.length) return [];
-      const scouted = await scout({
-        place,
-        anchor,
-        bounds,
-        seeds,
-        maxSeeds: MAX_SEEDS,
-        timeoutMs: SCOUT_TIMEOUT_MS,
-        ...(typeof fetcher === "function" ? { fetcher } : {}),
-        eventReader: null,
-      });
-      return feedsFromScout(scouted, { timezone: timezoneForPoint(anchor.lat, anchor.lng) });
-    }, { shouldStore: (found) => Array.isArray(found) && found.length > 0 });
-    if (!Array.isArray(feeds) || feeds.length === 0) {
-      emptyUntil.set(key, now() + EMPTY_HOLD_MS);
-      return [];
+      if (!seeds.length) {
+        const searchStatus = typeof searched?.status === "string" ? searched.status : "failed";
+        return FAILED_SEARCH_STATUSES.has(searchStatus) || searched?.retry_recommended === true || !searched
+          ? outcome("failed", `source_search_${FAILED_SEARCH_STATUSES.has(searchStatus) ? searchStatus : "failed"}`)
+          : outcome("empty", "no_search_results");
+      }
+      let scouted;
+      try {
+        scouted = await scout({
+          place,
+          anchor,
+          bounds,
+          seeds,
+          maxSeeds: MAX_SEEDS,
+          timeoutMs: SCOUT_TIMEOUT_MS,
+          ...(typeof fetcher === "function" ? { fetcher } : {}),
+          eventReader: null,
+        });
+      } catch (_error) {
+        return outcome("failed", "source_scout_failed");
+      }
+      const feeds = feedsFromScout(scouted, { timezone: timezoneForPoint(anchor.lat, anchor.lng) });
+      return feeds.length ? outcome("found", null, feeds) : outcome("empty", "no_structured_event_source");
     }
-    return feeds;
   };
+}
+
+function outcome(status, reason, feeds = []) {
+  return { status, reason, feeds };
 }
 
 function feedsFromScout(scouted, { timezone = null } = {}) {

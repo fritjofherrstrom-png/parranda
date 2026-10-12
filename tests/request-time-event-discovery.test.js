@@ -5,7 +5,13 @@ const {
   createRequestTimeEventDiscovery,
   feedsFromScout,
 } = require("../server/pulse-sources/request-time-event-discovery");
-const { collectAnchorEvents, resolveDefaultEventSupply, HELSINKI_LINKED_EVENTS_FEED } = require("../server/place-candidates/agnostic-event-supply");
+const {
+  collectAnchorEvents,
+  isFailedEventRefresh,
+  resolveDefaultEventSupply,
+  shouldCacheEventSupplyResult,
+  HELSINKI_LINKED_EVENTS_FEED,
+} = require("../server/place-candidates/agnostic-event-supply");
 
 const ANCHOR = { lat: 45.6496, lng: 13.7773 };
 const PLACE_CONTEXT = { locality: "Trieste", region: "Friuli – Venezia Giulia", country: "Italy", country_code: "it" };
@@ -99,7 +105,8 @@ test("discovery searches locality-scoped queries once per place and reuses what 
   });
   const first = await discover({ anchor: ANCHOR, placeLabel: "Trieste, Italy", placeContext: PLACE_CONTEXT });
   const again = await discover({ anchor: { lat: 45.6499, lng: 13.7770 }, placeLabel: "Trieste, Italy", placeContext: PLACE_CONTEXT });
-  assert.equal(first.length, 1);
+  assert.equal(first.status, "found");
+  assert.equal(first.feeds.length, 1);
   assert.deepEqual(again, first);
   assert.equal(searches.length, 1);
   assert.ok(searches[0].length > 0 && searches[0].length <= 2);
@@ -118,13 +125,63 @@ test("a place with nothing to find is not searched again within the hold, then i
     },
     scout: async () => assert.fail("no seeds, no scout"),
   });
-  assert.deepEqual(await discover({ anchor: ANCHOR, placeLabel: "Trieste", placeContext: PLACE_CONTEXT }), []);
+  assert.equal((await discover({ anchor: ANCHOR, placeLabel: "Trieste", placeContext: PLACE_CONTEXT })).status, "empty");
   clock += 30 * 60 * 1000;
   await discover({ anchor: ANCHOR, placeLabel: "Trieste", placeContext: PLACE_CONTEXT });
   assert.equal(searches, 1);
   clock += 31 * 60 * 1000;
   await discover({ anchor: ANCHOR, placeLabel: "Trieste", placeContext: PLACE_CONTEXT });
   assert.equal(searches, 2);
+});
+
+test("a failed search is a short failure hold, never the one-hour verified-empty hold", async () => {
+  let clock = 1_000_000;
+  let searches = 0;
+  const discover = createRequestTimeEventDiscovery({
+    cache: memoryCache(),
+    now: () => clock,
+    sourceSearch: async () => {
+      searches += 1;
+      return { status: "failed", seeds: [], retry_recommended: true };
+    },
+    scout: async () => assert.fail("no seeds, no scout"),
+  });
+  const failed = await discover({ anchor: ANCHOR, placeLabel: "Trieste", placeContext: PLACE_CONTEXT });
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.reason, "source_search_failed");
+  assert.deepEqual(failed.feeds, []);
+  clock += 4 * 60 * 1000;
+  assert.equal((await discover({ anchor: ANCHOR, placeLabel: "Trieste", placeContext: PLACE_CONTEXT })).status, "failed");
+  assert.equal(searches, 1, "an outage is not re-searched at once");
+  clock += 2 * 60 * 1000;
+  await discover({ anchor: ANCHOR, placeLabel: "Trieste", placeContext: PLACE_CONTEXT });
+  assert.equal(searches, 2, "a failure is retried after minutes, not after the hour a verified empty answer is held");
+});
+
+test("a search or scout that throws is a failure outcome, not an empty answer", async () => {
+  const throwingSearch = createRequestTimeEventDiscovery({
+    cache: memoryCache(),
+    sourceSearch: async () => { throw new Error("connect refused"); },
+  });
+  const searchFailure = await throwingSearch({ anchor: ANCHOR, placeLabel: "Trieste", placeContext: PLACE_CONTEXT });
+  assert.equal(searchFailure.status, "failed");
+  assert.equal(searchFailure.reason, "source_search_failed");
+
+  const throwingScout = createRequestTimeEventDiscovery({
+    cache: memoryCache(),
+    sourceSearch: async () => ({ status: "ok", seeds: [{ url: "https://venue.example/agenda" }] }),
+    scout: async () => { throw new Error("timeout"); },
+  });
+  const scoutFailure = await throwingScout({ anchor: ANCHOR, placeLabel: "Trieste", placeContext: PLACE_CONTEXT });
+  assert.equal(scoutFailure.status, "failed");
+  assert.equal(scoutFailure.reason, "source_scout_failed");
+
+  const healthyEmpty = createRequestTimeEventDiscovery({
+    cache: memoryCache(),
+    sourceSearch: async () => ({ status: "ok", seeds: [] }),
+  });
+  const empty = await healthyEmpty({ anchor: ANCHOR, placeLabel: "Trieste", placeContext: PLACE_CONTEXT });
+  assert.equal(empty.status, "empty");
 });
 
 test("without a configured source search there is no request-time discovery", () => {
@@ -141,7 +198,7 @@ test("a free discovered calendar surfaces source-backed Live facts without a mod
     },
     timezoneForPoint: () => "Europe/Rome",
   });
-  const feeds = await discover({ anchor: ANCHOR, placeContext: PLACE_CONTEXT });
+  const { feeds } = await discover({ anchor: ANCHOR, placeContext: PLACE_CONTEXT });
   const calendar = [
     "BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT", "UID:free-calendar-event",
     "DTSTART:20261013T170000Z", "DTEND:20261013T180000Z", "SUMMARY:Evening concert",
@@ -185,6 +242,7 @@ function supplyWith({ env = {}, discovery }) {
       await warmPromise;
       return collectedInput;
     },
+    produced: () => warmPromise,
   };
 }
 
@@ -194,7 +252,7 @@ test("a place without its own source looks for one inside the out-of-band Live c
   const { supply, settled } = supplyWith({
     discovery: async (input) => {
       calls.push(input);
-      return found;
+      return { status: "found", reason: null, feeds: found };
     },
   });
   const out = await supply({ anchor: ANCHOR, placeLabel: "Trieste, Italy", placeContext: PLACE_CONTEXT, now: "2026-10-10T08:00:00Z" });
@@ -208,12 +266,31 @@ test("a place without its own source looks for one inside the out-of-band Live c
 });
 
 test("an uncovered place no longer stops at 'uncovered' when it can look for sources", async () => {
-  const { supply, settled } = supplyWith({ discovery: async () => [] });
+  const { supply, settled } = supplyWith({ discovery: async () => ({ status: "empty", reason: "no_search_results", feeds: [] }) });
   const out = await supply({ anchor: { lat: -45.1, lng: 170.2 }, now: "2026-10-10T08:00:00Z" });
   assert.notEqual(out.coverage, "uncovered");
   const collected = await settled();
   assert.ok(Array.isArray(collected.registry));
   assert.equal("venueResolutionLimit" in collected, false, "nothing found keeps the ordinary lookup budget");
+});
+
+test("a failed discovery keeps the collection retryable instead of caching a healthy empty answer", async () => {
+  for (const discovery of [
+    async () => ({ status: "failed", reason: "source_search_failed", feeds: [] }),
+    async () => { throw new Error("unexpected"); },
+  ]) {
+    const { supply, produced } = supplyWith({ discovery });
+    await supply({ anchor: ANCHOR, placeLabel: "Trieste", placeContext: PLACE_CONTEXT, now: "2026-10-10T08:00:00Z" });
+    const result = await produced();
+    assert.equal(result.acquisition.request_time_discovery.status, "failed");
+    assert.equal(shouldCacheEventSupplyResult(result), false, "an unproven absence is not stored as a healthy empty answer");
+    assert.equal(isFailedEventRefresh(result), true, "it is held briefly as a failed refresh and then retried");
+  }
+  const { supply, produced } = supplyWith({ discovery: async () => ({ status: "empty", reason: "no_search_results", feeds: [] }) });
+  await supply({ anchor: ANCHOR, placeLabel: "Trieste", placeContext: PLACE_CONTEXT, now: "2026-10-10T08:00:00Z" });
+  const verifiedEmpty = await produced();
+  assert.equal(verifiedEmpty.acquisition.request_time_discovery.status, "empty");
+  assert.equal(shouldCacheEventSupplyResult(verifiedEmpty), true, "a verified empty answer is still cacheable");
 });
 
 test("a place with an approved local source does not search", async () => {
@@ -222,7 +299,7 @@ test("a place with an approved local source does not search", async () => {
     env: { PARRANDA_EVENT_FEEDS: JSON.stringify([HELSINKI_LINKED_EVENTS_FEED]) },
     discovery: async () => {
       called = true;
-      return [];
+      return { status: "empty", reason: null, feeds: [] };
     },
   });
   await supply({ anchor: { lat: 60.17, lng: 24.94 }, now: "2026-10-10T08:00:00Z" });

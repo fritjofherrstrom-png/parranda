@@ -226,6 +226,8 @@ function createOperatorRuntime(env = process.env) {
       "Parranda-Source-Scout/1.0 (+https://github.com/fritjofherrstrom-png/parranda)",
     endpoint: env.PARRANDA_PLACE_RESOLVER_ENDPOINT || undefined,
     timeoutMs: Number(env.PARRANDA_PLACE_RESOLVER_TIMEOUT_MS) || undefined,
+    // Shares Nominatim's per-application limit with the web process.
+    sharedGateDir: cacheDir,
   });
   const resolverCache = createSourceCache({
     namespace: "source-scout-place-resolver",

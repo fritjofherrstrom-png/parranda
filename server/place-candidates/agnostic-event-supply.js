@@ -1603,14 +1603,38 @@ function shouldCacheEventSupplyResult(result) {
   // Keep useful partial results and proven healthy empties. A partial/unavailable
   // empty result may be a transient provider failure and must remain retryable.
   if (health.result === "events_found") return true;
+  // The sources that ran may be healthy, but looking for this place's own
+  // sources failed: the absence is unproven, so it is not a healthy empty.
+  if (requestTimeDiscoveryFailed(result)) return false;
   return health.status === "healthy" && health.result === "empty";
 }
 
 // Exactly the covered outcomes the event cache refuses because a source failed.
 function isFailedEventRefresh(result) {
   if (!result || result.coverage !== "covered" || shouldCacheEventSupplyResult(result)) return false;
+  if (requestTimeDiscoveryFailed(result)) return true;
   const status = result.acquisition?.source_health?.status;
   return status === "unavailable" || status === "partial";
+}
+
+function requestTimeDiscoveryFailed(result) {
+  return result?.acquisition?.request_time_discovery?.status === "failed";
+}
+
+// Which of found / verified empty / failed the request-time lane answered.
+function withRequestTimeDiscovery(collected, discovery) {
+  if (!discovery || !collected || typeof collected !== "object") return collected;
+  return {
+    ...collected,
+    acquisition: {
+      ...(collected.acquisition || {}),
+      request_time_discovery: {
+        status: discovery.status,
+        reason: discovery.reason || null,
+        feed_count: Array.isArray(discovery.feeds) ? discovery.feeds.length : 0,
+      },
+    },
+  };
 }
 
 function createFailedRefreshHold({
@@ -1875,9 +1899,11 @@ function resolveDefaultEventSupply(
       cache.warm(key, async () => {
         try {
           let collected;
-          const discovered = discoverNow
-            ? await requestTimeDiscovery({ anchor, placeLabel, placeContext }).catch(() => [])
-            : [];
+          const discovery = discoverNow
+            ? await requestTimeDiscovery({ anchor, placeLabel, placeContext })
+              .catch(() => ({ status: "failed", reason: "request_time_discovery_failed", feeds: [] }))
+            : null;
+          const discovered = Array.isArray(discovery?.feeds) ? discovery.feeds : [];
           try {
             collected = await collectEvents({
               anchor,
@@ -1909,7 +1935,7 @@ function resolveDefaultEventSupply(
             failedRefreshes.remember(key, collection.result);
             throw error;
           }
-          collection.result = withDiscoveryHealth(collected);
+          collection.result = withDiscoveryHealth(withRequestTimeDiscovery(collected, discovery));
           if (isFailedEventRefresh(collected)) failedRefreshes.remember(key, collected);
           else failedRefreshes.forget(key);
           return collection.result;
