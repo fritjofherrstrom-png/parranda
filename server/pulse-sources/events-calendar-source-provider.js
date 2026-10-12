@@ -134,6 +134,7 @@ function createEventsCalendarProvider(providerOptions = {}) {
             .map((event) =>
               mapEventsCalendarEventToRaw(event, {
                 timezone: normalizeIanaTimezone(providerOptions.timezone),
+                fallbackTimezone: normalizeIanaTimezone(providerOptions.fallbackTimezone),
               }),
             )
             .filter(Boolean);
@@ -205,7 +206,8 @@ function mapTheEventsCalendarEventToRaw(event, options = {}) {
   const sourceUrl = firstString(event.url, event.website, event.link, event.rest_url, event.permalink);
   // The plugin's REST API publishes each event's own IANA zone; a reviewed
   // descriptor zone still wins when one exists.
-  const timezone = normalizeIanaTimezone(options.timezone) || normalizeIanaTimezone(event.timezone);
+  const timezone = normalizeIanaTimezone(options.timezone) || normalizeIanaTimezone(event.timezone) ||
+    normalizeIanaTimezone(options.fallbackTimezone);
   const utcStart = firstString(
     event.utc_start_date,
     event.start_date_utc,
@@ -227,6 +229,7 @@ function mapTheEventsCalendarEventToRaw(event, options = {}) {
   return compact({
     id: firstString(event.id, event.global_id, event.url, event.website, event.slug),
     title: htmlToText(localizedString(event.title || event.name)),
+    timezone,
     starts_at:
       normalizeUtcEventDateTime(utcStart) ||
       normalizeSourceEventDateTime(localStart, { timezone }),
@@ -327,7 +330,9 @@ function mapIcalEventToRaw(event, options = {}) {
   const categories = property("CATEGORIES");
   const status = property("STATUS");
   const language = firstString(summary?.params?.LANGUAGE, property("LANGUAGE")?.value);
-  const timezone = normalizeIanaTimezone(options.timezone);
+  const fallbackTimezone = normalizeIanaTimezone(options.fallbackTimezone);
+  const timezone = normalizeIanaTimezone(options.timezone) || (fallbackTimezone &&
+    (normalizeIanaTimezone(property("DTSTART")?.params?.TZID) || fallbackTimezone));
   const startsOn = parseIcalDateOnly(property("DTSTART"));
   const declaredEndOn = parseIcalDateOnly(property("DTEND"));
   const endsOn = startsOn && declaredEndOn
@@ -336,6 +341,7 @@ function mapIcalEventToRaw(event, options = {}) {
   return compact({
     id: firstString(property("UID")?.value, url?.value),
     title: decodeIcalText(summary?.value),
+    timezone,
     starts_at: parseIcalDate(property("DTSTART"), { timezone }),
     ends_at: parseIcalDate(property("DTEND"), { timezone }),
     starts_on: startsOn,

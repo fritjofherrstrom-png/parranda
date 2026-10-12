@@ -258,6 +258,7 @@ function normalizeEventFeedRow(f, index = 0) {
     bbox,
     license: f.license != null ? String(f.license) : null,
     timezone: f.timezone != null ? String(f.timezone) : null,
+    fallback_timezone: normalizeIanaTimezone(f.fallback_timezone),
     timezone_offset: firstString(f.timezone_offset, f.timezoneOffset),
     source_language: firstString(f.source_language, f.sourceLanguage),
     supported_languages: Array.isArray(f.supported_languages)
@@ -588,7 +589,7 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
     source_scope_verified: event.source_scope_verified === true,
     local_significance: event.local_significance || null,
     // The venue-local timezone so the UI shows the real local start time.
-    timezone: eventTimezone || feed.timezone || null,
+    timezone: eventTimezone || feed.timezone || feed.fallback_timezone || null,
   };
 }
 
@@ -951,7 +952,7 @@ async function collectAnchorEvents({
       const enriched = applyReviewedSourceTrust(rawEvent, source);
       const normalized = normalizeTimeSensitiveSourceEvent(enriched, {
         ...(nowDate ? { now: nowDate } : {}),
-        timezone: rawEvent.timezone || source.timezone || undefined,
+        timezone: rawEvent.timezone || source.timezone || source.fallback_timezone || undefined,
       });
       if (!normalized) continue;
       if (rawEvent.timezone) normalized.timezone = rawEvent.timezone;
@@ -1332,6 +1333,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
       ...common,
       format: adapter === "ical" ? "ical" : source.format,
       timezone: source.timezone || undefined,
+      fallbackTimezone: source.fallback_timezone || undefined,
       status: "active",
     });
   }

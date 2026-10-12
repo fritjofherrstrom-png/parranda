@@ -192,7 +192,7 @@ function feedsFromScout(scouted, { timezone = null } = {}) {
       ...sourceRowForBinding(binding),
       // Local floating times need a zone; the coordinate-derived zone of the
       // trusted anchor is server-owned, a source-declared zone still wins.
-      ...(!binding.timezone && timezone ? { timezone } : {}),
+      ...(!binding.timezone && timezone ? { fallback_timezone: timezone } : {}),
       priority,
       status: "probationary",
       source_health: "request_time_single_observation",

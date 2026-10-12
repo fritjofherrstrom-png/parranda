@@ -49,7 +49,8 @@ test("a found structured source becomes a probationary, Pulse-only single observ
   const [feed] = feeds;
   assert.equal(feed.endpoint, "https://venue.example/cal.ics");
   assert.equal(feed.adapter, "ical");
-  assert.equal(feed.timezone, "Europe/Rome");
+  assert.equal(feed.fallback_timezone, "Europe/Rome");
+  assert.equal(feed.timezone, undefined, "coordinate fallback is not a reviewed descriptor override");
   assert.equal(feed.status, "probationary");
   assert.equal(feed.runtime_trust, "request_time_single_observation");
   assert.equal(feed.pulse_only, true);
