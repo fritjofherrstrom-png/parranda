@@ -543,6 +543,8 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
     id: event.id || null,
     title,
     starts_at: event.starts_at || null,
+    source_provider_id: feed?.id || null,
+    source_series_id: event.source_series_id || null,
     ends_at: event.ends_at || null,
     starts_on: event.starts_on || null,
     ends_on: event.ends_on || null,
@@ -611,7 +613,7 @@ function rankEventViews(views, preferences = []) {
 }
 
 function buildEventBucketSurface(views, preferences = []) {
-  const ranked = rankEventViews(views, preferences);
+  const ranked = rankEventViews(groupSourceOccurrences(views), preferences);
   const highlights = selectEventHighlights(ranked, preferences);
   const highlighted = new Set(highlights.map(eventViewIdentity));
   const remaining = ranked.filter((view) => !highlighted.has(eventViewIdentity(view)));
@@ -626,6 +628,25 @@ function buildEventBucketSurface(views, preferences = []) {
       more,
     },
   };
+}
+
+function groupSourceOccurrences(views) {
+  const groups = new Map();
+  for (const view of views) {
+    // Only an explicit publisher series identity establishes recurrence.
+    // Different sources, venues and titles remain separate even for one ID.
+    const key = view.source_provider_id && view.source_series_id
+      ? JSON.stringify([view.source_provider_id, view.source_series_id, view.title, view.place, view.lat, view.lng, view.timezone])
+      : view;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(view);
+  }
+  return [...groups.values()].map(rows => {
+    if (rows.length < 2) return rows[0];
+    const occurrences = [...rows].sort((a, b) =>
+      String(a.starts_at || a.starts_on).localeCompare(String(b.starts_at || b.starts_on)));
+    return { ...occurrences[0], occurrences };
+  });
 }
 
 // Preference fit should personalize Live without turning it into a filter
@@ -957,7 +978,9 @@ async function collectAnchorEvents({
       if (!normalized) continue;
       if (rawEvent.timezone) normalized.timezone = rawEvent.timezone;
       // A reviewed venue-registry point keeps its geocoder attribution.
-      const reviewedVenue = trustedReviewedVenueResolution(rawEvent.venue_resolution);
+      const reviewedVenue = trustedReviewedVenueResolution(rawEvent.venue_resolution, {
+        lat: normalized.lat, lng: normalized.lng, sourceId: source.id,
+      });
       if (reviewedVenue && Number.isFinite(normalized.lat) && Number.isFinite(normalized.lng)) {
         normalized.venue_resolution = reviewedVenue;
       }
@@ -1611,7 +1634,7 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // v10 applies source-owned event timezones during normalization, not afterward.
 // Old empty pools must not bypass request-time discovery or retain the previous
 // venue-variant allocation after this code is deployed.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v11";
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v12";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read

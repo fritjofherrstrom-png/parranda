@@ -18,6 +18,7 @@ import type { LiveEventScope } from "../../lib/live-event-query.mjs";
 import { CloseIcon, LocationIcon } from "../shared/icons";
 import { liveRelevanceSentence, nearbyDistanceLabel, type Lang, type Translate } from "./copy";
 import { liveEventSource } from "./LiveEventSource";
+import EventOccurrences from "./EventOccurrences";
 import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
 import type { LiveEvents, LiveFailure, LiveSourceHealth, PulseEvent } from "./types";
 
@@ -116,6 +117,7 @@ export default function LiveSheet({
           {liveEventSource(ev, lang)}
           {relevance && <span className="mt-0.5 block text-xs text-parranda-ink/68">{relevance}</span>}
         </span>
+        <EventOccurrences event={ev} lang={lang} selectedDate={timingDate} />
       </li>
     );
   };

@@ -58,7 +58,7 @@ function createRequestTimeEventDiscovery({
   sourceSearch,
   scout = scoutLocalEventSources,
   fetcher,
-  cache = createSourceCache({ namespace: "request-time-event-discovery-v2", ttlMs: FOUND_TTL_MS }),
+  cache = createSourceCache({ namespace: "request-time-event-discovery-v3", ttlMs: FOUND_TTL_MS }),
   timezoneForPoint = coordinateTimezone,
   now = () => Date.now(),
 } = {}) {

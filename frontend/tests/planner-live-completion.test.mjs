@@ -114,6 +114,25 @@ test('cold Live updates its card and details when day composition was unavailabl
   assert.equal(upgradeCalls(h).length, 0);
 });
 
+test('grouped Live details retain every stated occurrence and its individual source link', async (t) => {
+  const live = wireBody('completion_ready').live_events;
+  const group = { ...live.tonight[0], timezone: 'Europe/Stockholm', occurrences: [
+    { ...live.tonight[0], id: 'slot-a', starts_at: '2026-06-28T17:00:00Z', ends_at: null,
+      time_window: { kind: 'continuous', starts_at: '2026-06-28T17:00:00Z' }, timezone: 'Europe/Stockholm', source_url: 'https://calendar.example/slot-a' },
+    { ...live.tonight[0], id: 'slot-b', starts_at: '2026-06-28T19:00:00Z', ends_at: null,
+      time_window: { kind: 'continuous', starts_at: '2026-06-28T19:00:00Z' }, timezone: 'Europe/Stockholm', source_url: 'https://calendar.example/slot-b' },
+  ] };
+  live.tonight = [group];
+  const h = await arrive(t, day(live));
+  await click(h, /See all live/);
+  const dialog = h.container.querySelector('[role="dialog"]');
+  assert.match(dialog.textContent, /2 occurrences/);
+  assert.ok(dialog.querySelector('a[href="https://calendar.example/slot-a"]'));
+  assert.ok(dialog.querySelector('a[href="https://calendar.example/slot-b"]'));
+  assert.match(dialog.textContent, /19:00/);
+  assert.match(dialog.textContent, /21:00/);
+});
+
 test('an expired capability ends as unavailable, never as an empty calendar', async (t) => {
   const h = await arrive(t, day(pendingLive(), { capability: {} }));
   await h.clock.advance(2000);

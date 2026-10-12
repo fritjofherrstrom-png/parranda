@@ -106,6 +106,7 @@ function createMappedEventSourceProvider(providerOptions = {}) {
             ? providerOptions.venueRegistry
             : loadReviewedVenueRegistry(providerOptions.venueRegistryPath);
           const mapping = {
+            sourceId: providerOptions.id || null,
             profile,
             timezone,
             endpoint,
@@ -129,7 +130,7 @@ function createMappedEventSourceProvider(providerOptions = {}) {
           const unique = rows.filter((row) => !seen.has(row.id) && seen.add(row.id));
           const limit = clampInteger(providerOptions.limit, 1, MAX_LIMIT, DEFAULT_LIMIT);
           const kept = unique.slice(0, limit);
-          const truncated = unique.length > kept.length || records.length > MAX_RECORDS;
+          const truncated = unique.length > kept.length || records.length > MAX_RECORDS || mapping.occurrenceTruncated;
           return {
             events: [],
             signals: [],
@@ -236,9 +237,11 @@ function mapRecord(record, context) {
   const postalCode = scalarString(readPath(record, fields.postal_code));
   const locality = cleanText(readPath(record, fields.locality));
   const country = scalarString(readPath(record, fields.country));
-  const geometry = venueGeometry(record, { profile, street, postalCode, country, registry: context.registry });
+  const geometry = venueGeometry(record, { profile, street, postalCode, country, registry: context.registry, sourceId: context.sourceId });
   const base = compact({
     title,
+    source_series_id: scalarString(readPath(record, fields.series)) || (profile.occurrences ? recordId : null),
+    timezone,
     name: title,
     source_url: sourceUrl,
     place_context: venue,
@@ -257,12 +260,14 @@ function mapRecord(record, context) {
     provenance: compact({ source_url: sourceUrl, retrieved_at: context.retrievedAt }),
   });
 
-  const slots = profile.occurrences
-    ? occurrenceSlots(record, profile.occurrences)
-    : [{ start: readPath(record, fields.start), end: readPath(record, fields.end), allDay: readPath(record, fields.all_day) === true }];
-  if (!slots) return null;
+  const selection = profile.occurrences
+    ? occurrenceSlots(record, profile.occurrences, context.window)
+    : { slots: [{ start: readPath(record, fields.start), end: readPath(record, fields.end), allDay: readPath(record, fields.all_day) === true }], outsideWindow: 0 };
+  if (!selection) return null;
+  if (selection.truncated) context.occurrenceTruncated = true;
+  const slots = selection.slots;
   const atoms = [];
-  let outsideWindow = 0;
+  let outsideWindow = selection.outsideWindow;
   for (const slot of slots) {
     if (context.window && !slotMayOverlap(slot, context.window)) {
       outsideWindow += 1;
@@ -280,14 +285,19 @@ function mapRecord(record, context) {
   return atoms.length || outsideWindow ? atoms : null;
 }
 
-function occurrenceSlots(record, spec) {
+function occurrenceSlots(record, spec, window) {
   const list = readPath(record, spec.path);
   if (!Array.isArray(list)) return null;
-  return list.slice(0, MAX_OCCURRENCES_PER_RECORD)
+  const scanned = list.slice(0, MAX_RECORDS)
     .map((entry) => ({ start: readPath(entry, spec.start), end: readPath(entry, spec.end), allDay: false }));
+  // Bound cheap written-date inspection separately; only potentially relevant
+  // slots spend the conversion budget. Offset instants retain one day's slack.
+  const relevant = window ? scanned.filter(slot => slotMayOverlap(slot, window)) : scanned;
+  return { slots: relevant.slice(0, MAX_OCCURRENCES_PER_RECORD), outsideWindow: scanned.length - relevant.length,
+    truncated: list.length > MAX_RECORDS || relevant.length > MAX_OCCURRENCES_PER_RECORD };
 }
 
-// Cheap pre-filter on the written dates (one day of slack for UTC offsets),
+// Cheap pre-filter on the written dates before timezone conversion,
 // so long occurrence lists are not converted outside the collection window.
 function slotMayOverlap(slot, window) {
   const start = scalarString(slot.start);
@@ -295,7 +305,11 @@ function slotMayOverlap(slot, window) {
   if (!startDay) return true;
   const end = scalarString(slot.end);
   const endDay = end && /^\d{4}-\d{2}-\d{2}/.test(end) ? end.slice(0, 10) : startDay;
-  return startDay <= shiftDate(window.endDate, 1) && (endDay >= startDay ? endDay : startDay) >= shiftDate(window.startDate, -1);
+  // Explicit offsets and an IANA venue zone can differ by up to 28 hours.
+  // Two dates of slack preserve midnight crossings; floating dates are already
+  // written in the source's reviewed local zone and need no slack.
+  const slack = /(?:z|[+-]\d{2}:?\d{2})$/i.test(start) || /(?:z|[+-]\d{2}:?\d{2})$/i.test(end || "") ? 2 : 0;
+  return startDay <= shiftDate(window.endDate, slack) && (endDay >= startDay ? endDay : startDay) >= shiftDate(window.startDate, -slack);
 }
 
 function shiftDate(date, days) {
@@ -340,7 +354,7 @@ function slotTime(slot, timezone) {
 
 // The publisher's pin counts only when it carries venue-level address detail;
 // otherwise a reviewed registry point for the stated address may be used.
-function venueGeometry(record, { profile, street, postalCode, country, registry }) {
+function venueGeometry(record, { profile, street, postalCode, country, registry, sourceId = null }) {
   const fields = profile.fields;
   const lat = Number(readPath(record, fields.lat));
   const lng = Number(readPath(record, fields.lng));
@@ -351,7 +365,7 @@ function venueGeometry(record, { profile, street, postalCode, country, registry 
     const precise = required.length === 0 || required.some((key) => cleanText(readPath(record, fields[key])));
     if (precise) return { lat, lng, resolution: null };
   }
-  const entry = lookupReviewedVenue(registry, { country, postal_code: postalCode, street });
+  const entry = lookupReviewedVenue(registry, { country, postal_code: postalCode, street, source_id: sourceId });
   return entry ? { lat: entry.lat, lng: entry.lng, resolution: reviewedVenueResolution(entry) } : null;
 }
 

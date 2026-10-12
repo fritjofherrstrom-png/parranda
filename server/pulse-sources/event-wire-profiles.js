@@ -21,6 +21,7 @@ const WIRE_PROFILES = Object.freeze({
     records: Object.freeze({ path: "" }),
     fields: Object.freeze({
       id: "uuid",
+      series: "series.uuid",
       title: "title",
       url: "url",
       start: "date_time.start",

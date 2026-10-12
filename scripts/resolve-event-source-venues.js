@@ -104,6 +104,13 @@ async function resolveAddress(address, bbox) {
     addressdetails: "1",
     limit: "5",
   });
+  return matchNominatimAddressResults(results, address, bbox);
+}
+
+function matchNominatimAddressResults(results, address, bbox) {
+  const number = houseNumber(address.street);
+  const road = value => String(value || "").normalize("NFC").toLowerCase().replace(/[\s,.]+/g, " ").trim();
+  const expectedRoad = road(streetLine(address.street).replace(/\s\d+\s?[a-z]?$/i, ""));
   const matches = new Map();
   for (const result of Array.isArray(results) ? results : []) {
     const lat = Number(result.lat);
@@ -111,10 +118,12 @@ async function resolveAddress(address, bbox) {
     const resultNumber = String(result.address?.house_number || "").replace(/\s+/g, "").toLowerCase();
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
     if (resultNumber !== number) continue;
+    if (road(result.address?.road || result.address?.pedestrian) !== expectedRoad) continue;
+    if (String(result.address?.country_code || "").toLowerCase() !== String(address.country || "").toLowerCase()) continue;
     if (compactPostcode(result.address?.postcode) !== compactPostcode(address.postal_code)) continue;
     if (!insideBbox(lat, lng, bbox)) continue;
     const ref = result.osm_type && result.osm_id ? `${result.osm_type}/${result.osm_id}` : `${lat},${lng}`;
-    matches.set(ref, { lat, lng, osm_ref: ref });
+    matches.set(`${ref}|${lat}|${lng}`, { lat, lng, osm_ref: ref });
   }
   if (matches.size === 1) return { status: "resolved", ...[...matches.values()][0] };
   return { status: "unresolved", reason: matches.size ? "ambiguous" : "no_house_level_match" };
@@ -174,7 +183,7 @@ async function main() {
         lng: Number(resolution.lng.toFixed(7)),
         geometry_source: "nominatim_osm",
         osm_ref: resolution.osm_ref,
-        match: "house_number_and_postcode",
+        match: "street_house_number_postcode_country",
         license: "ODbL",
         attribution: "© OpenStreetMap contributors",
         resolved_at: today,
@@ -199,7 +208,9 @@ function finish(args, document, known, added, unresolved) {
   console.log(`wrote ${venues.length} venues to ${path.relative(process.cwd(), args.venues)}`);
 }
 
-main().catch((error) => {
+if (require.main === module) main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+
+module.exports = { matchNominatimAddressResults, resolveAddress };

@@ -16,6 +16,7 @@ import { ChevronRightIcon } from "../shared/icons";
 import { buttonClass, Eyebrow } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 import { liveEventSource } from "./LiveEventSource";
+import EventOccurrences from "./EventOccurrences";
 import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
 import type { LiveEvents, PulseEvent } from "./types";
 
@@ -139,6 +140,7 @@ export default function LiveCard({
                   {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
                   {liveEventSource(ev, lang)}
                 </span>
+                <EventOccurrences event={ev} lang={lang} selectedDate={liveEvents?.selected_date} />
               </li>
             ))}
           </ul>
