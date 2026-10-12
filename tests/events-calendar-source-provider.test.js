@@ -121,6 +121,35 @@ test("floating REST date-times require a reviewed IANA timezone", () => {
   assert.equal(resolved.ends_at, "2026-09-12T20:00:00.000Z");
 });
 
+test("the plugin's own UTC fields, event zone and venue address are read as published", () => {
+  // Shape of The Events Calendar REST v1 (`/wp-json/tribe/events/v1/events`).
+  const event = tecEvent({
+    start_date: "2026-10-10 15:30:00",
+    end_date: "2026-10-10 17:00:00",
+    utc_start_date: "2026-10-10 13:30:00",
+    utc_end_date: "2026-10-10 15:00:00",
+    timezone: "Europe/Rome",
+    venue: { venue: "Riverside Memorial – National Monument", address: "Harbour Road 5", city: "Port Town", geo_lat: null, geo_lng: null },
+  });
+  const raw = mapEventsCalendarEventToRaw(event);
+  assert.equal(raw.starts_at, "2026-10-10T13:30:00.000Z");
+  assert.equal(raw.ends_at, "2026-10-10T15:00:00.000Z");
+  assert.equal(raw.address, "Harbour Road 5, Port Town");
+  assert.equal(raw.place_context, "Riverside Memorial – National Monument");
+
+  const utcOnly = mapEventsCalendarEventToRaw(tecEvent({
+    start_date: "2026-10-10 15:30:00",
+    end_date: null,
+    utc_start_date: "2026-10-10 13:30:00",
+  }));
+  assert.equal(utcOnly.starts_at, "2026-10-10T13:30:00.000Z", "the published UTC field needs no zone at all");
+
+  const localOnly = mapEventsCalendarEventToRaw(tecEvent({ start_date: "2026-10-10 15:30:00", end_date: null, timezone: "Europe/Rome" }));
+  assert.equal(localOnly.starts_at, "2026-10-10T13:30:00.000Z", "the event's published zone places a floating local time");
+  const reviewedWins = mapEventsCalendarEventToRaw(tecEvent({ start_date: "2026-10-10 15:30:00", end_date: null, timezone: "Europe/Rome" }), { timezone: "Europe/London" });
+  assert.equal(reviewedWins.starts_at, "2026-10-10T14:30:00.000Z", "a reviewed descriptor zone still wins");
+});
+
 test("reviewed IANA timezone conversion follows seasonal offsets", () => {
   const summer = mapEventsCalendarEventToRaw(tecEvent({
     start_date: "2026-07-15 18:00:00",

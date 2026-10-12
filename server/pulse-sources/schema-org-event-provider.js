@@ -168,16 +168,33 @@ function emptyCollection(status, reason) {
   };
 }
 
-// schema.org JSON-LD comes in several envelopes: a bare object, an array, or a
-// `@graph` wrapper. Pull out the records whose @type is (or includes) Event.
+// schema.org JSON-LD comes in several envelopes: a bare object, an array, a
+// `@graph` wrapper, or a listing page whose events sit in an ItemList
+// (`CollectionPage.mainEntity.itemListElement[].item`, `hasPart`). Pull out
+// the records whose @type is (or includes) Event. An event's own nested parts
+// (`subEvent`, offers, location) are not walked: only listed events count.
+const LISTING_KEYS = ["@graph", "items", "mainEntity", "itemListElement", "item", "hasPart"];
+const MAX_LISTING_DEPTH = 6;
+const MAX_LISTED_EVENTS = 500;
+
 function extractSchemaOrgEvents(payload) {
-  if (!payload) return [];
-  let records = [];
-  if (Array.isArray(payload)) records = payload;
-  else if (Array.isArray(payload["@graph"])) records = payload["@graph"];
-  else if (Array.isArray(payload.items)) records = payload.items; // common feed wrapper
-  else if (typeof payload === "object") records = [payload];
-  return records.filter((record) => record && typeof record === "object" && isEventType(record));
+  const events = [];
+  const visit = (node, depth) => {
+    if (!node || typeof node !== "object" || depth > MAX_LISTING_DEPTH || events.length >= MAX_LISTED_EVENTS) return;
+    if (Array.isArray(node)) {
+      for (const child of node) visit(child, depth + 1);
+      return;
+    }
+    if (isEventType(node)) {
+      events.push(node);
+      return;
+    }
+    for (const key of LISTING_KEYS) {
+      if (node[key] && typeof node[key] === "object") visit(node[key], depth + 1);
+    }
+  };
+  visit(payload, 0);
+  return events;
 }
 
 /**

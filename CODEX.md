@@ -1,5 +1,16 @@
 # Parranda Codex Project Context
 
+## Current cost boundary (2026-10-12)
+
+Fritjof requires this Live delivery to use no newly activated paid APIs,
+paid search services or model-reader calls. Use the existing operator-owned
+SearXNG and cost-free factual source interfaces with deterministic parsing.
+The request-time scout keeps `eventReader: null`; its runtime QA must set
+`PARRANDA_EVENT_READER=disabled`. The optional model-reader capability below
+is outside this delivery and must not be activated as a fallback. Measure
+actual event yield and remaining gaps without inventing events or weakening
+source/date/geography gates.
+
 ## Live supply policy (2026-10-05)
 
 Machine verification, not per-source human approval, is the normal activation
@@ -22,6 +33,11 @@ unknown rights when actual robots allowance and repeated event verification are
 present; an open licence is not a universal activation prerequisite. Explicit
 restricted / permission-required terms and robots exclusions remain blockers.
 Never label unknown rights as open data.
+
+A place without such a source also looks for one at request time, inside its
+out-of-band Live collection: bounded search, the ordinary scout, structured
+interfaces only, single-observation probationary feeds that stay Pulse-only
+(see `docs/MACHINE_VERIFIED_LIVE_SUPPLY.md`, "Request-time discovery lane").
 
 Country-wide provider layers are legitimate generic supply, not region hacks:
 DATAtourisme, festivos.io, OpenHolidays and source-backed OSM weekly schedules

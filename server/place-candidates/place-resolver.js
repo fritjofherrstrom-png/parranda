@@ -42,6 +42,7 @@ const { isValidCoordinate } = require("../planner/agnostic-place-intake");
 const { normalizeNominatimSpatialScope } = require("./spatial-scope");
 const { createWikidataPlaceResolver } = require("./wikidata-place-resolver");
 const { createSourceCache } = require("./source-cache");
+const { createSharedRateGate } = require("./shared-rate-gate");
 const { parsePlaceRef, isLinkablePlace } = require("./place-ref");
 const { createHash } = require("node:crypto");
 
@@ -54,7 +55,9 @@ const DEFAULT_REVERSE_TIMEOUT_MS = 2500;
 const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 10;
 const DEFAULT_CACHE_TTL_MS = 30 * 60 * 1000;
-const DEFAULT_MIN_INTERVAL_MS = 1100; // honor Nominatim's ~1 req/sec, per instance
+// Nominatim allows ~1 req/sec per application. With PARRANDA_CACHE_DIR the web
+// process and the scout worker share one gate in that volume (shared-rate-gate).
+const DEFAULT_MIN_INTERVAL_MS = 1100;
 const DEFAULT_MAX_PENDING_REQUESTS = 8;
 const MAX_PENDING_REQUESTS = 100;
 const DEFAULT_PROVIDER_COOLDOWN_MS = 5000;
@@ -435,8 +438,14 @@ function createNominatimPlaceResolver({
   maxProviderCooldownMs = MAX_PROVIDER_COOLDOWN_MS,
   now = () => Date.now(),
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  // A directory every process using this provider mounts (the source cache
+  // volume): Nominatim's 1 request/s is per application, not per process.
+  sharedGateDir = null,
 } = {}) {
   const clampedLimit = clampInt(limit, 1, MAX_LIMIT, DEFAULT_LIMIT);
+  const sharedGate = typeof sharedGateDir === "string" && sharedGateDir
+    ? createSharedRateGate({ dir: sharedGateDir, name: "nominatim", intervalMs: minIntervalMs, now })
+    : null;
   const clampedMaxPending = clampInt(
     maxPendingRequests,
     1,
@@ -499,9 +508,18 @@ function createNominatimPlaceResolver({
     // Global rate gate: distinct queries are serialized so a provider cooldown
     // learned from one response also protects queries that were already queued.
     const current = now();
-    const start = Math.max(current, nextSlot, cooldownUntil);
+    let start = Math.max(current, nextSlot, cooldownUntil);
     nextSlot = start + minIntervalMs;
-    const wait = start - current;
+    if (sharedGate) {
+      try {
+        start = await sharedGate.reserve(start);
+      } catch (_error) {
+        // The shared limit cannot be confirmed: skip rather than risk it.
+        return { ok: false, data: null };
+      }
+      nextSlot = Math.max(nextSlot, start + minIntervalMs);
+    }
+    const wait = start - now();
     if (wait > 0) await sleep(wait);
 
     const controller = new AbortController();
@@ -520,7 +538,10 @@ function createNominatimPlaceResolver({
           clampInt(fallbackProviderCooldownMs, 0, MAX_PROVIDER_COOLDOWN_MS, DEFAULT_PROVIDER_COOLDOWN_MS),
           clampInt(maxProviderCooldownMs, 0, MAX_PROVIDER_COOLDOWN_MS, MAX_PROVIDER_COOLDOWN_MS),
         );
-        if (cooldownMs > 0) cooldownUntil = Math.max(cooldownUntil, now() + cooldownMs);
+        if (cooldownMs > 0) {
+          cooldownUntil = Math.max(cooldownUntil, now() + cooldownMs);
+          if (sharedGate) sharedGate.noteCooldown(cooldownUntil).catch(() => {});
+        }
         return { ok: false, data: null };
       }
       return { ok: true, data: await response.json() };
@@ -779,6 +800,7 @@ function resolveDefaultPlaceResolver(env = process.env, overrides = {}) {
     reverseTimeoutMs,
     cacheTtlMs,
     cacheDir: env && env.PARRANDA_CACHE_DIR,
+    sharedGateDir: (env && env.PARRANDA_CACHE_DIR) || null,
     maxPendingRequests,
     ...nominatimOverrides,
   });

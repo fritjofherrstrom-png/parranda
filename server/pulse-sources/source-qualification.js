@@ -564,7 +564,9 @@ module.exports = {
   MAX_PROBES_PER_RUN,
   QUALIFICATION_SCHEMA_VERSION,
   QUALIFIED_RUNTIME_MAX_AGE_MS,
+  bindManifestCandidate,
   buildCandidateQualification,
   eventFeedsFromQualifiedSourceProfiles,
   qualifyDiscoveredSourceProfile,
+  sourceRowForBinding,
 };
