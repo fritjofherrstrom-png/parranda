@@ -67,7 +67,7 @@ test('opening before completion moves automatically to following rows after the 
   assert.equal(routes(h).length, 1);
 });
 
-test('an explicit selected-day click during pending survives completion and reopen', async t => {
+test('an explicit selected-day click during pending survives sheet-query completion and reopen', async t => {
   const h = await start(t, live({ pending: true }));
   await click(h, 'Sun 25 Oct');
   const latest = queries(h).at(-1);
