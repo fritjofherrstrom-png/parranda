@@ -328,7 +328,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // A scope request belongs to the published day it was built from. Intent
   // cancellation alone misses queries opened while the previous day is held.
   useEffect(() => {
-    const retainCell = liveSheetUpgradeResponseRef.current === safeResponse;
+    const retainCell = Boolean(liveSheetUpgradeResponseRef.current) &&
+      liveSheetUpgradeResponseRef.current === safeResponse;
     // Consume on mismatch too: restore/compose can replace a batched upgrade.
     liveSheetUpgradeResponseRef.current = null;
     liveQueryAbortRef.current?.abort();
