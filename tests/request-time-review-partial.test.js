@@ -64,4 +64,3 @@ test("a real partial search keeps a useful structured feed despite the other que
   assert.equal(result.feeds.length, 1);
   assert.equal(result.feeds[0].endpoint, "https://venue.example/public/calendar.ics");
 });
-

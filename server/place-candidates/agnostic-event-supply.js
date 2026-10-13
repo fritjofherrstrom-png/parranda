@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
+const { createAccessCheckedSourceFetch } = require("../pulse-sources/access-checked-source-fetch");
 
 /**
  * Agnostic live-event supply — "what's alive near here, right now".
@@ -1245,6 +1246,7 @@ async function collectEventSource({
   globalKey,
 }) {
   let provider;
+  fetcher = createAccessCheckedSourceFetch(fetcher || globalThis.fetch?.bind(globalThis));
   if (source.kind === "global") {
     provider = createTicketmasterProvider({
       key: globalKey,
@@ -1288,7 +1290,7 @@ async function collectEventSource({
     // DATAtourisme also binds its date-window/geographic query to the snapshot.
     // The local API has no date/geometry filter. Final gates remain per view.
     const snapshotKey = createHash("sha256").update(JSON.stringify(["datatourisme", "osm_market_schedules", "public_holidays"].includes(source.adapter)
-      ? { source, anchor, radiusM, placeContext: source.adapter === "public_holidays" ? placeContext : null, date: String(startParam || "").slice(0, 10) } : source)).digest("hex");
+      ? { accessPolicy: "redirect-v1", source, anchor, radiusM, placeContext: source.adapter === "public_holidays" ? placeContext : null, date: String(startParam || "").slice(0, 10) } : source)).digest("hex");
     const collected = ["localized_events_api", "datatourisme", "osm_market_schedules", "public_holidays"].includes(source.adapter) && sourceCollectionCache
       ? await sourceCollectionCache.get(snapshotKey, collect, {
           shouldStore: value => ["ok", "empty"].includes(value?.collection_status?.status),
@@ -1303,7 +1305,8 @@ async function collectEventSource({
       reason: outcome.reason,
     };
   } catch (_error) {
-    return { source, raw: [], status: "failed", reason: "source_collect_failed" };
+    return { source, raw: [], status: "failed", reason: String(_error?.code || "").startsWith("source_redirect_")
+      ? _error.code : "source_collect_failed" };
   }
 }
 
@@ -1635,7 +1638,7 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // v10 applies source-owned event timezones during normalization, not afterward.
 // Old empty pools must not bypass request-time discovery or retain the previous
 // venue-variant allocation after this code is deployed.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v12";
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v13";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read

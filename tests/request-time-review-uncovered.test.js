@@ -48,4 +48,3 @@ test("uncovered discovery failure has a terminal hold through the real collector
   assert.equal(searchCalls, 2, "discovery's own five-minute hold still protects both original queries");
   assert.deepEqual(first[LIVE_COLLECTION_READ](), failure, "later generation preserves the original terminal answer");
 });
-

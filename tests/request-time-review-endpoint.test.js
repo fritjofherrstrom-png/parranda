@@ -66,4 +66,3 @@ test("an allowed linked endpoint reaches the real iCal provider and collector", 
   assert.equal(collected.tonight.length, 1);
   assert.equal(collected.tonight[0].route_eligible, false);
 });
-

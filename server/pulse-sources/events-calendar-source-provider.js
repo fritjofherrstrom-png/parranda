@@ -9,6 +9,7 @@
 
 const { GENERIC_PROVIDER_CITY } = require("./provider-registry");
 const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
+const { createAccessCheckedSourceFetch } = require("./access-checked-source-fetch");
 const {
   normalizeIanaTimezone,
   normalizeSourceEventDate,
@@ -89,9 +90,9 @@ function createEventsCalendarProvider(providerOptions = {}) {
         descriptor: boundDescriptor,
         async collect(collectionContext = {}) {
           const endpoint = providerOptions.endpoint || context.endpoint || collectionContext.endpoint || null;
-          const fetcher =
+          const fetcher = createAccessCheckedSourceFetch(
             providerOptions.fetcher ||
-            (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null);
+            (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null));
           if (!endpoint) return emptyCollection("unavailable", "source_endpoint_unavailable");
           if (typeof fetcher !== "function") return emptyCollection("unavailable", "source_fetch_unavailable");
 
@@ -115,12 +116,12 @@ function createEventsCalendarProvider(providerOptions = {}) {
             body = await readResponseBody(response);
           } catch (error) {
             const message = String(error?.message || "");
-            const reason = error?.name === "AbortError"
+            const reason = String(error?.code || "").startsWith("source_redirect_") ? error.code : error?.name === "AbortError"
               ? "source_timeout"
               : /^source_http_(?:[1-5]\d{2}|not_ok)$/.test(message)
                 ? message
                 : "source_fetch_failed";
-            throw new Error(reason);
+            throw Object.assign(new Error(reason), { code: reason });
           } finally {
             clearTimeout(timer);
           }

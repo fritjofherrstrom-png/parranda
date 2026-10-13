@@ -27,6 +27,7 @@
 
 const { GENERIC_PROVIDER_CITY } = require("./provider-registry");
 const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
+const { createAccessCheckedSourceFetch } = require("./access-checked-source-fetch");
 
 const SCHEMA_ORG_EVENT_PROVIDER_ID = "generic-schema-org-events";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -85,9 +86,9 @@ function createSchemaOrgEventProvider(providerOptions = {}) {
         descriptor: boundDescriptor,
         async collect(collectionContext = {}) {
           const endpoint = providerOptions.endpoint || context.endpoint || collectionContext.endpoint || null;
-          const fetcher =
+          const fetcher = createAccessCheckedSourceFetch(
             providerOptions.fetcher ||
-            (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null);
+            (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null));
           if (!endpoint) return emptyCollection("unavailable", "source_endpoint_unavailable");
           if (typeof fetcher !== "function") return emptyCollection("unavailable", "source_fetch_unavailable");
 
@@ -126,7 +127,7 @@ function createSchemaOrgEventProvider(providerOptions = {}) {
               events = extractSchemaOrgEvents(payload);
             }
           } catch (error) {
-            const reason = error?.name === "AbortError"
+            const reason = String(error?.code || "").startsWith("source_redirect_") ? error.code : error?.name === "AbortError"
               ? "source_timeout"
               : phase === "payload"
                 ? "source_payload_invalid"
