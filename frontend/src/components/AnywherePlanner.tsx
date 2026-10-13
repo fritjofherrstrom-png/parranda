@@ -320,6 +320,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const liveSheetCloseRef = useRef<HTMLButtonElement | null>(null);
   const liveQueryAbortRef = useRef<AbortController | null>(null);
   const liveSheetOpenedRef = useRef(false);
+  const liveSheetPeriodAutomaticRef = useRef(true);
   const liveNearMeCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const liveResponseRef = useRef(safeResponse);
   liveResponseRef.current = safeResponse;
@@ -333,6 +334,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setLiveQueryError(null);
     setLiveQueryGeoHint(null);
     liveSheetOpenedRef.current = false;
+    liveSheetPeriodAutomaticRef.current = true;
     liveNearMeCoordsRef.current = null;
     setLiveSheetScope("around_place");
   }, [safeResponse]);
@@ -1520,13 +1522,34 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   );
   const inPlaceScopeAvailable = Boolean(buildLiveEventQueryPayload({ scope: "in_place", response: safeResponse }));
 
+  // Prioritize actual listed future rows, without claiming a partial calendar
+  // proves the selected day empty. Pending and hidden selected-day rows are
+  // not evidence for changing the period. Reader choices retain ownership.
+  const preferFollowingWeek = Boolean(
+    sheetLiveEvents?.coverage === "covered" && !sheetLiveEvents.pending &&
+    sheetLiveEvents.selected_date === liveEvents?.selected_date &&
+    ["healthy", "partial"].includes(sheetSourceHealth?.status || "") &&
+    !liveQueryPending && !liveQueryError && !dayIsStale && phase !== "loading" && split.woven.length === 0 &&
+    sheetBuckets.tonight.length === 0 && sheetBrowseBuckets.tonight.length === 0 &&
+    !sheetLiveEvents.browse?.tonight?.hidden_count &&
+    (sheetBuckets.thisWeek.length > 0 || sheetBrowseBuckets.thisWeek.length > 0)
+  );
+  useEffect(() => {
+    if (!liveSheetOpen || !liveSheetPeriodAutomaticRef.current ||
+        liveSheetScope !== "around_place" || liveSheetTime !== "tonight" || !preferFollowingWeek) return;
+    setLiveSheetTime("week");
+    if (liveQueryEvents) requestLiveSheetScope("around_place", "week", true).catch(() => {});
+  }, [liveSheetOpen, liveSheetScope, liveSheetTime, preferFollowingWeek, liveQueryEvents]);
+
   const liveFallback = useLiveFallback({
     enabled: liveSheetOpen && liveSheetScope === "around_place" && liveSheetTime === "tonight" &&
-      !liveQueryPending && !liveQueryError && !dayIsStale && phase !== "loading" && split.woven.length === 0,
+      !liveQueryPending && !liveQueryError && !dayIsStale && phase !== "loading" && split.woven.length === 0 &&
+      !(liveSheetPeriodAutomaticRef.current && preferFollowingWeek),
     response: safeResponse, localEvents: sheetLiveEvents, preferences: selected, lang,
   });
 
   function requestLiveSheetTime(nextTime: "tonight" | "week") {
+    liveSheetPeriodAutomaticRef.current = false;
     setLiveSheetTime(nextTime);
     requestLiveSheetScope(liveSheetScope, nextTime, true).catch(() => {});
   }
@@ -1883,6 +1906,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // and a pending route/GPS query would restart around the place.
     const reopening = liveSheetOpenedRef.current;
     const nextTime = reopening ? liveSheetTime
+      : preferFollowingWeek ? "week"
       : pulseBuckets.tonight.length > 0 || split.woven.length > 0 ||
         pulseState === "pending" ||
         (inPlaceScopeAvailable && selectedDayEmpty(liveEvents)) ? "tonight" : "week";
@@ -2435,9 +2459,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           liveDayLabel={liveDayLabel}
           liveSheetTime={liveSheetTime}
           setLiveSheetTime={requestLiveSheetTime}
-          onRetry={() => { requestLiveSheetScope(liveSheetScope, liveSheetTime, true).catch(() => {}); }}
+          onRetry={() => { liveSheetPeriodAutomaticRef.current = false; requestLiveSheetScope(liveSheetScope, liveSheetTime, true).catch(() => {}); }}
           liveSheetScope={liveSheetScope}
-          requestLiveSheetScope={(scope) => { requestLiveSheetScope(scope).catch(() => {}); }}
+          requestLiveSheetScope={(scope) => { liveSheetPeriodAutomaticRef.current = false; requestLiveSheetScope(scope).catch(() => {}); }}
           aroundPlaceScopeAvailable={aroundPlaceScopeAvailable}
           inPlaceScopeAvailable={inPlaceScopeAvailable}
           routeScopeAvailable={routeScopeAvailable}
