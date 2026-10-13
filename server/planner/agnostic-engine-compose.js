@@ -358,7 +358,9 @@ function mapPlannerReservoirToSourceCandidates({
 
   const selectedRoles = new Set(selectedPicks.map((pick) => pick?.role).filter(Boolean));
   const boundedLimit = Math.max(out.length, Math.min(12, Math.max(1, Math.trunc(Number(limit) || 8))));
-  const focusedRhythm = Boolean(dayRhythm) && normalizeUserIntents(requestedIntents || []).intents.length === 1;
+  const requestedIntentCount = normalizeUserIntents(requestedIntents || []).intents.length;
+  const focusedRhythm = Boolean(dayRhythm) && requestedIntentCount === 1;
+  const variedActivities = requestedIntentCount > 1;
   // Preserve safe same-interest depth instead of spending the reservoir on
   // unrequested roles. Experimental depth retains its existing two-place cap.
   const boundedPerRole = focusedRhythm ? 6 : Math.min(3, Math.max(1, Math.trunc(Number(perRole) || 2)));
@@ -367,14 +369,18 @@ function mapPlannerReservoirToSourceCandidates({
     const role = roleEntry?.role;
     if (!role || !selectedRoles.has(role)) continue;
     let roleCount = 1;
-    for (const rich of plannerUsableOptionsForRole(roleEntry)) {
-      if (roleCount >= boundedPerRole || out.length >= boundedLimit) break;
-      // Candidate Combination may honestly use one experimentally admitted
-      // candidate to represent an explicitly requested role. Do not multiply
-      // that lower-trust exception into role depth: extra candidates must have
-      // cleared the shared gates. A long day should grow because evidence is
-      // richer, not merely because more inferred rows exist for the same role.
-      if (isExperimentallyAdmitted(rich)) continue;
+    // Do not multiply the lower-trust experimental exception into role depth.
+    // The shared tier and availability gates still own automatic additions.
+    const depthOptions = plannerUsableOptionsForRole(roleEntry).filter(rich =>
+      !isExperimentallyAdmitted(rich) && rich?.candidate_id && !seen.has(rich.candidate_id) && finiteCoords(rich.coordinates));
+    while (depthOptions.length && roleCount < boundedPerRole && out.length < boundedLimit) {
+      // Keep the selected spine and the same eligibility/trust tier. For a
+      // varied request, prefer another factual activity type before repeating
+      // one already present; focused requests retain their same-interest depth.
+      const variedIndex = variedActivities
+        ? depthOptions.findIndex(rich => sameActivityDepthTier(rich, depthOptions[0]) &&
+          rich.type && !out.some(candidate => candidate.type === rich.type)) : -1;
+      const [rich] = depthOptions.splice(variedIndex < 0 ? 0 : variedIndex, 1);
       const id = rich?.candidate_id;
       if (!id || seen.has(id)) continue;
       const coords = finiteCoords(rich.coordinates);
@@ -505,6 +511,16 @@ function mapPlannerReservoirToSourceCandidates({
   }
 
   return out.filter((candidate) => matchesPreferenceFocus(candidate, requestedIntents, pinnedIds));
+}
+
+function sameActivityDepthTier(candidate, reference) {
+  const coverage = values => JSON.stringify([...new Set(normalizeUserIntents(values || []).intents)].sort());
+  return candidate.candidate_status === reference.candidate_status &&
+    candidate.confidence === reference.confidence && candidate.origin === reference.origin &&
+    candidate.provenance?.source_tier === reference.provenance?.source_tier &&
+    candidate.provenance?.human_verified === reference.provenance?.human_verified &&
+    coverage(candidate.covered_preferences) === coverage(reference.covered_preferences) &&
+    coverage(candidate.partial_preferences) === coverage(reference.partial_preferences);
 }
 
 function appendSecondSpinePlace({ out, seen, spine, plannerRoles, richIndex, city, requestedIntents }) {

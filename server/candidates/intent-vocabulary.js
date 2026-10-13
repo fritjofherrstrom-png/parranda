@@ -42,6 +42,9 @@ const CANONICAL_INTENTS = {
     strong_tags: ["utsikt", "panorama", "vista"],
     weak_types: ["rooftop-bar", "promenade", "park", "garden", "bridge", "castle", "historic-site", "monument", "lighthouse"],
     weak_tags: ["coast", "dolce-vita"],
+    // A bathing facility's geography does not state a scenic experience.
+    // Explicit panorama/view evidence above still covers scenic at that site.
+    weak_tag_excluded_types: ["beach", "bathing-spot", "swimming-area"],
     aliases: ["scenic", "viewpoint", "viewpoints", "view", "views", "utsikt", "panorama", "vista", "lookout", "overlook"],
   },
   green: {
@@ -245,7 +248,8 @@ function matchCandidateToIntent(candidate, intent) {
   }
 
   const weakTypeHit = (def.weak_types || []).map(slug).includes(type);
-  const weakTagHit = (def.weak_tags || []).map(slug).some((s) => tagSlugs.has(s));
+  const weakTagHit = !(def.weak_tag_excluded_types || []).map(slug).includes(type) &&
+    (def.weak_tags || []).map(slug).some((s) => tagSlugs.has(s));
   if (weakTypeHit || weakTagHit) {
     return {
       strength: WEAK_MATCH,
