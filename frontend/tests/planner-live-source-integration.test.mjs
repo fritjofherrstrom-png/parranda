@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mountPlanner } from './helpers/planner-harness.mjs';
 import { sourceFixture, activityDay, DATE } from './helpers/live-source-integration.mjs';
+import { LAST_KEY } from '../src/lib/anywhere-storage.mjs';
 
 // Real provider → collector → v14 cache → completion store/query projection →
 // mounted Planner, with a real candidate engine day. HTTP and source HTML are
@@ -42,6 +43,9 @@ test('cold source completion selects following days with every stated occurrence
   const body = await activityDay(fixture.pending, fixture.capability);
   const before = structuredClone(body.days);
   const h = await mount(t, body);
+  const publishedDay = h.readStorage(LAST_KEY).safeResponse.days;
+  assert.deepEqual(publishedDay, JSON.parse(JSON.stringify(before)),
+    'the composed activity day is published through the JSON storage boundary');
   await click(h, 'Explore live');
   assert.equal(pressed(h, 'Sun 25 Oct'), 'true', 'pending is not a verified empty day');
   const first = queries(h).at(-1);
@@ -73,6 +77,8 @@ test('cold source completion selects following days with every stated occurrence
   assert.equal(routes(h).length, 1);
   assert.equal(h.fetchMock.calls.filter(call => call.url === '/api/planner-live-route-upgrade').length, 0);
   assert.deepEqual(body.days, before, 'Live does not mutate the activity-composed day');
+  assert.deepEqual(h.readStorage(LAST_KEY).safeResponse.days, publishedDay,
+    'completion and automatic week selection preserve the published day used by save/share');
   const requests = fixture.requests.length;
   const warm = await fixture.query({ ...following.body, preferences: ['swimming'] });
   assert.deepEqual(datesFor(warm.body.live_events, 'Local workshop series'), ['2026-10-27', '2026-11-01']);
