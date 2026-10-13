@@ -119,22 +119,7 @@ async function collectBounded({ endpoint, fetcher, signal, date, timezone, langu
   return collection(rows, rows.length ? "ok" : "failed", rows.length ? null : "source_payload_invalid");
 }
 
-// Bounded glob matching without a backtracking regular expression. Robots
-// wildcard/end rules must also protect followed and redirected detail paths.
-function matchesRobotsPath(rule, path) {
-  const end = rule.endsWith("$");
-  const parts = (end ? rule.slice(0, -1) : rule).split("*");
-  if (!path.startsWith(parts[0])) return false;
-  let cursor = parts[0].length;
-  for (let index = 1; index < parts.length; index++) {
-    const part = parts[index];
-    if (end && index === parts.length - 1) return path.endsWith(part) && path.length - part.length >= cursor;
-    const found = path.indexOf(part, cursor);
-    if (found < 0) return false;
-    cursor = found + part.length;
-  }
-  return !end || cursor === path.length;
-}
+const { matchesRobotsPath } = require("./robots-path");
 
 function failure(reason) { return Object.assign(new Error(reason), { reason }); }
 function clamp(value, min, max, fallback) { return Number.isFinite(Number(value)) ? Math.max(min, Math.min(max, Math.floor(Number(value)))) : fallback; }

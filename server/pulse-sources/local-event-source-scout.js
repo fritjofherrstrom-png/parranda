@@ -491,6 +491,27 @@ async function scoutLocalEventSources({
   }
 
   const robotsByOrigin = new Map();
+  let endpointRobotsOrigins = 0;
+  async function robotsForUrl(url, { endpoint = false } = {}) {
+    if (!isScoutablePublicUrl(url)) return { status: "unknown", reason: "robots_invalid_endpoint" };
+    const parsed = new URL(url);
+    const policy = robotsByOrigin.get(parsed.origin);
+    if (policy) {
+      // A failed fetch is not a policy text to evaluate for another path.
+      if (policy.status === "unknown" && String(policy.reason).startsWith("source_")) return policy;
+      return applyRobotsPolicy(policy.raw, (parsed.pathname || "/") + parsed.search, userAgent);
+    }
+    if (endpoint && endpointRobotsOrigins >= clampInteger(maxSeeds, 1, MAX_SEEDS)) {
+      return { status: "unknown", reason: "robots_endpoint_budget_exhausted" };
+    }
+    if (endpoint) endpointRobotsOrigins += 1;
+    const fetched = await fetchRobotsPolicy({
+      origin: parsed.origin, path: (parsed.pathname || "/") + parsed.search, fetcher, timeoutMs,
+      maxBytes: Math.min(maxBytes, 128 * 1024), userAgent, cache,
+    });
+    robotsByOrigin.set(parsed.origin, fetched);
+    return fetched;
+  }
   const visitedPages = new Set(normalizedSeeds.map((seed) => normalizeHttpUrl(seed.url)));
   const linkedPageLimit = clampInteger(maxLinkedPages, 0, MAX_LINKED_PAGES);
   const perSeedLinkedPageLimit = clampInteger(
@@ -503,21 +524,7 @@ async function scoutLocalEventSources({
   for (const seed of normalizedSeeds) {
     const url = normalizeHttpUrl(seed.url);
     const parsed = new URL(url);
-    let robots = robotsByOrigin.get(parsed.origin);
-    if (!robots) {
-      robots = await fetchRobotsPolicy({
-        origin: parsed.origin,
-        path: parsed.pathname || "/",
-        fetcher,
-        timeoutMs,
-        maxBytes: Math.min(maxBytes, 128 * 1024),
-        userAgent,
-        cache,
-      });
-      robotsByOrigin.set(parsed.origin, robots);
-    } else {
-      robots = applyRobotsPolicy(robots.raw, parsed.pathname || "/");
-    }
+    const robots = await robotsForUrl(url);
 
     if (robots.status === "disallowed") {
       results.push({
@@ -542,6 +549,7 @@ async function scoutLocalEventSources({
       maxBytes,
       userAgent,
       cache,
+      checkRedirectAccess: robotsForUrl,
     });
     if (page.status !== "ok") {
       results.push({
@@ -567,7 +575,8 @@ async function scoutLocalEventSources({
     });
     const sourceResult = {
       ...inspection,
-      manifest_candidates: withManifestRobotsStatus(inspection.manifest_candidates, robots),
+      manifest_candidates: await withManifestRobotsStatus(inspection.manifest_candidates,
+        endpoint => robotsForUrl(endpoint, { endpoint: true })),
       place_manifest_candidates: withPlaceManifestRobotsStatus(
         inspection.place_manifest_candidates,
         robots,
@@ -625,7 +634,8 @@ async function scoutLocalEventSources({
       const linkedUrl = new URL(link.url);
       const linkedRobots = applyRobotsPolicy(
         robots.raw,
-        linkedUrl.pathname || "/",
+        (linkedUrl.pathname || "/") + linkedUrl.search,
+        userAgent,
       );
       if (linkedRobots.status === "disallowed") {
         results.push(linkedPageResult({
@@ -646,6 +656,7 @@ async function scoutLocalEventSources({
         maxBytes,
         userAgent,
         cache,
+        checkRedirectAccess: robotsForUrl,
       });
       if (linkedPage.status !== "ok") {
         results.push(linkedPageResult({
@@ -673,9 +684,9 @@ async function scoutLocalEventSources({
       });
       results.push({
         ...linkedInspection,
-        manifest_candidates: withManifestRobotsStatus(
+        manifest_candidates: await withManifestRobotsStatus(
           linkedInspection.manifest_candidates,
-          linkedRobots,
+          endpoint => robotsForUrl(endpoint, { endpoint: true }),
         ),
         place_manifest_candidates: withPlaceManifestRobotsStatus(
           linkedInspection.place_manifest_candidates,
@@ -966,16 +977,18 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
   });
 }
 
-function withManifestRobotsStatus(manifests, robots) {
-  const status = firstString(robots?.status, "unknown");
-  return (Array.isArray(manifests) ? manifests : []).map((manifest) => ({
-    ...manifest,
-    review: {
+async function withManifestRobotsStatus(manifests, robotsForEndpoint) {
+  const checked = [];
+  for (const manifest of Array.isArray(manifests) ? manifests : []) {
+    const robots = await robotsForEndpoint(manifest.endpoint);
+    checked.push({ ...manifest, review: {
       ...(manifest.review || {}),
-      robots_status: status,
+      robots_status: firstString(robots?.status, "unknown"),
+      robots_checked_url: manifest.endpoint,
       ...(robots?.reason ? { robots_reason: robots.reason } : {}),
-    },
-  }));
+    } });
+  }
+  return checked;
 }
 
 function interleaveInterfaceLinks(...lanes) {
@@ -1030,7 +1043,7 @@ async function fetchRobotsPolicy({
       raw: "",
     };
   }
-  return applyRobotsPolicy(result.body, path);
+  return applyRobotsPolicy(result.body, path, userAgent);
 }
 
 async function fetchScoutPageWithCache({ cache = null, ...options }) {
@@ -1038,11 +1051,12 @@ async function fetchScoutPageWithCache({ cache = null, ...options }) {
     return fetchScoutPage(options);
   }
   const cacheKey = [
-    "source-page",
+    "source-page-v2",
     stableHash(
       [
         normalizeHttpUrl(options.url),
         String(options.accept || ""),
+        String(options.userAgent || DEFAULT_USER_AGENT),
         String(options.maxBytes || DEFAULT_MAX_BYTES),
         String(normalizeOrigin(options.requiredOrigin) || ""),
       ].join("|"),
@@ -1062,8 +1076,10 @@ function applyRobotsPolicy(raw, path = "/", userAgent = "parranda-source-scout")
       (agent) => agent !== "*" && userAgent.toLowerCase().includes(agent),
     ),
   );
+  const specificity = group => Math.max(...group.agents.filter(agent => agent !== "*" && userAgent.toLowerCase().includes(agent)).map(agent => agent.length), 0);
+  const longestAgent = Math.max(...exact.map(specificity), 0);
   const selected = exact.length
-    ? exact
+    ? exact.filter(group => specificity(group) === longestAgent)
     : groups.filter((group) => group.agents.includes("*"));
   if (!selected.length) {
     return {
@@ -1074,12 +1090,14 @@ function applyRobotsPolicy(raw, path = "/", userAgent = "parranda-source-scout")
     };
   }
 
+  const { matchesRobotsPath } = require("./robots-path");
+  const ruleLength = rule => rule.path.replace(/\*/g, "").replace(/\$$/, "").length;
   const rules = selected
     .flatMap((group) => group.rules)
-    .filter((rule) => path.startsWith(rule.path));
+    .filter((rule) => matchesRobotsPath(rule.path, path));
   rules.sort(
     (left, right) =>
-      right.path.length - left.path.length ||
+      ruleLength(right) - ruleLength(left) ||
       (left.type === "allow" ? -1 : 1),
   );
   const rule = rules[0] || null;
@@ -1130,6 +1148,7 @@ async function fetchScoutPage({
   userAgent = DEFAULT_USER_AGENT,
   accept = "text/html, application/xhtml+xml, text/plain",
   requiredOrigin = null,
+  checkRedirectAccess = null,
 }) {
   if (!isScoutablePublicUrl(url)) {
     return { status: "blocked", reason: "unsafe_or_invalid_source_url" };
@@ -1144,10 +1163,13 @@ async function fetchScoutPage({
     return { status: "blocked", reason: "cross_origin_source_url" };
   }
   const controller = new AbortController();
+  const { createAccessCheckedSourceFetch } = require("./access-checked-source-fetch");
+  fetcher = createAccessCheckedSourceFetch(fetcher, { checkRedirectAccess });
   const timer = setTimeout(() => controller.abort(), boundedTimeout);
   let phase = "fetch";
   try {
     let currentUrl = url;
+    const visited = new Set([url]);
     let response;
     for (let redirectCount = 0; redirectCount <= 3; redirectCount += 1) {
       response = await fetcher(currentUrl, {
@@ -1169,6 +1191,8 @@ async function fetchScoutPage({
       if (constrainedOrigin && new URL(nextUrl).origin !== constrainedOrigin) {
         return { status: "blocked", reason: "cross_origin_source_redirect" };
       }
+      if (visited.has(nextUrl)) return { status: "blocked", reason: "source_redirect_loop" };
+      visited.add(nextUrl);
       currentUrl = nextUrl;
     }
     const responseUrl = normalizeHttpUrl(response?.url);
@@ -1207,6 +1231,9 @@ async function fetchScoutPage({
       content_type: response.headers?.get?.("content-type") || null,
     };
   } catch (error) {
+    if (error?.code === "source_redirect_cross_origin") return { status: "blocked", reason: "cross_origin_source_redirect" };
+    if (error?.code === "unsafe_source_redirect") return { status: "blocked", reason: "unsafe_source_redirect" };
+    if (String(error?.code || "").startsWith("source_redirect_")) return { status: "blocked", reason: error.code };
     if (error?.name === "AbortError") {
       return { status: "failed", reason: "source_timeout" };
     }

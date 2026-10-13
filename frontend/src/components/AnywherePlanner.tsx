@@ -654,7 +654,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       }
       // Pending Live is read through the original compose's own capability,
       // never by recomposing the route.
-      if (liveCapability && composedNow) startLiveCompletion(liveCapability, requestId, intentId, safe);
+      if (liveCapability && safe) startLiveCompletion(liveCapability, requestId, intentId, safe);
       else setLiveFollowing(false);
       // A bounded silent re-ask covers cold-start honesty gaps. The POLICY —
       // which composes re-ask, and with what delay — is the pure, unit-tested
@@ -732,7 +732,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     liveCompletionAbortRef.current = controller;
     setLiveFollowing(true);
     // The remembered entry for this day, while it is still the remembered one.
-    let entry = lastEntryRef.current?.safeResponse === installed ? lastEntryRef.current : null;
+    let entry = installed?.days?.length > 0 && lastEntryRef.current?.safeResponse === installed
+      ? lastEntryRef.current : null;
     const current = () =>
       !controller.signal.aborted &&
       requestId === requestSequenceRef.current &&

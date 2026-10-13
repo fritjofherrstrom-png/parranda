@@ -236,3 +236,34 @@ test("resolveDefaultSchemaOrgEventProvider is null without an endpoint env and a
   assert.equal(built.descriptor.license_label, "CC-BY 4.0");
   assert.equal(built.descriptor.status, "active");
 });
+
+test("listing pages that nest events in an ItemList are read; an event's own parts are not", () => {
+  // CollectionPage → mainEntity → ItemList → itemListElement[] → ListItem.item
+  const listing = {
+    "@context": "https://schema.org",
+    "@graph": [
+      { "@type": "WebSite", name: "Venue guide" },
+      {
+        "@type": "CollectionPage",
+        mainEntity: {
+          "@type": "ItemList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, item: { "@type": "MusicEvent", name: "Evening concert", startDate: "2026-10-25" } },
+            { "@type": "ListItem", position: 2, item: { "@type": "TheaterEvent", name: "Matinee", startDate: "2026-10-26",
+              subEvent: [{ "@type": "Event", name: "Pre-show talk", startDate: "2026-10-26" }],
+              hasPart: [{ "@type": "Event", name: "Interval talk", startDate: "2026-10-26" }] } },
+          ],
+        },
+      },
+    ],
+  };
+  assert.deepEqual(extractSchemaOrgEvents(listing).map((event) => event.name), ["Evening concert", "Matinee"]);
+  const html = `<script type="application/ld+json">${JSON.stringify(listing)}</script>`;
+  assert.equal(extractSchemaOrgEventsFromHtml(html).length, 2, "the scout and the reader see the same listed events");
+  assert.deepEqual(extractSchemaOrgEvents({ "@type": "WebPage", hasPart: [{ "@type": "Event", name: "Part" }] }).map((e) => e.name), ["Part"]);
+  assert.deepEqual(
+    extractSchemaOrgEvents({ "@type": "MusicEvent", name: "Festival", hasPart: [{ "@type": "Event", name: "Act" }] }).map((e) => e.name),
+    ["Festival"],
+    "an event's own parts are not separate listed events",
+  );
+});

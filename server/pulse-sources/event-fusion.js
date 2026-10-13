@@ -68,6 +68,11 @@ function eventsRepresentSameOccurrence(left, right) {
 
   const samePublisher = sourceIdentity(left) === sourceIdentity(right);
   const sameStableId = nonEmpty(left.id) && nonEmpty(right.id) && nonEmpty(left.id) === nonEmpty(right.id);
+  // A publisher explicitly listed these as distinct series occurrences. The
+  // fuzzy time tolerance exists for cross-source descriptions of one slot;
+  // it cannot erase two separately identified slots from the same publisher.
+  if (samePublisher && left.source_series_id && right.source_series_id &&
+      nonEmpty(left.id) && nonEmpty(right.id) && !sameStableId) return false;
   const leftSourceUrl = canonicalUrl(left.source_url || left.provenance?.source_url);
   const rightSourceUrl = canonicalUrl(right.source_url || right.provenance?.source_url);
   const sameSourceUrl = Boolean(leftSourceUrl && leftSourceUrl === rightSourceUrl);
