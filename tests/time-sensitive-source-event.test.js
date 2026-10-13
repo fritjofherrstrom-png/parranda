@@ -8,6 +8,26 @@ const {
 
 const NOW = "2026-07-10T18:30:00.000Z";
 
+test("a split occurrence retains validated complete series timing and rejects incoherent provenance", () => {
+  const source = { id: "series@2026-10-13", title: "Workshop", source_url: "https://source.example/series",
+    starts_on: "2026-10-13", ends_on: "2026-10-13",
+    time_window: { kind: "occurrences", dates: ["2026-10-13"], local_start: "12:30", local_end: "15:30" },
+    source_series_time_window: { kind: "occurrences", dates: ["2026-10-01", "2026-10-13", "2026-11-01"], local_start: "12:30", local_end: "15:30" } };
+  const normalized = normalizeTimeSensitiveSourceEvent(source, { timezone: "Europe/Stockholm" });
+  assert.deepEqual(normalized.source_series_time_window.dates, source.source_series_time_window.dates);
+  assert.deepEqual(normalized.time_window.dates, ["2026-10-13"]);
+  for (const change of [
+    { dates: ["2026-10-01", "2026-11-01"] },
+    { dates: ["2026-02-30"] },
+    { dates: [] },
+    { kind: "period" },
+    { local_start: "14:00" },
+  ]) {
+    assert.equal(normalizeTimeSensitiveSourceEvent({ ...source,
+      source_series_time_window: { ...source.source_series_time_window, ...change } }, { timezone: "Europe/Stockholm" }), null);
+  }
+});
+
 function event(overrides = {}) {
   return {
     id: "night-market-1",

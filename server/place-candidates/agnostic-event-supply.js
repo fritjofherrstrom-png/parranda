@@ -435,6 +435,12 @@ function withinEventHorizon(event, now, days) {
 // exercise (they inject payloads, not query params).
 function isEphemeralHappening(event, now) {
   const window = event?.time_window;
+  // Corroboration can prefer another source's session facts. It must retain
+  // the complete publisher series' route bound independently of that choice.
+  if (event?.source_series_time_window) {
+    const seriesDates = listedOccurrenceDates(event.source_series_time_window);
+    if (!seriesDates.length || !boundedDateOnlyRange(seriesDates[0], seriesDates.at(-1), MAX_HAPPENING_DAYS)) return false;
+  }
   // A range without stated session days cannot anchor a route on any date.
   if (window?.kind === "period") return false;
   if (window?.kind === "occurrences") {
@@ -1638,7 +1644,8 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // v10 applies source-owned event timezones during normalization, not afterward.
 // Old empty pools must not bypass request-time discovery or retain the previous
 // venue-variant allocation after this code is deployed.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v13";
+// Earlier pools can contain one first-day atom for an entire stated series.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v14";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read

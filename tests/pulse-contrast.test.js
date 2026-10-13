@@ -499,3 +499,28 @@ test("the Pulse empty state keeps its dark surface (internal Barcelona fixture a
     await context.close();
   }
 });
+
+test("decorative Pulse overflow cannot scroll text out of the dark edition", { timeout: 120_000 }, async (t) => {
+  const current = await openRuntime(t);
+  if (!current) return;
+  const { context, page, pageErrors } = await openPulse(current, { city: "barcelona", width: 390, empty: true });
+  try {
+    await page.locator("#cityPulseTimeFilters button", { hasText: "Ikväll" }).click();
+    await page.locator("#cityPulseStart .pulse-empty-state").waitFor();
+    // The off-edge decorative glow previously expanded the hidden-overflow
+    // scroll area. Browser scrolling could move every text node while the
+    // edition's own border/background stayed in place. Exercise that actual
+    // DOM scroll path, without changing the fixture, styles or audit limits.
+    await page.evaluate(() => {
+      document.querySelector("#cityPulseStart").scrollTo({ left: 131, behavior: "instant" });
+    });
+    const report = newReport();
+    await audit(page, "decorative overflow", ["#cityPulseStart"], report);
+    assert.deepEqual(pageErrors, [], "the city shell threw while rendering the fixture");
+    assertReadable(report, 20);
+    assert.equal(await page.locator("#cityPulseStart").evaluate((element) => element.scrollLeft), 0,
+      "decorative overflow must be clipped without making the edition scrollable");
+  } finally {
+    await context.close();
+  }
+});

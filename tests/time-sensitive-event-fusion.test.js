@@ -14,6 +14,48 @@ const {
 const NOW = new Date("2026-07-14T19:00:00.000Z");
 const CITY = { key: "fusion-test-city", label: "Fusion Test City" };
 
+test("corroboration preserves the complete series route bound when another source supplies the primary occurrence window", () => {
+  const primary = normalizedEvent({ id: "direct", confidence: "strong",
+    time_window: { kind: "occurrences", dates: ["2026-07-14"], local_start: "20:00", local_end: "00:00" } });
+  const seriesWindow = { kind: "occurrences", dates: ["2026-07-01", "2026-07-14", "2026-08-01"], local_start: "20:00", local_end: "00:00" };
+  const corroborating = normalizedEvent({ id: "series@2026-07-14", source_provider_id: "other", source_identity: "other.example",
+    source_url: "https://other.example/series", source_series_id: "series", source_series_time_window: seriesWindow,
+    time_window: { kind: "occurrences", dates: ["2026-07-14"], local_start: "20:00", local_end: "00:00" } });
+  const events = fuseTimeSensitiveEvents([primary, corroborating]);
+  assert.equal(events.length, 1);
+  const [fused] = events;
+  assert.equal(fused.source_provider_id, primary.source_provider_id);
+  assert.deepEqual(fused.source_series_time_window, seriesWindow);
+  assert.equal(require("../server/place-candidates/agnostic-event-supply").isEphemeralHappening(fused, NOW), false);
+});
+
+test("two split schedules retain the strictest actually published route bound and its provenance", () => {
+  const { normalizeTimeSensitiveSourceEvent } = require("../server/pulse-sources");
+  const { isEphemeralHappening } = require("../server/place-candidates/agnostic-event-supply");
+  const clock = { local_start: "20:00", local_end: "00:00" };
+  const primary = normalizeTimeSensitiveSourceEvent(normalizedEvent({
+    id: "short@2026-07-14", confidence: "strong", source_series_id: "short",
+    time_window: { kind: "occurrences", dates: ["2026-07-14"], ...clock },
+    source_series_time_window: { kind: "occurrences", dates: ["2026-07-14", "2026-07-15"], ...clock },
+  }), { timezone: "Europe/Stockholm" });
+  const secondary = normalizeTimeSensitiveSourceEvent(normalizedEvent({
+    id: "long@2026-07-14", source_provider_id: "other", source_identity: "other.example",
+    source_url: "https://other.example/series", source_series_id: "long",
+    time_window: { kind: "occurrences", dates: ["2026-07-14"], ...clock },
+    source_series_time_window: { kind: "occurrences", dates: ["2026-07-01", "2026-07-14", "2026-08-01"], ...clock },
+  }), { timezone: "Europe/Stockholm" });
+  assert.equal(isEphemeralHappening(primary, NOW), true);
+  assert.equal(isEphemeralHappening(secondary, NOW), false);
+  for (const rows of [[primary, secondary], [secondary, primary]]) {
+    const fused = fuseTimeSensitiveEvents(rows);
+    assert.equal(fused.length, 1);
+    assert.equal(fused[0].source_provider_id, primary.source_provider_id);
+    assert.deepEqual(fused[0].source_series_time_window, secondary.source_series_time_window);
+    assert.equal(fused[0].field_provenance.source_series_time_window, "other.example");
+    assert.equal(isEphemeralHappening(fused[0], NOW), false);
+  }
+});
+
 function normalizedEvent(overrides = {}) {
   return {
     id: "night-market",

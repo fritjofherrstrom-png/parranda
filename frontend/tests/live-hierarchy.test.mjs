@@ -33,10 +33,23 @@ async function composed(t, events=live(), lang='en', extra={}) {
   await h.fetchMock.respond(h.fetchMock.pending()[0],{...day(events),...extra}); await h.clock.advance(50); return h;
 }
 
-test('healthy empty selected day automatically shows separately labelled wider-area suggestions without changing Where/When or day', async t => {
+// A known following bucket now opens first. Wider-day acceptance is exercised
+// after the reader explicitly selects the empty published day.
+async function chooseSelectedDay(h, events) {
+  await click(h, /^(Wed 7 Oct|ons 7 okt\.)$/);
+  const local = h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
+  assert.equal(local.body.scope, 'around_place');
+  assert.equal(local.body.time, 'tonight');
+  await h.fetchMock.respond(local, { ...body(events), query: {
+    scope: 'around_place', time: 'tonight', selected_date: '2026-10-07',
+  } });
+}
+
+test('explicit empty selected-day view shows wider-area suggestions without changing Where/When or day', async t => {
   const h=await composed(t,live({this_week:[event('Later local','2026-10-09')]}));
   const saved=h.readStorage(LAST_KEY);
   await click(h,/Explore live|See all live/);
+  await chooseSelectedDay(h, live({this_week:[event('Later local','2026-10-09')]}));
   const query=h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
   assert.ok(query,'one automatic wider-area request');
   assert.equal(query.body.scope,'in_place'); assert.equal(query.body.time,'tonight');
@@ -51,7 +64,7 @@ test('healthy empty selected day automatically shows separately labelled wider-a
   assert.equal(button(h,/^Wed 7 Oct$/).getAttribute('aria-pressed'),'true');
   assert.deepEqual(h.readStorage(LAST_KEY),saved);
   assert.equal(h.fetchMock.calls.filter(c => c.url.includes('/api/route-recommendations')).length,1);
-  await h.clock.advance(30000); assert.equal(queries(h).length,1,'no auto polling or fan-out');
+  await h.clock.advance(30000); assert.equal(queries(h).length,2,'one explicit period request and one wider request; no fan-out');
 });
 
 test('opening while local calendars are pending keeps the selected day instead of silently switching to following days', async t => {
@@ -106,10 +119,11 @@ test('explicit near-route cancels automatic wider suggestions without moving the
 test('a failing wider query is not retried or presented as an empty larger area', async t => {
   const h=await composed(t,live({this_week:[event('Future','2026-10-09')]}));
   await click(h,/See all live/);
+  await chooseSelectedDay(h, live({this_week:[event('Future','2026-10-09')]}));
   const query=h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
   await h.fetchMock.respond(query,{},502);
   await h.clock.advance(60000);
-  assert.equal(queries(h).length,1);
+  assert.equal(queries(h).length,2);
   assert.match(text(h),/could not be confirmed/);
   assert.match(text(h),/Future/);
   assert.doesNotMatch(text(h),/No verified same-day events were listed in the wider area/);
@@ -143,6 +157,7 @@ test('following-days suggestions retain a source-timed single event, not just li
   const future=event('Timed concert','2026-10-09',{time_window:{kind:'continuous',starts_at:'2026-10-09T16:00:00Z',ends_at:'2026-10-09T18:00:00Z'},anchor_distance_km:1});
   const h=await composed(t,live({this_week:[future]}));
   await click(h,/See all live/);
+  await chooseSelectedDay(h, live({this_week:[future]}));
   const query=h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
   await h.fetchMock.respond(query,body(live()));
   assert.match(text(h),/Timed concert/);
@@ -176,12 +191,13 @@ for (const lang of ['en','sv']) test(`healthy wider selected-day empty reuses fo
   const future=event('Later local','2026-10-09');
   const h=await composed(t,live({this_week:[future]}),lang);
   await click(h,/See all live|Se allt live/);
+  await chooseSelectedDay(h, live({this_week:[future]}));
   const query=h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
   assert.ok(query);
   await h.fetchMock.respond(query,body(live()));
   assert.match(text(h),lang === 'en' ? /Following days — around Testville/ : /Följande dagar — runt Testville/);
   assert.match(text(h),/Later local/); assert.match(text(h),/9 (Oct|okt)/i);
-  assert.equal(queries(h).length,1,'future local already belongs to the local collection');
+  assert.equal(queries(h).length,2,'one explicit period request plus wider check; future rows are reused');
   assert.equal(button(h,/^(Around Testville|Runt Testville)$/).getAttribute('aria-pressed'),'true');
   assert.equal(button(h,/^(Wed 7 Oct|ons 7 okt\.)$/).getAttribute('aria-pressed'),'true');
 });

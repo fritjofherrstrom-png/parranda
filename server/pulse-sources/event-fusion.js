@@ -108,6 +108,7 @@ function buildFusedEvent(members) {
     "address",
     "area",
     "time_window",
+    "source_series_time_window",
     "recurrence",
     "calendar_fact",
     "route_role_hint",
@@ -120,6 +121,16 @@ function buildFusedEvent(members) {
     const owner = ranked.find((event) => hasValue(event[field]));
     if (!hasValue(merged[field]) && owner) merged[field] = owner[field];
     if (owner) fieldProvenance[field] = sourceIdentity(owner);
+  }
+
+  // Two publishers may describe the same session within different complete
+  // schedules. Keep the strictest real schedule as the route bound even when
+  // the primary has a shorter one; never invent a union of publisher dates.
+  const seriesOwner = ranked.filter(event => hasValue(event.source_series_time_window))
+    .sort((left, right) => seriesSpan(right) - seriesSpan(left))[0];
+  if (seriesOwner) {
+    merged.source_series_time_window = seriesOwner.source_series_time_window;
+    fieldProvenance.source_series_time_window = sourceIdentity(seriesOwner);
   }
 
   const coordinateOwner = ranked.find((event) => finiteCoordinates(event));
@@ -187,6 +198,15 @@ function buildFusedEvent(members) {
   };
 
   return merged;
+}
+
+function seriesSpan(event) {
+  const dates = event.source_series_time_window?.dates;
+  const span = Array.isArray(dates) && dates.length
+    ? Date.parse(dates[dates.length - 1]) - Date.parse(dates[0]) : NaN;
+  // Normalization rejects malformed provenance. Keep a malformed bound
+  // conservative if an internal caller bypasses that boundary.
+  return Number.isFinite(span) && span >= 0 ? span : Infinity;
 }
 
 function detectConflicts(events) {

@@ -35,6 +35,15 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     endsOn,
     timezone,
   });
+  const seriesWindow = rawEvent.source_series_time_window == null ? null
+    : normalizeTimeWindow(rawEvent.source_series_time_window, { timezone });
+  // A split occurrence carries the complete source schedule as a route bound.
+  // Incoherent or malformed provenance must not silently disappear and turn
+  // the remaining single date into a newly eligible route anchor.
+  if (rawEvent.source_series_time_window != null &&
+      (seriesWindow?.kind !== "occurrences" || timeWindow?.kind !== "occurrences" ||
+       !timeWindow.dates.every(date => seriesWindow.dates.includes(date)) ||
+       seriesWindow.local_start !== timeWindow.local_start || seriesWindow.local_end !== timeWindow.local_end)) return null;
   const sourceUrl = firstString(rawEvent.source_url, rawEvent.url);
   const sourceLabel = firstString(rawEvent.source_label, rawEvent.provider, rawEvent.source?.label);
   const provenance = normalizeProvenance(rawEvent.provenance, { sourceUrl, sourceLabel });
@@ -90,6 +99,7 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     starts_on: startsOn,
     ends_on: endsOn,
     time_window: timeWindow,
+    source_series_time_window: seriesWindow,
     recurrence: normalizeRecurrence(rawEvent.recurrence),
     calendar_fact: calendarFact,
     freshness: firstString(rawEvent.freshness) || (timingRelevance === "stale" ? "stale" : null),
