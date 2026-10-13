@@ -112,3 +112,59 @@ for (const period of ['Sun 28 Jun', 'Following 7 days']) test(`real applied upgr
   await h.fetchMock.respond(upgrade, applied);
   assert.equal(pressed(h, period), 'true'); assert.match(h.text(), /Changed: Live: event added/); assert.equal(routes(h).length, 1);
 });
+
+for (const scope of ['Around the place', 'Near the route', 'Near me']) for (const period of ['Sun 28 Jun', 'Following 7 days']) {
+  test(`same-question upgrade retains ${scope} × ${period} through reopen and rejects the old geometry body`, async t => {
+    const applied = wireBody('upgrade_applied');
+    const events = { ...wireBody('completion_pending').live_events, selected_date: '2026-06-28', pending: true, tonight: [], this_week: [] };
+    const original = day(events); original.live_completion.route_upgrade = 'explicit_request';
+    original.agnostic_route_output_experiment.source_status.anchor = structuredClone(applied.result.agnostic_route_output_experiment.source_status.anchor);
+    original.days[0].primary_route.main_stops = structuredClone(applied.result.days[0].primary_route.main_stops.filter(stop => !stop.event_id));
+    const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' }); t.after(() => h.unmount());
+    let permissions = 0;
+    Object.defineProperty(h.window.navigator, 'geolocation', { configurable: true, value: {
+      getCurrentPosition(success) { permissions += 1; success({ coords: { latitude: 60.18, longitude: 24.95 } }); },
+    } });
+    await h.clock.advance(500); await h.fetchMock.respond(routes(h)[0], original); await h.clock.advance(50);
+    await click(h, 'Explore live'); await click(h, period);
+    const terminal = wireBody('completion_ready');
+    const later = { ...terminal.live_events.tonight[0], id: 'later', title: 'Later concert', starts_at: '2026-06-29T18:00:00Z',
+      time_window: { kind: 'continuous', starts_at: '2026-06-29T18:00:00Z' }, route_eligible: false };
+    terminal.live_events.this_week = [later]; applied.result.live_events.this_week = [later];
+    await h.fetchMock.respond(queries(h).at(-1), query(terminal.live_events));
+    let obsolete = null;
+    if (scope !== 'Around the place') {
+      await click(h, scope); obsolete = queries(h).at(-1);
+      const oldEvents = structuredClone(terminal.live_events);
+      oldEvents.tonight = [{ ...oldEvents.tonight[0], title: 'Obsolete geometry event' }];
+      oldEvents.this_week = [{ ...later, title: 'Obsolete geometry event' }];
+      await h.fetchMock.respond(obsolete, query(oldEvents), 200, { deferBody: true });
+    } else await close(h); // also retain the cell when the upgrade arrives hidden
+    await h.fetchMock.respond(await read(h), terminal);
+    const upgrade = h.fetchMock.calls.find(c => c.url === '/api/planner-live-route-upgrade'); assert.ok(upgrade);
+    await h.fetchMock.respond(upgrade, applied);
+    if (obsolete) {
+      assert.equal(obsolete.aborted, true, 'geometry replacement aborts the old query');
+      await h.fetchMock.releaseBody(obsolete);
+      assert.equal(pressed(h, scope), 'true'); assert.equal(pressed(h, period), 'true');
+      const refreshed = queries(h).at(-1);
+      assert.notEqual(refreshed, obsolete);
+      assert.equal(refreshed.body.scope, scope === 'Near me' ? 'near_me' : 'near_route');
+      if (scope === 'Near me') assert.deepEqual(refreshed.body.anchor, { lat: 60.18, lng: 24.95 });
+      else assert.deepEqual(refreshed.body.route_points, applied.result.days[0].primary_route.main_stops.map(({ lat, lng }) => ({ lat, lng })));
+      await h.fetchMock.respond(refreshed, query(applied.result.live_events));
+      assert.doesNotMatch(h.text(), /Obsolete geometry event/);
+      await close(h);
+    }
+    await click(h, 'See all live');
+    if (scope !== 'Around the place') assert.equal(pressed(h, scope), 'true');
+    assert.equal(pressed(h, period), 'true');
+    assert.equal(queries(h).at(-1).body.scope, scope === 'Near me' ? 'near_me' : scope === 'Near the route' ? 'near_route' : 'around_place');
+    assert.equal(queries(h).at(-1).body.time, period === 'Following 7 days' ? 'this_week' : 'tonight');
+    if (scope === 'Near me') {
+      assert.deepEqual(queries(h).at(-1).body.anchor, { lat: 60.18, lng: 24.95 });
+      assert.equal(permissions, 1, 'the same Live-only consent survives the upgrade and reopen');
+    }
+    assert.equal(routes(h).length, 1, 'cell preservation never composes another day');
+  });
+}

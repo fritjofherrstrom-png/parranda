@@ -321,18 +321,28 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const liveQueryAbortRef = useRef<AbortController | null>(null);
   const liveSheetOpenedRef = useRef(false);
   const liveSheetPeriodAutomaticRef = useRef(true);
+  const liveSheetUpgradeResponseRef = useRef<any>(null);
   const liveNearMeCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const liveResponseRef = useRef(safeResponse);
   liveResponseRef.current = safeResponse;
   // A scope request belongs to the published day it was built from. Intent
   // cancellation alone misses queries opened while the previous day is held.
   useEffect(() => {
+    const retainCell = liveSheetUpgradeResponseRef.current === safeResponse;
+    // Consume on mismatch too: restore/compose can replace a batched upgrade.
+    liveSheetUpgradeResponseRef.current = null;
     liveQueryAbortRef.current?.abort();
     liveQueryAbortRef.current = null;
     setLiveQueryEvents(null);
     setLiveQueryPending(false);
     setLiveQueryError(null);
     setLiveQueryGeoHint(null);
+    // A Live upgrade answers the same question. Keep the reader's cell, but
+    // never reuse its old geometry/result. Reopen refreshes a closed sheet.
+    if (retainCell && liveSheetOpenedRef.current) {
+      if (liveSheetOpen) requestLiveSheetScope(liveSheetScope, liveSheetTime, true).catch(() => {});
+      return;
+    }
     liveSheetOpenedRef.current = false;
     liveSheetPeriodAutomaticRef.current = true;
     liveNearMeCoordsRef.current = null;
@@ -778,6 +788,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     lastEntryRef.current = upgraded;
     writeLS(LAST_KEY, upgraded);
     liveResponseRef.current = safe;
+    liveSheetUpgradeResponseRef.current = safe;
     setClassification(cls);
     setSafeResponse(safe);
     const unhonored = result?.agnostic_route_output_experiment?.pinned_candidates?.unhonored;
