@@ -1,0 +1,172 @@
+{
+  "policy": "explicit allowlist; no actual keys/bearer/private receipts; unchanged source diff/commits/bounded bundle; portable text paths",
+  "changed_exports": [
+    {
+      "file": "candidate/previous-verified-identity.json",
+      "original_sha256": "a764f3c3eefcd513c4475998ab0f01fb3c1c33d0e7a4d91940be9ab1a6e46593",
+      "exported_sha256": "c1ee18cce7a0fefbabac02771aa94738879968a0666a0c738fcce28fc5d38267",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/TEST_RESULTAT.json",
+      "original_sha256": "0121c9c0964d9793c0b83d83edb6fe26a81ff0df0d0359020fba13524c169815",
+      "exported_sha256": "a679ef2ab95fea70957e6b75084c492091d1dc30c86357f04fb9619869352682",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/frontend-build.log",
+      "original_sha256": "a92143faf561657835ea165a6e9c51777cf0009a0f521b574dedb15e18eafb3d",
+      "exported_sha256": "3e6f39618751bf0c3959b4f88461fd9839565afe09afbb12c1312b69ce30fc72",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/conditions.json",
+      "original_sha256": "b6f03c51f42bd449c1767a71caa1b3a2e8da3ab8678725ff22854647c74f3713",
+      "exported_sha256": "663d9aa741d28ea3433bceec03757f0f2b13ea9a6f2b74cd74c50715a23f1f16",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/result.json",
+      "original_sha256": "25d37b96fcac8ea41e395e0e6c70559d2152a902514892325447146afab1ab62",
+      "exported_sha256": "54662f4442cf8e63e13d15ace64d08b8b7cee94407418dae06b2e210cf021ce1",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/test.log",
+      "original_sha256": "c766a55674be6c9177c87304aa4c31d369b9d8e476d424418b221f19d93f9798",
+      "exported_sha256": "cf9a117e3269ca23287efd023f54c8f899e42253052d05c8dd6c554d5df16ab3",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/browser/page-1-0.json",
+      "original_sha256": "3d2d19b85abcd667d802e32b71ef4b19876b17a65c199f69b8222ca13f704017",
+      "exported_sha256": "fc26d8313fea12b7c5dcfc7eec2388f2d96af978e983f53cb548d9173176912a",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/browser/page-2-0.json",
+      "original_sha256": "24788babfe9637595ec1f639bb6623076ce040d116a5fc7438ab9dacd5d07884",
+      "exported_sha256": "0c241fb4b117aa04d412abdb341d2f3b41023b50a40dbcd40582923e7047ec8c",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/browser/page-3-0.json",
+      "original_sha256": "05abc4a128fc9521c14006cab30adce7dd0f0853c5171b7bd74bc86c1d089655",
+      "exported_sha256": "9f3f80898a4246d3bfe7c99f184bce01363dd00c18f72dc21f5269109cc4acaa",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/browser/page-4-0.json",
+      "original_sha256": "1b1f779217eb9f46ce9cc6ff3ff0fb3c34d1d63fe5592fe83f1174aec3f7697c",
+      "exported_sha256": "aed5b8231d48548af86943d8817404949f45f7425d7dd2296818c0788131dbec",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/browser/browser-events.json",
+      "original_sha256": "8d2bfc40b4b3a9843dbd4ff0655f99d1dfd3d377231f66a51b45a145bc637b50",
+      "exported_sha256": "0bae1b93788e16ce921e99f84618be2e7d355d5d5981f6b29412cddec85e84ef",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/pulse/page-1-events.json",
+      "original_sha256": "82041e8e857d37766f6a726b06ac4ded5e19c69f1f73db327a59c089998f2a32",
+      "exported_sha256": "8bb27b3b475d1428a1456eb4231cd45965a0ed2005e84ada01139a112c320373",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/pulse/page-1.json",
+      "original_sha256": "ccd3c0950dcceba21e44f0682efd0bd16b25843f4cd26c7b3a9ff0bcab5ad126",
+      "exported_sha256": "8aac96fd6be7e884b9ee333f9ef12bfe016f49933017d8585d20cb26346569bb",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/pulse/page-2-events.json",
+      "original_sha256": "890344e6c5e2d23866288947c3f204a4071f4f1a15ca2f3d6bd317e067a674c7",
+      "exported_sha256": "80fb4f89e4e3a9559deab3ae8d8042911a984d3c0d86b4ff9f23a77648b451b9",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/pulse/page-2.json",
+      "original_sha256": "fc8698464e18874f3cb88e1b09e062b3790c90616b3581b50b2107cd87838531",
+      "exported_sha256": "ffbee855b2aadb909af3bc0885ede7f00296de24c5608418dde3ea1ff108764a",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/pulse/page-3-events.json",
+      "original_sha256": "be878e81f50188182a0e8c19a404ea410e089c03a52fe698fb1033bc9e582b08",
+      "exported_sha256": "e80e0adc20cdd825c690f556ed4ad1d56daf5f6778cf0eb89d1ddd6abc20fab9",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/pulse/page-3.json",
+      "original_sha256": "5303fc05f5e97a072d630fb820ba0a4caac40dd479a641dde80e867e8e150bc4",
+      "exported_sha256": "047a0d354fc8d41c254baaa280f9e4750f1ee0dc675dd16bf91d0fcd7ba0efc0",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/pulse/page-4-events.json",
+      "original_sha256": "6d12bf0223208b2078a0e15b764819eaa16f0720b43b0ee0fda114423c376e88",
+      "exported_sha256": "b78d14320891edf303d0b02f921c7f9c7dcf3f6128800ede20e7e9a1d70ab60f",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/pulse/page-4.json",
+      "original_sha256": "f1ab5941ec2ae1c1455a904fecf821e331eca1afbddbf2a73eac7aa963d6bb97",
+      "exported_sha256": "fe844c21d38ca9c2094a5f88b38dc1b8186b0c6c72a5ec4961f49f2987be7d39",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/pulse/page-5-events.json",
+      "original_sha256": "2530696f63ccd946656876456a0bac46dda6b828418f8d621b8c83e7aa7e1aec",
+      "exported_sha256": "6f1c4b8ed0272a2a9d883742ac8031a6fd9c78999585d761e92319958fc164c8",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/pulse/page-5.json",
+      "original_sha256": "589c58cfad67bfc1b3f2d6f93db73b1356fc9a4c89df87ea83dbf6459accbc63",
+      "exported_sha256": "9ad7c054a0ea80bd0dfad819a48f2adfd32d25c1736cbbd99da27f8fa42b08fc",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/pulse/page-6-events.json",
+      "original_sha256": "03f219b7cf146fd90a296eabc2206eb6f2c9f56d517348f902ca795e716c49a1",
+      "exported_sha256": "aa247fdff900a42e257030b33ff5cc964b8f331c4ca72edd3769c9f0b6d94a34",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/pulse/page-6.json",
+      "original_sha256": "1cd66b591d89555a3529ecc47ea626767ea9cd41775fcd7dda1d6b652baf7e7f",
+      "exported_sha256": "84b44458e07aa63d4bccfdabc2ea381fe3804c170fddbf3f224664b8901b92e8",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/pulse/page-7-events.json",
+      "original_sha256": "789251124857b5c323620cfb9c6fd090406ed6ad0a2c7dd71595b8509afcef72",
+      "exported_sha256": "316e3462cd709b05d742a67beaa00b362f11480538e232e4ff5c31497bc91550",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/previous-exact-head/full/pulse/page-7.json",
+      "original_sha256": "57337a9509d0f08a57f2f2977d8a9405fd440e3532d905d20d3a624e96e17253",
+      "exported_sha256": "9e1dc6fda113c0b4e4f7cf804f7c8380e25ec38389cc5b3fb37c085cebe39ec5",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    },
+    {
+      "file": "evidence/http/http-final.log",
+      "original_sha256": "c27b7714d70ab6be625d2653b9b43c343a12429ba7b2c1513a657ef063a2bb08",
+      "exported_sha256": "3c3e70d5068df23f37dbb7bb9c50190d1ff422d045c450bbea96573a01bdda3e",
+      "method": "remove local user paths; redact sensitive structured fields and secret/bearer/signed-receipt patterns"
+    }
+  ],
+  "excluded": "env files, caches/dependency runtime, browser profiles, private API receipts/full raw API bodies, previous failed raw captures; original evidence remains outside package",
+  "raw_bundle_new_blob_scan": "candidate/BUNDLE_AUDIT.json",
+  "secret_rules": [
+    "private key PEM",
+    "provider/GitHub access keys",
+    "Bearer values",
+    "raw48hex capabilities",
+    "JWT-shaped signed receipts",
+    "sensitive JSON fields"
+  ],
+  "changed_evidence_interpretation": "sanitized copies; original evidence hashes preserved where copies changed"
+}
