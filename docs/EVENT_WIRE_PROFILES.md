@@ -24,6 +24,7 @@ The profile (`server/pulse-sources/event-wire-profiles.js`) says where the title
 - **No guessed times.** A clock is used only when the source states it. A missing or backwards end is left out, never guessed. Floating local clocks are converted in the row's IANA timezone, including clock changes.
 - **Dropped records:** cancelled records, online-only records and records outside the window.
 - **Bounded fetch:** one bounded fetch, same-origin redirects only, and no provider-supplied URLs are followed.
+- **Body bound:** declared excessive lengths are rejected before reading, and native streams are cancelled as soon as the byte cap is exceeded.
 - **Robots:** both sources allow the paths used. Göteborg & Co's CMS API (`cms.goteborg.com`) is robots-excluded and is not used.
 - **Unknown reuse terms:** rows stay `pulse_only` with `terms_status: "unknown"`, like the existing Barcelona and Rome rows.
 
@@ -39,6 +40,8 @@ The profile (`server/pulse-sources/event-wire-profiles.js`) says where the title
 This takes these fixed addresses out of the per-request venue lookup budget, which allows four new lookups per request.
 
 Cold Live follows its original completion capability even when day composition produces no usable route. It updates the card and details without reload, does not compose a route merely to refresh Live, and never stores an unavailable day as a remembered itinerary.
+
+Request-time discovery has a cancellable 30-second total budget within the existing 120-second Live capability. Its individual eight-second scout timeouts are unchanged. A budget failure is terminal and receives the existing short failure hold; aborted acquisition cannot populate the positive discovery cache. This leaves time for ordinary source collection and bounded venue lookup instead of spending the entire capability on sequential discovery reads.
 
 ## Adding a source
 

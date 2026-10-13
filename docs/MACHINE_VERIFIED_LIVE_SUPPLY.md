@@ -75,7 +75,7 @@ collection budget in rounds: later venues get a first attempt before earlier
 venues spend the budget on alternate spellings. Answers are still deduplicated,
 output order retained, and a confident out-of-scope match stops that venue's
 variants. No provider limits or geography/confidence gates are widened.
-Result pools use `agnostic-events-v11` so old healthy-empty answers cannot
+Result pools use `agnostic-events-v12` so old healthy-empty answers cannot
 bypass discovery or retain the previous venue allocation. Existing operator
 cache files are preserved.
 

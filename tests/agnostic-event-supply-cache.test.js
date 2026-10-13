@@ -281,7 +281,8 @@ test("one neutral warm cache reranks for different preferences without refetchin
     assert.equal(culture.tonight[0].id, "a-concert");
     assert.equal(secondHand.tonight[0].id, "z-loppis");
     assert.equal(fetchCount, 1, "preference changes rerank cached evidence instead of recollecting providers");
-    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v11")), "persist discovery and corrected venue allocation separately from stale result pools");
+    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v12")), "persist corrected timezone, bindings and occurrence groups separately from stale result pools");
+    assert.ok(!fs.existsSync(path.join(cacheDir, "agnostic-events-v11")), "old result pools with borrowed timezone/bindings are not written");
     assert.ok(!fs.existsSync(path.join(cacheDir, "agnostic-events-v6")), "v6 pools that widened recurring ranges into daily windows are never read or written");
     const restarted = resolveDefaultEventSupply({
       PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_EVENT_FEEDS: FEEDS_ENV,

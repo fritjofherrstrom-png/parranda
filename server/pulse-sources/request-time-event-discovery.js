@@ -29,6 +29,9 @@ const { bindManifestCandidate, sourceRowForBinding } = require("./source-qualifi
 const MAX_QUERIES = 2;
 const MAX_SEEDS = 6;
 const SCOUT_TIMEOUT_MS = 8_000;
+// Live capabilities last 120 s. Spend at most 30 s on finding sources, leaving
+// the rest for ordinary bounded collection, venue lookup and completion reads.
+const DISCOVERY_BUDGET_MS = 30_000;
 const FOUND_TTL_MS = 6 * 60 * 60 * 1000;
 // A place with nothing to find is not searched again for a while. A failed
 // search or scout is a different answer: the absence is unproven, so it is
@@ -72,17 +75,30 @@ function createRequestTimeEventDiscovery({
     const held = holds.get(key);
     if (held && held.until > now()) return held.outcome;
     let result;
+    const controller = new AbortController();
+    let deadline;
     try {
-      result = await cache.get(key, () => discoverOnce(), { shouldStore: (found) => found?.status === "found" });
+      result = await Promise.race([
+        cache.get(key, () => discoverOnce(controller.signal), {
+          signal: controller.signal,
+          shouldStore: found => !controller.signal.aborted && found?.status === "found",
+        }),
+        new Promise(resolve => { deadline = setTimeout(() => {
+          controller.abort();
+          resolve(outcome("failed", "request_time_discovery_timeout"));
+        }, DISCOVERY_BUDGET_MS); }),
+      ]);
     } catch (_error) {
       result = outcome("failed", "request_time_discovery_failed");
+    } finally {
+      clearTimeout(deadline);
     }
     if (result.status === "empty") holds.set(key, { until: now() + EMPTY_HOLD_MS, outcome: result });
     else if (result.status === "failed") holds.set(key, { until: now() + FAILED_HOLD_MS, outcome: result });
     else holds.delete(key);
     return result;
 
-    async function discoverOnce() {
+    async function discoverOnce(signal) {
       const bounds = {
         south: anchor.lat - BOUNDS_HALF_SPAN_DEG,
         north: anchor.lat + BOUNDS_HALF_SPAN_DEG,
@@ -106,6 +122,7 @@ function createRequestTimeEventDiscovery({
       let searched;
       try {
         searched = await sourceSearch({
+          signal,
           queries: queryPlan.map((item) => item.query),
           query_plan: queryPlan,
           place,
@@ -131,7 +148,14 @@ function createRequestTimeEventDiscovery({
           seeds,
           maxSeeds: MAX_SEEDS,
           timeoutMs: SCOUT_TIMEOUT_MS,
-          ...(typeof fetcher === "function" ? { fetcher } : {}),
+          fetcher: async (url, options = {}) => {
+            signal.throwIfAborted();
+            const transport = typeof fetcher === "function" ? fetcher : globalThis.fetch;
+            const response = await transport(url, { ...options,
+              signal: options.signal ? AbortSignal.any([signal, options.signal]) : signal });
+            signal.throwIfAborted();
+            return response;
+          },
           eventReader: null,
         });
       } catch (_error) {
