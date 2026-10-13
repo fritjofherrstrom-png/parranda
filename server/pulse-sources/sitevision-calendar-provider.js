@@ -127,7 +127,9 @@ function createSitevisionCalendarProvider(providerOptions = {}) {
           }
 
           const occurrences = collectionOccurrences(events, parseOptions);
-          const rows = prioritizeCollectionOccurrences(occurrences, parseOptions).slice(0, limit).map(compact).filter(Boolean);
+          const boundedOccurrences = occurrences.length > limit
+            ? prioritizeCollectionOccurrences(occurrences, parseOptions).slice(0, limit) : occurrences;
+          const rows = boundedOccurrences.map(compact).filter(Boolean);
           return {
             events: [],
             signals: [],
@@ -319,8 +321,10 @@ async function enrichFromDetailPages(events, fetcher, options = {}) {
       : 0;
     // Aggregated date ranges may hide the source's individual session clocks.
     // Already timed listing rows retain their facts without a detail request.
-    const needsTiming = statesNoClock(event) && end && start && end > start;
-    return period * 2 + (needsTiming ? 0 : 1);
+    const needsTiming = statesNoClock(event);
+    // A date-only single session needs its clock before broader schedules
+    // spend the budget. Then clarify ranges before already timed rows.
+    return period * 3 + (needsTiming ? end > start ? 1 : 0 : 2);
   };
   const selected = [...events].sort((a, b) => priority(a) - priority(b)).slice(0, detailLimit);
   await mapWithConcurrency(selected, concurrency, async (event) => {

@@ -62,6 +62,7 @@ async function capturedRows(name) {
 }
 
 const pinOf = (row) => [row.title, Number.isFinite(row.lat) ? [row.place_context, row.lat, row.lng] : null];
+const followingRows = (result) => [...result.this_week, ...(result.browse?.this_week?.more || [])];
 
 // Live near the Simrishamn anchor for a selected day, at the capture instant.
 async function capturedLive(selectedDate) {
@@ -86,7 +87,8 @@ function liveRow(event, from, through) {
   return [
     event.title,
     window.kind,
-    window.kind === "occurrences" ? window.dates.filter((date) => date >= from && date <= through) : null,
+    window.kind === "occurrences" ? (event.occurrences || [event]).flatMap(occurrence => occurrence.time_window.dates)
+      .filter((date) => date >= from && date <= through).sort() : null,
     `${window.local_start}–${window.local_end}`,
     event.route_eligible,
   ];
@@ -104,7 +106,7 @@ test("captured Sitevision pages match their provenance manifest", () => {
 test("captured legacy detail pages pin only events their own venue block names", async () => {
   // Rows without an "Evenemangsplats" venue block (an editorial location link,
   // an unlabelled address, a heading that differs from the listing) keep no pin.
-  assert.deepEqual((await capturedRows("simrishamn")).map(pinOf), [
+  assert.deepEqual((await capturedRows("simrishamn")).map(pinOf).sort(), [
     ["Mötesplats Rosenborg September", null],
     ["I love you two med Circus I love you", null],
     ["Ta hand om dig! Beredskapsdagen 2026", ["Österlens museum", 55.556437, 14.347752]],
@@ -113,7 +115,7 @@ test("captured legacy detail pages pin only events their own venue block names",
     ["Bénka-dí: Lappa & laga tillsammans", ["Ungdomens hus Bénka-dí", 55.554994, 14.352311]],
     ["Tisdagshäng", ["Simrishamns bibliotek", 55.554923, 14.352681]],
     ["SUMO Robot med Waynes Industrier – Simrishamns space för unga makers", ["Simrishamns bibliotek", 55.554923, 14.352681]],
-  ]);
+  ].sort());
 });
 
 test("captured event showcase pages pin their events from registered state", async () => {
@@ -142,7 +144,7 @@ test("captured weekly entries reach Live on their stated days; every other week 
   // day, the rule after it does. "Varannan tisdag" never says which weeks, so
   // that entry stays a range. Every series spans months: Pulse context, never
   // a route stop.
-  assert.deepEqual(result.this_week.filter(event => event.geographic_relevance !== "source_scope").map(row).sort(), [
+  assert.deepEqual(followingRows(result).filter(event => event.geographic_relevance !== "source_scope").map(row).sort(), [
     ["Bénka-dí: Lappa & laga tillsammans", "occurrences", ["2026-09-28"], "17:00–18:30", false],
     ["SUMO Robot med Waynes Industrier – Simrishamns space för unga makers", "period", null, "15:30–17:30", false],
     ["Samtalskafé för gemenskap", "occurrences", ["2026-09-28", "2026-10-01"], "13:00–14:30", false],
@@ -155,7 +157,7 @@ test("captured weekly entries reach Live on their stated days; every other week 
   ].sort());
   assert.ok(maplessToday.every(event => event.lat === null && event.lng === null && event.route_eligible === false));
   assert.ok(result.tonight.every(event => event.time_window.kind !== "period"), "source ranges never claim a selected-day occurrence");
-  assert.ok(result.this_week.filter(event => event.geographic_relevance === "source_scope").every(event =>
+  assert.ok(followingRows(result).filter(event => event.geographic_relevance === "source_scope").every(event =>
     event.time_window.kind === "period" && event.route_eligible === false && event.lat === null));
 });
 
@@ -165,11 +167,13 @@ test("a selected Monday lists the captured Monday entries; a range never claims 
   const row = (event) => liveRow(event, "2026-09-28", "2026-10-05");
 
   assert.deepEqual(result.tonight.map(row).sort(), [
-    ["Bénka-dí: Lappa & laga tillsammans", "occurrences", ["2026-09-28", "2026-10-05"], "17:00–18:30", false],
-    ["Samtalskafé för gemenskap", "occurrences", ["2026-09-28", "2026-10-01", "2026-10-05"], "13:00–14:30", false],
+    ["Bénka-dí: Lappa & laga tillsammans", "occurrences", ["2026-09-28"], "17:00–18:30", false],
+    ["Samtalskafé för gemenskap", "occurrences", ["2026-09-28"], "13:00–14:30", false],
   ]);
-  assert.deepEqual(result.this_week.filter(event => event.geographic_relevance !== "source_scope").map(row).sort(), [
+  assert.deepEqual(followingRows(result).filter(event => event.geographic_relevance !== "source_scope").map(row).sort(), [
+    ["Bénka-dí: Lappa & laga tillsammans", "occurrences", ["2026-10-05"], "17:00–18:30", false],
     ["SUMO Robot med Waynes Industrier – Simrishamns space för unga makers", "period", null, "15:30–17:30", false],
+    ["Samtalskafé för gemenskap", "occurrences", ["2026-10-01", "2026-10-05"], "13:00–14:30", false],
     ["Tisdagshäng", "occurrences", ["2026-09-29"], "14:00–16:00", false],
   ]);
   // Rows that ended before the selected day leave the listing, so three later
@@ -180,7 +184,7 @@ test("a selected Monday lists the captured Monday entries; a range never claims 
     "anhorigcirkel", "benka-di-bakning", "benka-di-pingis",
   ]);
   assert.deepEqual(result.acquisition.rejection_summary, []);
-  const mapless = result.this_week.filter(event => event.geographic_relevance === "source_scope");
+  const mapless = followingRows(result).filter(event => event.geographic_relevance === "source_scope");
   assert.deepEqual(mapless.map(event => event.title).sort(), [
     "Anhörigcirkel", "Bénka-dí: Bakning", "Bénka-dí: Pingis", "Mötesplats Rosenborg September",
   ].sort());
