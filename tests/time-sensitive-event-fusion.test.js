@@ -14,6 +14,21 @@ const {
 const NOW = new Date("2026-07-14T19:00:00.000Z");
 const CITY = { key: "fusion-test-city", label: "Fusion Test City" };
 
+test("corroboration preserves the complete series route bound when another source supplies the primary occurrence window", () => {
+  const primary = normalizedEvent({ id: "direct", confidence: "strong",
+    time_window: { kind: "occurrences", dates: ["2026-07-14"], local_start: "20:00", local_end: "00:00" } });
+  const seriesWindow = { kind: "occurrences", dates: ["2026-07-01", "2026-07-14", "2026-08-01"], local_start: "20:00", local_end: "00:00" };
+  const corroborating = normalizedEvent({ id: "series@2026-07-14", source_provider_id: "other", source_identity: "other.example",
+    source_url: "https://other.example/series", source_series_id: "series", source_series_time_window: seriesWindow,
+    time_window: { kind: "occurrences", dates: ["2026-07-14"], local_start: "20:00", local_end: "00:00" } });
+  const events = fuseTimeSensitiveEvents([primary, corroborating]);
+  assert.equal(events.length, 1);
+  const [fused] = events;
+  assert.equal(fused.source_provider_id, primary.source_provider_id);
+  assert.deepEqual(fused.source_series_time_window, seriesWindow);
+  assert.equal(require("../server/place-candidates/agnostic-event-supply").isEphemeralHappening(fused, NOW), false);
+});
+
 function normalizedEvent(overrides = {}) {
   return {
     id: "night-market",

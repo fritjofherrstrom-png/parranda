@@ -11,6 +11,7 @@
 const { GENERIC_PROVIDER_CITY } = require("./provider-registry");
 const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
 const {
+  datePartsInTimezone,
   normalizeIanaTimezone,
   normalizeSourceEventDateTime,
 } = require("./source-event-time");
@@ -125,13 +126,14 @@ function createSitevisionCalendarProvider(providerOptions = {}) {
             await enrichFromDetailPages(events, fetcher, parseOptions);
           }
 
-          const rows = events.map(compact).filter(Boolean);
+          const occurrences = collectionOccurrences(events, parseOptions);
+          const rows = prioritizeCollectionOccurrences(occurrences, parseOptions).slice(0, limit).map(compact).filter(Boolean);
           return {
             events: [],
             signals: [],
             time_sensitive_events: rows,
             collection_status: buildProviderCollectionOutcome(rows.length ? "ok" : "empty", {
-              reason: rows.length ? null : "source_empty",
+              reason: occurrences.length > limit ? "source_collection_truncated" : rows.length ? null : "source_empty",
               eventRows: rows.length,
             }),
           };
@@ -308,7 +310,20 @@ async function enrichFromDetailPages(events, fetcher, options = {}) {
     DEFAULT_DETAIL_CONCURRENCY,
   );
   const mapPinned = [];
-  await mapWithConcurrency(events.slice(0, detailLimit), concurrency, async (event) => {
+  const window = collectionCalendarWindow(options);
+  const priority = (event) => {
+    const start = event.listing_date, end = event.listing_end_date || start;
+    const period = window && start && end
+      ? start <= window.start && end >= window.start ? 0
+        : start <= window.end && end >= window.start ? 1 : 2
+      : 0;
+    // Aggregated date ranges may hide the source's individual session clocks.
+    // Already timed listing rows retain their facts without a detail request.
+    const needsTiming = statesNoClock(event) && end && start && end > start;
+    return period * 2 + (needsTiming ? 0 : 1);
+  };
+  const selected = [...events].sort((a, b) => priority(a) - priority(b)).slice(0, detailLimit);
+  await mapWithConcurrency(selected, concurrency, async (event) => {
     if (!event?.source_url) return;
     try {
       const html = await fetchBoundedText(fetcher, event.source_url, options);
@@ -341,6 +356,52 @@ async function enrichFromDetailPages(events, fetcher, options = {}) {
     }
   });
   dropSharedPageCoordinates(mapPinned);
+}
+
+function collectionCalendarWindow(options) {
+  let start = validDateKey(options.date);
+  if (!start && normalizeIanaTimezone(options.timezone)) {
+    const parts = datePartsInTimezone(options.date, options.timezone);
+    if (parts) start = validDateKey(dateKey(parts));
+  }
+  const day = start && datePartsFromKey(start);
+  return day ? { start, end: dateKey(addDays(day, 7)) } : null;
+}
+
+function collectionOccurrences(events, options) {
+  const window = collectionCalendarWindow(options);
+  return events.flatMap(event => {
+    const timing = event.time_window;
+    // Expand only dates actually stated by the source. A period or all-day
+    // range is not a daily schedule. Keep the local clock/timezone facts;
+    // the shared calendar gate resolves instants and rejects DST ambiguity.
+    if (!window || timing?.kind !== "occurrences" || !Array.isArray(timing.dates) || timing.dates.length < 2) return [event];
+    const dates = [...new Set(timing.dates)].filter(date => validDateKey(date) && date >= window.start && date <= window.end).sort();
+    return dates.map(date => {
+      const row = { ...event, id: `${event.id}@${date}`, source_series_id: event.id,
+        source_series_time_window: timing,
+        starts_on: date, ends_on: date,
+        time_window: { ...timing, dates: [date], starts_on: date, ends_on: date } };
+      delete row.starts_at;
+      delete row.ends_at;
+      return row;
+    });
+  });
+}
+
+function prioritizeCollectionOccurrences(events, options) {
+  const window = collectionCalendarWindow(options);
+  if (!window) return events;
+  // Expansion spends the same raw-row budget. Today's facts come before
+  // following-day atoms, and earlier future dates come before later repeats,
+  // so a series cannot starve a later listing's selected-day event.
+  const date = event => event.time_window?.dates?.[0] || event.starts_on || event.listing_date || "";
+  const rank = event => {
+    const start = date(event), end = event.ends_on || event.time_window?.ends_on || start;
+    return start && start <= window.start && end >= window.start ? 0
+      : start && start > window.start && start <= window.end ? 1 : 2;
+  };
+  return events.slice().sort((left, right) => rank(left) - rank(right) || date(left).localeCompare(date(right)));
 }
 
 function statesNoClock(event) {

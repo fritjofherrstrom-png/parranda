@@ -108,6 +108,7 @@ function buildFusedEvent(members) {
     "address",
     "area",
     "time_window",
+    "source_series_time_window",
     "recurrence",
     "calendar_fact",
     "route_role_hint",

@@ -26,6 +26,30 @@ const { createSourceCache } = require("../server/place-candidates/source-cache")
 // configures its region's open feed via env; here the Helsinki fixture stands in.
 const FEEDS_ENV = JSON.stringify([HELSINKI_LINKED_EVENTS_FEED]);
 
+test("a persisted first-day-only pool cannot suppress newly separated source occurrences", async t => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-old-occurrence-pool-"));
+  t.after(() => fs.rmSync(cacheDir, { recursive: true, force: true }));
+  const request = { anchor: { lat: 55.6, lng: 13 }, now: "2026-10-13T08:00:00Z", selectedDate: "2026-10-13" };
+  const feed = { id: "municipal-series", adapter: "sitevision_calendar", endpoint: "https://municipality.example/calendar",
+    timezone: "Europe/Stockholm", bbox: [12.9, 55.5, 13.1, 55.7] };
+  const key = eventCacheKey(request.anchor, request.now, [feed.id], 3000, null, request.selectedDate);
+  await createSourceCache({ namespace: "agnostic-events-v13", dir: cacheDir }).get(key, async () => ({
+    coverage: "covered", selected_date: request.selectedDate, tonight: [], this_week: [],
+    acquisition: { source_health: { status: "healthy", result: "empty" } },
+  }));
+  let collections = 0;
+  const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_CACHE_DIR: cacheDir,
+    PARRANDA_EVENT_FEEDS: JSON.stringify([feed]) }, {
+    requestTimeDiscovery: null, collectEvents: async () => {
+      collections += 1;
+      return { coverage: "covered", tonight: [], this_week: [], acquisition: { source_health: { status: "healthy", result: "empty" } } };
+    },
+  });
+  assert.equal((await supply(request)).pending, true, "the stale occurrence policy must not answer the corrected request");
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(collections, 1);
+});
+
 test("a persisted empty pool from the old venue policy cannot suppress a corrected collection", async (t) => {
   const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-old-event-pool-"));
   t.after(() => fs.rmSync(cacheDir, { recursive: true, force: true }));
@@ -281,7 +305,7 @@ test("one neutral warm cache reranks for different preferences without refetchin
     assert.equal(culture.tonight[0].id, "a-concert");
     assert.equal(secondHand.tonight[0].id, "z-loppis");
     assert.equal(fetchCount, 1, "preference changes rerank cached evidence instead of recollecting providers");
-    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v13")), "persist corrected timezone, bindings and occurrence groups separately from stale result pools");
+    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v14")), "persist corrected timezone, bindings and occurrence groups separately from stale result pools");
     assert.ok(!fs.existsSync(path.join(cacheDir, "agnostic-events-v11")), "old result pools with borrowed timezone/bindings are not written");
     assert.ok(!fs.existsSync(path.join(cacheDir, "agnostic-events-v6")), "v6 pools that widened recurring ranges into daily windows are never read or written");
     const restarted = resolveDefaultEventSupply({
