@@ -407,8 +407,18 @@ async function fetchBoundedText(fetcher, url, { timeoutMs, maxBytes, accept, use
     });
     if (!response || response.ok !== true) return { ok: false, reason: `source_http_${response?.status || "not_ok"}` };
     if (response.url && !sameOrigin(url, response.url)) return { ok: false, reason: "source_redirect_cross_origin" };
-    const text = typeof response.text === "function" ? await response.text() : JSON.stringify(await response.json());
-    if (Buffer.byteLength(String(text || ""), "utf8") > maxBytes) return { ok: false, reason: "source_payload_invalid" };
+    const declaredBytes = Number(response.headers?.get?.("content-length"));
+    if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
+      await Promise.resolve(response.body?.cancel?.()).catch(() => {});
+      return { ok: false, reason: "source_payload_invalid" };
+    }
+    // Reuse the scout's capped streaming reader; no unrestricted native body
+    // allocation precedes the cap. Non-stream test transports retain support.
+    const { readBoundedText } = require("./local-event-source-scout");
+    const text = typeof response.text === "function" || response.body
+      ? await readBoundedText(response, maxBytes)
+      : JSON.stringify(await response.json());
+    if (text == null || Buffer.byteLength(String(text), "utf8") > maxBytes) return { ok: false, reason: "source_payload_invalid" };
     return { ok: true, text: String(text || "") };
   } catch (error) {
     return { ok: false, reason: error?.name === "AbortError" ? "source_timeout" : "source_fetch_failed" };
