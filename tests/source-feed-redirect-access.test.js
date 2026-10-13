@@ -210,3 +210,24 @@ test("redirect policy retrieval uses the same User-Agent as the actual event req
   await assert.rejects(provider.create({ key: null }).collect(), /source_redirect_robots_disallowed/);
   assert.equal(requests.includes(destination), false);
 });
+
+test("a shared real scout cache cannot lend one agent's redirect permission or page to another", async () => {
+  const { createSourceCache } = require("../server/place-candidates/source-cache");
+  const cache = createSourceCache({ namespace: "redirect-test-two-agents" });
+  const requests = [];
+  const destination = "https://venue.example/private/landing";
+  const routes = new Map([[page, { location: destination }],
+    [destination, { body: `<a href="${start}">Calendar</a>`, type: "text/html" }],
+    ["https://venue.example/robots.txt", options => ({ type: "text/plain", body:
+      new Headers(options.headers).get("user-agent") === "DeniedBot"
+        ? "User-agent: *\nDisallow: /private/\n" : "User-agent: *\nAllow: /\n" })]]);
+  const fetcher = transport(routes, requests);
+  const scout = userAgent => scoutLocalEventSources({ place, anchor, bounds, seeds: [{ url: page }], fetcher,
+    userAgent, cache, maxLinkedPages: 0, maxLinkedPagesPerSeed: 0, eventReader: null });
+  assert.equal(feedsFromScout(await scout("AllowedBot")).length, 1);
+  const before = requests.filter(url => url === destination).length;
+  const denied = await scout("DeniedBot");
+  assert.equal(feedsFromScout(denied).length, 0, "no binding from another agent's cached redirected page");
+  assert.equal(requests.filter(url => url === destination).length, before, "no denied destination read");
+  assert.equal(denied.results[0].status, "blocked");
+});

@@ -1056,6 +1056,7 @@ async function fetchScoutPageWithCache({ cache = null, ...options }) {
       [
         normalizeHttpUrl(options.url),
         String(options.accept || ""),
+        String(options.userAgent || DEFAULT_USER_AGENT),
         String(options.maxBytes || DEFAULT_MAX_BYTES),
         String(normalizeOrigin(options.requiredOrigin) || ""),
       ].join("|"),

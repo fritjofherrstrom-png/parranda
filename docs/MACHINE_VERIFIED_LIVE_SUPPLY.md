@@ -285,7 +285,8 @@ redirect handling. A redirect cannot expand the bound publisher origin. Each
 same-origin destination waits for an allowed robots decision for its full path
 and query and the actual request User-Agent before an event request is sent.
 Unknown policy, malformed Location, loops and more than three automatic hops
-fail closed. Providers that already use manual redirects keep their own stricter
+fail closed. Scout page/policy caches also bind the actual User-Agent.
+Providers that already use manual redirects keep their own stricter
 limits and interface rules. Scout redirects enforce the same access gate;
 source-page-v2, discovery-v4 and result-pool-v13 exclude snapshots and
 bindings from the earlier fetch/access-decision path.
