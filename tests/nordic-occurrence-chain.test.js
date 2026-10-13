@@ -26,6 +26,13 @@ test("a source series occupies one Live row while all accepted source occurrence
   assert.equal(new Set(group.occurrences.map(e=>e.id)).size,2);
 });
 
+test("nearby starts published as distinct slots survive fuzzy cross-source fusion",async()=>{
+  const result=await collect([event("close-slots",[{start:"2026-10-13T18:00"},{start:"2026-10-13T18:10"}])]);
+  assert.equal(result.acquisition.source_health.accepted_event_count,2);
+  assert.equal(result.tonight[0].occurrences.length,2);
+  assert.deepEqual(result.tonight[0].occurrences.map(e=>e.starts_at),["2026-10-13T16:00:00.000Z","2026-10-13T16:10:00.000Z"]);
+});
+
 test("midnight offset and long out-of-window occurrence lists preserve the selected local day",async()=>{
   const result=await collect([event("midnight",[
     {start:"2025-01-01T00:30"},{start:"2026-10-12T23:30"},{start:"2026-10-13T00:30"},
