@@ -39,6 +39,9 @@ const {
   createVisitSwedenNapiSource,
 } = require("./visit-sweden-napi-source");
 const { normalizeOpeningHours, evaluateOpeningHoursForWindow } = require("./opening-hours");
+const {
+  readSourceNegativeFacts, attachSourceNegativeFacts, retainSourceNegativeFacts, hydrateSourceNegativeFacts,
+} = require('./source-negative-facts');
 const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
 const {
   sanitizeTrustedSpatialScope,
@@ -575,6 +578,9 @@ function createOpenDataLoader({
         selectedRadiusKm = widerKm;
         selectionReason = "richer_wider_supply";
       }
+      // Positive re-selection can reject a wider pass; its already acquired
+      // negative facts still belong to this producer and must reach identity.
+      selected = attachSourceNegativeFacts(selected, readSourceNegativeFacts(first, wider));
     }
     return withLoaderMetadata(selected, {
       base_radius_km: requestRadiusKm,
@@ -710,9 +716,9 @@ function createOpenDataLoader({
   };
 
   // One request's identity: the ~110 m anchor bucket plus everything that
-  // shaped its query. v11 invalidates cuts that lost regional availability or
-  // crowded out partial fits without trusted time. Legacy windowless v8 stays
-  // unchanged; windowed non-rhythm cuts use a distinct v11-window namespace.
+  // shaped its query. v12 invalidates cuts/indexes that lost source-owned
+  // negative facts before reconciliation. Legacy windowless v8 stays unchanged;
+  // windowed non-rhythm cuts use a distinct v12-window namespace.
   // v8 invalidates every row collected before the aperture
   // followed the walking budget: a `t9` row cached under v7 was gathered from
   // a 1.5 km disc, so reusing it would keep serving the narrow day this fixes.
@@ -729,9 +735,9 @@ function createOpenDataLoader({
     return {
       key: !request.dayRhythm && !window
         ? `v8:${anchorKey}:r${radiusKm}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`
-        : `${request.dayRhythm ? 'v11' : 'v11-window'}:${anchorKey}:r${radiusKm}:w${windowKey}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
-      budgetsKey: `${request.dayRhythm ? 'v11' : 'v8'}-budgets:${anchorKey}:${shape}:s${scopeKey}`,
-      evidenceKey: `${request.dayRhythm ? 'v11' : 'v8'}-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
+        : `${request.dayRhythm ? 'v12' : 'v12-window'}:${anchorKey}:r${radiusKm}:w${windowKey}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
+      budgetsKey: `${request.dayRhythm ? 'v12' : 'v8'}-budgets:${anchorKey}:${shape}:s${scopeKey}`,
+      evidenceKey: `${request.dayRhythm ? 'v12' : 'v8'}-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
       radiusKm,
       targetKm: band ? band.targetKm : null,
     };
@@ -810,7 +816,7 @@ function createOpenDataLoader({
         distance(a.entry.radius_km, own.radiusKm) - distance(b.entry.radius_km, own.radiusKm) ||
         distance(a.entry.target_km, own.targetKm) - distance(b.entry.target_km, own.targetKm))[0];
     if (!best) return null;
-    return withLoaderMetadata(withLoaderStatus([...best.value.records], best.value.status, null), {
+    return withLoaderMetadata(withLoaderStatus(hydrateSourceNegativeFacts([...best.value.records], best.value.negativeFacts), best.value.status, null), {
       ...(best.value.metadata && typeof best.value.metadata === "object" ? best.value.metadata : {}),
       primary_collection_target_km: Number.isFinite(best.entry.target_km) ? best.entry.target_km : null,
     });
@@ -836,6 +842,7 @@ function createOpenDataLoader({
         produced = true;
         return {
           records: Array.from(result),
+          negativeFacts: readSourceNegativeFacts(result),
           status: result.loader_status,
           error: result.loader_error,
           metadata: result.loader_metadata || null,
@@ -877,7 +884,7 @@ function createOpenDataLoader({
       rememberBudget(identity);
     }
     return withLoaderMetadata(
-      withLoaderStatus(entry.records, entry.status, entry.error),
+      withLoaderStatus(hydrateSourceNegativeFacts(entry.records, entry.negativeFacts), entry.status, entry.error),
       entry.metadata || null,
     );
   };
@@ -938,7 +945,10 @@ function mapOverpassResponse(payload, limit, { origin = null, requestedIntents =
     seenIds.add(record.id);
     mapped.push(record);
   }
-  return balanceMappedRecords(mapped, limit, origin, { requestedIntents, walkingTargetBand, availabilityWindow });
+  return retainSourceNegativeFacts(
+    balanceMappedRecords(mapped, limit, origin, { requestedIntents, walkingTargetBand, availabilityWindow }),
+    mapped, normalizeAvailabilityWindow(availabilityWindow),
+  );
 }
 
 function balanceMappedRecords(mapped, limit, origin, { requestedIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
@@ -1564,7 +1574,8 @@ function composeOpenDataLoaders(
       const cachedGroups = await Promise.all(sources.map(source => typeof source.readCached === 'function'
         ? source.readCached(primaryAnchor, request) : []));
       const selectedGroups = cachedGroups.map(rows => retainCorroboratingRows(rows, primaryCached));
-      const cached = [...primaryCached, ...selectedGroups.flat()];
+      const cached = attachSourceNegativeFacts([...primaryCached, ...selectedGroups.flat()],
+        readSourceNegativeFacts(primaryCached, ...selectedGroups));
       const rescue = [...primaryCached, ...selectedGroups.filter((_, index) => sources[index].primaryRescue !== false).flat()];
       const profile = supplyProfile(rescue, requestedIntents);
       const capacity = dayCapacityProfile(cached, { origin: primaryAnchor, walkingTargetBand: request.walkingTargetBand });
@@ -1751,7 +1762,10 @@ function composeOpenDataLoaders(
     }
     const primaryCompletionIndex = osm?.[SOURCE_COMPLETION] ? completions.length : null;
     if (primaryCompletionIndex !== null) completions.push(osm[SOURCE_COMPLETION]);
-    const records = [...mapRecords, ...backgroundGroups.flatMap(rows => retainCorroboratingRows(rows, mapRecords))];
+    const records = attachSourceNegativeFacts(
+      [...mapRecords, ...backgroundGroups.flatMap(rows => retainCorroboratingRows(rows, mapRecords))],
+      readSourceNegativeFacts(mapRecords, ...backgroundGroups),
+    );
     const status = records.length > 0 ? `loaded:${records.length}`
       : backgroundFailures.length ? 'error_failed_closed' : (osm.loader_status || "loaded:0");
     const collectionError = osm.loader_error || backgroundFailures[0] || null;
@@ -1796,7 +1810,8 @@ function composeOpenDataLoaders(
         const backgroundCompleted = [...finished.entries()].filter(([index]) => index !== primaryCompletionIndex).map(([, rows]) => rows);
         const settled = [...primaryRows, ...[...backgroundGroups, ...backgroundCompleted].flatMap(rows =>
           Array.isArray(rows) ? retainCorroboratingRows(rows, primaryRows) : [])];
-        const unique = [...new Map(settled.map(row => [row.id, row])).values()];
+        const unique = attachSourceNegativeFacts([...new Map(settled.map(row => [row.id, row])).values()],
+          readSourceNegativeFacts(primaryRows, ...backgroundGroups, ...backgroundCompleted));
         const hasFailure = rows => Boolean(rows?.source_error || rows?.loader_error ||
           rows?.loader_status === 'error_failed_closed' ||
           (Number.isFinite(rows?.loader_metadata?.source_completion?.failed) &&
