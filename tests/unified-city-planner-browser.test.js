@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const { once } = require('node:events');
 const { chromium } = require('playwright-core');
 const { buildApp } = require('../server/app');
+const { writeMapInteractionTrace } = require('./helpers/map-interaction-trace');
 const DATE = '2026-10-07';
 const HEALTH = Object.fromEntries(['selected_source_count', 'responding_source_count', 'event_bearing_source_count',
   'empty_source_count', 'failed_source_count', 'unavailable_source_count', 'raw_event_count',
@@ -58,11 +59,7 @@ for (const [label, path, anchor] of [
   let diagnosticPage;
   t.after(async () => {
     try {
-      if (diagnosticPage) console.error('[map-interaction-trace]', label, JSON.stringify(await diagnosticPage.evaluate(() => ({
-        events: window.__routeInteractionTrace || [],
-        tooltip: document.querySelector('[data-route-map] [role="tooltip"]')?.textContent || null,
-        markers: Array.from(document.querySelectorAll('.route-map-marker-shell')).map(e => e.getAttribute('aria-label')),
-      }))));
+      await writeMapInteractionTrace(diagnosticPage, label);
     } finally { await context.close(); }
   });
   // Observational only: retain the actual CI pointer/resize/focus boundary.
