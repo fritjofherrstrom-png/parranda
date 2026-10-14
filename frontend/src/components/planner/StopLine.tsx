@@ -1,3 +1,4 @@
+import { liveStopChoiceId } from "../../lib/live-stop-choice.mjs";
 /**
  * THE ROUTE as a line ("Linje"): every core stop is a station on one route-
  * coloured line, the walk INTO a stop is the segment above it, daypart headings
@@ -127,7 +128,7 @@ export default function StopLine({
   releaseCommitment: (identity: string) => void;
   keepStop: (identity: string, stopLabel: string) => void;
   dismissStop: (identity: string, stopLabel: string) => void;
-  commit: (identity: string, kind: "exclude" | "pin", commitLabel: string) => void;
+  commit: (identity: string, kind: "exclude" | "pin", commitLabel: string, liveAction?: "remove" | "replace") => void;
   eveningEvent: any;
   selectedDate: string | null | undefined;
   dayOffset: 0 | 1;
@@ -517,6 +518,15 @@ export default function StopLine({
                       )
                     : ""}
                 </p>
+                {liveStopChoiceId(stop) && <div className="mt-3 flex flex-wrap gap-2">
+                  {commitments[stop.live_occurrence_id]?.kind === "pin" ? (
+                    <button type="button" className={buttonClass("secondary", "min-h-11 px-4 text-sm")} onClick={() => releaseCommitment(stop.live_occurrence_id)}>{t("Behålls — släpp", "Kept — release")}</button>
+                  ) : stop.live_choice_eligible === true && (
+                    <button type="button" className={buttonClass("secondary", "min-h-11 px-4 text-sm")} onClick={() => keepStop(stop.live_occurrence_id, name)}>{t("Behåll eventet", "Keep this event")}</button>
+                  )}
+                  <button type="button" className={buttonClass("secondary", "min-h-11 px-4 text-sm")} onClick={() => commit(stop.live_occurrence_id, "exclude", name, "replace")}>{t("Byt event", "Try another event")}</button>
+                  <button type="button" className={buttonClass("secondary", "min-h-11 px-4 text-sm")} onClick={() => commit(stop.live_occurrence_id, "exclude", name, "remove")}>{t("Ta bort ur dagen", "Remove from day")}</button>
+                </div>}
                 {(sourceLabel || sourceLink) && (
                   <p className="mt-1 text-xs text-parranda-ink/68">
                     {sourceLabel && <>{t("Källa", "Source")}: {sourceLabel}</>}

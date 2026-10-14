@@ -186,3 +186,20 @@ test('mapless reviewed calendar rows disclose source area rather than implying e
     assert.match(partial,lang==='en'?/Some calendars were only partly read — more events may be listed at the source/:/Vissa kalendrar kunde bara läsas delvis — fler händelser kan finnas hos källan/);
   }
 });
+
+test('source tag chips and chronological groups remain readable inside narrow mobile drawer',async t=>{
+ const {page,render}=await browserHarness(t);
+ const cssDir=new URL('../dist/_astro/',import.meta.url);
+ for(const f of readdirSync(cssDir).filter(f=>f.endsWith('.css')))await page.addStyleTag({content:readFileSync(new URL(f,cssDir),'utf8')});
+ const ev={id:'source-tag',title:'A source-listed event',timezone:'Europe/Stockholm',tags:['Music','x'.repeat(180)],time_window:{kind:'occurrences',dates:['2026-10-15','2026-10-16'],local_start:'19:00'},source_url:'https://calendar.example/event',source_label:'Source calendar',route_eligible:false};
+ const live={coverage:'covered',selected_date:'2026-10-14',tonight:[],this_week:[ev],acquisition:{source_health:{status:'healthy',result:'events_found',selected_source_count:1,responding_source_count:1}}};
+ for(const width of [320,390]){
+  await page.setViewportSize({width,height:844});
+  await render(live,'en','week',{liveSheetSort:'by_time'});
+  assert.equal(await page.getByRole('button',{name:'By time',exact:true}).getAttribute('aria-pressed'),'true');
+  assert.equal(await page.getByRole('region',{name:'Thu 15 Oct',exact:true}).count(),1);
+  assert.equal(await page.getByRole('region',{name:'Fri 16 Oct',exact:true}).count(),1);
+  const bounds=await page.getByRole('dialog').evaluate(e=>({width:e.clientWidth,scroll:e.scrollWidth}));
+  assert.ok(bounds.scroll<=bounds.width+1,`${width}: source tags must wrap without moving event text out of drawer: ${JSON.stringify(bounds)}`);
+ }
+});

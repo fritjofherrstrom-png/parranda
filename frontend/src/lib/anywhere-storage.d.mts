@@ -16,6 +16,7 @@ export interface SavedInputs {
   dayOffset?: number;
   walkKey?: string;
   selected?: string[];
+  liveSheetSort?: "for_you" | "by_time";
 }
 
 export interface SavedEntry {

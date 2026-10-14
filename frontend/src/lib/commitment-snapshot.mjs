@@ -1,3 +1,4 @@
+import { isLiveOccurrenceId } from "./live-stop-choice.mjs";
 /**
  * The commitments a saved day answered, stored with that day.
  *
@@ -35,7 +36,9 @@
  * to no ledger: a v1 snapshot cannot prove which day it belongs to, and that
  * is the whole question.
  */
-export const COMMITMENT_SNAPSHOT_VERSION = 2;
+// v3 distinguishes Live removal from replacement. v2 remains readable for
+// unchanged place choices; it cannot attest any new Live choice semantics.
+export const COMMITMENT_SNAPSHOT_VERSION = 3;
 
 // Mirrors the server's own ledger limits (MAX_PINNED_IDS / MAX_EXCLUDED_IDS).
 // Storing more than the server would ever accept is storage spent on something
@@ -98,7 +101,10 @@ export function buildCommitmentSnapshot({
       if (exclusions >= MAX_SNAPSHOT_EXCLUSIONS) continue;
       exclusions += 1;
     }
-    kept[cleanedId] = { kind, label: cleanLabel(source[id]?.label) };
+    if (cleanedId.startsWith("live:") && (!isLiveOccurrenceId(cleanedId) ||
+        (kind === "exclude" && !["remove", "replace"].includes(source[id]?.liveAction)))) continue;
+    kept[cleanedId] = { kind, label: cleanLabel(source[id]?.label),
+      ...(isLiveOccurrenceId(cleanedId) && kind === "exclude" ? { liveAction: source[id].liveAction } : {}) };
   }
 
   const verdict = (Array.isArray(appliedPins) ? appliedPins : [])
@@ -146,7 +152,7 @@ export function readCommitmentSnapshot(snapshot, { anchorKey = null, dayKey = nu
   if (!snapshot || typeof snapshot !== "object") return empty("absent");
   // A day saved before commitments were stored at all. Not a fault — just
   // nothing to answer with.
-  if (snapshot.version !== COMMITMENT_SNAPSHOT_VERSION) return empty("version_mismatch");
+  if (snapshot.version !== COMMITMENT_SNAPSHOT_VERSION && snapshot.version !== 2) return empty("version_mismatch");
 
   const storedKey = typeof snapshot.anchorKey === "string" ? snapshot.anchorKey.trim() : "";
   const wantedKey = typeof anchorKey === "string" ? anchorKey.trim() : "";
@@ -164,7 +170,7 @@ export function readCommitmentSnapshot(snapshot, { anchorKey = null, dayKey = nu
   const rebuilt = buildCommitmentSnapshot({
     anchorKey: storedKey,
     dayKey: storedDay,
-    entries: snapshot.entries,
+    entries: snapshot.version === 2 ? Object.fromEntries(Object.entries(snapshot.entries || {}).filter(([id]) => !id.startsWith("live:"))) : snapshot.entries,
     appliedPins: snapshot.appliedPins,
     refusals: snapshot.refusals,
   });

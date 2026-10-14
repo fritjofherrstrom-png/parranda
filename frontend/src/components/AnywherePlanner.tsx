@@ -1,3 +1,4 @@
+import { isLiveOccurrenceId, scopeLiveChoices } from "../lib/live-stop-choice.mjs";
 /**
  * Modern planner surface for freeform places, coordinates, and registered cities.
  *
@@ -148,11 +149,11 @@ function adjustmentSignature(
   selected: string[],
   dayOffset: 0 | 1,
   walkKey: string,
-  commitments: Record<string, { kind: "exclude" | "pin"; label: string }>,
+  commitments: Record<string, { kind: "exclude" | "pin"; label: string; liveAction?: "remove" | "replace" }>,
 ): string {
   const ledger = Object.keys(commitments)
     .sort()
-    .map((id) => [id, commitments[id]?.kind ?? null]);
+    .map((id) => [id, commitments[id]?.kind ?? null, commitments[id]?.liveAction ?? null]);
   return JSON.stringify([selected, dayOffset, walkKey, ledger]);
 }
 
@@ -203,7 +204,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // ONE ledger: candidate id -> the single commitment that applies to it. A
   // candidate cannot be both kept and dismissed, because that state cannot be
   // represented — the newest explicit action replaces the previous one.
-  const [commitments, setCommitments] = useState<Record<string, { kind: "exclude" | "pin"; label: string }>>({});
+  const [commitments, setCommitments] = useState<Record<string, { kind: "exclude" | "pin"; label: string; liveAction?: "remove" | "replace" }>>({});
   // A dismissal belongs to the day it was made on. Stamped with that day's
   // anchor so it cannot follow the user to another place.
   const commitmentAnchorKeyRef = useRef<string | null>(null);
@@ -306,6 +307,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Live only. Nothing here re-composes or changes the day anchor.
   const [liveSheetOpen, setLiveSheetOpen] = useState(false);
   const [liveSheetTime, setLiveSheetTime] = useState<"tonight" | "week">("tonight");
+  const [liveSheetSort, setLiveSheetSort] = useState<"for_you" | "by_time">("for_you");
   const [liveSheetScope, setLiveSheetScope] = useState<LiveEventScope>("around_place");
   const [liveQueryEvents, setLiveQueryEvents] = useState<LiveEvents | null>(null);
   const [liveQueryPending, setLiveQueryPending] = useState(false);
@@ -480,16 +482,17 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         dateIsoOverride,
       });
       lastComposeDateIsoRef.current = effectiveDateIso;
+      const activeLedger = scopeLiveChoices(scopedLedger.entries, effectiveDateIso);
       const rhythm = DAY_RHYTHMS.find((p: { key: string }) => p.key === effectiveWalkKey) ?? DAY_RHYTHMS[1];
       // Frozen here, beside the request that carries them: whatever the ledger
       // does while this is in flight, THIS is what the answer will have
       // answered. Labels travel with the ids so the verdict can name a place
       // the user has since released.
-      const sentPinIds = pinnedOverride ?? scopedLedger.pinnedIds;
+      const sentPinIds = pinnedOverride ?? activeLedger.pinnedIds;
       const sentPins = sentPinIds.map((id: string) => ({
         id,
         kind: "pin" as const,
-        label: String(scopedLedger.entries[id]?.label ?? commitments[id]?.label ?? ""),
+        label: String(activeLedger.entries[id]?.label ?? commitments[id]?.label ?? ""),
       }));
       const payload = buildAnywherePayload({
         place: anchor.place,
@@ -501,8 +504,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         dates: [effectiveDateIso],
         preferences: preferencesOverride ?? selected,
         dayRhythm: rhythm.key,
-        excludedCandidateIds: excludedOverride ?? scopedLedger.excludedIds,
-        pinnedCandidateIds: sentPinIds,
+        excludedCandidateIds: (excludedOverride ?? activeLedger.excludedIds).filter(id => !id.startsWith("live:")),
+        pinnedCandidateIds: sentPinIds.filter(id => !id.startsWith("live:")),
+        liveEventChoices: activeLedger.liveEventChoices,
       });
       const { response, body: rawBody } = await fetchPlannerLifecycle(`/api/route-recommendations?lang=${langOverride ?? lang}&${LIVE_COMPLETION_QUERY}`, {
         payload,
@@ -589,10 +593,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // and unavailable composed no day, so there is nothing for a pin to have
       // failed to fit into and the snapshot stays empty.
       const composedNow = decision.isComposedStatus(cls.status);
-      const refusalsNow: Array<{ id: string; reason: string | null }> = composedNow
-        && Array.isArray(body?.agnostic_route_output_experiment?.pinned_candidates?.unhonored)
-        ? body.agnostic_route_output_experiment.pinned_candidates.unhonored
-        : [];
+      const refusalsNow: Array<{ id: string; reason: string | null }> = composedNow ? [
+        ...(Array.isArray(body?.agnostic_route_output_experiment?.pinned_candidates?.unhonored) ? body.agnostic_route_output_experiment.pinned_candidates.unhonored : []),
+        ...(Array.isArray(body?.agnostic_route_output_experiment?.live_event_choices?.unhonored) ? body.agnostic_route_output_experiment.live_event_choices.unhonored : []),
+      ] : [];
       setAppliedPins(composedNow ? sentPins : []);
       setAppliedRefusals(refusalsNow);
       setDayIsStale(false);
@@ -617,7 +621,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           classification: cls,
           // The mode is the anchor's, not this render's: an arrival composes
           // from the first render, before the near-me mode it set has landed.
-          inputs: { city: null, place: authoritativePlace ?? null, placeSelection: anchor.placeSelection, placeRef: anchor.placeRef ?? null, placeLabel: anchor.selectionLabel, mode: anchor.coords ? "near_me" : "typed", dayOffset: effectiveDayOffset, walkKey: effectiveWalkKey, selected: prefs },
+          inputs: { city: null, place: authoritativePlace ?? null, placeSelection: anchor.placeSelection, placeRef: anchor.placeRef ?? null, placeLabel: anchor.selectionLabel, mode: anchor.coords ? "near_me" : "typed", dayOffset: effectiveDayOffset, walkKey: effectiveWalkKey, selected: prefs, liveSheetSort },
           // Frozen from the SAME request that produced this day: the ledger it
           // carried and the verdict that came back. Recorded here rather than
           // at save time, because by then the live ledger may have moved on
@@ -636,7 +640,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               selected: prefs,
               walkKey: effectiveWalkKey,
             }),
-            entries: scopedLedger.entries,
+            entries: activeLedger.entries,
             appliedPins: decision.isComposedStatus(cls.status) ? sentPins : [],
             refusals: refusalsNow,
           }),
@@ -684,8 +688,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         if (followup.upgradePending) setUpgradePending(true);
         if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
         const effectivePreferences = preferencesOverride ?? selected;
-        const effectiveExcluded = excludedOverride ?? scopedLedger.excludedIds;
-        const effectivePinned = pinnedOverride ?? scopedLedger.pinnedIds;
+        const effectiveExcluded = excludedOverride ?? activeLedger.excludedIds;
+        const effectivePinned = pinnedOverride ?? activeLedger.pinnedIds;
         const followupIntentId = intentSequenceRef.current;
         pollTimerRef.current = setTimeout(() => {
           pollTimerRef.current = null;
@@ -793,7 +797,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setClassification(cls);
     setSafeResponse(safe);
     const unhonored = result?.agnostic_route_output_experiment?.pinned_candidates?.unhonored;
-    setAppliedRefusals(Array.isArray(unhonored) ? unhonored : []);
+    setAppliedRefusals([...(Array.isArray(unhonored) ? unhonored : []), ...(Array.isArray(result?.agnostic_route_output_experiment?.live_event_choices?.unhonored) ? result.agnostic_route_output_experiment.live_event_choices.unhonored : [])]);
     setExpandedStopKey(null);
     setExpandedCandidateKey(null);
     // Never silent: the change line says Live moved the day, and Undo puts the
@@ -856,7 +860,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   // Show a stored day WITHOUT re-fetching. A restored day is a snapshot (events /
   // "today" may be stale), so restoredAt is set and the UI labels it + offers rebuild.
-  function restoreEntry(entry: SavedEntry) {
+  function restoreEntry(entry: SavedEntry, restoreViewFromStorage = false) {
     resetBlitz();
     setNavigationInterrupted(false);
     // A saved day is its own generation: nothing from before it can be undone
@@ -915,6 +919,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setUpgradePending(false);
 
     lastEntryRef.current = entry;
+    const storedSort = restoreViewFromStorage ? readLS<{ sort?: string }>("parranda:live:sort", {}).sort : entry.inputs?.liveSheetSort;
+    setLiveSheetSort(storedSort === "by_time" ? "by_time" : "for_you");
     setClassification(entry.classification);
     setSafeResponse(entry.safeResponse);
     // Saved days do not carry the commitments they were composed under, so a
@@ -1005,6 +1011,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setSelected(nextSelected);
     setDayOffset(nextDayOffset);
     setWalkKey(nextWalkKey);
+    setLiveSheetSort(inputs.liveSheetSort === "by_time" ? "by_time" : "for_you");
     commitmentAnchorKeyRef.current = ledger.applies ? dayAnchorKey : null;
     setCommitments(nextCommitments);
     setAppliedPins(ledger.applies ? ledger.appliedPins : []);
@@ -1113,14 +1120,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       return;
     }
     const last = readLS<SavedEntry | null>(LAST_KEY, null);
-    if (last && last.safeResponse && last.classification) restoreEntry(last);
+    if (last && last.safeResponse && last.classification) restoreEntry(last, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function saveDay() {
     const entry = lastEntryRef.current;
     if (!entry) return;
-    const stamped = { ...entry, savedAt: new Date().toISOString() };
+    const stamped = { ...entry, inputs: { ...entry.inputs, liveSheetSort }, savedAt: new Date().toISOString() };
     const next = upsertSaved(savedDays, stamped);
     setSavedDays(next);
     writeLS(SAVED_KEY, next);
@@ -1740,8 +1747,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       if (retryGenerationRef.current === retryGeneration) retryInFlightRef.current = false;
     });
   };
-  const commit = (identity: string, kind: "exclude" | "pin", commitLabel: string) => {
-    if (!identity || commitments[identity]?.kind === kind) return;
+  const commit = (identity: string, kind: "exclude" | "pin", commitLabel: string, liveAction?: "remove" | "replace") => {
+    if (!identity || (commitments[identity]?.kind === kind && commitments[identity]?.liveAction === liveAction)) return;
     setExpandedStopKey(null);
     setExpandedCandidateKey(null);
     // The anchor of the day on screen — the geography this commitment is about.
@@ -1751,8 +1758,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     invalidateCommitmentIntent();
     // The label travels with the commitment so a day that could not keep a
     // place can name it, without a second map to fall out of sync.
-    setCommitments({ ...commitments, [identity]: { kind, label: commitLabel } });
+    setCommitments({ ...commitments, [identity]: { kind, label: commitLabel, ...(liveAction ? { liveAction } : {}) } });
   };
+  function changeLiveSheetSort(next: "for_you" | "by_time") {
+    setLiveSheetSort(next);
+    writeLS("parranda:live:sort", { sort: next });
+  }
   const dismissStop = (identity: string, stopLabel: string) => commit(identity, "exclude", stopLabel);
   const keepStop = (identity: string, stopLabel: string) => commit(identity, "pin", stopLabel);
   const releaseCommitment = (identity: string) => {
@@ -1767,8 +1778,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     invalidateCommitmentIntent();
     setCommitments({});
   };
-  const excludedCount = Object.values(commitments).filter((entry) => entry.kind === "exclude").length;
-  const pinnedCount = Object.values(commitments).filter((entry) => entry.kind === "pin").length;
+  const excludedCount = Object.entries(commitments).filter(([id, entry]) => !id.startsWith("live:") && entry.kind === "exclude").length;
+  const pinnedCount = Object.entries(commitments).filter(([id, entry]) => !id.startsWith("live:") && entry.kind === "pin").length;
+  const liveChoiceCount = Object.keys(commitments).filter(isLiveOccurrenceId).length;
   // A pin the composed day does not contain. The server resolves pins against
   // the candidates it loaded itself and will not invent a place to satisfy
   // one — so this is reported, never swallowed.
@@ -1781,7 +1793,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const unkept = unhonouredPins({
     entries: Object.fromEntries(stillHeld.map((pin) => [pin.id, pin])),
     pinnedIds: stillHeld.map((pin) => pin.id),
-    stopIds: split.core.map((stop: any) => String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "")),
+    stopIds: routeStops.map((stop: any) => String(stop?.live_occurrence_id ?? stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "")),
     isStale: dayIsStale,
     serverReasons: appliedRefusals,
   });
@@ -2061,8 +2073,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           dismissing left no day at all, which is exactly when a way back
           matters most. Hiding it behind a collapsed panel made the dismissal
           effectively irreversible. */}
-      {(excludedCount > 0 || pinnedCount > 0) && (
+      {(excludedCount > 0 || pinnedCount > 0 || liveChoiceCount > 0) && (
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-parranda-ink/72" role="status">
+          {liveChoiceCount > 0 && <span>{t("Live-valet behålls för sitt tillfälle", "Live choice saved for its occurrence")}</span>}
           {pinnedCount > 0 && (
             <span className="inline-flex items-center gap-1.5">
               <KeepIcon className="h-3.5 w-3.5 text-parranda-ember" />
@@ -2096,7 +2109,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {unkept.count > 0 && (
         <div className="flex flex-col gap-1.5 rounded-parranda border-[1.5px] border-parranda-glow/40 bg-parranda-glow/8 px-4 py-3 text-[13px] text-parranda-ink/85" role="status">
           {unkept.reasons.map((entry: { id: string; label: string; reason: string | null }) => (
-            <p key={entry.id}>{unkeptReasonSentence(entry, t)}</p>
+            <p key={entry.id}>{isLiveOccurrenceId(entry.id) ? t(`${entry.label || "Det valda tillfället"} kunde inte bekräftas som stopp i den här dagen. Ditt val finns kvar.`, `${entry.label || "The chosen occurrence"} could not be confirmed as a stop in this day. Your choice is retained.`) : unkeptReasonSentence(entry, t)}</p>
           ))}
         </div>
       )}
@@ -2470,6 +2483,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           selected={selected}
           liveDayLabel={liveDayLabel}
           liveSheetTime={liveSheetTime}
+          liveSheetSort={liveSheetSort}
+          setLiveSheetSort={changeLiveSheetSort}
           setLiveSheetTime={requestLiveSheetTime}
           onRetry={() => { liveSheetPeriodAutomaticRef.current = false; requestLiveSheetScope(liveSheetScope, liveSheetTime, true).catch(() => {}); }}
           liveSheetScope={liveSheetScope}
