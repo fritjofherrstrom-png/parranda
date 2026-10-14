@@ -39,9 +39,6 @@ const {
   createVisitSwedenNapiSource,
 } = require("./visit-sweden-napi-source");
 const { normalizeOpeningHours, evaluateOpeningHoursForWindow } = require("./opening-hours");
-const {
-  readSourceNegativeFacts, attachSourceNegativeFacts, retainSourceNegativeFacts, hydrateSourceNegativeFacts,
-} = require('./source-negative-facts');
 const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
 const {
   sanitizeTrustedSpatialScope,
@@ -414,7 +411,7 @@ function createOpenDataLoader({
     return withLoaderStatus([], last.status, last.error);
   }
 
-  async function fetchAcrossAnchors(anchors, radiusM, { requestedIntents = [], availabilityWindow = null } = {}) {
+  async function fetchAcrossAnchors(anchors, radiusM, { requestedIntents = [] } = {}) {
     const boundedAnchors = (Array.isArray(anchors) ? anchors : [])
       .filter((anchor) => Number.isFinite(anchor?.lat) && Number.isFinite(anchor?.lng))
       .slice(0, 2);
@@ -439,7 +436,7 @@ function createOpenDataLoader({
         // partitioned. A dense first anchor must not crowd a better second
         // cluster out of the global candidate limit before comparison.
         OVERPASS_FETCH_CAP,
-        { origin: boundedAnchors[0], availabilityWindow },
+        { origin: boundedAnchors[0] },
       );
       const buckets = boundedAnchors.map(() => []);
       for (const record of mapped) {
@@ -457,7 +454,7 @@ function createOpenDataLoader({
       const clusters = boundedAnchors.map((anchor, index) => ({
         anchor,
         records: withLoaderStatus(
-          balanceMappedRecords(buckets[index], boundedLimit, anchor, { requestedIntents, availabilityWindow }),
+          balanceMappedRecords(buckets[index], boundedLimit, anchor, { requestedIntents }),
           buckets[index].length ? `loaded:${Math.min(buckets[index].length, boundedLimit)}` : "loaded:0",
           null,
         ),
@@ -578,9 +575,6 @@ function createOpenDataLoader({
         selectedRadiusKm = widerKm;
         selectionReason = "richer_wider_supply";
       }
-      // Positive re-selection can reject a wider pass; its already acquired
-      // negative facts still belong to this producer and must reach identity.
-      selected = attachSourceNegativeFacts(selected, readSourceNegativeFacts(first, wider));
     }
     return withLoaderMetadata(selected, {
       base_radius_km: requestRadiusKm,
@@ -664,7 +658,6 @@ function createOpenDataLoader({
     }
     const regional = await fetchAcrossAnchors(secondaryAnchors, REGIONAL_CLUSTER_RADIUS_KM * 1000, {
       requestedIntents: request.dayRhythm ? normalizeRequestedIntents(request.requestedIntents) : [],
-      availabilityWindow: normalizeAvailabilityWindow(request.availabilityWindow),
     });
     const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
     let selected = primary;
@@ -716,9 +709,8 @@ function createOpenDataLoader({
   };
 
   // One request's identity: the ~110 m anchor bucket plus everything that
-  // shaped its query. v12 invalidates cuts/indexes that lost source-owned
-  // negative facts before reconciliation. Legacy windowless v8 stays unchanged;
-  // windowed non-rhythm cuts use a distinct v12-window namespace.
+  // shaped its query. v10 invalidates the modern category-only source cut;
+  // v9 included the trusted availability window and rhythm aperture.
   // v8 invalidates every row collected before the aperture
   // followed the walking budget: a `t9` row cached under v7 was gathered from
   // a 1.5 km disc, so reusing it would keep serving the narrow day this fixes.
@@ -735,9 +727,9 @@ function createOpenDataLoader({
     return {
       key: !request.dayRhythm && !window
         ? `v8:${anchorKey}:r${radiusKm}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`
-        : `${request.dayRhythm ? 'v12' : 'v12-window'}:${anchorKey}:r${radiusKm}:w${windowKey}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
-      budgetsKey: `${request.dayRhythm ? 'v12' : 'v8'}-budgets:${anchorKey}:${shape}:s${scopeKey}`,
-      evidenceKey: `${request.dayRhythm ? 'v12' : 'v8'}-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
+        : `${request.dayRhythm ? 'v10' : 'v9'}:${anchorKey}:r${radiusKm}:w${windowKey}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
+      budgetsKey: `${request.dayRhythm ? 'v10' : 'v8'}-budgets:${anchorKey}:${shape}:s${scopeKey}`,
+      evidenceKey: `${request.dayRhythm ? 'v10' : 'v8'}-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
       radiusKm,
       targetKm: band ? band.targetKm : null,
     };
@@ -816,7 +808,7 @@ function createOpenDataLoader({
         distance(a.entry.radius_km, own.radiusKm) - distance(b.entry.radius_km, own.radiusKm) ||
         distance(a.entry.target_km, own.targetKm) - distance(b.entry.target_km, own.targetKm))[0];
     if (!best) return null;
-    return withLoaderMetadata(withLoaderStatus(hydrateSourceNegativeFacts([...best.value.records], best.value.negativeFacts), best.value.status, null), {
+    return withLoaderMetadata(withLoaderStatus([...best.value.records], best.value.status, null), {
       ...(best.value.metadata && typeof best.value.metadata === "object" ? best.value.metadata : {}),
       primary_collection_target_km: Number.isFinite(best.entry.target_km) ? best.entry.target_km : null,
     });
@@ -842,7 +834,6 @@ function createOpenDataLoader({
         produced = true;
         return {
           records: Array.from(result),
-          negativeFacts: readSourceNegativeFacts(result),
           status: result.loader_status,
           error: result.loader_error,
           metadata: result.loader_metadata || null,
@@ -884,7 +875,7 @@ function createOpenDataLoader({
       rememberBudget(identity);
     }
     return withLoaderMetadata(
-      withLoaderStatus(hydrateSourceNegativeFacts(entry.records, entry.negativeFacts), entry.status, entry.error),
+      withLoaderStatus(entry.records, entry.status, entry.error),
       entry.metadata || null,
     );
   };
@@ -945,10 +936,7 @@ function mapOverpassResponse(payload, limit, { origin = null, requestedIntents =
     seenIds.add(record.id);
     mapped.push(record);
   }
-  return retainSourceNegativeFacts(
-    balanceMappedRecords(mapped, limit, origin, { requestedIntents, walkingTargetBand, availabilityWindow }),
-    mapped, normalizeAvailabilityWindow(availabilityWindow),
-  );
+  return balanceMappedRecords(mapped, limit, origin, { requestedIntents, walkingTargetBand, availabilityWindow });
 }
 
 function balanceMappedRecords(mapped, limit, origin, { requestedIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
@@ -957,15 +945,9 @@ function balanceMappedRecords(mapped, limit, origin, { requestedIntents = [], wa
 
   const intents = normalizeRequestedIntents(requestedIntents);
   if (intents.length) {
+    const level = record => intents.some(intent => matchCandidateToIntent(record, intent).level === 'strong') ? 2
+      : intents.some(intent => matchCandidateToIntent(record, intent).level === 'weak') ? 1 : 0;
     const window = normalizeAvailabilityWindow(availabilityWindow);
-    const level = record => {
-      const strong = intents.some(intent => matchCandidateToIntent(record, intent).level === 'strong');
-      const partial = intents.some(intent => matchCandidateToIntent(record, intent).level === 'weak');
-      // Without trusted local time, source_indicated_active is not proof of
-      // opening. Balance the requested union instead of letting unassessed
-      // strong matches erase all possible partial fits before the late gate.
-      return strong ? (window ? 2 : 1) : partial ? 1 : 0;
-    };
     const usable = record => record.operational_status !== 'inactive' &&
       (!window || evaluateOpeningHoursForWindow(record.opening_hours, window).eligible !== false);
     const selected = [];
@@ -1574,8 +1556,7 @@ function composeOpenDataLoaders(
       const cachedGroups = await Promise.all(sources.map(source => typeof source.readCached === 'function'
         ? source.readCached(primaryAnchor, request) : []));
       const selectedGroups = cachedGroups.map(rows => retainCorroboratingRows(rows, primaryCached));
-      const cached = attachSourceNegativeFacts([...primaryCached, ...selectedGroups.flat()],
-        readSourceNegativeFacts(primaryCached, ...selectedGroups));
+      const cached = [...primaryCached, ...selectedGroups.flat()];
       const rescue = [...primaryCached, ...selectedGroups.filter((_, index) => sources[index].primaryRescue !== false).flat()];
       const profile = supplyProfile(rescue, requestedIntents);
       const capacity = dayCapacityProfile(cached, { origin: primaryAnchor, walkingTargetBand: request.walkingTargetBand });
@@ -1648,10 +1629,7 @@ function composeOpenDataLoaders(
           ? await Promise.resolve(source.readCached(primaryAnchor, request)).catch(() => []) : [];
         if (Array.isArray(cached)) held.push(...retainCorroboratingRows(cached, mapEvidence || []));
       }
-      const records = attachSourceNegativeFacts(
-        [...(mapEvidence || []), ...eagerGroups.flatMap(rows => retainCorroboratingRows(rows, mapEvidence || [])), ...held],
-        readSourceNegativeFacts(mapEvidence, ...eagerGroups, held),
-      );
+      const records = [...(mapEvidence || []), ...eagerGroups.flatMap(rows => retainCorroboratingRows(rows, mapEvidence || [])), ...held];
       return withLoaderMetadata(
         withLoaderStatus(records, `loaded:${records.length}`, null),
         {
@@ -1765,10 +1743,7 @@ function composeOpenDataLoaders(
     }
     const primaryCompletionIndex = osm?.[SOURCE_COMPLETION] ? completions.length : null;
     if (primaryCompletionIndex !== null) completions.push(osm[SOURCE_COMPLETION]);
-    const records = attachSourceNegativeFacts(
-      [...mapRecords, ...backgroundGroups.flatMap(rows => retainCorroboratingRows(rows, mapRecords))],
-      readSourceNegativeFacts(mapRecords, ...backgroundGroups),
-    );
+    const records = [...mapRecords, ...backgroundGroups.flatMap(rows => retainCorroboratingRows(rows, mapRecords))];
     const status = records.length > 0 ? `loaded:${records.length}`
       : backgroundFailures.length ? 'error_failed_closed' : (osm.loader_status || "loaded:0");
     const collectionError = osm.loader_error || backgroundFailures[0] || null;
@@ -1813,8 +1788,7 @@ function composeOpenDataLoaders(
         const backgroundCompleted = [...finished.entries()].filter(([index]) => index !== primaryCompletionIndex).map(([, rows]) => rows);
         const settled = [...primaryRows, ...[...backgroundGroups, ...backgroundCompleted].flatMap(rows =>
           Array.isArray(rows) ? retainCorroboratingRows(rows, primaryRows) : [])];
-        const unique = attachSourceNegativeFacts([...new Map(settled.map(row => [row.id, row])).values()],
-          readSourceNegativeFacts(primaryRows, ...backgroundGroups, ...backgroundCompleted));
+        const unique = [...new Map(settled.map(row => [row.id, row])).values()];
         const hasFailure = rows => Boolean(rows?.source_error || rows?.loader_error ||
           rows?.loader_status === 'error_failed_closed' ||
           (Number.isFinite(rows?.loader_metadata?.source_completion?.failed) &&

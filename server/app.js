@@ -30,7 +30,6 @@ const {
   buildAgnosticPublicResult,
 } = require("./planner/agnostic-route-output");
 const { buildRegisteredCityCandidateFill } = require("./planner/registered-city-candidate-fill");
-const { resolveAgnosticAcquisitionContext } = require("./planner/agnostic-route-context");
 const { buildPreviewPreferenceFit } = require("./planner/preview-preference-fit");
 const { buildPreviewBetaEngineStatus } = require("./planner/preview-beta-engine-status");
 const { classifyPromotionReadiness } = require("./planner/agnostic-promotion-gate");
@@ -2363,11 +2362,6 @@ function buildApp({
         );
       }
       let agnosticPlaceStructure = null;
-      // Resolve the selected day once, before acquisition can cross midnight.
-      const compositionDate = resolveSelectedRouteDate(payload, baselineBody, cityConfig);
-      const acquisitionContext = resolveAgnosticAcquisitionContext({
-        date: compositionDate, trustedTimezone: intake.resolved?.timezone || null, clock,
-      });
       if (isExternalCandidatesRequested(request) && typeof scopedOpenDataLoader === "function") {
         try {
           const records = await scopedOpenDataLoader({
@@ -2377,7 +2371,6 @@ function buildApp({
             spatialScope,
             walkingTargetBand: requestedRhythm ? null : resolveAgnosticWalkingTargetBand(payload.walkingKmTarget),
             ...(requestedRhythm ? { dayRhythm: requestedRhythm } : {}),
-            availabilityWindow: acquisitionContext.availabilityWindow,
           });
           const structureCandidates = [...curatedCandidates, ...(Array.isArray(records) ? records : [])].filter(
             (c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng),
@@ -2435,7 +2428,7 @@ function buildApp({
             placeLabel: intake?.resolved?.label || null,
             spatialScope,
             now: eventsNow,
-            selectedDate: compositionDate,
+            selectedDate: resolveSelectedRouteDate(payload, baselineBody, cityConfig),
             // Preferences may reorder only the already trusted, normalized
             // event pool. They never become event evidence or relax time/geo
             // gates inside the supply.
@@ -2465,8 +2458,9 @@ function buildApp({
       let wovenPlaceStructure = agnosticPlaceStructure;
       try {
         const { weaveEveningEvent } = require("./candidates/evening-event-weave");
+        const selectedRouteDate = resolveSelectedRouteDate(payload, baselineBody, cityConfig);
         wovenPlaceStructure = weaveEveningEvent(agnosticPlaceStructure, liveEvents, {
-          selectedDate: compositionDate,
+          selectedDate: selectedRouteDate,
         });
       } catch (_error) {
         wovenPlaceStructure = agnosticPlaceStructure;
@@ -2495,7 +2489,7 @@ function buildApp({
         // from the server-injected seams. `trustedTimezone` is taken from the
         // trusted resolver when present; otherwise agnostic context may derive a
         // lower-trust timezone from trusted weather-provider auto metadata.
-        date: compositionDate,
+        date: payload.dates[0] || null,
         todayIsoDate: cityConfig.todayIsoDate,
         timezone: cityConfig.timezone || "UTC",
         lang,
@@ -2509,7 +2503,7 @@ function buildApp({
         // then extended underneath it.
         eveningEventStructure: wovenPlaceStructure,
         weatherProvider,
-        clock: acquisitionContext.clock,
+        clock,
         trustedTimezone: intake.resolved?.timezone || null,
         // ONLY the resolver-attested label may drive route prose. The raw public
         // placeQuery must never attest a place in Parranda's own voice — an
