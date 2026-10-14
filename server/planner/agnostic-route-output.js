@@ -1039,9 +1039,11 @@ async function composeAgnosticRouteOutput({
     : null;
   if (typeof onRetainComposition === 'function') onRetainComposition({ records: resolvedTrusted.trustedRecords, context: ctx });
 
-  const focusedRhythm = Boolean(dayRhythm) && normalizeUserIntents(preferences).intents.length === 1;
+  // Rhythm owns day depth; the number of requested interests must not cut
+  // off otherwise eligible same-interest options before engine composition.
+  const rhythmDepth = Boolean(dayRhythm);
   const rolePayload = {
-    ...(focusedRhythm ? { limitPerRole: 6 } : {}),
+    ...(rhythmDepth ? { limitPerRole: 6 } : {}),
     city: agnosticContext.key,
     date: effectiveDate,
     preferences: Array.isArray(preferences) ? preferences : [],
