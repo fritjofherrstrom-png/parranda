@@ -32,6 +32,8 @@
 const { createBoundedOvertureQuery } = require('./bounded-overture-query');
 const { createOvertureAssetResolver } = require('./overture-stac-assets');
 const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
+const { mapRecordToCandidate } = require('./external-open-provider');
+const { resolveCandidateIdentity, matchIdentity } = require('../candidates/entity-resolution');
 const {
   WALKING_REACH_RING_EDGES_KM,
   interleaveAcrossWalkingReach,
@@ -484,9 +486,10 @@ function spreadAcrossWalkingReach(entries, { band }) {
   });
 }
 
-function selectRecords(records, { anchor, requestedIntents = [], walkingTargetBand = null, limit = DEFAULT_LIMIT } = {}) {
+function selectRecords(records, { anchor, requestedIntents = [], walkingTargetBand = null, corroborationRecords = [], limit = DEFAULT_LIMIT } = {}) {
+  const { retained, ambiguous } = corroborationSelection(records, corroborationRecords);
   const intents = normalizeUserIntents(requestedIntents).intents;
-  const entries = records.map((record) => ({
+  const entries = records.filter(record => !ambiguous.has(record.id)).map((record) => ({
     record,
     ...intentMatch(record, intents),
     distance: distanceKm(anchor, record),
@@ -508,6 +511,15 @@ function selectRecords(records, { anchor, requestedIntents = [], walkingTargetBa
     taken.add(entry);
     selected.push(entry.record);
   }
+  // Already-acquired evidence for the primary cannot disappear merely because
+  // its directory twin is farther from the anchor than unrelated places. Keep
+  // the original raw row; ordinary identity/reducer/gates still decide trust.
+  for (const entry of ranked) {
+    if (selected.length >= limit) break;
+    if (taken.has(entry) || !retained.has(entry.record.id)) continue;
+    taken.add(entry);
+    selected.push(entry.record);
+  }
   // Without a walking budget the directory stays proximity-first (nearby
   // surfaces such as Blitz). With one, the fill follows the day's reach.
   const band = normalizeWalkingTargetBand(walkingTargetBand);
@@ -518,6 +530,29 @@ function selectRecords(records, { anchor, requestedIntents = [], walkingTargetBa
     selected.push(entry.record);
   }
   return selected;
+}
+
+function corroborationSelection(records, primaryRecords) {
+  const retained = new Set(), ambiguous = new Set();
+  const ids = new Set(records.map(record => record.id));
+  const primary = (Array.isArray(primaryRecords) ? primaryRecords : [])
+    .filter(record => record && !ids.has(record.id))
+    .map((record, index) => mapRecordToCandidate({ key: 'agnostic' }, record, null, index)).filter(Boolean);
+  if (!primary.length) return { retained, ambiguous };
+  const directory = records.map((record, index) => mapRecordToCandidate({ key: 'agnostic' }, record, null, index)).filter(Boolean);
+  const primaryIds = new Set(primary.map(candidate => candidate.id));
+  const resolved = resolveCandidateIdentity([...primary, ...directory]);
+  for (const candidate of resolved.candidates) {
+    const members = [candidate.id, ...(candidate.merged_from || []).map(record => record.id)];
+    if (members.some(id => primaryIds.has(id))) for (const id of members) if (ids.has(id)) retained.add(id);
+  }
+  // Resolving only the selected prefix could manufacture corroboration when a
+  // conflicting entity/address/alias witness lives beyond the cut. Withhold
+  // potential twins which the full acquired universe could not safely merge.
+  for (const candidate of directory) {
+    if (!retained.has(candidate.id) && primary.some(p => matchIdentity(p, candidate).same)) ambiguous.add(candidate.id);
+  }
+  return { retained, ambiguous };
 }
 
 function createOvertureSource({
@@ -580,13 +615,14 @@ function createOvertureSource({
   }
 
   // The bounded output for one request. A failed acquisition stays failed.
-  function select(records, { lat, lng, requestedIntents = [], walkingTargetBand = null } = {}) {
+  function select(records, { lat, lng, requestedIntents = [], walkingTargetBand = null, corroborationRecords = [] } = {}) {
     if (!Array.isArray(records) || records.source_error) return records;
     if (!validCoordinate(lat, lng)) return [];
     return selectRecords(records, {
       anchor: { lat, lng },
       requestedIntents,
       walkingTargetBand,
+      corroborationRecords,
       limit: boundedLimit,
     });
   }
