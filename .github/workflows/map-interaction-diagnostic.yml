@@ -20,13 +20,29 @@ jobs:
       - run: npm ci
       - run: npm ci --prefix frontend
       - run: npx --no-install playwright-core install --with-deps chromium
-      - name: Bounded exact-interaction reproduction
+      - name: Controlled concurrent-browser reproduction
         shell: bash
         run: |
           set -euo pipefail
-          for iteration in {1..10}; do
-            printf '\nMAP_TRACE_ITERATION=%s\n' "$iteration"
-            node --require ./tests/helpers/no-live-network.js \
-              --require ./tests/helpers/file-deadline.js \
-              --test tests/unified-city-planner-browser.test.js
+          for iteration in {1..2}; do
+            directory=$(mktemp -d "$RUNNER_TEMP/map-parallel.XXXXXX")
+            pids=()
+            for slot in {1..4}; do
+              node --require ./tests/helpers/no-live-network.js \
+                --require ./tests/helpers/file-deadline.js \
+                --test tests/unified-city-planner-browser.test.js \
+                > "$directory/$slot.log" 2>&1 &
+              pids+=("$!")
+            done
+            failed=0
+            for pid in "${pids[@]}"; do
+              if ! wait "$pid"; then failed=1; fi
+            done
+            python - "$directory" "$iteration" <<'PY'
+          import pathlib, sys
+          for path in sorted(pathlib.Path(sys.argv[1]).glob('*.log')):
+              print(f'MAP_TRACE_ITERATION={sys.argv[2]} SLOT={path.stem}', flush=True)
+              print(path.read_text(), flush=True)
+          PY
+            if ((failed)); then exit 1; fi
           done
