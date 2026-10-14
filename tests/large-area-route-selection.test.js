@@ -23,11 +23,15 @@ function replay(overrides = {}) {
 test('recorded London supply reaches the engine and walking validation instead of a fixed pairwise veto', async () => {
   const {result,experiment} = await replay();
   const pipeline = experiment.eligibility.checks.candidate_pipeline;
+  // The recorded acquisition/admission counts remain authoritative. Rhythm
+  // now retains up to six ranked options per role regardless of preference
+  // count; this widens the role surface, not trust or the final route.
+  const expectedPipeline = { ...recorded.provenance.expected_pipeline, role_surface_candidate_count: 23 };
   for (const key of ['coordinate_ready_real_place_count','identity_resolved_candidate_count',
     'eligible_pool_candidate_count','rejected_candidate_count','availability_evaluated_candidate_count',
     'availability_excluded_candidate_count','availability_unresolved_candidate_count',
     'role_relevant_candidate_count','role_surface_candidate_count','engine_reservoir_geocoded_stop_count']) {
-    assert.equal(pipeline[key],recorded.provenance.expected_pipeline[key],key);
+    assert.equal(pipeline[key],expectedPipeline[key],key);
   }
   const route = result.days?.[0]?.primary_route;
   assert.ok(route,'the same 35 records / 31 admitted / four reservoir places support an actual walk');

@@ -359,11 +359,12 @@ function mapPlannerReservoirToSourceCandidates({
   const selectedRoles = new Set(selectedPicks.map((pick) => pick?.role).filter(Boolean));
   const boundedLimit = Math.max(out.length, Math.min(12, Math.max(1, Math.trunc(Number(limit) || 8))));
   const requestedIntentCount = normalizeUserIntents(requestedIntents || []).intents.length;
-  const focusedRhythm = Boolean(dayRhythm) && requestedIntentCount === 1;
+  const rhythmDepth = Boolean(dayRhythm);
   const variedActivities = requestedIntentCount > 1;
-  // Preserve safe same-interest depth instead of spending the reservoir on
-  // unrequested roles. Experimental depth retains its existing two-place cap.
-  const boundedPerRole = focusedRhythm ? 6 : Math.min(3, Math.max(1, Math.trunc(Number(perRole) || 2)));
+  // Preserve safe requested-interest depth independently of preference count.
+  // The engine's rhythm/time budget chooses the actual day, not this reservoir.
+  // Experimental depth retains its existing two-place cap.
+  const boundedPerRole = rhythmDepth ? 6 : Math.min(3, Math.max(1, Math.trunc(Number(perRole) || 2)));
 
   for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
     const role = roleEntry?.role;
