@@ -571,6 +571,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       let authoritativePlace = anchor.place;
       const resolution = body?.agnostic_route_output_experiment?.intake?.resolved;
       if (!anchor.coords && typeof resolution?.selection_id === "string") {
+        const requestedRef = validPlaceRef(anchor.placeRef);
+        const resolvedRef = validPlaceRef(resolution.place_ref);
         anchor = {
           ...anchor,
           place: anchor.place || (typeof resolution.label === "string" ? resolution.label : undefined),
@@ -584,6 +586,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         setPlaceSelection(anchor.placeSelection ?? null);
         setSelectionLabel(anchor.selectionLabel);
         setPlaceRef(anchor.placeRef ?? null);
+        // This current response attests the query's canonical anchor. Move the
+        // ledger with it so later adjustments do not mistake a qualified label
+        // for different geography. A conflicting durable identity never moves
+        // choices, and stale responses were rejected before this boundary.
+        if (scopedLedger.applies && commitmentAnchorKeyRef.current === nextAnchorKey &&
+            (!requestedRef || requestedRef === resolvedRef)) {
+          commitmentAnchorKeyRef.current = anchorKey(anchor);
+        }
       }
       // Atomic replacement. If the new verdict is structure_only/unavailable,
       // the held day disappears here — it no longer answers the request.
