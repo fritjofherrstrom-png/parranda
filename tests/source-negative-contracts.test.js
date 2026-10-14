@@ -2,9 +2,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { mapOverpassResponse, composeOpenDataLoaders } = require('../server/place-candidates/open-data-loader');
+const { mapOverpassResponse, composeOpenDataLoaders, createOpenDataLoader, createOvertureBackgroundSource } = require('../server/place-candidates/open-data-loader');
+const { createSourceCache } = require('../server/place-candidates/source-cache');
 const { SOURCE_COMPLETION, SOURCE_SNAPSHOT } = require('../server/place-candidates/background-source');
-const { mapOvertureRow } = require('../server/place-candidates/overture-source');
+const { mapOvertureRow, createOvertureSource } = require('../server/place-candidates/overture-source');
 const { createExternalOpenProvider } = require('../server/place-candidates/external-open-provider');
 const { resolveCandidateIdentity } = require('../server/candidates/entity-resolution');
 const { evaluateOpeningHoursForWindow } = require('../server/place-candidates/opening-hours');
@@ -135,4 +136,52 @@ test('original primary completion and nested snapshots retain closure without la
   closedTarget(completed, []);
   closedTarget(initial[SOURCE_SNAPSHOT](), []);
   assert.equal(completed.filter(row => row.id.startsWith('osm-')).length, 25);
+});
+
+test('early directory rescue keeps negative facts after every positive map carrier is excluded', async () => {
+  const elements = [node(1000001, 'museum', { opening_hours: hours }),
+    ...Array.from({ length: 18 }, (_, i) => node(2000000 + i, 'museum')),
+    ...Array.from({ length: 19 }, (_, i) => node(3000000 + i, 'restaurant')),
+    ...Array.from({ length: 19 }, (_, i) => node(4000000 + i, 'cafe'))];
+  const eagerRequest = { ...request, requestedIntents: ['museums', 'food', 'coffee', 'bars'] };
+  let finishWider, mapCalls = 0, directoryCalls = 0;
+  const widerJob = new Promise(resolve => { finishWider = resolve; });
+  const primary = createOpenDataLoader({ radiusKm: 1.5, cache: createSourceCache({ dir: null }),
+    fetcher: async () => ++mapCalls === 1 ? { ok: true, json: async () => ({ elements }) } : widerJob });
+  const directoryRows = Array.from({ length: 80 }, (_, i) => {
+    const category = ['museum', 'restaurant', 'cafe'][i % 3];
+    return mapOvertureRow({ id: `00000000-0000-0000-0000-${String(i + 1).padStart(12, '0')}`,
+      name: i === 0 ? 'Juniper Museum' : `Unrelated Directory ${i}`,
+      lat: anchor.lat + (i === 0 ? .00001 : .003 + i * .0001), lng: anchor.lng,
+      confidence: .99, category, category_hierarchy: [category], licenses: ['CC0-1.0'], operating_status: 'open' });
+  });
+  const cache = createSourceCache({ dir: null });
+  cache.set('55.600,13.000:negative-carrier-test', directoryRows);
+  const selector = createOvertureSource({ queryRows: async () => { throw new Error('unexpected directory transport'); } });
+  const directory = createOvertureBackgroundSource({ cache, source: {
+    sampleKey: 'negative-carrier-test', select: selector.select,
+    acquire: async () => { directoryCalls++; throw new Error('directory is already warm'); },
+  } });
+  const knowledgeRow = { id: 'wikidata-Q1000001', name: 'Juniper Museum', type: 'museum',
+    lat: anchor.lat + .00001, lng: anchor.lng,
+    sources: [{ provider: 'wikidata', family: 'open_knowledge', tier: 'inferred', url: 'https://www.wikidata.org/wiki/Q1000001' }] };
+  const knowledge = { eager: false, readCached: () => [knowledgeRow], load: () => [knowledgeRow] };
+  try {
+    const composed = composeOpenDataLoaders(primary, knowledge, directory, null, { primaryWaitMs: 10 });
+    const initial = await composed(eagerRequest);
+    assert.equal(initial.loader_metadata.primary_collection, 'first_pass_while_expanding');
+    const mapIds = initial.filter(row => row.id.startsWith('osm-')).map(row => row.id);
+    assert.equal(mapIds.length, 25);
+    closedTarget(initial, []);
+    const remaining = await withoutExcludedCandidates(async () => initial, mapIds)(eagerRequest);
+    assert.equal(remaining.length, 81, 'keep the existing 80 directory + one knowledge rows');
+    assert.equal(readSourceNegativeFacts(remaining).length, 1,
+      'already acquired negative facts must not depend on a surviving positive map record');
+    closedTarget(remaining, []);
+    assert.equal(mapCalls, 2, 'only the original first and wider transport');
+    assert.equal(directoryCalls, 0);
+  } finally {
+    finishWider({ ok: true, json: async () => ({ elements: [] }) });
+    await primary(eagerRequest);
+  }
 });

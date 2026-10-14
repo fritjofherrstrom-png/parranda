@@ -1648,7 +1648,10 @@ function composeOpenDataLoaders(
           ? await Promise.resolve(source.readCached(primaryAnchor, request)).catch(() => []) : [];
         if (Array.isArray(cached)) held.push(...retainCorroboratingRows(cached, mapEvidence || []));
       }
-      const records = [...(mapEvidence || []), ...eagerGroups.flatMap(rows => retainCorroboratingRows(rows, mapEvidence || [])), ...held];
+      const records = attachSourceNegativeFacts(
+        [...(mapEvidence || []), ...eagerGroups.flatMap(rows => retainCorroboratingRows(rows, mapEvidence || [])), ...held],
+        readSourceNegativeFacts(mapEvidence, ...eagerGroups, held),
+      );
       return withLoaderMetadata(
         withLoaderStatus(records, `loaded:${records.length}`, null),
         {
