@@ -2363,7 +2363,8 @@ function buildApp({
         );
       }
       let agnosticPlaceStructure = null;
-      const compositionDate = payload.dates[0] || cityConfig.todayIsoDate();
+      // Resolve the selected day once, before acquisition can cross midnight.
+      const compositionDate = resolveSelectedRouteDate(payload, baselineBody, cityConfig);
       const acquisitionContext = resolveAgnosticAcquisitionContext({
         date: compositionDate, trustedTimezone: intake.resolved?.timezone || null, clock,
       });
@@ -2434,7 +2435,7 @@ function buildApp({
             placeLabel: intake?.resolved?.label || null,
             spatialScope,
             now: eventsNow,
-            selectedDate: resolveSelectedRouteDate(payload, baselineBody, cityConfig),
+            selectedDate: compositionDate,
             // Preferences may reorder only the already trusted, normalized
             // event pool. They never become event evidence or relax time/geo
             // gates inside the supply.
@@ -2464,9 +2465,8 @@ function buildApp({
       let wovenPlaceStructure = agnosticPlaceStructure;
       try {
         const { weaveEveningEvent } = require("./candidates/evening-event-weave");
-        const selectedRouteDate = resolveSelectedRouteDate(payload, baselineBody, cityConfig);
         wovenPlaceStructure = weaveEveningEvent(agnosticPlaceStructure, liveEvents, {
-          selectedDate: selectedRouteDate,
+          selectedDate: compositionDate,
         });
       } catch (_error) {
         wovenPlaceStructure = agnosticPlaceStructure;
