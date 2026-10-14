@@ -27,8 +27,7 @@
  * inputs (inject a fixed `clock` + deterministic `weatherProvider` in tests).
  */
 
-const { buildEngineContext, buildCityNow } = require("../pulse-engine/context");
-const { buildLocalDayAvailabilityWindow } = require("../place-candidates/opening-hours");
+const { buildEngineContext } = require("../pulse-engine/context");
 const goldenHourGenerator = require("../pulse-engine/generators/golden-hour");
 const cityRhythmGenerator = require("../pulse-engine/generators/city-rhythm");
 const { interpretWeatherForDayflow } = require("../pulse-sources/weather-context-provider");
@@ -110,36 +109,6 @@ function defaultWeatherProvider({ lat, lng, date, timezone } = {}) {
   return fetchWeatherForDates([date], { lat, lng }, options)
     .then((byDate) => (byDate && byDate[date]) || null)
     .catch(() => null);
-}
-
-// Acquisition may use already-attested time, but must not fetch weather just
-// to obtain a timezone. Share one lazy clock sample with later composition so
-// structure/route cuts cannot diverge at a minute or local-date boundary.
-function resolveAgnosticAcquisitionContext({ date, trustedTimezone = null, clock = null } = {}) {
-  let instant;
-  const requestClock = () => {
-    if (instant === undefined) {
-      try {
-        const sampled = typeof clock === "function" ? clock() : new Date();
-        instant = sampled instanceof Date ? new Date(sampled.getTime()) : new Date();
-      } catch (_error) {
-        // Retain failure too: resampling could change the source cache identity.
-        instant = new Date(NaN);
-      }
-    }
-    return new Date(instant.getTime());
-  };
-  let availabilityWindow = null;
-  if (date && isValidIanaTimezone(trustedTimezone)) {
-    try {
-      const local = buildCityNow(requestClock(), trustedTimezone.trim());
-      availabilityWindow = buildLocalDayAvailabilityWindow({
-        requestedDate: date,
-        nowLocalIso: `${local.isoDate}T${pad2(local.hour)}:${pad2(local.minute)}:00`,
-      });
-    } catch (_error) { /* Unavailable trusted time remains unknown. */ }
-  }
-  return { availabilityWindow, clock: requestClock };
 }
 
 function resolveWeatherTimezone(weather) {
@@ -355,7 +324,6 @@ function collectInfluenceReasons(plannerRoles, candidateCombination) {
 
 module.exports = {
   resolveAgnosticContext,
-  resolveAgnosticAcquisitionContext,
   collectInfluenceReasons,
   defaultWeatherProvider,
   isValidIanaTimezone,

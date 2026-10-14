@@ -28,7 +28,6 @@
 const { normalizePlaceCandidate, validatePlaceCandidate } = require("./contract");
 const { normalizeOpeningHours } = require("./opening-hours");
 const { normalizeSourceNameAliases } = require("./source-name-aliases");
-const { transferSourceNegativeFacts } = require('./source-negative-facts');
 const { createEvidence, SOURCE_FAMILIES } = require("../candidates/evidence");
 
 const EXTERNAL_OPEN_PROVIDER_META = Object.freeze({
@@ -182,7 +181,7 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
   if (record.operator_visit_evidence && ['confirmed_storefront', 'non_shopping_visit', 'closed_weekdays'].includes(record.operator_visit_evidence.status)) {
     base.operator_visit_evidence = record.operator_visit_evidence;
   }
-  return transferSourceNegativeFacts(validatePlaceCandidate(base, `externalOpenCandidate[${index}]`), record);
+  return validatePlaceCandidate(base, `externalOpenCandidate[${index}]`);
 }
 
 function normalizeOperationalStatus(value) {

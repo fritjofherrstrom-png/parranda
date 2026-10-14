@@ -45,7 +45,7 @@ const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-valid
 const { operatorClosureForWindow } = require('../place-candidates/operator-visit-evidence');
 const { buildAgnosticRouteOrdering, daypartForRole, timeBandRank } = require("./agnostic-route-ordering");
 const { resolveWalkableMicroBase } = require("./walkable-micro-base");
-const { resolveAgnosticContext, resolveAgnosticAcquisitionContext, collectInfluenceReasons } = require("./agnostic-route-context");
+const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-route-context");
 const { buildDayflowContext } = require("./dayflow-context");
 const { calibrateAgnosticRouteReadiness } = require("./agnostic-route-readiness-calibration");
 const { buildAgnosticConstraintNegotiation } = require("./agnostic-constraint-negotiation");
@@ -94,7 +94,6 @@ async function resolveTrustedHelpers({
   spatialScope = null,
   walkingTargetBand = null,
   dayRhythm = null,
-  availabilityWindow = null,
 }) {
   const baseStatus = {
     status: "skipped",
@@ -118,7 +117,6 @@ async function resolveTrustedHelpers({
       spatialScope,
       walkingTargetBand,
       ...(dayRhythm ? { dayRhythm } : {}),
-      availabilityWindow,
     });
     const loaderStatus = typeof records?.loader_status === "string" ? records.loader_status : null;
     const loaderError = records?.loader_error || null;
@@ -990,15 +988,6 @@ async function composeAgnosticRouteOutput({
   const origin = { lat: coords.lat, lng: coords.lng };
   const effectiveDate = date || agnosticContext.todayIsoDate();
 
-  const acquisitionContext = retainedContext !== undefined
-    ? {
-        availabilityWindow: retainedContext?.timezoneKnown
-          ? buildLocalDayAvailabilityWindow({ requestedDate: effectiveDate, nowLocalIso: retainedContext.now })
-          : null,
-        clock,
-      }
-    : resolveAgnosticAcquisitionContext({ date: effectiveDate, trustedTimezone, clock });
-
   const resolvedTrusted = await resolveTrustedHelpers({
     externalRequested,
     openDataLoader,
@@ -1008,7 +997,6 @@ async function composeAgnosticRouteOutput({
     spatialScope,
     walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
     dayRhythm,
-    availabilityWindow: acquisitionContext.availabilityWindow,
   });
   const helpers = { ...resolvedTrusted.helpers, curated_candidates: curatedCandidates };
   const loadedCandidateIds = [
@@ -1044,7 +1032,7 @@ async function composeAgnosticRouteOutput({
         date: effectiveDate,
         trustedTimezone,
         weatherProvider,
-        clock: acquisitionContext.clock,
+        clock,
         lang,
         cityLabel: agnosticContext.label,
       })
