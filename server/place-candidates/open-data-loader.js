@@ -39,6 +39,9 @@ const {
   createVisitSwedenNapiSource,
 } = require("./visit-sweden-napi-source");
 const { normalizeOpeningHours, evaluateOpeningHoursForWindow } = require("./opening-hours");
+const {
+  readSourceNegativeFacts, attachSourceNegativeFacts, retainSourceNegativeFacts, hydrateSourceNegativeFacts,
+} = require('./source-negative-facts');
 const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
 const {
   sanitizeTrustedSpatialScope,
@@ -122,6 +125,13 @@ const PRIMARY_CACHE_MISS = Symbol("primaryCacheMiss");
 // How many walking budgets per anchor, mode, intent set and scope the loader
 // remembers as neighbours of each other (Kort/Lagom/Lång plus one custom).
 const MAX_REMEMBERED_BUDGETS = 4;
+// Only source-owned selections can retain a re-selection over their original
+// bounded sample. JSON/public inputs cannot supply this process-private seam.
+const SOURCE_CORROBORATION_SELECTION = Symbol('sourceCorroborationSelection');
+function retainCorroboratingRows(rows, primary) {
+  return typeof rows?.[SOURCE_CORROBORATION_SELECTION] === 'function'
+    ? rows[SOURCE_CORROBORATION_SELECTION](primary) : rows;
+}
 
 const LOADER_SUPPORTED_INTENTS = new Set([
   "scenic",
@@ -376,7 +386,7 @@ function createOpenDataLoader({
   // One geocoded query at a given radius, with mirror failover. Fetch wider than
   // the final limit so scarce-but-important categories (scenic in a food-dense
   // centre) survive, then balance down to `boundedLimit` client-side.
-  async function fetchAtRadius(lat, lng, radiusM, { queryIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
+  async function fetchAtRadius(lat, lng, radiusM, { queryIntents = [], requestedIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
     const fetchBreadth = Math.min(boundedLimit * 6, OVERPASS_FETCH_CAP);
     const query = buildOverpassQuery({
       lat,
@@ -393,6 +403,7 @@ function createOpenDataLoader({
       if (attempt.ok) {
         const records = mapOverpassResponse(attempt.payload, boundedLimit, {
           origin: { lat, lng },
+          requestedIntents,
           walkingTargetBand,
           availabilityWindow,
         });
@@ -403,7 +414,7 @@ function createOpenDataLoader({
     return withLoaderStatus([], last.status, last.error);
   }
 
-  async function fetchAcrossAnchors(anchors, radiusM) {
+  async function fetchAcrossAnchors(anchors, radiusM, { requestedIntents = [], availabilityWindow = null } = {}) {
     const boundedAnchors = (Array.isArray(anchors) ? anchors : [])
       .filter((anchor) => Number.isFinite(anchor?.lat) && Number.isFinite(anchor?.lng))
       .slice(0, 2);
@@ -428,7 +439,7 @@ function createOpenDataLoader({
         // partitioned. A dense first anchor must not crowd a better second
         // cluster out of the global candidate limit before comparison.
         OVERPASS_FETCH_CAP,
-        { origin: boundedAnchors[0] },
+        { origin: boundedAnchors[0], availabilityWindow },
       );
       const buckets = boundedAnchors.map(() => []);
       for (const record of mapped) {
@@ -446,7 +457,7 @@ function createOpenDataLoader({
       const clusters = boundedAnchors.map((anchor, index) => ({
         anchor,
         records: withLoaderStatus(
-          balanceMappedRecords(buckets[index], boundedLimit, anchor),
+          balanceMappedRecords(buckets[index], boundedLimit, anchor, { requestedIntents, availabilityWindow }),
           buckets[index].length ? `loaded:${Math.min(buckets[index].length, boundedLimit)}` : "loaded:0",
           null,
         ),
@@ -468,6 +479,10 @@ function createOpenDataLoader({
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return withLoaderStatus([], "loaded:0", null);
 
     const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents);
+    // Preserve already-acquired requested experiences before the bounded map
+    // cut. Modern rhythm owns density; unrelated category variety must not
+    // consume its supply. Query, factual gates and provider caps stay unchanged.
+    const selectionIntents = dayRhythm ? normalizedRequestedIntents : [];
     const normalizedWalkingTargetBand = normalizeWalkingTargetBand(walkingTargetBand);
     const normalizedWindow = normalizeAvailabilityWindow(availabilityWindow);
     const origin = { lat, lng };
@@ -476,6 +491,7 @@ function createOpenDataLoader({
     const requestRadiusKm = pinnedRadiusKm ?? rhythmAwareRadiusKm(normalizedWalkingTargetBand, dayRhythm);
 
     const first = await fetchAtRadius(lat, lng, Math.round(requestRadiusKm * 1000), {
+      requestedIntents: selectionIntents,
       walkingTargetBand: normalizedWalkingTargetBand,
       availabilityWindow: normalizedWindow,
     });
@@ -542,10 +558,12 @@ function createOpenDataLoader({
       }
       const wider = await fetchAtRadius(lat, lng, Math.round(widerKm * 1000), {
         queryIntents: expansionQueryIntents,
+        requestedIntents: selectionIntents,
         walkingTargetBand: normalizedWalkingTargetBand,
         availabilityWindow: normalizedWindow,
       });
       const combined = mergeLoaderRecords(first, wider, boundedLimit, origin, {
+        requestedIntents: selectionIntents,
         walkingTargetBand: normalizedWalkingTargetBand,
         availabilityWindow: normalizedWindow,
       });
@@ -560,6 +578,9 @@ function createOpenDataLoader({
         selectedRadiusKm = widerKm;
         selectionReason = "richer_wider_supply";
       }
+      // Positive re-selection can reject a wider pass; its already acquired
+      // negative facts still belong to this producer and must reach identity.
+      selected = attachSourceNegativeFacts(selected, readSourceNegativeFacts(first, wider));
     }
     return withLoaderMetadata(selected, {
       base_radius_km: requestRadiusKm,
@@ -641,7 +662,10 @@ function createOpenDataLoader({
         { ...baseMetadata, selection_reason: "regional_scout_outstanding" },
       ));
     }
-    const regional = await fetchAcrossAnchors(secondaryAnchors, REGIONAL_CLUSTER_RADIUS_KM * 1000);
+    const regional = await fetchAcrossAnchors(secondaryAnchors, REGIONAL_CLUSTER_RADIUS_KM * 1000, {
+      requestedIntents: request.dayRhythm ? normalizeRequestedIntents(request.requestedIntents) : [],
+      availabilityWindow: normalizeAvailabilityWindow(request.availabilityWindow),
+    });
     const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
     let selected = primary;
     let selectedAnchor = { id: "primary", lat: request.lat, lng: request.lng };
@@ -692,7 +716,9 @@ function createOpenDataLoader({
   };
 
   // One request's identity: the ~110 m anchor bucket plus everything that
-  // shaped its query. v9 includes the trusted availability window and rhythm aperture.
+  // shaped its query. v12 invalidates cuts/indexes that lost source-owned
+  // negative facts before reconciliation. Legacy windowless v8 stays unchanged;
+  // windowed non-rhythm cuts use a distinct v12-window namespace.
   // v8 invalidates every row collected before the aperture
   // followed the walking budget: a `t9` row cached under v7 was gathered from
   // a 1.5 km disc, so reusing it would keep serving the narrow day this fixes.
@@ -709,9 +735,9 @@ function createOpenDataLoader({
     return {
       key: !request.dayRhythm && !window
         ? `v8:${anchorKey}:r${radiusKm}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`
-        : `v9:${anchorKey}:r${radiusKm}:w${windowKey}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
-      budgetsKey: `v8-budgets:${anchorKey}:${shape}:s${scopeKey}`,
-      evidenceKey: `v8-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
+        : `${request.dayRhythm ? 'v12' : 'v12-window'}:${anchorKey}:r${radiusKm}:w${windowKey}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
+      budgetsKey: `${request.dayRhythm ? 'v12' : 'v8'}-budgets:${anchorKey}:${shape}:s${scopeKey}`,
+      evidenceKey: `${request.dayRhythm ? 'v12' : 'v8'}-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
       radiusKm,
       targetKm: band ? band.targetKm : null,
     };
@@ -790,7 +816,7 @@ function createOpenDataLoader({
         distance(a.entry.radius_km, own.radiusKm) - distance(b.entry.radius_km, own.radiusKm) ||
         distance(a.entry.target_km, own.targetKm) - distance(b.entry.target_km, own.targetKm))[0];
     if (!best) return null;
-    return withLoaderMetadata(withLoaderStatus([...best.value.records], best.value.status, null), {
+    return withLoaderMetadata(withLoaderStatus(hydrateSourceNegativeFacts([...best.value.records], best.value.negativeFacts), best.value.status, null), {
       ...(best.value.metadata && typeof best.value.metadata === "object" ? best.value.metadata : {}),
       primary_collection_target_km: Number.isFinite(best.entry.target_km) ? best.entry.target_km : null,
     });
@@ -816,6 +842,7 @@ function createOpenDataLoader({
         produced = true;
         return {
           records: Array.from(result),
+          negativeFacts: readSourceNegativeFacts(result),
           status: result.loader_status,
           error: result.loader_error,
           metadata: result.loader_metadata || null,
@@ -857,7 +884,7 @@ function createOpenDataLoader({
       rememberBudget(identity);
     }
     return withLoaderMetadata(
-      withLoaderStatus(entry.records, entry.status, entry.error),
+      withLoaderStatus(hydrateSourceNegativeFacts(entry.records, entry.negativeFacts), entry.status, entry.error),
       entry.metadata || null,
     );
   };
@@ -905,7 +932,7 @@ function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_
   return `[out:json][timeout:${OVERPASS_QUERY_TIMEOUT_SECONDS}];${blocks.join("")}`;
 }
 
-function mapOverpassResponse(payload, limit, { origin = null, walkingTargetBand = null, availabilityWindow = null } = {}) {
+function mapOverpassResponse(payload, limit, { origin = null, requestedIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
   if (!payload || !Array.isArray(payload.elements)) return [];
   // Map + dedupe everything Overpass returned (already bounded by the fetch
   // cap), preserving response order.
@@ -918,12 +945,41 @@ function mapOverpassResponse(payload, limit, { origin = null, walkingTargetBand 
     seenIds.add(record.id);
     mapped.push(record);
   }
-  return balanceMappedRecords(mapped, limit, origin, { walkingTargetBand, availabilityWindow });
+  return retainSourceNegativeFacts(
+    balanceMappedRecords(mapped, limit, origin, { requestedIntents, walkingTargetBand, availabilityWindow }),
+    mapped, normalizeAvailabilityWindow(availabilityWindow),
+  );
 }
 
-function balanceMappedRecords(mapped, limit, origin, { walkingTargetBand = null, availabilityWindow = null } = {}) {
+function balanceMappedRecords(mapped, limit, origin, { requestedIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
   const ranked = rankMappedRecords(mapped, origin, availabilityWindow);
   if (mapped.length <= limit) return ranked;
+
+  const intents = normalizeRequestedIntents(requestedIntents);
+  if (intents.length) {
+    const window = normalizeAvailabilityWindow(availabilityWindow);
+    const level = record => {
+      const strong = intents.some(intent => matchCandidateToIntent(record, intent).level === 'strong');
+      const partial = intents.some(intent => matchCandidateToIntent(record, intent).level === 'weak');
+      // Without trusted local time, source_indicated_active is not proof of
+      // opening. Balance the requested union instead of letting unassessed
+      // strong matches erase all possible partial fits before the late gate.
+      return strong ? (window ? 2 : 1) : partial ? 1 : 0;
+    };
+    const usable = record => record.operational_status !== 'inactive' &&
+      (!window || evaluateOpeningHoursForWindow(record.opening_hours, window).eligible !== false);
+    const selected = [];
+    for (const tier of [5, 4, 3, 2, 1, 0]) {
+      if (selected.length >= limit) break;
+      const group = ranked.filter(record => level(record) + (usable(record) ? 3 : 0) === tier);
+      // Reuse the category/reach balancing within the requested union. This
+      // preserves minority interests as well as repeated same-interest depth.
+      // Known closed/inactive matches cannot consume the positive quota; their
+      // source facts remain available behind viable options, never reopened.
+      selected.push(...balanceMappedRecords(group, limit - selected.length, origin, { walkingTargetBand, availabilityWindow }));
+    }
+    return selected;
+  }
 
   // Category-balanced round-robin: a food-dense centre must not crowd out the
   // single scenic anchor. Buckets keep response order; we take one per category
@@ -981,7 +1037,7 @@ function mappingsForRequestedIntents(requestedIntents = []) {
   return mappings.length ? mappings : OSM_TAG_MAP;
 }
 
-function mergeLoaderRecords(first, wider, limit, origin, { walkingTargetBand = null, availabilityWindow = null } = {}) {
+function mergeLoaderRecords(first, wider, limit, origin, { requestedIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
   const deduped = [];
   const ids = new Set();
   for (const record of [...(Array.isArray(first) ? first : []), ...(Array.isArray(wider) ? wider : [])]) {
@@ -989,7 +1045,7 @@ function mergeLoaderRecords(first, wider, limit, origin, { walkingTargetBand = n
     ids.add(record.id);
     deduped.push(record);
   }
-  const selected = balanceMappedRecords(deduped, limit, origin, { walkingTargetBand, availabilityWindow });
+  const selected = balanceMappedRecords(deduped, limit, origin, { requestedIntents, walkingTargetBand, availabilityWindow });
   return withLoaderStatus(
     selected,
     selected.length ? `loaded:${selected.length}` : first?.loader_status || wider?.loader_status || "loaded:0",
@@ -1428,12 +1484,22 @@ function createOvertureBackgroundSource({ source, cache }) {
     keyFor: ({ lat, lng } = {}) => `${Number(lat).toFixed(3)},${Number(lng).toFixed(3)}:${sampleKey}`,
     load: (anchor) => source.acquire(anchor),
   });
-  const forRequest = (rows, anchor = {}, request = {}) => source.select(rows, {
-    lat: anchor.lat,
-    lng: anchor.lng,
-    requestedIntents: normalizeRequestedIntents(request.requestedIntents),
-    walkingTargetBand: request.walkingTargetBand,
-  });
+  const forRequest = (rows, anchor = {}, request = {}) => {
+    const selection = {
+      lat: anchor.lat, lng: anchor.lng,
+      requestedIntents: normalizeRequestedIntents(request.requestedIntents),
+      walkingTargetBand: request.walkingTargetBand,
+    };
+    const retainedSample = [...rows];
+    const select = primary => {
+      const selected = source.select(retainedSample, { ...selection, corroborationRecords: primary });
+      if (rows.source_error) Object.defineProperty(selected, 'source_error', { value: rows.source_error });
+      return selected;
+    };
+    const selected = select([]);
+    Object.defineProperty(selected, SOURCE_CORROBORATION_SELECTION, { value: select });
+    return selected;
+  };
   return {
     eager: true,
     readCached(anchor, request) {
@@ -1447,6 +1513,10 @@ function createOvertureBackgroundSource({ source, cache }) {
       Object.defineProperty(pending, SOURCE_COMPLETION, {
         value: Promise.resolve(completion).then((rows) => forRequest(rows, anchor, request)),
       });
+      Object.defineProperty(pending, SOURCE_SNAPSHOT, { value: () => {
+        const snapshot = typeof value[SOURCE_SNAPSHOT] === 'function' ? value[SOURCE_SNAPSHOT]() : null;
+        return Array.isArray(snapshot) ? forRequest(snapshot, anchor, request) : null;
+      } });
       return pending;
     },
   };
@@ -1503,8 +1573,10 @@ function composeOpenDataLoaders(
       const sameAnchor = !selected || (selected.lat === primaryAnchor.lat && selected.lng === primaryAnchor.lng);
       const cachedGroups = await Promise.all(sources.map(source => typeof source.readCached === 'function'
         ? source.readCached(primaryAnchor, request) : []));
-      const cached = [...primaryCached, ...cachedGroups.flat()];
-      const rescue = [...primaryCached, ...cachedGroups.filter((_, index) => sources[index].primaryRescue !== false).flat()];
+      const selectedGroups = cachedGroups.map(rows => retainCorroboratingRows(rows, primaryCached));
+      const cached = attachSourceNegativeFacts([...primaryCached, ...selectedGroups.flat()],
+        readSourceNegativeFacts(primaryCached, ...selectedGroups));
+      const rescue = [...primaryCached, ...selectedGroups.filter((_, index) => sources[index].primaryRescue !== false).flat()];
       const profile = supplyProfile(rescue, requestedIntents);
       const capacity = dayCapacityProfile(cached, { origin: primaryAnchor, walkingTargetBand: request.walkingTargetBand });
       const answersRequest = profile.requested_intents_missing.length === 0 && capacity.can_support_target !== false;
@@ -1534,9 +1606,11 @@ function composeOpenDataLoaders(
     const osmPromise = Promise.resolve(osmLoader(request))
       .catch(() => withLoaderStatus([], "error_failed_closed", "osm_threw"));
     const eagerRecords = [];
+    const eagerGroups = [];
     for (const [source, pending] of eagerLoads) {
       if (source.primaryRescue === false) continue;
       const loaded = await pending;
+      if (Array.isArray(loaded)) eagerGroups.push(loaded);
       if (Array.isArray(loaded)) eagerRecords.push(...loaded);
     }
     const eagerProfile = supplyProfile(eagerRecords, requestedIntents);
@@ -1572,9 +1646,12 @@ function composeOpenDataLoaders(
         if (source?.eager === true && source.primaryRescue !== false) continue; // already in the rescue
         const cached = typeof source?.readCached === "function"
           ? await Promise.resolve(source.readCached(primaryAnchor, request)).catch(() => []) : [];
-        if (Array.isArray(cached)) held.push(...cached);
+        if (Array.isArray(cached)) held.push(...retainCorroboratingRows(cached, mapEvidence || []));
       }
-      const records = [...(mapEvidence || []), ...eagerRecords, ...held];
+      const records = attachSourceNegativeFacts(
+        [...(mapEvidence || []), ...eagerGroups.flatMap(rows => retainCorroboratingRows(rows, mapEvidence || [])), ...held],
+        readSourceNegativeFacts(mapEvidence, ...eagerGroups, held),
+      );
       return withLoaderMetadata(
         withLoaderStatus(records, `loaded:${records.length}`, null),
         {
@@ -1617,7 +1694,7 @@ function composeOpenDataLoaders(
     const neighbour = primaryErrored && typeof osmLoader.readNeighbouring === "function"
       ? osmLoader.readNeighbouring(primaryAnchor, request) : null;
     const mapRecords = neighbour?.length ? neighbour : osmRecords;
-    const backgroundRecords = [];
+    const backgroundGroups = [];
     const backgroundFailures = [];
     const completions = [];
     for (const source of sources) {
@@ -1655,11 +1732,11 @@ function composeOpenDataLoaders(
         const originalSnapshot = typeof eagerRecords[SOURCE_SNAPSHOT] === 'function'
           ? eagerRecords[SOURCE_SNAPSHOT]() : null;
         if (Array.isArray(originalSnapshot)) {
-          backgroundRecords.push(...originalSnapshot);
+          backgroundGroups.push(originalSnapshot);
           if (originalSnapshot.source_error) backgroundFailures.push(safeLoaderToken(originalSnapshot.source_error));
           continue;
         }
-        backgroundRecords.push(...eagerRecords);
+        backgroundGroups.push(eagerRecords);
         if (eagerRecords.source_error) backgroundFailures.push(safeLoaderToken(eagerRecords.source_error));
         if (primaryFailed || source.waitForCompletion !== false) {
           completions.push(eagerRecords[SOURCE_COMPLETION]);
@@ -1680,14 +1757,18 @@ function composeOpenDataLoaders(
             ? (typeof source === "function" ? source(wikiAnchor) : source.load(wikiAnchor, request))
             : eagerResult || (typeof source === "function" ? source(wikiAnchor) : source.load(wikiAnchor, request)),
       ).catch(failedSourceValue);
-      if (Array.isArray(loaded)) backgroundRecords.push(...loaded);
+      if (Array.isArray(loaded)) backgroundGroups.push(loaded);
       if (loaded?.source_error) backgroundFailures.push(safeLoaderToken(loaded.source_error));
       if (loaded?.[SOURCE_COMPLETION] && (primaryFailed || source.waitForCompletion !== false)) {
         completions.push(loaded[SOURCE_COMPLETION]);
       }
     }
-    if (osm?.[SOURCE_COMPLETION]) completions.push(osm[SOURCE_COMPLETION]);
-    const records = [...mapRecords, ...backgroundRecords];
+    const primaryCompletionIndex = osm?.[SOURCE_COMPLETION] ? completions.length : null;
+    if (primaryCompletionIndex !== null) completions.push(osm[SOURCE_COMPLETION]);
+    const records = attachSourceNegativeFacts(
+      [...mapRecords, ...backgroundGroups.flatMap(rows => retainCorroboratingRows(rows, mapRecords))],
+      readSourceNegativeFacts(mapRecords, ...backgroundGroups),
+    );
     const status = records.length > 0 ? `loaded:${records.length}`
       : backgroundFailures.length ? 'error_failed_closed' : (osm.loader_status || "loaded:0");
     const collectionError = osm.loader_error || backgroundFailures[0] || null;
@@ -1722,16 +1803,25 @@ function composeOpenDataLoaders(
         // Reviewed-source composition can wrap an already composed primary.
         // Read its private progress too: awaiting its all-sources completion
         // again would otherwise hide individually finished source jobs.
-        const primarySnapshot = typeof osm?.[SOURCE_SNAPSHOT] === 'function' ? osm[SOURCE_SNAPSHOT]() : [];
-        const settled = [...records, ...(Array.isArray(primarySnapshot) ? primarySnapshot : []), ...groups.flatMap(rows => Array.isArray(rows) ? rows : [])];
-        const unique = [...new Map(settled.map(row => [row.id, row])).values()];
+        const primarySnapshot = typeof osm?.[SOURCE_SNAPSHOT] === 'function' ? osm[SOURCE_SNAPSHOT]() : null;
+        const primaryCompleted = primaryCompletionIndex !== null ? finished.get(primaryCompletionIndex) : null;
+        // A source snapshot/completion is its current frame, not a delta. A
+        // nested composer may have replaced its directory selection within the
+        // same cap; unioning the old flattened frame would resurrect evictions.
+        const primaryRows = Array.isArray(primarySnapshot) ? primarySnapshot
+          : Array.isArray(primaryCompleted) ? primaryCompleted : mapRecords;
+        const backgroundCompleted = [...finished.entries()].filter(([index]) => index !== primaryCompletionIndex).map(([, rows]) => rows);
+        const settled = [...primaryRows, ...[...backgroundGroups, ...backgroundCompleted].flatMap(rows =>
+          Array.isArray(rows) ? retainCorroboratingRows(rows, primaryRows) : [])];
+        const unique = attachSourceNegativeFacts([...new Map(settled.map(row => [row.id, row])).values()],
+          readSourceNegativeFacts(primaryRows, ...backgroundGroups, ...backgroundCompleted));
         const hasFailure = rows => Boolean(rows?.source_error || rows?.loader_error ||
           rows?.loader_status === 'error_failed_closed' ||
           (Number.isFinite(rows?.loader_metadata?.source_completion?.failed) &&
             rows.loader_metadata.source_completion.failed > 0));
         const failedGroups = groups.filter(hasFailure);
-        const failed = failedGroups.length > 0 || hasFailure(primarySnapshot);
-        const completionError = [...groups, primarySnapshot].map(rows =>
+        const failed = failedGroups.length > 0 || hasFailure(primaryRows);
+        const completionError = [...groups, primaryRows].map(rows =>
           rows?.source_error || rows?.loader_error).filter(Boolean).map(safeLoaderToken).find(Boolean);
         return withLoaderMetadata(withLoaderStatus(unique,
           unique.length ? `loaded:${unique.length}` : failed ? 'error_failed_closed' : status,

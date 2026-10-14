@@ -30,6 +30,7 @@ const { deriveEvidenceFromPlaceCandidate } = require("./evidence");
 const { normalizeSourceNameAliases } = require("../place-candidates/source-name-aliases");
 const { normalizeOpeningHours } = require("../place-candidates/opening-hours");
 const { evaluateOperationalViability } = require("../place-candidates/operational-viability");
+const { NEGATIVE_FACT_WITNESS, negativeFactWitnesses } = require('../place-candidates/source-negative-facts');
 
 // Thresholds — intentionally tight. Tune up (looser) only with evidence.
 const GEO_MERGE_M = 75; // close enough to be the same place, with a name match
@@ -75,7 +76,8 @@ const CATEGORY_BUCKETS = {
 function resolveCandidateIdentity(candidates, { now = null } = {}) {
   const input = Array.isArray(candidates) ? candidates : [];
   // Curated first so externals merge INTO curated, deterministically.
-  const ordered = [...input].sort((a, b) => curatedRank(b) - curatedRank(a));
+  const witnesses = negativeFactWitnesses(input);
+  const ordered = [...input, ...witnesses].sort((a, b) => curatedRank(b) - curatedRank(a));
 
   // Check the complete input, not just the already-seen prefix: a name/geo
   // match must not choose between two incompatible explicit place identities.
@@ -197,6 +199,7 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
           match_count: count });
       }
     }
+    if (duplicate[NEGATIVE_FACT_WITNESS]) continue;
     merges.push({
       duplicate_id: duplicate.id,
       duplicate_origin: originOf(duplicate),
@@ -210,13 +213,15 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
     });
   }
 
-  const mergedRecords = merges.filter((m) => m.decision === "merged");
+  const output = survivors.map((s) => s.candidate).filter(candidate => !candidate[NEGATIVE_FACT_WITNESS]);
+  const publicMerges = merges.filter(merge => !witnesses.some(witness => witness.id === merge.duplicate_id));
+  const mergedRecords = publicMerges.filter((m) => m.decision === "merged");
   return {
-    candidates: survivors.map((s) => s.candidate),
-    merges,
+    candidates: output,
+    merges: publicMerges,
     summary: {
       input_count: input.length,
-      output_count: survivors.length,
+      output_count: output.length,
       merged_count: mergedRecords.length,
       ambiguous_kept_separate: ambiguousKept,
       reconciled_count: mergedRecords.filter((m) => m.reconciled_fields.length > 0).length,
@@ -313,6 +318,10 @@ function matchIdentity(a, b) {
 }
 
 function chooseCanonical(a, b) {
+  // Facts outside a source's positive quota never become candidates or win a
+  // canonical identity. They lend no existence/category/consensus evidence.
+  if (a[NEGATIVE_FACT_WITNESS] && !b[NEGATIVE_FACT_WITNESS]) return b;
+  if (b[NEGATIVE_FACT_WITNESS] && !a[NEGATIVE_FACT_WITNESS]) return a;
   // Curated always canonical over external.
   if (a.city_pack_owned === true && b.city_pack_owned !== true) return a;
   if (b.city_pack_owned === true && a.city_pack_owned !== true) return b;
@@ -324,6 +333,12 @@ function chooseCanonical(a, b) {
 }
 
 function mergeInto(canonical, duplicate, { now = null } = {}) {
+  if (duplicate[NEGATIVE_FACT_WITNESS]) {
+    const { patch } = reconcileFields(canonical, duplicate);
+    const merged = { ...canonical, ...patch };
+    if (canonical[NEGATIVE_FACT_WITNESS]) Object.defineProperty(merged, NEGATIVE_FACT_WITNESS, { value: true });
+    return merged;
+  }
   const canonicalEvidence = evidenceOf(canonical, now);
   const duplicateEvidence = evidenceOf(duplicate, now);
   const evidence = dedupeEvidence([...canonicalEvidence, ...duplicateEvidence]);
