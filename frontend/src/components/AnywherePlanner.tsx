@@ -1,4 +1,6 @@
 import { isLiveOccurrenceId, scopeLiveChoices } from "../lib/live-stop-choice.mjs";
+import { urlEntryCommitments } from "../lib/url-entry-commitments.mjs";
+import type { Commitments } from "./planner/commitments";
 /**
  * Modern planner surface for freeform places, coordinates, and registered cities.
  *
@@ -395,6 +397,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       walkKeyOverride,
       excludedOverride,
       pinnedOverride,
+      commitmentsOverride,
     }: {
       silent?: boolean;
       langOverride?: Lang;
@@ -404,6 +407,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       walkKeyOverride?: string;
       excludedOverride?: string[];
       pinnedOverride?: string[];
+      commitmentsOverride?: Commitments;
     } = {},
   ) {
     if (navigationSuspendedRef.current) return;
@@ -435,7 +439,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const nextAnchorKey = anchorKey(anchor);
     // Genuinely new geography drops the ledger; the same anchor keeps it.
     const scopedLedger = scopeCommitmentsToAnchor({
-      entries: commitments,
+      entries: commitmentsOverride ?? commitments,
       ledgerAnchorKey: commitmentAnchorKeyRef.current,
       nextAnchorKey,
     });
@@ -1071,15 +1075,35 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       }
       if (changed) adoptedInputsRef.current = true;
     };
+    // URL entry composes fresh. Only an actual reload of the same absolute
+    // day/question may recover choices from LAST; it never installs old facts
+    // or old pin verdicts as this new response's evidence.
+    const urlArrivalInputs = (anchor: Parameters<typeof execute>[0]) => {
+      const dateIso = freezeComposeDateIso({ dayOffset: shared.dayOffset });
+      const preferences = shared.preferences.length ? shared.preferences : selected;
+      const navigation = window.performance?.getEntriesByType?.("navigation")[0] as PerformanceNavigationTiming | undefined;
+      const recovered = urlEntryCommitments(readLS<SavedEntry | null>(LAST_KEY, null), {
+        navigationType: navigation?.type, anchor, dateIso, selected: preferences, walkKey: shared.walkKey,
+      });
+      if (recovered.applies) {
+        commitmentAnchorKeyRef.current = anchorKey(anchor);
+        setCommitments(recovered.entries);
+        adoptedInputsRef.current = true;
+      }
+      return {
+        langOverride: shared.lang ?? undefined,
+        preferencesOverride: preferences,
+        dayOffsetOverride: shared.dayOffset,
+        dateIsoOverride: dateIso,
+        walkKeyOverride: shared.walkKey,
+        ...(recovered.applies ? { commitmentsOverride: recovered.entries } : {}),
+      };
+    };
     if (entry.coords) {
       setMode("near_me");
       adoptLinkInputs();
-      execute({ coords: entry.coords }, {
-        langOverride: shared.lang ?? undefined,
-        preferencesOverride: shared.preferences.length ? shared.preferences : undefined,
-        dayOffsetOverride: shared.dayOffset,
-        walkKeyOverride: shared.walkKey,
-      }).catch(() => {});
+      const anchor = { coords: entry.coords };
+      execute(anchor, urlArrivalInputs(anchor)).catch(() => {});
       return;
     }
     if (entry.place || shared.placeRef) {
@@ -1087,15 +1111,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setPlace(shared.place);
       setPlaceRef(shared.placeRef);
       adoptLinkInputs();
-      execute(
-        { place: shared.place, placeRef: shared.placeRef, ...consumePlaceChoice(shared.place) },
-        {
-          langOverride: shared.lang ?? undefined,
-          preferencesOverride: shared.preferences.length ? shared.preferences : undefined,
-          dayOffsetOverride: shared.dayOffset,
-          walkKeyOverride: shared.walkKey,
-        },
-      ).catch(() => {});
+      const anchor = { place: shared.place, placeRef: shared.placeRef, ...consumePlaceChoice(shared.place) };
+      execute(anchor, urlArrivalInputs(anchor)).catch(() => {});
       return;
     }
     // The landing (or a language switch) chose a LOCATION anchor: coordinates
