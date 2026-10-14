@@ -363,19 +363,20 @@ function mapPlannerReservoirToSourceCandidates({
   const variedActivities = requestedIntentCount > 1;
   // Preserve safe requested-interest depth independently of preference count.
   // The engine's rhythm/time budget chooses the actual day, not this reservoir.
-  // Experimental depth retains its existing two-place cap.
+  // Requested-role depth may use the same honestly labelled, source-backed
+  // admission as an explicit Add. Source confidence must not erase rhythm.
   const boundedPerRole = rhythmDepth ? 6 : Math.min(3, Math.max(1, Math.trunc(Number(perRole) || 2)));
 
   for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
     const role = roleEntry?.role;
     if (!role || !selectedRoles.has(role)) continue;
     let roleCount = 1;
-    // Do not multiply the lower-trust experimental exception into role depth.
-    // The shared tier and availability gates still own automatic additions.
-    const depthOptions = plannerUsableOptionsForRole(roleEntry).filter(rich =>
-      !isExperimentallyAdmitted(rich) && rich?.candidate_id && !seen.has(rich.candidate_id) && finiteCoords(rich.coordinates));
+    const depthOptions = (rhythmDepth && roleEntry.requested
+      ? requestedRhythmDepthOptions(roleEntry)
+      : plannerUsableOptionsForRole(roleEntry).filter(rich => !isExperimentallyAdmitted(rich)))
+      .filter(rich => rich?.candidate_id && !seen.has(rich.candidate_id) && finiteCoords(rich.coordinates));
     while (depthOptions.length && roleCount < boundedPerRole && out.length < boundedLimit) {
-      // Keep the selected spine and the same eligibility/trust tier. For a
+      // Keep the selected spine and existing evidence priority. For a
       // varied request, prefer another factual activity type before repeating
       // one already present; focused requests retain their same-interest depth.
       const variedIndex = variedActivities
@@ -512,6 +513,23 @@ function mapPlannerReservoirToSourceCandidates({
   }
 
   return out.filter((candidate) => matchesPreferenceFocus(candidate, requestedIntents, pinnedIds));
+}
+
+// A full requested-interest day needs depth, not one winner from its best
+// evidence tier. Exhaust each existing usable tier in priority order, then
+// offer the next tier with its original confidence/admission intact. Only the
+// already admitted role universe is consulted; no source fetch or trust change.
+function requestedRhythmDepthOptions(roleEntry) {
+  let remaining = [...(roleEntry.candidates || [])];
+  const out = [];
+  while (remaining.length) {
+    const tier = plannerUsableOptionsForRole({ ...roleEntry, candidates: remaining });
+    if (!tier.length) break;
+    out.push(...tier);
+    const selected = new Set(tier);
+    remaining = remaining.filter(candidate => !selected.has(candidate));
+  }
+  return out;
 }
 
 function sameActivityDepthTier(candidate, reference) {
