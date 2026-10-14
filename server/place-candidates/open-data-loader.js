@@ -411,7 +411,7 @@ function createOpenDataLoader({
     return withLoaderStatus([], last.status, last.error);
   }
 
-  async function fetchAcrossAnchors(anchors, radiusM, { requestedIntents = [] } = {}) {
+  async function fetchAcrossAnchors(anchors, radiusM, { requestedIntents = [], availabilityWindow = null } = {}) {
     const boundedAnchors = (Array.isArray(anchors) ? anchors : [])
       .filter((anchor) => Number.isFinite(anchor?.lat) && Number.isFinite(anchor?.lng))
       .slice(0, 2);
@@ -436,7 +436,7 @@ function createOpenDataLoader({
         // partitioned. A dense first anchor must not crowd a better second
         // cluster out of the global candidate limit before comparison.
         OVERPASS_FETCH_CAP,
-        { origin: boundedAnchors[0] },
+        { origin: boundedAnchors[0], availabilityWindow },
       );
       const buckets = boundedAnchors.map(() => []);
       for (const record of mapped) {
@@ -454,7 +454,7 @@ function createOpenDataLoader({
       const clusters = boundedAnchors.map((anchor, index) => ({
         anchor,
         records: withLoaderStatus(
-          balanceMappedRecords(buckets[index], boundedLimit, anchor, { requestedIntents }),
+          balanceMappedRecords(buckets[index], boundedLimit, anchor, { requestedIntents, availabilityWindow }),
           buckets[index].length ? `loaded:${Math.min(buckets[index].length, boundedLimit)}` : "loaded:0",
           null,
         ),
@@ -658,6 +658,7 @@ function createOpenDataLoader({
     }
     const regional = await fetchAcrossAnchors(secondaryAnchors, REGIONAL_CLUSTER_RADIUS_KM * 1000, {
       requestedIntents: request.dayRhythm ? normalizeRequestedIntents(request.requestedIntents) : [],
+      availabilityWindow: normalizeAvailabilityWindow(request.availabilityWindow),
     });
     const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
     let selected = primary;
@@ -709,8 +710,9 @@ function createOpenDataLoader({
   };
 
   // One request's identity: the ~110 m anchor bucket plus everything that
-  // shaped its query. v10 invalidates the modern category-only source cut;
-  // v9 included the trusted availability window and rhythm aperture.
+  // shaped its query. v11 invalidates cuts that lost regional availability or
+  // crowded out partial fits without trusted time. Legacy windowless v8 stays
+  // unchanged; windowed non-rhythm cuts use a distinct v11-window namespace.
   // v8 invalidates every row collected before the aperture
   // followed the walking budget: a `t9` row cached under v7 was gathered from
   // a 1.5 km disc, so reusing it would keep serving the narrow day this fixes.
@@ -727,9 +729,9 @@ function createOpenDataLoader({
     return {
       key: !request.dayRhythm && !window
         ? `v8:${anchorKey}:r${radiusKm}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`
-        : `${request.dayRhythm ? 'v10' : 'v9'}:${anchorKey}:r${radiusKm}:w${windowKey}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
-      budgetsKey: `${request.dayRhythm ? 'v10' : 'v8'}-budgets:${anchorKey}:${shape}:s${scopeKey}`,
-      evidenceKey: `${request.dayRhythm ? 'v10' : 'v8'}-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
+        : `${request.dayRhythm ? 'v11' : 'v11-window'}:${anchorKey}:r${radiusKm}:w${windowKey}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
+      budgetsKey: `${request.dayRhythm ? 'v11' : 'v8'}-budgets:${anchorKey}:${shape}:s${scopeKey}`,
+      evidenceKey: `${request.dayRhythm ? 'v11' : 'v8'}-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
       radiusKm,
       targetKm: band ? band.targetKm : null,
     };
@@ -945,9 +947,15 @@ function balanceMappedRecords(mapped, limit, origin, { requestedIntents = [], wa
 
   const intents = normalizeRequestedIntents(requestedIntents);
   if (intents.length) {
-    const level = record => intents.some(intent => matchCandidateToIntent(record, intent).level === 'strong') ? 2
-      : intents.some(intent => matchCandidateToIntent(record, intent).level === 'weak') ? 1 : 0;
     const window = normalizeAvailabilityWindow(availabilityWindow);
+    const level = record => {
+      const strong = intents.some(intent => matchCandidateToIntent(record, intent).level === 'strong');
+      const partial = intents.some(intent => matchCandidateToIntent(record, intent).level === 'weak');
+      // Without trusted local time, source_indicated_active is not proof of
+      // opening. Balance the requested union instead of letting unassessed
+      // strong matches erase all possible partial fits before the late gate.
+      return strong ? (window ? 2 : 1) : partial ? 1 : 0;
+    };
     const usable = record => record.operational_status !== 'inactive' &&
       (!window || evaluateOpeningHoursForWindow(record.opening_hours, window).eligible !== false);
     const selected = [];
