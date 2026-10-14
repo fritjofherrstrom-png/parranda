@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const { once } = require('node:events');
 const { chromium } = require('playwright-core');
 const { buildApp } = require('../server/app');
+const { writeMapInteractionTrace } = require('./helpers/map-interaction-trace');
 const DATE = '2026-10-07';
 const HEALTH = Object.fromEntries(['selected_source_count', 'responding_source_count', 'event_bearing_source_count',
   'empty_source_count', 'failed_source_count', 'unavailable_source_count', 'raw_event_count',
@@ -55,7 +56,36 @@ for (const [label, path, anchor] of [
 ]) test(`${label} uses the same map, add/remove and Live UI`, { timeout: 60000 }, async t => {
   const { browser, origin } = await start();
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
-  t.after(() => context.close());
+  let diagnosticPage;
+  t.after(async () => {
+    try {
+      await writeMapInteractionTrace(diagnosticPage, label);
+    } finally { await context.close(); }
+  });
+  // Observational only: retain the actual CI pointer/resize/focus boundary.
+  // No waits, retries, animation changes, or product state writes.
+  await context.addInitScript(() => {
+    const events = window.__routeInteractionTrace = [];
+    const bounds = e => { const r = e?.getBoundingClientRect(); return r ? { x:r.x,y:r.y,w:r.width,h:r.height } : null; };
+    const record = (kind, data) => { if (events.length === 256) events.shift(); events.push({ t:performance.now(),kind,...data }); };
+    for (const kind of ['mousedown','mouseup','click','mouseover','mouseout','focus','blur','transitionrun','transitionend']) {
+      document.addEventListener(kind, e => {
+        const frame = e.target?.closest?.('[data-route-map]');
+        if (!frame) return;
+        record(kind, { target:String(e.target.className),text:e.target.textContent?.slice(0,80),
+          trusted:e.isTrusted,x:e.clientX,y:e.clientY,scrollY,frame:bounds(frame),targetBounds:bounds(e.target),
+          active:document.activeElement?.getAttribute('aria-label'),
+          tooltip:frame.querySelector('[role="tooltip"]')?.textContent || null });
+      }, true);
+    }
+    new MutationObserver(mutations => {
+      for (const m of mutations) for (const [kind,nodes] of [['added',m.addedNodes],['removed',m.removedNodes]]) {
+        for (const n of nodes) if (n.nodeType === 1 && n.matches('[role="tooltip"],.route-map-marker-shell')) {
+          record(kind, { target:String(n.className),text:n.textContent?.slice(0,80),label:n.getAttribute('aria-label') });
+        }
+      }
+    }).observe(document, {childList:true,subtree:true});
+  });
   const composes = [], liveQueries = [], errors = [];
   await context.route('**/*', route => {
     const url = new URL(route.request().url());
@@ -78,6 +108,7 @@ for (const [label, path, anchor] of [
     return route.continue();
   });
   const page = await context.newPage();
+  diagnosticPage = page;
   page.setDefaultTimeout(15000);
   page.on('pageerror', error => errors.push(error.message));
   await page.clock.setFixedTime(new Date(`${DATE}T10:00:00Z`));
