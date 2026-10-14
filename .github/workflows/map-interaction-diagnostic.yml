@@ -1,0 +1,32 @@
+name: Map interaction diagnostic
+
+on:
+  push:
+    branches: [jean/map-test-sync]
+
+permissions:
+  contents: read
+
+jobs:
+  trace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix frontend
+      - run: npx --no-install playwright-core install --with-deps chromium
+      - name: Bounded exact-interaction reproduction
+        shell: bash
+        run: |
+          set -euo pipefail
+          for iteration in {1..10}; do
+            printf '\nMAP_TRACE_ITERATION=%s\n' "$iteration"
+            node --require ./tests/helpers/no-live-network.js \
+              --require ./tests/helpers/file-deadline.js \
+              --test tests/unified-city-planner-browser.test.js
+          done
