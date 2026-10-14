@@ -95,7 +95,7 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
 
   // An unclassified event remains a separate Live suggestion. Timing and
   // proximity alone do not authorize adding a new interest to the main day.
-  if (!matchesPreferenceFocus(event, requestedPreferences)) return unchanged(["event_outside_preference_focus"]);
+  if (!matchesPreferenceFocus(event, requestedPreferences) && event.explicit_live_choice !== true) return unchanged(["event_outside_preference_focus"]);
 
   const coordStops = route.main_stops.filter(finiteCoord);
   if (coordStops.length < 2 || coordStops.length !== route.main_stops.length) {
@@ -160,6 +160,8 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
     // manufacture a stable-place type for an ephemeral event.
     cultural_tier: event.cultural_tier || null,
     event_id: event.id || null,
+    live_occurrence_id: event.live_occurrence_id || null,
+    live_choice_eligible: event.live_choice_eligible === true,
     starts_at: event.starts_at || null,
     ends_at: event.ends_at || null,
     starts_on: event.starts_on || null,
