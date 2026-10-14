@@ -8,14 +8,30 @@ trustworthy, available and walkable supply is insufficient.
 The original category-balanced Overpass cut retained only two or three matching
 records from a bounded mixed response containing eight independently supported
 places per interest. The engine consequently received a thin pool for both
-Balanced and Full. Modern rhythm requests now retain strong requested matches,
-then assessed partial matches, before unrelated variety within the same 25-row
-cap. Known inactive/closed matches cannot consume that positive quota. Existing
-category/reach balancing remains inside each tier and requested union. This
-applies to the first cut, wider merge and each separately scoped regional
-cluster. Acquisition queries, attempts, radii and provider fetch caps are
-unchanged. Modern cache identity v10 invalidates the old cut; legacy requests
-retain their existing identity and selection behavior.
+Balanced and Full. With trusted availability, modern rhythm requests retain
+usable strong requested matches, then assessed partial matches, before unrelated
+variety within the same 25-row cap. Without trusted local time, strong and partial
+matches share the requested-union balancing so unknown availability cannot erase
+all partial alternatives. Category/reach balancing remains inside each tier and
+requested union. This applies to the first cut, wider merge and each separately
+scoped regional cluster. Provider/query/radius maxima are unchanged, but forwarding
+trusted availability can activate the existing requested-opening-gap expansion;
+individual requests therefore need not execute the same number of allowed queries.
+Modern cache identity v12 invalidates prior cuts and indexes that lost negative
+facts. Windowed non-rhythm requests use v12-window; windowless legacy v8 is preserved.
+
+Known negative source facts survive separately from the positive quota, including
+JSON cache restart, neighbouring reads and original-job completion/snapshots.
+They enter ordinary full-universe physical-identity reconciliation as fact-only
+witnesses: never additional route candidates, corroborating existence evidence,
+human verification or a public JSON capability. Ambiguous/different venues are
+not vetoed by a shared name. Existing factual precedence and the final day/window
+gates remain authoritative; a Thursday closure is not a permanent Friday veto.
+
+The server resolves the selected request date once before acquisition and shares
+it with route composition, event acquisition, weave and retained upgrades. It
+memoizes the acquisition/composition clock without moving weather work earlier;
+Live keeps its existing acquisition-time clock. No new Live wire contract is added.
 
 The acquired Overture sample can also contain supporting records which are
 discarded by its 80-row selection. The source descriptor privately retains its
