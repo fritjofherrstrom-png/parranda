@@ -31,7 +31,7 @@
 
 const { createSourceCache } = require("./source-cache");
 const { createBackgroundSource, SOURCE_COMPLETION, SOURCE_SNAPSHOT } = require("./background-source");
-const { createWikidataSource } = require("./wikidata-source");
+const { createWikidataSource, WIKIDATA_CACHE_NAMESPACE } = require("./wikidata-source");
 const { normalizeSourceNameAliases } = require("./source-name-aliases");
 const { createOvertureSource } = require("./overture-source");
 const {
@@ -1370,7 +1370,7 @@ function resolveDefaultOpenDataLoader(env = process.env) {
     const wikiRaw = createWikidataSource({ labelLanguages });
     if (typeof wikiRaw === "function") {
       const wikiCache = createSourceCache({
-        namespace: "wikidata",
+        namespace: WIKIDATA_CACHE_NAMESPACE,
         dir: env?.PARRANDA_CACHE_DIR || null,
         ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
       });

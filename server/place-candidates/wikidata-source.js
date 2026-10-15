@@ -32,6 +32,9 @@ const DEFAULT_WIKIDATA_ENDPOINT = "https://query.wikidata.org/sparql";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
 const DEFAULT_RADIUS_KM = 1.5;
 const DEFAULT_LIMIT = 25;
+// Earlier normalized rows discarded lifecycle claims. Preserve the old files,
+// but never serve them as if their absence of negative facts were meaningful.
+const WIKIDATA_CACHE_NAMESPACE = "wikidata-v2-lifecycle";
 const MAX_LIMIT = 60;
 const MAX_RADIUS_KM = 5;
 // WDQS can be slow on a COLD query for an area (~10-30s) and fast once warm
@@ -85,7 +88,7 @@ function buildWikidataQuery({ lat, lng, radiusKm, limit, labelLangs }) {
   const labelPriority = `${labelLangs.join(",")}`;
   // `?classRoot` is bound to the matched curated root so we can map type → engine
   // type deterministically (P279* may walk through many intermediate classes).
-  return `SELECT ?item ?itemLabel ?lat ?lng ?classRoot ?website WHERE {
+  return `SELECT ?item ?itemLabel ?lat ?lng ?classRoot ?website ?ceased WHERE {
   SERVICE wikibase:around {
     ?item wdt:P625 ?aroundLoc .
     bd:serviceParam wikibase:center "Point(${lng} ${lat})"^^geo:wktLiteral .
@@ -96,6 +99,18 @@ function buildWikidataQuery({ lat, lng, radiusKm, limit, labelLangs }) {
   ?item wdt:P31/wdt:P279* ?classRoot .
   ?item wdt:P625 ?pt .
   OPTIONAL { ?item wdt:P856 ?website . }
+  BIND(EXISTS {
+    ?item p:P576 ?endingStatement .
+    ?endingStatement a wikibase:BestRank ; psv:P576 ?endingTime .
+    ?endingTime wikibase:timeValue ?ended ;
+                wikibase:timePrecision ?precision ;
+                wikibase:timeCalendarModel wd:Q1985727 .
+    FILTER(
+      (?precision = 9 && YEAR(?ended) < YEAR(NOW())) ||
+      (?precision = 10 && YEAR(?ended) * 12 + MONTH(?ended) < YEAR(NOW()) * 12 + MONTH(NOW())) ||
+      (?precision >= 11 && YEAR(?ended) * 10000 + MONTH(?ended) * 100 + DAY(?ended) < YEAR(NOW()) * 10000 + MONTH(NOW()) * 100 + DAY(NOW()))
+    )
+  } AS ?ceased)
   BIND(geof:latitude(?pt) AS ?lat)
   BIND(geof:longitude(?pt) AS ?lng)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "${labelPriority}" . }
@@ -132,6 +147,13 @@ function mapWikidataBinding(binding) {
   const type = classRoot ? CLASS_TYPE_BY_QID.get(classRoot) : null;
   if (!type) return null; // unmapped class → drop (defensive; query already filters)
   const website = normalizePublicWebsite(binding.website && binding.website.value);
+  // P576 means dissolved/abolished/demolished. Only a non-deprecated best-rank
+  // claim whose entire stated Gregorian year/month/day has elapsed is a veto.
+  // Same-day, coarser-than-year and unsupported calendar dates remain unknown.
+  // EXISTS avoids duplicate rows/first-binding-wins for multiple statements.
+  const ceased = binding.ceased?.type === "literal" &&
+    binding.ceased.datatype === "http://www.w3.org/2001/XMLSchema#boolean" &&
+    (binding.ceased.value === "true" || binding.ceased.value === "1");
 
   return {
     id: `wikidata-${qid}`,
@@ -154,6 +176,7 @@ function mapWikidataBinding(binding) {
     // P856 is source-owned operational metadata. It never raises confidence;
     // the background local-event scout may use it as a bounded website seed.
     ...(website ? { website } : {}),
+    ...(ceased ? { operational_status: "inactive", operational_reasons: ["wikidata_dissolved"] } : {}),
   };
 }
 
@@ -250,6 +273,7 @@ module.exports = {
   DEFAULT_WIKIDATA_ENDPOINT,
   DEFAULT_RADIUS_KM,
   DEFAULT_LIMIT,
+  WIKIDATA_CACHE_NAMESPACE,
   MAX_LIMIT,
   MAX_RADIUS_KM,
 };
