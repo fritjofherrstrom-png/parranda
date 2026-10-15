@@ -1292,6 +1292,14 @@ function createOverpassGate({ now, maxWaitMs }) {
         pause(entry, Math.max(backoff, retryAfterMs(response, now())), "provider_rate_limited");
       } else if (status === 403 || status === 406) {
         pause(entry, OVERPASS_REJECTED_PAUSE_MS, "provider_rejected_client");
+      } else if (status === 500 || status === 502) {
+        // A server/gateway failure is neither a query answer nor an IP ban.
+        // Keep a short quiet period (or explicit Retry-After), without strikes.
+        const until = now() + Math.max(OVERPASS_RATE_LIMIT_BACKOFF_MS, retryAfterMs(response, now()));
+        if (until > entry.pausedUntil) {
+          entry.pausedUntil = until;
+          entry.reason = "provider_unavailable";
+        }
       }
     },
     observeQueryTimeout(endpoint) {

@@ -226,24 +226,25 @@ test("concurrent loader lookups for the same anchor coalesce to one Overpass cal
   assert.equal(calls, 1);
 });
 
-test("a failed Overpass response is not cached (the next lookup retries)", async () => {
+test("a failed Overpass response is not cached (acquisition resumes after endpoint cooldown)", async () => {
   let calls = 0;
+  const now = mutableClock();
   const fetcher = async () => {
     calls += 1;
     return { ok: false, status: 500 };
   };
-  // Single explicit endpoint so this stays a CACHE test (mirror failover, which
-  // would multiply the call count, is covered in open-data-loader.test.js). An
-  // ordinary error: a 429 deliberately pauses the endpoint, tested there too.
   const loader = createOpenDataLoader({
-    fetcher,
+    fetcher, now,
     endpoint: "https://example.org/overpass",
-    cache: createSourceCache({ namespace: "overpass", ttlMs: 60000, now: mutableClock() }),
+    cache: createSourceCache({ namespace: "overpass", ttlMs: 60000, now }),
   });
   const first = await loader({ lat: 1, lng: 1 });
-  const second = await loader({ lat: 1, lng: 1 });
+  assert.equal((await loader({ lat: 1, lng: 1 })).loader_error, "provider_unavailable");
+  assert.equal(calls, 1, "a short endpoint hold is not a cached empty answer");
+  now.advance(60001);
+  await loader({ lat: 1, lng: 1 });
   assert.equal(first.loader_status, "error_failed_closed");
-  assert.equal(calls, 2, "an error must not be frozen into the cache");
+  assert.equal(calls, 2, "an error must not be frozen into the cache after the hold expires");
 });
 
 test("a cached loader serves prior trusted records with explicit stale metadata after a refresh failure", async () => {

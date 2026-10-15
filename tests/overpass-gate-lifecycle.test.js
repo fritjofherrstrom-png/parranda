@@ -60,6 +60,20 @@ test('an abort-ignoring response body retains the native slot and cannot cache a
   assert.equal(calls,2,'the expired first body must not populate a positive cache');
 });
 
+for(const status of [500,502]){
+  test(`a transient HTTP ${status} pauses fresh endpoint queries for sixty seconds`,async()=>{
+    let clock=1_000_000,calls=0;
+    const loader=createOpenDataLoader({now:()=>clock,fetcher:async()=>{
+      calls++;return calls===1?{ok:false,status,headers:{get:()=>null}}:rich();
+    }});
+    assert.equal((await loader({lat:41.9,lng:12.5})).loader_error,'http_non_200');
+    assert.equal((await loader({lat:48.86,lng:2.35})).loader_error,'provider_unavailable');
+    assert.equal(calls,1,'do not reacquire a server that just failed');
+    clock+=60_001;
+    assert.match((await loader({lat:52.5,lng:13.4})).loader_status,/^loaded:/);assert.equal(calls,2);
+  });
+}
+
 for(const form of ['seconds','http-date']){
   test(`an explicit ${form} Retry-After overrides the local 30-minute exponential cap`,async()=>{
     let clock=1_000_000,calls=0;

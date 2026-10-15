@@ -515,7 +515,7 @@ test("a rejected client (406/403) is not retried for hours", async () => {
   assert.equal(calls, 1);
 });
 
-test("no connection at all pauses the endpoint; query timeouts and other errors do not", async () => {
+test("connect failure pauses the endpoint; unrelated upstream aborts and non-transient query errors do not", async () => {
   const connectFailure = (code) => Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error(code), { code }) });
   for (const code of ["ECONNREFUSED", "UND_ERR_CONNECT_TIMEOUT"]) {
     const clock = clockAt();
@@ -543,11 +543,11 @@ test("no connection at all pauses the endpoint; query timeouts and other errors 
       calls += 1;
       if (calls === 1) throw Object.assign(new Error("AbortError"), { name: "AbortError" });
       if (calls === 2) throw new Error("socket hang up");
-      return { ok: false, status: 500, headers: headersOf() };
+      return { ok: false, status: 400, headers: headersOf() };
     },
   });
   for (let i = 0; i < 4; i += 1) await ordinary({ lat: 41.9, lng: 12.5 });
-  assert.equal(calls, 4, "a slow query or a one-off error keeps today's retry behaviour");
+  assert.equal(calls, 4, "unrelated aborts and invalid queries must not masquerade as endpoint outage");
 });
 
 test("at most one query per endpoint is in flight at a time", async () => {
