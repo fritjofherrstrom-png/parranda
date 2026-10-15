@@ -100,7 +100,9 @@ test("a Swedish near-me day asks in Swedish and names the reader's position", as
 
   assert.match(h.container.querySelector("header h1").textContent, /^En dag nära dig$/);
   assert.match(h.text(), /Nära dig · idag/);
-  assert.doesNotMatch(h.text(), /your position|din position/i, "no baked-in label, in either language");
+  assert.equal(call.body.place, undefined, "near-me input has no baked-in named-place label");
+  assert.doesNotMatch(h.text(), /your position/i, "English endpoint copy never leaks into a Swedish day");
+  assert.match(h.text(), /Start: Din position · Slut: Din position/);
 });
 
 test("switching language on a near-me day hands the position to the next page, not the URL", async (t) => {

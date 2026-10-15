@@ -18,25 +18,25 @@ Tech: existing Node/React/Astro, native Chromium and actual HTTP handlers with c
 ## Task 1: source time/category facts (Codex)
 
 Files: event-wire-profiles.js, mapped-event-source-provider.js, localized-events-api-provider.js and focused provider replay tests.
-- [ ] Replay captured source records to establish midnight/all-day and nested-category semantics.
-- [ ] Write failing assertions for source precision and parent-only category labels; retain actual midnight events in other profiles and explicit time ranges.
-- [ ] Make minimal adapter fixes, retaining identity/fact/eligibility boundaries; run targeted source/collector regressions.
-- [ ] Commit source corrections separately.
+- [x] Replay captured source records to establish midnight/all-day and nested-category semantics.
+- [x] Write failing assertions for source precision and parent-only category labels; retain actual midnight events in other profiles and explicit time ranges.
+- [x] Make minimal adapter fixes, retaining identity/fact/eligibility boundaries; run targeted source/collector regressions.
+- [x] Commit source corrections separately.
 
 ## Task 2: Live timing (Codex)
 
 Files: pulse-view.mjs, live-navigation.mjs/types, LiveCard.tsx, LiveSheet.tsx, EventOccurrences.tsx, a small shared clock hook and focused mounted/native tests.
-- [ ] RED: exact and listed-occurrence status before/start/end, timezone/midnight, all-day display, frozen UI with no parent rerender.
-- [ ] GREEN: venue-local occurrence timing with explicit bounds, all-day label only for explicit all-day evidence, periodic/visibility clock update with cleanup.
-- [ ] Render both sort modes and occurrence disclosures through the same timing rules; preserve all stated dates and status caveats.
-- [ ] Run timing/navigation/source-health/native browser regressions and commit.
+- [x] RED: exact and listed-occurrence status before/start/end, timezone/midnight, all-day display, frozen UI with no parent rerender.
+- [x] GREEN: venue-local occurrence timing with explicit bounds, all-day label only for explicit all-day evidence, periodic/visibility clock update with cleanup.
+- [x] Render both sort modes and occurrence disclosures through the same timing rules; preserve all stated dates and status caveats.
+- [x] Run timing/navigation/source-health/native browser regressions and commit.
 
 ## Task 3: position lifecycle (bounded internal worker; Codex integrates)
 
 Files: AnywherePlanner.tsx, URL-entry/snapshot helpers, BlitzCard/StopLine and focused mounted regression tests.
-- [ ] RED: regrant same location after reload, different location/day negatives, restored Keep badge/Maps labels, missing-position Blitz message/action, visible start/return legs.
-- [ ] GREEN: restore context-matching ledger using existing privacy-safe anchor identity; preserve explicit consent, pin/exclude and late-response protections.
-- [ ] Verify actual mounted component behavior; report test scope and commit independently after root review.
+- [x] RED: regrant same location after reload, different location/day negatives, restored Keep badge/Maps labels, missing-position Blitz message/action, visible start/return legs.
+- [x] GREEN: restore context-matching ledger using existing privacy-safe anchor identity; preserve explicit consent, pin/exclude and late-response protections.
+- [x] Verify actual mounted component behavior; report test scope and commit independently after root review.
 
 ## Task 4: combined verification (Codex)
 
