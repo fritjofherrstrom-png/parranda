@@ -38,6 +38,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
   const [active, setActive] = useState(-1);
   const [above, setAbove] = useState(false);
   const [composing, setComposing] = useState(false);
+  const [retryGeneration, setRetryGeneration] = useState(0);
   const dismissed = useRef(false);
   const sequence = useRef(0);
   const t = (sv: string, en: string) => lang === "sv" ? sv : en;
@@ -68,7 +69,9 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
         const data = await response.json();
         if (!current()) return;
         clearTimeout(timeout);
-        if ((data.status === "busy" || response.status === 429) && !retried) {
+        // A provider deadline is a transient unavailable response too. Retry
+        // once for this query; repeated failures stay explicit and actionable.
+        if ((data.status === "busy" || response.status === 429 || (response.ok && data.status === "unavailable")) && !retried) {
           timer = setTimeout(() => search(true), Math.max(500, Math.min(2000, Number(data.retry_after_ms) || 1000)));
           return;
         }
@@ -82,7 +85,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
     }
     timer = setTimeout(() => search(), 200);
     return () => { controller.abort(); clearTimeout(timer); clearTimeout(timeout); };
-  }, [value, lang, selected, composing]);
+  }, [value, lang, selected, composing, retryGeneration]);
 
   function dismiss() { dismissed.current = true; setOpen(false); setActive(-1); }
   function choose(choice: PlaceSuggestion) { dismiss(); onSelect(choice); }
@@ -136,6 +139,11 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
       <span role="status" className={status === "unavailable" ? "mt-1 block text-xs text-parranda-ink/68" : "sr-only"}>
         {status === "loading" ? t("Söker platser …", "Finding places …") : status === "unavailable" ? t("Förslag kunde inte hämtas. Du kan ändå söka.", "Suggestions unavailable. You can still search.") : ""}
       </span>
+      {status === "unavailable" && <button type="button"
+        onClick={() => { setRetryGeneration(generation => generation + 1); inputRef.current?.focus(); }}
+        className="mt-1 text-xs font-semibold text-parranda-ink underline underline-offset-2">
+        {t("Försök igen", "Try again")}
+      </button>}
     </div>
   );
 }
