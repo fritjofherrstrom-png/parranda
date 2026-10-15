@@ -88,7 +88,10 @@ function buildWikidataQuery({ lat, lng, radiusKm, limit, labelLangs }) {
   const labelPriority = `${labelLangs.join(",")}`;
   // `?classRoot` is bound to the matched curated root so we can map type → engine
   // type deterministically (P279* may walk through many intermediate classes).
-  return `SELECT ?item ?itemLabel ?lat ?lng ?classRoot ?website ?ceased WHERE {
+  // Property paths and the lifecycle EXISTS can multiply identical solutions
+  // in WDQS. Deduplicate there, before LIMIT; mapper deduplication is too late
+  // to recover places whose rows were crowded out by one repeated identity.
+  return `SELECT DISTINCT ?item ?itemLabel ?lat ?lng ?classRoot ?website ?ceased WHERE {
   SERVICE wikibase:around {
     ?item wdt:P625 ?aroundLoc .
     bd:serviceParam wikibase:center "Point(${lng} ${lat})"^^geo:wktLiteral .
