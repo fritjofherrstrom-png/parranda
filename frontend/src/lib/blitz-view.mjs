@@ -57,6 +57,10 @@ function normalizeMove(move) {
   return {
     key: moveKey(move),
     kind: move.kind === "live_event" ? "live_event" : "place",
+    // Missing/legacy assessments never imply open. Live events keep their
+    // separate source-time contract rather than a venue-hours badge.
+    availability_status: move.kind === "live_event" ? null
+      : move.availability?.status === "available_in_window" ? "available_in_window" : "unknown",
     title,
     type: text(move.type),
     lat: finite(move.lat),

@@ -151,7 +151,7 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
 }
 
 function formatMove(entry, slot) {
-  const { candidate, gates, fit, derived, calibration } = entry;
+  const { candidate, gates, fit, derived, calibration, availability } = entry;
   return {
     candidate_id: candidate.id,
     label: candidate.label,
@@ -161,6 +161,10 @@ function formatMove(entry, slot) {
     lng: candidate.lng ?? null,
     origin: candidateOrigin(candidate),
     provenance: candidateProvenance(candidate, derived),
+    // A found proposal is not proof that the venue is open. Preserve the
+    // existing assessment without publishing raw source schedules or changing
+    // the shared pool's unknown-hours admission policy.
+    ...(availability ? { availability: { status: availability.status, reason: availability.reason } } : {}),
     calibration: calibration
       ? { level: calibration.level, influence: calibration.influence, reasons: calibration.reasons }
       : null,
