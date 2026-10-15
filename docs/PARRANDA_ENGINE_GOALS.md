@@ -385,3 +385,11 @@ coverage and final walking checks still apply; additional count is not stronger
 source evidence. Existing explicit pins keep their admitted identities. Support
 roles and legacy kilometre requests retain their smaller depth. Rhythm controls
 density; measured walking distance is an output.
+
+The experimental current-place admission exception excludes knowledge-only
+evidence. Encyclopedic type/coordinate/website records can describe historical
+institutions or collections, so they cannot alone establish a present-day
+visit, including via a pin. Wikidata remains independent corroboration under
+the ordinary shared gates. This restriction does not reinstate a numerical
+two-stop cap or reduce admitted map/directory depth; insufficient current place
+evidence must yield an honest limitation rather than fabricated density.

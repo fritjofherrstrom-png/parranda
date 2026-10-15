@@ -34,8 +34,12 @@ bounded directory selections. Failed source health remains failed.
 
 Discriminating regressions are in `focused-source-depth.test.js`,
 `directory-corroboration-retention.test.js` and `rhythm-density.test.js`.
-Both corroborated and already-admitted single-family source fixtures yield
-Calm4/Balanced5/Full6. Unknown hours remain unknown; closure, assessed partial
+Both corroborated and already-admitted single-family map/directory fixtures
+yield Calm4/Balanced5/Full6. Knowledge-only records cannot use the experimental
+current-place admission exception: an encyclopedic type, coordinate and website
+may describe a historical institution or collection. They remain available as
+independent corroboration under ordinary gates, not as standalone visit proof.
+Pins cannot bypass this boundary. Unknown hours remain unknown; closure, assessed partial
 coverage and final walking validation remain authoritative. Directory selections
 stay at most80 across completion. Fixtures are not facts about a named city.
 
@@ -53,10 +57,13 @@ evidence: no confidence, corroboration, verification or opening facts are added.
 Fallback-status, known-closed, unattributed and excluded records are not rescued.
 Legacy/no-rhythm and unrelated support-role admission policies are unchanged.
 
-A fixed replay of115 actual previously recorded source rows reproduced2/2/2
+A historical replay on PR602 head8c978e9 of115 previously recorded source rows reproduced2/2/2
 for Second hand, Coffee and Culture despite six admitted role options each;
 the corrected adapter produces4/5/6 from the identical rows and context. The
 mixed Food/Second hand replay changes3/3/3 to4/5/6. This is recorded-source
 composition evidence, not current live-provider or deployed-UI acceptance.
 Native built-UI and real-provider observations must be reported separately;
 provider blockage does not establish successful delivery of the Full contract.
+These older counts do not establish current visit validity and must not be
+transferred to a later admission policy. The London source check exposed
+historical museums among six stops; named-venue facts require separate evidence.

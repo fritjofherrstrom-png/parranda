@@ -353,6 +353,16 @@ function admitExperimentalInferredExternalCandidate({ candidate, derived, gates 
   if (!external || sourceTier !== "inferred" || !hasCoords || !hasText(candidate?.label) || !sourceBacked) {
     return { allowed: false };
   }
+  // Encyclopedic records include historical institutions/collections. A type,
+  // coordinate and website seed do not establish a present-day visit. Keep
+  // knowledge as corroboration under the ordinary gates; the experimental
+  // current-place exception must not turn knowledge-only evidence into a stop.
+  // Unknown/missing family labels and duplicate knowledge providers add no
+  // independent place evidence. Pins use the same admitted pool.
+  const families = new Set(attribution.map(ref => ref.source_family).filter(hasText));
+  if (families.has("open_knowledge") && ![...families].some(family => family !== "open_knowledge")) {
+    return { allowed: false, reasons: ["knowledge_only_requires_independent_place_evidence"] };
+  }
   const gateReasons = Array.isArray(gates?.reasons) ? gates.reasons : [];
   const reasons = dedupe([
     "experimental_inferred_external_admission",

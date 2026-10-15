@@ -64,6 +64,11 @@ test('real Wikidata source -> identity -> automatic rhythm never revives a cease
   const rows = await source(anchor);
   const duplicate = mapOsmElement({ type: 'node', id: 1, lat: anchor.lat, lon: anchor.lng,
     tags: { name: 'Former collection', tourism: 'museum', website: 'https://collection.example/' } });
+  // Knowledge-only records are not current visit evidence. Corroborate the
+  // usable controls with independent map rows; closure must still veto the
+  // same two-family shape for the former collection, even when pinned.
+  const currentMapRows = rows.slice(1).map((row, i) => mapOsmElement({ type: 'node', id: i + 2,
+    lat: row.lat, lon: row.lng, tags: { name: row.name, tourism: 'museum' } }));
   const candidates = [duplicate, rows[0]].map((record, i) => mapRecordToCandidate({ key: 'fixture' }, record, '2026-10-15T08:00:00Z', i));
   for (const ordered of [candidates, [...candidates].reverse()]) {
     const merged = resolveCandidateIdentity(ordered, { now: '2026-10-15T08:00:00Z' });
@@ -75,7 +80,7 @@ test('real Wikidata source -> identity -> automatic rhythm never revives a cease
   for (const dayRhythm of ['calm', 'balanced', 'full']) {
     const output = await composeAgnosticRouteOutput({
       coords: anchor, baselineResult: { days: [] }, externalRequested: true,
-      openDataLoader: async () => structuredClone([duplicate, ...rows]),
+      openDataLoader: async () => structuredClone([duplicate, ...rows, ...currentMapRows]),
       date: '2026-10-22', todayIsoDate: '2026-10-15', trustedTimezone: 'Europe/Stockholm', timezone: 'Europe/Stockholm',
       clock: () => new Date('2026-10-15T08:00:00Z'),
       weatherProvider: async () => ({ condition: 'sun', source: 'controlled', stale: false }),
