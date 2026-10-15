@@ -26,7 +26,34 @@ test('real HTTP publication issues occurrence identity then honors removal and r
 test('real HTTP rejects factual payload additions to an occurrence choice',async t=>{const h=await setup(t);for(const extra of [{title:'Invented'},{lat:60.173},{route_eligible:true},{source_url:'https://fake.org'}]){const r=await post(h.server,routePath,{...routeBody,live_event_choices:[{occurrence_id:ID,action:'keep',...extra}]});assert.equal(r.status,400);assert.equal(r.body.error,'invalid_live_event_choices');}});
 test('completion replay never reinserts a removed Live slot after cold acquisition',async t=>{const h=await setup(t);h.defer();const initial=await post(h.server,routePath,{...routeBody,live_event_choices:[{occurrence_id:ID,action:'remove'}]});assert.equal(initial.body.live_events.pending,true);const original=JSON.stringify(initial.body.days),token=initial.body.live_completion.token;h.release(live([first,second]));await new Promise(r=>setImmediate(r));const ready=await post(h.server,'/api/planner-live-completion',{token});assert.equal(ready.status,200);assert.equal(ready.body.live_events.tonight.length,2,'removal selects the day; it does not erase source evidence');const upgrade=await post(h.server,'/api/planner-live-route-upgrade',{token});assert.equal(upgrade.body.live_route_upgrade.state,'not_eligible');assert.equal(upgrade.body.result,undefined);assert.equal(JSON.stringify(initial.body.days),original);});
 test('supplied distinct same-series time slots remain individually selectable',()=>{const later={...first,starts_at:DATE+'T19:00:00Z',ends_at:DATE+'T21:00:00Z'};const group={...first,occurrences:[first,later]};const r=weave([group],[{occurrence_id:ID,action:'replace'}]);assert.equal(r.district_day.evening_event.starts_at,later.starts_at);assert.notEqual(r.district_day.evening_event.live_occurrence_id,ID);});
-test('floating timestamps never mint a manual choice identity as though an instant was verified',()=>{const e=weave([{...first,starts_at:DATE+'T21:00:00',ends_at:DATE+'T23:00:00'}]).district_day.evening_event;assert.equal(e?.live_occurrence_id,null);assert.equal(e?.live_choice_eligible,false);});
+test('floating timestamps never mint a manual choice identity as though an instant was verified',()=>{
+  const {execFileSync}=require('node:child_process');
+  const script=`
+    const {liveOccurrenceId}=require(${JSON.stringify(require.resolve('../server/planner/live-occurrence-choice'))});
+    const {weaveEveningEvent}=require(${JSON.stringify(require.resolve('../server/candidates/evening-event-weave'))});
+    const first=${JSON.stringify(first)},structure=${JSON.stringify(structure)},date=${JSON.stringify(DATE)};
+    const floating={...first,starts_at:date+'T21:00:00',ends_at:date+'T23:00:00'};
+    const weave=row=>weaveEveningEvent(structure,{coverage:'covered',selected_date:date,tonight:[row],this_week:[]},{selectedDate:date}).district_day.evening_event;
+    const event=weave(floating),positive=weave(first);
+    process.stdout.write(JSON.stringify({
+      floating_id:liveOccurrenceId(floating),event_present:Boolean(event),
+      woven_id:event?.live_occurrence_id??null,choice_eligible:event?.live_choice_eligible??null,
+      explicit_id:liveOccurrenceId(first),explicit_woven_id:positive?.live_occurrence_id,
+      explicit_choice_eligible:positive?.live_choice_eligible,
+    }));
+  `;
+  for(const timezone of ['UTC','Europe/Stockholm','America/Los_Angeles']){
+    const result=JSON.parse(execFileSync(process.execPath,['-e',script],{encoding:'utf8',env:{...process.env,TZ:timezone}}));
+    assert.equal(result.floating_id,null,`${timezone}: the identity constructor must refuse an unverified instant`);
+    assert.equal(result.woven_id,null,`${timezone}: selection cannot acquire an identity through weaving`);
+    // The invalid floating row may be filtered out before evening weaving.
+    // If present, its manual-choice gate must still be explicitly false.
+    if(result.event_present)assert.equal(result.choice_eligible,false,timezone);
+    assert.equal(result.explicit_id,ID,`${timezone}: a stated UTC instant keeps its source identity`);
+    assert.equal(result.explicit_woven_id,ID,timezone);
+    assert.equal(result.explicit_choice_eligible,true,timezone);
+  }
+});
 
 test('real cold completion honors an explicit kept occurrence independently of soft preference rank', async t => {
   const warm = await setup(t);
