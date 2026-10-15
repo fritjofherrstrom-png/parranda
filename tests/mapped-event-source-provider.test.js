@@ -313,3 +313,36 @@ test("Göteborg and Copenhagen events reach the public Live API", async (t) => {
     assert.ok(events.some((event) => event.title === city.title), `${city.name}: ${JSON.stringify(body.live_events).slice(0, 600)}`);
   }
 });
+
+test('ACF source midnight sentinel preserves all-day precision without reinterpreting real midnight starts elsewhere', async () => {
+  const record={...LISEBERG,id:104013,title:{rendered:'Source all-day festival'},information:{...LISEBERG.information,dates:[
+    {start:'2026-10-22T00:00'},
+    {start:'2026-10-23T00:00',end:'2026-10-23T00:00'},
+    {start:'2026-10-24T00:00',end:'2026-10-24T02:00'},
+    {start:'2026-10-25T20:00'},
+  ]}};
+  const result=await goteborgProvider(async()=>response(nuxtPage({data:{calendar:[record]}})))
+    .create().collect({date:'2026-10-22T10:00:00Z'});
+  const rows=result.time_sensitive_events;
+  assert.equal(rows.length,4);
+  for(const [i,date] of [[0,'2026-10-22'],[1,'2026-10-23']]){
+    assert.deepEqual(rows[i].time_window,{kind:'all_day',starts_on:date,ends_on:date});
+    assert.equal(rows[i].starts_at,undefined);
+  }
+  assert.equal(rows[2].time_window.kind,'continuous','a stated midnight-to-02:00 session remains timed');
+  assert.equal(rows[3].time_window.kind,'continuous','a nonmidnight open-ended session remains timed');
+  const dpl={...DPL_RECORDS[0],uuid:'midnight-session',date_time:{start:'2026-10-22T00:00:00+02:00',end:'2026-10-22T02:00:00+02:00'},all_day:false};
+  const other=await dplProvider(async()=>response([dpl])).create().collect({date:'2026-10-22T10:00:00Z'});
+  assert.equal(other.time_sensitive_events[0].time_window.kind,'continuous','midnight is not globally an all-day signal');
+});
+
+test('captured public ACF all-day record survives provider and collection as date facts with source eligibility unchanged', async () => {
+  const {acf_record}=require('./fixtures/public-qa-source-facts.json');
+  const feed=registry().find(f=>f.id==='goteborg-co-event-calendar');
+  const result=await collectAnchorEvents({anchor:{lat:57.6978,lng:11.9783},now:'2026-10-22T10:00:00Z',selectedDate:'2026-10-22',registry:[feed],fetcher:async()=>response(nuxtPage({data:{calendar:[acf_record]}}))});
+  const events=[...result.tonight,...result.this_week,...(result.browse?.tonight?.more||[]),...(result.browse?.this_week?.more||[])];
+  assert.ok(events.length,'captured source occurrences reach actual collector');
+  assert.ok(events.every(e=>e.time_window.kind==='all_day'&&!e.starts_at));
+  assert.ok(events.every(e=>e.route_eligible===false),'presentation correction cannot promote source eligibility');
+  assert.ok(events.some(e=>e.time_window.starts_on==='2026-10-22'));
+});

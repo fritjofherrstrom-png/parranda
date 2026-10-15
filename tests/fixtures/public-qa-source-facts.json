@@ -1,0 +1,184 @@
+{
+  "captured_at": "2026-10-15T20:51:54.476444+00:00",
+  "sources": [
+    "https://www.goteborg.com/evenemang",
+    "https://www.goteborg.com/_nuxt/BOyKFK4g.js",
+    "https://api.visitstockholm.com/api/public-v1/events/?page_size=200&page=1"
+  ],
+  "acf_record": {
+    "id": 104013,
+    "type": "event",
+    "title": {
+      "rendered": "Göteborg Film Festival Prisma 2026"
+    },
+    "link": "https://www.goteborg.com/evenemang/goteborg-film-festival-prisma/",
+    "information": {
+      "pricing": {
+        "free": false
+      },
+      "dates": [
+        {
+          "start": "2026-10-22T00:00",
+          "note": "",
+          "noteEn": ""
+        },
+        {
+          "start": "2026-10-23T00:00",
+          "note": "",
+          "noteEn": ""
+        },
+        {
+          "start": "2026-10-24T00:00",
+          "note": "",
+          "noteEn": ""
+        },
+        {
+          "start": "2026-10-25T00:00",
+          "note": "",
+          "noteEn": ""
+        },
+        {
+          "start": "2026-10-26T00:00",
+          "note": "",
+          "noteEn": ""
+        },
+        {
+          "start": "2026-10-27T00:00",
+          "note": "",
+          "noteEn": ""
+        },
+        {
+          "start": "2026-10-28T00:00",
+          "note": "",
+          "noteEn": ""
+        },
+        {
+          "start": "2026-10-29T00:00",
+          "note": "",
+          "noteEn": ""
+        },
+        {
+          "start": "2026-10-30T00:00",
+          "note": "",
+          "noteEn": ""
+        },
+        {
+          "start": "2026-10-31T00:00",
+          "note": "",
+          "noteEn": ""
+        },
+        {
+          "start": "2026-11-01T00:00",
+          "note": "",
+          "noteEn": ""
+        }
+      ],
+      "place_id": 12,
+      "place": {
+        "id": 12,
+        "title": "Biografen Roy",
+        "slug": "biografen-roy"
+      },
+      "labels": {
+        "category_heading": "Festivalen för unga filmälskare"
+      },
+      "media": [],
+      "contact": {
+        "website": "https://goteborgfilmfestival.se/barn-unga/prisma/prisma",
+        "tickets": "https://program.goteborgfilmfestival.se/",
+        "facebook": "https://www.facebook.com/gbgfilmfestival",
+        "facebook_event": "",
+        "instagram": "https://www.instagram.com/gbgfilmfestival/",
+        "location": {
+          "address": "Kungsportsavenyen 45, 411 36 Gothenburg, Sweden",
+          "lat": 57.6977978,
+          "lng": 11.9782736,
+          "zoom": 13,
+          "place_id": "ChIJU0gLOHHzT0YRyD-ysAoKYjQ",
+          "name": "Kungsportsavenyen 45",
+          "street_number": "45",
+          "street_name": "Kungsportsavenyen",
+          "state": "Västra Götalands län",
+          "post_code": "411 36",
+          "country": "Sweden",
+          "country_short": "SE"
+        }
+      },
+      "classification": 1,
+      "override_meta": {
+        "description": null
+      },
+      "alt_tab_title": null
+    }
+  },
+  "localized_record": {
+    "id": "185e93f7-7364-4d60-9e70-8b45b5447f7c",
+    "title": {
+      "en": "Stockholm Jazz Festival 2026",
+      "sv": "Stockholm Jazz Festival 2026"
+    },
+    "external_website_url": "https://www.stockholmjazz.se/",
+    "location": {
+      "latitude": 59.32932349999999,
+      "longitude": 18.0685808
+    },
+    "start_date": "2026-10-15",
+    "end_date": "2026-10-18",
+    "start_time": null,
+    "end_time": null,
+    "categories": [
+      {
+        "title": "Festivals",
+        "slug": "festivals",
+        "subcategories": []
+      },
+      {
+        "title": "Music",
+        "slug": "music",
+        "subcategories": [
+          {
+            "title": "Jazz & Blues",
+            "slug": "jazz-blues"
+          },
+          {
+            "title": "Pop",
+            "slug": "pop"
+          },
+          {
+            "title": "Dance & Electronic",
+            "slug": "dance-electronic"
+          },
+          {
+            "title": "Hip hop, Soul & RnB",
+            "slug": "hip-hop-soul-rnb"
+          },
+          {
+            "title": "Hard Rock & Metal",
+            "slug": "hard-rock-metal"
+          },
+          {
+            "title": "Indie & Punk",
+            "slug": "indie-punk"
+          },
+          {
+            "title": "Folk, Traditional & Country",
+            "slug": "country-folk"
+          },
+          {
+            "title": "Rock",
+            "slug": "rock"
+          },
+          {
+            "title": "Reggae",
+            "slug": "reggae"
+          },
+          {
+            "title": "Classical & Art Music",
+            "slug": "classical"
+          }
+        ]
+      }
+    ]
+  },
+  "taxonomy_children_equal_source_catalog": true
+}

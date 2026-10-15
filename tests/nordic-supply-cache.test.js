@@ -49,3 +49,29 @@ test("mapped source, partial health, branch lookup, completion and persisted cac
   assert.equal(fetches,2,"one successful mapped fetch and one failing calendar; persisted useful partial skips both on restart");
   assert.equal(discoveries,0);
 });
+
+test('old normalized event pools and source snapshots cannot retain taxonomy children after the fact-policy correction',async t=>{
+ const {createSourceCache}=require('../server/place-candidates/source-cache');
+ const {eventCacheKey,DEFAULT_RADIUS_M}=require('../server/place-candidates/agnostic-event-supply');
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'parranda-old-event-facts-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+ const feed=JSON.parse(fs.readFileSync(path.join(__dirname,'../config/reviewed-event-feeds.json'))).find(f=>f.id==='visit-stockholm-open-api');
+ const input={anchor:{lat:59.331,lng:18.071},now:'2026-10-15T12:00:00Z',selectedDate:'2026-10-15'};
+ let fetches=0;
+ const fetcher=async()=>{fetches++;return{ok:true,status:200,text:async()=>JSON.stringify({results:[{id:'category-cache',title:{sv:'Published music event'},external_website_url:'https://calendar.example/music',location:{latitude:59.331,longitude:18.071},start_date:'2026-10-15',end_date:'2026-10-15',start_time:'19:00',end_time:'21:00',categories:[{title:'Music',slug:'music',subcategories:[{title:'Reggae',slug:'reggae'}]}]}],next:null})};};
+ const oldSourceCache=createSourceCache({namespace:'agnostic-event-source-v1',dir});
+ const old=await collectAnchorEvents({...input,registry:[feed],fetcher,sourceCollectionCache:{get:(key,produce,options)=>oldSourceCache.get(key,async()=>{
+   const collected=await produce();for(const row of collected.time_sensitive_events)row.tags=['music','Music','reggae','Reggae'];return collected;
+ },options)}});
+ assert.ok(old.tonight.some(ev=>ev.tags.includes('Reggae')),'seed an actual older normalized source pool');
+ createSourceCache({namespace:'agnostic-events-v14',dir}).set(eventCacheKey(input.anchor,input.now,[feed.id],DEFAULT_RADIUS_M,null,input.selectedDate,'tonight'),old);
+ const env={PARRANDA_AGNOSTIC_EVENTS:'enabled',PARRANDA_EVENT_FEEDS:JSON.stringify([feed]),PARRANDA_CACHE_DIR:dir};
+ const supply=resolveDefaultEventSupply(env,{sourceCatalog:null,requestTimeDiscovery:null,eventReader:null,collectEvents:args=>collectAnchorEvents({...args,fetcher})});
+ const pending=await supply(input);
+ assert.equal(pending.pending,true,'old normalized aggregates must not answer the corrected policy');
+ for(let i=0;i<100&&pending[LIVE_COLLECTION_READ]()?.pending;i++)await new Promise(r=>setImmediate(r));
+ const final=await supply(input);
+ assert.equal(final.pending,undefined);
+ assert.ok(final.tonight.length);
+ assert.deepEqual(final.tonight[0].tags,['Music'],'old per-source atoms must not leak taxonomy children either');
+ assert.equal(fetches,2,'one fixture seed and one corrected bounded source acquisition');
+});
