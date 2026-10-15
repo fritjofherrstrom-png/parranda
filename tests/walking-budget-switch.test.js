@@ -416,7 +416,8 @@ test("a 504 for the new budget keeps the same anchor's cached map answer for ano
 
 test("with no map answer for any budget the directory still rescues, and says so", async () => {
   const overpass = controllableOverpass();
-  // An ordinary error, so every lookup reaches the provider (a 504 would pause it).
+  // The first500 starts the short endpoint hold. Directory rescue must retain
+  // its failed-source health, without reacquiring Overpass or inventing map rows.
   overpass.state.policy = () => ({ delayMs: 0, status: 500 });
   const loader = await createSupply({ overpass });
   const request = loaderRequest(9);
@@ -425,7 +426,8 @@ test("with no map answer for any budget the directory still rescues, and says so
   const records = await loader(request);
   assert.ok(records.length > 0, "the outage rescue still answers");
   assert.ok(records.every((record) => !familiesOf(record).has("map")));
-  assert.equal(records.loader_error, "http_non_200");
+  assert.equal(records.loader_error, "provider_unavailable");
+  assert.equal(overpass.state.calls.length, 1, "warm rescue must not restart a failed provider");
   assert.equal(records.loader_metadata?.primary_collection ?? null, null);
 });
 
