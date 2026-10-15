@@ -416,7 +416,8 @@ test("a 504 for the new budget keeps the same anchor's cached map answer for ano
 
 test("with no map answer for any budget the directory still rescues, and says so", async () => {
   const overpass = controllableOverpass();
-  overpass.state.policy = () => ({ delayMs: 0, status: 504 });
+  // An ordinary error, so every lookup reaches the provider (a 504 would pause it).
+  overpass.state.policy = () => ({ delayMs: 0, status: 500 });
   const loader = await createSupply({ overpass });
   const request = loaderRequest(9);
   await loader({ ...request, walkingTargetBand: fx.walkingBand(4) }); // starts warming the directory only
