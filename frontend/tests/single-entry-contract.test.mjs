@@ -19,7 +19,7 @@ test("no second planner hero or place-entry form, including hydration fallback",
   assert.match(planner, /Preparing your day/);
   assert.match(planner, /href=\{`\/\?lang=\$\{lang\}`\}/);
   assert.match(planner, /plannerEntry\.readPlannerEntry\(window.location.search\)/);
-  assert.match(planner, /execute\(\{ coords: entry.coords \}/);
+  assert.match(planner, /const anchor = \{ coords: entry.coords \};\s*execute\(anchor, urlArrivalInputs\(anchor\)\)/);
   assert.match(planner, /if \(entry.place \|\| shared.placeRef\)/);
 });
 test("saved resume and snapshot language carry explicit intent; home/change go root", () => {

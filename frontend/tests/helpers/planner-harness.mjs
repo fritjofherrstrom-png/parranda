@@ -208,7 +208,7 @@ async function buildComponent(entry) {
 /**
  * @returns {Promise<{ window, document, clock, fetchMock, container, unmount, act }>}
  */
-export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", storage = {}, sessionStorage = {}, entry = "components/AnywherePlanner.tsx", props = { lang: "en" }, injected = {} } = {}) {
+export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", storage = {}, sessionStorage = {}, entry = "components/AnywherePlanner.tsx", props = { lang: "en" }, injected = {}, navigationType } = {}) {
   const code = await buildComponent(entry);
   bundleGeneration += 1;
 
@@ -218,6 +218,11 @@ export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", 
   });
   const { window } = dom;
   Object.assign(window, injected);
+  // jsdom does not expose browser Navigation Timing. Model only this external
+  // entry signal; the URL, storage, planner and generation guards remain real.
+  if (navigationType) Object.defineProperty(window.performance, "getEntriesByType", {
+    value: kind => kind === "navigation" ? [{ type: navigationType }] : [],
+  });
 
   for (const [key, value] of Object.entries(storage)) {
     window.localStorage.setItem(key, JSON.stringify(value));

@@ -37,6 +37,7 @@ export declare function buildAnywherePayload(options?: {
   dayRhythm?: "calm" | "balanced" | "full" | "free";
   excludedCandidateIds?: string[];
   pinnedCandidateIds?: string[];
+  liveEventChoices?: Array<{occurrence_id:string;action:"keep"|"remove"|"replace"}>;
 }): {
   place?: string;
   place_query?: string;

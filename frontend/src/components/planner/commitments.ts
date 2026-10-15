@@ -5,7 +5,7 @@
  * sends — belongs to the orchestrator (AnywherePlanner.tsx). Pieces that only
  * render it read this type.
  */
-export type Commitments = Record<string, { kind: "exclude" | "pin"; label: string }>;
+export type Commitments = Record<string, { kind: "exclude" | "pin"; label: string; liveAction?: "remove" | "replace" }>;
 
 /**
  * A NEW commitment needs the server's explicit permission. Only an explicit

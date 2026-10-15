@@ -2018,6 +2018,9 @@ function buildApp({
       // payload may remove a place from consideration and nothing else. One
       // filter on the loader itself, so the composed day and the candidate panel
       // cannot disagree about what the user dismissed.
+      const parsedLiveChoices = require("./planner/live-occurrence-choice").parseLiveEventChoices(request.body?.live_event_choices);
+      if (!parsedLiveChoices.valid) { response.status(400).json({ error: "invalid_live_event_choices" }); return; }
+      const liveEventChoices = parsedLiveChoices.choices;
       const excludedCandidateIds = parseExcludedCandidateIds(
         request.body?.excluded_candidate_ids ?? request.body?.excludedCandidateIds,
       );
@@ -2471,6 +2474,7 @@ function buildApp({
         const selectedRouteDate = resolveSelectedRouteDate(payload, baselineBody, cityConfig);
         wovenPlaceStructure = weaveEveningEvent(agnosticPlaceStructure, liveEvents, {
           selectedDate: selectedRouteDate,
+          liveEventChoices,
         });
       } catch (_error) {
         wovenPlaceStructure = agnosticPlaceStructure;
@@ -2494,6 +2498,7 @@ function buildApp({
         curatedCandidates,
         preferences,
         pinnedStopIds: pinnedCandidateIds,
+        liveEventChoices,
         lens: request.body?.lens || request.query?.lens || null,
         // #262 — payload weather is NOT trusted; trusted weather/time come only
         // from the server-injected seams. `trustedTimezone` is taken from the
@@ -2558,7 +2563,13 @@ function buildApp({
             requestedIntents: normalizeUserIntents(preferences).intents,
             preferenceCoverage: experiment.constraint_negotiation?.preference_coverage,
             primaryStops: experimentResult?.days?.[0]?.primary_route?.main_stops,
-            pinnedIds: pinnedCandidateIds,
+            // Reuse the existing soft preference exception only for a kept
+            // occurrence that actually passed source/time/walking validation.
+            // Request IDs cannot promote a missing or ineligible event.
+            pinnedIds: [...pinnedCandidateIds, ...(experimentResult?.days?.[0]?.primary_route?.main_stops || [])
+              .filter(stop => stop.is_live_event === true && stop.live_choice_eligible === true &&
+                liveEventChoices.some(choice => choice.action === "keep" && choice.occurrence_id === stop.live_occurrence_id))
+              .map(stop => stop.id)],
           });
           experiment.promotion = promotion;
           // Bounded, count-only echo so an operator can see the day was composed
@@ -2619,6 +2630,12 @@ function buildApp({
             engineWoven.placeStructure,
             publishedEligibleIds({ promotionPromote: promotion.promote, commitmentEligibleIds }),
           );
+          if (liveEventChoices.length) {
+            experiment.live_event_choices = require("./planner/live-occurrence-choice").summarizeLiveChoices(
+              liveEventChoices, engineWoven.result?.days?.[0]?.primary_route?.main_stops,
+              engineWoven.result?.days?.[0]?.date || payload.dates[0],
+            );
+          }
           return {
             ...engineWoven.result,
             ...(publishedPlaceStructure ? { place_structure: publishedPlaceStructure } : {}),
