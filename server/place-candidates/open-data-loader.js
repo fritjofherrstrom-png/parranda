@@ -385,7 +385,14 @@ function createOpenDataLoader({
       return { ok: false, status: "error_failed_closed", error: "timeout_or_abort" };
     }
     const controller = new AbortController();
-    const timedOut = () => ({ ok: false, status: "error_failed_closed", error: "timeout_or_abort" });
+    let deadlineObserved = false;
+    const timedOut = () => {
+      if (!deadlineObserved) {
+        deadlineObserved = true;
+        gate.observeQueryTimeout(targetEndpoint);
+      }
+      return { ok: false, status: "error_failed_closed", error: "timeout_or_abort" };
+    };
     let timer, transport, response;
     const expired = new Promise(resolve => {
       timer = setTimeout(() => { controller.abort(); resolve(timedOut()); }, remainingMs);
@@ -432,9 +439,9 @@ function createOpenDataLoader({
       return await Promise.race([work, expired]);
     } finally {
       clearTimeout(timer);
-      // A caller deadline does not make an abort-ignoring native request stop.
-      // Keep its endpoint slot until that actual transport settles.
-      Promise.resolve(transport).then(() => gate.release(targetEndpoint), () => gate.release(targetEndpoint));
+      // Headers alone do not settle an abort-ignoring response body. The full
+      // native fetch+body operation owns the slot, independently of its caller.
+      work.then(() => gate.release(targetEndpoint), () => gate.release(targetEndpoint));
     }
   }
 
@@ -1219,9 +1226,10 @@ function distanceKm(a, b) {
 // "slow down" (429/503/504, honouring Retry-After and doubling while it
 // repeats), "not you" (403/406, manual bans) or cannot be connected to at all
 // (refused or connect timeout: how an IP ban looks, and each attempt otherwise
-// costs a request ~10 s). Query timeouts and other errors keep today's
-// behaviour. A paused endpoint fails fast, so cached, stale and other-source
-// rescue paths still answer.
+// costs a request ~10 s). An actually started query exceeding its own total
+// deadline has a separate short hold; unrelated upstream aborts and other
+// errors keep their former behaviour. A paused endpoint fails fast, so cached,
+// stale and other-source rescue paths still answer.
 function createOverpassGate({ now, maxWaitMs }) {
   const endpoints = new Map();
   const state = (endpoint) => {
@@ -1284,6 +1292,17 @@ function createOverpassGate({ now, maxWaitMs }) {
         pause(entry, Math.max(backoff, retryAfterMs(response, now())), "provider_rate_limited");
       } else if (status === 403 || status === 406) {
         pause(entry, OVERPASS_REJECTED_PAUSE_MS, "provider_rejected_client");
+      }
+    },
+    observeQueryTimeout(endpoint) {
+      const entry = state(endpoint);
+      const at = now();
+      // This attempt exhausted its real queue+transport budget. Briefly stop
+      // repeated cold queries; do not classify it as a connect failure/IP ban,
+      // increment exponential strikes, or overwrite a stronger provider pause.
+      if (at >= entry.pausedUntil) {
+        entry.pausedUntil = at + OVERPASS_RATE_LIMIT_BACKOFF_MS;
+        entry.reason = "provider_timed_out";
       }
     },
     observeError(endpoint, error) {

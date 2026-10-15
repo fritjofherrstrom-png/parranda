@@ -21,8 +21,8 @@ test('Overpass queue wait consumes the same elapsed budget as its transport',asy
 });
 
 test('a timed-out native Overpass fetch settles the caller but retains its slot until actual settlement',async()=>{
-  const entered=deferred(),release=deferred();let calls=0,timer;
-  const loader=createOpenDataLoader({timeoutMs:50,fetcher:async()=>{
+  const entered=deferred(),release=deferred();let calls=0,timer,clock=1_000_000;
+  const loader=createOpenDataLoader({timeoutMs:50,now:()=>clock,fetcher:async()=>{
     calls++;if(calls===1){entered.resolve();await release.promise;}return rich();
   }});
   const first=loader({lat:41.9,lng:12.5});await entered.promise;
@@ -30,6 +30,7 @@ test('a timed-out native Overpass fetch settles the caller but retains its slot 
     const result=await Promise.race([first,new Promise(resolve=>{timer=setTimeout(()=>resolve(null),200);})]);
     assert.ok(result,'an abort-ignoring transport must not keep the caller pending beyond its budget');
     assert.equal(result.loader_status,'error_failed_closed');
+    clock+=60_001; // Expire only cooldown, never the real native slot/budget.
     const blocked=await loader({lat:48.86,lng:2.35});
     assert.equal(blocked.loader_error,'provider_slot_busy');
     assert.equal(calls,1,'do not free a native slot merely because the caller timed out');
@@ -37,6 +38,26 @@ test('a timed-out native Overpass fetch settles the caller but retains its slot 
   await new Promise(resolve=>setImmediate(resolve));
   const recovered=await loader({lat:52.5,lng:13.4});
   assert.match(recovered.loader_status,/^loaded:/);assert.equal(calls,2);
+});
+
+test('an abort-ignoring response body retains the native slot and cannot cache a late positive answer',async()=>{
+  const entered=deferred(),release=deferred();let calls=0,clock=1_000_000;
+  const loader=createOpenDataLoader({timeoutMs:50,now:()=>clock,fetcher:async()=>{
+    calls++;
+    const response=rich();
+    if(calls===1){const json=response.json;response.json=async()=>{entered.resolve();await release.promise;return json();};}
+    return response;
+  }});
+  const first=loader({lat:41.9,lng:12.5});await entered.promise;
+  try{
+    assert.equal((await first).loader_error,'timeout_or_abort');
+    clock+=60_001;
+    assert.equal((await loader({lat:48.86,lng:2.35})).loader_error,'provider_slot_busy');
+    assert.equal(calls,1,'headers alone do not settle an outstanding response body');
+  }finally{release.resolve();await first;}
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.match((await loader({lat:41.9,lng:12.5})).loader_status,/^loaded:/);
+  assert.equal(calls,2,'the expired first body must not populate a positive cache');
 });
 
 for(const form of ['seconds','http-date']){
@@ -65,10 +86,24 @@ test('unreasonably long Retry-After values remain bounded by the six-hour endpoi
   clock+=2;await loader({lat:48.86,lng:2.35});assert.equal(calls,2);
 });
 
+test('a completed Overpass query timeout briefly pauses fresh acquisition instead of repeating its full wait',async()=>{
+  let clock=1_000_000,calls=0;
+  const loader=createOpenDataLoader({timeoutMs:50,now:()=>clock,fetcher:async(_url,{signal})=>{
+    calls++;
+    if(calls!==1)return rich();
+    return new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(Object.assign(new Error('deadline'),{name:'AbortError'})),{once:true}));
+  }});
+  assert.equal((await loader({lat:41.9,lng:12.5})).loader_error,'timeout_or_abort');
+  assert.equal((await loader({lat:48.86,lng:2.35})).loader_error,'provider_timed_out');
+  assert.equal(calls,1,'a known timed-out provider must not be reacquired immediately');
+  clock+=60_001;
+  assert.match((await loader({lat:52.5,lng:13.4})).loader_status,/^loaded:/);assert.equal(calls,2);
+});
+
 for(const [status,reason]of [[429,'provider_rate_limited'],[406,'provider_rejected_client']]){
   test(`a late ${status} response applies cooldown before handing its native slot to a waiting query`,async()=>{
-    const entered=deferred(),release=deferred();let calls=0;
-    const loader=createOpenDataLoader({timeoutMs:50,fetcher:async()=>{
+    const entered=deferred(),release=deferred();let calls=0,clock=1_000_000;
+    const loader=createOpenDataLoader({timeoutMs:50,now:()=>clock,fetcher:async()=>{
       calls++;
       if(calls===1){entered.resolve();await release.promise;return {ok:false,status,headers:{get:()=>status===429?'7200':null}};}
       return rich();
@@ -77,6 +112,7 @@ for(const [status,reason]of [[429,'provider_rate_limited'],[406,'provider_reject
     try{
       const timedOut=await first;
       assert.equal(timedOut.loader_error,'timeout_or_abort');
+      clock+=60_001; // A late explicit provider pause must also survive the short local hold.
       const queued=loader({lat:48.86,lng:2.35});
       release.resolve();
       assert.equal((await queued).loader_error,reason,'negative provider health survives an expired caller');
