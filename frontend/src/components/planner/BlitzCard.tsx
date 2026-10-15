@@ -21,6 +21,8 @@ export default function BlitzCard({
   dayOnScreen,
   blitz,
   blitzPhase,
+  sharePositionForBlitz,
+  blitzPositionFailed,
   blitzResult,
   typedPlaceLabel,
 }: {
@@ -30,7 +32,9 @@ export default function BlitzCard({
   anchorLabel: string;
   dayOnScreen: boolean;
   blitz: () => void;
-  blitzPhase: "idle" | "loading" | "done" | "error";
+  blitzPhase: "idle" | "loading" | "done" | "error" | "position_needed" | "locating";
+  sharePositionForBlitz: () => void;
+  blitzPositionFailed: boolean;
   blitzResult: AnywhereBlitzView | null;
   typedPlaceLabel: string;
 }) {
@@ -39,7 +43,7 @@ export default function BlitzCard({
       <button
         type="button"
         onClick={blitz}
-        disabled={blitzPhase === "loading"}
+        disabled={blitzPhase === "loading" || blitzPhase === "locating"}
         className={buttonClass("secondary", "min-h-11 w-full px-4 text-sm")}
       >
         <BoltIcon className="h-4 w-4 text-parranda-glow" />
@@ -63,6 +67,17 @@ export default function BlitzCard({
             <p className="mt-2 text-sm text-parranda-ink/75">
               {t("Läser tiden, platsen och vad som händer nära dig …", "Reading the time, place and what is happening nearby …")}
             </p>
+          )}
+          {(blitzPhase === "position_needed" || blitzPhase === "locating") && (
+            <div className="mt-2 flex flex-col items-start gap-3">
+              <p className="text-sm text-parranda-ink/75">
+                {t("Blitz behöver din position. Den sparas inte när dagen öppnas igen. Dela den för ett nästa drag nära dig.", "Blitz needs your position. It isn't kept when a saved day is reopened. Share it for a next move near you.")}
+              </p>
+              <button type="button" onClick={sharePositionForBlitz} disabled={blitzPhase === "locating"} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                {blitzPhase === "locating" ? t("Hämtar position …", "Getting location …") : t("Dela position för Blitz", "Share position for Blitz")}
+              </button>
+              {blitzPositionFailed && <p className="text-sm text-parranda-ink/75">{t("Positionen kunde inte delas. Försök igen eller välj en plats på startsidan.", "Your position could not be shared. Try again or choose a place on the home page.")}</p>}
+            </div>
           )}
           {blitzPhase === "error" && (
             <p className="mt-2 text-sm text-parranda-ink/75">
