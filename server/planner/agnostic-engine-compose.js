@@ -284,12 +284,12 @@ function toSourceCandidate({
 
 /**
  * Project a bounded, role-safe candidate reservoir into the route engine.
- * Candidate Combination winners remain the trusted spine; at most one extra
- * candidate per selected role adds geometric choice. A selected winner may use
- * the explicit experimental-admission seam, but role-depth extras must clear
- * the shared gates; coverage and local-feel tiers remain shared with Candidate
- * Combination. The one exception is a single-place requested spine, which may
- * take one more place of the same role (see appendSecondSpinePlace).
+ * Candidate Combination winners remain the spine. Automatic rhythm depth may
+ * traverse already admitted requested-role tiers in their existing order, up
+ * to six per role and the total reservoir bound. This includes honestly labelled
+ * experimental admission; it never upgrades source trust or revives a rejected
+ * place. Existing explicit pins keep their admitted identities. Support roles
+ * and legacy distance requests retain their smaller depth.
  */
 function mapPlannerReservoirToSourceCandidates({
   selected = [],
@@ -331,14 +331,10 @@ function mapPlannerReservoirToSourceCandidates({
       for (const rich of plannerUsableOptionsForRole(roleEntry)) {
         const id = rich?.candidate_id;
         if (!id || !pins.has(String(id)) || seen.has(id)) continue;
-        // Experimentally admitted candidates are NOT skipped here, unlike the
-        // role-depth fill below. That rule exists to stop a lower-trust
-        // exception from inflating breadth; a pin is not breadth, it is the
-        // user naming one place. And this path already routes to admitted
-        // candidates whenever the combination selects them — refusing the same
-        // candidate only because the USER chose it rather than the ranking
-        // would make the verb fail on nearly every real open-data place. The
-        // lower-trust label travels with the stop, so the day stays honest.
+        // Pins can use explicit experimental admission. Modern requested-role
+        // rhythm depth below can also use these admitted places, in tier order;
+        // support/legacy depth remains stricter. Every path preserves the
+        // lower-trust label and can only reach candidates the shared pool admits.
         const coords = finiteCoords(rich.coordinates);
         if (!coords) continue;
         seen.add(id);
