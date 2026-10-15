@@ -375,7 +375,21 @@ aperture instead of discarding everything beyond three kilometres. A trusted
 remaining local-day window under four hours keeps the narrower proposal scope;
 unknown time is not claimed verified. This aperture is neither a route target
 nor permission to bypass opening-hours, trust or final walking validation.
-Up to five shared-gate same-role choices survive to composition; the existing
-two-place experimental-depth limit remains. Rhythm controls density, measured
-walking distance is an output, and legacy kilometre requests remain API-only
-compatibility tests.
+Automatic rhythm depth may retain up to six already admitted requested-role
+choices, traversing the existing trust/coverage/operational/local-feel tiers in
+order within the total reservoir bound (default eight, maximum twelve). This
+includes explicitly experimental single-family admission, not an upgrade to
+ordinary shared-gate trust: inferred provenance, low confidence, unknown hours
+and human_verified:false stay visible. Hard inactivity, availability, preference
+coverage and final walking checks still apply; additional count is not stronger
+source evidence. Existing explicit pins keep their admitted identities. Support
+roles and legacy kilometre requests retain their smaller depth. Rhythm controls
+density; measured walking distance is an output.
+
+The experimental current-place admission exception excludes knowledge-only
+evidence. Encyclopedic type/coordinate/website records can describe historical
+institutions or collections, so they cannot alone establish a present-day
+visit, including via a pin. Wikidata remains independent corroboration under
+the ordinary shared gates. This restriction does not reinstate a numerical
+two-stop cap or reduce admitted map/directory depth; insufficient current place
+evidence must yield an honest limitation rather than fabricated density.

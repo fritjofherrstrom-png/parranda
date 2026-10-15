@@ -284,12 +284,12 @@ function toSourceCandidate({
 
 /**
  * Project a bounded, role-safe candidate reservoir into the route engine.
- * Candidate Combination winners remain the trusted spine; at most one extra
- * candidate per selected role adds geometric choice. A selected winner may use
- * the explicit experimental-admission seam, but role-depth extras must clear
- * the shared gates; coverage and local-feel tiers remain shared with Candidate
- * Combination. The one exception is a single-place requested spine, which may
- * take one more place of the same role (see appendSecondSpinePlace).
+ * Candidate Combination winners remain the spine. Automatic rhythm depth may
+ * traverse already admitted requested-role tiers in their existing order, up
+ * to six per role and the total reservoir bound. This includes honestly labelled
+ * experimental admission; it never upgrades source trust or revives a rejected
+ * place. Existing explicit pins keep their admitted identities. Support roles
+ * and legacy distance requests retain their smaller depth.
  */
 function mapPlannerReservoirToSourceCandidates({
   selected = [],
@@ -331,14 +331,10 @@ function mapPlannerReservoirToSourceCandidates({
       for (const rich of plannerUsableOptionsForRole(roleEntry)) {
         const id = rich?.candidate_id;
         if (!id || !pins.has(String(id)) || seen.has(id)) continue;
-        // Experimentally admitted candidates are NOT skipped here, unlike the
-        // role-depth fill below. That rule exists to stop a lower-trust
-        // exception from inflating breadth; a pin is not breadth, it is the
-        // user naming one place. And this path already routes to admitted
-        // candidates whenever the combination selects them — refusing the same
-        // candidate only because the USER chose it rather than the ranking
-        // would make the verb fail on nearly every real open-data place. The
-        // lower-trust label travels with the stop, so the day stays honest.
+        // Pins can use explicit experimental admission. Modern requested-role
+        // rhythm depth below can also use these admitted places, in tier order;
+        // support/legacy depth remains stricter. Every path preserves the
+        // lower-trust label and can only reach candidates the shared pool admits.
         const coords = finiteCoords(rich.coordinates);
         if (!coords) continue;
         seen.add(id);
@@ -363,19 +359,20 @@ function mapPlannerReservoirToSourceCandidates({
   const variedActivities = requestedIntentCount > 1;
   // Preserve safe requested-interest depth independently of preference count.
   // The engine's rhythm/time budget chooses the actual day, not this reservoir.
-  // Experimental depth retains its existing two-place cap.
+  // Requested-role depth may use the same honestly labelled, source-backed
+  // admission as an explicit Add. Source confidence must not erase rhythm.
   const boundedPerRole = rhythmDepth ? 6 : Math.min(3, Math.max(1, Math.trunc(Number(perRole) || 2)));
 
   for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
     const role = roleEntry?.role;
     if (!role || !selectedRoles.has(role)) continue;
     let roleCount = 1;
-    // Do not multiply the lower-trust experimental exception into role depth.
-    // The shared tier and availability gates still own automatic additions.
-    const depthOptions = plannerUsableOptionsForRole(roleEntry).filter(rich =>
-      !isExperimentallyAdmitted(rich) && rich?.candidate_id && !seen.has(rich.candidate_id) && finiteCoords(rich.coordinates));
+    const depthOptions = (rhythmDepth && roleEntry.requested
+      ? requestedRhythmDepthOptions(roleEntry)
+      : plannerUsableOptionsForRole(roleEntry).filter(rich => !isExperimentallyAdmitted(rich)))
+      .filter(rich => rich?.candidate_id && !seen.has(rich.candidate_id) && finiteCoords(rich.coordinates));
     while (depthOptions.length && roleCount < boundedPerRole && out.length < boundedLimit) {
-      // Keep the selected spine and the same eligibility/trust tier. For a
+      // Keep the selected spine and existing evidence priority. For a
       // varied request, prefer another factual activity type before repeating
       // one already present; focused requests retain their same-interest depth.
       const variedIndex = variedActivities
@@ -514,9 +511,29 @@ function mapPlannerReservoirToSourceCandidates({
   return out.filter((candidate) => matchesPreferenceFocus(candidate, requestedIntents, pinnedIds));
 }
 
+// A full requested-interest day needs depth, not one winner from its best
+// evidence tier. Exhaust each existing usable tier in priority order, then
+// offer the next tier with its original confidence/admission intact. Only the
+// already admitted role universe is consulted; no source fetch or trust change.
+function requestedRhythmDepthOptions(roleEntry) {
+  let remaining = [...(roleEntry.candidates || [])];
+  const out = [];
+  while (remaining.length) {
+    const tier = plannerUsableOptionsForRole({ ...roleEntry, candidates: remaining });
+    if (!tier.length) break;
+    out.push(...tier);
+    const selected = new Set(tier);
+    remaining = remaining.filter(candidate => !selected.has(candidate));
+  }
+  return out;
+}
+
 function sameActivityDepthTier(candidate, reference) {
   const coverage = values => JSON.stringify([...new Set(normalizeUserIntents(values || []).intents)].sort());
-  return candidate.candidate_status === reference.candidate_status &&
+  return isExperimentallyAdmitted(candidate) === isExperimentallyAdmitted(reference) &&
+    candidate.operational_viability?.rank === reference.operational_viability?.rank &&
+    candidate.local_feel_rank === reference.local_feel_rank &&
+    candidate.candidate_status === reference.candidate_status &&
     candidate.confidence === reference.confidence && candidate.origin === reference.origin &&
     candidate.provenance?.source_tier === reference.provenance?.source_tier &&
     candidate.provenance?.human_verified === reference.provenance?.human_verified &&

@@ -113,10 +113,9 @@ function buildCandidateCombination(plannerRoles = {}, dayflowHonesty = {}, optio
   };
 }
 
-// Shared trust-tier primitive for every consumer of the role reservoir. The
-// combination picker and the engine-depth bridge must agree: weaker admitted,
-// adjacent, or chain candidates cannot re-enter merely because a consumer asks
-// for more than one option.
+// Shared best-tier primitive for consumers of the admitted role reservoir.
+// Combination chooses from this tier. Modern requested-role rhythm depth may
+// repeat it on the remainder, preserving tier order without upgrading trust.
 function plannerUsableOptionsForRole(role = {}) {
   const usableAll = (Array.isArray(role.candidates) ? role.candidates : []).filter(
     (candidate) =>

@@ -82,12 +82,14 @@ test('thin and closed source pools cannot be filled to Full density', async () =
   }
 });
 
-test('Full does not multiply uncorroborated exceptions or publish unattributed filler', async () => {
+test('Full may use admitted single-family depth but never upgrades its trust or publishes unattributed filler', async () => {
   for (const preferences of [['second_hand'], ['culture'], ['second_hand', 'culture']]) {
     const rows = [...supply(), ...supply('museum')].map(row => ({ ...row, sources: row.sources.slice(0, 1) }));
     const { route } = await compose(rows, preferences);
     assert.ok(route);
-    assert.ok(route.main_stops.length <= 2);
+    assert.equal(route.main_stops.length, 6);
+    assert.ok(route.main_stops.every(stop => stop.trust?.confidence === 'low' &&
+      stop.provenance?.attribution?.length === 1 && stop.provenance?.corroborated_by_external === false));
     assert.equal(route.trust_summary.human_verified, false);
     const rejected = await compose(rows.map(row => ({ ...row, sources: [] })), preferences);
     assert.equal(rejected.route, undefined);

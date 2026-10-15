@@ -34,3 +34,26 @@ test('unavailable diagnostic logger cannot add a test failure', async () => {
     'Rome', () => { throw new Error('logger unavailable'); },
   ));
 });
+
+test('optional DOM capture failure preserves the successful trace', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'parranda-map-capture-'));
+  const previous = process.env.PARRANDA_MAP_DIAGNOSTICS_DIR;
+  const trace = { events: [], tooltip: null, markers: [] };
+  const output = [];
+  process.env.PARRANDA_MAP_DIAGNOSTICS_DIR = dir;
+  try {
+    await writeMapInteractionTrace({ evaluate: async () => trace,
+      content: async () => { throw new TypeError('capture unavailable'); },
+      screenshot: async () => {},
+    }, 'Rome', (...args) => output.push(args));
+    assert.deepEqual(output, [['[map-interaction-trace]', 'Rome', JSON.stringify(trace)]]);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'Rome.capture-error.json'))), { error: 'TypeError' });
+  } finally {
+    if (previous === undefined) delete process.env.PARRANDA_MAP_DIAGNOSTICS_DIR;
+    else process.env.PARRANDA_MAP_DIAGNOSTICS_DIR = previous;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
