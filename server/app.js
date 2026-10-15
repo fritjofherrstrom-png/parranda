@@ -1549,8 +1549,13 @@ function buildApp({
     if (query.length < 3) return response.json({ status: 'ready', choices: [] });
     if (typeof placeSuggestions !== 'function') return response.json({ status: 'unavailable', choices: [] });
     const previous = placeSelectionStore.read(request.body?.context_selection);
+    const controller = new AbortController();
+    const cancel = () => { if (!response.writableEnded) controller.abort(); };
+    request.once('aborted', cancel);
+    response.once('close', cancel);
     try {
-      const result = await placeSuggestions(query, { language: normalizeLanguage(request.query?.lang), ...(previous ? { near: { lat: previous.lat, lng: previous.lng } } : {}) });
+      const result = await placeSuggestions(query, { language: normalizeLanguage(request.query?.lang), signal: controller.signal, ...(previous ? { near: { lat: previous.lat, lng: previous.lng } } : {}) });
+      if (controller.signal.aborted) return;
       const registry = buildLandingCityRegistry(normalizeLanguage(request.query?.lang));
       const choices = (result.choices || []).slice(0, 5).flatMap(choice => {
         const selection = placeSelectionStore.issue(choice.candidate, choice.query);
@@ -1563,7 +1568,12 @@ function buildApp({
         return [{ title: choice.title, context: choice.context, query: choice.query, kind: choice.kind, ...(placeRef ? { place_ref: placeRef } : {}), selection_id: selection, attribution: point.attribution, license: point.license, ...(cityKey ? { city_key: cityKey } : {}) }];
       });
       response.json({ status: result.status, choices, ...(result.retry_after_ms ? { retry_after_ms: result.retry_after_ms } : {}) });
-    } catch (_) { response.json({ status: 'unavailable', choices: [] }); }
+    } catch (_) {
+      if (!controller.signal.aborted) response.json({ status: 'unavailable', choices: [] });
+    } finally {
+      request.removeListener('aborted', cancel);
+      response.removeListener('close', cancel);
+    }
   });
   // GET / — the new frontend IS the landing (sole owner since the old shell was
   // retired). The committed frontend/dist makes the build always present; if a
