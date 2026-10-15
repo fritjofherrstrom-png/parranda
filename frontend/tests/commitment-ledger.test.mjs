@@ -34,7 +34,9 @@ test("a ledger travels as its own field and is copied, not aliased", () => {
 // --------------------------------------------------------------------------
 
 test("the ledger reaches the request, scoped to the anchor", () => {
-  assert.match(component, /excludedCandidateIds: excludedOverride \?\? scopedLedger\.excludedIds,/);
+  assert.match(component, /const activeLedger = scopeLiveChoices\(scopedLedger\.entries, effectiveDateIso\);/);
+  assert.match(component, /liveEventChoices: activeLedger\.liveEventChoices,/);
+  assert.match(component, /excludedCandidateIds: \(excludedOverride \?\? activeLedger\.excludedIds\)\.filter\(id => !id\.startsWith\("live:"\)\),/);
 });
 
 test("changing the ledger recomposes the day", () => {
@@ -44,7 +46,7 @@ test("changing the ledger recomposes the day", () => {
 });
 
 test("a silent upgrade carries the ledger, so dismissed places cannot return", () => {
-  assert.match(component, /const effectiveExcluded = excludedOverride \?\? scopedLedger\.excludedIds;/);
+  assert.match(component, /const effectiveExcluded = excludedOverride \?\? activeLedger\.excludedIds;/);
   assert.match(component, /excludedOverride: effectiveExcluded,/);
 });
 
@@ -64,7 +66,7 @@ test("the way back is visible without opening anything", () => {
   // ledger was invisible and the undo unreachable — a dismissal you cannot see
   // is effectively irreversible.
   const ledgerBlock = component.slice(
-    component.indexOf("{(excludedCount > 0 || pinnedCount > 0) && ("),
+    component.indexOf("{(excludedCount > 0 || pinnedCount > 0 || liveChoiceCount > 0) && ("),
     component.indexOf("{phase === \"loading\" && !staleNotice && ("),
   );
   assert.ok(ledgerBlock.includes("Start over without my choices"), "the ledger renders above the day, not inside Adjust");
@@ -136,8 +138,8 @@ test("the component scopes the ledger and clears it on a new place", () => {
   assert.match(component, /commitmentAnchorKeyRef\.current = displayedAnchorKeyRef\.current;/);
   assert.match(component, /const scopedLedger = scopeCommitmentsToAnchor\(\{/);
   // The request must send the SCOPED list, never the raw component state.
-  assert.match(component, /excludedCandidateIds: excludedOverride \?\? scopedLedger\.excludedIds,/);
-  assert.match(component, /excludedOverride \?\? scopedLedger\.excludedIds;/);
+  assert.match(component, /excludedCandidateIds: \(excludedOverride \?\? activeLedger\.excludedIds\)\.filter\(id => !id\.startsWith\("live:"\)\),/);
+  assert.match(component, /excludedOverride \?\? activeLedger\.excludedIds;/);
   // And the visible "N dismissed" line must follow, not linger for a place
   // where nothing was dismissed.
   assert.match(component, /if \(!scopedLedger\.applies\) \{[\s\S]{0,160}setCommitments\(\{\}\);/);
@@ -188,10 +190,10 @@ test("both halves of the ledger reach the request", () => {
 });
 
 test("the pinned half of the ledger is wired into the request and the retry", () => {
-  assert.match(component, /pinnedCandidateIds: sentPinIds,/);
+  assert.match(component, /pinnedCandidateIds: sentPinIds\.filter\(id => !id\.startsWith\("live:"\)\),/);
   // A silent upgrade must carry the pins too, or a kept place quietly drops
   // out of the day the moment a better verdict arrives.
-  assert.match(component, /const effectivePinned = pinnedOverride \?\? scopedLedger\.pinnedIds;/);
+  assert.match(component, /const effectivePinned = pinnedOverride \?\? activeLedger\.pinnedIds;/);
   assert.match(component, /pinnedOverride: effectivePinned,/);
 });
 
@@ -199,8 +201,8 @@ test("exclude and pin cannot contradict each other for the same candidate", () =
   // Not a runtime check but a representation choice: one map keyed by
   // candidate id holds exactly one commitment, so the newest action replaces
   // the previous one and the server is never handed both at once.
-  assert.match(component, /useState<Record<string, \{ kind: "exclude" \| "pin"; label: string \}>>\(\{\}\)/);
-  assert.match(component, /setCommitments\(\{ \.\.\.commitments, \[identity\]: \{ kind, label: commitLabel \} \}\)/);
+  assert.match(component, /useState<Record<string, \{ kind: "exclude" \| "pin"; label: string; liveAction\?: "remove" \| "replace" \}>>\(\{\}\)/);
+  assert.match(component, /setCommitments\(\{ \.\.\.commitments, \[identity\]: \{ kind, label: commitLabel, \.\.\.\(liveAction \? \{ liveAction \} : \{\}\) \} \}\)/);
 
   const both = scopeCommitmentsToAnchor({
     entries: { "museum-2": { kind: "pin", label: "Museum" } },
@@ -283,7 +285,7 @@ test("a stale day accuses nobody", () => {
 test("the verdict is derived from the rendered day, never from the request", () => {
   // Counting what was asked for would let the notice claim a failure the user
   // cannot see. It must only ever describe the stops on screen.
-  assert.match(component, /stopIds: split\.core\.map\(/);
+  assert.match(component, /stopIds: routeStops\.map\(/);
   assert.match(component, /isStale: dayIsStale,/);
   assert.match(component, /\{unkept\.count > 0 && \(/);
   // And the REASON comes from the server's verdict, never from the absence.
@@ -325,7 +327,7 @@ test("the verdict is read from the snapshot the rendered day answered", () => {
   // Frozen at request time and carrying its own labels, so the day and its
   // verdict cannot describe different moments.
   assert.match(component, /const sentPins = sentPinIds\.map\(/);
-  assert.match(component, /label: String\(scopedLedger\.entries\[id\]\?\.label/);
+  assert.match(component, /label: String\(activeLedger\.entries\[id\]\?\.label/);
   // Installed only where a day exists to have failed to fit into.
   assert.match(component, /const composedNow = decision\.isComposedStatus\(cls\.status\);/);
   assert.match(component, /setAppliedPins\(composedNow \? sentPins : \[\]\);/);

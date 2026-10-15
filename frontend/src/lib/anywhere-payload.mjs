@@ -68,6 +68,7 @@ export function buildAnywherePayload({
   dayRhythm = "balanced",
   excludedCandidateIds = [],
   pinnedCandidateIds = [],
+  liveEventChoices = [],
 } = {}) {
   const autoPoint = { type: "auto", label: "Parranda väljer" };
   // Two exclusive anchor modes, mirroring the engine's intake precedence:
@@ -108,6 +109,9 @@ export function buildAnywherePayload({
       : {}),
     // "Keep this one" — selection-only, and omitted entirely when empty so the
     // default request is unchanged.
+    ...(Array.isArray(liveEventChoices) && liveEventChoices.length
+      ? { live_event_choices: liveEventChoices.map(({ occurrence_id, action }) => ({ occurrence_id, action })) }
+      : {}),
     ...(Array.isArray(pinnedCandidateIds) && pinnedCandidateIds.length
       ? { pinned_candidate_ids: [...pinnedCandidateIds] }
       : {}),

@@ -51,6 +51,7 @@ export interface PlaceStructure {
 }
 
 export interface PulseEvent {
+  tags?: string[];
   /** Exact accepted source slots, grouped only by an explicit source series. */
   occurrences?: PulseEvent[];
   id?: string;

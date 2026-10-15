@@ -1397,12 +1397,14 @@ test(
 
 test(
   "api: real loader non-200 surfaces loader_error instead of genuine empty",
-  withServer(createOpenDataLoader({ fetcher: async () => ({ ok: false, status: 429 }) }), async (server) => {
+  // HTTP500 starts a short endpoint hold; the API's second pass must retain
+  // that failed-provider health rather than reinterpret it as genuine empty.
+  withServer(createOpenDataLoader({ fetcher: async () => ({ ok: false, status: 500 }) }), async (server) => {
     const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
     const exp = r.body.agnostic_route_output_experiment;
     assert.equal(exp.route_mutation, false);
     assert.equal(exp.source_status.status, "error_failed_closed");
-    assert.equal(exp.source_status.error, "http_non_200");
+    assert.equal(exp.source_status.error, "provider_unavailable");
     assert.ok(exp.readiness_blockers.includes("loader_error"));
     assert.equal(exp.readiness_blockers.includes("no_usable_trusted_records"), false);
     assert.equal(exp.readiness_calibration.status, "blocked");

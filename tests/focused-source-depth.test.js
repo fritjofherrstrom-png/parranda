@@ -59,7 +59,9 @@ test('two interests preserve depth and each requested interest without unrelated
 test('preserving acquired interest depth never corroborates single-family records', async () => {
   for (const intent of ['second_hand', 'coffee', 'culture']) {
     const { route } = await compose([intent], 'full', { corroborated: false });
-    assert.ok(route && route.main_stops.length <= 2, 'the existing lower-trust breadth cap remains');
+    assert.equal(route?.main_stops.length, 6, 'single-family admission can fill the requested rhythm without adding source evidence');
+    assert.ok(route.main_stops.every(stop => stop.trust?.confidence === 'low' &&
+      stop.provenance?.attribution?.length === 1 && stop.provenance?.corroborated_by_external === false));
     assert.equal(route.trust_summary.human_verified, false);
   }
 });

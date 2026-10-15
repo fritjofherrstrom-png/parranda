@@ -32,17 +32,38 @@ Its completed primary frame supplies the same corroboration context. A nested
 snapshot replaces its old primary frame instead of unioning two different
 bounded directory selections. Failed source health remains failed.
 
-Discriminating regressions are in `focused-source-depth.test.js` and
-`directory-corroboration-retention.test.js`, through actual loader, mapper,
-identity, gates and composer. Rich source fixtures yield Calm4/Balanced5/Full6;
-single-family supply remains limited, closure and assessed partial coverage stay
-honest, and directory selections remain at most80 across completion. These
-fixtures are not provider facts about a named city.
+Discriminating regressions are in `focused-source-depth.test.js`,
+`directory-corroboration-retention.test.js` and `rhythm-density.test.js`.
+Both corroborated and already-admitted single-family map/directory fixtures
+yield Calm4/Balanced5/Full6. Knowledge-only records cannot use the experimental
+current-place admission exception: an encyclopedic type, coordinate and website
+may describe a historical institution or collection. They remain available as
+independent corroboration under ordinary gates, not as standalone visit proof.
+Pins cannot bypass this boundary. Unknown hours remain unknown; closure, assessed partial
+coverage and final walking validation remain authoritative. Directory selections
+stay at most80 across completion. Fixtures are not facts about a named city.
 
-The supplied review archive proves a recorded Coffee corroboration loss for
-Dolce Sicilia, not the exact production raw-pool cause. Corrected recorded-source
-replay retains that fact and yields Coffee4/4, Second hand2/2, Culture3/3. Those
-older source snapshots still lack enough gate-passing matching supply to show a
-Balanced/Full density difference. Their thinness is preserved, not bypassed.
-Native built-UI and real-provider observations must be reported separately from
-source replay; provider blockage is INCONCLUSIVE. No source merge is a deploy.
+## Requested rhythm versus admission breadth
+
+The old engine adapter admitted one selected place and at most one extra from a
+single inferred-source role, irrespective of rhythm. Explicit Add/pin could use
+six of the same candidates while automatic Calm/Balanced/Full all produced two.
+That blanket two-place depth policy is intentionally replaced for requested
+roles in modern rhythm requests: exhaust the already admitted options in their
+existing evidence/local-feel/operational priority, then offer the next tier up to
+the existing six-per-role and twelve-reservoir bounds. The engine still owns
+actual4/5/6 density. This is an automatic-selection policy change, not stronger
+evidence: no confidence, corroboration, verification or opening facts are added.
+Fallback-status, known-closed, unattributed and excluded records are not rescued.
+Legacy/no-rhythm and unrelated support-role admission policies are unchanged.
+
+A historical replay on PR602 head8c978e9 of115 previously recorded source rows reproduced2/2/2
+for Second hand, Coffee and Culture despite six admitted role options each;
+the corrected adapter produces4/5/6 from the identical rows and context. The
+mixed Food/Second hand replay changes3/3/3 to4/5/6. This is recorded-source
+composition evidence, not current live-provider or deployed-UI acceptance.
+Native built-UI and real-provider observations must be reported separately;
+provider blockage does not establish successful delivery of the Full contract.
+These older counts do not establish current visit validity and must not be
+transferred to a later admission policy. The London source check exposed
+historical museums among six stops; named-venue facts require separate evidence.

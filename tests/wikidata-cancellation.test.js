@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { resolveDefaultOpenDataLoader } = require('../server/place-candidates/open-data-loader');
-const { createWikidataSource } = require('../server/place-candidates/wikidata-source');
+const { createWikidataSource, WIKIDATA_CACHE_NAMESPACE } = require('../server/place-candidates/wikidata-source');
 const { createPlannerLifecycle, lifecycleLoader } = require('../server/planner/cold-lifecycle');
 
 const anchor = { lat: 48.123, lng: 8.456 };
@@ -34,7 +34,7 @@ function controlledLoader(t) {
     PARRANDA_OPEN_DATA_LOADER: 'enabled', PARRANDA_WIKIDATA_SOURCE: 'enabled', PARRANDA_CACHE_DIR: dir,
   });
   t.after(async () => { calls.forEach(call => call.body.resolve(payload)); await tick(); });
-  return { loader, calls, file: path.join(dir, 'wikidata', '48.123_8.456.json') };
+  return { loader, calls, file: path.join(dir, WIKIDATA_CACHE_NAMESPACE, '48.123_8.456.json') };
 }
 
 test('Wikidata cancellation reaches fetch/body and a late body never becomes records', async () => {

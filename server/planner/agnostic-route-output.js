@@ -28,6 +28,7 @@
 
 const { buildAgnosticCityContext } = require("../candidates/agnostic-context");
 const { normalizeUserIntents } = require("../candidates/intent-vocabulary");
+const { EXISTENCE_CLAIM_TYPES } = require("../candidates/evidence");
 const { buildProviderSpecs } = require("../candidates/candidate-pool");
 const { selectPlannerRoleCandidates } = require("./role-selector");
 const { summarizeDayflowHonesty } = require("./dayflow-honesty");
@@ -352,6 +353,19 @@ function admitExperimentalInferredExternalCandidate({ candidate, derived, gates 
   const sourceBacked = attribution.length > 0;
   if (!external || sourceTier !== "inferred" || !hasCoords || !hasText(candidate?.label) || !sourceBacked) {
     return { allowed: false };
+  }
+  // Encyclopedic records include historical institutions/collections. A type,
+  // coordinate and website seed do not establish a present-day visit. Keep
+  // knowledge as corroboration under the ordinary gates; the experimental
+  // current-place exception must not turn knowledge-only evidence into a stop.
+  // Unknown/missing family labels and duplicate knowledge providers add no
+  // independent place evidence. Pins use the same admitted pool.
+  const placeFamilies = new Set((candidate.evidence || [])
+    .filter(item => EXISTENCE_CLAIM_TYPES.has(item.claim_type) && Number(item.weight) > 0 && item.value !== false)
+    .map(item => item.source_ref?.source_family));
+  const independentPlaceFamilies = new Set(["catalog", "official", "map", "open_directory", "community", "editorial", "live"]);
+  if (placeFamilies.has("open_knowledge") && ![...placeFamilies].some(family => independentPlaceFamilies.has(family))) {
+    return { allowed: false, reasons: ["knowledge_only_requires_independent_place_evidence"] };
   }
   const gateReasons = Array.isArray(gates?.reasons) ? gates.reasons : [];
   const reasons = dedupe([

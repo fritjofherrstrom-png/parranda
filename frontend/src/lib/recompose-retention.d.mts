@@ -7,7 +7,7 @@ export function planRecomposeRetention(params: {
   nextAnchorKey?: string | null;
 }): { keepPrevious: boolean; reason: string };
 
-export type Commitment = { kind: "exclude" | "pin"; label: string };
+export type Commitment = { kind: "exclude" | "pin"; label: string; liveAction?: "remove" | "replace" };
 
 export function scopeCommitmentsToAnchor(params: {
   entries?: Record<string, Commitment>;

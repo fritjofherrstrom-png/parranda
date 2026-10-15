@@ -100,14 +100,18 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
 
   const hasCoords = Number.isFinite(record.lat) && Number.isFinite(record.lng);
   const type = firstString(record.type, record.category, "place");
-  const sources = Array.isArray(record.sources) ? record.sources.filter(Boolean) : [];
+  // Unclassified attribution and computed/environmental context do not assert
+  // a place. Ignore them rather than manufacturing existence corroboration.
+  const sources = Array.isArray(record.sources)
+    ? record.sources.filter(source => source && normalizeFamily(source.family)) : [];
+  if (!sources.length) return null;
 
   const evidence = buildEvidence(record, sources, hasCoords, type, observedAt);
 
   // Source tier = the strongest tier any contributing source claims. Provider
   // default applies when a source omits it.
   const sourceTier = strongestTier(sources) || EXTERNAL_OPEN_PROVIDER_META.source_tier;
-  const primaryFamily = firstString(sources[0]?.family, EXTERNAL_OPEN_PROVIDER_META.source_family);
+  const primaryFamily = normalizeFamily(sources[0].family);
 
   const base = normalizePlaceCandidate({
     id: firstString(record.id, `${cityConfig.key}-ext-${index}`),
@@ -317,7 +321,7 @@ function buildEvidence(record, sources, hasCoords, type, observedAt) {
 
 function normalizeFamily(family) {
   const value = firstString(family).toLowerCase();
-  return SOURCE_FAMILIES.has(value) ? value : "map";
+  return SOURCE_FAMILIES.has(value) && !["computed", "environmental"].includes(value) ? value : null;
 }
 
 const TIER_RANK = { official: 5, verified: 4, curated: 3, computed: 2, editorial: 2, inferred: 1, fallback: 0 };

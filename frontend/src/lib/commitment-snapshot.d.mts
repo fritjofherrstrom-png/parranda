@@ -1,5 +1,5 @@
 export type CommitmentKind = "exclude" | "pin";
-export type CommitmentEntry = { kind: CommitmentKind; label: string };
+export type CommitmentEntry = { kind: CommitmentKind; label: string; liveAction?: "remove" | "replace" };
 export type AppliedPin = { id: string; kind: "pin"; label: string };
 export type AppliedRefusal = { id: string; reason: string };
 

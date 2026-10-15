@@ -13,7 +13,8 @@
 import type { RefObject } from "react";
 import { nextSourceDate, type LiveFallback } from "./useLiveFallback";
 import { liveDateLabel } from "../../lib/live-event-query.mjs";
-import { eventTiming, liveEventRelevance, liveHighlightGroups } from "../../lib/pulse-view.mjs";
+import { eventTiming, liveEventRelevance } from "../../lib/pulse-view.mjs";
+import { liveEventTags, liveNavigationGroups, type LiveNavigationRow, type LiveSheetSort } from "../../lib/live-navigation.mjs";
 import type { LiveEventScope } from "../../lib/live-event-query.mjs";
 import { CloseIcon, LocationIcon } from "../shared/icons";
 import { liveRelevanceSentence, nearbyDistanceLabel, type Lang, type Translate } from "./copy";
@@ -39,6 +40,8 @@ export default function LiveSheet({
   liveDayLabel,
   liveSheetTime,
   setLiveSheetTime,
+  liveSheetSort,
+  setLiveSheetSort,
   onRetry,
   liveSheetScope,
   requestLiveSheetScope,
@@ -72,6 +75,8 @@ export default function LiveSheet({
   liveDayLabel: string;
   liveSheetTime: "tonight" | "week";
   setLiveSheetTime: (time: "tonight" | "week") => void;
+  liveSheetSort: LiveSheetSort;
+  setLiveSheetSort: (sort: LiveSheetSort) => void;
   onRetry: () => void;
   liveSheetScope: LiveEventScope;
   requestLiveSheetScope: (scope: LiveEventScope) => void;
@@ -103,24 +108,39 @@ export default function LiveSheet({
   // Relevance is claimed only where the server established it for the
   // current picks: matched rows get the picks heading, every other row
   // (the reserved local discovery included) is listed as "other".
-  const highlightGroups = liveHighlightGroups(sheetEvents, selected);
-  const sheetRow = (ev: PulseEvent, i: number, titleClassName: string, timingDate = sheetLiveEvents?.selected_date) => {
-    const relevance = liveRelevanceSentence(liveEventRelevance(ev, selected), lang, t);
+  const navigation = liveNavigationGroups(sheetEvents, sheetMoreEvents, { sort: liveSheetSort, selectedPreferences: selected });
+  const sheetRow = (ev: PulseEvent, i: number, titleClassName: string, timingDate = sheetLiveEvents?.selected_date,
+    navigationRow?: LiveNavigationRow<PulseEvent>) => {
+    const relevance = liveRelevanceSentence(liveEventRelevance(navigationRow?.series || ev, selected), lang, t);
     const distance = nearbyDistanceLabel(ev, lang);
+    const tags = liveEventTags(ev);
+    const timing = navigationRow?.date
+      ? [liveDateLabel(navigationRow.date, lang), navigationRow.clock &&
+          (navigationRow.endClock ? `${navigationRow.clock}–${navigationRow.endClock}` : navigationRow.clock)].filter(Boolean).join(" ")
+      : navigationRow?.kind === "undated" ? "" : eventTiming(ev, lang, undefined, timingDate);
     return (
-      <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 sm:gap-2">
-        <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">{eventTiming(ev, lang, undefined, timingDate)}</span>
+      <li key={`${ev.id || "event"}:${i}`} className="flex min-w-0 flex-col gap-1 sm:gap-2">
+        <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">{timing}</span>
         <span className="min-w-0 max-w-full break-words text-sm leading-relaxed text-parranda-ink/90">
           <span className={titleClassName}>{ev.title}</span>
           {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
           {distance && <span className="font-semibold text-parranda-live"> · {distance}</span>}
           {liveEventSource(ev, lang)}
+          {tags.length > 0 && <span aria-label={t("Taggar", "Tags")} className="mt-1 flex flex-wrap gap-1">
+            {tags.map(tag => <span key={tag} className="min-w-0 max-w-full break-words rounded-full border border-parranda-live/25 px-2 py-0.5 text-xs text-parranda-ink/68">{tag}</span>)}
+          </span>}
           {relevance && <span className="mt-0.5 block text-xs text-parranda-ink/68">{relevance}</span>}
         </span>
-        <EventOccurrences event={ev} lang={lang} selectedDate={timingDate} />
+        {!navigationRow && <EventOccurrences event={ev} lang={lang} selectedDate={timingDate} />}
       </li>
     );
   };
+  const dateSection = (label: string, rows: LiveNavigationRow<PulseEvent>[]) => (
+    <section key={label} aria-label={label} className="flex flex-col gap-3">
+      <h4 className="text-xs font-bold text-parranda-ink/68">{label}</h4>
+      <ul className="flex flex-col gap-3">{rows.map((row, i) => sheetRow(row.event, i, "font-semibold", row.date || undefined, row))}</ul>
+    </section>
+  );
   const scopePhrase =
     liveSheetScope === "near_route"
       ? t("nära rutten", "near the route")
@@ -243,6 +263,19 @@ export default function LiveSheet({
           </div>
         </div>
 
+        <div className="mt-4 flex flex-col gap-2">
+          <p className="type-eyebrow text-parranda-live">{t("Ordning", "Order")}</p>
+          <div className="inline-flex self-start overflow-hidden rounded-full border border-parranda-ink/14" role="group" aria-label={t("Live-ordning", "Live order")}>
+            {(["for_you", "by_time"] as const).map(sort => (
+              <button key={sort} type="button" aria-pressed={liveSheetSort === sort} onClick={() => setLiveSheetSort(sort)}
+                className={"inline-flex min-h-11 items-center px-[18px] text-[13px] transition " +
+                  (liveSheetSort === sort ? "bg-parranda-ink font-bold text-parranda-paper" : "text-parranda-ink/68 hover:text-parranda-ink")}>
+                {sort === "for_you" ? t("För dig", "For you") : t("Efter tid", "By time")}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* The ACTIVE scope×time cell — heading, list or honest emptiness. */}
         <div className="mt-5 flex flex-col gap-3 border-t border-parranda-ink/10 pt-4">
           <p className="type-eyebrow text-parranda-ink/68">
@@ -296,21 +329,26 @@ export default function LiveSheet({
             </div>
           ) : sheetEvents.length > 0 || sheetMoreEvents.length > 0 ? (
             <div className="flex flex-col gap-3">
-              {highlightGroups.picks.length > 0 && (
+              {liveSheetSort === "by_time" ? <>
+                {navigation.dates.map(group => dateSection(liveDateLabel(group.date, lang), group.rows))}
+                {navigation.ranges.length > 0 && dateSection(t("Källans datumintervall", "Source date ranges"), navigation.ranges)}
+                {navigation.undated.length > 0 && dateSection(t("Datum ej angivet", "Date not specified"), navigation.undated)}
+              </> : <>
+              {navigation.picks.length > 0 && (
                 <>
                   <p className="text-xs font-bold text-parranda-ink/68">{t("Höjdpunkter för dina val", "Highlights for your picks")}</p>
                   <ul className="flex flex-col gap-3">
-                    {highlightGroups.picks.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-bold"))}
+                    {navigation.picks.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-bold"))}
                   </ul>
                 </>
               )}
-              {highlightGroups.other.length > 0 && (
+              {navigation.other.length > 0 && (
                 <>
                   <p className="text-xs font-bold text-parranda-ink/68">
-                    {highlightGroups.picks.length > 0 ? t("Andra lokala höjdpunkter", "Other local highlights") : t("Höjdpunkter", "Highlights")}
+                    {navigation.picks.length > 0 ? t("Andra lokala höjdpunkter", "Other local highlights") : t("Höjdpunkter", "Highlights")}
                   </p>
                   <ul className="flex flex-col gap-3">
-                    {highlightGroups.other.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-bold"))}
+                    {navigation.other.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-bold"))}
                   </ul>
                 </>
               )}
@@ -324,6 +362,7 @@ export default function LiveSheet({
                   </ul>
                 </details>
               )}
+              </>}
             </div>
           ) : (
             <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
