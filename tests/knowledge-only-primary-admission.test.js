@@ -38,6 +38,28 @@ test('the knowledge boundary is generic, and duplicate knowledge providers or a 
   assert.deepEqual(await compose(records, records.map(row => row.id)), []);
 });
 
+test('popularity and sentiment are not independent place evidence, even for pinned historical records', async () => {
+  for (const signal of [{ popularity: { count: 1 } }, { popularity: { rating: 5 } }, { consensus: { count: 10, rating: 5 } }]) {
+    const records = mapWikidataResponse(historical, 25).map(row => ({ ...row, ...signal }));
+    for (const pins of [[], records.map(row => row.id)]) {
+      assert.deepEqual(await compose(records, pins), [], JSON.stringify(signal));
+    }
+  }
+});
+
+test('unclassified and non-place source families cannot manufacture place corroboration through the ordinary gates', async () => {
+  for (const family of [undefined, '', 'unclassified', 'computed', 'environmental']) {
+    const records = mapWikidataResponse(historical, 25).map(row => ({ ...row,
+      sources: [...row.sources, { ...row.sources[0], provider: 'encyclopedia-copy', family }],
+    }));
+    const candidate = mapRecordToCandidate({ key: 'fixture' }, records[0], '2026-10-15', 0);
+    assert.ok(candidate.evidence.every(item => item.source_ref.source_family === 'open_knowledge'));
+    assert.deepEqual(await compose(records, records.map(row => row.id)), []);
+    assert.equal(mapRecordToCandidate({ key: 'fixture' }, { ...records[0], sources: records[0].sources.slice(1) }, '2026-10-15', 0), null,
+      'a record with no classified source must not fall back to synthesized official/map evidence');
+  }
+});
+
 test('single-family map/directory depth and real independent corroboration remain available', async () => {
   for (const family of ['map','open_directory','corroborated']) {
     const records = Array.from({length:8}, (_,i) => {
