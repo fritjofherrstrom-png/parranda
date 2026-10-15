@@ -14,34 +14,43 @@ async function writeMapInteractionTrace(page, label, log = console.error) {
     }));
     log('[map-interaction-trace]', label, JSON.stringify(trace));
     const dir = process.env.PARRANDA_MAP_DIAGNOSTICS_DIR;
-    if (dir) {
-      fs.mkdirSync(dir, { recursive: true });
-      const name = String(label).replace(/[^a-z0-9_-]/gi, '_');
-      const rendered = await page.evaluate(() => {
-        const describe = element => {
-          const box = element.getBoundingClientRect();
-          const style = getComputedStyle(element);
-          return { tag: element.tagName, class: String(element.className), label: element.getAttribute('aria-label'),
-            rect: { x: box.x, y: box.y, width: box.width, height: box.height },
-            display: style.display, visibility: style.visibility, opacity: style.opacity,
-            transform: style.transform, position: style.position };
-        };
-        return { viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
-          readyState: document.readyState,
-          frames: Array.from(document.querySelectorAll('[data-route-map]')).map(element => ({
-            ...describe(element), region: element.closest('[role="region"],section,aside')?.getAttribute('aria-label'),
-            ancestors: Array.from((function* () { for (let e = element.parentElement; e; e = e.parentElement) yield e; })()).map(describe),
-            markers: Array.from(element.querySelectorAll('.route-map-marker-shell,.route-map-marker')).map(describe),
-            canvases: Array.from(element.querySelectorAll('canvas')).map(describe),
-          })),
-          styles: Array.from(document.styleSheets).map(sheet => { let rules; try { rules = sheet.cssRules.length; } catch { rules = null; }
-            return { href: sheet.href, disabled: sheet.disabled, rules }; }),
-          resources: performance.getEntriesByType('resource').filter(e => /\.js|\.css/.test(e.name)).map(e => ({ name: e.name, start: e.startTime, duration: e.duration, size: e.transferSize })),
-          events: window.__routeInteractionTrace || [] };
-      });
-      fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(rendered, null, 2));
-      fs.writeFileSync(path.join(dir, `${name}.html`), await page.content());
-      await page.screenshot({ path: path.join(dir, `${name}.png`), fullPage: true });
+    if (dir && typeof page.content === 'function' && typeof page.screenshot === 'function') {
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+        const name = String(label).replace(/[^a-z0-9_-]/gi, '_');
+        const rendered = await page.evaluate(() => {
+          const describe = element => {
+            const box = element.getBoundingClientRect();
+            const style = getComputedStyle(element);
+            return { tag: element.tagName, class: String(element.className), label: element.getAttribute('aria-label'),
+              rect: { x: box.x, y: box.y, width: box.width, height: box.height },
+              display: style.display, visibility: style.visibility, opacity: style.opacity,
+              transform: style.transform, position: style.position };
+          };
+          return { viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
+            readyState: document.readyState,
+            frames: Array.from(document.querySelectorAll('[data-route-map]')).map(element => ({
+              ...describe(element), region: element.closest('[role="region"],section,aside')?.getAttribute('aria-label'),
+              ancestors: Array.from((function* () { for (let e = element.parentElement; e; e = e.parentElement) yield e; })()).map(describe),
+              markers: Array.from(element.querySelectorAll('.route-map-marker-shell,.route-map-marker')).map(describe),
+              canvases: Array.from(element.querySelectorAll('canvas')).map(describe),
+            })),
+            styles: Array.from(document.styleSheets).map(sheet => { let rules; try { rules = sheet.cssRules.length; } catch { rules = null; }
+              return { href: sheet.href, disabled: sheet.disabled, rules }; }),
+            resources: performance.getEntriesByType('resource').filter(e => /\.js|\.css/.test(e.name)).map(e => ({ name: e.name, start: e.startTime, duration: e.duration, size: e.transferSize })),
+            events: window.__routeInteractionTrace || [] };
+        });
+        fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(rendered, null, 2));
+        fs.writeFileSync(path.join(dir, `${name}.html`), await page.content());
+        await page.screenshot({ path: path.join(dir, `${name}.png`), fullPage: true });
+      } catch (error) {
+        // Extra capture failure must not turn a successful trace into an
+        // unavailable trace, nor change the browser test's own result.
+        try {
+          fs.writeFileSync(path.join(dir, `${String(label).replace(/[^a-z0-9_-]/gi, '_')}.capture-error.json`),
+            JSON.stringify({ error: error?.name || 'Error' }));
+        } catch { /* Evidence directory can also be unavailable. */ }
+      }
     }
   } catch (error) {
     // A closed/crashed page is unavailable evidence, not a new test failure.
