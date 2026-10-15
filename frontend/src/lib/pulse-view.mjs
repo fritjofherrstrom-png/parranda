@@ -213,9 +213,17 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
       Boolean(venueNow && date === venueNow.date && win.local_start && win.local_end &&
         win.local_end > win.local_start && venueNow.clock >= win.local_end);
     const dates = listedDates(win.dates);
-    const next = dates.find((date) => (!reference || date >= reference) && !endedToday(date));
+    const next = dates.find((date) => (!reference || date >= reference) && (selectedDate || !endedToday(date)));
     const label = next ? day(next) : null;
     if (!label) return "";
+    if (next === venueNow?.date && (!selectedDate || selectedDate === venueNow.date) &&
+        win.local_start && win.local_end && win.local_end > win.local_start &&
+        venueNow.clock >= (win.local_start.length === 5 ? win.local_start + ":00" : win.local_start) && venueNow.clock < (win.local_end.length === 5 ? win.local_end + ":00" : win.local_end)) {
+      const onNow = ev.recurrence?.occurrence_status === "unconfirmed"
+        ? en ? "scheduled now" : "enligt schema nu"
+        : en ? "on now" : "pågår nu";
+      return `${onNow} · ${en ? "until" : "till"} ${win.local_end}`;
+    }
     return clockRange ? `${label} ${clockRange}` : label;
   }
 
@@ -247,9 +255,9 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
     const endsOn = (win && win.ends_on) || ev.ends_on || startsOn;
     const start = startsOn ? day(startsOn) : null;
     if (!start) return "";
-    if (!endsOn || endsOn === startsOn) return start;
-    const end = day(endsOn);
-    return end ? `${start} – ${end}` : start;
+    const end = endsOn && endsOn !== startsOn ? day(endsOn) : null;
+    const dateLabel = end ? `${start} – ${end}` : start;
+    return kind === "all_day" ? `${dateLabel} · ${en ? "All day" : "Hela dagen"}` : dateLabel;
   }
 
   const startsAt = (win && win.starts_at) || ev.starts_at || null;
@@ -287,7 +295,7 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
       const sameDay =
         endsAt.toLocaleDateString(locale, dayOpts) === nowDate.toLocaleDateString(locale, dayOpts);
       if (!sameDay) return onNow;
-      const clockOpts = { hour: "2-digit", minute: "2-digit", ...(timezone ? { timeZone: timezone } : {}) };
+      const clockOpts = { hour: "2-digit", minute: "2-digit", ...(endsAt.getUTCSeconds() ? { second: "2-digit" } : {}), ...(timezone ? { timeZone: timezone } : {}) };
       return `${onNow} · ${en ? "until" : "till"} ${endsAt.toLocaleTimeString(locale, clockOpts)}`;
     } catch {
       return onNow;
@@ -321,10 +329,10 @@ function venueLocalNow(nowDate, timezone) {
     const parts = Object.fromEntries(
       new Intl.DateTimeFormat("en-CA", {
         timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
-        hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+        hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
       }).formatToParts(nowDate).map((part) => [part.type, part.value]),
     );
-    return { date: `${parts.year}-${parts.month}-${parts.day}`, clock: `${parts.hour}:${parts.minute}` };
+    return { date: `${parts.year}-${parts.month}-${parts.day}`, clock: `${parts.hour}:${parts.minute}:${parts.second}` };
   } catch {
     return null;
   }

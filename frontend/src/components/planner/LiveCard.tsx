@@ -1,3 +1,4 @@
+import { useLiveClock } from "./useLiveClock";
 /**
  * LIVE — the city's now-context: weather read, clothing advice and current
  * events. It renders independently of route composition (live_events survives a
@@ -61,6 +62,7 @@ export default function LiveCard({
   liveSheetTriggerRef: Ref<HTMLButtonElement>;
   openLiveSheet: () => void;
 }) {
+  const now = useLiveClock([...pulseBuckets.tonight, ...pulseBuckets.thisWeek]);
   return (
     <section
       className="rounded-parranda border-[1.5px] border-parranda-live/35 bg-parranda-live/8 p-5 sm:p-6"
@@ -133,14 +135,14 @@ export default function LiveCard({
             {pulseBuckets.tonight.slice(0, 4).map((ev: PulseEvent, i: number) => (
               <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-parranda-ink/85">
                 <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">
-                  {eventTiming(ev, lang, undefined, liveEvents?.selected_date)}
+                  {eventTiming(ev, lang, now, liveEvents?.selected_date)}
                 </span>
                 <span className="min-w-0 max-w-full break-words">
                   <span className="font-bold text-parranda-ink">{ev.title}</span>
                   {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
                   {liveEventSource(ev, lang)}
                 </span>
-                <EventOccurrences event={ev} lang={lang} selectedDate={liveEvents?.selected_date} />
+                <EventOccurrences event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} />
               </li>
             ))}
           </ul>
