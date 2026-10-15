@@ -88,6 +88,9 @@ export default function StopLine({
   split,
   routeStops,
   legForStop,
+  startLeg,
+  finishLeg,
+  anchorIsPosition,
   mapsPlaceContext,
   expandedStopKey,
   setExpandedStopKey,
@@ -118,6 +121,9 @@ export default function StopLine({
   split: { core: any[]; woven: any[] };
   routeStops: any[];
   legForStop: (stop: any) => Leg | null;
+  startLeg?: (Leg & { label: string }) | null;
+  finishLeg?: (Leg & { label: string }) | null;
+  anchorIsPosition?: boolean;
   mapsPlaceContext: string | null | undefined;
   expandedStopKey: string | null;
   setExpandedStopKey: (key: string | null) => void;
@@ -250,6 +256,13 @@ export default function StopLine({
           POI — it renders once below, as an attached route extension.
           The line itself is the list's ::before: one continuous segment
           from the first station to the last. */}
+      {startLeg && (
+        <p className="type-data flex min-h-10 flex-wrap items-center gap-x-2 pl-14 text-[11px] text-parranda-ink/68">
+          <WalkIcon className="h-3.5 w-3.5" />
+          <span>{t(`Från ${startLeg.label}`, `From ${startLeg.label}`)}</span>
+          <span>{legLabel(startLeg)}</span>
+        </p>
+      )}
       <ol
         className="relative flex flex-col before:pointer-events-none before:absolute before:bottom-7 before:left-[19px] before:top-7 before:w-1.5 before:rounded-full before:bg-parranda-ember before:content-['']"
         aria-label={t("Stoppen i ordning", "The stops, in order")}
@@ -543,6 +556,14 @@ export default function StopLine({
           </div>
         );
       })}
+
+      {finishLeg && (
+        <p className="type-data flex min-h-10 flex-wrap items-center gap-x-2 pl-14 text-[11px] text-parranda-ink/68">
+          <WalkIcon className="h-3.5 w-3.5" />
+          <span>{anchorIsPosition ? t(`Tillbaka till ${finishLeg.label}`, `Return to ${finishLeg.label}`) : t(`Till ${finishLeg.label}`, `To ${finishLeg.label}`)}</span>
+          <span>{legLabel(finishLeg)}</span>
+        </p>
+      )}
 
       {/* ON A PHONE THE DAY COMES FIRST. The stops are the day; the map is its
           overview, so inline (phones) it follows the line, edge to edge in the

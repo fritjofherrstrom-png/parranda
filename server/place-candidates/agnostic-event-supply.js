@@ -1645,7 +1645,9 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // Old empty pools must not bypass request-time discovery or retain the previous
 // venue-variant allocation after this code is deployed.
 // Earlier pools can contain one first-day atom for an entire stated series.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v14";
+// v15 excludes midnight sentinels represented as exact instants and event
+// tags polluted by a source category's available taxonomy children.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v15";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read
@@ -1821,7 +1823,8 @@ function resolveDefaultEventSupply(
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   });
   const sourceCollectionCache = createSourceCache({
-    namespace: "agnostic-event-source-v1", ttlMs: EVENT_CACHE_TTL_MS,
+    // Source snapshots also contain normalized atoms, including category tags.
+    namespace: "agnostic-event-source-v2", ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   });
   const calendarReferenceCache = createSourceCache({

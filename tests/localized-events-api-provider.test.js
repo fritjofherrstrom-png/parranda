@@ -57,7 +57,7 @@ test("localized API mapper preserves language, source facts, geometry, and an al
   assert.equal(event.starts_at, undefined);
   assert.equal(event.lat, 59.331);
   assert.equal(event.lng, 18.071);
-  assert.deepEqual(event.tags, ["music", "Music"]);
+  assert.deepEqual(event.tags, ["Music"]);
 });
 
 test("same-day local times use the reviewed timezone; a clocked range without listed sessions is a period", () => {
@@ -347,4 +347,20 @@ test("source snapshots coalesce across Live locations and periods while each vie
   assert.equal(tomorrow.tonight.length, 0, "a shared source never overrides the calendar date");
   await collectAnchorEvents({ ...input, anchor: { lat: 59.331, lng: 18.071 }, registry: [{ ...source, endpoint: ENDPOINT + "new/" }] });
   assert.equal(requests, 2, "a changed source descriptor cannot reuse the old snapshot");
+});
+
+test('assigned parent categories do not turn nested taxonomy choices into event genres or duplicate slug chips', () => {
+  const raw=fixtureRecord({categories:[{title:'Music',slug:'music',subcategories:[{title:'Hard Rock & Metal',slug:'hard-rock-metal'},{title:'Reggae',slug:'reggae'}]},{title:'Stage & Film',slug:'stage-film',subcategories:[]}]});
+  const event=mapLocalizedEventApiRecord(raw,{timezone:TIMEZONE,sourceLanguage:'sv'});
+  assert.deepEqual(event.tags,['Music','Stage & Film']);
+  assert.equal(event.tags.some(t=>/Reggae|Hard Rock|stage-film|^music$/.test(t)),false);
+  assert.deepEqual(mapLocalizedEventApiRecord(fixtureRecord({categories:[{slug:'source-only'},{title:'Music',slug:'music'},{title:'Music',slug:'music'}]}),{timezone:TIMEZONE,sourceLanguage:'sv'}).tags,['source-only','Music']);
+});
+
+test('captured event category subtree is the source catalog, not an assertion of every genre',()=>{
+ const captured=require('./fixtures/public-qa-source-facts.json');
+ const event=mapLocalizedEventApiRecord(captured.localized_record,{timezone:TIMEZONE,sourceLanguage:'sv'});
+ assert.equal(captured.taxonomy_children_equal_source_catalog,true);
+ assert.deepEqual(event.tags,captured.localized_record.categories.map(c=>c.title||c.slug));
+ assert.ok(!event.tags.includes('Reggae'));
 });

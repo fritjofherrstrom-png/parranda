@@ -366,7 +366,7 @@ export function DayActions({
   shareCopied,
   routeOrigin,
   routeDestination,
-  routeAnchorCoords,
+  anchorIsPosition,
   publishedStart,
   publishedEnd,
   stale = false,
@@ -382,7 +382,7 @@ export function DayActions({
   shareCopied: boolean;
   routeOrigin: unknown;
   routeDestination: unknown;
-  routeAnchorCoords: unknown;
+  anchorIsPosition: boolean;
   publishedStart: any;
   publishedEnd: any;
   stale?: boolean;
@@ -487,9 +487,9 @@ export function DayActions({
       {/* A split walk already names its start and finish in the sequence. */}
       {routeParts.length <= 1 && Boolean(routeOrigin || routeDestination) && (
         <p className="text-xs text-parranda-ink/68">
-          {Boolean(routeOrigin) && `${t("Start", "Start")}: ${routeAnchorCoords ? t("din valda position", "your chosen location") : String(publishedStart?.label || t("kartans startpunkt", "map start point"))}`}
+          {Boolean(routeOrigin) && `${t("Start", "Start")}: ${anchorIsPosition ? t("Din position", "Your position") : String(publishedStart?.label || t("kartans startpunkt", "map start point"))}`}
           {routeOrigin && routeDestination ? " · " : ""}
-          {Boolean(routeDestination) && `${t("Slut", "Finish")}: ${routeAnchorCoords ? t("din valda position", "your chosen location") : String(publishedEnd?.label || t("kartans slutpunkt", "map end point"))}`}
+          {Boolean(routeDestination) && `${t("Slut", "Finish")}: ${anchorIsPosition ? t("Din position", "Your position") : String(publishedEnd?.label || t("kartans slutpunkt", "map end point"))}`}
         </p>
       )}
       {routeUrls.length === 0 && (

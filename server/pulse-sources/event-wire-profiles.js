@@ -60,7 +60,10 @@ const WIRE_PROFILES = Object.freeze({
       locality: "information.contact.location.city",
       updated_at: "modified",
     }),
-    occurrences: Object.freeze({ path: "information.dates", start: "start", end: "end" }),
+    // This platform's public EventSchedule renders midnight with no end, or
+    // midnight at both ends, as "whole day". Preserve that published precision;
+    // this is not a generic rule for midnight timestamps in other profiles.
+    occurrences: Object.freeze({ path: "information.dates", start: "start", end: "end", midnight_span_is_all_day: true }),
     // A pin without a street is a city or area marker, not a venue.
     geometry_requires_any: Object.freeze(["street_name", "street_number"]),
   }),

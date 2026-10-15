@@ -1,3 +1,4 @@
+import { useLiveClock } from "./useLiveClock";
 /**
  * THE LIVE SHEET (design handoff §3B) — explores the live_events buckets only.
  *
@@ -105,6 +106,7 @@ export default function LiveSheet({
 }) {
   const sheetEvents: PulseEvent[] = liveSheetTime === "tonight" ? sheetBuckets.tonight : sheetBuckets.thisWeek;
   const sheetMoreEvents: PulseEvent[] = liveSheetTime === "tonight" ? sheetBrowseBuckets.tonight : sheetBrowseBuckets.thisWeek;
+  const now = useLiveClock([...sheetEvents, ...sheetMoreEvents]);
   // Relevance is claimed only where the server established it for the
   // current picks: matched rows get the picks heading, every other row
   // (the reserved local discovery included) is listed as "other".
@@ -114,10 +116,8 @@ export default function LiveSheet({
     const relevance = liveRelevanceSentence(liveEventRelevance(navigationRow?.series || ev, selected), lang, t);
     const distance = nearbyDistanceLabel(ev, lang);
     const tags = liveEventTags(ev);
-    const timing = navigationRow?.date
-      ? [liveDateLabel(navigationRow.date, lang), navigationRow.clock &&
-          (navigationRow.endClock ? `${navigationRow.clock}–${navigationRow.endClock}` : navigationRow.clock)].filter(Boolean).join(" ")
-      : navigationRow?.kind === "undated" ? "" : eventTiming(ev, lang, undefined, timingDate);
+    const timing = navigationRow?.kind === "undated" ? ""
+      : eventTiming(ev, lang, now, navigationRow?.date || timingDate);
     return (
       <li key={`${ev.id || "event"}:${i}`} className="flex min-w-0 flex-col gap-1 sm:gap-2">
         <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">{timing}</span>
@@ -131,7 +131,7 @@ export default function LiveSheet({
           </span>}
           {relevance && <span className="mt-0.5 block text-xs text-parranda-ink/68">{relevance}</span>}
         </span>
-        {!navigationRow && <EventOccurrences event={ev} lang={lang} selectedDate={timingDate} />}
+        {!navigationRow && <EventOccurrences event={ev} lang={lang} now={now} selectedDate={timingDate} />}
       </li>
     );
   };

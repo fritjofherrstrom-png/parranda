@@ -13,6 +13,7 @@ const bundle = await build({
     import React from 'react';
     import { createRoot } from 'react-dom/client';
     import LiveSheet from './src/components/planner/LiveSheet';
+    import LiveCard from './src/components/planner/LiveCard';
     import { pulseHealthState, liveSourceFailure } from './src/lib/pulse-view.mjs';
     const root = createRoot(document.getElementById('root'));
     window.renderSheet = (events, lang, time = 'tonight', extra = {}) => {
@@ -31,7 +32,14 @@ const bundle = await build({
         wovenNames={[]} includedInRoute="Included in route"
         liveFailureSentence={() => 'Selected-source failure preserved'}
         dialogRef={{current:null}} closeRef={{current:null}} onClose={() => {}} {...extra} />);
-    };`, resolveDir: fileURLToPath(new URL('..', import.meta.url)), loader: 'tsx' },
+    };
+    window.renderCard = (events, lang) => root.render(<LiveCard
+      t={(sv,en)=>lang==='sv'?sv:en} lang={lang} mode="typed" anchorLabel="Fixture area"
+      liveEvents={events} liveDayLabel="Selected day" showDay={false} dayflow={null} clothing={null}
+      wovenNames={[]} includedInRoute="Included in route" pulseState="ok" liveFailure={null}
+      liveFailureSentence={()=>''} pulseBuckets={{tonight:events.tonight||[],thisWeek:events.this_week||[]}}
+      showExplore={false} pulseSources={null} liveSheetTriggerRef={{current:null}} openLiveSheet={()=>{}} />);
+    window.unmountView = () => root.unmount();`, resolveDir: fileURLToPath(new URL('..', import.meta.url)), loader: 'tsx' },
   bundle: true, write: false, format: 'iife', platform: 'browser', jsx: 'automatic',
 });
 
@@ -202,4 +210,57 @@ test('source tag chips and chronological groups remain readable inside narrow mo
   const bounds=await page.getByRole('dialog').evaluate(e=>({width:e.clientWidth,scroll:e.scrollWidth}));
   assert.ok(bounds.scroll<=bounds.width+1,`${width}: source tags must wrap without moving event text out of drawer: ${JSON.stringify(bounds)}`);
  }
+});
+
+test('native LiveSheet clock updates exact and listed time status without parent render or API refresh',async t=>{
+ const {page,render}=await browserHarness(t);
+ await page.clock.install({time:new Date('2026-10-15T18:59:50Z')});
+ const exact={id:'exact',title:'Exact workshop',timezone:'Europe/Stockholm',starts_at:'2026-10-15T18:00:00Z',ends_at:'2026-10-15T19:00:00Z'};
+ const listed={id:'listed-clock',title:'Listed workshop',timezone:'Europe/Stockholm',time_window:{kind:'occurrences',dates:['2026-10-15'],local_start:'20:00:00',local_end:'21:00:15'}};
+ const events={coverage:'covered',selected_date:'2026-10-15',tonight:[exact,listed],this_week:[]};
+ for(const sort of ['for_you','by_time']){
+  await page.clock.setSystemTime(new Date('2026-10-15T18:59:50Z'));
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+  await render(events,'en','tonight',{liveSheetSort:sort});
+  const row=title=>page.getByRole('listitem').filter({has:page.getByText(title,{exact:true})}).first();
+  assert.match(await row('Exact workshop').innerText(),/on now · until 21:00/);
+  assert.match(await row('Listed workshop').innerText(),/on now · until 21:00:15/);
+  await page.clock.runFor(10100);
+  assert.doesNotMatch(await row('Exact workshop').innerText(),/on now/,'exact end boundary refreshes without any user input');
+  assert.match(await row('Exact workshop').innerText(),/20:00–21:00/,'known end remains visible after expiry');
+  assert.match(await row('Listed workshop').innerText(),/on now/);
+  await page.clock.runFor(15000);
+  assert.doesNotMatch(await row('Listed workshop').innerText(),/on now/,'source second precision is honored too');
+ }
+ const allDay={id:'all-day',title:'Source whole day',time_window:{kind:'all_day',all_day_explicit:true,starts_on:'2026-10-22',ends_on:'2026-10-22'}};
+ await render({coverage:'covered',selected_date:'2026-10-22',tonight:[allDay]},'en','tonight',{liveSheetSort:'by_time'});
+ assert.match(await page.getByRole('dialog').innerText(),/All day/);
+ assert.doesNotMatch(await page.getByRole('dialog').innerText(),/00:00/);
+});
+
+test('native LiveCard and expanded source occurrences expire together and resync on focus',async t=>{
+ const {page}=await browserHarness(t);
+ await page.clock.install({time:new Date('2026-10-15T18:59:50Z')});
+ const slot={id:'slot',title:'Listed workshop',timezone:'Europe/Stockholm',time_window:{kind:'occurrences',dates:['2026-10-15'],local_start:'20:00',local_end:'21:00:15'}};
+ const exact={id:'exact-card',title:'Exact workshop',timezone:'Europe/Stockholm',starts_at:'2026-10-15T18:00:00Z',ends_at:'2026-10-15T19:00:00Z'};
+ const events={coverage:'covered',selected_date:'2026-10-15',tonight:[exact,{...slot,occurrences:[slot,{...slot,id:'next',time_window:{...slot.time_window,dates:['2026-10-22']}}]}],this_week:[]};
+ await page.evaluate(events=>window.renderCard(events,'en'),events);
+ await page.getByText('Exact workshop',{exact:true}).waitFor();
+ await page.getByText('2 occurrences',{exact:true}).click();
+ const row=title=>page.getByRole('listitem').filter({has:page.getByText(title,{exact:true})}).first();
+ assert.match(await row('Exact workshop').innerText(),/on now/);
+ assert.match(await page.locator('details').innerText(),/on now · until 21:00:15/);
+ await page.clock.runFor(10100);
+ assert.doesNotMatch(await row('Exact workshop').innerText(),/on now/);
+ assert.match(await page.locator('details').innerText(),/on now/);
+ await page.clock.runFor(15000);
+ assert.doesNotMatch(await page.locator('details').innerText(),/on now/);
+ // Simulate a tab waking after a system-clock adjustment, without a parent render.
+ await page.clock.setSystemTime(new Date('2026-10-15T18:59:30Z'));
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await page.waitForFunction(()=>document.querySelector('section').textContent.includes('on now'));
+ assert.match(await row('Exact workshop').innerText(),/on now/);
+ await page.evaluate(()=>window.unmountView());
+ await page.clock.runFor(60000);
+ assert.equal(await page.locator('section').count(),0,'unmounted views stay unmounted after clock boundaries');
 });

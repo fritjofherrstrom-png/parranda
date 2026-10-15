@@ -289,7 +289,11 @@ function occurrenceSlots(record, spec, window) {
   const list = readPath(record, spec.path);
   if (!Array.isArray(list)) return null;
   const scanned = list.slice(0, MAX_RECORDS)
-    .map((entry) => ({ start: readPath(entry, spec.start), end: readPath(entry, spec.end), allDay: false }));
+    .map((entry) => {
+      const start = readPath(entry, spec.start), end = readPath(entry, spec.end);
+      const localMidnight = value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}T00:00(?::00(?:\.0+)?)?$/.test(value);
+      return { start, end, allDay: spec.midnight_span_is_all_day === true && localMidnight(start) && (!end || localMidnight(end)) };
+    });
   // Bound cheap written-date inspection separately; only potentially relevant
   // slots spend the conversion budget. Offset instants retain one day's slack.
   const relevant = window ? scanned.filter(slot => slotMayOverlap(slot, window)) : scanned;
@@ -330,7 +334,7 @@ function slotTime(slot, timezone) {
     if (!startsOn || endsOn < startsOn) return null;
     return {
       key: startsOn,
-      fields: { starts_on: startsOn, ends_on: endsOn, time_window: { kind: "all_day", starts_on: startsOn, ends_on: endsOn } },
+      fields: { starts_on: startsOn, ends_on: endsOn, time_window: { kind: "all_day", starts_on: startsOn, ends_on: endsOn, ...(slot.allDay ? { all_day_explicit: true } : {}) } },
     };
   }
   const startsAt = normalizeSourceEventDateTime(rawStart, { timezone });

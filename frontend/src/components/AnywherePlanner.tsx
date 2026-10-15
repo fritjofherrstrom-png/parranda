@@ -68,6 +68,7 @@ import {
   LAST_KEY,
   SAVED_KEY,
   savedEntryId,
+  savedEntryAnchorKey,
   normalizeSavedWalkKey,
   type SavedEntry,
 } from "../lib/anywhere-storage.mjs";
@@ -166,6 +167,15 @@ function isUndoableDay(entry: SavedEntry | null): entry is SavedEntry {
   return status === "composed" || status === "composed_limited";
 }
 
+// This only detects an old bounded ledger for an explanatory notice. It does
+// not authorize recovery: urlEntryCommitments still checks the actual context.
+function hasStoredChoices(entry: SavedEntry | null): boolean {
+  const snapshot = entry?.commitments;
+  if (!snapshot) return false;
+  const stored = readCommitmentSnapshot(snapshot, { anchorKey: snapshot.anchorKey, dayKey: snapshot.dayKey });
+  return Object.keys(stored.entries).length > 0;
+}
+
 export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: Lang }) {
   // Static output can't read query params at request time, so honor the
   // production language contract (?lang=sv) client-side: EN default, SV explicit.
@@ -207,6 +217,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // candidate cannot be both kept and dismissed, because that state cannot be
   // represented — the newest explicit action replaces the previous one.
   const [commitments, setCommitments] = useState<Record<string, { kind: "exclude" | "pin"; label: string; liveAction?: "remove" | "replace" }>>({});
+  const [choicesNotCarried, setChoicesNotCarried] = useState(false);
   // A dismissal belongs to the day it was made on. Stamped with that day's
   // anchor so it cannot follow the user to another place.
   const commitmentAnchorKeyRef = useRef<string | null>(null);
@@ -234,7 +245,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Memory-only copy of the trusted coordinate anchor used for this response.
   // It frames the consumer Maps route but is never persisted or put in a URL.
   const [routeAnchorCoords, setRouteAnchorCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [blitzPhase, setBlitzPhase] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [blitzPhase, setBlitzPhase] = useState<"idle" | "loading" | "done" | "error" | "position_needed" | "locating">("idle");
+  const [blitzPositionFailed, setBlitzPositionFailed] = useState(false);
   const [blitzResult, setBlitzResult] = useState<AnywhereBlitzView | null>(null);
   const [upgradePending, setUpgradePending] = useState(false); // cold-start: structure upgrade in flight
   // Whether the day on screen is still following its own Live completion
@@ -384,6 +396,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     blitzRequestSequenceRef.current += 1;
     setBlitzPhase("idle");
     setBlitzResult(null);
+    setBlitzPositionFailed(false);
   }
 
   async function execute(
@@ -937,16 +950,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setLiveSheetSort(storedSort === "by_time" ? "by_time" : "for_you");
     setClassification(entry.classification);
     setSafeResponse(entry.safeResponse);
-    // Saved days do not carry the commitments they were composed under, so a
-    // restored snapshot cannot answer for any of them — not even when the
-    // anchor happens to match and the ledger survives scoping below.
     setAppliedPins([]);
     // A restored snapshot owns the screen outright; it is labelled by
     // restoredAt, never by the recompose "updating" state.
-    const restoredAnchorKey = anchorKey({
-      place: typeof i?.place === "string" ? i.place : undefined,
-      selectionLabel: i?.placeLabel ?? undefined,
-    });
+    const restoredAnchorKey = savedEntryAnchorKey(entry);
     displayedAnchorKeyRef.current = restoredAnchorKey;
     // Restoring puts a day on screen without a compose, so the ledger cannot
     // simply carry over: the live one may describe choices these stops were
@@ -963,6 +970,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       anchorKey: restoredAnchorKey,
       dayKey: entry.id,
     });
+    setChoicesNotCarried(!restoredCommitments.applies && hasStoredChoices(entry));
     if (restoredCommitments.applies) {
       commitmentAnchorKeyRef.current = restoredAnchorKey;
       setCommitments(restoredCommitments.entries);
@@ -1046,6 +1054,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // IMMEDIATELY — the user typed a city and expects a day, not a second form.
   // Otherwise, restore the last day so a reload doesn't lose it.
   const autoPlannedRef = useRef(false);
+  const positionReloadEntryRef = useRef<SavedEntry | null>(null);
   useEffect(() => {
     if (autoPlannedRef.current) return;
     autoPlannedRef.current = true;
@@ -1092,9 +1101,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const dateIso = freezeComposeDateIso({ dayOffset: shared.dayOffset });
       const preferences = shared.preferences.length ? shared.preferences : selected;
       const navigation = window.performance?.getEntriesByType?.("navigation")[0] as PerformanceNavigationTiming | undefined;
-      const recovered = urlEntryCommitments(readLS<SavedEntry | null>(LAST_KEY, null), {
+      const saved = readLS<SavedEntry | null>(LAST_KEY, null);
+      const recovered = urlEntryCommitments(saved, {
         navigationType: navigation?.type, anchor, dateIso, selected: preferences, walkKey: shared.walkKey,
       });
+      setChoicesNotCarried(navigation?.type === "reload" && !recovered.applies && hasStoredChoices(saved));
       if (recovered.applies) {
         commitmentAnchorKeyRef.current = anchorKey(anchor);
         setCommitments(recovered.entries);
@@ -1135,13 +1146,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setMode("near_me");
       adoptLinkInputs();
       const coords = consumeAnchorCoords();
-      const arrivalInputs = {
-        langOverride: shared.lang ?? undefined,
-        preferencesOverride: shared.preferences.length ? shared.preferences : undefined,
-        dayOffsetOverride: shared.dayOffset,
-        walkKeyOverride: shared.walkKey,
-      };
-      if (coords) execute({ coords }, arrivalInputs).catch(() => {});
+      if (coords) execute({ coords }, urlArrivalInputs({ coords })).catch(() => {});
+      else {
+        const navigation = window.performance?.getEntriesByType?.("navigation")[0] as PerformanceNavigationTiming | undefined;
+        positionReloadEntryRef.current = navigation?.type === "reload" ? readLS<SavedEntry | null>(LAST_KEY, null) : null;
+      }
       // Stored coords missing/expired (e.g. a reload consumed them): stay honest,
       // and offer to share the position again (useLocationAgain).
       return;
@@ -1244,11 +1253,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Blitz is one trusted next move beside the day. It reads the current anchor
   // and preferences but never mutates them, re-composes the route, or changes
   // stop order. Near-me coordinates remain memory-only.
-  async function blitz() {
-    const typedAnchor = place.trim();
-    const nearMeAnchor = mode === "near_me" ? routeAnchorCoords : null;
+  async function blitz(position?: { lat: number; lng: number }) {
+    const typedAnchor = mode === "typed" ? place.trim() : "";
+    const nearMeAnchor = mode === "near_me" ? position ?? routeAnchorCoords : null;
     if (!nearMeAnchor && !typedAnchor) {
-      setBlitzPhase("error");
+      setBlitzPhase(mode === "near_me" ? "position_needed" : "error");
       setBlitzResult(null);
       return;
     }
@@ -1281,6 +1290,24 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setBlitzPhase("error");
     } finally {
       if (blitzRequestRef.current === controller) blitzRequestRef.current = null;
+    }
+  }
+
+  async function sharePositionForBlitz() {
+    if (blitzPhase === "locating") return;
+    const sequence = ++blitzRequestSequenceRef.current;
+    const intent = intentSequenceRef.current;
+    const current = () => !navigationSuspendedRef.current && sequence === blitzRequestSequenceRef.current && intent === intentSequenceRef.current;
+    setBlitzPhase("locating");
+    setBlitzPositionFailed(false);
+    try {
+      const coords = await requestPosition();
+      if (current()) await blitz(coords);
+    } catch {
+      if (current()) {
+        setBlitzPhase("position_needed");
+        setBlitzPositionFailed(true);
+      }
     }
   }
 
@@ -1353,17 +1380,31 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (relocating) return;
     setRelocating(true);
     setRelocateDenied(false);
+    const intent = intentSequenceRef.current;
+    const current = () => !navigationSuspendedRef.current && intent === intentSequenceRef.current;
     let coords: { lat: number; lng: number };
     try {
       coords = await requestPosition();
     } catch {
       setRelocating(false);
-      setRelocateDenied(true);
+      if (current()) setRelocateDenied(true);
       return;
     }
     setRelocating(false);
+    if (!current()) return;
     setPositionNeeded(false);
-    execute({ coords }, {}).catch(() => {});
+    const entry = positionReloadEntryRef.current;
+    positionReloadEntryRef.current = null;
+    const recovered = urlEntryCommitments(entry, {
+      navigationType: "reload", anchor: { coords }, dateIso: freezeComposeDateIso({ dayOffset }), selected, walkKey,
+    });
+    setChoicesNotCarried(!recovered.applies && hasStoredChoices(entry));
+    if (recovered.applies) {
+      commitmentAnchorKeyRef.current = anchorKey({ coords });
+      setCommitments(recovered.entries);
+      adoptedInputsRef.current = true;
+    }
+    execute({ coords }, recovered.applies ? { commitmentsOverride: recovered.entries } : {}).catch(() => {});
   }
 
   // AUTO-RECOMPOSE: adjustments never need a submit. A settled change (400 ms)
@@ -1677,6 +1718,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const publishedPoints = Array.isArray(primaryRoute?.map_route_points) ? primaryRoute.map_route_points : [];
   const publishedStart = publishedPoints[0]?.role === "start" ? publishedPoints[0] : null;
   const publishedEnd = publishedPoints.at(-1)?.role === "end" ? publishedPoints.at(-1) : null;
+  // Only explicit published endpoint legs are shown; no distance is inferred.
+  const endpointLeg = (point: any, stop: any, fromStart: boolean) => {
+    if (!point || !stop || !Array.isArray(primaryRoute?.legs)) return null;
+    const pointLabel = String(point.label ?? "").trim();
+    const stopLabel = String(stop.label || stop.name || "").trim();
+    const leg = fromStart ? primaryRoute.legs[0] : primaryRoute.legs.at(-1);
+    if (!pointLabel || !stopLabel || String(leg?.from_label ?? "").trim() !== (fromStart ? pointLabel : stopLabel) ||
+        String(leg?.to_label ?? "").trim() !== (fromStart ? stopLabel : pointLabel)) return null;
+    const km = Number.isFinite(leg.distance_km) ? leg.distance_km : null;
+    const minutes = Number.isFinite(leg.estimated_walk_minutes) ? leg.estimated_walk_minutes : null;
+    if (km === null && minutes === null) return null;
+    const label = anchorIsPosition ? t("Din position", "Your position") : pointLabel;
+    return { km, minutes, label };
+  };
+  const startLeg = endpointLeg(publishedStart, routeStops[0], true);
+  const finishLeg = endpointLeg(publishedEnd, routeStops.at(-1), false);
   const routeOrigin = routeAnchorCoords ?? publishedStart;
   const routeDestination = routeAnchorCoords ?? publishedEnd;
   const routeParts = useMemo(
@@ -1693,7 +1750,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const routeEndLabel = (end: RouteEnd) =>
     end.kind === "stop"
       ? String(end.point.label || end.point.name || "").trim() || t(`Stopp ${end.index + 1}`, `Stop ${end.index + 1}`)
-      : routeAnchorCoords
+      : mode === "near_me"
         ? t("Din position", "Your position")
         : String(end.point.label || "").trim() || (end.kind === "origin" ? t("Start", "Start") : t("Slut", "Finish"));
   // District composition deliberately sees a broader candidate universe than
@@ -1730,6 +1787,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // in the day" — reached from two places. Writing the map by key is what makes
   // exclude and pin unable to contradict each other: the newest action wins.
   const invalidateCommitmentIntent = () => {
+    setChoicesNotCarried(false);
     intentSequenceRef.current += 1;
     // The day's completion read answers the old intent: stop it now, not when
     // the adjustment's debounce sends the next compose.
@@ -2096,6 +2154,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </div>
       )}
 
+      {choicesNotCarried && (
+        <p className={noticeCard} role="status">
+          {t(
+            "Dina tidigare fästa och bortvalda stopp kunde inte föras över till den här dagen. De används inte i den här planeringen.",
+            "Your previous kept and dismissed stops could not be carried over to this day. They are not used in this plan.",
+          )}
+        </p>
+      )}
+
       {/* The ledger is stated where the user can always see it — including when
           dismissing left no day at all, which is exactly when a way back
           matters most. Hiding it behind a collapsed panel made the dismissal
@@ -2374,6 +2441,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           split={split}
           routeStops={routeStops}
           legForStop={legForStop}
+          startLeg={startLeg}
+          finishLeg={finishLeg}
+          anchorIsPosition={anchorIsPosition}
           mapsPlaceContext={mapsPlaceContext}
           expandedStopKey={expandedStopKey}
           setExpandedStopKey={setExpandedStopKey}
@@ -2407,7 +2477,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           shareCopied={shareCopied}
           routeOrigin={routeOrigin}
           routeDestination={routeDestination}
-          routeAnchorCoords={routeAnchorCoords}
+          anchorIsPosition={anchorIsPosition}
           publishedStart={publishedStart}
           publishedEnd={publishedEnd}
           stale={staleNotice === "updating"}
@@ -2480,7 +2550,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           mode={mode}
           anchorLabel={anchorLabel}
           dayOnScreen={dayOnScreen}
-          blitz={blitz}
+          blitz={() => blitz()}
+          sharePositionForBlitz={sharePositionForBlitz}
+          blitzPositionFailed={blitzPositionFailed}
           blitzPhase={blitzPhase}
           blitzResult={blitzResult}
           typedPlaceLabel={typedPlaceLabel}

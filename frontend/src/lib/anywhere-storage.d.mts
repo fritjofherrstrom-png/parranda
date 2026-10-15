@@ -32,6 +32,8 @@ export interface SavedEntry {
   commitments: CommitmentSnapshot | null;
 }
 
+export declare function savedEntryAnchorKey(entry: SavedEntry | null): string | null;
+
 export declare function isComposedEntry(entry: unknown): boolean;
 
 export declare function savedEntryId(options?: {

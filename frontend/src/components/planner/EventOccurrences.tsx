@@ -2,8 +2,8 @@ import { eventTiming } from "../../lib/pulse-view.mjs";
 import { liveEventSource } from "./LiveEventSource";
 import type { PulseEvent } from "./types";
 
-export default function EventOccurrences({ event, lang, selectedDate }: {
-  event: PulseEvent; lang: "sv" | "en"; selectedDate?: string;
+export default function EventOccurrences({ event, lang, selectedDate, now }: {
+  event: PulseEvent; lang: "sv" | "en"; selectedDate?: string; now?: Date;
 }) {
   const slots = event.occurrences;
   if (!slots || slots.length < 2) return null;
@@ -15,7 +15,7 @@ export default function EventOccurrences({ event, lang, selectedDate }: {
       <ul className="flex flex-col gap-2 pb-2">
         {slots.map((slot, i) => (
           <li key={slot.id || i}>
-            {eventTiming(slot, lang, undefined, selectedDate)}
+            {eventTiming(slot, lang, now, selectedDate)}
             {liveEventSource(slot, lang)}
           </li>
         ))}

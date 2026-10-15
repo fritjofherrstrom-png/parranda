@@ -420,3 +420,31 @@ test("Live highlights split into server matches and other rows, keeping server o
   assert.equal(liveHighlightGroups(rows, []).other.length, rows.length);
   assert.deepEqual(liveHighlightGroups(null, PICKS), { picks: [], other: [] });
 });
+
+test('listed occurrence clocks can be ongoing only on the stated venue day with a known end', () => {
+  const ev={timezone:'Europe/Stockholm',time_window:{kind:'occurrences',dates:['2026-10-15','2026-10-22'],local_start:'20:00',local_end:'22:00'}};
+  const now=new Date('2026-10-15T18:55:00Z');
+  assert.equal(eventTiming(ev,'sv',now,'2026-10-15'),'pågår nu · till 22:00');
+  assert.equal(eventTiming(ev,'en',now,'2026-10-15'),'on now · until 22:00');
+  assert.doesNotMatch(eventTiming(ev,'en',now,'2026-10-22'),/on now/);
+  assert.doesNotMatch(eventTiming({...ev,timezone:undefined},'en',now,'2026-10-15'),/on now/);
+  assert.doesNotMatch(eventTiming({...ev,time_window:{...ev.time_window,local_end:undefined}},'en',now,'2026-10-15'),/on now/);
+  assert.doesNotMatch(eventTiming({...ev,time_window:{...ev.time_window,local_start:'22:00',local_end:'02:00'}},'en',now,'2026-10-15'),/on now/,'do not invent an overnight end date');
+  assert.equal(eventTiming(ev,'en',new Date('2026-10-15T20:00:00Z'),'2026-10-15'),'Thu 15 Oct 20:00–22:00','an explicitly browsed past session retains its stated time');
+  const unconfirmed={...ev,recurrence:{rule:'Th 20:00-22:00',occurrence_status:'unconfirmed'}};
+  assert.equal(eventTiming(unconfirmed,'en',now,'2026-10-15'),'scheduled now · until 22:00','time matching must not upgrade an unconfirmed occurrence');
+});
+
+test('explicit all-day facts say all day; date-only fallback and genuine midnight times do not gain precision',()=>{
+  const ev={time_window:{kind:'all_day',starts_on:'2026-10-22',ends_on:'2026-10-22',all_day_explicit:true}};
+  assert.equal(eventTiming(ev,'en'),'Thu 22 Oct · All day');
+  assert.equal(eventTiming(ev,'sv'),'tors 22 okt. · Hela dagen');
+  assert.doesNotMatch(eventTiming({starts_at:'2026-10-21T22:00:00Z',timezone:'Europe/Stockholm'},'en'),/All day/);
+  assert.equal(eventTiming({starts_on:'2026-10-22'},'en'),'Thu 22 Oct','a bare date does not assert whole-day availability');
+});
+
+test('continuous sessions retain a known end before starting and after ending on the selected venue day',()=>{
+ const ev={timezone:'Europe/Stockholm',starts_at:'2026-10-15T20:00:00Z',ends_at:'2026-10-15T21:00:00Z'};
+ assert.equal(eventTiming(ev,'en',new Date('2026-10-15T19:00:00Z'),'2026-10-15'),'Thu 22:00–23:00');
+ assert.equal(eventTiming(ev,'en',new Date('2026-10-15T21:00:00Z'),'2026-10-15'),'Thu 22:00–23:00');
+});

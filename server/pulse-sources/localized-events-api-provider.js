@@ -394,11 +394,10 @@ function categoryTags(categories) {
   const tags = [];
   for (const category of Array.isArray(categories) ? categories : []) {
     if (!category || typeof category !== "object") continue;
-    tags.push(firstString(category.slug), firstString(category.title));
-    for (const subcategory of Array.isArray(category.subcategories) ? category.subcategories : []) {
-      if (!subcategory || typeof subcategory !== "object") continue;
-      tags.push(firstString(subcategory.slug), firstString(subcategory.title));
-    }
+    // The nested list is the parent's available taxonomy, not this event's
+    // selected subgenres. Keep only the assigned category, preferring its
+    // published label to an internal slug (one fact, one display tag).
+    tags.push(firstString(category.title, category.slug));
   }
   return [...new Set(tags.filter(Boolean))];
 }
