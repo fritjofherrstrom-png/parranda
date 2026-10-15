@@ -227,11 +227,12 @@ test('native LiveSheet clock updates exact and listed time status without parent
   assert.match(await row('Listed workshop').innerText(),/on now · until 21:00:15/);
   await page.clock.runFor(10100);
   assert.doesNotMatch(await row('Exact workshop').innerText(),/on now/,'exact end boundary refreshes without any user input');
+  assert.match(await row('Exact workshop').innerText(),/20:00–21:00/,'known end remains visible after expiry');
   assert.match(await row('Listed workshop').innerText(),/on now/);
   await page.clock.runFor(15000);
   assert.doesNotMatch(await row('Listed workshop').innerText(),/on now/,'source second precision is honored too');
  }
- const allDay={id:'all-day',title:'Source whole day',time_window:{kind:'all_day',starts_on:'2026-10-22',ends_on:'2026-10-22'}};
+ const allDay={id:'all-day',title:'Source whole day',time_window:{kind:'all_day',all_day_explicit:true,starts_on:'2026-10-22',ends_on:'2026-10-22'}};
  await render({coverage:'covered',selected_date:'2026-10-22',tonight:[allDay]},'en','tonight',{liveSheetSort:'by_time'});
  assert.match(await page.getByRole('dialog').innerText(),/All day/);
  assert.doesNotMatch(await page.getByRole('dialog').innerText(),/00:00/);

@@ -326,7 +326,7 @@ test('ACF source midnight sentinel preserves all-day precision without reinterpr
   const rows=result.time_sensitive_events;
   assert.equal(rows.length,4);
   for(const [i,date] of [[0,'2026-10-22'],[1,'2026-10-23']]){
-    assert.deepEqual(rows[i].time_window,{kind:'all_day',starts_on:date,ends_on:date});
+    assert.deepEqual(rows[i].time_window,{kind:'all_day',starts_on:date,ends_on:date,all_day_explicit:true});
     assert.equal(rows[i].starts_at,undefined);
   }
   assert.equal(rows[2].time_window.kind,'continuous','a stated midnight-to-02:00 session remains timed');
@@ -342,7 +342,7 @@ test('captured public ACF all-day record survives provider and collection as dat
   const result=await collectAnchorEvents({anchor:{lat:57.6978,lng:11.9783},now:'2026-10-22T10:00:00Z',selectedDate:'2026-10-22',registry:[feed],fetcher:async()=>response(nuxtPage({data:{calendar:[acf_record]}}))});
   const events=[...result.tonight,...result.this_week,...(result.browse?.tonight?.more||[]),...(result.browse?.this_week?.more||[])];
   assert.ok(events.length,'captured source occurrences reach actual collector');
-  assert.ok(events.every(e=>e.time_window.kind==='all_day'&&!e.starts_at));
+  assert.ok(events.every(e=>e.time_window.kind==='all_day'&&e.time_window.all_day_explicit===true&&!e.starts_at));
   assert.ok(events.every(e=>e.route_eligible===false),'presentation correction cannot promote source eligibility');
   assert.ok(events.some(e=>e.time_window.starts_on==='2026-10-22'));
 });

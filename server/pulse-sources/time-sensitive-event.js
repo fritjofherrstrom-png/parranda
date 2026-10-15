@@ -290,6 +290,8 @@ function normalizeTimeWindow(value, facts = {}) {
     if (kind === "all_day") {
       return compactObject({
         kind,
+        // Date-only inference is not an explicit whole-day statement.
+        all_day_explicit: value.all_day_explicit === true || undefined,
         label: firstString(value.label),
         starts_on: windowStartsOn,
         ends_on: windowEndsOn || windowStartsOn,

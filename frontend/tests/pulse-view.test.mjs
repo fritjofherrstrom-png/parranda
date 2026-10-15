@@ -170,10 +170,10 @@ test("eventTiming: daily windows render the LOCAL clock range without timezone r
 
 test("eventTiming: all_day renders local dates — never a UTC-midnight shift", () => {
   // A single local date stays that date for EVERY viewer timezone.
-  assert.equal(eventTiming({ time_window: { kind: "all_day", starts_on: "2026-07-18", ends_on: "2026-07-18" } }, "sv"), "lör 18 juli · Hela dagen");
-  assert.equal(eventTiming({ time_window: { kind: "all_day", starts_on: "2026-07-18" } }, "en"), "Sat 18 Jul · All day");
+  assert.equal(eventTiming({ time_window: { kind: "all_day", starts_on: "2026-07-18", ends_on: "2026-07-18" } }, "sv"), "lör 18 juli");
+  assert.equal(eventTiming({ time_window: { kind: "all_day", starts_on: "2026-07-18" } }, "en"), "Sat 18 Jul");
   // A range renders both local dates.
-  assert.equal(eventTiming({ time_window: { kind: "all_day", starts_on: "2026-07-18", ends_on: "2026-07-19" } }, "sv"), "lör 18 juli – sön 19 juli · Hela dagen");
+  assert.equal(eventTiming({ time_window: { kind: "all_day", starts_on: "2026-07-18", ends_on: "2026-07-19" } }, "sv"), "lör 18 juli – sön 19 juli");
   // Date-only WITHOUT a declared window (starts_on fallback) also renders as a local date.
   assert.equal(eventTiming({ starts_on: "2026-07-18" }, "en"), "Sat 18 Jul");
 });
@@ -436,9 +436,15 @@ test('listed occurrence clocks can be ongoing only on the stated venue day with 
 });
 
 test('explicit all-day facts say all day; date-only fallback and genuine midnight times do not gain precision',()=>{
-  const ev={time_window:{kind:'all_day',starts_on:'2026-10-22',ends_on:'2026-10-22'}};
+  const ev={time_window:{kind:'all_day',starts_on:'2026-10-22',ends_on:'2026-10-22',all_day_explicit:true}};
   assert.equal(eventTiming(ev,'en'),'Thu 22 Oct · All day');
   assert.equal(eventTiming(ev,'sv'),'tors 22 okt. · Hela dagen');
   assert.doesNotMatch(eventTiming({starts_at:'2026-10-21T22:00:00Z',timezone:'Europe/Stockholm'},'en'),/All day/);
   assert.equal(eventTiming({starts_on:'2026-10-22'},'en'),'Thu 22 Oct','a bare date does not assert whole-day availability');
+});
+
+test('continuous sessions retain a known end before starting and after ending on the selected venue day',()=>{
+ const ev={timezone:'Europe/Stockholm',starts_at:'2026-10-15T20:00:00Z',ends_at:'2026-10-15T21:00:00Z'};
+ assert.equal(eventTiming(ev,'en',new Date('2026-10-15T19:00:00Z'),'2026-10-15'),'Thu 22:00–23:00');
+ assert.equal(eventTiming(ev,'en',new Date('2026-10-15T21:00:00Z'),'2026-10-15'),'Thu 22:00–23:00');
 });

@@ -439,3 +439,22 @@ test("a declared but unknown recurrence kind never widens into a daily window", 
   }), { now: "2026-07-09T17:00:00.000Z", timezone: "Europe/Stockholm" });
   assert.equal(undeclared.time_window.kind, "daily");
 });
+
+test('normalization and public Live views distinguish date-only uncertainty from source-explicit whole-day timing',async()=>{
+ const {toEventView}=require('../server/place-candidates/agnostic-event-supply');
+ const {eventTiming}=await import('../frontend/src/lib/pulse-view.mjs');
+ const raw={id:'date-precision',title:'Dated source item',source_url:'https://calendar.example/dated',starts_on:'2026-10-22'};
+ const options={timezone:'Europe/Stockholm',now:'2026-10-15T12:00:00Z'};
+ for(const input of [raw,{...raw,time_window:{kind:'all_day',starts_on:'2026-10-22'}},{...raw,time_window:{kind:'all_day',starts_on:'2026-10-22',all_day_explicit:'true'}}]){
+  const normalized=normalizeTimeSensitiveSourceEvent(input,options);
+  const {fuseTimeSensitiveEvents}=require('../server/pulse-sources');
+  const view=toEventView(fuseTimeSensitiveEvents([normalized])[0],{id:'calendar',label:'Source'});
+  assert.equal(view.time_window.kind,'all_day');
+  assert.doesNotMatch(eventTiming(view,'en'),/All day/,'a missing clock never establishes whole-day availability');
+ }
+ const normalized=normalizeTimeSensitiveSourceEvent({...raw,time_window:{kind:'all_day',starts_on:'2026-10-22',all_day_explicit:true}},options);
+ const {fuseTimeSensitiveEvents}=require('../server/pulse-sources');
+  const view=toEventView(fuseTimeSensitiveEvents([normalized])[0],{id:'calendar',label:'Source'});
+ assert.equal(view.time_window.all_day_explicit,true);
+ assert.equal(eventTiming(view,'en'),'Thu 22 Oct · All day');
+});

@@ -257,7 +257,7 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
     if (!start) return "";
     const end = endsOn && endsOn !== startsOn ? day(endsOn) : null;
     const dateLabel = end ? `${start} – ${end}` : start;
-    return kind === "all_day" ? `${dateLabel} · ${en ? "All day" : "Hela dagen"}` : dateLabel;
+    return kind === "all_day" && win?.all_day_explicit === true ? `${dateLabel} · ${en ? "All day" : "Hela dagen"}` : dateLabel;
   }
 
   const startsAt = (win && win.starts_at) || ev.starts_at || null;
@@ -303,9 +303,16 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
   }
 
   try {
-    const opts = { weekday: "short", hour: "2-digit", minute: "2-digit" };
+    const opts = { weekday: "short", hour: "2-digit", minute: "2-digit", ...(date.getUTCSeconds() ? { second: "2-digit" } : {}) };
     if (timezone) opts.timeZone = timezone; // venue-local, never the viewer's
-    return date.toLocaleString(locale, opts);
+    const startLabel = date.toLocaleString(locale, opts);
+    if (endValid && endsAt.getTime() > date.getTime()) {
+      const dayOpts = timezone ? { timeZone: timezone } : {};
+      const sameDay = date.toLocaleDateString(locale, dayOpts) === endsAt.toLocaleDateString(locale, dayOpts);
+      const endOpts = { ...(sameDay ? { hour: "2-digit", minute: "2-digit", ...(timezone ? { timeZone: timezone } : {}) } : opts), ...(endsAt.getUTCSeconds() ? { second: "2-digit" } : {}) };
+      return `${startLabel}–${endsAt.toLocaleString(locale, endOpts)}`;
+    }
+    return startLabel;
   } catch {
     return "";
   }

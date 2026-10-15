@@ -334,7 +334,7 @@ function slotTime(slot, timezone) {
     if (!startsOn || endsOn < startsOn) return null;
     return {
       key: startsOn,
-      fields: { starts_on: startsOn, ends_on: endsOn, time_window: { kind: "all_day", starts_on: startsOn, ends_on: endsOn } },
+      fields: { starts_on: startsOn, ends_on: endsOn, time_window: { kind: "all_day", starts_on: startsOn, ends_on: endsOn, ...(slot.allDay ? { all_day_explicit: true } : {}) } },
     };
   }
   const startsAt = normalizeSourceEventDateTime(rawStart, { timezone });
