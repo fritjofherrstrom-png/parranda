@@ -167,6 +167,15 @@ function isUndoableDay(entry: SavedEntry | null): entry is SavedEntry {
   return status === "composed" || status === "composed_limited";
 }
 
+// This only detects an old bounded ledger for an explanatory notice. It does
+// not authorize recovery: urlEntryCommitments still checks the actual context.
+function hasStoredChoices(entry: SavedEntry | null): boolean {
+  const snapshot = entry?.commitments;
+  if (!snapshot) return false;
+  const stored = readCommitmentSnapshot(snapshot, { anchorKey: snapshot.anchorKey, dayKey: snapshot.dayKey });
+  return Object.keys(stored.entries).length > 0;
+}
+
 export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: Lang }) {
   // Static output can't read query params at request time, so honor the
   // production language contract (?lang=sv) client-side: EN default, SV explicit.
@@ -208,6 +217,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // candidate cannot be both kept and dismissed, because that state cannot be
   // represented — the newest explicit action replaces the previous one.
   const [commitments, setCommitments] = useState<Record<string, { kind: "exclude" | "pin"; label: string; liveAction?: "remove" | "replace" }>>({});
+  const [choicesNotCarried, setChoicesNotCarried] = useState(false);
   // A dismissal belongs to the day it was made on. Stamped with that day's
   // anchor so it cannot follow the user to another place.
   const commitmentAnchorKeyRef = useRef<string | null>(null);
@@ -960,6 +970,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       anchorKey: restoredAnchorKey,
       dayKey: entry.id,
     });
+    setChoicesNotCarried(!restoredCommitments.applies && hasStoredChoices(entry));
     if (restoredCommitments.applies) {
       commitmentAnchorKeyRef.current = restoredAnchorKey;
       setCommitments(restoredCommitments.entries);
@@ -1090,9 +1101,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const dateIso = freezeComposeDateIso({ dayOffset: shared.dayOffset });
       const preferences = shared.preferences.length ? shared.preferences : selected;
       const navigation = window.performance?.getEntriesByType?.("navigation")[0] as PerformanceNavigationTiming | undefined;
-      const recovered = urlEntryCommitments(readLS<SavedEntry | null>(LAST_KEY, null), {
+      const saved = readLS<SavedEntry | null>(LAST_KEY, null);
+      const recovered = urlEntryCommitments(saved, {
         navigationType: navigation?.type, anchor, dateIso, selected: preferences, walkKey: shared.walkKey,
       });
+      setChoicesNotCarried(navigation?.type === "reload" && !recovered.applies && hasStoredChoices(saved));
       if (recovered.applies) {
         commitmentAnchorKeyRef.current = anchorKey(anchor);
         setCommitments(recovered.entries);
@@ -1385,6 +1398,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const recovered = urlEntryCommitments(entry, {
       navigationType: "reload", anchor: { coords }, dateIso: freezeComposeDateIso({ dayOffset }), selected, walkKey,
     });
+    setChoicesNotCarried(!recovered.applies && hasStoredChoices(entry));
     if (recovered.applies) {
       commitmentAnchorKeyRef.current = anchorKey({ coords });
       setCommitments(recovered.entries);
@@ -1773,6 +1787,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // in the day" — reached from two places. Writing the map by key is what makes
   // exclude and pin unable to contradict each other: the newest action wins.
   const invalidateCommitmentIntent = () => {
+    setChoicesNotCarried(false);
     intentSequenceRef.current += 1;
     // The day's completion read answers the old intent: stop it now, not when
     // the adjustment's debounce sends the next compose.
@@ -2137,6 +2152,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             </p>
           )}
         </div>
+      )}
+
+      {choicesNotCarried && (
+        <p className={noticeCard} role="status">
+          {t(
+            "Dina tidigare fästa och bortvalda stopp kunde inte föras över till den här dagen. De används inte i den här planeringen.",
+            "Your previous kept and dismissed stops could not be carried over to this day. They are not used in this plan.",
+          )}
+        </p>
       )}
 
       {/* The ledger is stated where the user can always see it — including when

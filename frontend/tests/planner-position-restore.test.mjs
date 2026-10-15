@@ -74,6 +74,7 @@ test('same-position consent after reload recovers its saved keep and dismissal b
   assert.match(h.text(), /1 place kept/); assert.match(h.text(), /1 place dismissed/);
   assert.match(h.container.querySelector('section[aria-label="The route"]').textContent, /Kept/);
   await h.clock.advance(1000); assert.equal(routes(h).length, 1);
+  assert.doesNotMatch(h.text(), /Your previous kept and dismissed stops could not be carried over/);
 });
 
 for (const [name, alter, coords, nav] of [
@@ -89,6 +90,25 @@ for (const [name, alter, coords, nav] of [
   if (!url.searchParams.has('place')) { await click(h, 'Use my location'); await gps.grant(); }
   assert.equal(routes(h)[0].body.pinned_candidate_ids, undefined);
   assert.equal(routes(h)[0].body.excluded_candidate_ids, undefined);
+  const notice = /Your previous kept and dismissed stops could not be carried over/;
+  if (nav === 'reload') {
+    assert.match(h.text(), notice, 'rejected previous choices must not disappear silently');
+    await h.fetchMock.respond(routes(h)[0], response({ date: routes(h)[0].body.dates[0], anchor: coords }));
+    assert.match(h.text(), notice, 'the explanation survives installation of the new day');
+  } else assert.doesNotMatch(h.text(), notice, 'an independent navigation did not request recovery');
+});
+
+test('a rejected position ledger is explained in Swedish and the notice clears on a new explicit choice', async t => {
+  freeze(t); const saved = await completed(t);
+  const h = await mountPlanner({ url: saved.url.replace('lang=en', 'lang=sv'), props: { lang: 'sv' },
+    storage: { [LAST]: saved.entry }, navigationType: 'reload' });
+  t.after(() => h.unmount()); const gps = geo(h, P2);
+  await click(h, 'Använd min position'); await gps.grant();
+  assert.match(h.text(), /Dina tidigare fästa och bortvalda stopp kunde inte föras över/);
+  assert.equal(routes(h)[0].body.pinned_candidate_ids, undefined);
+  await h.fetchMock.respond(routes(h)[0], response({ anchor: P2 }));
+  await click(h, 'Justera'); await click(h, 'Imorgon');
+  assert.doesNotMatch(h.text(), /Dina tidigare fästa och bortvalda stopp kunde inte föras över/);
 });
 
 test('restore last carries valid position ledger and pin badge without asking for or recovering GPS', async t => {

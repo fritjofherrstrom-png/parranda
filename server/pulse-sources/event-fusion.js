@@ -123,6 +123,28 @@ function buildFusedEvent(members) {
     if (owner) fieldProvenance[field] = sourceIdentity(owner);
   }
 
+  // Date-only and explicit whole-day rows share an all_day shape. Preserve
+  // the latter's precision across duplicate representations of the SAME
+  // publisher page, but never borrow it from weaker or incompatible evidence.
+  if (merged.time_window?.kind === 'all_day' && merged.time_window.all_day_explicit !== true) {
+    const signature = allDayTemporalSignature(primary);
+    const url = canonicalUrl(primary.source_url || primary.provenance?.source_url);
+    const timezone = nonEmpty(primary.timezone || primary.time_window?.timezone);
+    const owner = signature && url && timezone && ranked.find(event =>
+      event.time_window?.kind === 'all_day' && event.time_window.all_day_explicit === true &&
+      sourceIdentity(event) === sourceIdentity(primary) &&
+      canonicalUrl(event.source_url || event.provenance?.source_url) === url &&
+      allDayTemporalSignature(event) === signature &&
+      nonEmpty(event.timezone || event.time_window?.timezone) === timezone &&
+      sourceTierRank(event.source_tier) >= sourceTierRank(primary.source_tier) &&
+      confidenceRank(event.confidence) >= confidenceRank(primary.confidence) &&
+      event.freshness !== 'stale' && event.timing_relevance !== 'stale');
+    if (owner) {
+      merged.time_window = { ...merged.time_window, all_day_explicit: true };
+      fieldProvenance.time_window = sourceIdentity(owner);
+    }
+  }
+
   // Two publishers may describe the same session within different complete
   // schedules. Keep the strictest real schedule as the route bound even when
   // the primary has a shorter one; never invent a union of publisher dates.
