@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {composeAgnosticRouteOutput} = require('../server/planner/agnostic-route-output');
+const {mapPlannerReservoirToSourceCandidates} = require('../server/planner/agnostic-engine-compose');
 const {externalRecord} = require('./helpers/planner-reservoir-compare');
 
 const names = ['Alder','Birch','Cedar','Dogwood','Elm','Fir','Ginkgo','Hazel'];
@@ -86,3 +87,20 @@ test('rhythm depth still refuses known-closed, unattributed and excluded places 
   const closed=await compose(sourceRows().map(row=>({...row,opening_hours:'Mo-Su off'})),['second_hand'],'full');
   assert.equal(closed.stops.length,0);
 });
+
+for(const dimension of ['operational','local_feel']) {
+  test(`multi-interest variety cannot skip a better ${dimension} tier at the reservoir bound`,()=>{
+    const rich=(id,type,rank)=>({candidate_id:id,label:id,type,candidate_status:'partial',planner_usable:true,
+      coordinates:{lat:55.6,lng:13},confidence:'low',origin:'external_open',covered_preferences:['museums'],partial_preferences:[],
+      provenance:{source_tier:'inferred',human_verified:false,attribution:[{provider_id:'osm',source_family:'map',url:'https://www.openstreetmap.org/node/1'}]},
+      experimental_admission:{allowed:true},local_feel_rank:dimension==='local_feel'?rank:1,
+      operational_viability:{rank:dimension==='operational'?rank:1},availability:{eligible:true}});
+    const candidates=[rich('spine','museum',1),rich('better-a','museum',1),rich('better-b','museum',1),rich('worse-variety','gallery',2)];
+    const result=mapPlannerReservoirToSourceCandidates({
+      selected:[{role:'culture_stop',candidate_id:'spine',coordinates:{lat:55.6,lng:13}}],
+      plannerRoles:{requested_preferences:['museums','coffee'],roles:[{role:'culture_stop',slot:'stop',requested:true,candidates}]},
+      dayRhythm:'full',includeCapacityFrontier:false,limit:3,
+    });
+    assert.deepEqual(result.map(candidate=>candidate.id),['spine','better-a','better-b']);
+  });
+}

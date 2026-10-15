@@ -534,7 +534,10 @@ function requestedRhythmDepthOptions(roleEntry) {
 
 function sameActivityDepthTier(candidate, reference) {
   const coverage = values => JSON.stringify([...new Set(normalizeUserIntents(values || []).intents)].sort());
-  return candidate.candidate_status === reference.candidate_status &&
+  return isExperimentallyAdmitted(candidate) === isExperimentallyAdmitted(reference) &&
+    candidate.operational_viability?.rank === reference.operational_viability?.rank &&
+    candidate.local_feel_rank === reference.local_feel_rank &&
+    candidate.candidate_status === reference.candidate_status &&
     candidate.confidence === reference.confidence && candidate.origin === reference.origin &&
     candidate.provenance?.source_tier === reference.provenance?.source_tier &&
     candidate.provenance?.human_verified === reference.provenance?.human_verified &&
