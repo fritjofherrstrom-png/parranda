@@ -309,10 +309,8 @@ async function buildAnywhereBlitzDecision({
     },
     {
       ...(candidateLoad.dataset ? { external_provider: { dataset: candidateLoad.dataset } } : {}),
-      ...(availabilityWindow ? {
-        evaluateCandidateAvailability: ({ candidate }) =>
-          evaluateOpeningHoursForWindow(candidate.opening_hours, availabilityWindow),
-      } : {}),
+      evaluateCandidateAvailability: ({ candidate }) =>
+        evaluateOpeningHoursForWindow(candidate.opening_hours, availabilityWindow || {}),
       resolveNowContext: trustedNowContext,
       resolveTimeBand: () => trustedContext.timeBand,
     },

@@ -1,0 +1,20 @@
+{
+  "observed_at": "2026-10-15T22:38:02.229Z",
+  "local_time": "2026-10-16T00:38:02",
+  "timezone": "Europe/Stockholm",
+  "simulated_anchor": true,
+  "anchor": { "lat": 59.3326, "lng": 18.0649 },
+  "preferences": ["food", "culture", "views"],
+  "selected": {
+    "id": "overture-90932de3-61f3-4138-a92b-0c3a64f06557",
+    "name": "Museum Tre Kronor",
+    "type": "museum",
+    "lat": 59.327354431152344,
+    "lng": 18.071130752563477,
+    "sources": [
+      { "provider": "overture", "family": "open_directory", "tier": "inferred", "url": "https://overturemaps.org/" },
+      { "provider": "wikidata", "family": "open_knowledge", "tier": "inferred", "url": "https://www.wikidata.org/wiki/Q10590595" }
+    ]
+  },
+  "limits": "Trimmed identity/context from qa606/run1/R1-010-_api_blitz.json. The published response omitted availability; internal opening hours were not captured. Tests using this identity explicitly CONTROL hours; absence here is not proof of real unknown hours or closure."
+}

@@ -6,12 +6,18 @@
  * Its copy says "near you" only when the anchor IS the reader's position, and
  * promises the day stays as it is only when there is a day on screen.
  */
-import type { AnywhereBlitzView } from "../../lib/blitz-view.mjs";
+import type { AnywhereBlitzView, BlitzMoveView } from "../../lib/blitz-view.mjs";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { eventSourceLink, eventTiming } from "../../lib/pulse-view.mjs";
 import { BoltIcon, ExternalIcon } from "../shared/icons";
 import { buttonClass, Eyebrow } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
+
+function placeHoursNote(move: BlitzMoveView, t: Translate) {
+  return move.availability_status === "available_in_window"
+    ? t("Källans schema anger öppet vid kontrollen. Kontrollera att du hinner fram.", "Listed hours indicate open at the time checked. Check that you can arrive in time.")
+    : t("Vi kunde inte bekräfta att det var öppet vid kontrollen. Kontrollera öppettider innan du går.", "We could not confirm it was open when checked. Check opening hours before going.");
+}
 
 export default function BlitzCard({
   t,
@@ -123,8 +129,15 @@ export default function BlitzCard({
                     {move.source.label && <span>{move.source.label}</span>}
                   </div>
                 </div>
+                {move.kind === "place" && (
+                  <p className="text-sm text-parranda-ink/85">{placeHoursNote(move, t)}</p>
+                )}
                 <p className="text-xs text-parranda-ink/68">
-                  {dayOnScreen
+                  {move.kind === "place"
+                    ? dayOnScreen
+                      ? t("Ett källstött platsförslag. Det ändrar inte dagens rutt.", "A source-backed place suggestion. It does not change today's route.")
+                      : t("Ett källstött platsförslag.", "A source-backed place suggestion.")
+                    : dayOnScreen
                     ? t("Ett källstött nästa drag utifrån platsen, tiden och dina val. Det ändrar inte dagens rutt.", "A source-backed next move from your place, time and picks. It does not change today's route.")
                     : t("Ett källstött nästa drag utifrån platsen, tiden och dina val.", "A source-backed next move from your place, time and picks.")}
                 </p>
@@ -152,6 +165,7 @@ export default function BlitzCard({
                   <p className="border-t border-parranda-ink/12 pt-2 text-xs text-parranda-ink/68">
                     {secondary.kind === "live_event" ? t("Senare i närheten: ", "Later nearby: ") : t("Annars i närheten: ", "Otherwise nearby: ")}
                     <span className="font-bold text-parranda-ink/85">{secondary.title}</span>
+                    {secondary.kind === "place" && <span className="mt-1 block">{placeHoursNote(secondary, t)}</span>}
                   </p>
                 )}
               </div>
