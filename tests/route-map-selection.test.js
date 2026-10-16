@@ -133,6 +133,19 @@ test('another explicit selection replaces the name and Escape clears it', { time
   await page.getByRole('tooltip').waitFor({ state: 'detached' });
 });
 
+test('hovering another marker after a click inspects that marker while restored same-marker hover retains the click', { timeout: 30000 }, async t => {
+  const page = await pageFor(t);
+  await page.locator('.route-map-marker').first().click();
+  await page.mouse.move(380, 700);
+  await page.locator('.route-map-marker').first().hover();
+  await page.mouse.move(380, 700);
+  assert.deepEqual(await page.getByRole('tooltip').allTextContents(), ['Stop A'], 'restored hover of the selected marker must not downgrade its click');
+  await page.locator('.route-map-marker').nth(1).hover();
+  await page.getByRole('tooltip').getByText('Stop B', { exact: true }).waitFor();
+  await page.mouse.move(380, 700);
+  await page.getByRole('tooltip').waitFor({ state: 'detached' });
+});
+
 test('keyboard focus opens the marker name and blur closes it', { timeout: 30000 }, async t => {
   const page = await pageFor(t);
   await page.mouse.move(380, 700);

@@ -349,7 +349,6 @@ export default function RouteMap({
         });
         for (const layer of ["context-dots", "candidate-dots"]) {
           map.on("mousemove", layer, (event: any) => {
-            if (tipAnchorRef.current?.interaction === "click") return;
             const feature = event.features?.[0];
             const name = String(feature?.properties?.name || "");
             if (!name) return;
@@ -416,7 +415,11 @@ export default function RouteMap({
           const badgeIndex = badgesRef.current.length;
           const open = (interaction: "hover" | "focus" | "click") => {
             if (!markerName) return;
-            if (interaction === "hover" && tipAnchorRef.current?.interaction === "click") return;
+            // A touch-generated/restored hover of this same marker must not
+            // undo its explicit click. Entering another marker is a new
+            // inspection and must still reveal that marker's own name.
+            if (interaction === "hover" && tipAnchorRef.current?.interaction === "click"
+              && tipAnchorRef.current.index === badgeIndex) return;
             const badge = badgesRef.current[badgeIndex];
             const point = map.project([stop.lng, stop.lat]);
             tipAnchorRef.current = { index: badgeIndex, interaction };
