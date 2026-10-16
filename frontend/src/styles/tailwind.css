@@ -326,6 +326,23 @@
   pointer-events: auto;
 }
 
+/* A group pin: the stops that share one place at this zoom ("1–5"). The
+   whole 44px pin takes the tap and zooms in until they separate. A double
+   ring marks it as more than one station. */
+.route-map-frame .maplibregl-marker.route-map-group {
+  pointer-events: auto;
+  cursor: zoom-in;
+}
+.route-map-marker--group {
+  font-size: 0.7rem;
+  letter-spacing: -0.02em;
+}
+.route-map-marker--group::before {
+  inset: 5px 3px;
+  box-shadow: 0 0 0 2px rgb(var(--p-color-paper)), 0 0 0 4px rgb(var(--p-color-ink)), var(--p-shadow-marker);
+  pointer-events: none;
+}
+
 /* A woven live event is a transfer: the Live colour, ringed in paper. */
 .route-map-marker--event::before {
   border-color: rgb(var(--p-color-paper));

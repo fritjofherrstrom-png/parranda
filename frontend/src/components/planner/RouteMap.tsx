@@ -32,7 +32,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { routeMarkerPresentation, screenMarkerPresentation } from "../../lib/route-map-presentation.mjs";
+import { pinGroupLabel, routeMarkerPresentation, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
 import { controlAwareView, type FitMark, type MapBox } from "../../lib/route-map-fit.mjs";
 import { BASEMAP_PROVIDER, basemapPaint, basemapStyle, type BasemapTheme } from "../../lib/route-map-style.mjs";
 import type { RouteContextSuggestion } from "../../lib/route-context-view.mjs";
@@ -122,7 +122,7 @@ function controlBoxes(frame: HTMLElement, container: HTMLElement): MapBox[] {
  * Show every mark at the closest zoom where no marker sits under a control. If
  * no such view exists (the map is too small to read), fall back to a plain fit.
  */
-function fitToControls(map: any, frame: HTMLElement | null, container: HTMLElement | null, marks: FitMark[]) {
+function fitToControls(map: any, frame: HTMLElement | null, container: HTMLElement | null, marks: FitMark[], fitted?: { current: number }) {
   if (!map || !frame || !container || !marks.length) return;
   const width = container.clientWidth;
   const height = container.clientHeight;
@@ -138,15 +138,19 @@ function fitToControls(map: any, frame: HTMLElement | null, container: HTMLEleme
     unproject,
   });
   if (view) {
+    // Known before the move, so the layout during jumpTo already sees it.
+    if (fitted) fitted.current = view.zoom;
     map.jumpTo({ center: [view.center.lng, view.center.lat], zoom: view.zoom });
     return;
   }
+  if (fitted) fitted.current = -Infinity;
   const lngs = marks.map((mark) => mark.lng);
   const lats = marks.map((mark) => mark.lat);
   map.fitBounds(
     [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
     { padding: 36, maxZoom: FIT_MAX_ZOOM, animate: false },
   );
+  if (fitted) fitted.current = map.getZoom();
 }
 
 const emptyCollection = { type: "FeatureCollection", features: [] as any[] };
@@ -221,7 +225,15 @@ export default function RouteMap({
     document.addEventListener("keydown", dismiss);
     return () => document.removeEventListener("keydown", dismiss);
   }, [tip]);
-  const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; move: (x: number, y: number, direction: "left" | "right") => void; showOrigin: (visible: boolean) => void }>>([]);
+  const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; move: (x: number, y: number, direction: "left" | "right") => void; showOrigin: (visible: boolean) => void; setGrouped: (grouped: boolean) => void; focus: () => void }>>([]);
+  // Group pins by member key ("0,1,4"), the last shift of every pin (so a pin
+  // stays put while the map moves), and the stop to focus once a group pin
+  // opened from the keyboard has separated.
+  const groupPinsRef = useRef<Map<string, { marker: any; element: HTMLElement }>>(new Map());
+  const pinShiftsRef = useRef<Map<string, { dx: number; dy: number }>>(new Map());
+  const focusAfterSplitRef = useRef<number | null>(null);
+  // The zoom of the map's own fit: group pins appear only below it.
+  const fittedZoomRef = useRef<number>(-Infinity);
   const layoutRef = useRef<() => void>(() => {});
   const refitRef = useRef<() => void>(() => {});
   layoutRef.current = () => {
@@ -232,20 +244,112 @@ export default function RouteMap({
     const width = mapRef.current.clientWidth;
     const height = mapRef.current.clientHeight;
     const points = badgesRef.current.map((b) => map.project([b.lng, b.lat]));
-    const offsets = screenMarkerPresentation(points, { width, height, keepouts: controlBoxes(frameRef.current, mapRef.current) });
-    setLayoutCrowded(offsets === null);
-    offsets?.forEach((offset, i) => badgesRef.current[i].move(offset.shift_x_px, offset.shift_y_px,
-      points[i].x + offset.shift_x_px < width / 2 ? "right" : "left"));
+    // A number moves only a short way from its stop; stops that cannot be
+    // shown apart at this zoom share one group pin (route-map-presentation).
+    // Plain JS on purpose: tests/route-map-origin-fallback.test.js runs it.
+    // Group pins only once the reader has zoomed out past the fitted view.
+    const fitted = fittedZoomRef ? fittedZoomRef.current : -Infinity;
+    const grouping = typeof map.getZoom === "function" && map.getZoom() < fitted - 0.05;
+    const pins = screenPinPresentation(points, {
+      width, height, keepouts: controlBoxes(frameRef.current, mapRef.current), previous: pinShiftsRef.current, grouping,
+    });
+    setLayoutCrowded(pins === null);
+    const groups = new Map();
+    if (!pins) badgesRef.current.forEach((badge) => badge.setGrouped(false));
+    if (pins) {
+      pinShiftsRef.current = new Map(pins.map((pin) => [pin.members.join(","), { dx: pin.shift_x_px, dy: pin.shift_y_px }]));
+      for (const pin of pins) {
+        if (pin.members.length > 1) { groups.set(pin.members.join(","), pin); continue; }
+        const i = pin.members[0];
+        badgesRef.current[i].setGrouped(false);
+        badgesRef.current[i].move(pin.shift_x_px, pin.shift_y_px, pin.x < width / 2 ? "right" : "left");
+      }
+      for (const pin of pins) if (pin.members.length > 1) pin.members.forEach((i) => badgesRef.current[i].setGrouped(true));
+    }
+    syncGroupPins(map, groups);
     // Origin dots are optional coordinate hints, never relocated coordinates.
-    // Suppress a hint when it would paint over any station (including its own).
-    if (offsets) badgesRef.current.forEach((badge, i) => badge.showOrigin(
-      (Math.abs(offsets[i].shift_x_px) > 0.5 || Math.abs(offsets[i].shift_y_px) > 0.5)
-      && points.every((point, j) => Math.hypot(
-        points[i].x - point.x - offsets[j].shift_x_px,
-        points[i].y - point.y - offsets[j].shift_y_px,
-      ) >= 26),
-    ));
-    else badgesRef.current.forEach((badge) => badge.showOrigin(false));
+    // Suppress a hint when it would paint over any station (including its own)
+    // or a group pin; a stop inside a group pin shows none.
+    const pinOf = badgesRef.current.map((_, i) => (pins || []).find((pin) => pin.members.includes(i)));
+    const stations = (pins || []).map((pin) => (pin.members.length > 1
+      ? { x: pin.x, y: pin.y }
+      : { x: points[pin.members[0]].x + pin.shift_x_px, y: points[pin.members[0]].y + pin.shift_y_px }));
+    badgesRef.current.forEach((badge, i) => {
+      const pin = pinOf[i];
+      const moved = pin && pin.members.length === 1 && (Math.abs(pin.shift_x_px) > 0.5 || Math.abs(pin.shift_y_px) > 0.5);
+      badge.showOrigin(Boolean(moved && stations.every((station) => Math.hypot(points[i].x - station.x, points[i].y - station.y) >= 26)));
+    });
+    // A group pin opened from the keyboard hands focus to its first stop once
+    // the zoom has separated it.
+    // The pin that replaced it may itself be a smaller group.
+    const waiting = focusAfterSplitRef.current;
+    const next = waiting !== null ? pinOf[waiting] : null;
+    if (next && !next.offscreen) {
+      focusAfterSplitRef.current = null;
+      if (next.members.length === 1) badgesRef.current[next.members[0]].focus();
+      else groupPinsRef.current.get(next.members.join(","))?.element.focus();
+    }
+  };
+
+  // Group pins: created for a set of stops when they first share a pin, moved
+  // with the map, removed once they separate.
+  const syncGroupPins = (map: any, groups: Map<string, { members: number[]; x: number; y: number }>): void => {
+    const ml = instanceRef.current?.ml;
+    if (!ml) return;
+    for (const [key, pin] of groupPinsRef.current) {
+      if (groups.has(key)) continue;
+      const hadFocus = pin.element.contains(document.activeElement);
+      pin.marker.remove();
+      groupPinsRef.current.delete(key);
+      // Never leave keyboard focus on a removed element.
+      if (hadFocus && focusAfterSplitRef.current === null) focusAfterSplitRef.current = Number(key.split(",")[0]);
+    }
+    for (const [key, group] of groups) {
+      const badges = group.members.map((i) => badgesRef.current[i]);
+      const lng = badges.reduce((sum, b) => sum + b.lng, 0) / badges.length;
+      const lat = badges.reduce((sum, b) => sum + b.lat, 0) / badges.length;
+      const at = map.project([lng, lat]);
+      const offset: [number, number] = [group.x - at.x, group.y - at.y];
+      let pin = groupPinsRef.current.get(key);
+      if (!pin) {
+        const label = pinGroupLabel(group.members);
+        const names = group.members.map((i) => `${i + 1}. ${badgesRef.current[i].name}`).join(", ");
+        const element = document.createElement("div");
+        element.className = "route-map-marker-shell route-map-group";
+        element.tabIndex = 0;
+        element.setAttribute("role", "button");
+        element.setAttribute("aria-label", t(
+          `Stopp ${label}: ${names}. Zooma in för att skilja dem åt.`,
+          `Stops ${label}: ${names}. Zoom in to separate them.`,
+        ));
+        element.title = names;
+        const disc = document.createElement("span");
+        disc.className = "route-map-marker route-map-marker--group";
+        disc.textContent = label;
+        element.append(disc);
+        const open = () => {
+          if (element.contains(document.activeElement)) focusAfterSplitRef.current = group.members[0];
+          const bounds = new ml.LngLatBounds();
+          group.members.forEach((i) => bounds.extend([badgesRef.current[i].lng, badgesRef.current[i].lat]));
+          const still = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          // At least the map's own fitted zoom, where every number has its own pin.
+          const camera = map.cameraForBounds(bounds, { padding: 48, maxZoom: Math.max(map.getZoom() + 1, 16) });
+          const zoom = Math.max(camera?.zoom ?? map.getZoom() + 2, fittedZoomRef.current);
+          map.easeTo({ center: bounds.getCenter(), zoom, duration: still ? 0 : 450 });
+        };
+        // The whole 44px pin takes the tap (route-map-group in tailwind.css).
+        element.addEventListener("click", open);
+        element.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); }
+        });
+        const marker = new ml.Marker({ element, anchor: "center", offset }).setLngLat([lng, lat]).addTo(map);
+        element.style.zIndex = String(1200 + group.members[0]);
+        groupPinsRef.current.set(key, { marker, element });
+        continue;
+      }
+      pin.marker.setLngLat([lng, lat]);
+      pin.marker.setOffset(offset);
+    }
   };
   // The open name follows its marker while the map moves.
   const tipAnchorRef = useRef<{ index: number } | null>(null);
@@ -282,6 +386,10 @@ export default function RouteMap({
       const clearDrawn = () => {
         instanceRef.current?.markers.forEach((marker) => marker.remove());
         if (instanceRef.current) instanceRef.current.markers = [];
+        groupPinsRef.current.forEach((pin) => pin.marker.remove());
+        groupPinsRef.current = new Map();
+        pinShiftsRef.current = new Map();
+        focusAfterSplitRef.current = null;
         badgesRef.current = [];
         tipAnchorRef.current = null;
         setTip(null);
@@ -480,6 +588,17 @@ export default function RouteMap({
             y: shiftY,
             direction: "right",
             showOrigin: (visible: boolean) => { origin.hidden = !visible; },
+            // In a group pin: the stop's own pin steps aside, out of sight,
+            // out of the tab order and out of the accessibility tree.
+            setGrouped: (grouped: boolean) => {
+              if (badge.grouped === grouped) return;
+              badge.grouped = grouped;
+              for (const element of [target, shell]) element.style.visibility = grouped ? "hidden" : "";
+              shell.tabIndex = grouped ? -1 : 0;
+              if (grouped) shell.setAttribute("aria-hidden", "true"); else shell.removeAttribute("aria-hidden");
+              if (grouped && tipAnchorRef.current?.index === badgeIndex) close();
+            },
+            focus: () => shell.focus(),
             move: (x: number, y: number, direction: "left" | "right") => {
               const key = `${x}:${y}:${direction}`;
               if (key === last) return;
@@ -527,7 +646,7 @@ export default function RouteMap({
       map.setPaintProperty("route-line", "line-dasharray", sketch ? [0.2, 2.2] : null);
       marksRef.current = marks;
       map.resize();
-      fitToControls(map, frameRef.current, mapRef.current, marks);
+      fitToControls(map, frameRef.current, mapRef.current, marks, fittedZoomRef);
       layoutRef.current();
       setMapDrawn(true);
     }
@@ -562,7 +681,7 @@ export default function RouteMap({
       const map = instanceRef.current?.map;
       if (!map) return;
       map.resize();
-      fitToControls(map, frameRef.current, mapRef.current, marksRef.current);
+      fitToControls(map, frameRef.current, mapRef.current, marksRef.current, fittedZoomRef);
       layoutRef.current();
     };
     const schedule = () => {
