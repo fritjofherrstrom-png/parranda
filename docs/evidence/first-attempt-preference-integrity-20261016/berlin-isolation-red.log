@@ -36,12 +36,12 @@ test at tests/district-composition.test.js:438:1
 ✖ default district composition retains its legacy coverage and fallback contract (0.752ms)
   AssertionError [ERR_ASSERTION]: default callers keep the pre-existing broad culture policy
   + actual - expected
-  
+
   + []
   - [
   -   'culture'
   - ]
-  
+
       at TestContext.<anonymous> (<worktree>/tests/district-composition.test.js:441:10)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1201:25)
@@ -61,13 +61,13 @@ test at tests/district-composition.test.js:450:1
 ✖ the existing micro-base consumer keeps its legacy gallery anchor decision (3.225959ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
   + actual - expected
-  
+
     {
   +   lat: 50,
   -   lat: 50.03001,
       lng: 10
     }
-  
+
       at TestContext.<anonymous> (<worktree>/tests/district-composition.test.js:458:10)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1201:25)

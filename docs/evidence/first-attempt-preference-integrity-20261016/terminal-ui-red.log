@@ -16,9 +16,9 @@
 test at frontend/tests/planner-terminal-source-state.test.mjs:9:3
 ✖ terminal partial source response explains a finished no-route result in en (153.326583ms)
   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Planning finished without a route/. Input:
-  
+
   "ParrandaENSVKyoto · todayChangeCulture · Day rhythm: BalancedAdjustYour day in KyotoSource-backed place candidates — not a composed route yetCandidates near this placeParranda found place candidates, but not a reliable route yet.The map can't be shown in this browser. The stops and the Maps route work as usual.Culture9 placesMuseum of KyotoHeian Museum of Ancient HistorySomé SeiryukanGallery of Kyoto Traditional Arts & CraftsOnishi Seiwemon MuseumIkebana History MuseumYaosanChisō GalleryKyoto International Manga MuseumLive in KyotoExplore liveBlitz right nowOne next move in Kyoto, right now."
-  
+
       at TestContext.<anonymous> (file://<worktree>/frontend/tests/planner-terminal-source-state.test.mjs:16:12)
       at async Test.run (node:internal/test_runner/test:1208:7)
       at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
@@ -33,9 +33,9 @@ test at frontend/tests/planner-terminal-source-state.test.mjs:9:3
 test at frontend/tests/planner-terminal-source-state.test.mjs:9:3
 ✖ terminal failed source response explains a finished no-route result in en (23.26725ms)
   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Planning finished without a route/. Input:
-  
+
   "ParrandaENSVKyoto · todayChangeCulture · Day rhythm: BalancedAdjustYour day in KyotoSource-backed place candidates — not a composed route yetCandidates near this placeParranda found place candidates, but not a reliable route yet.The map can't be shown in this browser. The stops and the Maps route work as usual.Culture9 placesMuseum of KyotoHeian Museum of Ancient HistorySomé SeiryukanGallery of Kyoto Traditional Arts & CraftsOnishi Seiwemon MuseumIkebana History MuseumYaosanChisō GalleryKyoto International Manga MuseumLive in KyotoExplore liveBlitz right nowOne next move in Kyoto, right now."
-  
+
       at TestContext.<anonymous> (file://<worktree>/frontend/tests/planner-terminal-source-state.test.mjs:16:12)
       at async Test.run (node:internal/test_runner/test:1208:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
@@ -50,9 +50,9 @@ test at frontend/tests/planner-terminal-source-state.test.mjs:9:3
 test at frontend/tests/planner-terminal-source-state.test.mjs:9:3
 ✖ terminal partial source response explains a finished no-route result in sv (27.242125ms)
   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Planeringen avslutades utan rutt/. Input:
-  
+
   'ParrandaENSVKyoto · idagBytKultur · Dagens rytm: LagomJusteraDin dag i KyotoKällstödda platskandidater — inte en komponerad rutt ännuKandidater nära platsenParranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.Kartan kan inte visas i den här webbläsaren. Stoppen och Maps-rutten fungerar som vanligt.Kultur9 träffarMuseum of KyotoHeian Museum of Ancient HistorySomé SeiryukanGallery of Kyoto Traditional Arts & CraftsOnishi Seiwemon MuseumIkebana History MuseumYaosanChisō GalleryKyoto International Manga MuseumLive i KyotoUtforska liveBlitz just nuEtt nästa drag i Kyoto, just nu.'
-  
+
       at TestContext.<anonymous> (file://<worktree>/frontend/tests/planner-terminal-source-state.test.mjs:16:12)
       at async Test.run (node:internal/test_runner/test:1208:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
@@ -67,9 +67,9 @@ test at frontend/tests/planner-terminal-source-state.test.mjs:9:3
 test at frontend/tests/planner-terminal-source-state.test.mjs:9:3
 ✖ terminal failed source response explains a finished no-route result in sv (26.204833ms)
   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Planeringen avslutades utan rutt/. Input:
-  
+
   'ParrandaENSVKyoto · idagBytKultur · Dagens rytm: LagomJusteraDin dag i KyotoKällstödda platskandidater — inte en komponerad rutt ännuKandidater nära platsenParranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.Kartan kan inte visas i den här webbläsaren. Stoppen och Maps-rutten fungerar som vanligt.Kultur9 träffarMuseum of KyotoHeian Museum of Ancient HistorySomé SeiryukanGallery of Kyoto Traditional Arts & CraftsOnishi Seiwemon MuseumIkebana History MuseumYaosanChisō GalleryKyoto International Manga MuseumLive i KyotoUtforska liveBlitz just nuEtt nästa drag i Kyoto, just nu.'
-  
+
       at TestContext.<anonymous> (file://<worktree>/frontend/tests/planner-terminal-source-state.test.mjs:16:12)
       at async Test.run (node:internal/test_runner/test:1208:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {

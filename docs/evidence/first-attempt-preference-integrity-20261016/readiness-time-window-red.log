@@ -13,9 +13,9 @@
 test at tests/planner-source-snapshot-readiness.test.js:47:1
 ✖ readiness respects the same trusted remaining-day hours and reach as composition (5.217959ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   true !== false
-  
+
       at TestContext.<anonymous> (<worktree>/tests/planner-source-snapshot-readiness.test.js:50:10)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1201:25)

@@ -39,9 +39,9 @@
 test at frontend/tests/day-limitations.test.mjs:9:1
 ✖ partial acquisition describes the published evidence regardless of its historical pending count (1.033917ms)
   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /incomplete when the response was produced/. Input:
-  
+
   'The day uses the sources that have answered; more places may be missing.'
-  
+
       at TestContext.<anonymous> (file://<worktree>/frontend/tests/day-limitations.test.mjs:12:12)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1201:25)
@@ -59,10 +59,10 @@ test at frontend/tests/planner-places-arriving.test.mjs:35:1
 ✖ historically incomplete source evidence cannot judge the place thin (0.766792ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
   + actual - expected
-  
+
   + undefined
   - true
-  
+
       at TestContext.<anonymous> (file://<worktree>/frontend/tests/planner-places-arriving.test.mjs:38:10)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1201:25)
@@ -79,9 +79,9 @@ test at frontend/tests/planner-places-arriving.test.mjs:35:1
 test at frontend/tests/planner-places-arriving.test.mjs:49:1
 ✖ a published partial day states historical incompleteness and offers an explicit update (370.182625ms)
   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /incomplete when the response was produced/. Input:
-  
+
   "ParrandaENSVTestville · todayChangeFood & drink · Culture · Views · Day rhythm: BalancedAdjustA day in Testville is ready: 2 stops.Your dayA day in Testville≈ 0.9 km on foot2 stopsMore places are on their wayA source is still fetching places here. The day below uses what has arrived so far — update in a moment for a fuller day.Update the dayA shorter day — 2 stops we can stand behind.The stops, in orderThe sources give no opening hours for today's stops on the chosen day — check before you go.Midday1HalleMuseum2SquareMuseumThe map can't be shown in this browser. The stops and the Maps route work as usual.About this day and mapThe dotted line shows the order of the stops, not the streets.Distances and walking times are estimates.Open route in MapsSaveShareGoogle Maps works out the walking path when you open the route.Blitz right nowOne next move in Testville, right now — your day stays as it is."
-  
+
       at TestContext.<anonymous> (file://<worktree>/frontend/tests/planner-places-arriving.test.mjs:55:10)
       at async Test.run (node:internal/test_runner/test:1208:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
@@ -96,9 +96,9 @@ test at frontend/tests/planner-places-arriving.test.mjs:49:1
 test at frontend/tests/planner-places-arriving.test.mjs:87:1
 ✖ a no-route terminal snapshot states incomplete evidence without judging the place or promising a route (26.126583ms)
   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Planeringen avslutades utan rutt/. Input:
-  
+
   'ParrandaENSVTestville · idagBytMat & dryck · Kultur · Utsikt · Dagens rytm: LagomJusteraFler platser är på väg. Platserna för Testville hämtas fortfarande, så Parranda har ingen dag ännu — inget hittas på. Försök igen om en stund.Din dag i TestvilleFler platser är på väg. Platserna för Testville hämtas fortfarande, så Parranda har ingen dag ännu — inget hittas på. Försök igen om en stund.Försök igenBlitz just nuEtt nästa drag i Testville, just nu.'
-  
+
       at TestContext.<anonymous> (file://<worktree>/frontend/tests/planner-places-arriving.test.mjs:101:10)
       at async Test.run (node:internal/test_runner/test:1208:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
@@ -113,9 +113,9 @@ test at frontend/tests/planner-places-arriving.test.mjs:87:1
 test at frontend/tests/planner-places-arriving.test.mjs:114:1
 ✖ a partial published day with no pending count still suppresses thin-place judgement (29.388916ms)
   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /incomplete when the response was produced/. Input:
-  
+
   "ParrandaENSVTestville · todayChangeFood & drink · Culture · Views · Day rhythm: BalancedAdjustA day in Testville is ready: 2 stops.Your dayA day in Testville≈ 0.9 km on foot2 stopsA shorter day — 2 stops we can stand behind. Few places to choose between here.The stops, in orderThe sources give no opening hours for today's stops on the chosen day — check before you go.Midday1HalleMuseum2SquareMuseumThe map can't be shown in this browser. The stops and the Maps route work as usual.About this day and mapThe dotted line shows the order of the stops, not the streets.Distances and walking times are estimates.The day uses the sources that have answered; more places may be missing.Open route in MapsSaveShareGoogle Maps works out the walking path when you open the route.Blitz right nowOne next move in Testville, right now — your day stays as it is."
-  
+
       at TestContext.<anonymous> (file://<worktree>/frontend/tests/planner-places-arriving.test.mjs:118:10)
       at async Test.run (node:internal/test_runner/test:1208:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
@@ -130,9 +130,9 @@ test at frontend/tests/planner-places-arriving.test.mjs:114:1
 test at frontend/tests/planner-restored-source-snapshot.test.mjs:80:1
 ✖ unsafe restored snapshot without a route still provides historical source copy and replanning (14.009917ms)
   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /incomplete when the response was produced/i. Input:
-  
+
   'ParrandaENSVNear you · tomorrowChangeCulture · Green & walks · Day rhythm: FullAdjustSources had not finished when this day was created. The saved snapshot contains no day — this is not an ongoing fetch.Your day near youYour previous kept and dismissed stops could not be carried over to this day. They are not used in this plan.Sources had not finished when this day was created. The saved snapshot contains no day — this is not an ongoing fetch.We cannot safely update this saved day. Choose a starting point and dateBlitz right nowOne next move near you, right now.'
-  
+
       at TestContext.<anonymous> (file://<worktree>/frontend/tests/planner-restored-source-snapshot.test.mjs:87:12)
       at async Test.run (node:internal/test_runner/test:1208:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
@@ -147,9 +147,9 @@ test at frontend/tests/planner-restored-source-snapshot.test.mjs:80:1
 test at frontend/tests/planner-restored-source-snapshot.test.mjs:96:1
 ✖ restored source completion describes the saved snapshot, not a still-running source (23.081334ms)
   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /incomplete when the response was produced/i. Input:
-  
+
   "ParrandaENSVTestville · tomorrowChangeCulture · Green & walks · Day rhythm: FullAdjustA day in Testville is ready: 2 stops.1 place kept1 place dismissedStart over without my choicesYour dayA day in Testville≈ 0.9 km on foot2 stopsSources had not finished when this day was createdThis saved day uses what had arrived then. This is a snapshot, not an ongoing fetch. Update explicitly to read the sources again.Update the daySaved day · 23/08/2026 — rebuild for fresh eventsThe stops, in orderThe sources give no opening hours for today's stops on the chosen day — check before you go.1MuseumMuseumKept2SquareMuseumThe map can't be shown in this browser. The stops and the Maps route work as usual.About this day and mapThe dotted line shows the order of the stops, not the streets.Distances and walking times are estimates.Open route in MapsSaveShareGoogle Maps works out the walking path when you open the route.Blitz right nowOne next move in Testville, right now — your day stays as it is."
-  
+
       at TestContext.<anonymous> (file://<worktree>/frontend/tests/planner-restored-source-snapshot.test.mjs:99:12)
       at async Test.run (node:internal/test_runner/test:1208:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
@@ -164,9 +164,9 @@ test at frontend/tests/planner-restored-source-snapshot.test.mjs:96:1
 test at frontend/tests/planner-terminal-source-state.test.mjs:9:3
 ✖ terminal partial source response explains a finished no-route result in en (313.325584ms)
   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Planning finished without a route/. Input:
-  
+
   "ParrandaENSVKyoto · todayChangeCulture · Day rhythm: BalancedAdjustYour day in KyotoSource-backed place candidates — not a composed route yetCandidates near this placeParranda found place candidates, but not a reliable route yet.The map can't be shown in this browser. The stops and the Maps route work as usual.Culture9 placesMuseum of KyotoHeian Museum of Ancient HistorySomé SeiryukanGallery of Kyoto Traditional Arts & CraftsOnishi Seiwemon MuseumIkebana History MuseumYaosanChisō GalleryKyoto International Manga MuseumLive in KyotoExplore liveBlitz right nowOne next move in Kyoto, right now."
-  
+
       at TestContext.<anonymous> (file://<worktree>/frontend/tests/planner-terminal-source-state.test.mjs:16:12)
       at async Test.run (node:internal/test_runner/test:1208:7)
       at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
@@ -181,9 +181,9 @@ test at frontend/tests/planner-terminal-source-state.test.mjs:9:3
 test at frontend/tests/planner-terminal-source-state.test.mjs:9:3
 ✖ terminal failed source response explains a finished no-route result in en (38.391917ms)
   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Planning finished without a route/. Input:
-  
+
   "ParrandaENSVKyoto · todayChangeCulture · Day rhythm: BalancedAdjustYour day in KyotoSource-backed place candidates — not a composed route yetCandidates near this placeParranda found place candidates, but not a reliable route yet.The map can't be shown in this browser. The stops and the Maps route work as usual.Culture9 placesMuseum of KyotoHeian Museum of Ancient HistorySomé SeiryukanGallery of Kyoto Traditional Arts & CraftsOnishi Seiwemon MuseumIkebana History MuseumYaosanChisō GalleryKyoto International Manga MuseumLive in KyotoExplore liveBlitz right nowOne next move in Kyoto, right now."
-  
+
       at TestContext.<anonymous> (file://<worktree>/frontend/tests/planner-terminal-source-state.test.mjs:16:12)
       at async Test.run (node:internal/test_runner/test:1208:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
@@ -198,9 +198,9 @@ test at frontend/tests/planner-terminal-source-state.test.mjs:9:3
 test at frontend/tests/planner-terminal-source-state.test.mjs:9:3
 ✖ terminal partial source response explains a finished no-route result in sv (38.673ms)
   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Planeringen avslutades utan rutt/. Input:
-  
+
   'ParrandaENSVKyoto · idagBytKultur · Dagens rytm: LagomJusteraDin dag i KyotoKällstödda platskandidater — inte en komponerad rutt ännuKandidater nära platsenParranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.Kartan kan inte visas i den här webbläsaren. Stoppen och Maps-rutten fungerar som vanligt.Kultur9 träffarMuseum of KyotoHeian Museum of Ancient HistorySomé SeiryukanGallery of Kyoto Traditional Arts & CraftsOnishi Seiwemon MuseumIkebana History MuseumYaosanChisō GalleryKyoto International Manga MuseumLive i KyotoUtforska liveBlitz just nuEtt nästa drag i Kyoto, just nu.'
-  
+
       at TestContext.<anonymous> (file://<worktree>/frontend/tests/planner-terminal-source-state.test.mjs:16:12)
       at async Test.run (node:internal/test_runner/test:1208:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
@@ -215,9 +215,9 @@ test at frontend/tests/planner-terminal-source-state.test.mjs:9:3
 test at frontend/tests/planner-terminal-source-state.test.mjs:9:3
 ✖ terminal failed source response explains a finished no-route result in sv (41.50475ms)
   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Planeringen avslutades utan rutt/. Input:
-  
+
   'ParrandaENSVKyoto · idagBytKultur · Dagens rytm: LagomJusteraDin dag i KyotoKällstödda platskandidater — inte en komponerad rutt ännuKandidater nära platsenParranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.Kartan kan inte visas i den här webbläsaren. Stoppen och Maps-rutten fungerar som vanligt.Kultur9 träffarMuseum of KyotoHeian Museum of Ancient HistorySomé SeiryukanGallery of Kyoto Traditional Arts & CraftsOnishi Seiwemon MuseumIkebana History MuseumYaosanChisō GalleryKyoto International Manga MuseumLive i KyotoUtforska liveBlitz just nuEtt nästa drag i Kyoto, just nu.'
-  
+
       at TestContext.<anonymous> (file://<worktree>/frontend/tests/planner-terminal-source-state.test.mjs:16:12)
       at async Test.run (node:internal/test_runner/test:1208:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {

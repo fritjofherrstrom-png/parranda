@@ -34,7 +34,7 @@ test at tests/district-composition.test.js:351:1
 ✖ second hand never publishes eleven unrelated cultural places as matches (2.2485ms)
   AssertionError [ERR_ASSERTION]: unrelated members are not selected matches
   + actual - expected
-  
+
   + [
   +   {
   +     center: {
@@ -205,7 +205,7 @@ test at tests/district-composition.test.js:351:1
   +   }
   + ]
   - []
-  
+
       at TestContext.<anonymous> (<worktree>/tests/district-composition.test.js:358:10)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1201:25)
@@ -225,12 +225,12 @@ test at tests/district-composition.test.js:365:1
 ✖ a rare genuine vintage stop survives dominant type and tag summaries (0.336291ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
   + actual - expected
-  
+
   + []
   - [
   -   'second_hand'
   - ]
-  
+
       at TestContext.<anonymous> (<worktree>/tests/district-composition.test.js:375:10)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1201:25)
@@ -250,12 +250,12 @@ test at tests/district-composition.test.js:382:1
 ✖ canonical second-hand aliases match source categories without inferring from names (0.1225ms)
   AssertionError [ERR_ASSERTION]: the established external axis is retained
   + actual - expected
-  
+
   + []
   - [
   -   'second_hand'
   - ]
-  
+
       at TestContext.<anonymous> (<worktree>/tests/district-composition.test.js:390:10)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1201:25)
@@ -275,12 +275,12 @@ test at tests/district-composition.test.js:396:1
 ✖ weak scenic places stay partial while a genuine viewpoint covers the same intent (0.110209ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
   + actual - expected
-  
+
   + undefined
   - [
   -   'views'
   - ]
-  
+
       at TestContext.<anonymous> (<worktree>/tests/district-composition.test.js:400:10)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1201:25)
@@ -300,13 +300,13 @@ test at tests/district-composition.test.js:417:1
 ✖ a legitimate multifunction place can cover several requested preferences (0.105958ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
   + actual - expected
-  
+
     [
   -   'second_hand',
       'culture',
       'views'
     ]
-  
+
       at TestContext.<anonymous> (<worktree>/tests/district-composition.test.js:423:10)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1201:25)
