@@ -2424,7 +2424,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             )}
             {restoredAt && (
               <p className="mt-1 text-xs text-parranda-ink/68">
-                {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE")} —{" "}
+                {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", { day: "numeric", month: "short", year: "numeric" })} —{" "}
                 {canUpdateSaved ? (
                   <button type="button" onClick={() => retryPlan({ sameDate: true })} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-parranda-clay">
                     {t("bygg om för färska events", "rebuild for fresh events")}
