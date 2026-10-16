@@ -192,6 +192,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // other languages and new sessions; the server re-validates it.
   const [placeRef, setPlaceRef] = useState<string | null>(null);
   const [invalidPlaceLink, setInvalidPlaceLink] = useState(false);
+  // False in the static HTML and the hydration render: until the arrival
+  // effect has read the URL, nothing is known about the link's place.
+  const [arrivalRead, setArrivalRead] = useState(false);
   const [conflictingPlaceLink, setConflictingPlaceLink] = useState(false);
   const [narrowingPlace, setNarrowingPlace] = useState(false);
   const [narrowingFailed, setNarrowingFailed] = useState(false);
@@ -1059,6 +1062,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   useEffect(() => {
     if (autoPlannedRef.current) return;
     autoPlannedRef.current = true;
+    setArrivalRead(true);
     setSavedDays(readLS<SavedEntry[]>(SAVED_KEY, []));
     // A shared link carries the WHOLE day's inputs (place + prefs + day + length),
     // so it auto-plans exactly what the sharer saw — composed fresh for the opener.
@@ -2080,7 +2084,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         />
       </div>
 
-      <div className="flex min-w-0 flex-col gap-10 sm:gap-12">
+      <main className="flex min-w-0 flex-col gap-10 sm:gap-12">
       {hasAnchor && (
         <AnchorCard
           t={t}
@@ -2121,15 +2125,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {/* Static hydration and unavailable snapshots must not become another
           place-entry step. Root is the only place picker. */}
       {!hasAnchor && (
+        // One status region from the static HTML on, so the arrival's verdict
+        // is announced as a change. The static page cannot see its own link:
+        // telling a reader with a place link to choose a place on the home
+        // page sent them away while their day was about to be built. Until
+        // the link is read, only "preparing" is true; the app bar links home.
         <div className="flex flex-col items-start gap-3 pt-8" role="status">
-          <p>{invalidPlaceLink
-            ? t("Länken har en ogiltig platsreferens. Välj en plats på startsidan — ingen annan plats väljs automatiskt.", "This link has an invalid place reference. Choose a place on the home page — no other place is selected automatically.")
-            : conflictingPlaceLink
-            ? t("Länken har motstridiga platsankare. Välj en plats på startsidan — ingen annan plats väljs automatiskt.", "This link has conflicting place anchors. Choose a place on the home page — no other place is selected automatically.")
-            : t("Förbereder din dag. Om ingen sparad dag finns, välj en plats på startsidan.", "Preparing your day. If no saved day is available, choose a place on the home page.")}</p>
-          <a href={`/?lang=${lang}`} onClick={() => leavePlanner("home")} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
-            {t("Till startsidan", "Go to home")}
-          </a>
+          {!arrivalRead ? (
+            <p>{t("Förbereder din dag …", "Preparing your day …")}</p>
+          ) : (
+            <>
+              <p>{invalidPlaceLink
+                ? t("Länken har en ogiltig platsreferens. Välj en plats på startsidan — ingen annan plats väljs automatiskt.", "This link has an invalid place reference. Choose a place on the home page — no other place is selected automatically.")
+                : conflictingPlaceLink
+                ? t("Länken har motstridiga platsankare. Välj en plats på startsidan — ingen annan plats väljs automatiskt.", "This link has conflicting place anchors. Choose a place on the home page — no other place is selected automatically.")
+                : t("Förbereder din dag. Om ingen sparad dag finns, välj en plats på startsidan.", "Preparing your day. If no saved day is available, choose a place on the home page.")}</p>
+              <a href={`/?lang=${lang}`} onClick={() => leavePlanner("home")} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                {t("Till startsidan", "Go to home")}
+              </a>
+            </>
+          )}
         </div>
       )}
 
@@ -2569,12 +2584,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {savedDays.length > 0 && (
         <SavedDays t={t} lang={lang} savedDays={savedDays} restoreEntry={restoreEntry} removeSavedDay={removeSavedDay} />
       )}
-      </div>
+      </main>
 
+      {/* No landmark of its own: the map inside is already the "Map of the
+          day" region, and two landmarks with one name read as a duplicate. */}
       {splitLayout && (
-        <aside aria-label={t("Karta över dagen", "Map of the day")} className="sticky top-4 h-[calc(100dvh-2rem)] min-h-[30rem]">
+        <div className="sticky top-4 h-[calc(100dvh-2rem)] min-h-[30rem]">
           {routeMap}
-        </aside>
+        </div>
       )}
 
       {/* THE LIVE SHEET (§3B) — explores the live_events buckets only. It never
