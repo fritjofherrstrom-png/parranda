@@ -170,6 +170,7 @@ export default function RouteMap({
   mapExpanded,
   onToggleExpanded,
   heightClass,
+  regionLabel,
   t,
 }: {
   hasPrimaryRoute: boolean;
@@ -185,11 +186,24 @@ export default function RouteMap({
   /** Offer the expand control only where the map can grow in place. */
   onToggleExpanded?: () => void;
   heightClass: string;
+  /**
+   * The canvas region's accessible name. "Map of the day" unless the map sits
+   * in a landmark that already carries that name (the wide-screen column):
+   * two landmarks with one name read as a duplicate.
+   */
+  regionLabel?: string;
   t: Translate;
 }) {
+  const mapTitle = regionLabel || t("Karta över dagen", "Map of the day");
+  const mapTitleRef = useRef(mapTitle);
+  mapTitleRef.current = mapTitle;
   const frameRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<{ ml: MapLibre; map: any; ready: Promise<void>; markers: any[] } | null>(null);
+  // One map instance moves between layouts; its name follows where it sits.
+  useEffect(() => {
+    instanceRef.current?.map?.getCanvas?.()?.setAttribute("aria-label", mapTitle);
+  }, [mapTitle]);
   // What the view has to show, kept for the re-fit after expand/shrink.
   const marksRef = useRef<FitMark[]>([]);
   const [mapDrawn, setMapDrawn] = useState(false);
@@ -307,7 +321,7 @@ export default function RouteMap({
             renderWorldCopies: false,
             fadeDuration: 0,
             // The canvas region's accessible name; MapLibre's default is "Map".
-            locale: { "Map.Title": t("Karta över dagen", "Map of the day") },
+            locale: { "Map.Title": mapTitleRef.current },
           });
         } catch {
           // No WebGL2, or the GPU refused: the day stays, the map does not.

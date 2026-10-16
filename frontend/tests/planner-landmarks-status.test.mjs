@@ -4,8 +4,9 @@
  *
  * - The app bar's navigation comes before <main>, not inside it, like the
  *   landing. The page shell no longer wraps the island in a <main>.
- * - The map has one landmark: its own "Map of the day" region. The desktop
- *   column around it used to repeat that name as an <aside>.
+ * - "Map of the day" is one landmark: on wide screens the map column (an
+ *   <aside>) and the canvas region inside it used to share that name; the
+ *   canvas is now "Interactive map" there. On phones the canvas is it.
  * - The static HTML cannot see its own link, so its status only says that the
  *   day is being prepared. It used to tell a reader with a place link to
  *   choose a place on the home page, visibly and in role="status".
@@ -43,8 +44,13 @@ test("a link with no place still says where to go once it has been read", async 
 test("navigation sits before main, and the map is one landmark", async (t) => {
   assert.doesNotMatch(read("../src/pages/anywhere.astro"), /^\s*<main/m);
   const planner = read("../src/components/AnywherePlanner.tsx");
-  assert.doesNotMatch(planner, /<aside aria-label=\{t\("Karta över dagen", "Map of the day"\)\}/);
-  assert.match(read("../src/components/planner/RouteMap.tsx"), /"Map\.Title": t\("Karta över dagen", "Map of the day"\)/);
+  // Wide screens: the column is the "Map of the day" landmark and the canvas
+  // region inside it has its own name. Phones: the canvas is the landmark.
+  assert.match(planner, /<aside aria-label=\{t\("Karta över dagen", "Map of the day"\)\}/);
+  assert.match(planner, /regionLabel=\{splitLayout \? t\("Interaktiv karta", "Interactive map"\) : undefined\}/);
+  const routeMap = read("../src/components/planner/RouteMap.tsx");
+  assert.match(routeMap, /const mapTitle = regionLabel \|\| t\("Karta över dagen", "Map of the day"\)/);
+  assert.match(routeMap, /"Map\.Title": mapTitleRef\.current/);
 
   const h = await mountPlanner({ url: "http://localhost/anywhere?place=Testville&lang=en" });
   t.after(() => h.unmount());

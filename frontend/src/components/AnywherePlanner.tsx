@@ -2062,6 +2062,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       mapExpanded={splitLayout ? undefined : mapExpanded}
       onToggleExpanded={splitLayout ? undefined : () => setMapExpanded((cur) => !cur)}
       heightClass={splitLayout ? "h-full" : mapExpanded ? "h-96 sm:h-112" : "h-48 sm:h-60"}
+      regionLabel={splitLayout ? t("Interaktiv karta", "Interactive map") : undefined}
       t={t}
     />
   ) : null;
@@ -2585,12 +2586,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       )}
       </main>
 
-      {/* No landmark of its own: the map inside is already the "Map of the
-          day" region, and two landmarks with one name read as a duplicate. */}
+      {/* The wide-screen map column is the "Map of the day" landmark; the
+          map's own canvas region inside it is named "Interactive map", so
+          the two are not one name twice. */}
       {splitLayout && (
-        <div className="sticky top-4 h-[calc(100dvh-2rem)] min-h-[30rem]">
+        <aside aria-label={t("Karta över dagen", "Map of the day")} className="sticky top-4 h-[calc(100dvh-2rem)] min-h-[30rem]">
           {routeMap}
-        </div>
+        </aside>
       )}
 
       {/* THE LIVE SHEET (§3B) — explores the live_events buckets only. It never
