@@ -469,6 +469,11 @@ test("frames, elevation, layers and small text come from Linje tokens", () => {
   assert.match(anywhereStyles, /z-index: var\(--p-z-map-tooltip\)/);
 });
 
+test("the map's own focusable parts keep a visible ring inside its clipped frame", () => {
+  assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-canvas:focus-visible \{[^}]*outline-offset: -3px/);
+  assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-marker:focus-visible,\s*\.route-map-frame \.maplibregl-ctrl-attrib a:focus-visible \{\s*outline-offset: 0;/);
+});
+
 test("grouped controls never clip the focus ring that sits outside them", () => {
   // The ring is drawn 3px outside a control. A rounded group with
   // overflow-hidden cut it to a sliver on EN/SV, Today/Tomorrow, rhythm and
