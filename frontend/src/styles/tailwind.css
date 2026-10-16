@@ -18,6 +18,10 @@
   --radius-parranda: var(--p-radius-card);
   --radius-parranda-btn: var(--p-radius-button);
 
+  --shadow-control: var(--p-shadow-control);
+  --shadow-pop: var(--p-shadow-pop);
+  --shadow-sheet: var(--p-shadow-sheet);
+
   /* Linje's in-between text sizes, between Tailwind's xs (12) and lg (18).
      Named by their size at the default 16px root, set in rem so they follow
      the reader's own text size (browser text zoom, larger default fonts);
@@ -50,6 +54,18 @@
   [role="button"]:not([aria-disabled="true"]) {
     cursor: pointer;
   }
+}
+
+/* The hairline frame (tokens.css --p-line), one weight for every card, pill,
+   segment and notice. */
+@utility border-line {
+  border-width: var(--p-line);
+}
+@utility border-t-line {
+  border-top-width: var(--p-line);
+}
+@utility border-l-line {
+  border-left-width: var(--p-line);
 }
 
 /* "Linje" type roles. The display face is Archivo on its width axis — wide and
@@ -119,7 +135,7 @@
   background: rgb(var(--p-color-paper));
   border: 1px solid rgb(var(--p-color-ink) / 0.14);
   border-radius: 10px;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
+  box-shadow: var(--p-shadow-control);
   overflow: hidden;
 }
 .route-map-frame .maplibregl-ctrl-group button + button {
@@ -153,7 +169,7 @@
 /* The stop's name, opened from its marker. */
 .route-map-tooltip {
   position: absolute;
-  z-index: 3000;
+  z-index: var(--p-z-map-tooltip);
   padding: 6px 10px;
   border-radius: 10px;
   background: rgb(var(--p-color-ink));
@@ -166,7 +182,7 @@
   max-width: 70vw;
   overflow: hidden;
   text-overflow: ellipsis;
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+  box-shadow: var(--p-shadow-pop);
   pointer-events: none;
   transform: translate(22px, -50%);
 }
@@ -217,7 +233,7 @@
   font-size: 0.8rem;
   font-weight: 600;
   border: 3px solid rgb(var(--p-color-ink));
-  box-shadow: 0 1px 6px rgb(0 0 0 / 0.25);
+  box-shadow: var(--p-shadow-marker);
 }
 
 /* A route stop is drawn twice at the same place (RouteMap.tsx), both as 44px
@@ -258,7 +274,7 @@
   border-radius: 999px;
   background: rgb(var(--p-color-ink));
   transform: translate(-50%, -50%);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+  box-shadow: var(--p-shadow-marker);
 }
 
 .route-map-marker {
@@ -291,7 +307,7 @@
   border: 3px solid rgb(var(--p-color-ink));
   border-radius: 999px;
   background: rgb(var(--p-color-paper));
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.28);
+  box-shadow: var(--p-shadow-marker);
   content: "";
   z-index: -1;
   /* The pin takes the tap on the number too: the number itself does not. */
@@ -302,7 +318,7 @@
 .route-map-marker--event::before {
   border-color: rgb(var(--p-color-paper));
   background: rgb(var(--p-color-live));
-  box-shadow: 0 0 0 2.5px rgb(var(--p-color-live)), 0 2px 8px rgb(0 0 0 / 0.28);
+  box-shadow: 0 0 0 2.5px rgb(var(--p-color-live)), var(--p-shadow-marker);
 }
 
 .route-map-marker--event {

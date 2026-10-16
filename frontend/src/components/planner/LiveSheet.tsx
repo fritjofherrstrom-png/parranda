@@ -157,7 +157,7 @@ export default function LiveSheet({
           : t(`runt ${anchorLabel}`, `around ${anchorLabel}`);
 
   return (
-    <div className="fixed inset-0 z-1100">
+    <div className="fixed inset-0 z-(--p-z-sheet)">
       <div aria-hidden="true" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
       <div
         ref={dialogRef}
@@ -165,7 +165,7 @@ export default function LiveSheet({
         aria-modal="true"
         aria-label={t("Live-händelser", "Live events")}
         tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t border-parranda-ink/14 bg-parranda-paper px-5 pb-8 pt-4 shadow-2xl sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:rounded-3xl sm:border sm:px-7"
+        className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t border-parranda-ink/14 bg-parranda-paper px-5 pb-8 pt-4 shadow-sheet sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:rounded-3xl sm:border sm:px-7"
       >
         <div className="flex justify-center sm:hidden" aria-hidden="true">
           <span className="h-1 w-11 rounded-full bg-parranda-ink/20" />
@@ -444,7 +444,7 @@ export default function LiveSheet({
           )}
           {(liveQueryError || (!liveQueryPending && (sheetPulseState === "pending" || sheetPulseState === "unavailable"))) && (
             <button type="button" onClick={onRetry}
-              className="inline-flex min-h-11 items-center self-start rounded-full border-[1.5px] border-parranda-live/60 px-4 text-sm font-bold text-parranda-live">
+              className="inline-flex min-h-11 items-center self-start rounded-full border-line border-parranda-live/60 px-4 text-sm font-bold text-parranda-live">
               {t("Försök igen", "Try again")}
             </button>
           )}

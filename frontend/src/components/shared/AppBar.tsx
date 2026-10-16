@@ -97,13 +97,13 @@ export default function AppBar({
           onClick={toggleTheme}
           aria-pressed={night}
           aria-label={lang === "sv" ? "Kvällsläge" : "Night mode"}
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full border-[1.5px] border-parranda-ink/18 text-parranda-ink transition hover:border-parranda-ink/50"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-full border-line border-parranda-ink/18 text-parranda-ink transition hover:border-parranda-ink/50"
         >
           <span data-theme-glyph="day"><SunIcon className="h-[18px] w-[18px]" /></span>
           <span data-theme-glyph="night"><MoonIcon className="h-[18px] w-[18px]" /></span>
         </button>
         {/* Each end rounds itself: overflow-hidden here would clip the focus ring. */}
-        <div className="flex rounded-full border-[1.5px] border-parranda-ink/18" role="group" aria-label={languageLabel}>
+        <div className="flex rounded-full border-line border-parranda-ink/18" role="group" aria-label={languageLabel}>
           {(["en", "sv"] as const).map((option) => (
             <a
               key={option}

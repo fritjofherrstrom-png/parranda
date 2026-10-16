@@ -65,7 +65,7 @@ export default function LiveCard({
   const now = useLiveClock([...pulseBuckets.tonight, ...pulseBuckets.thisWeek]);
   return (
     <section
-      className="rounded-parranda border-[1.5px] border-parranda-live/35 bg-parranda-live/8 p-5 sm:p-6"
+      className="rounded-parranda border-line border-parranda-live/35 bg-parranda-live/8 p-5 sm:p-6"
     >
       <Eyebrow as="h2" tone="live" dot>
         {mode === "near_me"

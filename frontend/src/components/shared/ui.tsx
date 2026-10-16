@@ -17,11 +17,11 @@ type ButtonTone = "primary" | "secondary" | "quiet" | "live" | "dashed";
 const TONES: Record<ButtonTone, string> = {
   // The one filled action on a surface: white on terracotta, 5.2:1 in both themes.
   primary: "bg-parranda-terracotta font-extrabold text-white hover:brightness-110",
-  secondary: "border-[1.5px] border-parranda-ink/20 font-bold text-parranda-ink hover:border-parranda-ink/50",
+  secondary: "border-line border-parranda-ink/20 font-bold text-parranda-ink hover:border-parranda-ink/50",
   quiet: "bg-parranda-ink/8 font-bold text-parranda-ink hover:bg-parranda-ink/14",
   live: "bg-parranda-live font-extrabold text-parranda-on-live hover:brightness-110",
   // Optional, explicitly not part of the day.
-  dashed: "border-[1.5px] border-dashed border-parranda-ink/30 font-bold text-parranda-ink hover:border-parranda-ink/55",
+  dashed: "border-line border-dashed border-parranda-ink/30 font-bold text-parranda-ink hover:border-parranda-ink/55",
 };
 
 /**
@@ -39,7 +39,7 @@ export function pillClass(active = false, extra = ""): string {
     "inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 text-13 transition " +
     (active
       ? "bg-parranda-ink font-bold text-parranda-paper"
-      : "border-[1.5px] border-parranda-ink/18 font-semibold text-parranda-ink/80 hover:border-parranda-ink/45 hover:text-parranda-ink") +
+      : "border-line border-parranda-ink/18 font-semibold text-parranda-ink/80 hover:border-parranda-ink/45 hover:text-parranda-ink") +
     (extra ? ` ${extra}` : "")
   );
 }
@@ -59,7 +59,7 @@ export const compactPillTarget =
  * segment rounds its own ends. Never `overflow-hidden` on the group: it would
  * clip the focus ring, which sits 3px outside the segment.
  */
-export const segmentGroup = "inline-flex self-start rounded-full border-[1.5px] border-parranda-ink/18";
+export const segmentGroup = "inline-flex self-start rounded-full border-line border-parranda-ink/18";
 
 /** One segment of `segmentGroup`. Selected is the system's one "chosen" fill: ink. */
 export function segmentClass(active: boolean, extra = ""): string {
@@ -107,10 +107,10 @@ export const labelChip =
 
 /** A plain informational card: notices, refusals, errors. */
 export const noticeCard =
-  "rounded-parranda border-[1.5px] border-parranda-ink/12 bg-parranda-ink/4 p-4 text-sm leading-relaxed text-parranda-ink/80";
+  "rounded-parranda border-line border-parranda-ink/12 bg-parranda-ink/4 p-4 text-sm leading-relaxed text-parranda-ink/80";
 
 /** The surface every grouped panel sits on. */
-export const panelCard = "rounded-parranda border-[1.5px] border-parranda-ink/12 bg-parranda-ink/4";
+export const panelCard = "rounded-parranda border-line border-parranda-ink/12 bg-parranda-ink/4";
 
 type EyebrowTone = "muted" | "glow" | "live";
 const EYEBROW_TONES: Record<EyebrowTone, string> = {

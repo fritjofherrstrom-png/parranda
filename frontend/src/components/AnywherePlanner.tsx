@@ -2223,7 +2223,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           screen is the evidence. Silently dropping it would let the ledger
           claim something the day does not show. */}
       {unkept.count > 0 && (
-        <div className="flex flex-col gap-1.5 rounded-parranda border-[1.5px] border-parranda-glow/40 bg-parranda-glow/8 px-4 py-3 text-13 text-parranda-ink/85" role="status">
+        <div className="flex flex-col gap-1.5 rounded-parranda border-line border-parranda-glow/40 bg-parranda-glow/8 px-4 py-3 text-13 text-parranda-ink/85" role="status">
           {unkept.reasons.map((entry: { id: string; label: string; reason: string | null }) => (
             <p key={entry.id}>{isLiveOccurrenceId(entry.id) ? t(`${entry.label || "Det valda tillfället"} kunde inte bekräftas som stopp i den här dagen. Ditt val finns kvar.`, `${entry.label || "The chosen occurrence"} could not be confirmed as a stop in this day. Your choice is retained.`) : unkeptReasonSentence(entry, t)}</p>
           ))}
@@ -2366,7 +2366,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {dayChange && phase === "done" && !dayIsStale && dayChangeLine.length > 0 && (
         <div
           role="status"
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-parranda border-[1.5px] border-parranda-ink/12 bg-parranda-ink/4 px-4 py-2.5"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-parranda border-line border-parranda-ink/12 bg-parranda-ink/4 px-4 py-2.5"
         >
           <p className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink/75">
             <span className="font-bold text-parranda-ink">{t("Ändrat", "Changed")}: </span>
@@ -2376,7 +2376,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             type="button"
             onClick={undoDayChange}
             aria-label={t("Ångra ändringen", "Undo this change")}
-            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-parranda-ink/20 px-3.5 text-xs font-bold text-parranda-ink transition hover:border-parranda-ink/50"
+            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-line border-parranda-ink/20 px-3.5 text-xs font-bold text-parranda-ink transition hover:border-parranda-ink/50"
           >
             <UndoIcon className="h-3.5 w-3.5" />
             {t("Ångra", "Undo")}
@@ -2412,7 +2412,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           remain route actions: offering them here would call an unsequenced
           candidate surface a day. */}
       {showStructure && structure && !(showDay && routeStops.length > 0) && (
-        <section className="rounded-parranda border-[1.5px] border-parranda-glow/40 bg-parranda-glow/8 p-4">
+        <section className="rounded-parranda border-line border-parranda-glow/40 bg-parranda-glow/8 p-4">
           <div className="min-w-0 flex-1">
             {structure.provenance === "agnostic_anchor" && (
               <p className="text-sm font-bold text-parranda-clay">

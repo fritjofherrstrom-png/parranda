@@ -229,7 +229,7 @@ export default function StopLine({
               `${compactPillTarget} gap-1.5 px-3.5 font-bold ` +
               (following
                 ? "bg-parranda-ink text-parranda-paper"
-                : "border-[1.5px] border-parranda-ink/20 text-parranda-ink hover:border-parranda-ink/50")
+                : "border-line border-parranda-ink/20 text-parranda-ink hover:border-parranda-ink/50")
             }
           >
             <LocationIcon className={"h-3.5 w-3.5 " + (following ? "" : "text-parranda-ember")} />
@@ -378,7 +378,7 @@ export default function StopLine({
               {expanded && (
                 <div
                   id={panelId}
-                  className="mb-2 ml-14 mt-1 flex flex-col rounded-parranda border-[1.5px] border-parranda-ink/12 bg-parranda-ink/5 p-4"
+                  className="mb-2 ml-14 mt-1 flex flex-col rounded-parranda border-line border-parranda-ink/12 bg-parranda-ink/5 p-4"
                 >
                   {/* Facts only. The schedule row is a bounded source fact
                       for the selected local day, never an "open now" claim. */}
@@ -429,7 +429,7 @@ export default function StopLine({
                       <button
                         type="button"
                         onClick={() => releaseCommitment(stopIdentity)}
-                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-parranda-btn border-[1.5px] border-parranda-ember/60 bg-parranda-ember/10 px-4 text-sm font-bold text-parranda-ink transition hover:border-parranda-ember sm:px-5"
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-parranda-btn border-line border-parranda-ember/60 bg-parranda-ember/10 px-4 text-sm font-bold text-parranda-ink transition hover:border-parranda-ember sm:px-5"
                       >
                         <KeepIcon className="h-4 w-4 text-parranda-ember" />
                         {t("Behålls — släpp", "Kept — release")}
@@ -502,7 +502,7 @@ export default function StopLine({
               >
                 {routeNumber}
               </span>
-              <div className="min-w-0 flex-1 rounded-parranda border-[1.5px] border-parranda-live/45 bg-parranda-live/8 p-4">
+              <div className="min-w-0 flex-1 rounded-parranda border-line border-parranda-live/45 bg-parranda-live/8 p-4">
                 <Eyebrow as="h3" tone="live" dot>{t("Live i din rutt", "Live in your route")}</Eyebrow>
                 <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-parranda-ink">
                   {pin ? (
@@ -621,7 +621,7 @@ export default function StopLine({
                 const candidatePanelId = `candidate-panel-detour-${index}`;
                 const expanded = expandedCandidateKey === candidateKey;
                 return (
-                  <li key={stop.id || stop.candidate_id || stop.place_id || name} className="rounded-parranda border-[1.5px] border-dashed border-parranda-ink/25 px-3.5 py-1.5">
+                  <li key={stop.id || stop.candidate_id || stop.place_id || name} className="rounded-parranda border-line border-dashed border-parranda-ink/25 px-3.5 py-1.5">
                     <button
                       type="button"
                       aria-expanded={expanded}
@@ -660,7 +660,7 @@ export default function StopLine({
                                 ? releaseCommitment(candidateId)
                                 : commit(candidateId, "pin", name)
                             }
-                            className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border-[1.5px] px-4 text-sm font-bold transition ${
+                            className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border-line px-4 text-sm font-bold transition ${
                               commitments[candidateId]?.kind === "pin"
                                 ? "border-parranda-ember/60 bg-parranda-ember/10 text-parranda-ink hover:border-parranda-ember"
                                 : "border-parranda-ink/20 text-parranda-ink hover:border-parranda-ink/50"

@@ -128,7 +128,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
           placeholder={t("T.ex. Lyon eller Kyoto", "e.g. Lyon or Kyoto")} autoComplete="off"
           className="min-w-0 flex-1 bg-transparent text-lg text-parranda-ink outline-hidden placeholder:text-parranda-ink/68 focus-visible:outline-hidden sm:text-xl" />
       </div>
-      {shown && <div className={"absolute inset-x-0 z-40 overflow-hidden rounded-parranda border border-parranda-ink/20 bg-parranda-paper shadow-xl " + (above ? "bottom-full mb-1" : "top-full mt-1")}>
+      {shown && <div className={"absolute inset-x-0 z-(--p-z-popover) overflow-hidden rounded-parranda border border-parranda-ink/20 bg-parranda-paper shadow-pop " + (above ? "bottom-full mb-1" : "top-full mt-1")}>
         <ul id={listId} role="listbox" aria-label={t("Platsförslag", "Place suggestions")} className="max-h-72 overflow-y-auto py-1">
           {choices.map((choice, index) => <li key={choice.selection_id} id={`${listId}-${index}`} role="option" aria-selected={active === index}
             onMouseDown={event => event.preventDefault()} onClick={() => choose(choice)} onMouseEnter={() => setActive(index)}

@@ -106,7 +106,7 @@ export default function AnchorCard({
             ref={adjustButton}
             aria-expanded={false}
             onClick={() => toggleAdjust(true)}
-            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-parranda-ink/18 px-3.5 text-13 font-bold text-parranda-ink transition hover:border-parranda-ink/50"
+            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-line border-parranda-ink/18 px-3.5 text-13 font-bold text-parranda-ink transition hover:border-parranda-ink/50"
           >
             {t("Justera", "Adjust")}
             <ChevronDownIcon className="h-3.5 w-3.5" />
@@ -129,7 +129,7 @@ export default function AnchorCard({
               aria-expanded={true}
               aria-controls={panelId}
               onClick={() => toggleAdjust(false)}
-              className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-parranda-ink/18 px-3.5 text-13 font-bold text-parranda-ink transition hover:border-parranda-ink/50"
+              className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-line border-parranda-ink/18 px-3.5 text-13 font-bold text-parranda-ink transition hover:border-parranda-ink/50"
             >
               {t("Klar", "Done")}
               <ChevronDownIcon className="h-3.5 w-3.5 rotate-180" />
@@ -151,7 +151,7 @@ export default function AnchorCard({
                       `${compactPillTarget} gap-1.5 px-3.5 ` +
                       (active
                         ? "bg-parranda-ink font-bold text-parranda-paper"
-                        : "border-[1.5px] border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45 hover:text-parranda-ink")
+                        : "border-line border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45 hover:text-parranda-ink")
                     }
                   >
                     {active && <CheckIcon className="h-3 w-3" />}
@@ -192,7 +192,7 @@ export default function AnchorCard({
                     // "optional, not part of the day" (ui.tsx), which a rhythm is not.
                     (walkKey === free.key
                       ? "bg-parranda-ink font-bold text-parranda-paper"
-                      : "border-[1.5px] border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45 hover:text-parranda-ink")
+                      : "border-line border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45 hover:text-parranda-ink")
                   }
                 >
                   {walkKey === free.key && <CheckIcon className="h-3 w-3" />}
@@ -201,7 +201,7 @@ export default function AnchorCard({
               )}
             </div>
             <div
-              className="grid grid-cols-3 rounded-full border-[1.5px] border-parranda-ink/18 sm:max-w-sm"
+              className="grid grid-cols-3 rounded-full border-line border-parranda-ink/18 sm:max-w-sm"
               role="group"
               aria-label={t("Dagens rytm", "Day rhythm")}
             >
@@ -215,7 +215,7 @@ export default function AnchorCard({
                     onClick={() => onSetRhythm(preset.key)}
                     className={
                       "min-h-11 px-2 text-13 leading-tight transition first:rounded-l-full last:rounded-r-full " +
-                      (index > 0 ? "border-l-[1.5px] border-parranda-ink/18 " : "") +
+                      (index > 0 ? "border-l-line border-parranda-ink/18 " : "") +
                       (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink/72 hover:text-parranda-ink")
                     }
                   >

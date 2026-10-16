@@ -57,7 +57,7 @@ export default function CandidateAreas({
 
       <ul className="flex flex-col gap-3">
         {areas.map((area, index) => (
-          <li key={index} className="rounded-parranda border-[1.5px] border-parranda-ink/12 bg-parranda-paper p-4">
+          <li key={index} className="rounded-parranda border-line border-parranda-ink/12 bg-parranda-paper p-4">
             <div className="flex flex-wrap items-center gap-1.5">
               {(area.covers ?? []).map((axis) => (
                 <span key={axis} className="rounded-full bg-parranda-ink px-2.5 py-0.5 text-xs font-bold text-parranda-paper">
@@ -80,7 +80,7 @@ export default function CandidateAreas({
                   const expanded = expandedCandidateKey === candidateKey;
                   const facts = [...new Set([stop.address, stop.area].map((value) => String(value || "").trim()).filter(Boolean))];
                   return (
-                    <li key={stop.id ?? si} className="rounded-parranda-btn border-[1.5px] border-parranda-ink/10 px-3 py-1">
+                    <li key={stop.id ?? si} className="rounded-parranda-btn border-line border-parranda-ink/10 px-3 py-1">
                       <button
                         type="button"
                         aria-expanded={expanded}
@@ -113,7 +113,7 @@ export default function CandidateAreas({
                                   ? releaseCommitment(candidateId)
                                   : commit(candidateId, "pin", name)
                               }
-                              className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border-[1.5px] px-4 text-sm font-bold transition sm:ml-2 sm:w-auto ${
+                              className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border-line px-4 text-sm font-bold transition sm:ml-2 sm:w-auto ${
                                 commitments[candidateId]?.kind === "pin"
                                   ? "border-parranda-ember/60 bg-parranda-ember/10 text-parranda-ink hover:border-parranda-ember"
                                   : "border-parranda-ink/20 text-parranda-ink hover:border-parranda-ink/50"

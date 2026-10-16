@@ -199,7 +199,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
               type="button"
               onClick={useLocation}
               disabled={locating}
-              className="inline-flex min-h-12 items-center gap-2 rounded-full border-[1.5px] border-parranda-ink/22 px-5 text-15 font-bold text-parranda-ink transition hover:border-parranda-ink/55 disabled:opacity-60"
+              className="inline-flex min-h-12 items-center gap-2 rounded-full border-line border-parranda-ink/22 px-5 text-15 font-bold text-parranda-ink transition hover:border-parranda-ink/55 disabled:opacity-60"
             >
               <LocationIcon className="h-4 w-4 text-parranda-ember" />
               {locating ? t("Hämtar position …", "Getting location …") : t("Använd min position", "Use my location")}
@@ -236,7 +236,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
         )}
       </main>
 
-      <footer className="type-data flex items-center justify-between border-t-[1.5px] border-parranda-ink/14 py-4 text-11 text-parranda-ink/68">
+      <footer className="type-data flex items-center justify-between border-t-line border-parranda-ink/14 py-4 text-11 text-parranda-ink/68">
         <span>Parranda</span>
         <span>{t("din rutt, din stad", "your route, your city")}</span>
       </footer>

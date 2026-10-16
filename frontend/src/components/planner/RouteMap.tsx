@@ -620,7 +620,7 @@ export default function RouteMap({
           aria-expanded={mapExpanded}
           aria-label={mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
           data-map-control=""
-          className="absolute right-2.5 top-2.5 z-1001 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-parranda-ink/20 bg-parranda-paper/90 text-parranda-ink/85 shadow-xs backdrop-blur-xs transition hover:border-parranda-ember"
+          className="absolute right-2.5 top-2.5 z-(--p-z-map-control) inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-parranda-ink/20 bg-parranda-paper/90 text-parranda-ink/85 shadow-control backdrop-blur-xs transition hover:border-parranda-ember"
         >
           {mapExpanded ? <CollapseIcon className="h-5 w-5" /> : <ExpandIcon className="h-5 w-5" />}
         </button>

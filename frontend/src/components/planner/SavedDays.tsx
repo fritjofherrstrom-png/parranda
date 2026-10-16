@@ -22,7 +22,7 @@ export default function SavedDays({
   removeSavedDay: (id: string) => void;
 }) {
   return (
-    <section className="border-t-[1.5px] border-parranda-ink/14 pt-3">
+    <section className="border-t-line border-parranda-ink/14 pt-3">
       <Eyebrow className="py-1">{t("Sparade dagar", "Saved days")}</Eyebrow>
       <ul className="flex flex-col">
         {savedDays.map((entry) => (

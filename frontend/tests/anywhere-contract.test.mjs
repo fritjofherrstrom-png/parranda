@@ -441,14 +441,32 @@ test("keyboard-reachable controls have one visible focus contract", () => {
 });
 
 test("small text keeps AA contrast on every Linje surface", () => {
-  // ink/60 is 4.42:1 on a day-theme panel (ink/4 over paper); ink/64 is the
-  // lowest step that clears 4.5:1 on panels up to ink/8. White at 85 % on
-  // terracotta was 4.18:1, and the digit on a white/22 disc 3.7:1.
+  // tokens.css: secondary text never goes below 65 % ink. ink/60 was 4.42:1
+  // on a day-theme panel (ink/4 over paper); 65 % clears 4.5:1 on panels up
+  // to ink/10. White at 85 % on terracotta was 4.18:1, and the digit on a
+  // white/22 disc 3.7:1.
   const surface = [plannerSurfaceSource(), componentSource("PlaceSearchField.tsx"), componentSource("LandingHero.tsx")].join("\n");
-  const faint = [...surface.matchAll(/(?<![\w-])text-parranda-ink\/(\d+)/g)].map(m => Number(m[1])).filter(n => n < 64);
-  assert.deepEqual(faint, [], "no ink text below 64 %");
+  const faint = [...surface.matchAll(/(?<![\w-])text-parranda-ink\/(\d+)/g)].map(m => Number(m[1])).filter(n => n < 65);
+  assert.deepEqual(faint, [], "no ink text below 65 %");
   assert.doesNotMatch(surface, /text-white\/\d+/);
   assert.doesNotMatch(componentSource("planner/DayHeader.tsx"), /bg-white\/22/);
+});
+
+test("frames, elevation, layers and small text come from Linje tokens", () => {
+  // 7fb8c10 design-system audit: 35 hand-written 1.5px borders, raw z-index
+  // numbers, black shadows in five strengths and 52 fixed px text sizes.
+  const surface = [plannerSurfaceSource(), componentSource("PlaceSearchField.tsx"), componentSource("LandingHero.tsx")].join("\n");
+  assert.doesNotMatch(surface, /border(-[trblxy])?-\[1\.5px\]/);
+  assert.doesNotMatch(surface, /(?<![\w-])z-\d+(?![\w-])/);
+  assert.doesNotMatch(surface, /(?<![\w-])shadow-(xs|sm|md|lg|xl|2xl)(?![\w-])/);
+  assert.doesNotMatch(surface, /text-\[\d+px\]/);
+  const tokens = readFileSync(new URL("../src/styles/tokens.css", import.meta.url), "utf8");
+  for (const token of ["--p-line", "--p-shadow-control", "--p-shadow-marker", "--p-shadow-pop", "--p-shadow-sheet", "--p-z-popover", "--p-z-map-control", "--p-z-map-tooltip", "--p-z-sheet"]) {
+    assert.match(tokens, new RegExp(`${token}:`), token);
+  }
+  assert.doesNotMatch(anywhereStyles, /box-shadow:[^;]*rgb\(0 0 0/);
+  assert.doesNotMatch(anywhereStyles, /font-size: \d+px/);
+  assert.match(anywhereStyles, /z-index: var\(--p-z-map-tooltip\)/);
 });
 
 test("grouped controls never clip the focus ring that sits outside them", () => {

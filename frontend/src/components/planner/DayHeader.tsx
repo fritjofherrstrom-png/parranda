@@ -232,7 +232,7 @@ export default function DayHeader({
             <button
               type="button"
               onClick={retryPlan}
-              className="inline-flex min-h-11 items-center rounded-full border-[1.5px] border-parranda-ember/50 px-3.5 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
+              className="inline-flex min-h-11 items-center rounded-full border-line border-parranda-ember/50 px-3.5 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
             >
               {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök uppdatera igen", "Try updating again")}
             </button>
@@ -287,7 +287,7 @@ export default function DayHeader({
               key={key}
               className={
                 state === "missing"
-                  ? "inline-flex items-center gap-1.5 rounded-full border-[1.5px] border-dashed border-parranda-ink/30 px-2.5 py-1 text-xs font-semibold text-parranda-ink/72"
+                  ? "inline-flex items-center gap-1.5 rounded-full border-line border-dashed border-parranda-ink/30 px-2.5 py-1 text-xs font-semibold text-parranda-ink/72"
                   : labelChip
               }
             >
@@ -306,7 +306,7 @@ export default function DayHeader({
           still fetching. The day is real but provisional: say that more is on
           its way and let the reader ask again, rather than judging the place. */}
       {placesArriving && (
-        <div role="status" className="flex flex-col items-start gap-2 rounded-parranda border-[1.5px] border-parranda-ember/40 bg-parranda-ember/8 px-4 py-3">
+        <div role="status" className="flex flex-col items-start gap-2 rounded-parranda border-line border-parranda-ember/40 bg-parranda-ember/8 px-4 py-3">
           <p className="text-sm font-bold text-parranda-ink">{restoredAt
             ? t("Källorna hade inte hämtats klart när dagen skapades", "Sources had not finished when this day was created")
             : t("Fler platser är på väg", "More places are on their way")}</p>
@@ -415,7 +415,7 @@ export function DayActions({
                       "flex min-h-14 items-center gap-3 rounded-parranda-btn px-3.5 py-2 text-left text-15 transition " +
                       (first
                         ? "bg-parranda-terracotta font-extrabold text-white hover:brightness-110"
-                        : "border-[1.5px] border-parranda-ink/20 font-bold text-parranda-ink hover:border-parranda-ink/50")
+                        : "border-line border-parranda-ink/20 font-bold text-parranda-ink hover:border-parranda-ink/50")
                     }
                   >
                     <span

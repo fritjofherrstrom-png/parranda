@@ -64,7 +64,7 @@ export default function BlitzCard({
         </p>
       )}
       {blitzPhase !== "idle" && (
-        <section className="rounded-parranda border-[1.5px] border-parranda-ink/14 bg-parranda-ink/4 p-4" aria-live="polite">
+        <section className="rounded-parranda border-line border-parranda-ink/14 bg-parranda-ink/4 p-4" aria-live="polite">
           <div className="flex items-center gap-2">
             <BoltIcon className="h-3.5 w-3.5 text-parranda-glow" />
             <Eyebrow tone="glow">{t("Blitz just nu", "Blitz right now")}</Eyebrow>
