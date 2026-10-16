@@ -151,7 +151,8 @@ export default function BlitzCard({
                   {move.kind === "live_event"
                     ? liveSourceLink && (
                         <a href={liveSourceLink.href} target="_blank" rel="noreferrer" className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
-                          <span>{liveSourceLink.text}<span aria-hidden="true">&nbsp;↗</span></span>
+                          <span>{liveSourceLink.text}</span>
+                          <ExternalIcon />
                         </a>
                       )
                     : move.source.url && (

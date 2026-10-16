@@ -41,7 +41,7 @@ import {
   SightIcon,
   WalkIcon,
 } from "../shared/icons";
-import { buttonClass, compactPillTarget, Eyebrow } from "../shared/ui";
+import { buttonClass, compactPillTarget, Eyebrow, ExternalLinkText, inlineLinkTarget } from "../shared/ui";
 import { DAYPART_LABELS, label, partialPreferenceLabels, typeLabel, type Lang, type Translate } from "./copy";
 import { canCommitTo, type Commitments } from "./commitments";
 import { useFollowPosition } from "./useFollowPosition";
@@ -545,8 +545,8 @@ export default function StopLine({
                     {sourceLabel && <>{t("Källa", "Source")}: {sourceLabel}</>}
                     {sourceLabel && sourceLink && " · "}
                     {sourceLink && (
-                      <a href={sourceLink.href} target="_blank" rel="noopener noreferrer" className="-my-3 inline-flex min-h-11 min-w-11 items-center underline decoration-parranda-ink/30 underline-offset-2 hover:text-parranda-live">
-                        <span>{sourceLink.text}<span aria-hidden="true">&nbsp;↗</span></span>
+                      <a href={sourceLink.href} target="_blank" rel="noopener noreferrer" className={`${inlineLinkTarget} underline decoration-parranda-ink/30 underline-offset-2 hover:text-parranda-live`}>
+                        <ExternalLinkText text={sourceLink.text} />
                       </a>
                     )}
                   </p>

@@ -425,9 +425,12 @@ test("route, saved-day, Blitz, and source actions keep a 44px mobile touch targe
   assert.match(anywherePlannerSource, /onClick=\{\(\) => restoreEntry\(entry\)\}[\s\S]{0,180}min-h-11/);
   assert.match(anywherePlannerSource, /aria-label=\{t\("Ta bort", "Remove"\)\}[\s\S]{0,180}min-h-11 min-w-11/);
   assert.match(anywherePlannerSource, /href=\{pin\}[\s\S]{0,180}min-h-11 min-w-11/);
-  // Live source links (rows, woven stop, Blitz) name their destination.
-  assert.match(anywherePlannerSource, /href=\{link\.href\}[\s\S]{0,180}min-h-11 min-w-11/);
-  assert.match(anywherePlannerSource, /href=\{sourceLink\.href\}[\s\S]{0,180}min-h-11 min-w-11/);
+  // Live source links (rows, woven stop, Blitz) name their destination. Inline
+  // ones draw the 44px target with ::before, so wrapping never moves the text.
+  assert.match(anywherePlannerSource, /href=\{link\.href\}[\s\S]{0,120}\$\{inlineLinkTarget\}/);
+  assert.match(anywherePlannerSource, /href=\{sourceLink\.href\}[\s\S]{0,120}\$\{inlineLinkTarget\}/);
+  assert.match(componentSource("shared/ui.tsx"), /inlineLinkTarget = "relative before:absolute before:-inset-x-1 before:-inset-y-\[14px\]/);
+  assert.doesNotMatch(anywherePlannerSource, /-my-3|&nbsp;↗/);
   assert.match(anywherePlannerSource, /href=\{liveSourceLink\.href\}[\s\S]{0,180}min-h-11/);
 });
 
@@ -435,6 +438,17 @@ test("keyboard-reachable controls have one visible focus contract", () => {
   assert.match(anywhereStyles, /:where\([\s\S]*a\[href\][\s\S]*button[\s\S]*input[\s\S]*summary[\s\S]*\):focus-visible/);
   assert.match(anywhereStyles, /outline: 3px solid rgb\(var\(--p-color-glow\)\)/);
   assert.match(anywhereStyles, /outline-offset: 3px/);
+});
+
+test("small text keeps AA contrast on every Linje surface", () => {
+  // ink/60 is 4.42:1 on a day-theme panel (ink/4 over paper); ink/64 is the
+  // lowest step that clears 4.5:1 on panels up to ink/8. White at 85 % on
+  // terracotta was 4.18:1, and the digit on a white/22 disc 3.7:1.
+  const surface = [plannerSurfaceSource(), componentSource("PlaceSearchField.tsx"), componentSource("LandingHero.tsx")].join("\n");
+  const faint = [...surface.matchAll(/(?<![\w-])text-parranda-ink\/(\d+)/g)].map(m => Number(m[1])).filter(n => n < 64);
+  assert.deepEqual(faint, [], "no ink text below 64 %");
+  assert.doesNotMatch(surface, /text-white\/\d+/);
+  assert.doesNotMatch(componentSource("planner/DayHeader.tsx"), /bg-white\/22/);
 });
 
 test("grouped controls never clip the focus ring that sits outside them", () => {

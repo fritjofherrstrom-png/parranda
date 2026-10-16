@@ -422,7 +422,8 @@ export function DayActions({
                       aria-hidden="true"
                       className={
                         "type-data inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold " +
-                        (first ? "bg-white/22" : "bg-parranda-ink/8")
+                        // A darker disc keeps the white digit at 6.7:1 on terracotta (white/22 gave 3.7:1).
+                        (first ? "bg-black/15" : "bg-parranda-ink/8")
                       }
                     >
                       {index + 1}
@@ -430,7 +431,7 @@ export function DayActions({
                     <span className="min-w-0 flex-1">
                       <span className="sr-only">{t(`Del ${index + 1} i Google Maps: `, `Part ${index + 1} in Google Maps: `)}</span>
                       {routeEndLabel(part.from)} → {routeEndLabel(part.to)}
-                      <span className={"type-data block text-[11px] font-medium " + (first ? "text-white/85" : "text-parranda-ink/68")}>
+                      <span className={"type-data block text-[11px] font-medium " + (first ? "text-white" : "text-parranda-ink/68")}>
                         {newStops > 0
                           ? t(`${newStops} stopp`, `${newStops} ${newStops === 1 ? "stop" : "stops"}`)
                           : t("Sista biten", "The last stretch")}

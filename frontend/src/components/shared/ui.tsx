@@ -4,12 +4,13 @@
  * The same long class strings used to recur across the landing, the planner
  * and the Live sheet — eyebrows, buttons, chips, notice cards. They live here
  * once, so the design system is explicit and a restyle is one edit. These are
- * deliberately thin: class helpers and two tiny components, no behaviour.
+ * deliberately thin: class helpers and a few tiny components, no behaviour.
  *
  * Every control keeps the 44 px minimum target; the focus ring is the global
  * contract in tailwind.css.
  */
 import type { ReactNode } from "react";
+import { ExternalIcon } from "./icons";
 
 type ButtonTone = "primary" | "secondary" | "quiet" | "live" | "dashed";
 
@@ -66,6 +67,33 @@ export function segmentClass(active: boolean, extra = ""): string {
     "inline-flex min-h-11 items-center justify-center px-[18px] text-[13px] transition first:rounded-l-full last:rounded-r-full " +
     (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink/72 hover:text-parranda-ink") +
     (extra ? ` ${extra}` : "")
+  );
+}
+
+/**
+ * An inline text link that is still a 44px target. The invisible ::before
+ * reaches 14px above and below the line, so the link never changes the text's
+ * layout: no negative margins, and a wrapped link cannot run into the next row.
+ */
+export const inlineLinkTarget = "relative before:absolute before:-inset-x-1 before:-inset-y-[14px] before:content-['']";
+
+/**
+ * Link text that leaves Parranda: the text, then the external mark. The mark is
+ * the SVG, never the "↗" glyph, which Safari draws as a blue emoji box. The last
+ * word and the mark never wrap apart, and the mark adds no text of its own.
+ */
+export function ExternalLinkText({ text }: { text: string }) {
+  const space = text.lastIndexOf(" ");
+  const head = space > 0 ? text.slice(0, space + 1) : "";
+  const tail = space > 0 ? text.slice(space + 1) : text;
+  return (
+    <>
+      {head}
+      <span className="whitespace-nowrap">
+        {tail}
+        <ExternalIcon className="ml-[0.2em] h-[0.95em] w-[0.95em] align-[-0.12em]" />
+      </span>
+    </>
   );
 }
 
