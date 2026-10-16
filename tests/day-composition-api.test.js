@@ -111,6 +111,35 @@ for (const targetCount of [1, 0]) test(`HTTP intentional ${targetCount}-stop rem
   }
 });
 
+test('HTTP a new stable pin can enter a shortened day without restoring removed visits or filling its cap', async t => {
+  const supply = rows('museum', 'museum', 8).map(record => ({ ...record, lat: record.lat + 1, lng: record.lng + 1 }));
+  const fixture = await fixtureServer(t, supply);
+  const original = await requestJson(fixture.server, { path: '/api/route-recommendations?lang=en', body: await payload({ preferences: ['culture'] }) });
+  const originalIds = original.body.days[0].primary_route.main_stops.map(stop => stop.id);
+  assert.equal(originalIds.length, 6);
+  const retained = [originalIds[0], originalIds[2]];
+  const outsider = supply.find(record => !originalIds.includes(record.id));
+  assert.ok(outsider, 'precondition: a real admitted alternative exists outside the published route');
+  const dayEdit = { version: 1, action: 'remove', candidate_id: originalIds[1],
+    retained_candidate_ids: retained, target_stop_count: 2, slot_index: 1,
+    replacement_preference: null, removed_candidate_ids: originalIds.filter(id => !retained.includes(id)) };
+  const removed = await requestJson(fixture.server, { path: '/api/route-recommendations?lang=en',
+    body: await payload({ preferences: ['culture'], pinnedCandidateIds: [retained[0]], dayEdit }) });
+  assert.equal(removed.body.agnostic_route_output_experiment.day_edit.status, 'applied');
+  assert.deepEqual(new Set(removed.body.days[0].primary_route.main_stops.map(stop => stop.id)), new Set(retained));
+  const added = await requestJson(fixture.server, { path: '/api/route-recommendations?lang=en',
+    body: await payload({ preferences: ['culture'], pinnedCandidateIds: [retained[0], outsider.id],
+      dayEdit: { ...dayEdit, preserve_retained: false } }) });
+  assert.equal(added.status, 200);
+  const experiment = added.body.agnostic_route_output_experiment;
+  assert.equal(experiment.day_edit.status, 'applied');
+  const stops = added.body.days[0].primary_route.main_stops;
+  assert.equal(stops.length, 2);
+  assert.deepEqual(new Set(stops.map(stop => stop.id)), new Set([retained[0], outsider.id]));
+  assert.ok(!stops.some(stop => dayEdit.removed_candidate_ids.includes(stop.id)));
+  assert.equal(experiment.walking_validation.valid, true);
+});
+
 test('a computed edit withheld by publication cannot be reported as applied', async t => {
   const supply = rows('museum', 'museum', 8).map(record => ({ ...record, lat: record.lat + 1, lng: record.lng + 1 }));
   const fixture = await fixtureServer(t, supply);

@@ -187,7 +187,20 @@ function writeSnapshot(city, name, value) {
 
 async function assertScenarioSnapshot(city, name, payload, weatherCodes = {}) {
   global.fetch = createStableScenarioFetch(weatherCodes);
-  const actual = normalizeScenarioResult(await generateRecommendations(payload));
+  const generated = await generateRecommendations(payload);
+  const actual = normalizeScenarioResult(generated);
+  if (city === 'athens' && name === 'preview-zero-state') {
+    const stops = generated.days[0].primary_route.main_stops;
+    // Updating order/leg snapshots must not approve different identities or
+    // upgrade the two lower-trust supplement records into curated visits.
+    assert.deepEqual(stops.map(stop => stop.id).sort(), [
+      'athens-alexandrino', 'athens-ama-lachei-stis-nefelis', 'athens-filopappou-hill',
+      'athens-klimataria', 'athens-pnyx-hill',
+    ]);
+    assert.equal(stops.filter(stop => stop.trust?.human_verified === true).length, 3);
+    assert.equal(stops.filter(stop => stop.provisional === true && stop.trust?.source_tier === 'inferred'
+      && stop.trust?.human_verified === false && stop.trust?.confidence === 'needs_review').length, 2);
+  }
 
   if (shouldUpdateSnapshots) {
     writeSnapshot(city, name, actual);

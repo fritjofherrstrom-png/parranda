@@ -26,14 +26,14 @@ test('recorded London supply reaches the engine and walking validation instead o
   // Acquisition facts remain unchanged. Ten encyclopedia-only records no
   // longer bypass the current-visit evidence gates (the fixture includes
   // historical museums). The other 21 candidates still support an actual
-  // five-stop walk with all requested interests and an eight-place reservoir.
+  // five-stop walk with all requested interests and a bounded twelve-place reservoir.
   const knowledgeOnly = recorded.records.filter(record => record.sources?.length &&
     record.sources.every(source => source.family === 'open_knowledge'));
   assert.equal(knowledgeOnly.length,10);
   const expectedPipeline = { ...recorded.provenance.expected_pipeline,
     eligible_pool_candidate_count:21,rejected_candidate_count:14,
     role_relevant_candidate_count:21,role_surface_candidate_count:21,
-    engine_reservoir_geocoded_stop_count:8 };
+    engine_reservoir_geocoded_stop_count:12 };
   for (const key of ['coordinate_ready_real_place_count','identity_resolved_candidate_count',
     'eligible_pool_candidate_count','rejected_candidate_count','availability_evaluated_candidate_count',
     'availability_excluded_candidate_count','availability_unresolved_candidate_count',
@@ -41,7 +41,7 @@ test('recorded London supply reaches the engine and walking validation instead o
     assert.equal(pipeline[key],expectedPipeline[key],key);
   }
   const route = result.days?.[0]?.primary_route;
-  assert.ok(route,'the same 35 records / 21 admitted / eight reservoir places support an actual walk');
+  assert.ok(route,'the same 35 records / 21 admitted / twelve reservoir places support an actual walk');
   assert.equal(route.main_stops.length,5,'Balanced uses the richer reservoir, without changing the recorded source facts');
   assert.equal(experiment.eligibility.checks.geometry_coherence,'weak','do not relabel the 3.037 km diagnostic');
   assert.equal(experiment.walking_validation.valid,true);

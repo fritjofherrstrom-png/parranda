@@ -4518,6 +4518,17 @@ function applyAgnosticDaypartOrder(orderedStops, geometry, geomFor, roleById = n
 // role order it considered and rejected. When geometry fallback wins, emitting
 // the original role labels can create a backwards public arc (afternoon before
 // midday). Keep the better walk, but withhold those approximate labels.
+function composeFinalDaypartOrdering(stops, roleById = null, ordering = null) {
+  if (ordering?.reason !== 'balanced_day_rhythm') return ordering;
+  const slots = (Array.isArray(stops) ? stops : [])
+    .map(stop => composeStopDaypartSlot(stop, roleById)).filter(slot => slot !== null);
+  if (!slots.length) return ordering;
+  // Identity swaps within one band preserve chronology. Check the actual final
+  // chain, including later bridge/rebalance changes and trusted anchored bands.
+  const backwards = slots.some((slot, index) => index > 0 && slot < slots[index - 1]);
+  return { ...ordering, fallback: backwards };
+}
+
 function composeRouteDaypartArc(stops, roleById = null, ordering = null) {
   const ordered = Array.isArray(stops) ? stops : [];
   if (ordering?.fallback === true) return ordered.map(() => null);
@@ -5514,8 +5525,8 @@ function buildRouteFromTemplate(
     if (balanced.changed) {
       composeOrderedStops = balanced.stops;
       composeGeometry = balanced.geometry;
-      // Do not publish role-derived times as a monotonic arc after a content
-      // tie-break legitimately interleaves those roles.
+      // Provisional label suppression: the final projection below distinguishes
+      // genuine cross-band interleaving from harmless same-band identity swaps.
       agnosticDaypartOrdering = { applied: true, fallback: true, reason: 'balanced_day_rhythm' };
     }
   }
@@ -5662,6 +5673,7 @@ function buildRouteFromTemplate(
   // engine geometry + daypart post-pass already set the actual sequence. Null
   // labels are honest for role-less stops (e.g. inserted bridge stops).
   if (agnosticDaypartOrdering) {
+    agnosticDaypartOrdering = composeFinalDaypartOrdering(finalOrderedStops, composeRoleById, agnosticDaypartOrdering);
     const dayparts = composeRouteDaypartArc(finalOrderedStops, composeRoleById, agnosticDaypartOrdering);
     mainStops.forEach((stop, index) => {
       if (dayparts[index]) stop.daypart = dayparts[index];
@@ -7313,6 +7325,7 @@ module.exports = {
   composeStopDaypartSlot,
   applyAgnosticDaypartOrder,
   composeRouteDaypartArc,
+  composeFinalDaypartOrdering,
   selectedStopChainKm,
   resolvePoint,
   expandDateRange,

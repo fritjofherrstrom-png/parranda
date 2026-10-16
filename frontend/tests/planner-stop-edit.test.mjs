@@ -222,6 +222,37 @@ test('a later preference adjustment keeps the shorter cap but releases old venue
   assert.deepEqual(adjusted.body.preference_priority, ['second_hand', 'food', 'culture', 'views']);
 });
 
+test('Add after removal can pin a new place without freezing the old retained set or refilling the slot', async t => {
+  const h = await completed(t);
+  await expandMuseum(h); await click(h, 'Remove'); await h.clock.advance(400);
+  const removal = routeCalls(h).at(-1), remaining = initialStops.slice(1);
+  const outsider = { ...initialStops[2], id: 'outside', label: 'Outside Gallery', lat: 59.338, lng: 18.07 };
+  const removed = response(remaining, dayPolicy.dayEditOutcome(removal.body.day_edit, remaining));
+  removed.place_structure = { provenance: 'agnostic_anchor', area_count: 1, district_day: {
+    areas: [{ center: { lat: outsider.lat, lng: outsider.lng }, stops: [outsider],
+      stop_names: [outsider.label], stop_ids: [outsider.id], covers: ['museums'], size: 1 }],
+    legs: [], covered_intents: [], missing_intents: [] } };
+  await h.fetchMock.respond(removal, removed);
+  const beforeAdd = h.readStorage(LAST);
+  const detours = [...h.container.querySelectorAll('button')].find(item => /detour idea.*near your route/.test(item.textContent));
+  assert.ok(Boolean(detours), 'a real eligible outside candidate is offered');
+  await h.act(() => detours.dispatchEvent(new h.window.MouseEvent('click', { bubbles: true })));
+  await click(h, 'Outside Gallery'); await click(h, 'Add to my day'); await h.clock.advance(400);
+  const added = routeCalls(h).at(-1);
+  assert.deepEqual(added.body.pinned_candidate_ids, ['outside']);
+  assert.equal(added.body.day_edit.target_stop_count, 4, 'a new commitment does not silently reset the chosen extent');
+  assert.equal(added.body.day_edit.preserve_retained, false,
+    'the prior transaction cannot forbid the explicitly requested new pin');
+  assert.ok(added.body.excluded_candidate_ids.includes('museum'));
+  const nextStops = [...remaining.slice(0, 3), outsider];
+  await h.fetchMock.respond(added, response(nextStops, dayPolicy.dayEditOutcome(added.body.day_edit, nextStops)));
+  assert.ok(h.readStorage(LAST).safeResponse.days[0].primary_route.main_stops.some(stop => stop.id === 'outside'));
+  assert.equal(h.readStorage(LAST).inputs.dayEdit.target_stop_count, 4);
+  await click(h, 'Undo'); await h.clock.advance(500);
+  assert.equal(h.readStorage(LAST).id, beforeAdd.id);
+  assert.equal(routeCalls(h).length, 3, 'Undo restores the pre-Add shorter day without a new request');
+});
+
 test('a saved snapshot restores priority and manual count together before an explicit rebuild', async t => {
   let h = await completed(t, { teardown: false, url: `${PLANNER_URL}&prefs=food,culture,views&prio=culture,food,views` });
   t.after(() => h?.unmount());

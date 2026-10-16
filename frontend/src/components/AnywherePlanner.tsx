@@ -1982,6 +1982,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // Anything in flight or already scheduled is now answering a question the
     // user has moved past.
     invalidateCommitmentIntent();
+    // A newly added stable pin may reselect within the shorter day. The old
+    // transaction's retained IDs must not make this explicit commitment impossible.
+    if (kind === "pin" && !isLiveOccurrenceId(identity) && dayEdit &&
+        !dayEdit.retained_candidate_ids.includes(identity)) relaxDayEditForAdjustment();
     // The label travels with the commitment so a day that could not keep a
     // place can name it, without a second map to fall out of sync.
     setCommitments({ ...commitments, [identity]: { kind, label: commitLabel, ...(liveAction ? { liveAction } : {}) } });

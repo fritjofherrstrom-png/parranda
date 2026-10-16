@@ -75,9 +75,11 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
     // A fixed six-role combination is a neutral fallback, not a veto on an
     // explicitly higher-priority seventh interest. Coverage and walking still
     // lead; only explicit priority moves content utility ahead of that spine.
-    const score = [diagnostics.within_budget ? 1 : 0,
-      diagnostics.exact_preference_count,
+    const score = [diagnostics.exact_preference_count,
       ...(!priority.length ? [diagnostics.spine_role_count] : []), diagnostics.partial_preference_count,
+      // An internal approximate loop target must not trade exact requested
+      // coverage for partial fit. Final independent walking gates still decide.
+      diagnostics.within_budget ? 1 : 0,
       -Math.max(0, meals - 2), utility,
       ...(priority.length ? [diagnostics.spine_role_count] : []),
       diagnostics.local_quality, diagnostics.operational_quality, diagnostics.trust_quality,
