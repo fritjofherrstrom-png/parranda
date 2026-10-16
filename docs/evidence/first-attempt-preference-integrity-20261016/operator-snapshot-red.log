@@ -1,0 +1,29 @@
+✖ real HTTP keeps the same cold job pending for operator_closed matching coordinates (8328.4775ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8611.23225
+
+✖ failing tests:
+
+test at tests/planner-cold-admission.test.js:22:87
+✖ real HTTP keeps the same cold job pending for operator_closed matching coordinates (8328.4775ms)
+  AssertionError [ERR_ASSERTION]: matching coordinates do not establish admission for the requested day; wait for the same actual producer
+  
+  200 !== 202
+  
+      at TestContext.<anonymous> (<worktree>/tests/planner-cold-admission.test.js:59:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 202,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

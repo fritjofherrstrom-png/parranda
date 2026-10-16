@@ -6,13 +6,16 @@ import { contextNote, limitationNote } from "../src/lib/day-limitations.mjs";
 const en = (_sv, enText) => enText;
 const sv = (svText) => svText;
 
-test('partial acquisition is explained without claiming completeness or a later automatic day change', () => {
-  assert.match(contextNote([], en, { sourceCompletion: { status: 'partial', pending: 0 } }), /sources that have answered; more places may be missing/);
-  // Still fetching: the top of the day says more places are on their way, so
-  // the assembly note does not repeat it.
-  assert.equal(contextNote([], en, { sourceCompletion: { status: 'partial', pending: 1 } }), '');
-  assert.match(contextNote([], sv, { sourceCompletion: { status: 'partial' } }), /källor som hunnit svara/);
-  assert.equal(contextNote([], en, { sourceCompletion: { status: 'complete' } }), '');
+test('partial acquisition describes the published evidence regardless of its historical pending count', () => {
+  for (const pending of [0, 1]) {
+    const note = contextNote([], en, { sourceCompletion: { status: 'partial', pending } });
+    assert.match(note, /incomplete when the response was produced/);
+    assert.match(note, /more places may be missing/);
+    assert.doesNotMatch(note, /still fetching|on their way|ongoing|will arrive/i);
+  }
+  assert.match(contextNote([], sv, { sourceCompletion: { status: 'partial' } }), /ofullständigt när svaret skapades/);
+  assert.match(contextNote([], en, { sourceCompletion: { status: 'complete', failed: 1 } }), /One or more place sources failed/);
+  assert.equal(contextNote([], en, { sourceCompletion: { status: 'complete', failed: 0 } }), '');
   assert.equal(contextNote([], en), '');
 });
 

@@ -1,0 +1,442 @@
+[
+  {
+    "case": "E-Kyoto-culture-balanced",
+    "file": "E-Kyoto-culture-balanced-007-_api_planner_status.json",
+    "at": "2026-10-15T23:02:31.519Z",
+    "http": 200,
+    "hash": "32cd534223437831e4a62a4c8542ad9a70a6ac7df0c293cb7802304de35a5ff9",
+    "anchor": {
+      "lat": 35.0115754,
+      "lng": 135.7681441
+    },
+    "source_status": "loaded:18",
+    "source_error": "provider_unavailable",
+    "source_completion": {
+      "status": "partial",
+      "reason": "bounded_lifecycle_snapshot",
+      "pending": 1,
+      "completed": 0,
+      "failed": 0
+    },
+    "cache": null,
+    "profile": {
+      "record_count": 18,
+      "category_count": 1,
+      "requested_intent_count": 1,
+      "requested_intents_covered": [
+        "museums"
+      ],
+      "requested_intents_partial": [],
+      "requested_intents_missing": []
+    },
+    "pipeline": {
+      "coordinate_ready_real_place_count": 18,
+      "identity_resolved_candidate_count": 18,
+      "eligible_pool_candidate_count": 0,
+      "rejected_candidate_count": 18,
+      "availability_evaluated_candidate_count": 0,
+      "availability_excluded_candidate_count": 0,
+      "availability_unresolved_candidate_count": 0,
+      "role_relevant_candidate_count": 0,
+      "role_surface_candidate_count": 0,
+      "reach_eligible_candidate_count": 0,
+      "reach_excluded_candidate_count": 0,
+      "combination_selected_candidate_count": 0,
+      "combination_geocoded_stop_count": 0,
+      "engine_reservoir_geocoded_stop_count": 0
+    },
+    "promote": false,
+    "published_stops": [],
+    "structure_sample": []
+  },
+  {
+    "case": "E-Kyoto-culture-full",
+    "file": "E-Kyoto-culture-full-001-_api_route_recommendations.json",
+    "at": "2026-10-15T23:04:50.449Z",
+    "http": 200,
+    "hash": "c8594cd855f002415b0feeedbf71fffb2db16b7fe604c780db17fa93c4608fbd",
+    "anchor": {
+      "lat": 35.0115754,
+      "lng": 135.7681441
+    },
+    "source_status": "loaded:98",
+    "source_error": "http_non_200",
+    "source_completion": null,
+    "cache": null,
+    "profile": {
+      "record_count": 98,
+      "category_count": 7,
+      "requested_intent_count": 1,
+      "requested_intents_covered": [
+        "museums"
+      ],
+      "requested_intents_partial": [],
+      "requested_intents_missing": []
+    },
+    "pipeline": {
+      "coordinate_ready_real_place_count": 98,
+      "identity_resolved_candidate_count": 96,
+      "eligible_pool_candidate_count": 80,
+      "rejected_candidate_count": 16,
+      "availability_evaluated_candidate_count": 0,
+      "availability_excluded_candidate_count": 0,
+      "availability_unresolved_candidate_count": 0,
+      "role_relevant_candidate_count": 80,
+      "role_surface_candidate_count": 15,
+      "reach_eligible_candidate_count": 80,
+      "reach_excluded_candidate_count": 0,
+      "combination_selected_candidate_count": 1,
+      "combination_geocoded_stop_count": 1,
+      "engine_reservoir_geocoded_stop_count": 6
+    },
+    "promote": true,
+    "published_stops": [
+      {
+        "id": "overture-a4594025-90c9-4a56-86a9-a249994a6cd1",
+        "label": "Hosomi Museum",
+        "lat": 35.01385498046875,
+        "lng": 135.77978515625,
+        "type": "museum"
+      },
+      {
+        "id": "overture-0142d1ae-8f60-436b-91fc-0ddbb8d0d9b5",
+        "label": "アートギャラリー北野",
+        "lat": 35.0088996887207,
+        "lng": 135.76930236816406,
+        "type": "gallery"
+      },
+      {
+        "id": "overture-194143b2-366c-4acb-8858-45634f795178",
+        "label": "Samurai Ninja Museum",
+        "lat": 35.0101318359375,
+        "lng": 135.7687530517578,
+        "type": "museum"
+      },
+      {
+        "id": "overture-2aa6d5a2-b0ae-4941-9d50-46e776115014",
+        "label": "お酒の美術館 本能寺店",
+        "lat": 35.01053237915039,
+        "lng": 135.768310546875,
+        "type": "museum"
+      },
+      {
+        "id": "overture-0624569a-a2fc-4935-a6d3-54768ec93c70",
+        "label": "Galerie H2O",
+        "lat": 35.009315490722656,
+        "lng": 135.76478576660156,
+        "type": "gallery"
+      },
+      {
+        "id": "overture-edf3d0bd-a2e6-4429-83c6-cbab5376b270",
+        "label": "Onishi Seiwemon Museum",
+        "lat": 35.008514404296875,
+        "lng": 135.75572204589844,
+        "type": "museum"
+      }
+    ],
+    "structure_sample": []
+  },
+  {
+    "case": "E-København-green-balanced",
+    "file": "E-København-green-balanced-006-_api_planner_status.json",
+    "at": "2026-10-15T23:06:39.154Z",
+    "http": 200,
+    "hash": "de7118411d2faf3acae9a3f11e234cc16128a3db801ba6382bacea76df66ddb0",
+    "anchor": {
+      "lat": 55.6867243,
+      "lng": 12.5700724
+    },
+    "source_status": "loaded:21",
+    "source_error": "provider_unavailable",
+    "source_completion": {
+      "status": "complete",
+      "reason": null,
+      "pending": 0,
+      "completed": 1,
+      "failed": 1
+    },
+    "cache": null,
+    "profile": {
+      "record_count": 21,
+      "category_count": 3,
+      "requested_intent_count": 1,
+      "requested_intents_covered": [
+        "green"
+      ],
+      "requested_intents_partial": [],
+      "requested_intents_missing": []
+    },
+    "pipeline": {
+      "coordinate_ready_real_place_count": 21,
+      "identity_resolved_candidate_count": 21,
+      "eligible_pool_candidate_count": 0,
+      "rejected_candidate_count": 21,
+      "availability_evaluated_candidate_count": 0,
+      "availability_excluded_candidate_count": 0,
+      "availability_unresolved_candidate_count": 0,
+      "role_relevant_candidate_count": 0,
+      "role_surface_candidate_count": 0,
+      "reach_eligible_candidate_count": 0,
+      "reach_excluded_candidate_count": 0,
+      "combination_selected_candidate_count": 0,
+      "combination_geocoded_stop_count": 0,
+      "engine_reservoir_geocoded_stop_count": 0
+    },
+    "promote": false,
+    "published_stops": [],
+    "structure_sample": []
+  },
+  {
+    "case": "E-København-green-full",
+    "file": "E-København-green-full-005-_api_planner_status.json",
+    "at": "2026-10-15T23:09:41.266Z",
+    "http": 200,
+    "hash": "4f25f7c7b881eb9f6c9896013dfb65ae96b913abb72493d022e162de18e8b0c4",
+    "anchor": {
+      "lat": 55.6867243,
+      "lng": 12.5700724
+    },
+    "source_status": "loaded:101",
+    "source_error": "timeout_or_abort",
+    "source_completion": {
+      "status": "complete",
+      "reason": null,
+      "pending": 0,
+      "completed": 1,
+      "failed": 1
+    },
+    "cache": null,
+    "profile": {
+      "record_count": 101,
+      "category_count": 8,
+      "requested_intent_count": 1,
+      "requested_intents_covered": [
+        "green"
+      ],
+      "requested_intents_partial": [],
+      "requested_intents_missing": []
+    },
+    "pipeline": {
+      "coordinate_ready_real_place_count": 101,
+      "identity_resolved_candidate_count": 99,
+      "eligible_pool_candidate_count": 80,
+      "rejected_candidate_count": 19,
+      "availability_evaluated_candidate_count": 0,
+      "availability_excluded_candidate_count": 0,
+      "availability_unresolved_candidate_count": 0,
+      "role_relevant_candidate_count": 80,
+      "role_surface_candidate_count": 35,
+      "reach_eligible_candidate_count": 80,
+      "reach_excluded_candidate_count": 0,
+      "combination_selected_candidate_count": 1,
+      "combination_geocoded_stop_count": 1,
+      "engine_reservoir_geocoded_stop_count": 6
+    },
+    "promote": true,
+    "published_stops": [
+      {
+        "id": "overture-feddcf26-38c4-4988-8f6e-41b89875e13f",
+        "label": "Fredens Park",
+        "lat": 55.69308090209961,
+        "lng": 12.5681791305542,
+        "type": "park"
+      },
+      {
+        "id": "overture-ac95727d-76b4-4dea-9b7e-cbb762696943",
+        "label": "Hans Tavsens Park",
+        "lat": 55.68917465209961,
+        "lng": 12.547876358032227,
+        "type": "park"
+      },
+      {
+        "id": "overture-a2e066db-5bc9-4d20-90d3-42f8cd1bb20f",
+        "label": "Ørstedsparken",
+        "lat": 55.68086624145508,
+        "lng": 12.566978454589844,
+        "type": "park"
+      },
+      {
+        "id": "overture-b3f81489-6e24-4ca8-b07a-896f9e702cf7",
+        "label": "Plænen",
+        "lat": 55.67388916015625,
+        "lng": 12.567032814025879,
+        "type": "park"
+      },
+      {
+        "id": "overture-efc10bd1-f708-4d1f-9926-8294334a58d6",
+        "label": "Botanisk Have",
+        "lat": 55.68484115600586,
+        "lng": 12.5734224319458,
+        "type": "garden"
+      },
+      {
+        "id": "overture-26457a0d-d968-4bab-981a-916530dbad77",
+        "label": "Kongens Have",
+        "lat": 55.6852912902832,
+        "lng": 12.57987117767334,
+        "type": "park"
+      }
+    ],
+    "structure_sample": []
+  },
+  {
+    "case": "W-Kyoto-culture-balanced-warm",
+    "file": "W-Kyoto-culture-balanced-warm-001-_api_route_recommendations.json",
+    "at": "2026-10-15T23:17:52.855Z",
+    "http": 200,
+    "hash": "6075ba55e01709d785b2074ebb31ae575ccbe3e0882ba40ce00907c0d9f2117e",
+    "anchor": {
+      "lat": 35.0115754,
+      "lng": 135.7681441
+    },
+    "source_status": "loaded:98",
+    "source_error": null,
+    "source_completion": null,
+    "cache": null,
+    "profile": {
+      "record_count": 98,
+      "category_count": 7,
+      "requested_intent_count": 1,
+      "requested_intents_covered": [
+        "museums"
+      ],
+      "requested_intents_partial": [],
+      "requested_intents_missing": []
+    },
+    "pipeline": {
+      "coordinate_ready_real_place_count": 98,
+      "identity_resolved_candidate_count": 96,
+      "eligible_pool_candidate_count": 80,
+      "rejected_candidate_count": 16,
+      "availability_evaluated_candidate_count": 0,
+      "availability_excluded_candidate_count": 0,
+      "availability_unresolved_candidate_count": 0,
+      "role_relevant_candidate_count": 80,
+      "role_surface_candidate_count": 15,
+      "reach_eligible_candidate_count": 80,
+      "reach_excluded_candidate_count": 0,
+      "combination_selected_candidate_count": 1,
+      "combination_geocoded_stop_count": 1,
+      "engine_reservoir_geocoded_stop_count": 6
+    },
+    "promote": true,
+    "published_stops": [
+      {
+        "id": "overture-a4594025-90c9-4a56-86a9-a249994a6cd1",
+        "label": "Hosomi Museum",
+        "lat": 35.01385498046875,
+        "lng": 135.77978515625,
+        "type": "museum"
+      },
+      {
+        "id": "overture-194143b2-366c-4acb-8858-45634f795178",
+        "label": "Samurai Ninja Museum",
+        "lat": 35.0101318359375,
+        "lng": 135.7687530517578,
+        "type": "museum"
+      },
+      {
+        "id": "overture-0142d1ae-8f60-436b-91fc-0ddbb8d0d9b5",
+        "label": "アートギャラリー北野",
+        "lat": 35.0088996887207,
+        "lng": 135.76930236816406,
+        "type": "gallery"
+      },
+      {
+        "id": "overture-0624569a-a2fc-4935-a6d3-54768ec93c70",
+        "label": "Galerie H2O",
+        "lat": 35.009315490722656,
+        "lng": 135.76478576660156,
+        "type": "gallery"
+      },
+      {
+        "id": "overture-edf3d0bd-a2e6-4429-83c6-cbab5376b270",
+        "label": "Onishi Seiwemon Museum",
+        "lat": 35.008514404296875,
+        "lng": 135.75572204589844,
+        "type": "museum"
+      }
+    ],
+    "structure_sample": []
+  },
+  {
+    "case": "W-København-green-balanced-warm",
+    "file": "W-København-green-balanced-warm-001-_api_route_recommendations.json",
+    "at": "2026-10-15T23:18:10.839Z",
+    "http": 200,
+    "hash": "ab7eb47744b158074d983591a1f355667729983094e65b81b22f772c7377657e",
+    "anchor": {
+      "lat": 55.6867243,
+      "lng": 12.5700724
+    },
+    "source_status": "loaded:101",
+    "source_error": null,
+    "source_completion": null,
+    "cache": null,
+    "profile": {
+      "record_count": 101,
+      "category_count": 8,
+      "requested_intent_count": 1,
+      "requested_intents_covered": [
+        "green"
+      ],
+      "requested_intents_partial": [],
+      "requested_intents_missing": []
+    },
+    "pipeline": {
+      "coordinate_ready_real_place_count": 101,
+      "identity_resolved_candidate_count": 99,
+      "eligible_pool_candidate_count": 80,
+      "rejected_candidate_count": 19,
+      "availability_evaluated_candidate_count": 0,
+      "availability_excluded_candidate_count": 0,
+      "availability_unresolved_candidate_count": 0,
+      "role_relevant_candidate_count": 80,
+      "role_surface_candidate_count": 35,
+      "reach_eligible_candidate_count": 80,
+      "reach_excluded_candidate_count": 0,
+      "combination_selected_candidate_count": 1,
+      "combination_geocoded_stop_count": 1,
+      "engine_reservoir_geocoded_stop_count": 6
+    },
+    "promote": true,
+    "published_stops": [
+      {
+        "id": "overture-a2e066db-5bc9-4d20-90d3-42f8cd1bb20f",
+        "label": "Ørstedsparken",
+        "lat": 55.68086624145508,
+        "lng": 12.566978454589844,
+        "type": "park"
+      },
+      {
+        "id": "overture-b3f81489-6e24-4ca8-b07a-896f9e702cf7",
+        "label": "Plænen",
+        "lat": 55.67388916015625,
+        "lng": 12.567032814025879,
+        "type": "park"
+      },
+      {
+        "id": "overture-efc10bd1-f708-4d1f-9926-8294334a58d6",
+        "label": "Botanisk Have",
+        "lat": 55.68484115600586,
+        "lng": 12.5734224319458,
+        "type": "garden"
+      },
+      {
+        "id": "overture-26457a0d-d968-4bab-981a-916530dbad77",
+        "label": "Kongens Have",
+        "lat": 55.6852912902832,
+        "lng": 12.57987117767334,
+        "type": "park"
+      },
+      {
+        "id": "overture-feddcf26-38c4-4988-8f6e-41b89875e13f",
+        "label": "Fredens Park",
+        "lat": 55.69308090209961,
+        "lng": 12.5681791305542,
+        "type": "park"
+      }
+    ],
+    "structure_sample": []
+  }
+]

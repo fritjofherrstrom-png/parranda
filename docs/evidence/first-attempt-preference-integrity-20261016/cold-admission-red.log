@@ -1,0 +1,29 @@
+✖ real HTTP keeps the original cold job pending when matching coordinates cannot pass place admission (8303.600875ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8542.491125
+
+✖ failing tests:
+
+test at tests/planner-cold-admission.test.js:21:1
+✖ real HTTP keeps the original cold job pending when matching coordinates cannot pass place admission (8303.600875ms)
+  AssertionError [ERR_ASSERTION]: 18 matching coordinates are not admitted visit candidates; wait for the same actual producer
+  
+  200 !== 202
+  
+      at TestContext.<anonymous> (<worktree>/tests/planner-cold-admission.test.js:47:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 202,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

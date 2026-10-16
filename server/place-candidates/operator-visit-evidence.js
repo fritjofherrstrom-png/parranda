@@ -218,12 +218,20 @@ function createOperatorVisitEnricher({
     } catch {outcomes.push({url,status:'unavailable',elapsed_ms:now()-started});return null;}
     finally {clearTimeout(timer);signal?.removeEventListener('abort',abort)}
   }
-  return async function enrichOperatorVisits(records, context={}) {
+  const factKey=record=>createHash('sha256').update(JSON.stringify([
+    sourceUrl(record.website),record.name,record.source_address||null,
+  ])).digest('hex');
+  const newSession=()=>({deadline:null,targets:new Map(),facts:new Map(),pages:new Map(),outcomes:[]});
+  async function enrichOperatorVisits(records, context={}, session=newSession()) {
     if(!Array.isArray(records))return records;
-    const deadline=Math.min(now()+maxMs,Number.isFinite(context.deadline)?context.deadline-5000:Infinity);
-    const targets=records.filter(r=>r.type==='vintage-shop'&&sourceUrl(r.website)).slice(0,MAX_CANDIDATES);
-    const facts=new Map();const outcomes=[];
-    const pages=new Map();
+    for(const record of records.filter(r=>r.type==='vintage-shop'&&sourceUrl(r.website))) {
+      const key=factKey(record);
+      if(session.targets.size<MAX_CANDIDATES && !session.targets.has(key))session.targets.set(key,record);
+    }
+    const targets=[...session.targets.values()];
+    if(session.deadline===null && targets.length)session.deadline=now()+maxMs;
+    const deadline=Math.min(session.deadline??now()+maxMs,Number.isFinite(context.deadline)?context.deadline-5000:Infinity);
+    const {facts,pages,outcomes}=session;
     const page = url => {
       if(!pages.has(url))pages.set(url,read(url,context.signal,deadline,outcomes));
       return pages.get(url);
@@ -233,7 +241,8 @@ function createOperatorVisitEnricher({
     await Promise.all([0,1].map(async()=>{
       while(cursor<targets.length && now()<deadline && !context.signal?.aborted) {
         const record=targets[cursor++],url=sourceUrl(record.website);
-        const key=createHash('sha256').update(JSON.stringify([url,record.name,record.source_address||null])).digest('hex');
+        const key=factKey(record);
+        if(facts.has(key))continue; // Includes failed/unresolved attempts in this request.
         const fact=await cache.get(key,async()=>{
           const initial=await page(url);if(!initial)return null;
           let fact=parseOperatorVisitEvidence(initial.html,record,initial.url);
@@ -243,12 +252,12 @@ function createOperatorVisitEnricher({
           }
           return {...fact,observed_at:new Date(now()).toISOString()};
         },{signal:context.signal,shouldStore:v=>!!v && v.status!=='unresolved'}).catch(()=>null);
-        facts.set(record.id,fact);
+        facts.set(key,fact);
       }
     }));
     context.signal?.throwIfAborted();
     const output=records.map(record=>{
-      const fact=facts.get(record.id) || [...facts.entries()].map(([id, f])=>({record:targets.find(t=>t.id===id),fact:f}))
+      const fact=facts.get(factKey(record)) || targets.map(other=>({record:other,fact:facts.get(factKey(other))}))
         .find(({record:other,fact:f})=>f?.status==='non_shopping_visit' && fold(other.name)===fold(record.name) &&
           sourceUrl(other.website)===sourceUrl(record.website))?.fact;
       if(!fact||fact.status==='unresolved')return record;
@@ -261,9 +270,21 @@ function createOperatorVisitEnricher({
     Object.defineProperty(output,'loader_metadata',{value:{...(records.loader_metadata||{}),operator_evidence:{
       attempted:targets.length,confirmed:[...facts.values()].filter(f=>f?.status==='confirmed_storefront').length,
       excluded:[...facts.values()].filter(f=>['non_shopping_visit','closed_weekdays'].includes(f?.status)).length,
-      outcomes, candidates:targets.map(t=>({id:t.id,status:facts.get(t.id)?.status||'not_observed'})),
+      outcomes, candidates:targets.map(t=>({id:t.id,status:facts.get(factKey(t))?.status||'not_observed'})),
     }}});
     return output;
+  }
+  // Partial readiness and final composition share one bounded check: at most
+  // four identities and the original six-second window, including failures.
+  // Serialize overlapping snapshots so settlement cannot duplicate acquisition.
+  enrichOperatorVisits.forRequest=()=>{
+    const session=newSession();let tail=Promise.resolve();
+    return (records,context)=>{
+      const work=tail.then(()=>enrichOperatorVisits(records,context,session));
+      tail=work.catch(()=>{});
+      return work;
+    };
   };
+  return enrichOperatorVisits;
 }
 module.exports={createOperatorVisitEnricher,parseOperatorVisitEvidence,parseHours,contactLink,sourceUrl,operatorClosureForWindow};

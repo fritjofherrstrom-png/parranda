@@ -1,0 +1,323 @@
+✔ each district carries a few concrete stop NAMES (so the UI shows an itinerary, not a count) (14.545542ms)
+✔ each district carries map-drawable stops (id + name + real coords, never fabricated) (0.278166ms)
+✔ nearby same-name source features become one context suggestion (1.198625ms)
+✔ same-name context evidence remains separate when far apart or functionally different (0.162375ms)
+✔ district stops preserve explicit local-quality facts for optional route context (0.72825ms)
+✔ district context keeps a chain only as an axis-specific sparse fallback (0.177ms)
+✔ a chain-only district remains inspectable instead of becoming a fabricated empty (0.122958ms)
+✔ composes complementary districts that cover the requested intents (0.548083ms)
+✔ orders districts by daypart: morning district before evening district (0.369291ms)
+✔ daypart coherence: the day reads as a distinct morning→evening arc (no two districts share a daypart) (0.589375ms)
+✔ a district with a few strong-evening bars amid daytime types leans later than a pure-daytime one (0.198416ms)
+✔ honestly reports an intent no district can satisfy (no fabricated district) (0.194375ms)
+✔ deterministic and order-independent (0.492416ms)
+✔ respects maxAreas (a compact day, not the whole city) (0.239917ms)
+✔ tokensToAxes maps surface tokens (tags/types/synonyms) to canonical axes (0.042ms)
+✖ second hand never publishes eleven unrelated cultural places as matches (2.2485ms)
+✖ a rare genuine vintage stop survives dominant type and tag summaries (0.336291ms)
+✖ canonical second-hand aliases match source categories without inferring from names (0.1225ms)
+✖ weak scenic places stay partial while a genuine viewpoint covers the same intent (0.110209ms)
+✖ a legitimate multifunction place can cover several requested preferences (0.105958ms)
+✔ no preferences retains varied source-backed candidates (0.065416ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 16
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 70.564083
+
+✖ failing tests:
+
+test at tests/district-composition.test.js:351:1
+✖ second hand never publishes eleven unrelated cultural places as matches (2.2485ms)
+  AssertionError [ERR_ASSERTION]: unrelated members are not selected matches
+  + actual - expected
+  
+  + [
+  +   {
+  +     center: {
+  +       lat: 50.00005,
+  +       lng: 10
+  +     },
+  +     character: [
+  +       'museum',
+  +       'castle',
+  +       'gallery'
+  +     ],
+  +     covers: [],
+  +     daypart_hint: 'midday',
+  +     size: 11,
+  +     stop_ids: [
+  +       'source-0',
+  +       'source-1',
+  +       'source-10',
+  +       'source-2',
+  +       'source-3',
+  +       'source-4',
+  +       'source-5',
+  +       'source-6',
+  +       'source-7',
+  +       'source-8',
+  +       'source-9'
+  +     ],
+  +     stop_names: [
+  +       'Source place 0',
+  +       'Source place 1',
+  +       'Source place 10',
+  +       'Source place 2'
+  +     ],
+  +     stops: [
+  +       {
+  +         brand: null,
+  +         candidate_origin: null,
+  +         chain: false,
+  +         id: 'source-0',
+  +         lat: 50,
+  +         lng: 10,
+  +         local_feel_rank: null,
+  +         name: 'Source place 0',
+  +         tags: [],
+  +         type: 'museum'
+  +       },
+  +       {
+  +         brand: null,
+  +         candidate_origin: null,
+  +         chain: false,
+  +         id: 'source-1',
+  +         lat: 50.00001,
+  +         lng: 10,
+  +         local_feel_rank: null,
+  +         name: 'Source place 1',
+  +         tags: [],
+  +         type: 'museum'
+  +       },
+  +       {
+  +         brand: null,
+  +         candidate_origin: null,
+  +         chain: false,
+  +         id: 'source-10',
+  +         lat: 50.0001,
+  +         lng: 10,
+  +         local_feel_rank: null,
+  +         name: 'Source place 10',
+  +         tags: [],
+  +         type: 'castle'
+  +       },
+  +       {
+  +         brand: null,
+  +         candidate_origin: null,
+  +         chain: false,
+  +         id: 'source-2',
+  +         lat: 50.00002,
+  +         lng: 10,
+  +         local_feel_rank: null,
+  +         name: 'Source place 2',
+  +         tags: [],
+  +         type: 'museum'
+  +       },
+  +       {
+  +         brand: null,
+  +         candidate_origin: null,
+  +         chain: false,
+  +         id: 'source-3',
+  +         lat: 50.00003,
+  +         lng: 10,
+  +         local_feel_rank: null,
+  +         name: 'Source place 3',
+  +         tags: [],
+  +         type: 'museum'
+  +       },
+  +       {
+  +         brand: null,
+  +         candidate_origin: null,
+  +         chain: false,
+  +         id: 'source-4',
+  +         lat: 50.00004,
+  +         lng: 10,
+  +         local_feel_rank: null,
+  +         name: 'Source place 4',
+  +         tags: [],
+  +         type: 'museum'
+  +       },
+  +       {
+  +         brand: null,
+  +         candidate_origin: null,
+  +         chain: false,
+  +         id: 'source-5',
+  +         lat: 50.00005,
+  +         lng: 10,
+  +         local_feel_rank: null,
+  +         name: 'Source place 5',
+  +         tags: [],
+  +         type: 'museum'
+  +       },
+  +       {
+  +         brand: null,
+  +         candidate_origin: null,
+  +         chain: false,
+  +         id: 'source-6',
+  +         lat: 50.00006,
+  +         lng: 10,
+  +         local_feel_rank: null,
+  +         name: 'Source place 6',
+  +         tags: [],
+  +         type: 'museum'
+  +       },
+  +       {
+  +         brand: null,
+  +         candidate_origin: null,
+  +         chain: false,
+  +         id: 'source-7',
+  +         lat: 50.00007,
+  +         lng: 10,
+  +         local_feel_rank: null,
+  +         name: 'Source place 7',
+  +         tags: [],
+  +         type: 'museum'
+  +       },
+  +       {
+  +         brand: null,
+  +         candidate_origin: null,
+  +         chain: false,
+  +         id: 'source-8',
+  +         lat: 50.00008,
+  +         lng: 10,
+  +         local_feel_rank: null,
+  +         name: 'Source place 8',
+  +         tags: [],
+  +         type: 'museum'
+  +       },
+  +       {
+  +         brand: null,
+  +         candidate_origin: null,
+  +         chain: false,
+  +         id: 'source-9',
+  +         lat: 50.00009,
+  +         lng: 10,
+  +         local_feel_rank: null,
+  +         name: 'Source place 9',
+  +         tags: [],
+  +         type: 'gallery'
+  +       }
+  +     ]
+  +   }
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (<worktree>/tests/district-composition.test.js:358:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ { center: [Object], daypart_hint: 'midday', character: [Array], covers: [], size: 11, stop_ids: [Array], stop_names: [Array], stops: [Array] } ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/district-composition.test.js:365:1
+✖ a rare genuine vintage stop survives dominant type and tag summaries (0.336291ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + []
+  - [
+  -   'second_hand'
+  - ]
+  
+      at TestContext.<anonymous> (<worktree>/tests/district-composition.test.js:375:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ 'second_hand' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/district-composition.test.js:382:1
+✖ canonical second-hand aliases match source categories without inferring from names (0.1225ms)
+  AssertionError [ERR_ASSERTION]: the established external axis is retained
+  + actual - expected
+  
+  + []
+  - [
+  -   'second_hand'
+  - ]
+  
+      at TestContext.<anonymous> (<worktree>/tests/district-composition.test.js:390:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ 'second_hand' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/district-composition.test.js:396:1
+✖ weak scenic places stay partial while a genuine viewpoint covers the same intent (0.110209ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + undefined
+  - [
+  -   'views'
+  - ]
+  
+      at TestContext.<anonymous> (<worktree>/tests/district-composition.test.js:400:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: [ 'views' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/district-composition.test.js:417:1
+✖ a legitimate multifunction place can cover several requested preferences (0.105958ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  -   'second_hand',
+      'culture',
+      'views'
+    ]
+  
+      at TestContext.<anonymous> (<worktree>/tests/district-composition.test.js:423:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'culture', 'views' ],
+    expected: [ 'second_hand', 'culture', 'views' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
