@@ -193,14 +193,22 @@ export function screenMarkerPresentation(points, { width, height, keepouts = [],
 export function screenPinPresentation(points, {
   width, height, keepouts = [], radius = 22, gap = 4, mergeDistance = 16, maxShift = 60, previous = null, grouping = true,
 } = {}) {
-  // Without grouping (the fitted view and closer): every stop keeps its own
-  // number, placed as screenMarkerPresentation always has.
+  // Without grouping (the fitted view and closer): every stop in view keeps
+  // its own number, placed as screenMarkerPresentation always has. A stop
+  // panned out of view stays at its coordinate, outside the frame, instead of
+  // being pinned to the edge over a place it is not.
   if (!grouping) {
-    const offsets = screenMarkerPresentation(points, { width, height, keepouts, radius, gap });
-    return offsets && offsets.map((offset, i) => ({
-      members: [i], x: points[i].x + offset.shift_x_px, y: points[i].y + offset.shift_y_px,
-      shift_x_px: offset.shift_x_px, shift_y_px: offset.shift_y_px,
-    }));
+    if (!Array.isArray(points) || !points.every((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y))) return null;
+    const out = (p) => p.x < -radius || p.x > width + radius || p.y < -radius || p.y > height + radius;
+    const inView = points.map((_, i) => i).filter((i) => !out(points[i]));
+    const offsets = screenMarkerPresentation(inView.map((i) => points[i]), { width, height, keepouts, radius, gap });
+    if (!offsets) return null;
+    const pins = points.map((p, i) => ({ members: [i], x: p.x, y: p.y, shift_x_px: 0, shift_y_px: 0, offscreen: true }));
+    inView.forEach((i, k) => {
+      pins[i] = { members: [i], x: points[i].x + offsets[k].shift_x_px, y: points[i].y + offsets[k].shift_y_px,
+        shift_x_px: offsets[k].shift_x_px, shift_y_px: offsets[k].shift_y_px };
+    });
+    return pins;
   }
   if (!Array.isArray(points) || !Array.isArray(keepouts) || points.length > 200) return null;
   if (![width, height, radius, gap, mergeDistance, maxShift].every(Number.isFinite)) return null;

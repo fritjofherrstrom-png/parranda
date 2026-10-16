@@ -78,6 +78,16 @@ test('at the fitted zoom and closer every stop keeps its own number', () => {
   assert.match(source, /if \(fitted\) fitted\.current = view\.zoom;\s*map\.jumpTo/);
 });
 
+test('a stop panned out of view is not pinned to the edge, at any zoom', () => {
+  // Seen in the Simulator: dragging the map moved the stops north of the view,
+  // and their numbers stayed along the top edge over Årsta.
+  const points = [{ x: 150, y: -300 }, { x: 200, y: -280 }, { x: 180, y: 100 }];
+  for (const grouping of [false, true]) {
+    const pins = screenPinPresentation(points, { ...VIEW, grouping });
+    assert.deepEqual(pins.map((p) => [p.members.join(), Boolean(p.offscreen), p.y]), [['0', true, -300], ['1', true, -280], ['2', false, 100]], `grouping ${grouping}`);
+  }
+});
+
 test('a pin keeps its last spot while it is still free, so it does not jump as the map moves', () => {
   const points = [{ x: 150, y: 100 }, { x: 180, y: 100 }];
   const first = screenPinPresentation(points, VIEW);
