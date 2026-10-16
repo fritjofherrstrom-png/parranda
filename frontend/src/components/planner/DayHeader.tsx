@@ -465,10 +465,12 @@ export function DayActions({
         )}
         <button
           type="button"
-          onClick={saveDay}
-          disabled={isSaved}
+          // Saved stays focusable: a disabled button would drop the focus
+          // that just pressed it to the top of the page.
+          onClick={isSaved ? undefined : saveDay}
+          aria-disabled={isSaved || undefined}
           aria-label={isSaved ? t("Dagen är sparad", "Day is saved") : t("Spara dagen", "Save this day")}
-          className={buttonClass("secondary", "min-h-12 px-4 text-sm disabled:border-parranda-ember/50 disabled:text-parranda-clay disabled:opacity-100")}
+          className={buttonClass("secondary", "min-h-12 px-4 text-sm aria-disabled:border-parranda-ember/50 aria-disabled:text-parranda-clay aria-disabled:opacity-100")}
         >
           <StarIcon filled={isSaved} />
           {isSaved ? t("Sparad", "Saved") : t("Spara", "Save")}

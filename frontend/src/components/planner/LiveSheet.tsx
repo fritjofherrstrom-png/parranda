@@ -18,7 +18,7 @@ import { eventTiming, liveEventRelevance } from "../../lib/pulse-view.mjs";
 import { liveEventTags, liveNavigationGroups, type LiveNavigationRow, type LiveSheetSort } from "../../lib/live-navigation.mjs";
 import type { LiveEventScope } from "../../lib/live-event-query.mjs";
 import { CloseIcon, LocationIcon } from "../shared/icons";
-import { labelChip, pillClass, segmentClass, segmentGroup } from "../shared/ui";
+import { busyButton, labelChip, pillClass, segmentClass, segmentGroup } from "../shared/ui";
 import { liveTagLabels } from "../../lib/live-tags.mjs";
 import { liveRelevanceSentence, nearbyDistanceLabel, type Lang, type Translate } from "./copy";
 import { liveEventSource } from "./LiveEventSource";
@@ -30,7 +30,10 @@ type SheetState = "hidden" | "uncovered" | "pending" | "unavailable" | "partial"
 
 // Where is a set of chips, not a segment: one of four, and some can be off.
 // Selected uses the system's one "chosen" fill (ink); Live blue stays for Live content.
-const scopeChip = (active: boolean) => pillClass(active, "gap-2 disabled:cursor-not-allowed disabled:opacity-40");
+// An unavailable scope is disabled; while a query runs the chips are busy
+// (busyButton), so the pressed chip keeps keyboard focus.
+const scopeChip = (active: boolean) =>
+  pillClass(active, "gap-2 disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:opacity-60 aria-busy:cursor-progress");
 
 export default function LiveSheet({
   lang,
@@ -199,8 +202,8 @@ export default function LiveSheet({
             <button
               type="button"
               aria-pressed={liveSheetScope === "around_place"}
-              disabled={!aroundPlaceScopeAvailable || liveQueryPending}
-              onClick={() => requestLiveSheetScope("around_place")}
+              disabled={!aroundPlaceScopeAvailable}
+              {...busyButton(liveQueryPending, () => requestLiveSheetScope("around_place"))}
               className={scopeChip(liveSheetScope === "around_place")}
             >
               {anchorIsPosition ? t("Runt din position", "Around your position") : t(`Runt ${anchorLabel}`, `Around ${anchorLabel}`)}
@@ -208,8 +211,8 @@ export default function LiveSheet({
             <button
               type="button"
               aria-pressed={liveSheetScope === "in_place"}
-              disabled={!inPlaceScopeAvailable || liveQueryPending}
-              onClick={() => requestLiveSheetScope("in_place")}
+              disabled={!inPlaceScopeAvailable}
+              {...busyButton(liveQueryPending, () => requestLiveSheetScope("in_place"))}
               className={scopeChip(liveSheetScope === "in_place")}
             >
               {t("Hela området", "Whole area")}
@@ -217,8 +220,8 @@ export default function LiveSheet({
             <button
               type="button"
               aria-pressed={liveSheetScope === "near_route"}
-              disabled={!routeScopeAvailable || liveQueryPending}
-              onClick={() => requestLiveSheetScope("near_route")}
+              disabled={!routeScopeAvailable}
+              {...busyButton(liveQueryPending, () => requestLiveSheetScope("near_route"))}
               className={scopeChip(liveSheetScope === "near_route")}
             >
               {t("Nära rutten", "Near the route")}
@@ -226,8 +229,7 @@ export default function LiveSheet({
             <button
               type="button"
               aria-pressed={liveSheetScope === "near_me"}
-              disabled={liveQueryPending}
-              onClick={() => requestLiveSheetScope("near_me")}
+              {...busyButton(liveQueryPending, () => requestLiveSheetScope("near_me"))}
               className={scopeChip(liveSheetScope === "near_me")}
             >
               <LocationIcon className="h-3.5 w-3.5 text-parranda-ember" />
