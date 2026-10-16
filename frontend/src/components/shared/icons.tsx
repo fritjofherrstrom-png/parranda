@@ -68,6 +68,25 @@ export function ChevronDownIcon({ className }: IconProps) {
   );
 }
 
+/** A new alternative, not a reversal or removal. */
+export function ShuffleIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M3 6h3c4 0 5 12 9 12h6m-4-4 4 4-4 4" />
+      <path d="M3 18h3c1.6 0 2.8-2 4-4m4-4c1.4-2.5 2.3-4 4-4h3m-4-4 4 4-4 4" />
+    </Icon>
+  );
+}
+
+/** Deliberately remove a visit, with no replacement. */
+export function TrashIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5m4-5v5" />
+    </Icon>
+  );
+}
+
 /** Leaves Parranda (Maps, a source page). */
 export function ExternalIcon({ className }: IconProps) {
   return (
