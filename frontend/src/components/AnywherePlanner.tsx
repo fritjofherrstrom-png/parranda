@@ -20,6 +20,7 @@ import {
   freezeComposeDateIso,
 } from "../lib/anywhere-payload.mjs";
 import { anywhereBlitzView, type AnywhereBlitzView } from "../lib/blitz-view.mjs";
+import { inertOutside, tabbableWithin } from "../lib/modal-focus.mjs";
 import { contextNote, limitationNote, placesStillArriving } from "../lib/day-limitations.mjs";
 import { dayChangeSegments, describeDayChange, type DayChange } from "../lib/day-change.mjs";
 import {
@@ -1446,34 +1447,38 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   // The Live sheet behaves like a modal: focus enters it, stays inside while it
   // is open, returns to the trigger on close, and the page behind does not scroll.
+  // The page behind is inert while it is open, so neither Tab nor a screen
+  // reader's own navigation can reach what the sheet covers.
   useEffect(() => {
     if (!liveSheetOpen) {
       liveQueryAbortRef.current?.abort();
       return;
     }
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const restoreOutside = inertOutside(liveSheetDialogRef.current?.parentElement);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setLiveSheetOpen(false);
         return;
       }
-      if (e.key !== "Tab" || !liveSheetDialogRef.current) return;
-      const focusable = Array.from(
-        liveSheetDialogRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
-        ),
-      );
+      const dialog = liveSheetDialogRef.current;
+      if (e.key !== "Tab" || !dialog) return;
+      const focusable = tabbableWithin(dialog);
       if (!focusable.length) {
         e.preventDefault();
-        liveSheetDialogRef.current.focus();
+        dialog.focus();
         return;
       }
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
+      const active = document.activeElement;
+      if (!active || !dialog.contains(active)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      } else if (e.shiftKey && (active === first || active === dialog)) {
         e.preventDefault();
         last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
+      } else if (!e.shiftKey && active === last) {
         e.preventDefault();
         first.focus();
       }
@@ -1486,6 +1491,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       cancelAnimationFrame(focusFrame);
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = previousOverflow;
+      // The trigger sits in the page behind: make it reachable before focusing it.
+      restoreOutside();
       (liveSheetTriggerRef.current ?? previouslyFocused)?.focus();
     };
   }, [liveSheetOpen]);
