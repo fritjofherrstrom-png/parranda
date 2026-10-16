@@ -126,12 +126,9 @@ export default function LiveSheet({
           {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
           {distance && <span className="font-semibold text-parranda-live"> · {distance}</span>}
           {liveEventSource(ev, lang)}
-          {/* aria-label on a plain span is not read; the tags say what they are in text. */}
-          {tags.length > 0 && <span className="mt-1 flex flex-wrap gap-1">
-            <span className="sr-only">{t("Taggar: ", "Tags: ")}</span>
-            {tags.map((tag, index) => <span key={tag} className={`${labelChip} min-w-0 max-w-full break-words`}>
-              {index > 0 && <span className="sr-only">, </span>}{tag}
-            </span>)}
+          {/* A named list: aria-label on a plain span is not read, a list's is. */}
+          {tags.length > 0 && <span role="list" aria-label={t("Taggar", "Tags")} className="mt-1 flex flex-wrap gap-1">
+            {tags.map(tag => <span role="listitem" key={tag} className={`${labelChip} min-w-0 max-w-full break-words`}>{tag}</span>)}
           </span>}
           {relevance && <span className="mt-0.5 block text-xs text-parranda-ink/68">{relevance}</span>}
         </span>

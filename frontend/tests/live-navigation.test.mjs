@@ -153,7 +153,8 @@ test('By time retains all source-listed dates and renders tags only from supplie
   assert.ok(section(h, 'Thu 15 Oct'), 'the first stated date has its own section');
   assert.match(section(h, 'Thu 15 Oct').textContent, /Source list/);
   assert.match(section(h, 'Sat 17 Oct').textContent, /Source list/);
-  assert.deepEqual([...section(h, 'Thu 15 Oct').querySelector('[aria-label="Tags"]').children].map(node => node.textContent), ['Konsert', 'Jazz']);
+  // The source's own tags, in the page's language where they are a common category (live-tags.mjs).
+  assert.deepEqual([...section(h, 'Thu 15 Oct').querySelector('[role="list"][aria-label="Tags"]').children].map(node => node.textContent), ['Concerts', 'Jazz']);
   assert.equal(section(h, 'Fri 16 Oct').querySelector('[aria-label="Tags"]'), null);
 });
 

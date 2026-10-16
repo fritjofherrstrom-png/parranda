@@ -26,9 +26,10 @@ test('one category from two sources is one tag', () => {
   assert.deepEqual(liveTagLabels(null, 'en'), []);
 });
 
-test('the sheet announces its tags in text, not with aria-label on a span', () => {
+test('the sheet names its tags as a list, not with aria-label on a plain span', () => {
   const sheet = readFileSync(new URL('../src/components/planner/LiveSheet.tsx', import.meta.url), 'utf8');
   assert.match(sheet, /liveTagLabels\(liveEventTags\(ev\), lang\)/);
   assert.doesNotMatch(sheet, /<span aria-label=\{t\("Taggar", "Tags"\)\}/);
-  assert.match(sheet, /<span className="sr-only">\{t\("Taggar: ", "Tags: "\)\}<\/span>/);
+  assert.match(sheet, /<span role="list" aria-label=\{t\("Taggar", "Tags"\)\}/);
+  assert.match(sheet, /<span role="listitem" key=\{tag\}/);
 });
