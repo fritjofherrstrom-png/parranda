@@ -6,8 +6,9 @@ No merge, deploy, Pi image or public/shared-cache mutation is included.
 - Main/base: `dad368233963b7766afb532339cbabc7ac2e8fb1`.
 - Preserved PR checkpoint: `337bfdc3b2b888c69e14e593e1fd3ef67443c92f`.
 - Source/native/cache candidate: `ec7e13b9c058ce5b184c4dafd79d87f7c75ff50b`.
-- Final code candidate: `7e3e30ff18a1d01864673a88964471bf7a6d7616`.
-- Final code tree: `a331a35a1893dcd0ce106725264c40cdccceee84`.
+- Final product code: `7e3e30ff18a1d01864673a88964471bf7a6d7616`.
+- Final product/test candidate: `a7ce65bb00edd1b79696d525c1bfbc1fd45c1186` (test-only follow-up).
+- Final product/test tree: `2e58d2e2e543c695b48286becb6dfd93f5b66169`.
 - A following evidence-only commit changes this directory, not product or tests.
   Its full published head and exact-head CI result are reported in PR608.
 
@@ -70,6 +71,30 @@ The unchanged built Rome/Barcelona/Athens/Stockholm tests now all pass. No map
 layout policy, timeout, acceptance assertion or test was removed. The static
 wiring assertion now requires the actual event argument. Dist was rebuilt cleanly
 after all temporary browser harness directories had been removed.
+
+## Exact-head CI precondition failure and test-only correction
+
+The first published head `8fa46c6b9e620070e29e24e3479d9767ea7eb544`
+completed CI38906505287 with **4312 PASS /1 FAIL /3 SKIP** (4316 total).
+The sole failure was the new stationary test waiting for a layout-generated
+mouseenter, before any product assertion. Existing Rome/Stockholm unified UI
+and unchanged 110-view acceptance passed. Later CI build/type/container steps
+were skipped because root tests failed. This is retained as RED evidence.
+
+An independent minimal transformed-DOM control on local Chrome155 proved that
+B can own the exact hit-test point after a CSS transform without Chromium
+sending a boundary event after two animation frames. One native input at the
+identical coordinates then sent trusted leave/enter/move, without displacement.
+The exact reason Linux headless CI omitted that event remains unproven; neither
+arbitrary timeout nor product correctness is inferred from this control.
+
+The test-only follow-up explicitly verifies B's hit geometry, requests ONE native
+hit-test update at unchanged coordinates, requires a trusted enter with no
+coordinate displacement, and retains the original StopA preservation and later
+deliberate return/leave assertions and timeouts. Against old f42 product, the
+same fixture produces RED: actual StopB, expected StopA. Restored final product
+passes all seven controls. No product/source/dist changes were made for this
+CI-precondition correction. Full CI is required on its actual new published head.
 
 ## Real source controls and geographic scope
 

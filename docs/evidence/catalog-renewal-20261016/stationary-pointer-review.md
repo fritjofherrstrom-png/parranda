@@ -36,3 +36,41 @@ The integration owner should retain these hashes or review any later source delt
 The reviewer independently resolved final code commit **`7e3e30ff18a1d01864673a88964471bf7a6d7616`** and tree **`a331a35a1893dcd0ce106725264c40cdccceee84`** from Git. Reading each of the three reviewed files directly from this commit produced the exact SHA256 values recorded above; the disposition therefore applies to this code commit. Its remaining file delta is the rebuilt AnywherePlanner bundle and its anywhere HTML reference.
 
 The reviewer also inspected the integration owner's `final-unified-browser.log`: the built unified-city browser controls report **4 tests, 4 PASS, 0 FAIL, 0 SKIP** for Rome, Barcelona, Athens and Stockholm. Clean build, typecheck, frontend-contract and production-dist comparison results were reported by the integration owner; this addendum does not represent independent re-execution of those checks. No tests were rerun and no repository files were modified for this addendum. Final evidence packaging and remote CI at the actual published head remain separate delivery checks.
+
+## CI precondition investigation
+
+Published evidence head `8fa46c6` subsequently had a failing complete CI run, `38906505287`: 4,316 total, 4,312 PASS, 1 FAIL, 3 SKIP. The reviewer inspected the retained CI log. The only failure is `tests/route-map-selection.test.js:164`, waiting 15 seconds for `window.stationaryEnter === true`. The test did not reach its Stop A versus Stop B product assertion. The other mounted interaction controls passed. This is an unresolved final-CI blocker; the earlier reviewed code disposition must not be represented as a complete passing workflow.
+
+The reviewer used the systematic-debugging workflow to inspect the event precondition. The harness moves MapLibre-transformed DOM elements with CSS individual `translate`, then assumes the browser will automatically dispatch the new mouseenter without further native input. Its current trace does not prove the post-mutation hit geometry on the failing CI platform. The network guard only intercepts Node network connections, and the file-deadline helper only fails an overlong process; neither changes browser hit testing or mouse events.
+
+A finite independent control outside the repository used two absolutely positioned 44px div targets inside an overflow-hidden frame, with MapLibre-like transforms and the same native launch flags. Runtime: macOS arm64, installed Chrome **155.0.8059.84**. It is a minimal DOM control, not a mounted product test or a Linux-CI reproduction.
+
+After the native click at `(82,130)`, the control moved A away and translated B by `-90px` under the unchanged pointer. After two requestAnimationFrame callbacks:
+
+```json
+{"hit":"b","rect":{"x":60,"y":108,"width":44,"height":44},"trace":[],"previous":{"x":82,"y":130}}
+```
+
+`document.elementFromPoint(82,130)` already returned B and its rectangle was centered at that point, yet no enter or leave event had been observed. Exactly one `page.mouse.move(82,130)` then requested native input processing at the identical coordinates. It produced the following actual event trace; every event had `isTrusted === true`, and previous document mouse coordinates remained `(82,130)`:
+
+```json
+[
+  {"kind":"mouseleave","target":"a","x":82,"y":130,"trusted":true},
+  {"kind":"mouseenter","target":"b","x":82,"y":130,"trusted":true},
+  {"kind":"mousemove","target":"b","x":82,"y":130,"trusted":true}
+]
+```
+
+This demonstrates that correct transformed hit geometry and automatic boundary-event scheduling are separate harness assumptions, even on installed local Chrome. It does not establish the precise cause of the Linux timeout, whose retained failure lacks a geometry trace. A test-only correction can explicitly prove B's rectangle and hit target, request one native hit-test refresh at the identical coordinates, require the trusted enter with unchanged coordinates, retain the original Stop A preservation assertion and deliberate leave/return assertion, and demonstrate old-product RED versus corrected-product GREEN. No product logic, assertion, timeout, source policy or resource boundary needs to change for this discriminating control. The integration owner owns that test correction, focused RED/GREEN evidence, final review and exact-head CI.
+
+## Test-only hit-test correction review
+
+Reviewed working delta against published HEAD **`8fa46c6b9e620070e29e24e3479d9767ea7eb544`**: only `tests/route-map-selection.test.js` differs. **No actionable finding.** The test retains the original Stop A preservation, deliberate return to inspect Stop B, subsequent leave dismissal and existing timeouts. It now rounds the original clicked center to integer native mouse coordinates, proves that B's target owns that exact point with its rectangle centered there, issues one native mouse move at those unchanged coordinates, and additionally requires a trusted enter and no coordinate displacement in the trace. It does not dispatch synthetic DOM events, remove a product assertion or bypass the demonstrated regression. The trace listeners belong to the disposable test page and are removed when its context closes.
+
+The reviewer inspected `map-hit-test-final-green.log`: **7 tests, 7 PASS, 0 FAIL, 0 SKIP**. The stationary case records the point `(138,159)`, `targetUnderPointer: true`, exact B center `(138,159)`, and native trusted enter plus move at `(138,159)`. The unchanged later leave/return assertions pass.
+
+The reviewer also inspected `map-hit-test-old-product-red.log`, using the identical strengthened fixture against the previous f42 product behavior. Its geometry and native trace are the same, then the retained product assertion fails with actual Stop B versus expected Stop A. This confirms that the test still discriminates the actual selection regression after removing its unsupported automatic-event-scheduling assumption.
+
+The product `RouteMap.tsx` was independently hashed both from HEAD and the restored working file; both remain `a70995a89cfbbc63784cc24d7cc65cf7a60689b435c43e430c78dced7ca9f239`. The reviewed new test SHA256 is **`6ed21a30b238ee458d78671d53f3cce7a5ac1d4876dd5c090d65678d199a6985`**. No repository edits, test reruns or provider calls were made by this review. The integration owner owns the post-restore focused run, test-only commit, updated evidence and complete CI at the actual new published head. This approval clears the test-only correction; it does not mark the previous failed CI run as passing.
+
+Exact-commit confirmation: the reviewer independently resolved **`a7ce65bb00edd1b79696d525c1bfbc1fd45c1186`**, tree **`2e58d2e2e543c695b48286becb6dfd93f5b66169`**, and hashed the committed test directly: it matches `6ed21a30b238ee458d78671d53f3cce7a5ac1d4876dd5c090d65678d199a6985`. The commit changes only that test; comparing its `server` and `frontend` trees with `8fa46c6` produces no delta. The reviewer inspected `map-hit-test-restored-final-green.log`: **7 tests, 7 PASS, 0 FAIL, 0 SKIP**, with the same verified B geometry and trusted unchanged-coordinate trace after product restoration. The reviewed approval applies to this exact test-only commit. Its evidence-only descendant still requires complete final published-head CI.

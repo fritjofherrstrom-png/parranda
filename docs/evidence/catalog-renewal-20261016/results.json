@@ -1,5 +1,5 @@
 {
-  "codeCandidate": "7e3e30ff18a1d01864673a88964471bf7a6d7616",
+  "codeCandidate": "a7ce65bb00edd1b79696d525c1bfbc1fd45c1186",
   "base": "dad368233963b7766afb532339cbabc7ac2e8fb1",
   "preservedCheckpoint": "337bfdc3b2b888c69e14e593e1fd3ef67443c92f",
   "localRuntime": {
@@ -45,7 +45,8 @@
       "tests": 7,
       "pass": 7,
       "fail": 0,
-      "skip": 0
+      "skip": 0,
+      "log": "map-hit-test-restored-final-green.log"
     },
     "unifiedBuiltBrowserFinal": {
       "tests": 4,
@@ -68,6 +69,14 @@
       "fail": 0,
       "skip": 0,
       "scope": "real built UI and HTTP/cache/composer, controlled external inputs; source code unchanged after run"
+    },
+    "stationaryOldProductControl": {
+      "tests": 1,
+      "pass": 0,
+      "fail": 1,
+      "skip": 0,
+      "expected": "RED: real trusted zero-displacement enter replaces StopA with StopB against f42 product",
+      "log": "map-hit-test-old-product-red.log"
     }
   },
   "sourceControls": [
@@ -430,7 +439,7 @@
       "rendered": true
     }
   ],
-  "codeTree": "a331a35a1893dcd0ce106725264c40cdccceee84",
+  "codeTree": "2e58d2e2e543c695b48286becb6dfd93f5b66169",
   "sourceCandidate": "ec7e13b9c058ce5b184c4dafd79d87f7c75ff50b",
   "ci": {
     "status": "pending-at-packaging",
@@ -460,6 +469,16 @@
       "pass": 4,
       "fail": 1,
       "scope": "f42 built run reproduced stationary-pointer layout enter; fixed at final code candidate with discriminating RED/GREEN and unchanged unified acceptance"
+    },
+    {
+      "head": "8fa46c6b9e620070e29e24e3479d9767ea7eb544",
+      "run": 38906505287,
+      "tests": 4316,
+      "pass": 4312,
+      "fail": 1,
+      "skip": 3,
+      "failure": "stationary-layout test native-enter generation precondition; old product negative assertion not reached; later workflow steps skipped",
+      "correction": "test-only explicit geometry and native same-coordinate hit-test refresh; current product unchanged; old product still RED; final new-head CI pending"
     }
   ],
   "skips": [
@@ -471,5 +490,6 @@
       "count": 1,
       "kind": "PostgreSQL requires configured disposable DB in root suite; separate CI migration smoke exercises real DB"
     }
-  ]
+  ],
+  "productCandidate": "7e3e30ff18a1d01864673a88964471bf7a6d7616"
 }

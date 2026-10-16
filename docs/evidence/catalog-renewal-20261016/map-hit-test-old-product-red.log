@@ -1,0 +1,35 @@
+✖ layout moving another marker under a stationary pointer preserves the click, but a real return can inspect it (6696.422792ms)
+ℹ {"point":{"x":138,"y":159},"geometry":{"targetUnderPointer":true,"center":{"x":138,"y":159}},"trace":[{"kind":"enter","x":138,"y":159,"trusted":true},{"kind":"move","x":138,"y":159}]}
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7452.25125
+
+✖ failing tests:
+
+test at tests/route-map-selection.test.js:149:1
+✖ layout moving another marker under a stationary pointer preserves the click, but a real return can inspect it (6696.422792ms)
+  AssertionError [ERR_ASSERTION]: layout-generated enter must not replace the clicked marker
+  + actual - expected
+
+    [
+  +   'Stop B'
+  -   'Stop A'
+    ]
+
+      at TestContext.<anonymous> ($REPO/tests/route-map-selection.test.js:182:10)
+      at runNextTicks (node:internal/process/task_queues:65:5)
+      at process.processImmediate (node:internal/timers:472:9)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ 'Stop B' ],
+    expected: [ 'Stop A' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
