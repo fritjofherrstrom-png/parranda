@@ -146,6 +146,30 @@ test('hovering another marker after a click inspects that marker while restored 
   await page.getByRole('tooltip').waitFor({ state: 'detached' });
 });
 
+test('layout moving another marker under a stationary pointer preserves the click, but a real return can inspect it', { timeout: 30000 }, async t => {
+  const page = await pageFor(t);
+  const first = page.locator('.route-map-marker').first();
+  const point = await first.evaluate(e => { const r=e.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; });
+  await page.mouse.click(point.x, point.y);
+  await page.getByRole('tooltip').getByText('Stop A', { exact: true }).waitFor();
+  await page.evaluate(point => {
+    const target = document.querySelectorAll('.route-map-target')[1];
+    window.stationaryEnter = false;
+    target.addEventListener('mouseenter', () => { window.stationaryEnter = true; });
+    const rect = target.getBoundingClientRect();
+    document.querySelector('.route-map-marker-shell').style.translate = '120px 0';
+    document.querySelector('.route-map-target').style.translate = '120px 0';
+    target.style.translate = `${point.x-rect.x-rect.width/2}px ${point.y-rect.y-rect.height/2}px`;
+  }, point);
+  await page.waitForFunction(() => window.stationaryEnter === true);
+  assert.deepEqual(await page.getByRole('tooltip').allTextContents(), ['Stop A'], 'layout-generated enter must not replace the clicked marker');
+  await page.mouse.move(380, 700);
+  await page.mouse.move(point.x, point.y);
+  await page.getByRole('tooltip').getByText('Stop B', { exact: true }).waitFor();
+  await page.mouse.move(380, 700);
+  await page.getByRole('tooltip').waitFor({ state: 'detached' });
+});
+
 test('keyboard focus opens the marker name and blur closes it', { timeout: 30000 }, async t => {
   const page = await pageFor(t);
   await page.mouse.move(380, 700);

@@ -418,8 +418,8 @@ test("a route stop's visible number is its own tap target", () => {
   // Both surfaces open the same name, while distinguishing transient hover
   // from an explicit selection. Native behavior (including expansion/leave,
   // keyboard and touch) is exercised in tests/route-map-selection.test.js.
-  assert.match(routeMapSource, /target\.addEventListener\("mouseenter", \(\) => open\("hover"\)\);[\s\S]{0,200}target\.addEventListener\("click", \(\) => open\("click"\)\);/);
-  assert.match(routeMapSource, /disc\.addEventListener\("mouseenter", \(\) => open\("hover"\)\);[\s\S]{0,200}disc\.addEventListener\("click", \(\) => open\("click"\)\);/);
+  assert.match(routeMapSource, /target\.addEventListener\("mouseenter", \(event\) => open\("hover", event\)\);[\s\S]{0,200}target\.addEventListener\("click", \(event\) => open\("click", event\)\);/);
+  assert.match(routeMapSource, /disc\.addEventListener\("mouseenter", \(event\) => open\("hover", event\)\);[\s\S]{0,200}disc\.addEventListener\("click", \(event\) => open\("click", event\)\);/);
 });
 
 test("route, saved-day, Blitz, and source actions keep a 44px mobile touch target", () => {
