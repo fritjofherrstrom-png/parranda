@@ -174,7 +174,10 @@
    It lives in the base layer so a control that draws focus on its own frame
    (the landing search: `focus-visible:outline-hidden`) can still opt out —
    Tailwind 4 puts utilities in a cascade layer, and unlayered CSS would beat
-   every one of them. */
+   every one of them. `summary` is listed because a <details> toggle is a
+   control too; without it the browser drew its own thin default ring.
+   Segmented controls (ui.tsx) round their own ends instead of clipping with
+   overflow-hidden, which would cut this ring away. */
 @layer base {
   :where(
     a[href],
@@ -182,6 +185,7 @@
     input,
     select,
     textarea,
+    summary,
     [tabindex]:not([tabindex="-1"])
   ):focus-visible {
     outline: 3px solid rgb(var(--p-color-glow));

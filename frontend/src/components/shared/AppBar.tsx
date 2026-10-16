@@ -102,7 +102,8 @@ export default function AppBar({
           <span data-theme-glyph="day"><SunIcon className="h-[18px] w-[18px]" /></span>
           <span data-theme-glyph="night"><MoonIcon className="h-[18px] w-[18px]" /></span>
         </button>
-        <div className="flex overflow-hidden rounded-full border-[1.5px] border-parranda-ink/18" role="group" aria-label={languageLabel}>
+        {/* Each end rounds itself: overflow-hidden here would clip the focus ring. */}
+        <div className="flex rounded-full border-[1.5px] border-parranda-ink/18" role="group" aria-label={languageLabel}>
           {(["en", "sv"] as const).map((option) => (
             <a
               key={option}
@@ -110,7 +111,7 @@ export default function AppBar({
               onClick={leaving("language")}
               aria-current={lang === option ? "true" : undefined}
               className={
-                "type-data inline-flex min-h-11 min-w-11 items-center justify-center px-3 text-xs font-semibold transition " +
+                "type-data inline-flex min-h-11 min-w-11 items-center justify-center px-3 text-xs font-semibold transition first:rounded-l-full last:rounded-r-full " +
                 (lang === option ? "bg-parranda-ink text-parranda-paper" : "text-parranda-ink/72 hover:text-parranda-ink")
               }
             >

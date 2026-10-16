@@ -52,6 +52,23 @@ export function pillClass(active = false, extra = ""): string {
 export const compactPillTarget =
   "relative inline-flex min-h-9 items-center rounded-full text-[13px] transition before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']";
 
+/**
+ * A row of mutually exclusive choices drawn as one rounded control (Today /
+ * Tomorrow, rhythm, Live's When and Order). The group draws the frame; each
+ * segment rounds its own ends. Never `overflow-hidden` on the group: it would
+ * clip the focus ring, which sits 3px outside the segment.
+ */
+export const segmentGroup = "inline-flex self-start rounded-full border-[1.5px] border-parranda-ink/18";
+
+/** One segment of `segmentGroup`. Selected is the system's one "chosen" fill: ink. */
+export function segmentClass(active: boolean, extra = ""): string {
+  return (
+    "inline-flex min-h-11 items-center justify-center px-[18px] text-[13px] transition first:rounded-l-full last:rounded-r-full " +
+    (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink/72 hover:text-parranda-ink") +
+    (extra ? ` ${extra}` : "")
+  );
+}
+
 /** A plain informational card: notices, refusals, errors. */
 export const noticeCard =
   "rounded-parranda border-[1.5px] border-parranda-ink/12 bg-parranda-ink/4 p-4 text-sm leading-relaxed text-parranda-ink/80";

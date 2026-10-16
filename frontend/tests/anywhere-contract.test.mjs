@@ -432,9 +432,24 @@ test("route, saved-day, Blitz, and source actions keep a 44px mobile touch targe
 });
 
 test("keyboard-reachable controls have one visible focus contract", () => {
-  assert.match(anywhereStyles, /:where\([\s\S]*a\[href\][\s\S]*button[\s\S]*input[\s\S]*\):focus-visible/);
+  assert.match(anywhereStyles, /:where\([\s\S]*a\[href\][\s\S]*button[\s\S]*input[\s\S]*summary[\s\S]*\):focus-visible/);
   assert.match(anywhereStyles, /outline: 3px solid rgb\(var\(--p-color-glow\)\)/);
   assert.match(anywhereStyles, /outline-offset: 3px/);
+});
+
+test("grouped controls never clip the focus ring that sits outside them", () => {
+  // The ring is drawn 3px outside a control. A rounded group with
+  // overflow-hidden cut it to a sliver on EN/SV, Today/Tomorrow, rhythm and
+  // Live's When/Order; each segment now rounds its own ends instead.
+  const ui = componentSource("shared/ui.tsx");
+  assert.match(ui, /export const segmentGroup = "(?![^"]*overflow-hidden)[^"]*rounded-full/);
+  assert.match(ui, /first:rounded-l-full last:rounded-r-full/);
+  for (const file of ["shared/AppBar.tsx", "planner/AnchorCard.tsx", "planner/LiveSheet.tsx"]) {
+    const source = componentSource(file);
+    assert.doesNotMatch(source, /className="[^"]*overflow-hidden[^"]*"\s+role="group"/, `${file} clips a group`);
+    assert.doesNotMatch(source, /overflow-hidden[^"\n]*rounded-full[^"\n]*"\s*\n?\s*role="group"/, `${file} clips a group`);
+  }
+  assert.doesNotMatch(componentSource("planner/AnchorCard.tsx"), /className=\{`overflow-hidden \$\{panelCard\}`\}/);
 });
 
 test("adjustments collapse to a summary and re-compose themselves — no submit past the landing", () => {

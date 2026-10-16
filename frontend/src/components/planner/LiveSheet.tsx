@@ -18,6 +18,7 @@ import { eventTiming, liveEventRelevance } from "../../lib/pulse-view.mjs";
 import { liveEventTags, liveNavigationGroups, type LiveNavigationRow, type LiveSheetSort } from "../../lib/live-navigation.mjs";
 import type { LiveEventScope } from "../../lib/live-event-query.mjs";
 import { CloseIcon, LocationIcon } from "../shared/icons";
+import { pillClass, segmentClass, segmentGroup } from "../shared/ui";
 import { liveRelevanceSentence, nearbyDistanceLabel, type Lang, type Translate } from "./copy";
 import { liveEventSource } from "./LiveEventSource";
 import EventOccurrences from "./EventOccurrences";
@@ -26,11 +27,9 @@ import type { LiveEvents, LiveFailure, LiveSourceHealth, PulseEvent } from "./ty
 
 type SheetState = "hidden" | "uncovered" | "pending" | "unavailable" | "partial" | "ok" | "rejected_empty" | "soft_empty";
 
-const scopeChip = (active: boolean) =>
-  "inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-[13px] transition disabled:cursor-not-allowed disabled:opacity-40 " +
-  (active
-    ? "border-parranda-live bg-parranda-live font-bold text-parranda-on-live"
-    : "border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45");
+// Where is a set of chips, not a segment: one of four, and some can be off.
+// Selected uses the system's one "chosen" fill (ink); Live blue stays for Live content.
+const scopeChip = (active: boolean) => pillClass(active, "gap-2 disabled:cursor-not-allowed disabled:opacity-40");
 
 export default function LiveSheet({
   lang,
@@ -245,17 +244,14 @@ export default function LiveSheet({
         {/* WHEN — a real axis over the live_events buckets. */}
         <div className="mt-4 flex flex-col gap-2">
           <p className="type-eyebrow text-parranda-live">{t("När", "When")}</p>
-          <div className="inline-flex self-start overflow-hidden rounded-full border border-parranda-ink/14" role="group" aria-label={t("Vilken tid", "Which time")}>
+          <div className={segmentGroup} role="group" aria-label={t("Vilken tid", "Which time")}>
             {(["tonight", "week"] as const).map((key) => (
               <button
                 type="button"
                 key={key}
                 aria-pressed={liveSheetTime === key}
                 onClick={() => setLiveSheetTime(key)}
-                className={
-                  "inline-flex min-h-11 items-center px-[18px] text-[13px] transition " +
-                  (liveSheetTime === key ? "bg-parranda-ink font-bold text-parranda-paper" : "text-parranda-ink/68 hover:text-parranda-ink")
-                }
+                className={segmentClass(liveSheetTime === key)}
               >
                 {key === "tonight" ? liveDayLabel : t("Följande 7 dagar", "Following 7 days")}
               </button>
@@ -265,11 +261,10 @@ export default function LiveSheet({
 
         <div className="mt-4 flex flex-col gap-2">
           <p className="type-eyebrow text-parranda-live">{t("Ordning", "Order")}</p>
-          <div className="inline-flex self-start overflow-hidden rounded-full border border-parranda-ink/14" role="group" aria-label={t("Live-ordning", "Live order")}>
+          <div className={segmentGroup} role="group" aria-label={t("Live-ordning", "Live order")}>
             {(["for_you", "by_time"] as const).map(sort => (
               <button key={sort} type="button" aria-pressed={liveSheetSort === sort} onClick={() => setLiveSheetSort(sort)}
-                className={"inline-flex min-h-11 items-center px-[18px] text-[13px] transition " +
-                  (liveSheetSort === sort ? "bg-parranda-ink font-bold text-parranda-paper" : "text-parranda-ink/68 hover:text-parranda-ink")}>
+                className={segmentClass(liveSheetSort === sort)}>
                 {sort === "for_you" ? t("För dig", "For you") : t("Efter tid", "By time")}
               </button>
             ))}

@@ -6,7 +6,7 @@
  */
 import { useEffect, useId, useRef } from "react";
 import { CheckIcon, ChevronDownIcon, LocationIcon } from "../shared/icons";
-import { compactPillTarget, Eyebrow, panelCard } from "../shared/ui";
+import { compactPillTarget, Eyebrow, panelCard, segmentClass, segmentGroup } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 
 type Option = { key: string; sv: string; en: string };
@@ -68,11 +68,10 @@ export default function AnchorCard({
   const scale = rhythms.filter((preset) => preset.key !== "free");
   const free = rhythms.find((preset) => preset.key === "free");
   const current = rhythms.find((preset) => preset.key === walkKey);
-  const segment = (active: boolean) =>
-    "inline-flex min-h-11 items-center justify-center px-[18px] text-[13px] transition " +
-    (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink/72 hover:text-parranda-ink");
   return (
-    <section aria-label={t("Dagens utgångspunkt", "Your day's starting point")} className={`overflow-hidden ${panelCard}`}>
+    // No overflow-hidden: Change and Adjust sit 6px from the card's edge, and
+    // clipping would cut their focus rings.
+    <section aria-label={t("Dagens utgångspunkt", "Your day's starting point")} className={panelCard}>
       <div className="flex min-h-14 items-center gap-2.5 py-1.5 pl-4 pr-1.5">
         <LocationIcon className="h-4 w-4 text-parranda-ember" />
         <span className="min-w-0 flex-1 truncate text-base font-extrabold text-parranda-ink">
@@ -165,9 +164,9 @@ export default function AnchorCard({
 
           <div className="flex flex-col gap-2 border-t border-parranda-ink/10 pt-4">
             <Eyebrow tone="glow">{t("När", "When")}</Eyebrow>
-            <div className="inline-flex self-start overflow-hidden rounded-full border-[1.5px] border-parranda-ink/18" role="group" aria-label={t("Vilken dag", "Which day")}>
+            <div className={segmentGroup} role="group" aria-label={t("Vilken dag", "Which day")}>
               {([0, 1] as const).map((offset) => (
-                <button type="button" key={offset} aria-pressed={dayOffset === offset} onClick={() => onSetDay(offset)} className={segment(dayOffset === offset)}>
+                <button type="button" key={offset} aria-pressed={dayOffset === offset} onClick={() => onSetDay(offset)} className={segmentClass(dayOffset === offset)}>
                   {offset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")}
                 </button>
               ))}
@@ -200,7 +199,7 @@ export default function AnchorCard({
               )}
             </div>
             <div
-              className="grid grid-cols-3 overflow-hidden rounded-full border-[1.5px] border-parranda-ink/18 sm:max-w-sm"
+              className="grid grid-cols-3 rounded-full border-[1.5px] border-parranda-ink/18 sm:max-w-sm"
               role="group"
               aria-label={t("Dagens rytm", "Day rhythm")}
             >
@@ -213,7 +212,7 @@ export default function AnchorCard({
                     aria-pressed={active}
                     onClick={() => onSetRhythm(preset.key)}
                     className={
-                      "min-h-11 px-2 text-[13px] leading-tight transition " +
+                      "min-h-11 px-2 text-[13px] leading-tight transition first:rounded-l-full last:rounded-r-full " +
                       (index > 0 ? "border-l-[1.5px] border-parranda-ink/18 " : "") +
                       (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink/72 hover:text-parranda-ink")
                     }
