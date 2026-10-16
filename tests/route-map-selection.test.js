@@ -149,19 +149,36 @@ test('hovering another marker after a click inspects that marker while restored 
 test('layout moving another marker under a stationary pointer preserves the click, but a real return can inspect it', { timeout: 30000 }, async t => {
   const page = await pageFor(t);
   const first = page.locator('.route-map-marker').first();
-  const point = await first.evaluate(e => { const r=e.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; });
+  const point = await first.evaluate(e => { const r=e.getBoundingClientRect(); return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}; });
   await page.mouse.click(point.x, point.y);
   await page.getByRole('tooltip').getByText('Stop A', { exact: true }).waitFor();
   await page.evaluate(point => {
     const target = document.querySelectorAll('.route-map-target')[1];
-    window.stationaryEnter = false;
-    target.addEventListener('mouseenter', () => { window.stationaryEnter = true; });
+    window.stationaryTrace = [];
+    document.addEventListener('mousemove', event => window.stationaryTrace.push({ kind: 'move', x: event.clientX, y: event.clientY }), true);
+    target.addEventListener('mouseenter', event => window.stationaryTrace.push({ kind: 'enter', x: event.clientX, y: event.clientY, trusted: event.isTrusted }));
     const rect = target.getBoundingClientRect();
     document.querySelector('.route-map-marker-shell').style.translate = '120px 0';
     document.querySelector('.route-map-target').style.translate = '120px 0';
     target.style.translate = `${point.x-rect.x-rect.width/2}px ${point.y-rect.y-rect.height/2}px`;
   }, point);
-  await page.waitForFunction(() => window.stationaryEnter === true);
+  const geometry = await page.evaluate(point => {
+    const target = document.querySelectorAll('.route-map-target')[1];
+    const rect = target.getBoundingClientRect();
+    return { targetUnderPointer: document.elementFromPoint(point.x, point.y) === target,
+      center: { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } };
+  }, point);
+  assert.equal(geometry.targetUnderPointer, true, 'the moved target must really own the original hit-test point');
+  assert.ok(Math.abs(geometry.center.x - point.x) < 0.01 && Math.abs(geometry.center.y - point.y) < 0.01);
+  // CSS transforms do not guarantee a boundary event until the next native hit
+  // test (including headless Chromium). Refresh it WITHOUT pointer displacement.
+  // Require a real trusted enter; do not dispatch an artificial DOM event.
+  await page.mouse.move(point.x, point.y);
+  await page.waitForFunction(() => window.stationaryTrace.some(event => event.kind === 'enter'));
+  const trace = await page.evaluate(() => window.stationaryTrace);
+  t.diagnostic(JSON.stringify({ point, geometry, trace }));
+  assert.ok(trace.some(event => event.kind === 'enter' && event.trusted));
+  assert.ok(trace.every(event => event.x === point.x && event.y === point.y), 'the native enter occurred without pointer displacement');
   assert.deepEqual(await page.getByRole('tooltip').allTextContents(), ['Stop A'], 'layout-generated enter must not replace the clicked marker');
   await page.mouse.move(380, 700);
   await page.mouse.move(point.x, point.y);
