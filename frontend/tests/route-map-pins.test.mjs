@@ -109,7 +109,7 @@ test('the map uses the bounded pins, and a group pin is a named control that zoo
   assert.match(source, /screenPinPresentation\(points,/);
   assert.doesNotMatch(source, /screenMarkerPresentation\(/);
   assert.match(source, /element\.setAttribute\("role", "button"\)[\s\S]{0,200}Zoom in to separate them/);
-  assert.match(source, /map\.fitBounds\(bounds/);
+  assert.match(source, /map\.easeTo\(\{ center: bounds\.getCenter\(\), zoom, duration/);
   assert.match(source, /focusAfterSplitRef\.current = group\.members\[0\]/);
   const css = readFileSync(new URL('../src/styles/tailwind.css', import.meta.url), 'utf8');
   assert.match(css, /\.route-map-frame \.maplibregl-marker\.route-map-group \{\s*pointer-events: auto;/);
