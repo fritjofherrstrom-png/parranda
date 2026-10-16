@@ -421,7 +421,7 @@ test("a route stop's visible number is its own tap target", () => {
 });
 
 test("route, saved-day, Blitz, and source actions keep a 44px mobile touch target", () => {
-  assert.match(anywherePlannerSource, /onClick=\{blitz\}[\s\S]{0,180}min-h-11/);
+  assert.match(anywherePlannerSource, /busyButton\([^)]*, blitz\)\}[\s\S]{0,180}min-h-11/);
   assert.match(anywherePlannerSource, /onClick=\{\(\) => restoreEntry\(entry\)\}[\s\S]{0,180}min-h-11/);
   assert.match(anywherePlannerSource, /aria-label=\{t\("Ta bort", "Remove"\)\}[\s\S]{0,180}min-h-11 min-w-11/);
   assert.match(anywherePlannerSource, /href=\{pin\}[\s\S]{0,180}min-h-11 min-w-11/);
