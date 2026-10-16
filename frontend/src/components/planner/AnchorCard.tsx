@@ -72,9 +72,11 @@ export default function AnchorCard({
     // No overflow-hidden: Change and Adjust sit 6px from the card's edge, and
     // clipping would cut their focus rings.
     <section aria-label={t("Dagens utgångspunkt", "Your day's starting point")} className={panelCard}>
-      <div className="flex min-h-14 items-center gap-2.5 py-1.5 pl-4 pr-1.5">
+      <div className="flex min-h-14 flex-wrap items-center gap-2.5 py-1.5 pl-4 pr-1.5">
         <LocationIcon className="h-4 w-4 text-parranda-ember" />
-        <span className="min-w-0 flex-1 truncate text-base font-extrabold text-parranda-ink">
+        {/* Wraps rather than truncates: at large text sizes "· tomorrow" was
+            cut off. Below ~10rem the row wraps and Change moves under it. */}
+        <span className="min-w-[min(100%,10rem)] flex-1 break-words text-base font-extrabold text-parranda-ink">
           {anchorLabel}
           <span className="font-medium text-parranda-ink/68">
             {" · "}
@@ -96,8 +98,8 @@ export default function AnchorCard({
       </div>
 
       {!adjustOpen && (
-        <div className="flex min-h-12 items-center gap-2.5 border-t border-parranda-ink/10 py-1.5 pl-4 pr-1.5">
-          <span className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink/72">
+        <div className="flex min-h-12 flex-wrap items-center gap-2.5 border-t border-parranda-ink/10 py-1.5 pl-4 pr-1.5">
+          <span className="min-w-[min(100%,10rem)] flex-1 text-13 leading-snug text-parranda-ink/72">
             <strong className="font-bold text-parranda-ink">{moodLabel || t("Inga val", "No moods")}</strong>
             {` · ${t("Dagens rytm", "Day rhythm")}: ${walkLabel}`}
           </span>

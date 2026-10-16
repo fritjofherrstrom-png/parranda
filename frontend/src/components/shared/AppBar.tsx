@@ -80,7 +80,9 @@ export default function AppBar({
   };
 
   return (
-    <nav className="flex items-center justify-between gap-3 py-1" aria-label="Parranda">
+    // Wraps when the reader's text size outgrows one row (200 % text zoom),
+    // instead of pushing the language switch off screen.
+    <nav className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-1" aria-label="Parranda">
       <a
         href={`/?lang=${lang}`}
         onClick={leaving("home")}
