@@ -18,7 +18,8 @@ import { eventTiming, liveEventRelevance } from "../../lib/pulse-view.mjs";
 import { liveEventTags, liveNavigationGroups, type LiveNavigationRow, type LiveSheetSort } from "../../lib/live-navigation.mjs";
 import type { LiveEventScope } from "../../lib/live-event-query.mjs";
 import { CloseIcon, LocationIcon } from "../shared/icons";
-import { pillClass, segmentClass, segmentGroup } from "../shared/ui";
+import { labelChip, pillClass, segmentClass, segmentGroup } from "../shared/ui";
+import { liveTagLabels } from "../../lib/live-tags.mjs";
 import { liveRelevanceSentence, nearbyDistanceLabel, type Lang, type Translate } from "./copy";
 import { liveEventSource } from "./LiveEventSource";
 import EventOccurrences from "./EventOccurrences";
@@ -114,7 +115,7 @@ export default function LiveSheet({
     navigationRow?: LiveNavigationRow<PulseEvent>) => {
     const relevance = liveRelevanceSentence(liveEventRelevance(navigationRow?.series || ev, selected), lang, t);
     const distance = nearbyDistanceLabel(ev, lang);
-    const tags = liveEventTags(ev);
+    const tags = liveTagLabels(liveEventTags(ev), lang);
     const timing = navigationRow?.kind === "undated" ? ""
       : eventTiming(ev, lang, now, navigationRow?.date || timingDate);
     return (
@@ -125,8 +126,12 @@ export default function LiveSheet({
           {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
           {distance && <span className="font-semibold text-parranda-live"> · {distance}</span>}
           {liveEventSource(ev, lang)}
-          {tags.length > 0 && <span aria-label={t("Taggar", "Tags")} className="mt-1 flex flex-wrap gap-1">
-            {tags.map(tag => <span key={tag} className="min-w-0 max-w-full break-words rounded-full border border-parranda-live/25 px-2 py-0.5 text-xs text-parranda-ink/68">{tag}</span>)}
+          {/* aria-label on a plain span is not read; the tags say what they are in text. */}
+          {tags.length > 0 && <span className="mt-1 flex flex-wrap gap-1">
+            <span className="sr-only">{t("Taggar: ", "Tags: ")}</span>
+            {tags.map((tag, index) => <span key={tag} className={`${labelChip} min-w-0 max-w-full break-words`}>
+              {index > 0 && <span className="sr-only">, </span>}{tag}
+            </span>)}
           </span>}
           {relevance && <span className="mt-0.5 block text-xs text-parranda-ink/68">{relevance}</span>}
         </span>

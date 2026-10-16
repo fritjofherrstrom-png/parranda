@@ -188,9 +188,11 @@ export default function AnchorCard({
                   onClick={() => onSetRhythm(free.key)}
                   className={
                     `${compactPillTarget} shrink-0 gap-1.5 px-3 ` +
+                    // A choice like the moods above. The dashed tone means
+                    // "optional, not part of the day" (ui.tsx), which a rhythm is not.
                     (walkKey === free.key
                       ? "bg-parranda-ink font-bold text-parranda-paper"
-                      : "border-[1.5px] border-dashed border-parranda-ink/30 font-semibold text-parranda-ink/72 hover:border-parranda-ink/50 hover:text-parranda-ink")
+                      : "border-[1.5px] border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45 hover:text-parranda-ink")
                   }
                 >
                   {walkKey === free.key && <CheckIcon className="h-3 w-3" />}

@@ -11,15 +11,15 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
 import { walkingDistanceLabel } from "../../lib/route-context-view.mjs";
 import { CheckIcon, ExternalIcon, HalfCircleIcon, MinusIcon, ShareIcon, StarIcon, SunIcon, WalkIcon } from "../shared/icons";
-import { buttonClass, Eyebrow } from "../shared/ui";
+import { buttonClass, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
 
 type RoutePart = WalkingRoutePart;
 type PickCoverage = { key: string; state: "covered" | "partial" | "missing" };
 
 /** A quiet fact about the day, not a control. */
-const metaChip =
-  "inline-flex items-center gap-1.5 rounded-full bg-parranda-ink/[0.07] px-2.5 py-1 text-xs font-semibold text-parranda-ink/85";
+// The day's facts are labels, not choices (ui.tsx labelChip).
+const metaChip = labelChip;
 
 /** The weather source's daily summary (server/weather.js), in the reader's words. */
 const WEATHER_CONDITIONS: Record<string, [string, string]> = {
@@ -280,18 +280,18 @@ export default function DayHeader({
       {pickCoverage.length > 0 && !allPicksCovered && (
         <ul className="flex flex-wrap gap-2" aria-label={t("Dina val i dagen", "Your picks in this day")}>
           {pickCoverage.map(({ key, state }) => (
+            // Status, not selection: covered and partial are labels like the
+            // facts row (an ink fill would read as a chosen chip, as in Adjust).
+            // Missing keeps the dashed tone, which means "not in the day".
             <li
               key={key}
               className={
-                "inline-flex min-h-7 items-center gap-1.5 rounded-full px-3 text-xs " +
-                (state === "covered"
-                  ? "bg-parranda-ink font-bold text-parranda-paper"
-                  : state === "partial"
-                    ? "border-[1.5px] border-parranda-ink/22 font-semibold text-parranda-ink/80"
-                    : "border-[1.5px] border-dashed border-parranda-ink/30 text-parranda-ink/72")
+                state === "missing"
+                  ? "inline-flex items-center gap-1.5 rounded-full border-[1.5px] border-dashed border-parranda-ink/30 px-2.5 py-1 text-xs font-semibold text-parranda-ink/72"
+                  : labelChip
               }
             >
-              {state === "covered" && <CheckIcon className="h-3 w-3" />}
+              {state === "covered" && <CheckIcon className="h-3 w-3 text-parranda-ember" />}
               {state === "partial" && <HalfCircleIcon className="h-3 w-3 text-parranda-glow" />}
               {state === "missing" && <MinusIcon className="h-3 w-3" />}
               <span>{pickLabel(key, lang)}</span>
