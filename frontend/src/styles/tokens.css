@@ -31,7 +31,6 @@
   --p-color-glow: 138 86 0; /* #8A5600 */
   --p-color-live: 35 66 200; /* #2342C8 */
   --p-color-on-live: 255 255 255;
-  --p-color-accent: var(--p-color-ember); /* legacy alias → ember */
   --p-map-tiles: grayscale(1) contrast(0.92) brightness(1.04);
   --p-radius-card: 18px;
   --p-radius-button: 14px;

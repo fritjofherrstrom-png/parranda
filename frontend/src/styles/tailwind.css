@@ -8,7 +8,6 @@
 @theme inline {
   --color-parranda-ink: rgb(var(--p-color-ink));
   --color-parranda-paper: rgb(var(--p-color-paper));
-  --color-parranda-accent: rgb(var(--p-color-accent));
   --color-parranda-terracotta: rgb(var(--p-color-terracotta));
   --color-parranda-ember: rgb(var(--p-color-ember));
   --color-parranda-clay: rgb(var(--p-color-clay));
