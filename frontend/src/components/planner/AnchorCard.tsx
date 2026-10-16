@@ -89,7 +89,7 @@ export default function AnchorCard({
             }
           }}
           aria-label={t("Byt plats", "Change place")}
-          className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-parranda-ink/8 px-4 text-[13px] font-bold text-parranda-ink transition hover:bg-parranda-ink/14"
+          className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-parranda-ink/8 px-4 text-13 font-bold text-parranda-ink transition hover:bg-parranda-ink/14"
         >
           {t("Byt", "Change")}
         </a>
@@ -97,7 +97,7 @@ export default function AnchorCard({
 
       {!adjustOpen && (
         <div className="flex min-h-12 items-center gap-2.5 border-t border-parranda-ink/10 py-1.5 pl-4 pr-1.5">
-          <span className="min-w-0 flex-1 text-[13px] leading-snug text-parranda-ink/72">
+          <span className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink/72">
             <strong className="font-bold text-parranda-ink">{moodLabel || t("Inga val", "No moods")}</strong>
             {` · ${t("Dagens rytm", "Day rhythm")}: ${walkLabel}`}
           </span>
@@ -106,7 +106,7 @@ export default function AnchorCard({
             ref={adjustButton}
             aria-expanded={false}
             onClick={() => toggleAdjust(true)}
-            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-parranda-ink/18 px-3.5 text-[13px] font-bold text-parranda-ink transition hover:border-parranda-ink/50"
+            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-parranda-ink/18 px-3.5 text-13 font-bold text-parranda-ink transition hover:border-parranda-ink/50"
           >
             {t("Justera", "Adjust")}
             <ChevronDownIcon className="h-3.5 w-3.5" />
@@ -129,7 +129,7 @@ export default function AnchorCard({
               aria-expanded={true}
               aria-controls={panelId}
               onClick={() => toggleAdjust(false)}
-              className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-parranda-ink/18 px-3.5 text-[13px] font-bold text-parranda-ink transition hover:border-parranda-ink/50"
+              className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-parranda-ink/18 px-3.5 text-13 font-bold text-parranda-ink transition hover:border-parranda-ink/50"
             >
               {t("Klar", "Done")}
               <ChevronDownIcon className="h-3.5 w-3.5 rotate-180" />
@@ -214,7 +214,7 @@ export default function AnchorCard({
                     aria-pressed={active}
                     onClick={() => onSetRhythm(preset.key)}
                     className={
-                      "min-h-11 px-2 text-[13px] leading-tight transition first:rounded-l-full last:rounded-r-full " +
+                      "min-h-11 px-2 text-13 leading-tight transition first:rounded-l-full last:rounded-r-full " +
                       (index > 0 ? "border-l-[1.5px] border-parranda-ink/18 " : "") +
                       (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink/72 hover:text-parranda-ink")
                     }
@@ -225,7 +225,7 @@ export default function AnchorCard({
               })}
             </div>
             {current && (
-              <p className="text-[13px] leading-snug text-parranda-ink/72" aria-live="polite">
+              <p className="text-13 leading-snug text-parranda-ink/72" aria-live="polite">
                 <strong className="font-bold text-parranda-ink">{lang === "en" ? current.en : current.sv}:</strong>{" "}
                 {lang === "en" ? current.noteEn : current.noteSv}
               </p>

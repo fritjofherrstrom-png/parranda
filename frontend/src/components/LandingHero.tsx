@@ -188,7 +188,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
               onSelect={choice => { setSelectedPlace(choice); setValue(choice.query); inputRef.current?.focus(); }} />
             <button
               type="submit"
-              className="min-h-[3.75rem] whitespace-nowrap rounded-parranda bg-parranda-terracotta px-8 text-[17px] font-extrabold text-white transition [font-stretch:110%] hover:brightness-110 sm:min-h-16 sm:text-lg"
+              className="min-h-[3.75rem] whitespace-nowrap rounded-parranda bg-parranda-terracotta px-8 text-17 font-extrabold text-white transition [font-stretch:110%] hover:brightness-110 sm:min-h-16 sm:text-lg"
             >
               {t("Bygg min dag", "Build my day")}
             </button>
@@ -199,18 +199,18 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
               type="button"
               onClick={useLocation}
               disabled={locating}
-              className="inline-flex min-h-12 items-center gap-2 rounded-full border-[1.5px] border-parranda-ink/22 px-5 text-[15px] font-bold text-parranda-ink transition hover:border-parranda-ink/55 disabled:opacity-60"
+              className="inline-flex min-h-12 items-center gap-2 rounded-full border-[1.5px] border-parranda-ink/22 px-5 text-15 font-bold text-parranda-ink transition hover:border-parranda-ink/55 disabled:opacity-60"
             >
               <LocationIcon className="h-4 w-4 text-parranda-ember" />
               {locating ? t("Hämtar position …", "Getting location …") : t("Använd min position", "Use my location")}
             </button>
-            <span className="text-[13px] text-parranda-ink/68">
+            <span className="text-13 text-parranda-ink/68">
               {t("Hela dagen planeras runt din position.", "The day is planned around where you are.")}
             </span>
           </div>
 
           {geoDenied && (
-            <p className="text-[13px] leading-relaxed text-parranda-ink/72" aria-live="polite">
+            <p className="text-13 leading-relaxed text-parranda-ink/72" aria-live="polite">
               {t(
                 "Positionen blockerades — inga problem. Skriv en stad eller plats i stället.",
                 "Location was blocked — no problem. Type a city or place instead.",
@@ -236,7 +236,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
         )}
       </main>
 
-      <footer className="type-data flex items-center justify-between border-t-[1.5px] border-parranda-ink/14 py-4 text-[11px] text-parranda-ink/68">
+      <footer className="type-data flex items-center justify-between border-t-[1.5px] border-parranda-ink/14 py-4 text-11 text-parranda-ink/68">
         <span>Parranda</span>
         <span>{t("din rutt, din stad", "your route, your city")}</span>
       </footer>

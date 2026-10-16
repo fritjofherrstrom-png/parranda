@@ -395,7 +395,7 @@ export default function LiveSheet({
                 <button
                   type="button"
                   onClick={() => setLiveSheetTime("week")}
-                  className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-live px-4 text-[13px] font-extrabold text-parranda-on-live hover:brightness-110"
+                  className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-live px-4 text-13 font-extrabold text-parranda-on-live hover:brightness-110"
                 >
                   {t("Visa följande dagar", "Show following days")}
                 </button>
@@ -404,7 +404,7 @@ export default function LiveSheet({
                 <button
                   type="button"
                   onClick={() => setLiveSheetTime("tonight")}
-                  className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-live px-4 text-[13px] font-extrabold text-parranda-on-live hover:brightness-110"
+                  className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-live px-4 text-13 font-extrabold text-parranda-on-live hover:brightness-110"
                 >
                   {liveDayLabel}
                 </button>

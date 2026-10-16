@@ -139,7 +139,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
             </span>}
           </li>)}
         </ul>
-        {choices.some(choice => choice.attribution) && <div className="border-t border-parranda-ink/10 px-5 py-1.5 text-[11px] text-parranda-ink/68">
+        {choices.some(choice => choice.attribution) && <div className="border-t border-parranda-ink/10 px-5 py-1.5 text-11 text-parranda-ink/68">
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
         </div>}
       </div>}

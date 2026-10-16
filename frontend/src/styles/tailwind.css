@@ -19,6 +19,16 @@
   --radius-parranda: var(--p-radius-card);
   --radius-parranda-btn: var(--p-radius-button);
 
+  /* Linje's in-between text sizes, between Tailwind's xs (12) and lg (18).
+     Named by their size at the default 16px root, set in rem so they follow
+     the reader's own text size (browser text zoom, larger default fonts);
+     fixed px sizes stayed put while everything around them grew. */
+  --text-10: 0.625rem;
+  --text-11: 0.6875rem;
+  --text-13: 0.8125rem;
+  --text-15: 0.9375rem;
+  --text-17: 1.0625rem;
+
   --font-display: var(--p-font-display), "Helvetica Neue", Arial, sans-serif;
   --font-body: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
   --font-mono: var(--p-font-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -94,7 +104,7 @@
 .route-map-frame .maplibregl-ctrl.maplibregl-ctrl-attrib {
   background: rgb(var(--p-color-paper) / 0.85);
   color: rgb(var(--p-color-ink) / 0.75);
-  font-size: 10px;
+  font-size: 0.625rem;
   line-height: 1.35;
   padding: 1px 6px;
   border-radius: 6px 0 0 0;
@@ -150,7 +160,7 @@
   background: rgb(var(--p-color-ink));
   color: rgb(var(--p-color-paper));
   font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   line-height: 1.25;
   white-space: nowrap;

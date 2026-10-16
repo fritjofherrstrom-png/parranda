@@ -120,7 +120,7 @@ export function PlaceSign({ text }: { text: string }) {
 
 function Note({ children }: { children: ReactNode }) {
   return (
-    <p className="flex items-start gap-2 text-[13px] leading-relaxed text-parranda-ink/72">
+    <p className="flex items-start gap-2 text-13 leading-relaxed text-parranda-ink/72">
       <span aria-hidden="true" className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-glow" />
       <span>{children}</span>
     </p>
@@ -213,7 +213,7 @@ export default function DayHeader({
         {staleNotice === "updating" && (
           <span
             aria-live="polite"
-            className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ink/10 px-2.5 py-0.5 text-[11px] font-bold text-parranda-ink/75"
+            className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ink/10 px-2.5 py-0.5 text-11 font-bold text-parranda-ink/75"
           >
             <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-parranda-glow motion-safe:animate-pulse" />
             {t("Uppdaterar dagen …", "Updating your day …")}
@@ -223,7 +223,7 @@ export default function DayHeader({
           <>
             <span
               aria-live="polite"
-              className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ember/12 px-2.5 py-0.5 text-[11px] font-bold text-parranda-clay"
+              className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ember/12 px-2.5 py-0.5 text-11 font-bold text-parranda-clay"
             >
               {navigationInterrupted
                 ? t("Planeringen pausades när du lämnade sidan — visar din förra dag", "Planning paused when you left — showing your previous day")
@@ -310,7 +310,7 @@ export default function DayHeader({
           <p className="text-sm font-bold text-parranda-ink">{restoredAt
             ? t("Källorna hade inte hämtats klart när dagen skapades", "Sources had not finished when this day was created")
             : t("Fler platser är på väg", "More places are on their way")}</p>
-          <p className="text-[13px] leading-relaxed text-parranda-ink/80">
+          <p className="text-13 leading-relaxed text-parranda-ink/80">
             {restoredAt ? t(
               "Den sparade dagen bygger på det som hade hunnit komma då. Det här är en ögonblicksbild, inte en pågående hämtning. Uppdatera uttryckligen för att läsa källorna igen.",
               "This saved day uses what had arrived then. This is a snapshot, not an ongoing fetch. Update explicitly to read the sources again.",
@@ -412,7 +412,7 @@ export function DayActions({
                     target="_blank"
                     rel="noopener noreferrer"
                     className={
-                      "flex min-h-14 items-center gap-3 rounded-parranda-btn px-3.5 py-2 text-left text-[15px] transition " +
+                      "flex min-h-14 items-center gap-3 rounded-parranda-btn px-3.5 py-2 text-left text-15 transition " +
                       (first
                         ? "bg-parranda-terracotta font-extrabold text-white hover:brightness-110"
                         : "border-[1.5px] border-parranda-ink/20 font-bold text-parranda-ink hover:border-parranda-ink/50")
@@ -431,7 +431,7 @@ export function DayActions({
                     <span className="min-w-0 flex-1">
                       <span className="sr-only">{t(`Del ${index + 1} i Google Maps: `, `Part ${index + 1} in Google Maps: `)}</span>
                       {routeEndLabel(part.from)} → {routeEndLabel(part.to)}
-                      <span className={"type-data block text-[11px] font-medium " + (first ? "text-white" : "text-parranda-ink/68")}>
+                      <span className={"type-data block text-11 font-medium " + (first ? "text-white" : "text-parranda-ink/68")}>
                         {newStops > 0
                           ? t(`${newStops} stopp`, `${newStops} ${newStops === 1 ? "stop" : "stops"}`)
                           : t("Sista biten", "The last stretch")}
@@ -457,7 +457,7 @@ export function DayActions({
             href={routeUrls[0]}
             target="_blank"
             rel="noopener noreferrer"
-            className={buttonClass("primary", "col-span-2 min-h-12 px-5 text-[15px] sm:px-6")}
+            className={buttonClass("primary", "col-span-2 min-h-12 px-5 text-15 sm:px-6")}
           >
             {t("Öppna rutten i Maps", "Open route in Maps")}
             <ExternalIcon />

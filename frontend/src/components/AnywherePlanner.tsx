@@ -2169,7 +2169,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             {relocating ? t("Hämtar position …", "Getting location …") : t("Använd min position", "Use my location")}
           </button>
           {relocateDenied && (
-            <p className="text-[13px] text-parranda-ink/72" aria-live="polite">
+            <p className="text-13 text-parranda-ink/72" aria-live="polite">
               {t("Positionen blockerades — byt till en stad eller plats i stället.", "Location was blocked — choose a city or place instead.")}
             </p>
           )}
@@ -2190,7 +2190,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           matters most. Hiding it behind a collapsed panel made the dismissal
           effectively irreversible. */}
       {(excludedCount > 0 || pinnedCount > 0 || liveChoiceCount > 0) && (
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-parranda-ink/72" role="status">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-13 text-parranda-ink/72" role="status">
           {liveChoiceCount > 0 && <span>{t("Live-valet behålls för sitt tillfälle", "Live choice saved for its occurrence")}</span>}
           {pinnedCount > 0 && (
             <span className="inline-flex items-center gap-1.5">
@@ -2223,7 +2223,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           screen is the evidence. Silently dropping it would let the ledger
           claim something the day does not show. */}
       {unkept.count > 0 && (
-        <div className="flex flex-col gap-1.5 rounded-parranda border-[1.5px] border-parranda-glow/40 bg-parranda-glow/8 px-4 py-3 text-[13px] text-parranda-ink/85" role="status">
+        <div className="flex flex-col gap-1.5 rounded-parranda border-[1.5px] border-parranda-glow/40 bg-parranda-glow/8 px-4 py-3 text-13 text-parranda-ink/85" role="status">
           {unkept.reasons.map((entry: { id: string; label: string; reason: string | null }) => (
             <p key={entry.id}>{isLiveOccurrenceId(entry.id) ? t(`${entry.label || "Det valda tillfället"} kunde inte bekräftas som stopp i den här dagen. Ditt val finns kvar.`, `${entry.label || "The chosen occurrence"} could not be confirmed as a stop in this day. Your choice is retained.`) : unkeptReasonSentence(entry, t)}</p>
           ))}
@@ -2303,7 +2303,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               primary locality, not the resolver's full admin chain. */}
           {/* Plain visible copy is announced by the permanent result region;
               PlaceChoices instead owns its interactive status. */}
-          <div className="text-[15px] text-parranda-ink">
+          <div className="text-15 text-parranda-ink">
             {unavailableHasChoices ? (
               <PlaceChoices intake={safeResponse?.agnostic_route_output_experiment?.intake}
                 pending={false} locationPending={narrowingPlace} locationFailed={narrowingFailed} t={t}
@@ -2368,7 +2368,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           role="status"
           className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-parranda border-[1.5px] border-parranda-ink/12 bg-parranda-ink/4 px-4 py-2.5"
         >
-          <p className="min-w-0 flex-1 text-[13px] leading-snug text-parranda-ink/75">
+          <p className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink/75">
             <span className="font-bold text-parranda-ink">{t("Ändrat", "Changed")}: </span>
             {dayChangeLine.join(" · ")}
           </p>

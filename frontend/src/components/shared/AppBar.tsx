@@ -89,7 +89,7 @@ export default function AppBar({
       >
         {/* The mark: a station ring on the route colour. */}
         <span aria-hidden="true" className="h-[18px] w-[18px] rounded-full border-4 border-parranda-ember transition group-hover:scale-110" />
-        <span className="type-display text-[15px] tracking-[0.02em] min-[360px]:text-[17px]">Parranda</span>
+        <span className="type-display text-15 tracking-[0.02em] min-[360px]:text-17">Parranda</span>
       </a>
       <div className="flex items-center gap-2">
         <button
