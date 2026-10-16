@@ -131,7 +131,9 @@ export default function LiveSheet({
           {liveEventSource(ev, lang)}
           {/* A named list: aria-label on a plain span is not read, a list's is. */}
           {tags.length > 0 && <span role="list" aria-label={t("Taggar", "Tags")} className="mt-1 flex flex-wrap gap-1">
-            {tags.map(tag => <span role="listitem" key={tag} className={`${labelChip} min-w-0 max-w-full break-words`}>{tag}</span>)}
+            {/* overflow-wrap:anywhere, not break-words: inside an inline-flex chip
+                only "anywhere" lets an unbroken source word wrap at 320px. */}
+            {tags.map(tag => <span role="listitem" key={tag} className={`${labelChip} min-w-0 max-w-full [overflow-wrap:anywhere]`}>{tag}</span>)}
           </span>}
           {relevance && <span className="mt-0.5 block text-xs text-parranda-ink/68">{relevance}</span>}
         </span>

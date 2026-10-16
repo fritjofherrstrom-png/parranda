@@ -33,6 +33,13 @@ const CATEGORIES = [
   { en: "Outdoors", sv: "Utomhus", words: ["outdoors", "outdoor", "nature", "natur", "friluftsliv", "utomhus", "luonto"] },
   { en: "History", sv: "Historia", words: ["history", "historia", "historie"] },
   { en: "Opera", sv: "Opera", words: ["opera", "ooppera"] },
+  // Combined categories as calendars publish them.
+  { en: "Clubs & parties", sv: "Klubbar & fester", words: ["clubs & parties", "clubs and parties", "klubbar & fester"] },
+  { en: "Tours & talks", sv: "Visningar & föredrag", words: ["guided tours & lectures", "guided tours and lectures", "tours & talks", "visningar & föredrag"] },
+  { en: "Networking & community", sv: "Nätverk & gemenskap", words: ["networking & community", "networking and community", "nätverk & gemenskap"] },
+  { en: "Sports & wellbeing", sv: "Sport & hälsa", words: ["sports & wellbeing", "sports and wellbeing", "sport & hälsa"] },
+  { en: "Stage & film", sv: "Scen & film", words: ["stage & film", "stage and film", "scen & film"] },
+  { en: "Art & design", sv: "Konst & design", words: ["art & design", "art and design", "konst & design"] },
 ];
 
 const BY_WORD = new Map();

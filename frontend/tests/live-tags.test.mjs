@@ -12,6 +12,10 @@ test('common categories read in the page language, either way round', () => {
   assert.equal(liveTagLabel('music', 'sv'), 'Musik');
   assert.equal(liveTagLabel('Musik', 'en'), 'Music');
   assert.equal(liveTagLabel('  Udstillinger ', 'en'), 'Exhibitions');
+  // Combined categories as recorded from a public calendar on 7fb8c10.
+  assert.equal(liveTagLabel('Guided tours & Lectures', 'sv'), 'Visningar & föredrag');
+  assert.equal(liveTagLabel('Stage & Film', 'sv'), 'Scen & film');
+  assert.equal(liveTagLabel('Sports & Wellbeing', 'sv'), 'Sport & hälsa');
 });
 
 test('a tag that is not a known category keeps the source words exactly', () => {
