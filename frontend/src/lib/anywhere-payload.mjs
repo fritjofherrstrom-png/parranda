@@ -69,6 +69,7 @@ export function buildAnywherePayload({
   excludedCandidateIds = [],
   pinnedCandidateIds = [],
   liveEventChoices = [],
+  intentMode = null,
 } = {}) {
   const autoPoint = { type: "auto", label: "Parranda väljer" };
   // Two exclusive anchor modes, mirroring the engine's intake precedence:
@@ -96,6 +97,12 @@ export function buildAnywherePayload({
     day_rhythm: rhythm,
     ...(rhythm === "free" ? {} : { leg_pacing: "balanced" }),
     preferences,
+    // "Parranda chooses": sent only when the reader asked for it, and only
+    // without picks of their own (explicit preferences always win). Omitted
+    // otherwise, so the default request is unchanged.
+    ...(intentMode === "parranda_chooses" && !(Array.isArray(preferences) && preferences.length)
+      ? { intent_mode: "parranda_chooses" }
+      : {}),
     distance_mode: "no_limit",
     budget_tier: "standard",
     experimental_agnostic_route_output: 1,

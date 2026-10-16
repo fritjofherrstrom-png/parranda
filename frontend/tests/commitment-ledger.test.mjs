@@ -42,7 +42,7 @@ test("the ledger reaches the request, scoped to the anchor", () => {
 test("changing the ledger recomposes the day", () => {
   // Without excludedIds in the deps, dismissing does nothing until the user
   // happens to touch some other control.
-  assert.match(component, /\}, \[selected, dayOffset, walkKey, commitments\]\);/);
+  assert.match(component, /\}, \[selected, dayOffset, walkKey, commitments, intentMode\]\);/);
 });
 
 test("a silent upgrade carries the ledger, so dismissed places cannot return", () => {

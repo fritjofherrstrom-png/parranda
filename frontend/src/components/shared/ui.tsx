@@ -52,6 +52,14 @@ export function pillClass(active = false, extra = ""): string {
 export const compactPillTarget =
   "relative inline-flex min-h-9 items-center rounded-full text-[13px] transition before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']";
 
+/**
+ * A fact or status shown as a small label, never a control: the day's facts
+ * ("2 km on foot", "5 stops"), what the day did with a pick, a Live row's
+ * categories. A quiet fill, so it never reads as a selected chip (ink fill).
+ */
+export const labelChip =
+  "inline-flex items-center gap-1.5 rounded-full bg-parranda-ink/[0.07] px-2.5 py-1 text-xs font-semibold text-parranda-ink/85";
+
 /** A plain informational card: notices, refusals, errors. */
 export const noticeCard =
   "rounded-parranda border-[1.5px] border-parranda-ink/12 bg-parranda-ink/4 p-4 text-sm leading-relaxed text-parranda-ink/80";

@@ -17,6 +17,8 @@ export interface SavedInputs {
   walkKey?: string;
   selected?: string[];
   liveSheetSort?: "for_you" | "by_time";
+  /** Set when the reader asked Parranda to choose the day's interests. */
+  intentMode?: "parranda_chooses" | null;
 }
 
 export interface SavedEntry {

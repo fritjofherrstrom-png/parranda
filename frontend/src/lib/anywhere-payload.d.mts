@@ -38,6 +38,7 @@ export declare function buildAnywherePayload(options?: {
   excludedCandidateIds?: string[];
   pinnedCandidateIds?: string[];
   liveEventChoices?: Array<{occurrence_id:string;action:"keep"|"remove"|"replace"}>;
+  intentMode?: "parranda_chooses" | null;
 }): {
   place?: string;
   place_query?: string;
@@ -56,6 +57,7 @@ export declare function buildAnywherePayload(options?: {
   day_rhythm: string;
   leg_pacing?: string;
   preferences: string[];
+  intent_mode?: "parranda_chooses";
   distance_mode: string;
   budget_tier: string;
   experimental_agnostic_route_output?: number;
