@@ -30,7 +30,11 @@ const TONES: Record<ButtonTone, string> = {
  * control's touch target is visible where it is drawn.
  */
 export function buttonClass(tone: ButtonTone, size: string): string {
-  return `inline-flex items-center justify-center gap-2 rounded-parranda-btn transition disabled:opacity-60 aria-disabled:opacity-60 aria-busy:cursor-progress ${TONES[tone]} ${size}`;
+  // A call site that aligns its own content (`justify-between` for a label and
+  // a chevron) must not also get `justify-center`: Tailwind orders the two by
+  // name, not by position in the class string, so center won.
+  const justify = /(^|\s)justify-/.test(size) ? "" : "justify-center ";
+  return `inline-flex items-center ${justify}gap-2 rounded-parranda-btn transition disabled:opacity-60 aria-disabled:opacity-60 aria-busy:cursor-progress ${TONES[tone]} ${size}`;
 }
 
 /**

@@ -583,8 +583,10 @@ export default function StopLine({
       {/* Detours — collapsed by default (design handoff §3): optional ideas
           must never read as part of the route, and the caption stays visible
           even while collapsed. Their dots join the map only while open. */}
+      {/* Close under the map and its About line: they are one block, and a
+          section-sized gap after the light About line read as missing content. */}
       {routeContextSuggestions.length > 0 && (
-        <div className="mt-10 flex flex-col gap-2.5">
+        <div className="mt-5 flex flex-col gap-2.5">
           <button
             type="button"
             aria-expanded={detoursOpen}
