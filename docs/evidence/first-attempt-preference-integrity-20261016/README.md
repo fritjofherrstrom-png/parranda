@@ -53,6 +53,10 @@ providerinsamling. Ingen sådan förklaring införs i produkten.
    rutt och rätt källbegränsning, även när diagnostisk platsstruktur finns. Läsaren
    kan uttryckligen försöka igen med samma absoluta dag och val. En publicerad
    dag behålls vid uppdatering. Ingen automatisk retry eller utlovad kommande rutt.
+   Även primärkällans separata `source_status.error` bevaras i denna förklaring;
+   bakgrundsjobbens `complete/failed=0` får inte dölja ett faktiskt primärkällfel.
+   Två monterade RED-fall (sv/en) och ett publicerad-dag-kontrollfall verifierar
+   denna sista avgränsade UI-rättning. Friska kontrollsvar har inga källfel.
 3. **Berlin/Second hand visade främmande träffar:** första området fick väljas
    med noll täckning, och tom on-intent-lista föll tillbaka till alla medlemmar.
    De historiska elva var nio museer, ett galleri och ett slott. Kandidatytans

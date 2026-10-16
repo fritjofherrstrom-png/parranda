@@ -1888,8 +1888,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Published source completion is historical evidence, not a live job state.
   // An incomplete answer cannot judge the place thin or promise more supply.
   const sourceCompletion = safeResponse?.agnostic_route_output_experiment?.source_status?.collection?.source_completion;
-  const incompletePlaceSources = phase === "done" && sourcesIncomplete(sourceCompletion);
-  const sourceEvidenceNote = incompletePlaceSources ? contextNote([], t, { sourceCompletion }) : "";
+  // Primary failures live alongside collection metadata; the completion failed
+  // count covers background jobs and cannot clear a failed primary source.
+  const sourceError = safeResponse?.agnostic_route_output_experiment?.source_status?.error;
+  const primarySourceFailed = typeof sourceError === "string" && sourceError.trim() !== "";
+  const incompletePlaceSources = phase === "done" && (sourcesIncomplete(sourceCompletion) || primarySourceFailed);
+  const sourceEvidenceNote = incompletePlaceSources ? contextNote([], t, { sourceCompletion, sourceFailed: primarySourceFailed }) : "";
   const terminalSourceIssue = incompletePlaceSources && !hasPrimaryRoute && !anchorUnresolved && !upgradePending && !serviceRefusal;
   const canUpdateSaved = !restoredAt || Boolean(lastRequestedAnchorRef.current && lastComposeDateIsoRef.current);
   const dayLimitationNote = limitationNote(dayLimitations, split.core.length, t, { sourcesIncomplete: incompletePlaceSources });

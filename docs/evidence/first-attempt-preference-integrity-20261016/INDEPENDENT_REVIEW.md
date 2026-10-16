@@ -23,6 +23,13 @@ och fullsvit anges i PR:n efter commit; detta dokument är inte ett mergebeslut.
    har dessutom en serialiserad requestsession med högst fyra identiteter och
    ursprunglig sexsekundersbudget, även för misslyckade/oklara sidförsök.
 
+4. Roots sista UI-kontroll reproducerade primärkällfel med lyckade
+   bakgrundsjobb (`complete/failed=0`). Reviewern granskade tillägget som läser
+   befintligt `source_status.error` och bevarar historisk feltext, manuell retry
+   och den publicerade dagen. Inga källräknare, metadata eller återförsök ändras.
+   Sv/en RED→GREEN samt ett publicerad-dag-fall tillkom. Frisk kontroll har null
+   error; a11y-kontrollen kräver inte längre ett bristpåstående efter källfel.
+
 ## Slutlig delta-bedömning
 
 Reviewern rapporterade inga kvarstående konkreta fynd efter rättningarna.

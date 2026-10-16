@@ -23,7 +23,8 @@ function day(stops, sourceCompletion) {
     agnostic_route_output_experiment: {
       intake: { status: "resolved", resolved: { label: "Testville" } },
       promotion: { promote: true, readiness: "promotable_limited", qualifying_caps: ["capped_by_thin_day", "capped_by_below_planner_candidate_threshold"] },
-      source_status: { status: "loaded:10", error: "fetch_error", collection: { selection_reason: "loader_error", source_completion: sourceCompletion } },
+      source_status: { status: "loaded:10", error: sourceCompletion.status === 'partial' || sourceCompletion.failed > 0 ? "fetch_error" : null,
+        collection: { selection_reason: sourceCompletion.status === 'partial' ? "loader_error" : null, source_completion: sourceCompletion } },
     },
   };
 }
@@ -120,4 +121,17 @@ test("a partial published day with no pending count still suppresses thin-place 
   assert.ok(buttonNamed(h, "Update the day"));
   await h.clock.advance(120000);
   assert.equal(composeCalls(h).length, 1);
+});
+
+test("a published day preserves the primary-source failure even when all background jobs succeeded", async t => {
+  const h=await mountPlanner({url:PLACE_URL});t.after(()=>h.unmount());
+  const response=thinDay(complete);
+  response.agnostic_route_output_experiment.source_status.error='provider_unavailable';
+  await h.fetchMock.respond(composeCalls(h)[0],response);
+  assert.match(h.text(),/One or more place sources failed/);
+  assert.match(h.text(),/Halle/);
+  assert.doesNotMatch(h.text(),/few places to choose between here|on their way|still fetching/i);
+  assert.ok(buttonNamed(h,'Update the day'));
+  await h.clock.advance(120000);
+  assert.equal(composeCalls(h).length,1,'a failed primary does not start another acquisition automatically');
 });

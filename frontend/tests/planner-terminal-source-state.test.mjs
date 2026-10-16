@@ -5,12 +5,13 @@ import {mountPlanner} from './helpers/planner-harness.mjs';
 const captured=JSON.parse(readFileSync(new URL('./fixtures/captured-terminal-place-snapshot.json',import.meta.url)));
 const calls=h=>h.fetchMock.calls.filter(c=>c.url.includes('/api/route-recommendations'));
 
-for(const lang of ['en','sv']) for(const kind of ['partial','failed']) {
+for(const lang of ['en','sv']) for(const kind of ['partial','failed','primary_failed']) {
   test(`terminal ${kind} source response explains a finished no-route result in ${lang}`,async t=>{
     const h=await mountPlanner({url:`http://localhost/anywhere?place=Testville&prefs=culture&lang=${lang}`,props:{lang}});
     t.after(()=>h.unmount());
     const data=structuredClone(captured);
     if(kind==='failed') data.agnostic_route_output_experiment.source_status.collection.source_completion={status:'complete',pending:0,completed:1,failed:1};
+    if(kind==='primary_failed') data.agnostic_route_output_experiment.source_status.collection.source_completion={status:'complete',pending:0,completed:1,failed:0};
     await h.fetchMock.respond(calls(h)[0],data);
     const text=h.text();
     assert.match(text,lang==='en'?/Planning finished without a route/:/Planeringen avslutades utan rutt/);

@@ -142,18 +142,18 @@ export function sourcesIncomplete(sourceCompletion) {
  *
  * @param {string[]} limitations  qualifying caps from the server
  * @param {(sv: string, en: string) => string} t  the caller's language picker
- * @param {{ statedElsewhere?: string[], sourceCompletion?: {status?: string, failed?: number}|null }} [options]  caps another line on the
+ * @param {{ statedElsewhere?: string[], sourceCompletion?: {status?: string, failed?: number}|null, sourceFailed?: boolean }} [options]  caps another line on the
  *        page already states in full; they are not repeated here
  * @returns {string} short sentences, or "" when there is nothing to add
  */
-export function contextNote(limitations, t, { statedElsewhere = [], sourceCompletion = null } = {}) {
+export function contextNote(limitations, t, { statedElsewhere = [], sourceCompletion = null, sourceFailed = false } = {}) {
   const skip = new Set(Array.isArray(statedElsewhere) ? statedElsewhere : []);
   const keys = CONTEXT_LIMITATIONS.filter((key) => !skip.has(key));
   const note = sentencesFor(keys, limitations, phrases(null), t, CONTEXT_LIMITATIONS.length);
   const partial = sourceCompletion?.status === 'partial'
     ? sentence(t('Platsunderlaget var ofullständigt när svaret skapades; fler platser kan saknas', 'The place evidence was incomplete when the response was produced; more places may be missing'))
     : '';
-  const failed = Number(sourceCompletion?.failed) > 0
+  const failed = sourceFailed || Number(sourceCompletion?.failed) > 0
     ? sentence(t('En eller flera platskällor misslyckades', 'One or more place sources failed'))
     : '';
   return [partial, failed, note].filter(Boolean).join(' ');

@@ -8,7 +8,7 @@ export function limitationNote(
 export function contextNote(
   limitations: string[] | null | undefined,
   t: (sv: string, en: string) => string,
-  options?: { statedElsewhere?: string[]; sourceCompletion?: { status?: string; pending?: number; failed?: number } | null },
+  options?: { statedElsewhere?: string[]; sourceCompletion?: { status?: string; pending?: number; failed?: number } | null; sourceFailed?: boolean },
 ): string;
 
 export function sourcesIncomplete(sourceCompletion: { status?: string; pending?: number; failed?: number } | null | undefined): boolean;
