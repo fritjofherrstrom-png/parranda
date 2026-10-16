@@ -41,7 +41,7 @@ import {
   SightIcon,
   WalkIcon,
 } from "../shared/icons";
-import { buttonClass, compactPillTarget, Eyebrow, ExternalLinkText, inlineLinkTarget } from "../shared/ui";
+import { buttonClass, compactPillTarget, dataLine, Eyebrow, ExternalLinkText, inlineLinkTarget } from "../shared/ui";
 import { DAYPART_LABELS, label, partialPreferenceLabels, typeLabel, type Lang, type Translate } from "./copy";
 import { canCommitTo, type Commitments } from "./commitments";
 import { useFollowPosition } from "./useFollowPosition";
@@ -257,7 +257,7 @@ export default function StopLine({
           The line itself is the list's ::before: one continuous segment
           from the first station to the last. */}
       {startLeg && (
-        <p className="type-data flex min-h-10 flex-wrap items-center gap-x-2 pl-14 text-11 text-parranda-ink/68">
+        <p className={`${dataLine} flex min-h-10 flex-wrap items-center gap-x-2 pl-14`}>
           <WalkIcon className="h-3.5 w-3.5" />
           <span>{t(`Från ${startLeg.label}`, `From ${startLeg.label}`)}</span>
           <span>{legLabel(startLeg)}</span>
@@ -305,7 +305,7 @@ export default function StopLine({
           return (
             <li key={stopKey} className="flex flex-col">
               {leg && (leg.minutes != null || leg.km != null) && (
-                <span className="type-data flex min-h-10 items-center gap-2 pl-14 text-11 text-parranda-ink/68">
+                <span className={`${dataLine} flex min-h-10 items-center gap-2 pl-14`}>
                   <WalkIcon className="h-3.5 w-3.5" />
                   {leg.minutes != null ? `${leg.minutes} min` : ""}
                   {leg.minutes != null && leg.km != null ? " · " : ""}
@@ -487,7 +487,7 @@ export default function StopLine({
         return (
           <div key={stop?.id} className="flex flex-col">
             {legShown && leg && (
-              <span className="type-data relative flex min-h-10 items-center gap-2 pl-14 text-11 text-parranda-ink/68">
+              <span className={`${dataLine} relative flex min-h-10 items-center gap-2 pl-14`}>
                 <span
                   aria-hidden="true"
                   className="absolute bottom-0 left-[19px] top-0 w-1.5 rounded-full bg-[repeating-linear-gradient(to_bottom,rgb(var(--p-color-live))_0_6px,transparent_6px_11px)]"
@@ -558,7 +558,7 @@ export default function StopLine({
       })}
 
       {finishLeg && (
-        <p className="type-data flex min-h-10 flex-wrap items-center gap-x-2 pl-14 text-11 text-parranda-ink/68">
+        <p className={`${dataLine} flex min-h-10 flex-wrap items-center gap-x-2 pl-14`}>
           <WalkIcon className="h-3.5 w-3.5" />
           <span>{anchorIsPosition ? t(`Tillbaka till ${finishLeg.label}`, `Return to ${finishLeg.label}`) : t(`Till ${finishLeg.label}`, `To ${finishLeg.label}`)}</span>
           <span>{legLabel(finishLeg)}</span>
@@ -632,7 +632,7 @@ export default function StopLine({
                       <span>{name}</span>
                       {expanded ? <MinusIcon className="h-4 w-4 shrink-0 text-parranda-ember" /> : <PlusIcon className="h-4 w-4 shrink-0 text-parranda-ink/68" />}
                     </button>
-                    <p className="type-data pb-1.5 text-11 text-parranda-ink/68">
+                    <p className={`${dataLine} pb-1.5`}>
                       {walkingDistanceLabel(stop.distance_km, lang)} {t("från", "from")} {stop.route_stop_name}
                     </p>
                     {expanded && (

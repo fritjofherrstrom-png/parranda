@@ -22,7 +22,7 @@ import { isComposedEntry, LAST_KEY } from "../lib/anywhere-storage.mjs";
 import { liveDateLabel } from "../lib/live-event-query.mjs";
 import AppBar from "./shared/AppBar";
 import { ChevronRightIcon, LocationIcon } from "./shared/icons";
-import { busyButton } from "./shared/ui";
+import { busyButton, dataLine } from "./shared/ui";
 
 type Lang = "sv" | "en";
 
@@ -236,7 +236,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
         )}
       </main>
 
-      <footer className="type-data flex items-center justify-between border-t-line border-parranda-ink/14 py-4 text-11 text-parranda-ink/68">
+      <footer className={`${dataLine} flex items-center justify-between border-t-line border-parranda-ink/14 py-4`}>
         <span>Parranda</span>
         <span>{t("din rutt, din stad", "your route, your city")}</span>
       </footer>

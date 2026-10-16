@@ -165,7 +165,10 @@ export function Eyebrow({
   );
 }
 
+/** The mono fact line's look ("18 MIN · 1.5 KM"), for elements that also carry layout. */
+export const dataLine = "type-data text-11 text-parranda-ink/68";
+
 /** A small mono fact line ("18 MIN · 1.5 KM"). Text keeps its own case; CSS sets it in capitals. */
 export function DataLine({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <span className={`type-data text-11 text-parranda-ink/68 ${className}`.trim()}>{children}</span>;
+  return <span className={`${dataLine} ${className}`.trim()}>{children}</span>;
 }
