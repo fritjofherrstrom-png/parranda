@@ -1,0 +1,113 @@
+✖ new acquisition binds normalized facts to the exact release, query and pinned source objects (2.245458ms)
+✖ unchanged expired sample is reverified once without a bulk reread or rewriting its acquisition time (0.528875ms)
+✖ changed release acquires the new facts instead of renewing old data (0.240834ms)
+✖ changed object validator in the same release acquires the new facts instead of renewing old data (0.140083ms)
+✖ failed source verification returns a source failure, without claiming fresh old rows or a hidden second read (0.223041ms)
+✔ bare legacy sample cannot be declared unchanged (0.192958ms)
+✔ tampered records cannot be declared unchanged (0.089458ms)
+✔ wrong query identity cannot be declared unchanged (0.071917ms)
+✔ weak validator cannot be declared unchanged (0.070875ms)
+✔ another anchor cannot reuse a proved sample from a different window (0.135459ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 5
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 59.705458
+
+✖ failing tests:
+
+test at tests/overture-renewal.test.js:47:1
+✖ new acquisition binds normalized facts to the exact release, query and pinned source objects (2.245458ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + undefined
+  - '2026-09-23.1'
+
+      at TestContext.<anonymous> ($REPO/tests/overture-renewal.test.js:51:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: '2026-09-23.1',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/overture-renewal.test.js:62:1
+✖ unchanged expired sample is reverified once without a bulk reread or rewriting its acquisition time (0.528875ms)
+  AssertionError [ERR_ASSERTION]: only a proved unchanged input may avoid a bulk query
+
+  2 !== 1
+
+      at TestContext.<anonymous> ($REPO/tests/overture-renewal.test.js:67:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/overture-renewal.test.js:77:4
+✖ changed release acquires the new facts instead of renewing old data (0.240834ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + undefined
+  - 22000000
+
+      at TestContext.<anonymous> ($REPO/tests/overture-renewal.test.js:84:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 22000000,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/overture-renewal.test.js:77:4
+✖ changed object validator in the same release acquires the new facts instead of renewing old data (0.140083ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + undefined
+  - 22000000
+
+      at TestContext.<anonymous> ($REPO/tests/overture-renewal.test.js:84:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 22000000,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/overture-renewal.test.js:88:1
+✖ failed source verification returns a source failure, without claiming fresh old rows or a hidden second read (0.223041ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + undefined
+  - 'fetch_error'
+
+      at TestContext.<anonymous> ($REPO/tests/overture-renewal.test.js:93:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'fetch_error',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

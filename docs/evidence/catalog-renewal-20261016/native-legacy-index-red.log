@@ -1,0 +1,36 @@
+✖ legacy index pages are included at the exact chunk start used by the pinned DuckDB reader (5.186083ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 585.056375
+
+✖ failing tests:
+
+test at tests/overture-parquet-prefetch.test.js:111:1
+✖ legacy index pages are included at the exact chunk start used by the pinned DuckDB reader (5.186083ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   end: 139,
+  +   start: 80
+  -   end: 119,
+  -   start: 60
+    }
+
+      at TestContext.<anonymous> ($REPO/tests/overture-parquet-prefetch.test.js:118:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.start (node:internal/test_runner/test:1096:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { start: 80, end: 139 },
+    expected: { start: 60, end: 119 },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

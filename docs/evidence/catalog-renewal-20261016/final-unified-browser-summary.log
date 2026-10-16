@@ -1,0 +1,10 @@
+✔ Rome uses the same map, add/remove and Live UI (10534.47525ms)
+✔ Barcelona uses the same map, add/remove and Live UI (2996.722125ms)
+✔ Athens uses the same map, add/remove and Live UI (3194.097042ms)
+✔ Stockholm uses the same map, add/remove and Live UI (3011.155917ms)
+ℹ tests 4
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ duration_ms 20639.674042

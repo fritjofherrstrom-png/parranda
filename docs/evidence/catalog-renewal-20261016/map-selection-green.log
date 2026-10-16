@@ -1,0 +1,14 @@
+✔ explicit click during expansion keeps its marker name after mouseleave and scroll (6414.317958ms)
+ℹ {"click":{"kind":"click","target":"route-map-marker","y":175,"height":222.25},"mouseout":[{"kind":"mouseout","target":"route-map-marker","y":175,"height":266.328125}]}
+✔ hover name still closes on pointer leave without an explicit selection (441.361334ms)
+✔ another explicit selection replaces the name and Escape clears it (562.49475ms)
+✔ keyboard focus opens the marker name and blur closes it (316.696792ms)
+✔ touch selection survives pointer restoration and a new route clears it (508.980208ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8638.559959

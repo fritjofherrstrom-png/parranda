@@ -1,0 +1,19 @@
+✔ new acquisition binds normalized facts to the exact release, query and pinned source objects (3.08425ms)
+✔ unchanged expired sample is reverified once without a bulk reread or rewriting its acquisition time (0.663041ms)
+✔ changed release acquires the new facts instead of renewing old data (0.607333ms)
+✔ changed object validator in the same release acquires the new facts instead of renewing old data (0.421917ms)
+✔ failed source verification returns a source failure, without claiming fresh old rows or a hidden second read (0.378791ms)
+✔ bare legacy sample cannot be declared unchanged (0.387542ms)
+✔ tampered records cannot be declared unchanged (0.313292ms)
+✔ wrong query identity cannot be declared unchanged (0.222958ms)
+✔ weak validator cannot be declared unchanged (0.211209ms)
+✔ another anchor cannot reuse a proved sample from a different window (0.31975ms)
+✔ a newly reverified complete empty manifest renews absence without any object HEAD or native read (0.276958ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 101.85875
