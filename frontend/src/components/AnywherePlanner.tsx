@@ -80,7 +80,7 @@ import {
 import { anywhereDecision, type AnywhereClassification } from "../lib/anywhere-decision";
 import AppBar from "./shared/AppBar";
 import { KeepIcon, LocationIcon, MinusIcon, UndoIcon } from "./shared/icons";
-import { buttonClass, noticeCard } from "./shared/ui";
+import { busyButton, buttonClass, noticeCard } from "./shared/ui";
 import { useMediaQuery } from "./shared/useMediaQuery";
 import AnchorCard from "./planner/AnchorCard";
 import BlitzCard from "./planner/BlitzCard";
@@ -2161,8 +2161,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           </p>
           <button
             type="button"
-            onClick={useLocationAgain}
-            disabled={relocating}
+            {...busyButton(relocating, useLocationAgain)}
             className={buttonClass("primary", "min-h-11 px-4 text-sm")}
           >
             <LocationIcon className="h-4 w-4" />

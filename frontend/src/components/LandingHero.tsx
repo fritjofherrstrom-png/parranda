@@ -22,6 +22,7 @@ import { isComposedEntry, LAST_KEY } from "../lib/anywhere-storage.mjs";
 import { liveDateLabel } from "../lib/live-event-query.mjs";
 import AppBar from "./shared/AppBar";
 import { ChevronRightIcon, LocationIcon } from "./shared/icons";
+import { busyButton } from "./shared/ui";
 
 type Lang = "sv" | "en";
 
@@ -197,9 +198,8 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
           <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
             <button
               type="button"
-              onClick={useLocation}
-              disabled={locating}
-              className="inline-flex min-h-12 items-center gap-2 rounded-full border-line border-parranda-ink/22 px-5 text-15 font-bold text-parranda-ink transition hover:border-parranda-ink/55 disabled:opacity-60"
+              {...busyButton(locating, useLocation)}
+              className="inline-flex min-h-12 items-center gap-2 rounded-full border-line border-parranda-ink/22 px-5 text-15 font-bold text-parranda-ink transition hover:border-parranda-ink/55 aria-disabled:opacity-60 aria-busy:cursor-progress"
             >
               <LocationIcon className="h-4 w-4 text-parranda-ember" />
               {locating ? t("Hämtar position …", "Getting location …") : t("Använd min position", "Use my location")}

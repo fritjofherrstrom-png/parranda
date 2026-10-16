@@ -65,7 +65,8 @@ test("the landing chooses the anchor once — coords never enter the URL", () =>
   assert.match(landingSource, /\/anywhere\?anchor=near&planner=open&lang=/);
   assert.doesNotMatch(landingSource, /anywhere\?[^"'`]*lat=/, "coordinates must never be a URL param");
   // Permission is requested on the explicit tap; denial stays on the landing.
-  assert.match(landingSource, /onClick=\{useLocation\}/);
+  // busyButton wires the same click and keeps focus while locating.
+  assert.match(landingSource, /busyButton\(locating, useLocation\)/);
   assert.match(landingSource, /Location was blocked/);
   assert.match(landingSource, /Positionen blockerades/);
 });
@@ -79,7 +80,7 @@ test("the planner consumes the handoff and never re-prompts on arrival", () => {
   const narrowing = plannerSource.split("async function narrowPlaceSearch() {")[1]?.split("async function ")[0] ?? "";
   assert.match(narrowing, /await requestPosition\(\)/);
   assert.match(plannerSource.split("async function useLocationAgain() {")[1]?.split("\n  // AUTO-RECOMPOSE")[0] || "", /await requestPosition\(\)/);
-  assert.match(plannerSource, /onClick=\{useLocationAgain\}/);
+  assert.match(plannerSource, /busyButton\(relocating, useLocationAgain\)/);
   // Recomposing a near-me day (an adjustment, a rebuild) reuses the chosen
   // position; it never asks the browser in the background.
   const resolveAndRun = plannerSource.split("async function resolveAndRun(")[1]?.split("async function plan(")[0] ?? "";

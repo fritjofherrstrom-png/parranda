@@ -30,7 +30,21 @@ const TONES: Record<ButtonTone, string> = {
  * control's touch target is visible where it is drawn.
  */
 export function buttonClass(tone: ButtonTone, size: string): string {
-  return `inline-flex items-center justify-center gap-2 rounded-parranda-btn transition disabled:opacity-60 ${TONES[tone]} ${size}`;
+  return `inline-flex items-center justify-center gap-2 rounded-parranda-btn transition disabled:opacity-60 aria-disabled:opacity-60 aria-busy:cursor-progress ${TONES[tone]} ${size}`;
+}
+
+/**
+ * The working state of a button ("Getting location …", "Reading the moment …").
+ * Spread it instead of `disabled`: a focused button that becomes disabled drops
+ * keyboard focus to the top of the page mid-action. This keeps the button
+ * focusable, announces it as busy and unavailable, and ignores the click.
+ */
+export function busyButton(busy: boolean, onClick: () => void) {
+  return {
+    "aria-disabled": busy ? true : undefined,
+    "aria-busy": busy ? true : undefined,
+    onClick: busy ? undefined : onClick,
+  } as const;
 }
 
 /** A rounded pill control (Adjust, Change, scope chips). */
