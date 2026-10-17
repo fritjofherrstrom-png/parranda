@@ -20,20 +20,40 @@ test('explicit URL priority enters the first compose and remains in the address 
   assert.equal(calls(h).length, 1, 'adopting the link is not a user adjustment');
 });
 
-test('mounted priority promotion updates the emitted intent without deselecting the interest', async t => {
+test('tapping a ranked interest off and on moves it last in the emitted intent', async t => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-16T10:00:00Z') });
   const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Fixture%20Town&prefs=culture,second_hand&prio=culture,second_hand&lang=en' });
   t.after(() => h.unmount());
   await h.fetchMock.respond(calls(h)[0], { days: [] });
   const click = async target => { assert.ok(Boolean(target), 'real requested control exists'); await h.act(() => target.click()); };
   await click([...h.container.querySelectorAll('button')].find(button => button.textContent.trim() === 'Adjust'));
-  await click(h.container.querySelector('button[aria-label="Increase priority for Second hand"]'));
+  const chip = () => h.container.querySelector('[data-preference-key="culture"] button[aria-pressed]');
+  await click(chip()); await click(chip());
   await h.clock.advance(400);
   const request = calls(h).at(-1);
   await h.fetchMock.respond(request, { days: [] });
-  assert.deepEqual(request.body.preferences, ['culture', 'second_hand']);
+  assert.deepEqual(request.body.preferences, ['second_hand', 'culture']);
   assert.deepEqual(request.body.preference_priority, ['second_hand', 'culture']);
-  assert.equal(h.container.querySelector('[data-preference-key="second_hand"] button[aria-pressed]').getAttribute('aria-pressed'), 'true');
+  assert.equal(chip().getAttribute('aria-pressed'), 'true');
+  assert.equal(calls(h).length, 2, 'two quick taps compose once');
+});
+
+test('picking a new interest on an unranked day ranks only that interest', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-16T10:00:00Z') });
+  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Fixture%20Town&prefs=food,culture,views&lang=en' });
+  t.after(() => h.unmount());
+  await h.fetchMock.respond(calls(h)[0], { days: [] });
+  assert.equal(calls(h)[0].body.preference_priority, undefined, 'untouched defaults are unranked');
+  const click = async target => { assert.ok(Boolean(target), 'real requested control exists'); await h.act(() => target.click()); };
+  await click([...h.container.querySelectorAll('button')].find(button => button.textContent.trim() === 'Adjust'));
+  await click(h.container.querySelector('[data-preference-key="fika"] button[aria-pressed]'));
+  await h.clock.advance(400);
+  const request = calls(h).at(-1);
+  await h.fetchMock.respond(request, { days: [] });
+  assert.deepEqual(request.body.preference_priority, ['fika']);
+  await click([...h.container.querySelectorAll('button')].find(button => button.textContent.trim() === 'Done'));
+  const summary = h.container.querySelector("section[aria-label=\"Your day's starting point\"] strong");
+  assert.equal(summary.textContent, '1. Coffee · Food & drink · Culture · Views', 'only the pick is numbered');
 });
 
 test('clearing the order composes unranked interests and leaves no prio in the address to reload', async t => {

@@ -1,6 +1,6 @@
 export type PlannerPreferenceKey = "food" | "culture" | "views" | "fika" | "nightlife" | "green" | "second_hand";
 export declare const PLANNER_PREFERENCE_KEYS: readonly PlannerPreferenceKey[];
-/** Full selected-key permutation, or [] when no explicit selected priority exists. */
+/** Ranked prefix of the selection in pick order, or [] when nothing is ranked. */
 export declare function normalizePreferencePriority(value: unknown, selected: unknown): PlannerPreferenceKey[];
 
 export interface PreferenceSelection {
@@ -8,10 +8,6 @@ export interface PreferenceSelection {
   preferencePriority: PlannerPreferenceKey[];
 }
 export declare function togglePreferenceSelection(state: {
-  selected?: unknown;
-  preferencePriority?: unknown;
-} | null | undefined, key: unknown): PreferenceSelection;
-export declare function promotePreference(state: {
   selected?: unknown;
   preferencePriority?: unknown;
 } | null | undefined, key: unknown): PreferenceSelection;

@@ -54,8 +54,11 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
   // Two/three interests have a clear leading focus. With many interests the
   // slope tapers rather than treating every numbered chip as a rigid quota.
   const slope = requested.length <= 3 ? 1.8 : requested.length === 4 ? 0.75 : 0.3;
+  // Picked interests rank as a prefix; the unpicked rest keep weight 1, the
+  // weight a full ranking gives its last place, so "1 Views" alone weighs the
+  // same as Views first in a complete order.
   priority.forEach((intent, index) => weights.set(intent,
-    1 + slope * (priority.length - 1 - index) / Math.max(1, priority.length - 1)));
+    1 + slope * (requested.length - 1 - index) / Math.max(1, requested.length - 1)));
   const poolIds = new Set(pool.map(({ item }) => item.id));
   const required = pinnedIds.filter(id => poolIds.has(id));
   let best = null;
