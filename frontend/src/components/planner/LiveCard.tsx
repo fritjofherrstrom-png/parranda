@@ -65,7 +65,7 @@ export default function LiveCard({
   const now = useLiveClock([...pulseBuckets.tonight, ...pulseBuckets.thisWeek]);
   return (
     <section
-      className="rounded-parranda border-[1.5px] border-parranda-live/35 bg-parranda-live/8 p-5 sm:p-6"
+      className="rounded-parranda border-line border-parranda-live/35 bg-parranda-live/8 p-5 sm:p-6"
     >
       <Eyebrow as="h2" tone="live" dot>
         {mode === "near_me"
@@ -79,7 +79,7 @@ export default function LiveCard({
       {((showDay && dayflow?.weather?.headline) || clothing) && (
         <div className="mt-3 flex flex-col gap-1">
           {showDay && dayflow?.weather?.headline && (
-            <p className="text-[15px] font-bold leading-snug text-parranda-ink">
+            <p className="text-15 font-bold leading-snug text-parranda-ink">
               {dayflow.weather.headline}
               {dayflow.weather.pitch ? <span className="font-medium text-parranda-ink/75"> — {dayflow.weather.pitch}</span> : null}
             </p>
@@ -94,7 +94,7 @@ export default function LiveCard({
       )}
 
       {wovenNames.length > 0 && (
-        <p className="mt-3 text-[13px] text-parranda-ink/72">
+        <p className="mt-3 text-13 text-parranda-ink/72">
           {wovenNames.map((n: string) => `${n} · ${includedInRoute}`).join(" · ")}
         </p>
       )}

@@ -14,6 +14,36 @@ const office=`<script type="application/ld+json">{"@type":"WebSite","name":"Juni
 const dns=async()=>[{address:'93.184.216.34',family:4}];
 const response=html=>new Response(html,{status:200,headers:{'Content-Type':'text/html'}});
 
+test('request-owned partial and final enrichment share four identities and failed page attempts',async()=>{
+ const seen=[];
+ const session=createOperatorVisitEnricher({cache:createSourceCache(),resolveHost:dns,fetcher:async url=>{
+  seen.push(url);return response('<main>Facts not observed</main>');
+ }}).forRequest();
+ const rows=Array.from({length:8},(_,i)=>({...record,id:`request-${i}`,name:`Owned ${i}`,website:`https://owned-${i}.example/`}));
+ const first=await session(rows.slice(0,3));
+ assert.equal(first.loader_metadata.operator_evidence.attempted,3);
+ await Promise.all([session(rows),session(rows)]);
+ assert.equal(seen.length,4,'overlapping final snapshots do not expand or repeat the original four-target budget');
+ assert.equal(new Set(seen).size,4,'unresolved/failed pages are not retried in the same request');
+ const nextSession=createOperatorVisitEnricher({cache:createSourceCache(),resolveHost:dns,fetcher:async()=>response(shop)}).forRequest();
+ const next=await nextSession([record]);
+ assert.equal(next[0].operator_visit_evidence.status,'confirmed_storefront','a new deliberate request owns a fresh bounded attempt');
+});
+
+test('empty partials do not consume enrichment time; the first actual targets share the original deadline',async()=>{
+ let now=0,calls=0;
+ const session=createOperatorVisitEnricher({cache:createSourceCache(),now:()=>now,resolveHost:dns,
+  fetcher:async()=>{calls++;return response(shop);}}).forRequest();
+ await session([]);now=10000;
+ assert.equal((await session([record]))[0].operator_visit_evidence.status,'confirmed_storefront');
+ now=17000;
+ const changed={...record,id:'other',website:'https://other.example/'};
+ const result=await session([record,changed]);
+ assert.equal(calls,1,'new targets cannot reset the six-second request window');
+ assert.equal(result[1].operator_visit_evidence,undefined,'a reused id/name is not evidence for a different operator URL');
+ assert.equal(result[0].operator_visit_evidence.status,'confirmed_storefront','already observed facts are retained past that window');
+});
+
 test('current hours belong to the exact address card, never another branch or a footer',()=>{
  const html=`<meta property="og:site_name" content="Juniper Reuse"><meta name="description" content="Second hand stores"><main>${card('Pine Road 9','Monday – Friday 8-10')}${card('Oak Street 14','Monday – Friday 11-19')}</main><footer>Sunday 9-10</footer>`;
  const fact=parseOperatorVisitEvidence(html,record,record.website);

@@ -1,0 +1,63 @@
+✖ the real candidate surface shows zero matches instead of eleven unrelated museum hits (54.629209ms)
+✖ missing preference explanation precedes the real matching candidate list (9.857291ms)
+✖ weak scenic evidence is visibly partial in the mounted candidate area (5.493125ms)
+✔ a real viewpoint has a full coverage chip and no partial claim (4.998ms)
+✔ an unfiltered request still shows a varied set of actual source candidates (17.414833ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 2
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 789.867834
+
+✖ failing tests:
+
+test at frontend/tests/candidate-areas-preference-integrity.test.mjs:55:1
+✖ the real candidate surface shows zero matches instead of eleven unrelated museum hits (54.629209ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /0 matchningar/. Input:
+
+  'Kandidater nära platsenParranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.11 träffarSource place 0Source place 1Source place 10Source place 2Source place 3Source place 4Source place 5Source place 6Source place 7Source place 8Source place 9Ingen av kandidaterna täcker: Second hand'
+
+      at TestContext.<anonymous> (file://<worktree>/frontend/tests/candidate-areas-preference-integrity.test.mjs:58:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'Kandidater nära platsenParranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.11 träffarSource place 0Source place 1Source place 10Source place 2Source place 3Source place 4Source place 5Source place 6Source place 7Source place 8Source place 9Ingen av kandidaterna täcker: Second hand',
+    expected: /0 matchningar/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at frontend/tests/candidate-areas-preference-integrity.test.mjs:64:1
+✖ missing preference explanation precedes the real matching candidate list (9.857291ms)
+  AssertionError [ERR_ASSERTION]: the gap is visible before reading the matching places
+      at TestContext.<anonymous> (file://<worktree>/frontend/tests/candidate-areas-preference-integrity.test.mjs:72:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at frontend/tests/candidate-areas-preference-integrity.test.mjs:79:1
+✖ weak scenic evidence is visibly partial in the mounted candidate area (5.493125ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Utsikt · delvis/. Input:
+
+  'Kandidater nära platsenParranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.3 träffarSource place 0Source place 1Source place 2Ingen av kandidaterna täcker: Utsikt'
+
+      at TestContext.<anonymous> (file://<worktree>/frontend/tests/candidate-areas-preference-integrity.test.mjs:82:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'Kandidater nära platsenParranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.3 träffarSource place 0Source place 1Source place 2Ingen av kandidaterna täcker: Utsikt',
+    expected: /Utsikt · delvis/,
+    operator: 'match',
+    diff: 'simple'
+  }

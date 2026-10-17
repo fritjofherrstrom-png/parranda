@@ -1,0 +1,40 @@
+✔ the real candidate surface shows zero matches instead of eleven unrelated museum hits (77.84775ms)
+✔ missing preference explanation precedes the real matching candidate list (12.221625ms)
+✔ weak scenic evidence is visibly partial in the mounted candidate area (6.83375ms)
+✔ a real viewpoint has a full coverage chip and no partial claim (8.958459ms)
+✔ an unfiltered request still shows a varied set of actual source candidates (8.113209ms)
+✔ partial acquisition describes the published evidence regardless of its historical pending count (1.09075ms)
+✔ a thin day names the number of stops it can stand behind (0.198417ms)
+✔ no limitations means no sentence at all (0.109083ms)
+✔ at most two limitations are shown, most consequential first (0.089333ms)
+✔ copy is available in both languages and never invents a time (0.079583ms)
+✔ an unknown cap is ignored rather than rendered raw (0.052041ms)
+✔ the partial-intent cap yields no sentence — a specific surface owns that message (0.052ms)
+✔ how a day was assembled never competes with what it contains (0.048792ms)
+✔ the context note states how the day was assembled, in the reader's terms (0.082417ms)
+✔ a cap another line already states in full is not said twice (0.110167ms)
+✔ historically incomplete source evidence cannot judge the place thin (0.530125ms)
+✔ a published partial day states historical incompleteness and offers an explicit update (262.757292ms)
+✔ a day whose sources have all answered keeps its honest thin-day note and no update offer (52.314209ms)
+✔ a no-route terminal snapshot states incomplete evidence without judging the place or promising a route (23.327667ms)
+✔ a partial published day with no pending count still suppresses thin-place judgement (26.012167ms)
+✔ unsafe restored snapshot (GPS without persisted coordinates) offers explicit replanning, never an inert or guessed-anchor retry (249.800083ms)
+✔ unsafe restored snapshot (missing saved date) offers explicit replanning, never an inert or guessed-anchor retry (45.268875ms)
+✔ unsafe restored snapshot (impossible saved date) offers explicit replanning, never an inert or guessed-anchor retry (35.902541ms)
+✔ unsafe restored snapshot (missing saved inputs) offers explicit replanning, never an inert or guessed-anchor retry (22.480084ms)
+✔ unsafe restored snapshot (malformed place identity) offers explicit replanning, never an inert or guessed-anchor retry (23.487ms)
+✔ restored typed snapshot updates its saved date, preferences, rhythm and scoped commitments (25.770834ms)
+✔ unsafe restored snapshot without a route still provides historical source copy and replanning (13.651875ms)
+✔ restored source completion describes the saved snapshot, not a still-running source (20.882208ms)
+✔ terminal partial source response explains a finished no-route result in en (213.538709ms)
+✔ terminal failed source response explains a finished no-route result in en (33.435625ms)
+✔ terminal partial source response explains a finished no-route result in sv (35.420541ms)
+✔ terminal failed source response explains a finished no-route result in sv (43.339166ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1067.898208

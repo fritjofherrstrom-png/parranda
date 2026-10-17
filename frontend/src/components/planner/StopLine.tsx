@@ -43,7 +43,7 @@ import {
   TrashIcon,
   WalkIcon,
 } from "../shared/icons";
-import { buttonClass, compactPillTarget, Eyebrow } from "../shared/ui";
+import { busyButton, buttonClass, compactPillTarget, dataLine, Eyebrow, ExternalLinkText, inlineLinkTarget } from "../shared/ui";
 import { DAYPART_LABELS, label, partialPreferenceLabels, typeLabel, type Lang, type Translate } from "./copy";
 import { canCommitTo, type Commitments } from "./commitments";
 import { useFollowPosition } from "./useFollowPosition";
@@ -202,7 +202,7 @@ export default function StopLine({
   // when opened). How Maps walks the route is said beside the Maps action.
   const about = (
     <details className="group mt-2">
-      <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-parranda-ink/72 transition hover:text-parranda-ink [&::-webkit-details-marker]:hidden">
+      <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-13 font-semibold text-parranda-ink/72 transition hover:text-parranda-ink [&::-webkit-details-marker]:hidden">
         {t("Om dagen och kartan", "About this day and map")}
         <ChevronDownIcon className="h-3.5 w-3.5 transition group-open:rotate-180" />
       </summary>
@@ -235,7 +235,7 @@ export default function StopLine({
               `${compactPillTarget} gap-1.5 px-3.5 font-bold ` +
               (following
                 ? "bg-parranda-ink text-parranda-paper"
-                : "border-[1.5px] border-parranda-ink/20 text-parranda-ink hover:border-parranda-ink/50")
+                : "border-line border-parranda-ink/20 text-parranda-ink hover:border-parranda-ink/50")
             }
           >
             <LocationIcon className={"h-3.5 w-3.5 " + (following ? "" : "text-parranda-ember")} />
@@ -244,7 +244,7 @@ export default function StopLine({
         )}
       </div>
       {followStatus && (
-        <p className="mb-1 text-[13px] font-semibold text-parranda-ink" aria-live="polite">{followStatus}</p>
+        <p className="mb-1 text-13 font-semibold text-parranda-ink" aria-live="polite">{followStatus}</p>
       )}
       {hoursUnknownEverywhere && (
         <p className="mb-1 text-xs leading-relaxed text-parranda-ink/72">
@@ -263,7 +263,7 @@ export default function StopLine({
           The line itself is the list's ::before: one continuous segment
           from the first station to the last. */}
       {startLeg && (
-        <p className="type-data flex min-h-10 flex-wrap items-center gap-x-2 pl-14 text-[11px] text-parranda-ink/68">
+        <p className={`${dataLine} flex min-h-10 flex-wrap items-center gap-x-2 pl-14`}>
           <WalkIcon className="h-3.5 w-3.5" />
           <span>{t(`Från ${startLeg.label}`, `From ${startLeg.label}`)}</span>
           <span>{legLabel(startLeg)}</span>
@@ -311,7 +311,7 @@ export default function StopLine({
           return (
             <li key={stopKey} className="flex flex-col">
               {leg && (leg.minutes != null || leg.km != null) && (
-                <span className="type-data flex min-h-10 items-center gap-2 pl-14 text-[11px] text-parranda-ink/68">
+                <span className={`${dataLine} flex min-h-10 items-center gap-2 pl-14`}>
                   <WalkIcon className="h-3.5 w-3.5" />
                   {leg.minutes != null ? `${leg.minutes} min` : ""}
                   {leg.minutes != null && leg.km != null ? " · " : ""}
@@ -342,10 +342,10 @@ export default function StopLine({
                   {behind && <span className="sr-only">{routeNumber}</span>}
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className={"flex flex-wrap items-center gap-x-2 text-[17px] font-extrabold leading-tight " + (behind ? "text-parranda-ink/68" : "text-parranda-ink")}>
+                  <span className={"flex flex-wrap items-center gap-x-2 text-17 font-extrabold leading-tight " + (behind ? "text-parranda-ink/68" : "text-parranda-ink")}>
                     {name}
                     {isCurrent && (
-                      <span className="type-eyebrow rounded-full bg-parranda-terracotta px-2 py-0.5 text-[10px] text-white">
+                      <span className="type-eyebrow rounded-full bg-parranda-terracotta px-2 py-0.5 text-10 text-white">
                         {progress?.state === "at" ? t("Du är här", "You're here") : t("Nästa", "Next")}
                       </span>
                     )}
@@ -384,11 +384,11 @@ export default function StopLine({
               {expanded && (
                 <div
                   id={panelId}
-                  className="mb-2 ml-14 mt-1 flex flex-col rounded-parranda border-[1.5px] border-parranda-ink/12 bg-parranda-ink/5 p-4"
+                  className="mb-2 ml-14 mt-1 flex flex-col rounded-parranda border-line border-parranda-ink/12 bg-parranda-ink/5 p-4"
                 >
                   {/* Facts only. The schedule row is a bounded source fact
                       for the selected local day, never an "open now" claim. */}
-                  <div className="flex flex-col gap-1.5 text-[13px] leading-snug text-parranda-ink/72">
+                  <div className="flex flex-col gap-1.5 text-13 leading-snug text-parranda-ink/72">
                     {leg && (leg.minutes != null || leg.km != null) && (
                       <span>
                         {legLabel(leg)}
@@ -435,7 +435,7 @@ export default function StopLine({
                       <button
                         type="button"
                         onClick={() => releaseCommitment(stopIdentity)}
-                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-parranda-btn border-[1.5px] border-parranda-ember/60 bg-parranda-ember/10 px-4 text-sm font-bold text-parranda-ink transition hover:border-parranda-ember sm:px-5"
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-parranda-btn border-line border-parranda-ember/60 bg-parranda-ember/10 px-4 text-sm font-bold text-parranda-ink transition hover:border-parranda-ember sm:px-5"
                       >
                         <KeepIcon className="h-4 w-4 text-parranda-ember" />
                         {t("Behålls — släpp", "Kept — release")}
@@ -452,22 +452,22 @@ export default function StopLine({
                     ))}
                     {hasRealId && commitments[stopIdentity]?.kind !== "pin" && (
                       <div role="group" aria-label={t("Ändra stopp", "Edit stop")} className="grid grid-cols-2 gap-2 sm:inline-flex sm:items-center">
+                      {/* Busy, not disabled, while the edit runs: the pressed
+                          button keeps keyboard focus (ui.tsx busyButton). */}
                       <button
                         type="button"
-                        disabled={editPending}
+                        {...busyButton(editPending, () => dismissStop(stopIdentity, name))}
                         title={t("Byt till ett liknande stopp", "Replace with a similar stop")}
-                        onClick={() => dismissStop(stopIdentity, name)}
-                        className={buttonClass("secondary", "min-h-11 px-4 text-sm disabled:cursor-wait disabled:opacity-50 sm:px-5")}
+                        className={buttonClass("secondary", "min-h-11 px-4 text-sm sm:px-5")}
                       >
                         <ShuffleIcon className="h-4 w-4" />
                         {t("Byt", "Replace")}
                       </button>
                       <button
                         type="button"
-                        disabled={editPending}
+                        {...busyButton(editPending, () => removeStop(stopIdentity, name))}
                         title={t("Ta bort stoppet utan ersättning", "Remove this stop without replacement")}
-                        onClick={() => removeStop(stopIdentity, name)}
-                        className={buttonClass("secondary", "min-h-11 px-4 text-sm disabled:cursor-wait disabled:opacity-50 sm:px-5")}
+                        className={buttonClass("secondary", "min-h-11 px-4 text-sm sm:px-5")}
                       >
                         <TrashIcon className="h-4 w-4" />
                         {t("Ta bort", "Remove")}
@@ -507,7 +507,7 @@ export default function StopLine({
         return (
           <div key={stop?.id} className="flex flex-col">
             {legShown && leg && (
-              <span className="type-data relative flex min-h-10 items-center gap-2 pl-14 text-[11px] text-parranda-ink/68">
+              <span className={`${dataLine} relative flex min-h-10 items-center gap-2 pl-14`}>
                 <span
                   aria-hidden="true"
                   className="absolute bottom-0 left-[19px] top-0 w-1.5 rounded-full bg-[repeating-linear-gradient(to_bottom,rgb(var(--p-color-live))_0_6px,transparent_6px_11px)]"
@@ -522,25 +522,25 @@ export default function StopLine({
               >
                 {routeNumber}
               </span>
-              <div className="min-w-0 flex-1 rounded-parranda border-[1.5px] border-parranda-live/45 bg-parranda-live/8 p-4">
+              <div className="min-w-0 flex-1 rounded-parranda border-line border-parranda-live/45 bg-parranda-live/8 p-4">
                 <Eyebrow as="h3" tone="live" dot>{t("Live i din rutt", "Live in your route")}</Eyebrow>
                 <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-parranda-ink">
                   {pin ? (
-                    <a href={pin} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center gap-1.5 text-[17px] font-extrabold transition hover:text-parranda-live">
+                    <a href={pin} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center gap-1.5 text-17 font-extrabold transition hover:text-parranda-live">
                       {name}
                       <ExternalIcon className="h-3.5 w-3.5 text-parranda-ink/68" />
                     </a>
                   ) : (
-                    <span className="text-[17px] font-extrabold">{name}</span>
+                    <span className="text-17 font-extrabold">{name}</span>
                   )}
                   {stop?.starts_at && (
-                    <span className="type-data rounded-full bg-parranda-live px-2 py-0.5 text-[11px] font-semibold text-parranda-on-live">
+                    <span className="type-data rounded-full bg-parranda-live px-2 py-0.5 text-11 font-semibold text-parranda-on-live">
                       {eventTiming(stop, lang, undefined, selectedDate)}
                     </span>
                   )}
                 </p>
-                {venue && venue !== name && <p className="mt-0.5 text-[13px] text-parranda-ink/72">{venue}</p>}
-                <p className="mt-1 text-[13px] text-parranda-ink/72">
+                {venue && venue !== name && <p className="mt-0.5 text-13 text-parranda-ink/72">{venue}</p>}
+                <p className="mt-1 text-13 text-parranda-ink/72">
                   {dayOffset === 0
                     ? t("Tillagt till dagens rutt", "Added to today's route")
                     : t("Tillagt till morgondagens rutt", "Added to tomorrow's route")}
@@ -565,8 +565,8 @@ export default function StopLine({
                     {sourceLabel && <>{t("Källa", "Source")}: {sourceLabel}</>}
                     {sourceLabel && sourceLink && " · "}
                     {sourceLink && (
-                      <a href={sourceLink.href} target="_blank" rel="noopener noreferrer" className="-my-3 inline-flex min-h-11 min-w-11 items-center underline decoration-parranda-ink/30 underline-offset-2 hover:text-parranda-live">
-                        <span>{sourceLink.text}<span aria-hidden="true">&nbsp;↗</span></span>
+                      <a href={sourceLink.href} target="_blank" rel="noopener noreferrer" className={`${inlineLinkTarget} underline decoration-parranda-ink/30 underline-offset-2 hover:text-parranda-live`}>
+                        <ExternalLinkText text={sourceLink.text} />
                       </a>
                     )}
                   </p>
@@ -578,7 +578,7 @@ export default function StopLine({
       })}
 
       {finishLeg && (
-        <p className="type-data flex min-h-10 flex-wrap items-center gap-x-2 pl-14 text-[11px] text-parranda-ink/68">
+        <p className={`${dataLine} flex min-h-10 flex-wrap items-center gap-x-2 pl-14`}>
           <WalkIcon className="h-3.5 w-3.5" />
           <span>{anchorIsPosition ? t(`Tillbaka till ${finishLeg.label}`, `Return to ${finishLeg.label}`) : t(`Till ${finishLeg.label}`, `To ${finishLeg.label}`)}</span>
           <span>{legLabel(finishLeg)}</span>
@@ -603,8 +603,10 @@ export default function StopLine({
       {/* Detours — collapsed by default (design handoff §3): optional ideas
           must never read as part of the route, and the caption stays visible
           even while collapsed. Their dots join the map only while open. */}
+      {/* Close under the map and its About line: they are one block, and a
+          section-sized gap after the light About line read as missing content. */}
       {routeContextSuggestions.length > 0 && (
-        <div className="mt-10 flex flex-col gap-2.5">
+        <div className="mt-5 flex flex-col gap-2.5">
           <button
             type="button"
             aria-expanded={detoursOpen}
@@ -641,7 +643,7 @@ export default function StopLine({
                 const candidatePanelId = `candidate-panel-detour-${index}`;
                 const expanded = expandedCandidateKey === candidateKey;
                 return (
-                  <li key={stop.id || stop.candidate_id || stop.place_id || name} className="rounded-parranda border-[1.5px] border-dashed border-parranda-ink/25 px-3.5 py-1.5">
+                  <li key={stop.id || stop.candidate_id || stop.place_id || name} className="rounded-parranda border-line border-dashed border-parranda-ink/25 px-3.5 py-1.5">
                     <button
                       type="button"
                       aria-expanded={expanded}
@@ -652,7 +654,7 @@ export default function StopLine({
                       <span>{name}</span>
                       {expanded ? <MinusIcon className="h-4 w-4 shrink-0 text-parranda-ember" /> : <PlusIcon className="h-4 w-4 shrink-0 text-parranda-ink/68" />}
                     </button>
-                    <p className="type-data pb-1.5 text-[11px] text-parranda-ink/68">
+                    <p className={`${dataLine} pb-1.5`}>
                       {walkingDistanceLabel(stop.distance_km, lang)} {t("från", "from")} {stop.route_stop_name}
                     </p>
                     {expanded && (
@@ -680,7 +682,7 @@ export default function StopLine({
                                 ? releaseCommitment(candidateId)
                                 : commit(candidateId, "pin", name)
                             }
-                            className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border-[1.5px] px-4 text-sm font-bold transition ${
+                            className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border-line px-4 text-sm font-bold transition ${
                               commitments[candidateId]?.kind === "pin"
                                 ? "border-parranda-ember/60 bg-parranda-ember/10 text-parranda-ink hover:border-parranda-ember"
                                 : "border-parranda-ink/20 text-parranda-ink hover:border-parranda-ink/50"

@@ -1,0 +1,68 @@
+✔ native acquisition terminates on deadline, refuses concurrent work, then recovers its slot (18.906167ms)
+✔ lifecycle cancellation kills the native child and recovers its slot after exit (1.806917ms)
+✔ child error, malformed response and spawn failure fail closed without leaking a slot (0.924167ms)
+✖ validated native prefetch binds object identities to rows without publishing them as candidate fields (1.383208ms)
+✖ malformed native plans never spawn and mismatched object receipts fail closed (17.232ms)
+✔ deadline kills an actual operating-system child, not only an abandoned promise (36.571333ms)
+✔ lifecycle cancellation kills an actual operating-system child and removes its temp directory (3.062666ms)
+✔ a stale child event cannot release the slot owned by a newer child (1.289791ms)
+﹣ real child uses bounded temporary disk and parent removes its private directory (0.077667ms) # set PARRANDA_TEST_LIVE_NETWORK=enabled: the DuckDB child downloads the httpfs extension
+﹣ an unusable extension cache falls back without disabling the bounded query (0.057125ms) # set PARRANDA_TEST_LIVE_NETWORK=enabled: the DuckDB child downloads the httpfs extension
+ℹ tests 10
+ℹ suites 0
+ℹ pass 6
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 2
+ℹ todo 0
+ℹ duration_ms 144.229083
+
+✖ failing tests:
+
+test at tests/bounded-overture-query.test.js:66:1
+✖ validated native prefetch binds object identities to rows without publishing them as candidate fields (1.383208ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+  + undefined
+  - {
+  -   paths: [
+  -     's3://overturemaps-us-west-2/release/2026-09-23.1/theme=places/type=place/part-00001-fixture.zstd.parquet'
+  -   ],
+  -   window: {
+  -     lat: 40,
+  -     lng: 12,
+  -     radiusKm: 5
+  -   }
+  - }
+
+      at TestContext.<anonymous> ($REPO/tests/bounded-overture-query.test.js:74:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: { paths: [ 's3://overturemaps-us-west-2/release/2026-09-23.1/theme=places/type=place/part-00001-fixture.zstd.parquet' ], window: { lat: 40, lng: 12, radiusKm: 5 } },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/bounded-overture-query.test.js:79:1
+✖ malformed native plans never spawn and mismatched object receipts fail closed (17.232ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /invalid_overture/. Input:
+
+  'Error: overture_timeout'
+
+      at async TestContext.<anonymous> ($REPO/tests/bounded-overture-query.test.js:87:6)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Error: overture_timeout
+        at Timeout.<anonymous> ($REPO/server/place-candidates/bounded-overture-query.js:54:37)
+        at listOnTimeout (node:internal/timers:605:17)
+        at process.processTimers (node:internal/timers:541:7),
+    expected: /invalid_overture/,
+    operator: 'rejects',
+    diff: 'simple'
+  }

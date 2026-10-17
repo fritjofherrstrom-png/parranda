@@ -8,7 +8,6 @@
 @theme inline {
   --color-parranda-ink: rgb(var(--p-color-ink));
   --color-parranda-paper: rgb(var(--p-color-paper));
-  --color-parranda-accent: rgb(var(--p-color-accent));
   --color-parranda-terracotta: rgb(var(--p-color-terracotta));
   --color-parranda-ember: rgb(var(--p-color-ember));
   --color-parranda-clay: rgb(var(--p-color-clay));
@@ -18,6 +17,20 @@
 
   --radius-parranda: var(--p-radius-card);
   --radius-parranda-btn: var(--p-radius-button);
+
+  --shadow-control: var(--p-shadow-control);
+  --shadow-pop: var(--p-shadow-pop);
+  --shadow-sheet: var(--p-shadow-sheet);
+
+  /* Linje's in-between text sizes, between Tailwind's xs (12) and lg (18).
+     Named by their size at the default 16px root, set in rem so they follow
+     the reader's own text size (browser text zoom, larger default fonts);
+     fixed px sizes stayed put while everything around them grew. */
+  --text-10: 0.625rem;
+  --text-11: 0.6875rem;
+  --text-13: 0.8125rem;
+  --text-15: 0.9375rem;
+  --text-17: 1.0625rem;
 
   --font-display: var(--p-font-display), "Helvetica Neue", Arial, sans-serif;
   --font-body: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
@@ -41,6 +54,18 @@
   [role="button"]:not([aria-disabled="true"]) {
     cursor: pointer;
   }
+}
+
+/* The hairline frame (tokens.css --p-line), one weight for every card, pill,
+   segment and notice. */
+@utility border-line {
+  border-width: var(--p-line);
+}
+@utility border-t-line {
+  border-top-width: var(--p-line);
+}
+@utility border-l-line {
+  border-left-width: var(--p-line);
 }
 
 /* "Linje" type roles. The display face is Archivo on its width axis — wide and
@@ -94,7 +119,7 @@
 .route-map-frame .maplibregl-ctrl.maplibregl-ctrl-attrib {
   background: rgb(var(--p-color-paper) / 0.85);
   color: rgb(var(--p-color-ink) / 0.75);
-  font-size: 10px;
+  font-size: 0.625rem;
   line-height: 1.35;
   padding: 1px 6px;
   border-radius: 6px 0 0 0;
@@ -110,7 +135,7 @@
   background: rgb(var(--p-color-paper));
   border: 1px solid rgb(var(--p-color-ink) / 0.14);
   border-radius: 10px;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
+  box-shadow: var(--p-shadow-control);
   overflow: hidden;
 }
 .route-map-frame .maplibregl-ctrl-group button + button {
@@ -128,6 +153,18 @@
   outline: none;
   box-shadow: inset 0 0 0 3px rgb(var(--p-color-glow));
 }
+/* The map frame clips (overflow-hidden), so the shared ring, 3px outside a
+   control, vanished on the focusable canvas, which fills the frame, and was
+   cut on markers and the attribution link near its edge. Draw the canvas
+   ring inside it and keep the others tight to the control. */
+.route-map-frame .maplibregl-canvas:focus-visible {
+  outline: 3px solid rgb(var(--p-color-glow));
+  outline-offset: -3px;
+}
+.route-map-frame .maplibregl-marker:focus-visible,
+.route-map-frame .maplibregl-ctrl-attrib a:focus-visible {
+  outline-offset: 0;
+}
 /* The zoom glyphs are drawn in the theme's ink, not MapLibre's fixed grey. */
 .route-map-frame .maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon,
 .route-map-frame .maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon {
@@ -144,20 +181,20 @@
 /* The stop's name, opened from its marker. */
 .route-map-tooltip {
   position: absolute;
-  z-index: 3000;
+  z-index: var(--p-z-map-tooltip);
   padding: 6px 10px;
   border-radius: 10px;
   background: rgb(var(--p-color-ink));
   color: rgb(var(--p-color-paper));
   font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   line-height: 1.25;
   white-space: nowrap;
   max-width: 70vw;
   overflow: hidden;
   text-overflow: ellipsis;
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+  box-shadow: var(--p-shadow-pop);
   pointer-events: none;
   transform: translate(22px, -50%);
 }
@@ -174,7 +211,10 @@
    It lives in the base layer so a control that draws focus on its own frame
    (the landing search: `focus-visible:outline-hidden`) can still opt out —
    Tailwind 4 puts utilities in a cascade layer, and unlayered CSS would beat
-   every one of them. */
+   every one of them. `summary` is listed because a <details> toggle is a
+   control too; without it the browser drew its own thin default ring.
+   Segmented controls (ui.tsx) round their own ends instead of clipping with
+   overflow-hidden, which would cut this ring away. */
 @layer base {
   :where(
     a[href],
@@ -182,6 +222,7 @@
     input,
     select,
     textarea,
+    summary,
     [tabindex]:not([tabindex="-1"])
   ):focus-visible {
     outline: 3px solid rgb(var(--p-color-glow));
@@ -204,7 +245,7 @@
   font-size: 0.8rem;
   font-weight: 600;
   border: 3px solid rgb(var(--p-color-ink));
-  box-shadow: 0 1px 6px rgb(0 0 0 / 0.25);
+  box-shadow: var(--p-shadow-marker);
 }
 
 /* A route stop is drawn twice at the same place (RouteMap.tsx), both as 44px
@@ -245,7 +286,7 @@
   border-radius: 999px;
   background: rgb(var(--p-color-ink));
   transform: translate(-50%, -50%);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+  box-shadow: var(--p-shadow-marker);
 }
 
 .route-map-marker {
@@ -278,18 +319,35 @@
   border: 3px solid rgb(var(--p-color-ink));
   border-radius: 999px;
   background: rgb(var(--p-color-paper));
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.28);
+  box-shadow: var(--p-shadow-marker);
   content: "";
   z-index: -1;
   /* The pin takes the tap on the number too: the number itself does not. */
   pointer-events: auto;
 }
 
+/* A group pin: the stops that share one place at this zoom ("1–5"). The
+   whole 44px pin takes the tap and zooms in until they separate. A double
+   ring marks it as more than one station. */
+.route-map-frame .maplibregl-marker.route-map-group {
+  pointer-events: auto;
+  cursor: zoom-in;
+}
+.route-map-marker--group {
+  font-size: 0.7rem;
+  letter-spacing: -0.02em;
+}
+.route-map-marker--group::before {
+  inset: 5px 3px;
+  box-shadow: 0 0 0 2px rgb(var(--p-color-paper)), 0 0 0 4px rgb(var(--p-color-ink)), var(--p-shadow-marker);
+  pointer-events: none;
+}
+
 /* A woven live event is a transfer: the Live colour, ringed in paper. */
 .route-map-marker--event::before {
   border-color: rgb(var(--p-color-paper));
   background: rgb(var(--p-color-live));
-  box-shadow: 0 0 0 2.5px rgb(var(--p-color-live)), 0 2px 8px rgb(0 0 0 / 0.28);
+  box-shadow: 0 0 0 2.5px rgb(var(--p-color-live)), var(--p-shadow-marker);
 }
 
 .route-map-marker--event {

@@ -151,10 +151,23 @@ test("without the server's classification there is no link — the client never 
 
 test("eventTiming: continuous instants render venue-local, never the viewer's clock", () => {
   const ev = { starts_at: "2026-07-17T17:00:00Z", timezone: "Europe/Helsinki" };
-  assert.equal(eventTiming(ev, "sv"), "fre 20:00", "17:00Z is 20:00 in Helsinki (EEST)");
-  assert.equal(eventTiming(ev, "en"), "Fri 20:00");
+  assert.equal(eventTiming(ev, "sv"), "fre 17 juli 20:00", "17:00Z is 20:00 in Helsinki (EEST)");
+  assert.equal(eventTiming(ev, "en"), "Fri 17 Jul 20:00");
   // time_window.continuous starts_at wins over a missing top-level field.
-  assert.equal(eventTiming({ time_window: { kind: "continuous", starts_at: "2026-07-17T17:00:00Z" }, timezone: "Europe/Helsinki" }, "sv"), "fre 20:00");
+  assert.equal(eventTiming({ time_window: { kind: "continuous", starts_at: "2026-07-17T17:00:00Z" }, timezone: "Europe/Helsinki" }, "sv"), "fre 17 juli 20:00");
+});
+
+test("eventTiming: a timed row names its date the way dated rows do", () => {
+  // 7fb8c10 design-system audit: "FRE 19:00–22:30" sat beside "FRE 16 OKT. 18:30–20:30".
+  const timed = { starts_at: "2026-10-16T17:00:00Z", ends_at: "2026-10-16T20:30:00Z", timezone: "Europe/Stockholm" };
+  const listed = { time_window: { kind: "occurrences", dates: ["2026-10-16"], local_start: "18:30", local_end: "20:30" }, timezone: "Europe/Stockholm" };
+  const now = new Date("2026-10-15T08:00:00Z");
+  assert.equal(eventTiming(timed, "sv", now), "fre 16 okt. 19:00–22:30");
+  assert.equal(eventTiming(listed, "sv", now), "fre 16 okt. 18:30–20:30");
+  assert.equal(eventTiming(timed, "en", now), "Fri 16 Oct 19:00–22:30");
+  // Across midnight both ends carry their own date.
+  const late = { starts_at: "2026-10-16T20:00:00Z", ends_at: "2026-10-17T01:00:00Z", timezone: "Europe/Stockholm" };
+  assert.equal(eventTiming(late, "en", now), "Fri 16 Oct 22:00 – Sat 17 Oct 03:00");
 });
 
 test("eventTiming: daily windows render the LOCAL clock range without timezone re-conversion", () => {
@@ -445,6 +458,6 @@ test('explicit all-day facts say all day; date-only fallback and genuine midnigh
 
 test('continuous sessions retain a known end before starting and after ending on the selected venue day',()=>{
  const ev={timezone:'Europe/Stockholm',starts_at:'2026-10-15T20:00:00Z',ends_at:'2026-10-15T21:00:00Z'};
- assert.equal(eventTiming(ev,'en',new Date('2026-10-15T19:00:00Z'),'2026-10-15'),'Thu 22:00–23:00');
- assert.equal(eventTiming(ev,'en',new Date('2026-10-15T21:00:00Z'),'2026-10-15'),'Thu 22:00–23:00');
+ assert.equal(eventTiming(ev,'en',new Date('2026-10-15T19:00:00Z'),'2026-10-15'),'Thu 15 Oct 22:00–23:00');
+ assert.equal(eventTiming(ev,'en',new Date('2026-10-15T21:00:00Z'),'2026-10-15'),'Thu 15 Oct 22:00–23:00');
 });

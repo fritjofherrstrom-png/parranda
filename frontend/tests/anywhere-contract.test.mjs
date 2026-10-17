@@ -415,26 +415,90 @@ test("a route stop's visible number is its own tap target", () => {
   // On the disc's side only the visible pin takes a tap, never the marker box.
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-marker\.route-map-marker-shell\s*\{\s*pointer-events: none;/);
   assert.match(anywhereStyles, /\.route-map-marker::before\s*\{[^}]*pointer-events: auto;/);
-  // The disc and its target open one name.
-  assert.match(routeMapSource, /target\.addEventListener\("mouseenter", open\);[\s\S]{0,200}target\.addEventListener\("click", open\);/);
-  assert.match(routeMapSource, /disc\.addEventListener\("mouseenter", open\);[\s\S]{0,200}disc\.addEventListener\("click", open\);/);
+  // Both surfaces open the same name, while distinguishing transient hover
+  // from an explicit selection. Native behavior (including expansion/leave,
+  // keyboard and touch) is exercised in tests/route-map-selection.test.js.
+  assert.match(routeMapSource, /target\.addEventListener\("mouseenter", \(event\) => open\("hover", event\)\);[\s\S]{0,200}target\.addEventListener\("click", \(event\) => open\("click", event\)\);/);
+  assert.match(routeMapSource, /disc\.addEventListener\("mouseenter", \(event\) => open\("hover", event\)\);[\s\S]{0,200}disc\.addEventListener\("click", \(event\) => open\("click", event\)\);/);
 });
 
 test("route, saved-day, Blitz, and source actions keep a 44px mobile touch target", () => {
-  assert.match(anywherePlannerSource, /onClick=\{blitz\}[\s\S]{0,180}min-h-11/);
+  assert.match(anywherePlannerSource, /busyButton\([^)]*, blitz\)\}[\s\S]{0,180}min-h-11/);
   assert.match(anywherePlannerSource, /onClick=\{\(\) => restoreEntry\(entry\)\}[\s\S]{0,180}min-h-11/);
   assert.match(anywherePlannerSource, /aria-label=\{t\("Ta bort", "Remove"\)\}[\s\S]{0,180}min-h-11 min-w-11/);
   assert.match(anywherePlannerSource, /href=\{pin\}[\s\S]{0,180}min-h-11 min-w-11/);
-  // Live source links (rows, woven stop, Blitz) name their destination.
-  assert.match(anywherePlannerSource, /href=\{link\.href\}[\s\S]{0,180}min-h-11 min-w-11/);
-  assert.match(anywherePlannerSource, /href=\{sourceLink\.href\}[\s\S]{0,180}min-h-11 min-w-11/);
+  // Live source links (rows, woven stop, Blitz) name their destination. Inline
+  // ones draw the 44px target with ::before, so wrapping never moves the text.
+  assert.match(anywherePlannerSource, /href=\{link\.href\}[\s\S]{0,120}\$\{inlineLinkTarget\}/);
+  assert.match(anywherePlannerSource, /href=\{sourceLink\.href\}[\s\S]{0,120}\$\{inlineLinkTarget\}/);
+  assert.match(componentSource("shared/ui.tsx"), /inlineLinkTarget = "relative before:absolute before:-inset-x-1 before:-inset-y-\[14px\]/);
+  assert.doesNotMatch(anywherePlannerSource, /-my-3|&nbsp;↗/);
   assert.match(anywherePlannerSource, /href=\{liveSourceLink\.href\}[\s\S]{0,180}min-h-11/);
 });
 
 test("keyboard-reachable controls have one visible focus contract", () => {
-  assert.match(anywhereStyles, /:where\([\s\S]*a\[href\][\s\S]*button[\s\S]*input[\s\S]*\):focus-visible/);
+  assert.match(anywhereStyles, /:where\([\s\S]*a\[href\][\s\S]*button[\s\S]*input[\s\S]*summary[\s\S]*\):focus-visible/);
   assert.match(anywhereStyles, /outline: 3px solid rgb\(var\(--p-color-glow\)\)/);
   assert.match(anywhereStyles, /outline-offset: 3px/);
+});
+
+test("small text keeps AA contrast on every Linje surface", () => {
+  // tokens.css: secondary text never goes below 65 % ink. ink/60 was 4.42:1
+  // on a day-theme panel (ink/4 over paper); 65 % clears 4.5:1 on panels up
+  // to ink/10. White at 85 % on terracotta was 4.18:1, and the digit on a
+  // white/22 disc 3.7:1.
+  const surface = [plannerSurfaceSource(), componentSource("PlaceSearchField.tsx"), componentSource("LandingHero.tsx")].join("\n");
+  const faint = [...surface.matchAll(/(?<![\w-])text-parranda-ink\/(\d+)/g)].map(m => Number(m[1])).filter(n => n < 65);
+  assert.deepEqual(faint, [], "no ink text below 65 %");
+  assert.doesNotMatch(surface, /text-white\/\d+/);
+  assert.doesNotMatch(componentSource("planner/DayHeader.tsx"), /bg-white\/22/);
+});
+
+test("frames, elevation, layers and small text come from Linje tokens", () => {
+  // 7fb8c10 design-system audit: 35 hand-written 1.5px borders, raw z-index
+  // numbers, black shadows in five strengths and 52 fixed px text sizes.
+  const surface = [plannerSurfaceSource(), componentSource("PlaceSearchField.tsx"), componentSource("LandingHero.tsx")].join("\n");
+  assert.doesNotMatch(surface, /border(-[trblxy])?-\[1\.5px\]/);
+  assert.doesNotMatch(surface, /(?<![\w-])z-\d+(?![\w-])/);
+  assert.doesNotMatch(surface, /(?<![\w-])shadow-(xs|sm|md|lg|xl|2xl)(?![\w-])/);
+  assert.doesNotMatch(surface, /text-\[\d+px\]/);
+  const tokens = readFileSync(new URL("../src/styles/tokens.css", import.meta.url), "utf8");
+  for (const token of ["--p-line", "--p-shadow-control", "--p-shadow-marker", "--p-shadow-pop", "--p-shadow-sheet", "--p-z-popover", "--p-z-map-control", "--p-z-map-tooltip", "--p-z-sheet"]) {
+    assert.match(tokens, new RegExp(`${token}:`), token);
+  }
+  assert.doesNotMatch(anywhereStyles, /box-shadow:[^;]*rgb\(0 0 0/);
+  assert.doesNotMatch(anywhereStyles, /font-size: \d+px/);
+  assert.match(anywhereStyles, /z-index: var\(--p-z-map-tooltip\)/);
+});
+
+test("the map's own focusable parts keep a visible ring inside its clipped frame", () => {
+  assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-canvas:focus-visible \{[^}]*outline-offset: -3px/);
+  assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-marker:focus-visible,\s*\.route-map-frame \.maplibregl-ctrl-attrib a:focus-visible \{\s*outline-offset: 0;/);
+});
+
+test("no control is disabled under the focus that pressed it", () => {
+  // A focused button that turns disabled drops keyboard focus to the top of
+  // the page. Working and finished states use busyButton or aria-disabled;
+  // \`disabled\` is only for a choice that was never available (a Live scope
+  // without a route). #611's stop edits and priority buttons came in with it.
+  const surface = [plannerSurfaceSource(), componentSource("PlaceSearchField.tsx"), componentSource("LandingHero.tsx")].join("\n");
+  const bound = [...surface.matchAll(/(?<![\w-])disabled=\{([^}]*)\}/g)].map((m) => m[1].trim());
+  assert.deepEqual(bound.filter((expression) => !/^!\w+ScopeAvailable$/.test(expression)), []);
+});
+
+test("grouped controls never clip the focus ring that sits outside them", () => {
+  // The ring is drawn 3px outside a control. A rounded group with
+  // overflow-hidden cut it to a sliver on EN/SV, Today/Tomorrow, rhythm and
+  // Live's When/Order; each segment now rounds its own ends instead.
+  const ui = componentSource("shared/ui.tsx");
+  assert.match(ui, /export const segmentGroup = "(?![^"]*overflow-hidden)[^"]*rounded-full/);
+  assert.match(ui, /first:rounded-l-full last:rounded-r-full/);
+  for (const file of ["shared/AppBar.tsx", "planner/AnchorCard.tsx", "planner/LiveSheet.tsx"]) {
+    const source = componentSource(file);
+    assert.doesNotMatch(source, /className="[^"]*overflow-hidden[^"]*"\s+role="group"/, `${file} clips a group`);
+    assert.doesNotMatch(source, /overflow-hidden[^"\n]*rounded-full[^"\n]*"\s*\n?\s*role="group"/, `${file} clips a group`);
+  }
+  assert.doesNotMatch(componentSource("planner/AnchorCard.tsx"), /className=\{`overflow-hidden \$\{panelCard\}`\}/);
 });
 
 test("adjustments collapse to a summary and re-compose themselves — no submit past the landing", () => {

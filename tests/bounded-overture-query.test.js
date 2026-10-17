@@ -63,6 +63,43 @@ test('child error, malformed response and spawn failure fail closed without leak
   assert.deepEqual(child.kills, ['SIGKILL']);
 });
 
+test('validated native prefetch binds object identities to rows without publishing them as candidate fields', async () => {
+  const asset = 's3://overturemaps-us-west-2/release/2026-09-23.1/theme=places/type=place/part-00001-fixture.zstd.parquet';
+  const child = childFixture();
+  const query = createBoundedOvertureQuery({ spawn: () => child });
+  const plan = { paths: [asset], window: { lat: 40, lng: 12, radiusKm: 5 } };
+  const result = query(`SELECT * FROM read_parquet(['${asset}'])`, { prefetch: plan });
+  child.emit('message', { rows: [{ id: 'real' }], sourceAssets: [{ path: asset, etag: '"v1"', length: 100 }] });
+  const rows = await result;
+  assert.deepEqual(child.sent[0].prefetch, plan);
+  assert.deepEqual(rows.source_assets, [{ path: asset, etag: '"v1"', length: 100 }]);
+  assert.equal(JSON.stringify(rows), '[{"id":"real"}]');
+});
+
+test('malformed native plans never spawn and mismatched object receipts fail closed', async () => {
+  let spawned = 0;
+  const query = createBoundedOvertureQuery({ timeoutMs: 15, spawn: () => { spawned++; return childFixture(); } });
+  const valid = 's3://overturemaps-us-west-2/release/2026-09-23.1/theme=places/type=place/part-00001-fixture.zstd.parquet';
+  for (const plan of [
+    { paths: [valid + '?redirect=1'], window: { lat: 40, lng: 12, radiusKm: 5 } },
+    { paths: [valid], window: { lat: 40, lng: 12, radiusKm: 6 } },
+    { paths: [valid, valid], window: { lat: 40, lng: 12, radiusKm: 5 } },
+  ]) await assert.rejects(query('unused', { prefetch: plan }), /invalid_overture/);
+  assert.equal(spawned, 0);
+  const child = childFixture();
+  const result = createBoundedOvertureQuery({ spawn: () => child })(`SELECT * FROM read_parquet(['${valid}'])`, { prefetch: { paths: [valid], window: { lat: 40, lng: 12, radiusKm: 5 } } });
+  child.emit('message', { rows: [{ id: 'wrong object' }], sourceAssets: [{ path: valid.replace('00001', '00002'), etag: '"v1"', length: 100 }] });
+  await assert.rejects(result, /overture_query_failed/);
+});
+
+test('IPC byte cap includes pinned source identity metadata as well as candidate rows', async () => {
+  const asset = 's3://overturemaps-us-west-2/release/2026-09-23.1/theme=places/type=place/part-00001-fixture.zstd.parquet';
+  const child = childFixture();
+  const result = createBoundedOvertureQuery({ spawn: () => child })(`SELECT * FROM read_parquet(['${asset}'])`, { prefetch: { paths: [asset], window: { lat: 40, lng: 12, radiusKm: 5 } } });
+  child.emit('message', { rows: [{ value: 'a'.repeat(2 * 1024 * 1024 - 40) }], sourceAssets: [{ path: asset, etag: '"v1"', length: 100 }] });
+  await assert.rejects(result, /overture_query_failed/);
+});
+
 test('deadline kills an actual operating-system child, not only an abandoned promise', async () => {
   const { spawn } = require('node:child_process');
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'parranda-overture-timeout-'));

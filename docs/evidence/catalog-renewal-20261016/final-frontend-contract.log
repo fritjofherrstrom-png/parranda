@@ -1,0 +1,42 @@
+✔ payload carries the freeform place + the three agnostic flags, never a city key (1.321042ms)
+✔ a legacy curated-city input uses the shared place engine and keeps its preferences (0.123375ms)
+✔ explicit coordinates win over obsolete city identity (0.094167ms)
+✔ day rhythm carries no kilometer goal while preserving real date math (1.032042ms)
+✔ start context: a coords anchor ('near me now') sends top-level lat/lng and NO place text (0.159917ms)
+✔ start context: a typed place sends NO coords (the modes are exclusive) (0.104917ms)
+✔ preference chips map to the engine's canonical intent axes (0.109916ms)
+✔ classification flows through the SHARED honesty module (no duplicated rule) (0.277667ms)
+✔ public share capacity refusals render as capacity, never false place absence (0.205209ms)
+✔ cold-start refresh is bounded: the component delegates to the tested follow-up policy (0.51275ms)
+✔ the surface renders the engine's TRUSTWORTHY richness — and never the contaminated fields (2.431084ms)
+✔ route/Pulse hierarchy: a woven event is a route EXTENSION with exactly one full presentation (1.492042ms)
+✔ Pulse section: place-titled, dedup-aware, honest states, no jargon (2.068208ms)
+✔ route result has one authoritative route and keeps broader candidates secondary (1.845666ms)
+✔ map hierarchy mirrors route authority instead of numbering two competing plans (1.580666ms)
+✔ map controls preserve provider attribution space (0.249166ms)
+✔ a tapped stop discloses route facts before an explicit Maps action (5.146834ms)
+✔ candidate clusters read as candidates, not a second itinerary (0.749917ms)
+✔ secondary candidates disclose in Parranda before offering an explicit Maps action (0.712667ms)
+✔ the weather read lives in Pulse (context), not as its own competing section (0.348916ms)
+✔ walking leg copy uses the shared sub-100-metre formatter (0.272875ms)
+✔ the anchor is chosen once: the planner shows it, and adjusts — never a second form (1.128375ms)
+✔ compact planner and map controls keep a 44px mobile touch target (0.849375ms)
+✔ a route stop's visible number is its own tap target (0.401958ms)
+✔ route, saved-day, Blitz, and source actions keep a 44px mobile touch target (1.218584ms)
+✔ keyboard-reachable controls have one visible focus contract (0.154ms)
+✔ adjustments collapse to a summary and re-compose themselves — no submit past the landing (0.784542ms)
+✔ saving a live day does not freeze its adjustment controls as a restored snapshot (0.573125ms)
+✔ latest compose wins and cancels stale network work (0.08625ms)
+✔ composed coverage comes from the route, never the broader district structure (0.29775ms)
+✔ planner honesty copy avoids internal catalog/citypack language (1.4855ms)
+✔ the anchor pill shows the primary locality, never the full resolver chain (0.114583ms)
+✔ the Live sheet explores events only — it never touches the day's anchor or route (3.23275ms)
+✔ a partially covered request stays composed_limited and names the missing intent (1.559708ms)
+ℹ tests 34
+ℹ suites 0
+ℹ pass 34
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 124.242166

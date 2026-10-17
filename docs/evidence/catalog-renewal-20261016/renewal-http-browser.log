@@ -1,0 +1,10 @@
+✔ cold UI publishes actual catalog stops; expired unchanged, changed and failed refreshes obey source proof (5764.574916ms)
+ℹ {"controlled":true,"coldStops":5,"unchangedBulkQueries":0,"changedReleaseStops":5,"failedRefreshRoute":false,"queryCalls":2,"verifications":2}
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6324.387292

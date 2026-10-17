@@ -205,7 +205,8 @@ surface-migration rule in `FRONTEND_MIGRATION_CONTRACT.md`:
 2. Redirect `/:city?planner=open` and `/:city/plan` to `/anywhere?city=…`,
    preserving `lang`.
 3. Delete `script.js`'s dead `anywhereMode` branches, then the legacy shells and
-   their assets, and the unused `landing-proof` page in the Astro build.
+   their assets. (The unused `landing-proof` page is already gone from the
+   Astro build.)
    `landing.html` goes too: the retired landing's template is still read into
    `landingShellTemplate` at startup, but nothing renders it (a test still pins
    its asset URLs).

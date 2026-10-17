@@ -18,6 +18,8 @@ import { eventTiming, liveEventRelevance } from "../../lib/pulse-view.mjs";
 import { liveEventTags, liveNavigationGroups, type LiveNavigationRow, type LiveSheetSort } from "../../lib/live-navigation.mjs";
 import type { LiveEventScope } from "../../lib/live-event-query.mjs";
 import { CloseIcon, LocationIcon } from "../shared/icons";
+import { busyButton, labelChip, pillClass, segmentClass, segmentGroup } from "../shared/ui";
+import { liveTagLabels } from "../../lib/live-tags.mjs";
 import { liveRelevanceSentence, nearbyDistanceLabel, type Lang, type Translate } from "./copy";
 import { liveEventSource } from "./LiveEventSource";
 import EventOccurrences from "./EventOccurrences";
@@ -26,11 +28,12 @@ import type { LiveEvents, LiveFailure, LiveSourceHealth, PulseEvent } from "./ty
 
 type SheetState = "hidden" | "uncovered" | "pending" | "unavailable" | "partial" | "ok" | "rejected_empty" | "soft_empty";
 
+// Where is a set of chips, not a segment: one of four, and some can be off.
+// Selected uses the system's one "chosen" fill (ink); Live blue stays for Live content.
+// An unavailable scope is disabled; while a query runs the chips are busy
+// (busyButton), so the pressed chip keeps keyboard focus.
 const scopeChip = (active: boolean) =>
-  "inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-[13px] transition disabled:cursor-not-allowed disabled:opacity-40 " +
-  (active
-    ? "border-parranda-live bg-parranda-live font-bold text-parranda-on-live"
-    : "border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45");
+  pillClass(active, "gap-2 disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:opacity-60 aria-busy:cursor-progress");
 
 export default function LiveSheet({
   lang,
@@ -115,7 +118,7 @@ export default function LiveSheet({
     navigationRow?: LiveNavigationRow<PulseEvent>) => {
     const relevance = liveRelevanceSentence(liveEventRelevance(navigationRow?.series || ev, selected), lang, t);
     const distance = nearbyDistanceLabel(ev, lang);
-    const tags = liveEventTags(ev);
+    const tags = liveTagLabels(liveEventTags(ev), lang);
     const timing = navigationRow?.kind === "undated" ? ""
       : eventTiming(ev, lang, now, navigationRow?.date || timingDate);
     return (
@@ -126,8 +129,11 @@ export default function LiveSheet({
           {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
           {distance && <span className="font-semibold text-parranda-live"> · {distance}</span>}
           {liveEventSource(ev, lang)}
-          {tags.length > 0 && <span aria-label={t("Taggar", "Tags")} className="mt-1 flex flex-wrap gap-1">
-            {tags.map(tag => <span key={tag} className="min-w-0 max-w-full break-words rounded-full border border-parranda-live/25 px-2 py-0.5 text-xs text-parranda-ink/68">{tag}</span>)}
+          {/* A named list: aria-label on a plain span is not read, a list's is. */}
+          {tags.length > 0 && <span role="list" aria-label={t("Taggar", "Tags")} className="mt-1 flex flex-wrap gap-1">
+            {/* overflow-wrap:anywhere, not break-words: inside an inline-flex chip
+                only "anywhere" lets an unbroken source word wrap at 320px. */}
+            {tags.map(tag => <span role="listitem" key={tag} className={`${labelChip} min-w-0 max-w-full [overflow-wrap:anywhere]`}>{tag}</span>)}
           </span>}
           {relevance && <span className="mt-0.5 block text-xs text-parranda-ink/68">{relevance}</span>}
         </span>
@@ -153,7 +159,7 @@ export default function LiveSheet({
           : t(`runt ${anchorLabel}`, `around ${anchorLabel}`);
 
   return (
-    <div className="fixed inset-0 z-1100">
+    <div className="fixed inset-0 z-(--p-z-sheet)">
       <div aria-hidden="true" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
       <div
         ref={dialogRef}
@@ -161,7 +167,7 @@ export default function LiveSheet({
         aria-modal="true"
         aria-label={t("Live-händelser", "Live events")}
         tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t border-parranda-ink/14 bg-parranda-paper px-5 pb-8 pt-4 shadow-2xl sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:rounded-3xl sm:border sm:px-7"
+        className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t border-parranda-ink/14 bg-parranda-paper px-5 pb-8 pt-4 shadow-sheet sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:rounded-3xl sm:border sm:px-7"
       >
         <div className="flex justify-center sm:hidden" aria-hidden="true">
           <span className="h-1 w-11 rounded-full bg-parranda-ink/20" />
@@ -198,8 +204,8 @@ export default function LiveSheet({
             <button
               type="button"
               aria-pressed={liveSheetScope === "around_place"}
-              disabled={!aroundPlaceScopeAvailable || liveQueryPending}
-              onClick={() => requestLiveSheetScope("around_place")}
+              disabled={!aroundPlaceScopeAvailable}
+              {...busyButton(liveQueryPending, () => requestLiveSheetScope("around_place"))}
               className={scopeChip(liveSheetScope === "around_place")}
             >
               {anchorIsPosition ? t("Runt din position", "Around your position") : t(`Runt ${anchorLabel}`, `Around ${anchorLabel}`)}
@@ -207,8 +213,8 @@ export default function LiveSheet({
             <button
               type="button"
               aria-pressed={liveSheetScope === "in_place"}
-              disabled={!inPlaceScopeAvailable || liveQueryPending}
-              onClick={() => requestLiveSheetScope("in_place")}
+              disabled={!inPlaceScopeAvailable}
+              {...busyButton(liveQueryPending, () => requestLiveSheetScope("in_place"))}
               className={scopeChip(liveSheetScope === "in_place")}
             >
               {t("Hela området", "Whole area")}
@@ -216,8 +222,8 @@ export default function LiveSheet({
             <button
               type="button"
               aria-pressed={liveSheetScope === "near_route"}
-              disabled={!routeScopeAvailable || liveQueryPending}
-              onClick={() => requestLiveSheetScope("near_route")}
+              disabled={!routeScopeAvailable}
+              {...busyButton(liveQueryPending, () => requestLiveSheetScope("near_route"))}
               className={scopeChip(liveSheetScope === "near_route")}
             >
               {t("Nära rutten", "Near the route")}
@@ -225,8 +231,7 @@ export default function LiveSheet({
             <button
               type="button"
               aria-pressed={liveSheetScope === "near_me"}
-              disabled={liveQueryPending}
-              onClick={() => requestLiveSheetScope("near_me")}
+              {...busyButton(liveQueryPending, () => requestLiveSheetScope("near_me"))}
               className={scopeChip(liveSheetScope === "near_me")}
             >
               <LocationIcon className="h-3.5 w-3.5 text-parranda-ember" />
@@ -245,17 +250,14 @@ export default function LiveSheet({
         {/* WHEN — a real axis over the live_events buckets. */}
         <div className="mt-4 flex flex-col gap-2">
           <p className="type-eyebrow text-parranda-live">{t("När", "When")}</p>
-          <div className="inline-flex self-start overflow-hidden rounded-full border border-parranda-ink/14" role="group" aria-label={t("Vilken tid", "Which time")}>
+          <div className={segmentGroup} role="group" aria-label={t("Vilken tid", "Which time")}>
             {(["tonight", "week"] as const).map((key) => (
               <button
                 type="button"
                 key={key}
                 aria-pressed={liveSheetTime === key}
                 onClick={() => setLiveSheetTime(key)}
-                className={
-                  "inline-flex min-h-11 items-center px-[18px] text-[13px] transition " +
-                  (liveSheetTime === key ? "bg-parranda-ink font-bold text-parranda-paper" : "text-parranda-ink/68 hover:text-parranda-ink")
-                }
+                className={segmentClass(liveSheetTime === key)}
               >
                 {key === "tonight" ? liveDayLabel : t("Följande 7 dagar", "Following 7 days")}
               </button>
@@ -265,11 +267,10 @@ export default function LiveSheet({
 
         <div className="mt-4 flex flex-col gap-2">
           <p className="type-eyebrow text-parranda-live">{t("Ordning", "Order")}</p>
-          <div className="inline-flex self-start overflow-hidden rounded-full border border-parranda-ink/14" role="group" aria-label={t("Live-ordning", "Live order")}>
+          <div className={segmentGroup} role="group" aria-label={t("Live-ordning", "Live order")}>
             {(["for_you", "by_time"] as const).map(sort => (
               <button key={sort} type="button" aria-pressed={liveSheetSort === sort} onClick={() => setLiveSheetSort(sort)}
-                className={"inline-flex min-h-11 items-center px-[18px] text-[13px] transition " +
-                  (liveSheetSort === sort ? "bg-parranda-ink font-bold text-parranda-paper" : "text-parranda-ink/68 hover:text-parranda-ink")}>
+                className={segmentClass(liveSheetSort === sort)}>
                 {sort === "for_you" ? t("För dig", "For you") : t("Efter tid", "By time")}
               </button>
             ))}
@@ -395,7 +396,7 @@ export default function LiveSheet({
                 <button
                   type="button"
                   onClick={() => setLiveSheetTime("week")}
-                  className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-live px-4 text-[13px] font-extrabold text-parranda-on-live hover:brightness-110"
+                  className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-live px-4 text-13 font-extrabold text-parranda-on-live hover:brightness-110"
                 >
                   {t("Visa följande dagar", "Show following days")}
                 </button>
@@ -404,7 +405,7 @@ export default function LiveSheet({
                 <button
                   type="button"
                   onClick={() => setLiveSheetTime("tonight")}
-                  className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-live px-4 text-[13px] font-extrabold text-parranda-on-live hover:brightness-110"
+                  className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-live px-4 text-13 font-extrabold text-parranda-on-live hover:brightness-110"
                 >
                   {liveDayLabel}
                 </button>
@@ -444,7 +445,7 @@ export default function LiveSheet({
           )}
           {(liveQueryError || (!liveQueryPending && (sheetPulseState === "pending" || sheetPulseState === "unavailable"))) && (
             <button type="button" onClick={onRetry}
-              className="inline-flex min-h-11 items-center self-start rounded-full border-[1.5px] border-parranda-live/60 px-4 text-sm font-bold text-parranda-live">
+              className="inline-flex min-h-11 items-center self-start rounded-full border-line border-parranda-live/60 px-4 text-sm font-bold text-parranda-live">
               {t("Försök igen", "Try again")}
             </button>
           )}

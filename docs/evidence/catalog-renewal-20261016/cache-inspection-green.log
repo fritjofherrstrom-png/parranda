@@ -1,0 +1,28 @@
+✔ inspection retains expired evidence without renewing, hydrating or writing it (2.429291ms)
+✔ a fresh invalid cached value cannot bypass the requesting source validator (0.123042ms)
+✔ validator failures cannot launder invalid stale values through stale fallback (0.534666ms)
+✔ a hit within TTL does not call the producer again (0.848792ms)
+✔ an expired entry re-produces (0.126083ms)
+✔ concurrent identical lookups coalesce onto one producer call (11.74025ms)
+✔ shouldStore=false values are never cached (transient errors re-produce) (0.112417ms)
+✔ an expired accepted value can bridge a failed refresh within a bounded stale window (0.105459ms)
+✔ stale fallback handles thrown refreshes but never serves beyond its age bound (0.227917ms)
+✔ a healthy refresh replaces stale state instead of extending the old value (0.091625ms)
+✔ file backing persists a value across separate cache instances (1.260208ms)
+✔ file backing can serve a bounded stale value after restart without refreshing its expiry (1.25075ms)
+✔ a cached loader serves a repeat lookup for the same anchor without re-hitting Overpass (2.944583ms)
+✔ concurrent loader lookups for the same anchor coalesce to one Overpass call (12.228125ms)
+✔ a failed Overpass response is not cached (acquisition resumes after endpoint cooldown) (0.419583ms)
+✔ a cached loader serves prior trusted records with explicit stale metadata after a refresh failure (0.500917ms)
+✔ an uncached loader (no cache option) is byte-for-byte the prior behavior (0.777708ms)
+✔ the deployed Overture loader reads its v5 anchor sample after restart, never legacy v2/v3/v4 rows (30.016375ms)
+✔ resolveDefaultOpenDataLoader stays null when the flag is unset, and returns a loader when enabled (0.060375ms)
+✔ a bounded cache evicts oldest entries without retaining arbitrary prefix searches (0.056334ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 114.638208

@@ -84,7 +84,7 @@ test("unsafe restored snapshot without a route still provides historical source 
   entry.classification = { status: "unavailable", placeLabel: "Testville", limitations: [] };
   const h = await restored(entry);
   try {
-    assert.match(h.text(), /sources had not finished when this day was created/i);
+    assert.match(h.text(), /incomplete when the response was produced/i);
     assert.doesNotMatch(h.text(), /More places are on their way|still being fetched/i);
     assert.ok(!button(h, "Try again"), "no guessed-anchor source retry");
     const link = [...h.container.querySelectorAll("a")].find(a => a.textContent.trim() === "Choose a starting point and date");
@@ -96,7 +96,7 @@ test("unsafe restored snapshot without a route still provides historical source 
 test("restored source completion describes the saved snapshot, not a still-running source", async () => {
   const h = await restored(saved());
   try {
-    assert.match(h.text(), /sources had not finished when this day was created/i);
+    assert.match(h.text(), /incomplete when the response was produced/i);
     assert.doesNotMatch(h.text(), /More places are on their way|still fetching|update in a moment/i);
     await h.clock.advance(8000);
     assert.equal(calls(h).length, 0, "a frozen source completion never schedules a compose");

@@ -1,0 +1,31 @@
+✔ each district carries a few concrete stop NAMES (so the UI shows an itinerary, not a count) (17.647292ms)
+✔ each district carries map-drawable stops (id + name + real coords, never fabricated) (0.932167ms)
+✔ nearby same-name source features become one context suggestion (0.621667ms)
+✔ same-name context evidence remains separate when far apart or functionally different (0.161208ms)
+✔ district stops preserve explicit local-quality facts for optional route context (0.893ms)
+✔ district context keeps a chain only as an axis-specific sparse fallback (0.17825ms)
+✔ a chain-only district remains inspectable instead of becoming a fabricated empty (0.117417ms)
+✔ composes complementary districts that cover the requested intents (0.577708ms)
+✔ orders districts by daypart: morning district before evening district (0.493209ms)
+✔ daypart coherence: the day reads as a distinct morning→evening arc (no two districts share a daypart) (0.309959ms)
+✔ a district with a few strong-evening bars amid daytime types leans later than a pure-daytime one (0.171583ms)
+✔ honestly reports an intent no district can satisfy (no fabricated district) (0.184583ms)
+✔ deterministic and order-independent (0.520792ms)
+✔ respects maxAreas (a compact day, not the whole city) (0.314292ms)
+✔ tokensToAxes maps surface tokens (tags/types/synonyms) to canonical axes (0.039ms)
+✔ second hand never publishes eleven unrelated cultural places as matches (0.387791ms)
+✔ a rare genuine vintage stop survives dominant type and tag summaries (0.299ms)
+✔ canonical second-hand aliases match source categories without inferring from names (0.104041ms)
+✔ weak scenic places stay partial while a genuine viewpoint covers the same intent (3.743292ms)
+✔ a legitimate multifunction place can cover several requested preferences (0.1285ms)
+✔ no preferences retains varied source-backed candidates (0.076625ms)
+✔ default district composition retains its legacy coverage and fallback contract (0.111542ms)
+✔ the existing micro-base consumer keeps its legacy gallery anchor decision (2.982792ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 91.591208

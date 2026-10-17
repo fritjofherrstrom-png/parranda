@@ -1,0 +1,13 @@
+✔ cold UI publishes actual catalog stops; expired unchanged, changed and failed refreshes obey source proof (6618.13875ms)
+✔ Rome uses the same map, add/remove and Live UI (12007.994541ms)
+✔ Barcelona uses the same map, add/remove and Live UI (4457.966625ms)
+✔ Athens uses the same map, add/remove and Live UI (6566.264ms)
+✖ Stockholm uses the same map, add/remove and Live UI (16963.164667ms)
+ℹ tests 5
+ℹ pass 4
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ duration_ms 48269.272667
+✖ failing tests:
+✖ Stockholm uses the same map, add/remove and Live UI (16963.164667ms)

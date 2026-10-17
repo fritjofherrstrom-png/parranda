@@ -80,7 +80,9 @@ export default function AppBar({
   };
 
   return (
-    <nav className="flex items-center justify-between gap-3 py-1" aria-label="Parranda">
+    // Wraps when the reader's text size outgrows one row (200 % text zoom),
+    // instead of pushing the language switch off screen.
+    <nav className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-1" aria-label="Parranda">
       <a
         href={`/?lang=${lang}`}
         onClick={leaving("home")}
@@ -89,7 +91,7 @@ export default function AppBar({
       >
         {/* The mark: a station ring on the route colour. */}
         <span aria-hidden="true" className="h-[18px] w-[18px] rounded-full border-4 border-parranda-ember transition group-hover:scale-110" />
-        <span className="type-display text-[15px] tracking-[0.02em] min-[360px]:text-[17px]">Parranda</span>
+        <span className="type-display text-15 tracking-[0.02em] min-[360px]:text-17">Parranda</span>
       </a>
       <div className="flex items-center gap-2">
         <button
@@ -97,12 +99,13 @@ export default function AppBar({
           onClick={toggleTheme}
           aria-pressed={night}
           aria-label={lang === "sv" ? "Kvällsläge" : "Night mode"}
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full border-[1.5px] border-parranda-ink/18 text-parranda-ink transition hover:border-parranda-ink/50"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-full border-line border-parranda-ink/18 text-parranda-ink transition hover:border-parranda-ink/50"
         >
           <span data-theme-glyph="day"><SunIcon className="h-[18px] w-[18px]" /></span>
           <span data-theme-glyph="night"><MoonIcon className="h-[18px] w-[18px]" /></span>
         </button>
-        <div className="flex overflow-hidden rounded-full border-[1.5px] border-parranda-ink/18" role="group" aria-label={languageLabel}>
+        {/* Each end rounds itself: overflow-hidden here would clip the focus ring. */}
+        <div className="flex rounded-full border-line border-parranda-ink/18" role="group" aria-label={languageLabel}>
           {(["en", "sv"] as const).map((option) => (
             <a
               key={option}
@@ -110,7 +113,7 @@ export default function AppBar({
               onClick={leaving("language")}
               aria-current={lang === option ? "true" : undefined}
               className={
-                "type-data inline-flex min-h-11 min-w-11 items-center justify-center px-3 text-xs font-semibold transition " +
+                "type-data inline-flex min-h-11 min-w-11 items-center justify-center px-3 text-xs font-semibold transition first:rounded-l-full last:rounded-r-full " +
                 (lang === option ? "bg-parranda-ink text-parranda-paper" : "text-parranda-ink/72 hover:text-parranda-ink")
               }
             >

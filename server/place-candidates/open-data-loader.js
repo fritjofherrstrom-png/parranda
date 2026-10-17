@@ -34,6 +34,7 @@ const { createBackgroundSource, SOURCE_COMPLETION, SOURCE_SNAPSHOT } = require("
 const { createWikidataSource, WIKIDATA_CACHE_NAMESPACE } = require("./wikidata-source");
 const { normalizeSourceNameAliases } = require("./source-name-aliases");
 const { createOvertureSource } = require("./overture-source");
+const { createOvertureSampleCache } = require('./overture-sample-cache');
 const {
   createCachedVisitSwedenNapiSource,
   createVisitSwedenNapiSource,
@@ -1596,16 +1597,14 @@ function resolveDefaultOpenDataLoader(env = process.env) {
       minConfidence: Number(env?.PARRANDA_OVERTURE_MIN_CONFIDENCE) || undefined,
     });
     const overtureCache = createSourceCache({
-      // v5 stores one stratified sample per anchor window (walking-reach rings
-      // x route type) that each request re-selects from. v4 rows are an
-      // 80-record nearest-window selection per preference set — in a dense
-      // centre a few hundred metres across — so they are never read here.
-      // v4 also still binds the taxonomy contract; v2/v3 remain excluded.
-      namespace: "overture-v5",
+      // v6 retains the same stratified sample plus pinned source/query proof.
+      // Bare v5 arrays cannot be revalidated, so remain in their old namespace.
+      namespace: "overture-v6",
       dir: env?.PARRANDA_CACHE_DIR || null,
       ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
     });
-    overtureSource = createOvertureBackgroundSource({ source: overtureRaw, cache: overtureCache });
+    overtureSource = createOvertureBackgroundSource({ source: overtureRaw,
+      cache: createOvertureSampleCache({ cache: overtureCache, validateReceipt: overtureRaw.validateReceipt }) });
   }
 
   // Official Swedish place supply through Visit Sweden's documented NAPI
@@ -1650,10 +1649,12 @@ function resolveDefaultOpenDataLoader(env = process.env) {
 // the selection can never be a different window's leftovers.
 function createOvertureBackgroundSource({ source, cache }) {
   const sampleKey = typeof source?.sampleKey === "string" ? source.sampleKey : "default";
+  const keyFor = typeof source.cacheKeyFor === 'function' ? source.cacheKeyFor
+    : ({ lat, lng } = {}) => `${Number(lat).toFixed(3)},${Number(lng).toFixed(3)}:${sampleKey}`;
   const background = createBackgroundSource({
     cache,
-    keyFor: ({ lat, lng } = {}) => `${Number(lat).toFixed(3)},${Number(lng).toFixed(3)}:${sampleKey}`,
-    load: (anchor) => source.acquire(anchor),
+    keyFor,
+    load: (anchor) => source.acquire({ ...anchor, previousSample: cache.previous?.(keyFor(anchor)) || null }),
   });
   const forRequest = (rows, anchor = {}, request = {}) => {
     const selection = {

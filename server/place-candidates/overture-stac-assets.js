@@ -24,9 +24,9 @@ function canonicalAsset(item,release){
 }
 function createOvertureAssetResolver({fetcher=globalThis.fetch,timeoutMs=5000}={}){
  const cache=new Map();
- async function manifest(release,signal,deadlineMs){
+ async function manifest(release,signal,deadlineMs,revalidate=false){
   if(signal?.aborted || (Number.isFinite(deadlineMs)&&Date.now()>=deadlineMs))throw new Error('overture_cancelled');
-  if(cache.has(release))return cache.get(release);
+  if(!revalidate&&cache.has(release))return cache.get(release);
   const controller=new AbortController();const abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});const timer=setTimeout(abort,Math.min(5000,Math.max(1,timeoutMs),Number.isFinite(deadlineMs)?Math.max(1,deadlineMs-Date.now()):5000));let bytes=0;
   async function read(url){
    const response=await fetcher(url,{signal:controller.signal,redirect:'error',headers:{Accept:'application/json'}});
@@ -51,7 +51,7 @@ function createOvertureAssetResolver({fetcher=globalThis.fetch,timeoutMs=5000}={
  }
  return async request=>{
   if(!releasePattern.test(request.release)||request.signal?.aborted)throw new Error('invalid_overture_release');
-  const windows=windowBboxes(request),items=await manifest(request.release,request.signal,request.deadlineMs);
+  const windows=windowBboxes(request),items=await manifest(request.release,request.signal,request.deadlineMs,request.revalidate);
   if(request.signal?.aborted)throw new Error('overture_cancelled');
   return [...new Set(items.filter(item=>windows.some(w=>overlaps(item.bbox,w))).map(item=>item.path))];
  };

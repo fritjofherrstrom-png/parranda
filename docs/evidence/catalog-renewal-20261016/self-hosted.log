@@ -1,0 +1,5 @@
+
+> parranda@1.0.0 validate:self-hosted
+> node scripts/validate-self-hosted-stack.js
+
+self-hosted production contract: ok
