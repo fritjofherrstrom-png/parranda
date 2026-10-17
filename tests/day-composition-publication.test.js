@@ -24,6 +24,13 @@ const EVENING_EVENT = {
   source_label: 'Controlled fixture',
 };
 
+// Exact new discovery envelope for these fixed source facts. Source evidence
+// remains unchanged; offering a choice is not final walking admission.
+const SELECTABLE_EVENING_EVENT = { ...EVENING_EVENT,
+  live_occurrence_id: 'live:2026-10-17:7f075a6bdc30b78ae99a437750b6aaae',
+  live_choice_eligible: true, occurrence_date: DATE,
+};
+
 const originalFetch = global.fetch;
 const networkAttempts = [];
 test.before(() => {
@@ -125,7 +132,7 @@ test('HTTP manual remove retains exactly five IDs despite an eligible evening ev
   assertPublishedEdit(body, 5);
   assert.deepEqual(stopIds(body), ids.slice(1), 'removal cannot refill or change the retained route');
   assert.notEqual(body.place_structure.district_day.evening_event.woven_into_route, true);
-  assert.deepEqual(body.live_events.tonight, [EVENING_EVENT], 'Live evidence remains available separately');
+  assert.deepEqual(body.live_events.tonight, [SELECTABLE_EVENING_EVENT], 'Live evidence remains available separately');
   const ordinary = await f.request();
   assert.deepEqual(body.live_events, ordinary.live_events, 'manual edit leaves the complete Live sidecar unchanged');
 });
@@ -141,7 +148,7 @@ test('HTTP capped Adjust cannot grow five stops through public event fallback', 
   assert.ok(stops(body).every(stop => stop.type === 'museum' && stop.id !== ids[0]));
   assert.equal(new Set(stopIds(body)).size, 5);
   assert.notEqual(body.place_structure.district_day.evening_event.woven_into_route, true);
-  assert.deepEqual(body.live_events.tonight, [EVENING_EVENT]);
+  assert.deepEqual(body.live_events.tonight, [SELECTABLE_EVENING_EVENT]);
 });
 
 test('HTTP replace retains the other five IDs and exactly one relevant alternative, not a seventh event', async t => {
@@ -163,7 +170,7 @@ test('HTTP replace retains the other five IDs and exactly one relevant alternati
   assert.equal(experiment(body).day_edit.replacement_candidate_id, replacement.id);
   assert.deepEqual(stopIds(body).filter(id => id !== replacement.id), retained);
   assert.notEqual(body.place_structure.district_day.evening_event.woven_into_route, true);
-  assert.deepEqual(body.live_events.tonight, [EVENING_EVENT]);
+  assert.deepEqual(body.live_events.tonight, [SELECTABLE_EVENING_EVENT]);
 });
 
 test('HTTP ordinary no-edit composition still weaves the eligible event and preserves its Live sidecar', async t => {
@@ -176,7 +183,7 @@ test('HTTP ordinary no-edit composition still weaves the eligible event and pres
   assert.equal(stops(body).filter(stop => stop.is_live_event === true).length, 1);
   assert.equal(stops(body).at(-1).event_id, EVENING_EVENT.id);
   assert.equal(body.place_structure.district_day.evening_event.woven_into_route, true);
-  assert.deepEqual(body.live_events.tonight, [EVENING_EVENT]);
+  assert.deepEqual(body.live_events.tonight, [SELECTABLE_EVENING_EVENT]);
   assert.equal(body.live_events.selected_date, DATE);
   assert.equal(body.live_events.coverage, 'covered');
   assert.equal(body.live_events.acquisition.source_health.status, 'unavailable',
@@ -208,7 +215,7 @@ for (const target of [1, 0]) {
       assert.equal(experiment(body).promotion.promote, false);
     }
     assert.notEqual(body.place_structure?.district_day?.evening_event?.woven_into_route, true);
-    assert.deepEqual(body.live_events.tonight, [EVENING_EVENT]);
+    assert.deepEqual(body.live_events.tonight, [SELECTABLE_EVENING_EVENT]);
   });
 }
 
@@ -229,7 +236,7 @@ test('HTTP edited chain still refuses an independent walking failure instead of 
   assert.equal(experiment(body).promotion.promote, false);
   assert.deepEqual(stopIds(body), []);
   assert.deepEqual(experiment(body).day_edit.result_candidate_ids, []);
-  assert.deepEqual(body.live_events.tonight, [EVENING_EVENT]);
+  assert.deepEqual(body.live_events.tonight, [SELECTABLE_EVENING_EVENT]);
 });
 
 test('HTTP publication-withheld edit remains refused when retained places become known closed', async t => {
@@ -244,13 +251,13 @@ test('HTTP publication-withheld edit remains refused when retained places become
   assert.deepEqual(experiment(body).day_edit.result_candidate_ids, []);
   assert.deepEqual(stopIds(body), []);
   assert.notEqual(experiment(body).manual_edit_published, true);
-  assert.deepEqual(body.live_events.tonight, [EVENING_EVENT]);
+  assert.deepEqual(body.live_events.tonight, [SELECTABLE_EVENING_EVENT]);
 });
 
-for (const [label, changed] of [
-  ['source-ineligible', { route_eligible: false }],
-  ['other-date', { starts_at: '2026-10-18T18:00:00Z', ends_at: '2026-10-18T20:00:00Z' }],
-  ['not-walkable', { lat: 57.6 }],
+for (const [label, changed, offersChoice] of [
+  ['source-ineligible', { route_eligible: false }, false],
+  ['other-date', { starts_at: '2026-10-18T18:00:00Z', ends_at: '2026-10-18T20:00:00Z' }, false],
+  ['not-walkable', { lat: 57.6 }, true],
 ]) {
   test(`HTTP ordinary event weave still refuses a ${label} occurrence without erasing Live evidence`, async t => {
     const f = await fixture(t);
@@ -261,7 +268,7 @@ for (const [label, changed] of [
     assert.equal(stops(body).length, 6);
     assert.ok(stops(body).every(stop => stop.is_live_event !== true));
     assert.notEqual(body.place_structure?.district_day?.evening_event?.woven_into_route, true);
-    assert.deepEqual(body.live_events.tonight, [row]);
+    assert.deepEqual(body.live_events.tonight, [offersChoice ? { ...SELECTABLE_EVENING_EVENT, ...changed } : row]);
   });
 }
 
