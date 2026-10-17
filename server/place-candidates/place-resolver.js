@@ -187,6 +187,11 @@ function toRawCandidate(result) {
     label,
     name,
     matching_names: matchingNames(result),
+    // The names a place carries as its own: its local name and its English
+    // one. Other name:xx are translations, and so is the display name, which
+    // follows accept-language (Vyborg's old town is "Gamla stan" in sv).
+    own_names: [...new Set((result.namedetails?.name ? [result.namedetails.name, result.namedetails["name:en"]] : [result.name])
+      .map(normalizeNameForMatch).filter(Boolean))],
     // Provider display labels can include additional divisions and postcodes.
     // Keep those source-owned qualifiers so a shared canonical label works too.
     admin_names: [...new Set([...ADMIN_NAME_FIELDS.map(key => normalizeNameForMatch(result.address?.[key])),
@@ -321,7 +326,14 @@ function classifyConfidences(rawCandidates, query = null, context = {}) {
     const near = normalizeBias(context.near);
     const local = near ? exactStructuralMatches.filter(candidate => coordinateDistanceKm(candidate, near) <= PLACE_BIAS_KM) : [];
     const [leader, runnerUp] = exactStructuralMatches;
-    const dominant = runnerUp &&
+    // A translated name may not out-rank a place that carries the typed name
+    // as its own: "Gamla stan" anchored Vyborg (name:sv, 0.308) over Stockholm
+    // (0.147) because Porvoo trailed by 0.103, and "Haga" anchored The Hague
+    // (name:pl). Such a lead stays a choice for the reader.
+    const ownName = candidate => (candidate.own_names || []).includes(normalizedQuery);
+    const translatedLeader = !String(query).includes(",") && !ownName(leader) &&
+      exactStructuralMatches.some(ownName);
+    const dominant = !translatedLeader && runnerUp &&
       exactStructuralMatches.every((candidate) => candidate.importance !== null) &&
       leader.importance >= JUNK_IMPORTANCE_FLOOR &&
       // Decimal boundary scores can round to a gap just above the margin.
@@ -485,7 +497,7 @@ function createNominatimPlaceResolver({
     .slice(0, 16);
   const lookupEndpointIdentity = createHash("sha256").update(lookupEndpoint).digest("hex").slice(0, 16);
   const cache = sourceCache || createSourceCache({
-    namespace: "place-resolver-nominatim-v5",
+    namespace: "place-resolver-nominatim-v6",
     ttlMs: cacheTtlMs,
     dir: cacheDir,
     now,
@@ -705,7 +717,7 @@ function createNominatimPlaceResolver({
     if (!endpointValid) return [];
     const context = { language: normalizeLanguage(options.language), near: normalizeBias(options.near), purpose: options.purpose === "event_venue" ? "event_venue" : "place" };
     const queryIdentity = createHash("sha256").update(JSON.stringify([query.toLowerCase(), context.language, context.near, context.purpose])).digest("hex");
-    const key = `v5:${endpointIdentity}:${queryIdentity}`;
+    const key = `v6:${endpointIdentity}:${queryIdentity}`;
     const result = await cache.get(
       key,
       () => enqueueProviderTask(() => fetchAndMapQueued(query, context)),

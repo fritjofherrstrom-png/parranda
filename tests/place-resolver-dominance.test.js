@@ -49,7 +49,7 @@ test("old persisted ambiguity is bypassed and the new decision survives restart"
   const candidates = await resolver("Stockholm");
   assert.equal(fetches, 1, "v2 medium-confidence ambiguity must not survive the semantics change");
   assert.deepEqual(candidates.map((c) => c.confidence), ["medium", "low"]);
-  assert.ok(readdirSync(join(cacheDir, "place-resolver-nominatim-v5")).some((file) => file.startsWith("v5_")));
+  assert.ok(readdirSync(join(cacheDir, "place-resolver-nominatim-v6")).some((file) => file.startsWith("v6_")));
   const restarted = resolverFor([], { cacheDir, fetcher: async () => { throw new Error("cache miss"); } });
   assert.deepEqual(await restarted("Stockholm"), candidates);
 });
@@ -151,3 +151,43 @@ for (const [winner, namesake] of [
     }
   });
 }
+
+// Observed Nominatim shapes (2026-10-17): a translated name (name:sv, name:pl)
+// may make a place an exact match, but never the winner over a place that
+// carries the typed name as its own.
+function district(name, namedetails, country, lat, lon, importance, id, addresstype = "suburb") {
+  return {
+    name, display_name: `${name}, ${country}`, lat: String(lat), lon: String(lon), importance,
+    osm_type: "relation", osm_id: id, category: "boundary", type: "administrative", addresstype,
+    address: { suburb: name, country, country_code: country.slice(0, 2).toLowerCase() }, namedetails,
+    boundingbox: [lat - 0.01, lat + 0.01, lon - 0.01, lon + 0.01].map(String),
+  };
+}
+const vyborgOldTown = district("Gamla stan", { name: "Старый город", "name:sv": "Gamla stan" }, "Russia", 60.712, 28.735, 0.308, 3024933246);
+const porvooOldTown = district("Old Town", { name: "Vanhakaupunki", "name:sv": "Gamla stan" }, "Finland", 60.394, 25.664, 0.205, 10929256189);
+const stockholmOldTown = district("Gamla stan", { name: "Gamla stan" }, "Sweden", 59.3255, 18.0711, 0.147, 5695398);
+
+test("a translated name cannot anchor over a place that owns the typed name", async () => {
+  for (const language of ["sv", "en"]) {
+    for (const rows of [[vyborgOldTown, porvooOldTown, stockholmOldTown], [stockholmOldTown, porvooOldTown, vyborgOldTown]]) {
+      const result = await resolveAgnosticIntake({ placeQuery: "Gamla stan", placeLanguage: language, placeResolver: resolverFor(rows) });
+      assert.equal(result.anchor, null, "Vyborg's 0.103 lead over Porvoo must not decide Stockholm's Gamla stan");
+      assert.deepEqual(result.intake.blockers, ["ambiguous_place"]);
+      assert.ok(result.intake.candidates.some((candidate) => candidate.label.startsWith("Gamla stan, Sweden")));
+    }
+  }
+  const hague = district("Den Haag", { name: "Den Haag", "name:en": "The Hague", "name:pl": "Haga" }, "Netherlands", 52.08, 4.31, 0.738, 192737, "city");
+  const haga = district("Haga", { name: "芳賀町", "name:en": "Haga" }, "Japan", 36.548, 140.058, 0.433, 4847039, "town");
+  const result = await resolveAgnosticIntake({ placeQuery: "Haga", placeResolver: resolverFor([hague, haga]) });
+  assert.equal(result.anchor, null);
+  assert.deepEqual(result.intake.blockers, ["ambiguous_place"]);
+});
+
+test("a dominant place still anchors on its local or English name", async () => {
+  const gothenburg = district("Göteborg", { name: "Göteborg", "name:en": "Gothenburg" }, "Sweden", 57.7072, 11.9668, 0.73, 935611, "city");
+  const nebraska = district("Gothenburg", { name: "Gothenburg" }, "United States", 40.929, -100.16, 0.43, 128420, "city");
+  for (const query of ["Göteborg", "Gothenburg"]) {
+    const result = await resolveAgnosticIntake({ placeQuery: query, placeLanguage: "sv", placeResolver: resolverFor([nebraska, gothenburg]) });
+    assert.deepEqual(result.anchor, { lat: 57.7072, lng: 11.9668 }, `${query} keeps its dominant own-name answer`);
+  }
+});
