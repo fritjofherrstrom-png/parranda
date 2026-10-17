@@ -967,9 +967,36 @@ function buildBlockedAgnosticRouteOutputExperiment({ baselineResult, blocker, so
  *   baseline (unchanged) when not eligible, or a deep-cloned mutated/synthesized
  *   result when eligible. `experiment` is the top-level diagnostics block.
  */
+function withCandidateHours(composition, snapshot, requestedDate) {
+  // The composer resolves omitted dates too; use that same private day identity
+  // even when publication withholds a route. Never infer another date in UI.
+  const date = snapshot?.date || requestedDate;
+  const facts = new Map();
+  const ctx = snapshot?.context;
+  const window = ctx?.timezoneKnown ? buildLocalDayAvailabilityWindow({ requestedDate: date, nowLocalIso: ctx.now }) : null;
+  for (const record of snapshot?.records || []) {
+    const closure = window ? operatorClosureForWindow(record, window) : null;
+    const fact = closure?.selected_day_hours || (window ? buildSelectedDayHoursFact(record.opening_hours, window) :
+      isAlwaysClosedOpeningHours(record.opening_hours) ? { status: 'closed', all_day: false, windows: [] } : null);
+    if (!fact) continue;
+    const source = record.opening_hours_source;
+    const normalized = normalizeSelectedDayHoursFact({ ...fact,
+      ...(source && window ? { date, timezone: ctx.contextBlock.time.timezone,
+        source_url: source.url, observed_at: source.observed_at } : {}),
+    });
+    if (normalized && record.id != null) facts.set(String(record.id), normalized);
+  }
+  return { ...composition, candidateHours: facts };
+}
+
 async function composeAgnosticRouteOutput(args) {
   if (args.synthesizeVia !== 'engine' || typeof args.openDataLoader?.enrichSelected !== 'function') {
-    return composeAgnosticRouteOutputOnce(args);
+    let retained;
+    const composition = await composeAgnosticRouteOutputOnce({ ...args, onRetainComposition: value => {
+      retained = value;
+      args.onRetainComposition?.(value);
+    } });
+    return withCandidateHours(composition, retained, args.date);
   }
   let snapshot;
   const initial = await composeAgnosticRouteOutputOnce({ ...args,
@@ -978,7 +1005,7 @@ async function composeAgnosticRouteOutput(args) {
   const stops = initial.result?.days?.[0]?.primary_route?.main_stops || [];
   if (!snapshot || !stops.length || !Array.isArray(snapshot.records)) {
     if (snapshot) args.onRetainComposition?.(snapshot);
-    return initial;
+    return withCandidateHours(initial, snapshot, args.date);
   }
   // Check only the identities actually selected by the real composer. No new
   // source discovery, source reacquisition, or unbounded retry is permitted.
@@ -998,7 +1025,7 @@ async function composeAgnosticRouteOutput(args) {
   });
   if (!changed) {
     args.onRetainComposition?.(snapshot);
-    return initial;
+    return withCandidateHours(initial, snapshot, args.date);
   }
   for (const key of ['loader_status', 'loader_error', 'loader_metadata', EXCLUDED_LOADED_IDS]) {
     if (snapshot.records[key] !== undefined) Object.defineProperty(records, key, { value: snapshot.records[key] });
@@ -1006,9 +1033,10 @@ async function composeAgnosticRouteOutput(args) {
   // One replay of the same frozen supply/context applies the new facts through
   // normal admission, preference, pin/edit and final walking gates. The replay
   // loader has no enrichment method and cannot restart either acquisition.
-  return composeAgnosticRouteOutputOnce({ ...args, openDataLoader: async () => records,
-    retainedContext: snapshot.context,
+  const replayed = await composeAgnosticRouteOutputOnce({ ...args, openDataLoader: async () => records,
+    date: snapshot.date, retainedContext: snapshot.context,
   });
+  return withCandidateHours(replayed, { records, context: snapshot.context, date: snapshot.date }, args.date);
 }
 
 async function composeAgnosticRouteOutputOnce({
@@ -1130,7 +1158,7 @@ async function composeAgnosticRouteOutputOnce({
         cityLabel: agnosticContext.label,
       })
     : null;
-  if (typeof onRetainComposition === 'function') onRetainComposition({ records: resolvedTrusted.trustedRecords, context: ctx });
+  if (typeof onRetainComposition === 'function') onRetainComposition({ records: resolvedTrusted.trustedRecords, context: ctx, date: effectiveDate });
 
   // Rhythm owns day depth; the number of requested interests must not cut
   // off otherwise eligible same-interest options before engine composition.

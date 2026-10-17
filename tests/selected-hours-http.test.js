@@ -82,6 +82,10 @@ test('newly observed explicit closure is applied before publication through the 
   assert.equal(stops.some(stop => stop.id === 'selected-0'), false);
   assert.equal(stops.length, 2, 'the source-closed stop cannot survive to fill intensity');
   assert.ok(stops.every(stop => stop.selected_day_hours?.status === 'known'));
+  const sourceStop = response.body.place_structure.district_day.areas.flatMap(area => area.stops)
+    .find(stop => stop.id === 'selected-0');
+  assert.equal(sourceStop.selected_day_hours?.status, 'closed',
+    'the same observed closure must follow the diagnostic source row so it cannot become a detour suggestion');
   assert.equal(f.collections, 1);
   assert.equal(f.requests.length, 3, 'recomposition cannot restart website checks');
 });
@@ -120,4 +124,21 @@ test('a new selected date reuses only weekly source evidence and rebuilds the da
   }
   assert.equal(f.requests.length, 3, 'fresh weekly evidence does not trigger another provider acquisition');
   assert.equal(f.collections, 2, 'each user intent still owns its own frozen supply snapshot');
+});
+
+
+test('an omitted date binds broader-context hours to the actual published day', async t => {
+  const f = await fixture(t);
+  const response = await f.request({ dates: [] });
+  assert.equal(response.status, 200);
+  const day = response.body.days[0];
+  assert.ok(day.primary_route.main_stops.length > 0);
+  const contextStops = response.body.place_structure.district_day.areas.flatMap(area => area.stops);
+  for (const stop of day.primary_route.main_stops) {
+    const contextStop = contextStops.find(row => row.id === stop.id);
+    assert.equal(contextStop?.selected_day_hours?.date, day.date);
+    assert.deepEqual(contextStop.selected_day_hours, stop.selected_day_hours);
+  }
+  assert.equal(f.collections, 1);
+  assert.equal(f.requests.length, 3);
 });

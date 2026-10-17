@@ -21,7 +21,10 @@ Unknown hours retain a usable day, with “Opening hours unavailable” /
 “Öppettider saknas”, a safe source-owned Website action when present, and the
 existing Replace action. Source windows remain selected-day facts; none claims
 open now, guaranteed arrival, current operational verification or holiday
-exceptions. A closed restored fact is no longer labeled unknown.
+exceptions. A closed restored fact is no longer labeled unknown. The same dated facts
+follow broader source-context rows, so a known closed place cannot reappear as
+a detour suggestion. Unknown-hour and otherwise uncommittable ideas retain
+their existing behavior; no new trust gate is added.
 
 Modern asynchronous Planner can check only already composed, selected unknown
 identities. Existing operator checks and this pass share four identities, two

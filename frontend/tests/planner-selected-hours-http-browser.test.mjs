@@ -136,7 +136,8 @@ async function harness(t, mode) {
     writeFileSync(join(evidenceDir, `${mode}-built-ui.json`), JSON.stringify({
       boundary: 'built UI -> actual local HTTP -> real composer/publisher; controlled external source transport; not deployment or live-provider acceptance',
       date: DATE, requests: composeRequests, source_requests: websiteRequests, resolver_requests: resolverRequests,
-      stops, pipeline: body.agnostic_route_output_experiment.eligibility.checks.candidate_pipeline, errors,
+      stops, context_stops: body.place_structure?.district_day?.areas?.flatMap(area => area.stops || []) || [],
+      pipeline: body.agnostic_route_output_experiment.eligibility.checks.candidate_pipeline, errors,
     }, null, 2));
   }
   t.diagnostic(JSON.stringify({ mode, real_http: true, selected_date: DATE,
@@ -167,5 +168,12 @@ test('built Planner publishes source hours and excludes an observed closed selec
     assert.equal(stop.open_now, undefined);
   }
   assert.match(await panel.innerText(), /Source hours for selected day: 10:00–17:00/);
+  const closedContext = body.place_structure?.district_day?.areas?.flatMap(area => area.stops || [])
+    .find(stop => stop.id === 'selected-0');
+  assert.equal(closedContext?.selected_day_hours?.status, 'closed',
+    'the broader source context retains the selected-day fact used to withhold the detour');
+  const detours = route.getByRole('button', { name: /detour ideas? near your route/ });
+  if (await detours.count()) await detours.click();
+  assert.equal(await detours.count(), 0, 'a known-closed place is not offered as an optional detour');
   assert.doesNotMatch(await route.innerText(), /Selected museum 0|Opening hours unavailable|open now|currently open/i);
 });
