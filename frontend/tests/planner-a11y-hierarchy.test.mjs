@@ -316,8 +316,9 @@ test("one failed place source among answering ones is named without claiming a t
       },
     });
     await h.clock.advance(50);
-    assert.match(h.text(), /Parranda found 10 real places near Testville, but not enough for a reliable day yet/);
-    assert.match(h.text(), /One of the place sources didn't answer just now, so the evidence may be incomplete\. Try again in a moment\./);
+    assert.match(h.text(), /Planning finished without a route/);
+    assert.match(h.text(), /One or more place sources failed/);
+    assert.doesNotMatch(h.text(), /not enough for a reliable day|still fetching|on their way/, "failed collection does not prove sparse supply or promise completion");
     assert.doesNotMatch(h.text(), /The place sources didn't answer just now, so Parranda couldn't fetch/, "not a total outage");
     assert.doesNotMatch(h.text(), /with your choices/);
     const retry = buttonNamed(h, "Try again");

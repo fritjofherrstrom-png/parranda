@@ -127,9 +127,18 @@ function awaitLifecycleWork(work, signal) {
 
 // One memoized trusted supply snapshot for both structure and composer. Await
 // only evidence attached by a server source, never status strings in JSON.
-function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, reserveMs = COMPOSITION_RESERVE_MS, independentSupply = [] } = {}) {
+function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, reserveMs = COMPOSITION_RESERVE_MS, independentSupply = [], assessSnapshot } = {}) {
   if (typeof loader !== 'function') return loader;
   const loads = new Map();
+  const enrich = typeof loader.enrich?.forRequest === 'function' ? loader.enrich.forRequest() : loader.enrich;
+  const enriched = new WeakMap();
+  const enrichSnapshot = (records, request) => {
+    if (typeof enrich !== 'function' || !Array.isArray(records)) return Promise.resolve(records);
+    if (!enriched.has(records)) enriched.set(records, awaitLifecycleWork(enrich(records, {
+      ...request, signal: context.signal, deadline: context.deadline,
+    }), context.signal));
+    return enriched.get(records);
+  };
   return request => {
     context.signal.throwIfAborted();
     const key = JSON.stringify(request);
@@ -142,52 +151,58 @@ function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, res
         const waitMs = Math.max(0, Math.min(partialWaitMs, remaining));
         records = await new Promise((resolve, reject) => {
           let timer;
+          let settled = false;
           const cleanup = () => { clearTimeout(timer); context.signal.removeEventListener('abort', abort); };
-          const abort = () => { cleanup(); reject(new Error('planner_cancelled')); };
-          const done = value => { cleanup(); resolve(value); };
+          const fail = error => { if (settled) return; settled = true; cleanup(); reject(error); };
+          const abort = () => fail(new Error('planner_cancelled'));
+          const done = value => { if (settled) return; settled = true; cleanup(); resolve(value); };
           if (context.signal.aborted) return abort();
           context.signal.addEventListener('abort', abort, { once: true });
-          const takeSnapshot = () => {
-            // Only a source-owned symbol can supply a newer partial snapshot.
-            const value = typeof initial[SOURCE_SNAPSHOT] === 'function' ? initial[SOURCE_SNAPSHOT]() : initial;
-            const intents = normalizeUserIntents(request.requestedIntents || []).intents;
-            const available = [...(Array.isArray(value) ? value : []), ...independentSupply];
-            const relevant = available.length > 0 && intents.every(intent =>
-              available.some(record => matchCandidateToIntent(record, intent).level === 'strong'));
-            // Reserve composition time only when there is supply to compose.
-            // Finalizing an empty snapshot at the reserve boundary discards
-            // the original acquisition even if usable rows arrive before the
-            // hard deadline. Keep awaiting that same work, never reacquire it.
-            const remaining = Number.isFinite(context.deadline)
-              ? context.deadline - Date.now() - (available.length ? reserveMs : 0) : 0;
-            // A failed fast source is not proof that the whole day lacks
-            // supply. Keep the original execution alive for outstanding real
-            // sources when no relevant partial exists, within the SAME budget.
-            if (!relevant && remaining > 0) {
-              timer = setTimeout(takeSnapshot, Math.min(partialWaitMs, remaining));
-              return;
-            }
-            const snapshot = [...(Array.isArray(value) ? value : [])];
-            for (const name of ['loader_status', 'loader_error']) {
-              if (value[name] !== undefined) Object.defineProperty(snapshot, name, { value: value[name] });
-            }
-            Object.defineProperty(snapshot, 'loader_metadata', { value: {
-              ...(value.loader_metadata || {}),
-              source_completion: { ...(value.loader_metadata?.source_completion || {}), status: 'partial', reason: 'bounded_lifecycle_snapshot' },
-            } });
-            done(snapshot);
+          const takeSnapshot = async () => {
+            try {
+              // Only a source-owned symbol can supply a newer partial snapshot.
+              const raw = typeof initial[SOURCE_SNAPSHOT] === 'function' ? initial[SOURCE_SNAPSHOT]() : initial;
+              const value = await enrichSnapshot(raw, request);
+              if (settled || context.signal.aborted) return;
+              const intents = normalizeUserIntents(request.requestedIntents || []).intents;
+              const available = [...(Array.isArray(value) ? value : []), ...independentSupply];
+              const readiness = typeof assessSnapshot === 'function'
+                ? await assessSnapshot(value, request, independentSupply)
+                : { hasUsableSupply: available.length > 0, ready: available.length > 0 && intents.every(intent =>
+                  available.some(record => matchCandidateToIntent(record, intent).level === 'strong')) };
+              if (settled || context.signal.aborted) return;
+              // Reserve composition time only when there is supply to compose.
+              // Finalizing an empty snapshot at the reserve boundary discards
+              // the original acquisition even if usable rows arrive before the
+              // hard deadline. Keep awaiting that same work, never reacquire it.
+              const remaining = Number.isFinite(context.deadline)
+                ? context.deadline - Date.now() - (readiness.hasUsableSupply ? reserveMs : 0) : 0;
+              // A failed fast source is not proof that the whole day lacks
+              // supply. Keep the original execution alive for outstanding real
+              // sources when no relevant partial exists, within the SAME budget.
+              if (!readiness.ready && remaining > 0) {
+                timer = setTimeout(takeSnapshot, Math.min(partialWaitMs, remaining));
+                return;
+              }
+              const snapshot = [...(Array.isArray(value) ? value : [])];
+              for (const name of ['loader_status', 'loader_error']) {
+                if (value[name] !== undefined) Object.defineProperty(snapshot, name, { value: value[name] });
+              }
+              Object.defineProperty(snapshot, 'loader_metadata', { value: {
+                ...(value.loader_metadata || {}),
+                source_completion: { ...(value.loader_metadata?.source_completion || {}), status: 'partial', reason: 'bounded_lifecycle_snapshot' },
+              } });
+              enriched.set(snapshot, Promise.resolve(snapshot));
+              done(snapshot);
+            } catch (error) { fail(error); }
           };
           timer = setTimeout(takeSnapshot, waitMs);
-          Promise.resolve(initial[SOURCE_COMPLETION]).then(done, error => {
-            cleanup(); reject(error);
-          });
+          Promise.resolve(initial[SOURCE_COMPLETION]).then(done, fail);
         });
       }
       context.signal.throwIfAborted();
       // The enrichment seam belongs to the real server loader, never payload.
-      if (typeof loader.enrich === 'function') records = await loader.enrich(records, {
-        ...request, signal: context.signal, deadline: context.deadline,
-      });
+      records = await enrichSnapshot(records, request);
       context.signal.throwIfAborted();
       return records;
     })());

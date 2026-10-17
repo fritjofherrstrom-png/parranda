@@ -1,0 +1,13 @@
+✔ the real candidate surface shows zero matches instead of eleven unrelated museum hits (55.532875ms)
+✔ missing preference explanation precedes the real matching candidate list (9.660333ms)
+✔ weak scenic evidence is visibly partial in the mounted candidate area (5.607542ms)
+✔ a real viewpoint has a full coverage chip and no partial claim (5.695625ms)
+✔ an unfiltered request still shows a varied set of actual source candidates (14.745333ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 741.370125

@@ -1,0 +1,22 @@
+✖ hovering another marker after a click inspects that marker while restored same-marker hover retains the click (22903.818708ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 23533.651167
+
+✖ failing tests:
+
+test at tests/route-map-selection.test.js:136:1
+✖ hovering another marker after a click inspects that marker while restored same-marker hover retains the click (22903.818708ms)
+  locator.waitFor: Timeout 15000ms exceeded.
+  Call log:
+    - waiting for getByRole('tooltip').getByText('Stop B', { exact: true }) to be visible
+
+      at TestContext.<anonymous> ($REPO/tests/route-map-selection.test.js:144:72) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByRole('tooltip').getByText('Stop B', { exact: true }) to be visible" ]
+  }

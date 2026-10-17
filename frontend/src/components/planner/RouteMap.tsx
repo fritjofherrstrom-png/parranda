@@ -215,12 +215,18 @@ export default function RouteMap({
   const [tilesFailed, setTilesFailed] = useState(false);
   const [layoutCrowded, setLayoutCrowded] = useState(false);
   const [tip, setTip] = useState<Tip>(null);
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const track = (event: MouseEvent) => { lastPointerRef.current = { x: event.clientX, y: event.clientY }; };
+    document.addEventListener("mousemove", track, { capture: true, passive: true });
+    return () => document.removeEventListener("mousemove", track, true);
+  }, []);
   // A tooltip opened by hover or focus can be dismissed without moving the
   // pointer or focus (WCAG 1.4.13).
   useEffect(() => {
     if (!tip) return;
     const dismiss = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setTip(null);
+      if (event.key === "Escape") { tipAnchorRef.current = null; setTip(null); }
     };
     document.addEventListener("keydown", dismiss);
     return () => document.removeEventListener("keydown", dismiss);
@@ -351,8 +357,9 @@ export default function RouteMap({
       pin.marker.setOffset(offset);
     }
   };
-  // The open name follows its marker while the map moves.
-  const tipAnchorRef = useRef<{ index: number } | null>(null);
+  // Explicit selection survives pointer leave as layout/scroll moves a marker.
+  // Hover remains transient; keyboard focus keeps its own blur boundary.
+  const tipAnchorRef = useRef<{ index: number; interaction: "hover" | "focus" | "click" } | null>(null);
 
   // Theme: recolour the basemap and the route in place.
   const applyTheme = (map: any) => {
@@ -477,7 +484,7 @@ export default function RouteMap({
             tipAnchorRef.current = null;
             setTip({ name, x: point.x, y: point.y, direction: point.x < map.getContainer().clientWidth / 2 ? "right" : "left" });
           });
-          map.on("mouseleave", layer, () => setTip(null));
+          map.on("mouseleave", layer, () => { if (!tipAnchorRef.current) setTip(null); });
         }
         // Numbers stay on the map while it moves (a drag, its inertia, a zoom):
         // laid out again once per frame, and once more when it settles.
@@ -534,25 +541,35 @@ export default function RouteMap({
           marks.push({ lat: stop.lat, lng: stop.lng, radius: MARKER_RADIUS, offsetX: shiftX, offsetY: shiftY });
           const markerName = String(stop.label || stop.name || "").trim();
           const badgeIndex = badgesRef.current.length;
-          const open = () => {
+          const open = (interaction: "hover" | "focus" | "click", event?: MouseEvent) => {
             if (!markerName) return;
+            if (interaction === "hover" && tipAnchorRef.current?.interaction === "click") {
+              // Layout can move this OR another marker under a stationary
+              // pointer. Only actual pointer movement starts a new inspection.
+              const previous = lastPointerRef.current;
+              if (tipAnchorRef.current.index === badgeIndex || (event && previous
+                && event.clientX === previous.x && event.clientY === previous.y)) return;
+            }
+            if (interaction === "click" && event) lastPointerRef.current = { x: event.clientX, y: event.clientY };
             const badge = badgesRef.current[badgeIndex];
             const point = map.project([stop.lng, stop.lat]);
-            tipAnchorRef.current = { index: badgeIndex };
+            tipAnchorRef.current = { index: badgeIndex, interaction };
             setTip({ name: markerName, x: point.x + (badge as any).x, y: point.y + (badge as any).y, direction: (badge as any).direction });
           };
-          const close = () => {
-            if (tipAnchorRef.current?.index === badgeIndex) tipAnchorRef.current = null;
-            setTip((current) => (current?.name === markerName ? null : current));
+          const close = (boundary: "leave" | "blur") => {
+            const anchor = tipAnchorRef.current;
+            if (anchor?.index !== badgeIndex || (boundary === "leave" && anchor.interaction !== "hover")) return;
+            tipAnchorRef.current = null;
+            setTip(null);
           };
           // Two 44px elements where the disc is drawn: the touch target beneath
           // every disc, and the disc with its number above all targets. Only
           // the disc's visible pin takes a tap on the disc's side.
           const target = document.createElement("div");
           target.className = "route-map-target";
-          target.addEventListener("mouseenter", open);
-          target.addEventListener("mouseleave", close);
-          target.addEventListener("click", open);
+          target.addEventListener("mouseenter", (event) => open("hover", event));
+          target.addEventListener("mouseleave", () => close("leave"));
+          target.addEventListener("click", (event) => open("click", event));
           const shell = document.createElement("div");
           shell.className = "route-map-marker-shell";
           shell.style.zIndex = String(1200 + index);
@@ -568,11 +585,11 @@ export default function RouteMap({
           origin.style.setProperty("--route-marker-x", `${shiftX}px`);
           origin.style.setProperty("--route-marker-y", `${shiftY}px`);
           shell.append(disc, origin);
-          disc.addEventListener("mouseenter", open);
-          disc.addEventListener("mouseleave", close);
-          disc.addEventListener("click", open);
-          shell.addEventListener("focus", open);
-          shell.addEventListener("blur", close);
+          disc.addEventListener("mouseenter", (event) => open("hover", event));
+          disc.addEventListener("mouseleave", () => close("leave"));
+          disc.addEventListener("click", (event) => open("click", event));
+          shell.addEventListener("focus", () => open("focus"));
+          shell.addEventListener("blur", () => close("blur"));
           const targetMarker = new ml.Marker({ element: target, anchor: "center", offset: [shiftX, shiftY] }).setLngLat([stop.lng, stop.lat]).addTo(map);
           const discMarker = new ml.Marker({ element: shell, anchor: "center", offset: [shiftX, shiftY] }).setLngLat([stop.lng, stop.lat]).addTo(map);
           // MapLibre sets its own stacking; targets stay beneath every disc.
@@ -596,7 +613,7 @@ export default function RouteMap({
               for (const element of [target, shell]) element.style.visibility = grouped ? "hidden" : "";
               shell.tabIndex = grouped ? -1 : 0;
               if (grouped) shell.setAttribute("aria-hidden", "true"); else shell.removeAttribute("aria-hidden");
-              if (grouped && tipAnchorRef.current?.index === badgeIndex) close();
+              if (grouped && tipAnchorRef.current?.index === badgeIndex) close("blur");
             },
             focus: () => shell.focus(),
             move: (x: number, y: number, direction: "left" | "right") => {

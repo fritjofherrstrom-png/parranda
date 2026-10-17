@@ -30,7 +30,7 @@ export default function CandidateAreas({
   lang: Lang;
   map: ReactNode;
   structureOnly: boolean;
-  areas: DistrictArea[];
+  areas: Array<DistrictArea & { partial_covers?: string[] }>;
   missingIntents: string[];
   mapsPlaceContext: string | null | undefined;
   expandedCandidateKey: string | null;
@@ -39,11 +39,12 @@ export default function CandidateAreas({
   releaseCommitment: (identity: string) => void;
   commit: (identity: string, kind: "exclude" | "pin", commitLabel: string) => void;
 }) {
+  const matchCount = areas.reduce((count, area) => count + (area.stops?.length ?? area.stop_ids?.length ?? 0), 0);
   return (
     <section className={`flex flex-col gap-4 p-4 sm:p-5 ${panelCard}`}>
       <div>
         <Eyebrow>{t("Kandidater nära platsen", "Candidates near this place")}</Eyebrow>
-        {structureOnly && (
+        {structureOnly && matchCount > 0 && (
           <p className="mt-1.5 text-sm text-parranda-ink/75">
             {t(
               "Parranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.",
@@ -53,7 +54,18 @@ export default function CandidateAreas({
         )}
       </div>
 
-      {map}
+      {missingIntents.length > 0 && (
+        <p className="text-sm text-parranda-ink/72">
+          {t("Ingen av kandidaterna täcker:", "None of these candidates cover:")} {missingIntents.map((k) => label(INTENT_LABELS, k, lang)).join(", ")}
+        </p>
+      )}
+      {matchCount === 0 && (
+        <p className="text-sm text-parranda-ink/75">
+          {t("0 matchningar för dina val.", "0 matches for your picks.")}
+        </p>
+      )}
+
+      {matchCount > 0 && map}
 
       <ul className="flex flex-col gap-3">
         {areas.map((area, index) => (
@@ -64,8 +76,13 @@ export default function CandidateAreas({
                   {label(INTENT_LABELS, axis, lang)}
                 </span>
               ))}
+              {(area.partial_covers ?? []).map((axis) => (
+                <span key={`partial-${axis}`} className="rounded-full border border-parranda-ink/30 px-2.5 py-0.5 text-xs font-bold text-parranda-ink">
+                  {label(INTENT_LABELS, axis, lang)} · {t("delvis", "partial")}
+                </span>
+              ))}
               <span className="type-data ml-auto text-11 text-parranda-ink/68">
-                {(area.stop_ids?.length ?? area.stops?.length ?? 0)} {t("träffar", "places")}
+                {(area.stops?.length ?? area.stop_ids?.length ?? 0)} {t("träffar", "places")}
               </span>
             </div>
             {Array.isArray(area.stops) && area.stops.length > 0 ? (
@@ -141,12 +158,6 @@ export default function CandidateAreas({
       {/* The evening event is NOT presented here: a woven event renders once,
           as the route extension on the line; a non-woven anchor event
           surfaces in Live's tonight bucket. */}
-
-      {missingIntents.length > 0 && (
-        <p className="text-sm text-parranda-ink/72">
-          {t("Ingen av kandidaterna täcker:", "None of these candidates cover:")} {missingIntents.map((k) => label(INTENT_LABELS, k, lang)).join(", ")}
-        </p>
-      )}
     </section>
   );
 }

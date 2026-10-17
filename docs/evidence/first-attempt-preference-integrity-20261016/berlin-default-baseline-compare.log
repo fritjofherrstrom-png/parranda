@@ -1,0 +1,4 @@
+PASS exact default output matches dad3682: legacy gallery coverage
+PASS exact default output matches dad3682: legacy unrelated fallback
+PASS exact default output matches dad3682: legacy varied no-preference
+PASS exact default output matches dad3682: legacy complementary coverage order

@@ -1,0 +1,17 @@
+✔ every number is legible and opens its own stop at 320/390/1280, collapsed/expanded (302939.305833ms)
+ℹ 18 days (6 fixtures + 12 seeded), 3 widths, collapsed/expanded plus zoom/pan: 110 views passed
+✔ explicit click during expansion keeps its marker name after mouseleave and scroll (16788.256625ms)
+ℹ {"click":{"kind":"click","target":"route-map-marker","y":186,"height":249.578125},"mouseout":[{"kind":"mouseout","target":"route-map-marker","y":186,"height":311.234375}]}
+✔ hover name still closes on pointer leave without an explicit selection (1364.337542ms)
+✔ another explicit selection replaces the name and Escape clears it (1153.122458ms)
+✔ hovering another marker after a click inspects that marker while restored same-marker hover retains the click (1233.393708ms)
+✔ keyboard focus opens the marker name and blur closes it (702.727417ms)
+✔ touch selection survives pointer restoration and a new route clears it (1028.796083ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 326780.392833

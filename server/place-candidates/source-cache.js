@@ -74,8 +74,8 @@ function createSourceCache(options = {}) {
     return entry && typeof entry.expiresAt === "number" && entry.expiresAt > now();
   }
 
-  function readFile(key, { allowExpired = false } = {}) {
-    if (!ensureFileDir()) return null;
+  function readFile(key, { allowExpired = false, createDir = true } = {}) {
+    if (!fileDir || (createDir && !ensureFileDir())) return null;
     try {
       const raw = fs.readFileSync(path.join(fileDir, safeFileName(key)), "utf8");
       const entry = JSON.parse(raw);
@@ -107,6 +107,7 @@ function createSourceCache(options = {}) {
    * @param {() => Promise<any>} producer  computes the value on a miss
    * @param {{
    *   shouldStore?: (value:any) => boolean,
+   *   validateCached?: (value:any) => boolean, // source-owned persisted schema
    *   signal?: AbortSignal, // producer ownership, not an individual shared consumer
    *   staleIfErrorMs?: number,
    *   onStale?: (value:any, info:object) => any
@@ -116,14 +117,18 @@ function createSourceCache(options = {}) {
     const signal = opts.signal;
     signal?.throwIfAborted();
     const shouldStore = typeof opts.shouldStore === "function" ? opts.shouldStore : () => true;
+    const validateCached = typeof opts.validateCached === 'function' ? opts.validateCached : () => true;
+    const accepted = entry => {
+      try { return Boolean(entry && validateCached(entry.value, { expiresAt: entry.expiresAt })); } catch (_) { return false; }
+    };
     const staleIfErrorMs = Math.max(0, Math.floor(Number(opts.staleIfErrorMs) || 0));
     const onStale = typeof opts.onStale === "function" ? opts.onStale : (value) => value;
 
     const memEntry = mem.get(key);
-    if (fresh(memEntry)) return memEntry.value;
+    if (fresh(memEntry) && accepted(memEntry)) return memEntry.value;
 
     const fileEntry = readFile(key);
-    if (fileEntry) {
+    if (fileEntry && accepted(fileEntry)) {
       remember(key, fileEntry); // hydrate the hot path
       return fileEntry.value;
     }
@@ -136,7 +141,7 @@ function createSourceCache(options = {}) {
     const staleAgeMs = staleEntry && Number.isFinite(staleEntry.expiresAt)
       ? Math.max(0, now() - staleEntry.expiresAt)
       : Number.POSITIVE_INFINITY;
-    const canServeStale = Boolean(staleEntry && staleAgeMs <= staleIfErrorMs);
+    const canServeStale = accepted(staleEntry) && staleAgeMs <= staleIfErrorMs;
 
     // Coalesce concurrent identical lookups onto one producer call.
     if (inFlight.has(key)) return inFlight.get(key);
@@ -201,6 +206,16 @@ function createSourceCache(options = {}) {
     return null;
   }
 
+  // Inspect source-owned evidence, including expiry, without hydrating memory,
+  // creating directories, producing data or changing its acceptance lifetime.
+  function inspect(key) {
+    const resident = mem.get(key);
+    const stored = fresh(resident) ? null : readFile(key, { allowExpired: true, createDir: false });
+    const entry = stored && Number.isFinite(stored.expiresAt)
+      && (!resident || stored.expiresAt >= resident.expiresAt) ? stored : resident;
+    return entry ? { value: entry.value, expiresAt: entry.expiresAt } : null;
+  }
+
   // Kick a producer to populate the cache without awaiting it (de-duped by the
   // in-flight map inside get). Fire-and-forget; errors are swallowed.
   function warm(key, producer, opts = {}) {
@@ -220,7 +235,7 @@ function createSourceCache(options = {}) {
     inFlight.clear();
   }
 
-  return { get, peek, warm, set, clear, namespace, ttlMs: boundedTtlMs, fileBacked: Boolean(fileDir) };
+  return { get, peek, inspect, warm, set, clear, namespace, ttlMs: boundedTtlMs, fileBacked: Boolean(fileDir) };
 }
 
 module.exports = { createSourceCache, DEFAULT_TTL_MS };

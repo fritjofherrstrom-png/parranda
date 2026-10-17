@@ -415,9 +415,11 @@ test("a route stop's visible number is its own tap target", () => {
   // On the disc's side only the visible pin takes a tap, never the marker box.
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-marker\.route-map-marker-shell\s*\{\s*pointer-events: none;/);
   assert.match(anywhereStyles, /\.route-map-marker::before\s*\{[^}]*pointer-events: auto;/);
-  // The disc and its target open one name.
-  assert.match(routeMapSource, /target\.addEventListener\("mouseenter", open\);[\s\S]{0,200}target\.addEventListener\("click", open\);/);
-  assert.match(routeMapSource, /disc\.addEventListener\("mouseenter", open\);[\s\S]{0,200}disc\.addEventListener\("click", open\);/);
+  // Both surfaces open the same name, while distinguishing transient hover
+  // from an explicit selection. Native behavior (including expansion/leave,
+  // keyboard and touch) is exercised in tests/route-map-selection.test.js.
+  assert.match(routeMapSource, /target\.addEventListener\("mouseenter", \(event\) => open\("hover", event\)\);[\s\S]{0,200}target\.addEventListener\("click", \(event\) => open\("click", event\)\);/);
+  assert.match(routeMapSource, /disc\.addEventListener\("mouseenter", \(event\) => open\("hover", event\)\);[\s\S]{0,200}disc\.addEventListener\("click", \(event\) => open\("click", event\)\);/);
 });
 
 test("route, saved-day, Blitz, and source actions keep a 44px mobile touch target", () => {

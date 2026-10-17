@@ -17,6 +17,14 @@
  */
 
 const { summarizePlaceStructure, haversineKm } = require("./area-intelligence");
+const { normalizeUserIntents, matchCandidateToIntent } = require("./intent-vocabulary");
+
+// Keep the district surface's existing axis names while sharing the reservoir's
+// canonical matching and strong/weak distinction. The exported token helper is
+// also used by walking-base selection and retains its existing contract.
+const DISTRICT_AXIS_BY_INTENT = {
+  scenic: "views", coffee: "fika", museums: "culture", bars: "nightlife", markets: "market",
+};
 
 // Generic intent AXES: the canonical experience dimensions. Each maps the many
 // surface tokens (OSM tags, Swedish/English synonyms, types) that mean the same
@@ -193,50 +201,83 @@ function preferLocalContextCandidates(candidates) {
 /**
  * Compose a day across a place's districts.
  * @param {object[]} candidates  any candidate set (curated + open-data), each {id,lat,lng,type,tags,time_fit}
- * @param {object} opts  { intents[], maxAreas=2, linkKm, minAreaSize }
+ * @param {object} opts  { intents[], maxAreas=2, linkKm, minAreaSize, candidateSurface=false }
+ * candidateSurface is a server-only option for displayed preference matches.
+ * Default callers retain the existing composition/derived-anchor policy.
  * @returns {{
  *   areas: object[],         // selected districts in visit order, each with role/covers/stops/daypart
  *   legs: object[],          // honest inter-district walking legs (distance_km only, no ETA)
  *   covered_intents: string[],
+ *   partial_intents?: string[], // candidateSurface supporting evidence without a strong match
  *   missing_intents: string[],
  *   structure: object,       // the full derived structure (for inspect)
  * }}
  */
-function composeDistrictDay(candidates, { intents = [], maxAreas = 2, linkKm, minAreaSize } = {}) {
+function composeDistrictDay(candidates, { intents = [], maxAreas = 2, linkKm, minAreaSize, candidateSurface = false } = {}) {
   const structure = summarizePlaceStructure(candidates, { linkKm, minAreaSize });
   const byId = new Map((Array.isArray(candidates) ? candidates : []).map((c) => [c.id, c]));
 
-  const wantedAxes = [...tokensToAxes(intents)];
-  const wantedSet = new Set(wantedAxes);
+  const requested = candidateSurface
+    ? normalizeUserIntents(intents).intents.map((intent) => ({ intent, axis: DISTRICT_AXIS_BY_INTENT[intent] || intent }))
+    : [...tokensToAxes(intents)].map((axis) => ({ axis }));
+  const wantedAxes = requested.map(({ axis }) => axis);
 
-  // Per area: which wanted axes its character covers.
+  // Fit belongs to actual source-backed members, not the area's truncated
+  // dominant type/tag summary. Filter every emitted member by that same fit;
+  // an unrelated first area is never a substitute for a missing preference.
   const scored = structure.areas.map((area) => {
-    const areaAxes = tokensToAxes([...(area.dominant_intents || []), ...(area.dominant_types || [])]);
-    const covers = wantedAxes.filter((ax) => areaAxes.has(ax));
-    return { area, areaAxes, covers };
+    const members = (area.member_ids || []).map((id) => byId.get(id)).filter(Boolean);
+    if (!candidateSurface) {
+      const areaAxes = tokensToAxes([...(area.dominant_intents || []), ...(area.dominant_types || [])]);
+      const covers = wantedAxes.filter((axis) => areaAxes.has(axis));
+      const onIntent = members.filter((member) => [...tokensToAxes([
+        member.type, ...(Array.isArray(member.tags) ? member.tags : []),
+      ])].some((axis) => wantedAxes.includes(axis)));
+      const matchedStops = wantedAxes.length && onIntent.length ? onIntent : members;
+      return {
+        area,
+        covers,
+        levels: new Map(covers.map((axis) => [axis, 2])),
+        stopsSource: dedupeNearbyContextCandidates(preferLocalContextCandidates(matchedStops)),
+      };
+    }
+    const onIntent = requested.length
+      ? members.filter((member) => requested.some(({ intent }) => matchCandidateToIntent(member, intent).level !== "none"))
+      : members;
+    const stopsSource = dedupeNearbyContextCandidates(preferLocalContextCandidates(onIntent));
+    const levels = new Map(requested.map(({ intent, axis }) => {
+      const matches = stopsSource.map((member) => matchCandidateToIntent(member, intent).level);
+      return [axis, matches.includes("strong") ? 2 : matches.includes("weak") ? 1 : 0];
+    }));
+    return {
+      area,
+      stopsSource,
+      levels,
+      covers: wantedAxes.filter((axis) => levels.get(axis) === 2),
+      partial_covers: wantedAxes.filter((axis) => levels.get(axis) === 1),
+    };
   });
 
-  // Greedy set-cover: repeatedly take the area that adds the most still-uncovered
-  // wanted axes (tiebreak: bigger/denser area, then deterministic by center).
-  const covered = new Set();
+  // Greedy coverage keeps a weak match distinct and allows a later area to
+  // improve it to strong. Density only breaks ties within the same fit gain.
+  const selectedLevels = new Map();
+  const legacyCovered = new Set();
+  const gain = (entry) => wantedAxes.reduce((sum, axis) =>
+    sum + Math.max(0, (entry.levels.get(axis) || 0) - (selectedLevels.get(axis) || 0)), 0);
   const selected = [];
   const remaining = scored.slice();
   while (selected.length < Math.max(1, maxAreas) && remaining.length) {
-    remaining.sort((a, b) => {
-      const ga = a.covers.filter((ax) => !covered.has(ax)).length;
-      const gb = b.covers.filter((ax) => !covered.has(ax)).length;
-      return (
-        gb - ga ||
-        b.area.size - a.area.size ||
-        (a.area.center && b.area.center ? a.area.center.lat - b.area.center.lat || a.area.center.lng - b.area.center.lng : 0)
-      );
-    });
+    remaining.sort((a, b) => (
+      gain(b) - gain(a) ||
+      b.area.size - a.area.size ||
+      (a.area.center && b.area.center ? a.area.center.lat - b.area.center.lat || a.area.center.lng - b.area.center.lng : 0)
+    ));
     const next = remaining.shift();
-    const gain = next.covers.filter((ax) => !covered.has(ax));
-    // After the first pick, only add an area that contributes NEW coverage (a
-    // complementary district), or — if no intents requested — the next densest.
-    if (selected.length > 0 && wantedAxes.length && gain.length === 0) break;
-    gain.forEach((ax) => covered.add(ax));
+    if (wantedAxes.length && gain(next) === 0 && (candidateSurface || selected.length > 0)) break;
+    next.covers.forEach((axis) => legacyCovered.add(axis));
+    for (const axis of wantedAxes) {
+      selectedLevels.set(axis, Math.max(selectedLevels.get(axis) || 0, next.levels.get(axis) || 0));
+    }
     selected.push(next);
   }
 
@@ -252,14 +293,7 @@ function composeDistrictDay(candidates, { intents = [], maxAreas = 2, linkKm, mi
   const coherentDayparts = assignCoherentDayparts(selected.map((s) => daypartScore(s.area)));
 
   const areas = selected.map((s, index) => {
-    const members = (s.area.member_ids || []).map((id) => byId.get(id)).filter(Boolean);
-    // On-intent stops first (members matching a wanted axis), then the rest.
-    const onIntent = members.filter((m) => {
-      const ax = tokensToAxes([m.type, ...(Array.isArray(m.tags) ? m.tags : [])]);
-      return [...ax].some((a) => wantedSet.has(a));
-    });
-    const matchedStops = wantedAxes.length && onIntent.length ? onIntent : members;
-    const stopsSource = dedupeNearbyContextCandidates(preferLocalContextCandidates(matchedStops));
+    const { stopsSource } = s;
     return {
       center: s.area.center,
       // The coherent arc daypart (distinct across the day), not the raw per-district
@@ -267,6 +301,7 @@ function composeDistrictDay(candidates, { intents = [], maxAreas = 2, linkKm, mi
       daypart_hint: coherentDayparts[index] || s.area.daypart_hint,
       character: s.area.dominant_types,
       covers: s.covers,
+      ...(candidateSurface ? { partial_covers: s.partial_covers } : {}),
       size: s.area.size,
       stop_ids: stopsSource.map((m) => m.id).filter((id) => id != null),
       // A few concrete, on-intent place NAMES so the UI can show an actual
@@ -303,10 +338,17 @@ function composeDistrictDay(candidates, { intents = [], maxAreas = 2, linkKm, mi
     legs.push({ from_area: i - 1, to_area: i, distance_km: a && b ? Number(haversineKm(a, b).toFixed(2)) : null });
   }
 
-  const coveredIntents = [...covered];
-  const missingIntents = wantedAxes.filter((ax) => !covered.has(ax));
+  const coveredIntents = candidateSurface
+    ? wantedAxes.filter((axis) => selectedLevels.get(axis) === 2)
+    : [...legacyCovered];
+  const partialIntents = wantedAxes.filter((axis) => selectedLevels.get(axis) === 1);
+  const missingIntents = wantedAxes.filter((axis) => !selectedLevels.get(axis));
 
-  return { areas, legs, covered_intents: coveredIntents, missing_intents: missingIntents, structure };
+  return {
+    areas, legs, covered_intents: coveredIntents,
+    ...(candidateSurface ? { partial_intents: partialIntents } : {}),
+    missing_intents: missingIntents, structure,
+  };
 }
 
 module.exports = {

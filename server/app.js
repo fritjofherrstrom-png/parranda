@@ -47,6 +47,8 @@ const { parseRequestedDates } = require("./planner/requested-dates");
 const { normalizeDayEdit, normalizePreferencePriority } = require('../shared/planner-intent.mjs');
 const { dayEditOutcome } = require('./planner/day-composition-policy');
 const { createPlannerLifecycle, lifecycleLoader } = require('./planner/cold-lifecycle');
+const { createPlannerSnapshotAssessor, memoizePlannerWeather } = require('./planner/source-snapshot-readiness');
+const { resolveAgnosticContext, defaultWeatherProvider } = require('./planner/agnostic-route-context');
 const { createLiveCompletionStore } = require('./planner/live-completion');
 const { retainComposition, createRouteUpgrade } = require('./planner/live-route-upgrade');
 const { nearbyCuratedSupply } = require('./planner/nearby-curated-supply');
@@ -2035,8 +2037,17 @@ function buildApp({
       const excludedCandidateIds = [...new Set([...parseExcludedCandidateIds(
         request.body?.excluded_candidate_ids ?? request.body?.excludedCandidateIds,
       ), ...(dayEdit ? [dayEdit.candidate_id, ...dayEdit.removed_candidate_ids] : [])])];
+      let snapshotTimezone = null;
+      const scopedWeatherProvider = lifecycle && requestedRhythm
+        ? memoizePlannerWeather(weatherProvider || defaultWeatherProvider) : weatherProvider;
+      const snapshotOptions = requestedRhythm && isAgnosticRouteOutputExperimentRequested(request)
+        ? { assessSnapshot: createPlannerSnapshotAssessor({
+          selectedDate: payload.dates[0], excludedIds: excludedCandidateIds,
+          resolveContext: ({coords,date}) => resolveAgnosticContext({coords,date,
+            trustedTimezone:snapshotTimezone,weatherProvider:scopedWeatherProvider,clock,lang}),
+        }) } : {};
       let scopedOpenDataLoader = withoutExcludedCandidates(
-        lifecycle ? lifecycleLoader(openDataLoader, lifecycle) : openDataLoader,
+        lifecycle ? lifecycleLoader(openDataLoader, lifecycle, snapshotOptions) : openDataLoader,
         excludedCandidateIds,
       );
       // Ledger v2: "keep this one". Selection-only — a pin can name a candidate
@@ -2282,6 +2293,7 @@ function buildApp({
             const day = composeDistrictDay(structureCandidates, {
               intents: Array.isArray(payload.preferences) ? payload.preferences : [],
               maxAreas: 3,
+              candidateSurface: true,
             });
             if (day.structure.area_count > 0) {
               placeStructureSidecar = {
@@ -2294,6 +2306,7 @@ function buildApp({
                     areas: day.areas,
                     legs: day.legs,
                     covered_intents: day.covered_intents,
+                    partial_intents: day.partial_intents,
                     missing_intents: day.missing_intents,
                   },
                 },
@@ -2341,6 +2354,7 @@ function buildApp({
         ...placeResolutionInputs(request.body),
         explicitCoordinatesPresent: hasExplicitCoordinateFields(request),
       });
+      snapshotTimezone = intake.resolved?.timezone || null;
 
       if (!anchor) {
         // No trusted anchor → no route. Place resolution alone never produces a
@@ -2381,7 +2395,7 @@ function buildApp({
         : [];
       if (lifecycle && curatedCandidates.length) {
         scopedOpenDataLoader = withoutExcludedCandidates(
-          lifecycleLoader(openDataLoader, lifecycle, { independentSupply: curatedCandidates }),
+          lifecycleLoader(openDataLoader, lifecycle, { ...snapshotOptions, independentSupply: curatedCandidates }),
           excludedCandidateIds,
         );
       }
@@ -2404,6 +2418,7 @@ function buildApp({
             const day = composeDistrictDay(structureCandidates, {
               intents: Array.isArray(preferences) ? preferences : [],
               maxAreas: 3,
+              candidateSurface: true,
             });
             if (day.structure.area_count > 0) {
               agnosticPlaceStructure = {
@@ -2419,6 +2434,7 @@ function buildApp({
                   areas: day.areas,
                   legs: day.legs,
                   covered_intents: day.covered_intents,
+                  partial_intents: day.partial_intents,
                   missing_intents: day.missing_intents,
                 },
               };
@@ -2530,7 +2546,7 @@ function buildApp({
         // the response will carry, rather than settling on a route that is
         // then extended underneath it.
         eveningEventStructure: wovenPlaceStructure,
-        weatherProvider,
+        weatherProvider: scopedWeatherProvider,
         clock,
         trustedTimezone: intake.resolved?.timezone || null,
         // ONLY the resolver-attested label may drive route prose. The raw public

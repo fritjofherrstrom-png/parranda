@@ -161,7 +161,7 @@ export default function DayHeader({
   wovenCount,
   pickCoverage,
   dayLimitationNote,
-  placesArriving = false,
+  sourceEvidenceNote = "",
   onUpdateDay,
   restoredAt,
   canUpdateSaved = true,
@@ -182,8 +182,8 @@ export default function DayHeader({
   wovenCount: number;
   pickCoverage: PickCoverage[];
   dayLimitationNote: string | null | undefined;
-  /** A place source is still fetching: more places can arrive. */
-  placesArriving?: boolean;
+  /** Historical source limitations of this published answer. */
+  sourceEvidenceNote?: string;
   onUpdateDay?: () => void;
   restoredAt: string | null;
   canUpdateSaved?: boolean;
@@ -302,21 +302,15 @@ export default function DayHeader({
           ))}
         </ul>
       )}
-      {/* The server answered within its bounded wait while a place source is
-          still fetching. The day is real but provisional: say that more is on
-          its way and let the reader ask again, rather than judging the place. */}
-      {placesArriving && (
+      {/* Source limitations describe this published answer, never a live job.
+          The day remains until the reader explicitly asks for an update. */}
+      {sourceEvidenceNote && (
         <div role="status" className="flex flex-col items-start gap-2 rounded-parranda border-line border-parranda-ember/40 bg-parranda-ember/8 px-4 py-3">
-          <p className="text-sm font-bold text-parranda-ink">{restoredAt
-            ? t("Källorna hade inte hämtats klart när dagen skapades", "Sources had not finished when this day was created")
-            : t("Fler platser är på väg", "More places are on their way")}</p>
+          <p className="text-sm font-bold text-parranda-ink">{sourceEvidenceNote}</p>
           <p className="text-13 leading-relaxed text-parranda-ink/80">
-            {restoredAt ? t(
-              "Den sparade dagen bygger på det som hade hunnit komma då. Det här är en ögonblicksbild, inte en pågående hämtning. Uppdatera uttryckligen för att läsa källorna igen.",
-              "This saved day uses what had arrived then. This is a snapshot, not an ongoing fetch. Update explicitly to read the sources again.",
-            ) : t(
-              "En källa hämtar fortfarande platser här. Dagen nedan bygger på det som hunnit komma — uppdatera om en stund för en rikare dag.",
-              "A source is still fetching places here. The day below uses what has arrived so far — update in a moment for a fuller day.",
+            {t(
+              "Dagen bygger på underlaget i det svaret. Uppdatera uttryckligen för att läsa källorna igen.",
+              "This day uses the evidence in that response. Update explicitly to read the sources again.",
             )}
           </p>
           {onUpdateDay && canUpdateSaved && (
