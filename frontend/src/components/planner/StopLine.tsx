@@ -43,7 +43,7 @@ import {
   TrashIcon,
   WalkIcon,
 } from "../shared/icons";
-import { buttonClass, compactPillTarget, dataLine, Eyebrow, ExternalLinkText, inlineLinkTarget } from "../shared/ui";
+import { busyButton, buttonClass, compactPillTarget, dataLine, Eyebrow, ExternalLinkText, inlineLinkTarget } from "../shared/ui";
 import { DAYPART_LABELS, label, partialPreferenceLabels, typeLabel, type Lang, type Translate } from "./copy";
 import { canCommitTo, type Commitments } from "./commitments";
 import { useFollowPosition } from "./useFollowPosition";
@@ -452,22 +452,22 @@ export default function StopLine({
                     ))}
                     {hasRealId && commitments[stopIdentity]?.kind !== "pin" && (
                       <div role="group" aria-label={t("Ändra stopp", "Edit stop")} className="grid grid-cols-2 gap-2 sm:inline-flex sm:items-center">
+                      {/* Busy, not disabled, while the edit runs: the pressed
+                          button keeps keyboard focus (ui.tsx busyButton). */}
                       <button
                         type="button"
-                        disabled={editPending}
+                        {...busyButton(editPending, () => dismissStop(stopIdentity, name))}
                         title={t("Byt till ett liknande stopp", "Replace with a similar stop")}
-                        onClick={() => dismissStop(stopIdentity, name)}
-                        className={buttonClass("secondary", "min-h-11 px-4 text-sm disabled:cursor-wait disabled:opacity-50 sm:px-5")}
+                        className={buttonClass("secondary", "min-h-11 px-4 text-sm sm:px-5")}
                       >
                         <ShuffleIcon className="h-4 w-4" />
                         {t("Byt", "Replace")}
                       </button>
                       <button
                         type="button"
-                        disabled={editPending}
+                        {...busyButton(editPending, () => removeStop(stopIdentity, name))}
                         title={t("Ta bort stoppet utan ersättning", "Remove this stop without replacement")}
-                        onClick={() => removeStop(stopIdentity, name)}
-                        className={buttonClass("secondary", "min-h-11 px-4 text-sm disabled:cursor-wait disabled:opacity-50 sm:px-5")}
+                        className={buttonClass("secondary", "min-h-11 px-4 text-sm sm:px-5")}
                       >
                         <TrashIcon className="h-4 w-4" />
                         {t("Ta bort", "Remove")}

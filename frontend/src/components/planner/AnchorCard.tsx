@@ -184,9 +184,11 @@ export default function AnchorCard({
                       <button
                         type="button"
                         aria-label={t(`Höj prioritet för ${name}`, `Increase priority for ${name}`)}
-                        disabled={rank === 1}
-                        onClick={() => onPromoteMood(pref.key)}
-                        className={`${compactPillTarget} min-w-11 justify-center bg-parranda-ink/8 text-parranda-ink/72 enabled:hover:bg-parranda-ink/14 disabled:opacity-40`}
+                        // Unavailable at rank one, but still focusable: the press
+                        // that reached rank one must not drop keyboard focus.
+                        aria-disabled={rank === 1 || undefined}
+                        onClick={rank === 1 ? undefined : () => onPromoteMood(pref.key)}
+                        className={`${compactPillTarget} min-w-11 justify-center bg-parranda-ink/8 text-parranda-ink/72 hover:bg-parranda-ink/14 aria-disabled:opacity-40 aria-disabled:hover:bg-parranda-ink/8`}
                       >
                         <ChevronDownIcon className="h-3.5 w-3.5 rotate-180" />
                       </button>

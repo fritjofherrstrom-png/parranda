@@ -474,6 +474,16 @@ test("the map's own focusable parts keep a visible ring inside its clipped frame
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-marker:focus-visible,\s*\.route-map-frame \.maplibregl-ctrl-attrib a:focus-visible \{\s*outline-offset: 0;/);
 });
 
+test("no control is disabled under the focus that pressed it", () => {
+  // A focused button that turns disabled drops keyboard focus to the top of
+  // the page. Working and finished states use busyButton or aria-disabled;
+  // \`disabled\` is only for a choice that was never available (a Live scope
+  // without a route). #611's stop edits and priority buttons came in with it.
+  const surface = [plannerSurfaceSource(), componentSource("PlaceSearchField.tsx"), componentSource("LandingHero.tsx")].join("\n");
+  const bound = [...surface.matchAll(/(?<![\w-])disabled=\{([^}]*)\}/g)].map((m) => m[1].trim());
+  assert.deepEqual(bound.filter((expression) => !/^!\w+ScopeAvailable$/.test(expression)), []);
+});
+
 test("grouped controls never clip the focus ring that sits outside them", () => {
   // The ring is drawn 3px outside a control. A rounded group with
   // overflow-hidden cut it to a sliver on EN/SV, Today/Tomorrow, rhythm and
