@@ -2528,6 +2528,9 @@ function buildApp({
         dayEdit,
         pinnedStopIds: pinnedCandidateIds,
         liveEventChoices,
+        // Only the original, still-running producer and its authorized replay
+        // may defer a missing occurrence verdict. Public payload cannot set it.
+        liveSelectionPending: Boolean(upgradeRequested && liveEvents?.pending),
         lens: request.body?.lens || request.query?.lens || null,
         // #262 — payload weather is NOT trusted; trusted weather/time come only
         // from the server-injected seams. `trustedTimezone` is taken from the

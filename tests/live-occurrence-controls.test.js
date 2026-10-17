@@ -70,6 +70,8 @@ test('real cold completion honors an explicit kept occurrence independently of s
   const upgrade = await post(h.server, '/api/planner-live-route-upgrade', { token });
   assert.equal(upgrade.body.live_route_upgrade.state, 'applied');
   assert.equal(upgrade.body.result.days[0].primary_route.main_stops.find(s => s.is_live_event).live_occurrence_id, ID);
+  assert.equal(upgrade.body.result.days[0].primary_route.main_stops.length, 5,
+    'completion includes the selected occurrence within Balanced extent');
   assert.equal(upgrade.body.result.agnostic_route_output_experiment.live_event_choices.honored_count, 1);
 });
 
@@ -77,9 +79,15 @@ test('real HTTP keep does not override a walking failure or a changed source ver
   for (const changed of [{ lat: 61.173 }, { route_eligible: false }]) {
     const h = await setup(t);
     h.set(live([{ ...first, ...changed }, second]));
+    // Finish the controlled producer first: pending evidence is not a terminal
+    // impossibility verdict. This assertion exercises the completed snapshot.
+    await finished(h);
     const r = await finished(h, { ...routeBody, live_event_choices: [{ occurrence_id: ID, action: 'keep' }] });
+    assert.notEqual(r.body.live_events?.pending, true);
     assert.equal(r.status, 200);
-    assert.equal(r.body.days[0].primary_route.main_stops.filter(s => s.is_live_event).length, 0);
+    assert.equal(r.body.days?.[0]?.primary_route?.main_stops?.length || 0, 0,
+      'a terminal impossible Keep refuses atomically instead of publishing a substitute day');
+    assert.equal(r.body.agnostic_route_output_experiment.promotion.promote, false);
     assert.equal(r.body.agnostic_route_output_experiment.live_event_choices.honored_count, 0);
     assert.deepEqual(r.body.agnostic_route_output_experiment.live_event_choices.unhonored.map(x => x.id), [ID]);
   }
@@ -97,4 +105,37 @@ test('cold completion considers verified slots inside a source series individual
   const upgrade = await post(h.server, '/api/planner-live-route-upgrade', { token });
   assert.equal(upgrade.body.live_route_upgrade.state, 'applied');
   assert.equal(upgrade.body.result.days[0].primary_route.main_stops.find(s => s.is_live_event).live_occurrence_id, SECOND);
+});
+
+test('cold completion preserves the exact Live occurrence and strict shortened saved day together', async t => {
+  const warm = await setup(t);
+  const before = await finished(warm, { ...routeBody, live_event_choices: [{ occurrence_id: ID, action: 'keep' }] });
+  const stops = before.body.days[0].primary_route.main_stops;
+  const removed = stops.find(stop => !stop.is_live_event);
+  const retained = stops.filter(stop => stop.id !== removed.id).map(stop => stop.id);
+  const edit = { version: 1, action: 'remove', candidate_id: removed.id,
+    retained_candidate_ids: retained, target_stop_count: retained.length, slot_index: 0,
+    replacement_preference: null, removed_candidate_ids: [removed.id] };
+  const h = await setup(t);
+  h.defer();
+  const initial = await post(h.server, routePath, { ...routeBody, day_edit: edit,
+    live_event_choices: [{ occurrence_id: ID, action: 'keep' }] });
+  assert.equal(initial.body.live_events.pending, true);
+  assert.equal(initial.body.agnostic_route_output_experiment.promotion.promote, false,
+    'the incomplete edited chain is withheld while its original producer runs');
+  assert.equal(initial.body.live_completion.route_upgrade, 'explicit_request');
+  h.release(live([first, second]));
+  await new Promise(resolve => setImmediate(resolve));
+  const token = initial.body.live_completion.token;
+  const read = await post(h.server, '/api/planner-live-completion', { token });
+  assert.equal(read.body.live_completion.state, 'ready');
+  const upgrade = await post(h.server, '/api/planner-live-route-upgrade', { token });
+  assert.equal(upgrade.status, 200);
+  assert.equal(upgrade.body.live_route_upgrade.state, 'applied');
+  const result = upgrade.body.result;
+  assert.deepEqual(result.days[0].primary_route.main_stops.map(stop => stop.id), retained);
+  assert.equal(result.days[0].primary_route.main_stops.at(-1).live_occurrence_id, ID);
+  assert.equal(result.agnostic_route_output_experiment.day_edit.actual_stop_count, retained.length);
+  assert.equal(result.agnostic_route_output_experiment.day_edit.status, 'applied');
+  assert.equal(result.agnostic_route_output_experiment.walking_validation.valid, true);
 });
