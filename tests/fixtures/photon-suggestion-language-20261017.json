@@ -1,0 +1,1052 @@
+{
+  "description": "Official Photon responses for the same native query, with only UI-forced lang=en differing. Public source features unchanged; no inferred aliases.",
+  "attribution": "© OpenStreetMap contributors; ODbL",
+  "captures": {
+    "default": {
+      "captured_at": "2026-10-17T16:06:06.886Z",
+      "request_url": "https://photon.komoot.io/api/?q=G%C3%B6teborg&limit=20&layer=city&layer=district&layer=locality&layer=county&layer=state&layer=country",
+      "response": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.9670171,
+                57.7072326
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 25930131,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "city",
+              "name": "Göteborg",
+              "county": "Västra Götalands län",
+              "country": "Sverige",
+              "postcode": "411 10",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                16.7732925,
+                62.7151969
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 7449085107,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Göteborg",
+              "city": "Indals-Lidens kommundel",
+              "county": "Västernorrlands län",
+              "country": "Sverige",
+              "postcode": "860 41",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                20.2265059,
+                64.0618108
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 1966563820,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Göteborg",
+              "city": "Umeå kommun",
+              "county": "Västerbottens län",
+              "country": "Sverige",
+              "postcode": "905 94",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                13.7891659,
+                57.2724458
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 7457150514,
+              "osm_key": "place",
+              "osm_value": "isolated_dwelling",
+              "type": "locality",
+              "name": "Göteborg",
+              "district": "Brogården",
+              "city": "Gnosjö kommun",
+              "county": "Jönköpings län",
+              "country": "Sverige",
+              "postcode": "335 74",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.9727685,
+                57.710083
+              ]
+            },
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 935611,
+              "osm_key": "place",
+              "osm_value": "municipality",
+              "type": "city",
+              "name": "Göteborgs Stad",
+              "county": "Västra Götalands län",
+              "country": "Sverige",
+              "countrycode": "SE",
+              "extra": {
+                "admin_level": "7"
+              },
+              "extent": [
+                11.2315225,
+                57.8660038,
+                12.2416113,
+                57.4996713
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                12.5970731,
+                55.7068917
+              ]
+            },
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 437218404,
+              "osm_key": "place",
+              "osm_value": "square",
+              "type": "locality",
+              "name": "Göteborg Plads",
+              "district": "Nordhavn",
+              "city": "København",
+              "state": "Region Hovedstaden",
+              "country": "Danmark",
+              "countrycode": "DK",
+              "extent": [
+                12.5964126,
+                55.7072188,
+                12.5977309,
+                55.7065626
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                12.0022733,
+                57.731443
+              ]
+            },
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 13708382,
+              "osm_key": "landuse",
+              "osm_value": "industrial",
+              "type": "locality",
+              "name": "Göteborg Energi AB",
+              "district": "Gamlestaden",
+              "city": "Göteborg",
+              "county": "Västra Götalands län",
+              "country": "Sverige",
+              "countrycode": "SE",
+              "extent": [
+                12.0004244,
+                57.7327012,
+                12.0040575,
+                57.7303803
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                16.0907187,
+                62.8466266
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 7460542546,
+              "osm_key": "place",
+              "osm_value": "isolated_dwelling",
+              "type": "locality",
+              "name": "Göteborgskojan",
+              "city": "Bräcke kommun",
+              "county": "Jämtlands län",
+              "country": "Sverige",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.6640472,
+                57.7365319
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 10253490860,
+              "osm_key": "place",
+              "osm_value": "locality",
+              "type": "locality",
+              "name": "Göteborgs norra skärgård",
+              "city": "Hälsö",
+              "county": "Västra Götalands län",
+              "country": "Sverige",
+              "postcode": "475 50",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.8384981,
+                57.6071414
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 10253490861,
+              "osm_key": "place",
+              "osm_value": "locality",
+              "type": "locality",
+              "name": "Göteborgs södra skärgård",
+              "district": "Näset",
+              "city": "Göteborg",
+              "county": "Västra Götalands län",
+              "country": "Sverige",
+              "postcode": "426 58",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                13.4279644,
+                59.3579366
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 7563676751,
+              "osm_key": "place",
+              "osm_value": "locality",
+              "type": "locality",
+              "name": "Göteborgsudden",
+              "district": "Zakrisdalsudden",
+              "city": "Dingelsundet",
+              "county": "Värmlands län",
+              "country": "Sverige",
+              "postcode": "653 38",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.854896,
+                57.692885
+              ]
+            },
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 3329481,
+              "osm_key": "landuse",
+              "osm_value": "industrial",
+              "type": "locality",
+              "name": "Skandiahamnen",
+              "district": "Arendal",
+              "city": "Göteborg",
+              "county": "Västra Götalands län",
+              "country": "Sverige",
+              "countrycode": "SE",
+              "extent": [
+                11.8429559,
+                57.697519,
+                11.8663766,
+                57.6883894
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.8905778,
+                57.6922435
+              ]
+            },
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 917521835,
+              "osm_key": "landuse",
+              "osm_value": "industrial",
+              "type": "locality",
+              "name": "Rya Kraftvärmeverk",
+              "district": "Arendal",
+              "city": "Göteborg",
+              "county": "Västra Götalands län",
+              "country": "Sverige",
+              "countrycode": "SE",
+              "extent": [
+                11.8885767,
+                57.6938275,
+                11.892315,
+                57.6915448
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -98.8702646,
+                35.0684118
+              ]
+            },
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 184162,
+              "osm_key": "place",
+              "osm_value": "town",
+              "type": "city",
+              "name": "Gotebo",
+              "county": "Kiowa",
+              "state": "Oklahoma",
+              "country": "United States",
+              "postcode": "73041",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -98.8847505,
+                35.0800346,
+                -98.8671909,
+                35.0641354
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                15.3524929,
+                53.0851905
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 31593455,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Boguszyny",
+              "county": "powiat choszczeński",
+              "state": "województwo zachodniopomorskie",
+              "country": "Polska",
+              "postcode": "73-236",
+              "countrycode": "PL"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                12.6682305,
+                52.9088156
+              ]
+            },
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 8113485,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Gottberg",
+              "city": "Märkisch Linden",
+              "county": "Ostprignitz-Ruppin",
+              "state": "Brandenburg",
+              "country": "Deutschland",
+              "countrycode": "DE",
+              "extra": {
+                "admin_level": "9"
+              },
+              "extent": [
+                12.6208475,
+                52.918645,
+                12.7023773,
+                52.8879754
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                10.4153223,
+                53.2693693
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 571503836,
+              "osm_key": "place",
+              "osm_value": "suburb",
+              "type": "locality",
+              "name": "Goseburg",
+              "district": "Goseburg-Zeltberg",
+              "city": "Lüneburg",
+              "county": "Landkreis Lüneburg",
+              "state": "Niedersachsen",
+              "country": "Deutschland",
+              "postcode": "21339",
+              "countrycode": "DE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                10.0440688,
+                53.793452
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 343636637,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "district",
+              "name": "Götzberg",
+              "city": "Henstedt-Ulzburg",
+              "county": "Kreis Segeberg",
+              "state": "Schleswig-Holstein",
+              "country": "Deutschland",
+              "postcode": "24558",
+              "countrycode": "DE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                28.2907686,
+                -26.1423588
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 262706699,
+              "osm_key": "place",
+              "osm_value": "suburb",
+              "type": "locality",
+              "name": "Goedeburg",
+              "district": "Ekurhuleni Ward 23",
+              "county": "City of Ekurhuleni Metropolitan Municipality",
+              "state": "Gauteng",
+              "country": "South Africa",
+              "postcode": "1622",
+              "countrycode": "ZA"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                12.1088126,
+                57.5880495
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 7497767024,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Gödeberg",
+              "city": "Lindome",
+              "county": "Västra Götalands län",
+              "country": "Sverige",
+              "postcode": "437 33",
+              "countrycode": "SE"
+            }
+          }
+        ]
+      }
+    },
+    "en": {
+      "captured_at": "2026-10-17T16:07:01.893Z",
+      "request_url": "https://photon.komoot.io/api/?q=G%C3%B6teborg&limit=20&layer=city&layer=district&layer=locality&layer=county&layer=state&layer=country&lang=en",
+      "response": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.9670171,
+                57.7072326
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 25930131,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "city",
+              "name": "Gothenburg",
+              "county": "Västra Götaland County",
+              "country": "Sweden",
+              "postcode": "411 10",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                16.7732925,
+                62.7151969
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 7449085107,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Göteborg",
+              "city": "Indals-Lidens kommundel",
+              "county": "Västernorrland County",
+              "country": "Sweden",
+              "postcode": "860 41",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                20.2265059,
+                64.0618108
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 1966563820,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Göteborg",
+              "city": "Umeå kommun",
+              "county": "Västerbotten County",
+              "country": "Sweden",
+              "postcode": "905 94",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                13.7891659,
+                57.2724458
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 7457150514,
+              "osm_key": "place",
+              "osm_value": "isolated_dwelling",
+              "type": "locality",
+              "name": "Göteborg",
+              "district": "Brogården",
+              "city": "Gnosjö kommun",
+              "county": "Jönköping County",
+              "country": "Sweden",
+              "postcode": "335 74",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.9727685,
+                57.710083
+              ]
+            },
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 935611,
+              "osm_key": "place",
+              "osm_value": "municipality",
+              "type": "city",
+              "name": "Göteborgs Stad",
+              "county": "Västra Götaland County",
+              "country": "Sweden",
+              "countrycode": "SE",
+              "extra": {
+                "admin_level": "7"
+              },
+              "extent": [
+                11.2315225,
+                57.8660038,
+                12.2416113,
+                57.4996713
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                12.5970731,
+                55.7068917
+              ]
+            },
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 437218404,
+              "osm_key": "place",
+              "osm_value": "square",
+              "type": "locality",
+              "name": "Göteborg Plads",
+              "district": "Nordhavn",
+              "city": "Copenhagen",
+              "state": "Capital Region of Denmark",
+              "country": "Denmark",
+              "countrycode": "DK",
+              "extent": [
+                12.5964126,
+                55.7072188,
+                12.5977309,
+                55.7065626
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                12.0022733,
+                57.731443
+              ]
+            },
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 13708382,
+              "osm_key": "landuse",
+              "osm_value": "industrial",
+              "type": "locality",
+              "name": "Göteborg Energi AB",
+              "district": "Gamlestaden",
+              "city": "Gothenburg",
+              "county": "Västra Götaland County",
+              "country": "Sweden",
+              "countrycode": "SE",
+              "extent": [
+                12.0004244,
+                57.7327012,
+                12.0040575,
+                57.7303803
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                16.0907187,
+                62.8466266
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 7460542546,
+              "osm_key": "place",
+              "osm_value": "isolated_dwelling",
+              "type": "locality",
+              "name": "Göteborgskojan",
+              "city": "Bräcke kommun",
+              "county": "Jämtland County",
+              "country": "Sweden",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.854896,
+                57.692885
+              ]
+            },
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 3329481,
+              "osm_key": "landuse",
+              "osm_value": "industrial",
+              "type": "locality",
+              "name": "Göteborgs Hamn Scandia Container Terminal",
+              "district": "Arendal",
+              "city": "Gothenburg",
+              "county": "Västra Götaland County",
+              "country": "Sweden",
+              "countrycode": "SE",
+              "extent": [
+                11.8429559,
+                57.697519,
+                11.8663766,
+                57.6883894
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.6640472,
+                57.7365319
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 10253490860,
+              "osm_key": "place",
+              "osm_value": "locality",
+              "type": "locality",
+              "name": "Göteborgs norra skärgård",
+              "city": "Hälsö",
+              "county": "Västra Götaland County",
+              "country": "Sweden",
+              "postcode": "475 50",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.8384981,
+                57.6071414
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 10253490861,
+              "osm_key": "place",
+              "osm_value": "locality",
+              "type": "locality",
+              "name": "Göteborgs södra skärgård",
+              "district": "Näset",
+              "city": "Gothenburg",
+              "county": "Västra Götaland County",
+              "country": "Sweden",
+              "postcode": "426 58",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                13.4279644,
+                59.3579366
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 7563676751,
+              "osm_key": "place",
+              "osm_value": "locality",
+              "type": "locality",
+              "name": "Göteborgsudden",
+              "district": "Zakrisdalsudden",
+              "city": "Dingelsundet",
+              "county": "Värmland County",
+              "country": "Sweden",
+              "postcode": "653 38",
+              "countrycode": "SE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.8905778,
+                57.6922435
+              ]
+            },
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 917521835,
+              "osm_key": "landuse",
+              "osm_value": "industrial",
+              "type": "locality",
+              "name": "Rya Göteborg Power Plant",
+              "district": "Arendal",
+              "city": "Gothenburg",
+              "county": "Västra Götaland County",
+              "country": "Sweden",
+              "countrycode": "SE",
+              "extent": [
+                11.8885767,
+                57.6938275,
+                11.892315,
+                57.6915448
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -98.8702646,
+                35.0684118
+              ]
+            },
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 184162,
+              "osm_key": "place",
+              "osm_value": "town",
+              "type": "city",
+              "name": "Gotebo",
+              "county": "Kiowa",
+              "state": "Oklahoma",
+              "country": "United States",
+              "postcode": "73041",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -98.8847505,
+                35.0800346,
+                -98.8671909,
+                35.0641354
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                15.3524929,
+                53.0851905
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 31593455,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Boguszyny",
+              "county": "Choszczno County",
+              "state": "West Pomeranian Voivodeship",
+              "country": "Poland",
+              "postcode": "73-236",
+              "countrycode": "PL"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                12.6682305,
+                52.9088156
+              ]
+            },
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 8113485,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Gottberg",
+              "city": "Märkisch Linden",
+              "county": "Ostprignitz-Ruppin",
+              "state": "Brandenburg",
+              "country": "Germany",
+              "countrycode": "DE",
+              "extra": {
+                "admin_level": "9"
+              },
+              "extent": [
+                12.6208475,
+                52.918645,
+                12.7023773,
+                52.8879754
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                10.4153223,
+                53.2693693
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 571503836,
+              "osm_key": "place",
+              "osm_value": "suburb",
+              "type": "locality",
+              "name": "Goseburg",
+              "district": "Goseburg-Zeltberg",
+              "city": "Lüneburg",
+              "county": "Landkreis Lüneburg",
+              "state": "Lower Saxony",
+              "country": "Germany",
+              "postcode": "21339",
+              "countrycode": "DE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                10.0440688,
+                53.793452
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 343636637,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "district",
+              "name": "Götzberg",
+              "city": "Henstedt-Ulzburg",
+              "county": "Kreis Segeberg",
+              "state": "Schleswig-Holstein",
+              "country": "Germany",
+              "postcode": "24558",
+              "countrycode": "DE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                28.2907686,
+                -26.1423588
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 262706699,
+              "osm_key": "place",
+              "osm_value": "suburb",
+              "type": "locality",
+              "name": "Goedeburg",
+              "district": "Ekurhuleni Ward 23",
+              "county": "City of Ekurhuleni Metropolitan Municipality",
+              "state": "Gauteng",
+              "country": "South Africa",
+              "postcode": "1622",
+              "countrycode": "ZA"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                12.1088126,
+                57.5880495
+              ]
+            },
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 7497767024,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Gödeberg",
+              "city": "Lindome",
+              "county": "Västra Götaland County",
+              "country": "Sweden",
+              "postcode": "437 33",
+              "countrycode": "SE"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
