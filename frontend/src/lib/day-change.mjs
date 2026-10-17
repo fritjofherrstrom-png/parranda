@@ -14,7 +14,6 @@
 
 import { walkingDistanceLabel } from "./route-context-view.mjs";
 
-const NAMED_STOPS = 2;
 
 function primaryRoute(entry) {
   return entry?.safeResponse?.days?.[0]?.primary_route ?? null;
@@ -112,13 +111,6 @@ export function describeDayChange(previous, next, { cause = null } = {}) {
   };
 }
 
-function names(list, lang) {
-  const shown = list.slice(0, NAMED_STOPS).join(", ");
-  const rest = list.length - NAMED_STOPS;
-  if (rest <= 0) return shown;
-  return lang === "sv" ? `${shown} och ${rest} till` : `${shown} and ${rest} more`;
-}
-
 /**
  * The change as short phrases in the page's language, most specific first:
  * the inputs the user touched, then what the route did. Labels for walks,
@@ -150,14 +142,15 @@ export function dayChangeSegments(change, { lang = "en", walkLabel = (key) => ke
     segments.push(sv ? "samma stopp och sträcka" : "same stops and distance");
     return segments;
   }
+  // One short line: counts, not names. The new stops are listed in the day
+  // right below, and five wrapped lines of names made the card bulky.
+  const count = (n) => `${n} ${sv ? "stopp" : n === 1 ? "stop" : "stops"}`;
+  const swapped = Math.min(stops.added.length, stops.removed.length);
+  if (swapped) segments.push(sv ? `${count(swapped)} ${swapped === 1 ? "bytt" : "bytta"}` : `${count(swapped)} swapped`);
+  if (stops.added.length > swapped) segments.push(`+${count(stops.added.length - swapped)}`);
+  if (stops.removed.length > swapped) segments.push(`−${count(stops.removed.length - swapped)}`);
   if (km && Math.round(km.before * 10) !== Math.round(km.after * 10)) {
-    segments.push(`${walkingDistanceLabel(km.before, lang)} → ${walkingDistanceLabel(km.after, lang)}`);
-  }
-  if (stops.added.length) {
-    segments.push(`+${stops.added.length} ${sv ? "stopp" : stops.added.length === 1 ? "stop" : "stops"}: ${names(stops.added, lang)}`);
-  }
-  if (stops.removed.length) {
-    segments.push(`−${stops.removed.length}: ${names(stops.removed, lang)}`);
+    segments.push(`${walkingDistanceLabel(km.before, lang).replace(/ km$/, "")} → ${walkingDistanceLabel(km.after, lang)}`);
   }
   if (stops.reordered) segments.push(sv ? "samma stopp i ny ordning" : "same stops, new order");
   return segments;

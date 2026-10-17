@@ -19,7 +19,7 @@ const labels = (lang) => ({
   dayLabel: (offset) => (offset === 0 ? (lang === "sv" ? "Idag" : "Today") : lang === "sv" ? "Imorgon" : "Tomorrow"),
 });
 
-test("a fuller day that changes the route names the inputs, the distance and the stops", () => {
+test("a fuller day that changes the route names the inputs and counts the stops and distance", () => {
   const change = describeDayChange(
     entry({ stops: [stop("a", "Place a"), stop("b", "Place b")], km: 1.2 }),
     entry({ stops: [stop("a", "Place a"), stop("c", "Place c"), stop("d", "Place d")], km: 4.8, walkKey: "full" }),
@@ -30,15 +30,15 @@ test("a fuller day that changes the route names the inputs, the distance and the
   assert.equal(change.routeChanged, true);
   assert.deepEqual(dayChangeSegments(change, labels("en")), [
     "Balanced → Full",
-    "1.2 km → 4.8 km",
-    "+2 stops: Place c, Place d",
-    "−1: Place b",
+    "1 stop swapped",
+    "+1 stop",
+    "1.2 → 4.8 km",
   ]);
   assert.deepEqual(dayChangeSegments(change, labels("sv")), [
     "Lagom → Fylld",
-    "1,2 km → 4,8 km",
-    "+2 stopp: Place c, Place d",
-    "−1: Place b",
+    "1 stopp bytt",
+    "+1 stopp",
+    "1,2 → 4,8 km",
   ]);
 });
 
@@ -91,13 +91,16 @@ test("a change that produced no route says so, so the previous day is worth offe
   assert.deepEqual(dayChangeSegments(change, labels("sv")).at(-1), "ingen rutt för det här valet");
 });
 
-test("long lists name two stops and count the rest", () => {
+test("the line counts stops instead of naming them, so it stays one short line", () => {
   const change = describeDayChange(
     entry({ stops: [], km: 0 }),
     entry({ stops: [stop("a", "A"), stop("b", "B"), stop("c", "C"), stop("d", "D")], km: 5 }),
   );
-  assert.equal(dayChangeSegments(change, labels("en")).at(-1), "+4 stops: A, B and 2 more");
-  assert.equal(dayChangeSegments(change, labels("sv")).at(-1), "+4 stopp: A, B och 2 till");
+  assert.deepEqual(dayChangeSegments(change, labels("en")).slice(-2), ["+4 stops", "< 0.1 → 5 km"]);
+  assert.deepEqual(dayChangeSegments(change, labels("sv")).slice(-2), ["+4 stopp", "< 0,1 → 5 km"]);
+  const swap = describeDayChange(entry({ stops: [stop("a", "A"), stop("b", "B"), stop("c", "C")], km: 1 }),
+    entry({ stops: [stop("d", "D"), stop("e", "E"), stop("f", "F")], km: 1 }));
+  assert.deepEqual(dayChangeSegments(swap, labels("sv")), ["3 stopp bytta"]);
 });
 
 test("nothing to describe is an empty list, never a throw", () => {
@@ -115,6 +118,6 @@ test("a server-applied Live upgrade says Live moved the day, with the same input
   assert.deepEqual(change.inputs.picksAdded, []);
   assert.deepEqual(dayChangeSegments(change, labels("en")).slice(0, 1), ["Live: event added"]);
   assert.deepEqual(dayChangeSegments(change, labels("sv")).slice(0, 1), ["Live: evenemang tillagt"]);
-  assert.match(dayChangeSegments(change, labels("en")).join(" · "), /\+1 stop: Late concert/);
+  assert.equal(dayChangeSegments(change, labels("en")).join(" · "), "Live: event added · +1 stop · 1.2 → 1.9 km");
   assert.equal(describeDayChange(before, after).cause, null, "an adjustment has no cause of its own");
 });
