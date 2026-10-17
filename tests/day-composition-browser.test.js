@@ -100,7 +100,9 @@ test('native composed day preserves dominance, removal/reload, replacement, refu
     assert.ok(countMuseums(saved) < 3, 'second hand is the stronger first interest');
     stages.push('published-six-with-second-hand-dominance');
     await openAdjust(page);
-    await page.getByRole('button', { name: 'Höj prioritet för Kultur', exact: true }).click();
+    // Ranking is the pick order: tapping Second hand off and on moves it after Kultur.
+    const secondHand = page.locator('[data-preference-key="second_hand"] button[aria-pressed]');
+    await secondHand.click(); await secondHand.click();
     await waitSaved(page, entry => entry.inputs.preferencePriority?.[0] === 'culture');
     saved = await current(page);
     assert.ok(countMuseums(saved) > 3, 'the native priority click changes actual published content');

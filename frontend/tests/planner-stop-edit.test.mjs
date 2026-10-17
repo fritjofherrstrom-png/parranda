@@ -219,7 +219,7 @@ test('a later preference adjustment keeps the shorter cap but releases old venue
   assert.equal(adjusted.body.day_edit.target_stop_count, 4);
   assert.equal(adjusted.body.day_edit.preserve_retained, false, 'new interests can change content without undoing manual shortening');
   assert.ok(adjusted.body.excluded_candidate_ids.includes('museum'));
-  assert.equal(adjusted.body.preference_priority, undefined, 'adding an interest does not rank it; only a promotion does');
+  assert.deepEqual(adjusted.body.preference_priority, ['second_hand'], 'a picked interest ranks in pick order; untouched defaults stay unranked');
 });
 
 test('Add after removal can pin a new place without freezing the old retained set or refilling the slot', async t => {
@@ -294,29 +294,30 @@ test('an empty day has an explicit start-over action that can itself be undone',
   assert.equal(routeCalls(h).length, 3);
 });
 
-async function promote(h, key) {
-  const control = h.container.querySelector(`[data-preference-key="${key}"] button[aria-label]`);
-  assert.ok(Boolean(control), `native priority control for ${key} exists`);
-  assert.equal(control.disabled, false);
-  await h.act(() => control.dispatchEvent(new h.window.MouseEvent('click', { bubbles: true })));
+// Ranking is the pick order: tapping a chip off and on moves it last in the order.
+async function repick(h, key) {
+  const chip = () => h.container.querySelector(`[data-preference-key="${key}"] button[aria-pressed]`);
+  assert.ok(Boolean(chip()), `interest chip for ${key} exists`);
+  for (let tap = 0; tap < 2; tap += 1) await h.act(() => chip().dispatchEvent(new h.window.MouseEvent('click', { bubbles: true })));
+  assert.equal(chip().getAttribute('aria-pressed'), 'true');
 }
 
 test('a late primary body for the former priority cannot overwrite a newer priority intent', async t => {
   const h = await completed(t);
   const original = h.readStorage(LAST);
-  await click(h, 'Adjust'); await promote(h, 'culture'); await h.clock.advance(400);
+  await click(h, 'Adjust'); await repick(h, 'culture'); await h.clock.advance(400);
   const obsolete = routeCalls(h).at(-1);
-  assert.equal(obsolete.body.preference_priority[0], 'culture');
+  assert.deepEqual(obsolete.body.preference_priority, ['culture']);
   await h.fetchMock.respond(obsolete, response(), 200, { deferBody: true });
-  await promote(h, 'food');
+  await repick(h, 'food');
   assert.equal(obsolete.aborted, true, 'the click invalidates the former priority before its debounce');
   await h.fetchMock.releaseBody(obsolete);
   assert.equal(h.readStorage(LAST).id, original.id);
   await h.clock.advance(400);
   const latest = routeCalls(h).at(-1);
-  assert.equal(latest.body.preference_priority[0], 'food');
+  assert.deepEqual(latest.body.preference_priority, ['culture', 'food']);
   await h.fetchMock.respond(latest, response());
-  assert.equal(h.readStorage(LAST).inputs.preferencePriority[0], 'food');
+  assert.deepEqual(h.readStorage(LAST).inputs.preferencePriority, ['culture', 'food']);
   assert.equal(routeCalls(h).length, 3);
 });
 
@@ -362,7 +363,7 @@ for (const change of ['Remove', 'Replace', 'priority', 'Tomorrow']) test(`${chan
   assert.ok(Boolean(read), 'precondition: the published day follows its actual completion capability');
   await h.fetchMock.respond(read, staleCompletion(), 200, { deferBody: true });
   if (change === 'Remove' || change === 'Replace') { await expandMuseum(h); await click(h, change); }
-  else { await click(h, 'Adjust'); if (change === 'priority') await promote(h, 'culture'); else await click(h, change); }
+  else { await click(h, 'Adjust'); if (change === 'priority') await repick(h, 'culture'); else await click(h, change); }
   assert.equal(read.aborted, true, 'the new intent cancels completion before its compose debounce');
   await h.fetchMock.releaseBody(read);
   assert.equal(h.readStorage(LAST).id, original.id);

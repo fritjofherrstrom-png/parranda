@@ -11,18 +11,18 @@ test("priority normalization preserves neutral legacy defaults and only known se
     assert.deepEqual(intent.normalizePreferencePriority(value, defaults), []);
   }
   assert.deepEqual(intent.normalizePreferencePriority(["views", "views", "unknown", "food"], defaults),
-    ["views", "food", "culture"]);
+    ["views", "food"], "a ranked prefix; unpicked selections stay unranked");
   assert.deepEqual(intent.normalizePreferencePriority(["culture"], ["food", "evil", "culture", "food"]),
-    ["culture", "food"]);
+    ["culture"]);
   assert.deepEqual(intent.normalizePreferencePriority(["food"], null), []);
 });
 
-test("a new selection keeps neutral interests neutral; only a promotion ranks", () => {
+test("a picked interest ranks in pick order while untouched defaults stay unranked", () => {
   const before = { selected: [...defaults], preferencePriority: [] };
   const after = intent.togglePreferenceSelection(before, "fika");
   assert.deepEqual(after, {
     selected: ["food", "culture", "views", "fika"],
-    preferencePriority: [],
+    preferencePriority: ["fika"],
   });
   assert.deepEqual(before, { selected: defaults, preferencePriority: [] }, "state transitions are immutable");
 });
@@ -62,26 +62,16 @@ test("selection rejects unknown keys and does not mutate malformed input", () =>
   assert.deepEqual(intent.togglePreferenceSelection({ selected: ["food", "food", "evil"], preferencePriority: [] }, null),
     { selected: ["food"], preferencePriority: [] });
   assert.deepEqual(intent.togglePreferenceSelection(undefined, "green"),
-    { selected: ["green"], preferencePriority: [] });
+    { selected: ["green"], preferencePriority: ["green"] });
 });
 
-test("promotion from neutral makes only the chosen selected interest first", () => {
-  const state = { selected: defaults, preferencePriority: [] };
-  assert.deepEqual(intent.promotePreference(state, "culture"), {
-    selected: defaults, preferencePriority: ["culture", "food", "views"],
-  });
-  assert.deepEqual(state, { selected: defaults, preferencePriority: [] });
-});
-
-test("promotion moves an explicitly ranked interest one step rather than changing route or chip order", () => {
-  const state = { selected: defaults, preferencePriority: ["views", "food", "culture"] };
-  assert.deepEqual(intent.promotePreference(state, "culture"), {
-    selected: defaults, preferencePriority: ["views", "culture", "food"],
-  });
-  assert.deepEqual(intent.promotePreference(state, "views"), state, "rank one is already first");
-  assert.deepEqual(intent.promotePreference(state, "fika"), state, "unselected interests cannot be promoted");
-  assert.deepEqual(intent.promotePreference(state, "unknown"), state);
-  assert.deepEqual(state.preferencePriority, ["views", "food", "culture"]);
+test("tapping an interest off and on moves it last; from neutral it becomes first", () => {
+  const repick = (state, key) => intent.togglePreferenceSelection(intent.togglePreferenceSelection(state, key), key);
+  assert.deepEqual(repick({ selected: defaults, preferencePriority: [] }, "views"),
+    { selected: ["food", "culture", "views"], preferencePriority: ["views"] });
+  assert.deepEqual(repick({ selected: defaults, preferencePriority: ["views", "food", "culture"] }, "views"),
+    { selected: ["food", "culture", "views"], preferencePriority: ["food", "culture", "views"] });
+  assert.equal("promotePreference" in intent, false, "there is no separate promote control");
 });
 
 const edit = (overrides = {}) => ({
