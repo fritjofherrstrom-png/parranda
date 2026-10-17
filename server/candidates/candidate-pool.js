@@ -163,15 +163,28 @@ function safeEvaluateAvailability(evaluator, candidate, context) {
     const result = evaluator({ candidate, context });
     if (!result || typeof result !== "object") return null;
     const selectedDayHours = normalizeSelectedDayHoursFact(result.selected_day_hours);
+    const closedForRoles = normalizeClosedForRoles(result.closed_for_roles);
     return {
       eligible: result.eligible !== false,
       status: normalizeAvailabilityToken(result.status, "unknown"),
       reason: normalizeAvailabilityToken(result.reason, "candidate_availability_unresolved"),
       ...(selectedDayHours ? { selected_day_hours: selectedDayHours } : {}),
+      ...(closedForRoles.length ? { closed_for_roles: closedForRoles } : {}),
     };
   } catch (_error) {
     return { eligible: true, status: "unknown", reason: "candidate_availability_evaluation_failed" };
   }
+}
+
+// Route roles the place is closed for at their visit time. Bounded tokens
+// only; anything malformed is dropped, which can only admit, never exclude.
+function normalizeClosedForRoles(value) {
+  if (!Array.isArray(value)) return [];
+  const roles = value
+    .slice(0, 32)
+    .map((role) => normalizeAvailabilityToken(role, null))
+    .filter(Boolean);
+  return [...new Set(roles)];
 }
 
 function normalizeAvailabilityToken(value, fallback) {
