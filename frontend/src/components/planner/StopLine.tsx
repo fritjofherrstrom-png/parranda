@@ -38,7 +38,9 @@ import {
   NatureIcon,
   PlusIcon,
   ShopIcon,
+  ShuffleIcon,
   SightIcon,
+  TrashIcon,
   WalkIcon,
 } from "../shared/icons";
 import { buttonClass, compactPillTarget, Eyebrow } from "../shared/ui";
@@ -101,6 +103,8 @@ export default function StopLine({
   releaseCommitment,
   keepStop,
   dismissStop,
+  removeStop,
+  editPending = false,
   commit,
   eveningEvent,
   selectedDate,
@@ -134,6 +138,8 @@ export default function StopLine({
   releaseCommitment: (identity: string) => void;
   keepStop: (identity: string, stopLabel: string) => void;
   dismissStop: (identity: string, stopLabel: string) => void;
+  removeStop: (identity: string, stopLabel: string) => void;
+  editPending?: boolean;
   commit: (identity: string, kind: "exclude" | "pin", commitLabel: string, liveAction?: "remove" | "replace") => void;
   eveningEvent: any;
   selectedDate: string | null | undefined;
@@ -445,14 +451,28 @@ export default function StopLine({
                       </button>
                     ))}
                     {hasRealId && commitments[stopIdentity]?.kind !== "pin" && (
+                      <div role="group" aria-label={t("Ändra stopp", "Edit stop")} className="grid grid-cols-2 gap-2 sm:inline-flex sm:items-center">
                       <button
                         type="button"
+                        disabled={editPending}
+                        title={t("Byt till ett liknande stopp", "Replace with a similar stop")}
                         onClick={() => dismissStop(stopIdentity, name)}
-                        className={buttonClass("secondary", "min-h-11 px-4 text-sm sm:px-5")}
+                        className={buttonClass("secondary", "min-h-11 px-4 text-sm disabled:cursor-wait disabled:opacity-50 sm:px-5")}
                       >
-                        <MinusIcon className="h-4 w-4" />
-                        {t("Inte den här", "Not this one")}
+                        <ShuffleIcon className="h-4 w-4" />
+                        {t("Byt", "Replace")}
                       </button>
+                      <button
+                        type="button"
+                        disabled={editPending}
+                        title={t("Ta bort stoppet utan ersättning", "Remove this stop without replacement")}
+                        onClick={() => removeStop(stopIdentity, name)}
+                        className={buttonClass("secondary", "min-h-11 px-4 text-sm disabled:cursor-wait disabled:opacity-50 sm:px-5")}
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                        {t("Ta bort", "Remove")}
+                      </button>
+                      </div>
                     )}
                   </div>
                 </div>

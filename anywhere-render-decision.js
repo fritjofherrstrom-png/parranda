@@ -152,8 +152,14 @@
     var days = response && Array.isArray(response.days) ? response.days : [];
     var composed = days.length > 0 && isAgnosticAppliedDay(days[0]);
     var hasStructure = hasValidPlaceStructure(response);
+    var experiment = response && response.agnostic_route_output_experiment;
+    var edit = experiment && experiment.day_edit;
+    var manualEmpty = Boolean(days.length === 1 && days[0].manual_empty_day === true && !days[0].primary_route &&
+      experiment && experiment.manual_edit_published === true && edit && edit.version === 1 &&
+      edit.action === "remove" && edit.status === "applied" && edit.target_stop_count === 0 && edit.actual_stop_count === 0 &&
+      Array.isArray(edit.result_candidate_ids) && edit.result_candidate_ids.length === 0);
     var limitations = composed ? dayLimitations(response) : [];
-    var status = composed
+    var status = manualEmpty ? "edited_empty" : composed
       ? (limitations.length ? "composed_limited" : "composed")
       : hasStructure ? "structure_only" : "unavailable";
     var classification = {
@@ -180,6 +186,11 @@
    */
   function safeResponseFor(response, classification) {
     var cls = classification || classifyAnywhereResult(response);
+    if (cls.status === "edited_empty") {
+      var empty = Object.assign({}, response);
+      empty.days = [{ date: response.days[0].date, primary_route: null, alternatives: [], manual_empty_day: true }];
+      return empty;
+    }
     if (isComposedStatus(cls.status)) return response;
     var safe = {};
     for (var key in response) {

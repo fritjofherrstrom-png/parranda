@@ -1,3 +1,5 @@
+import type { PlannerPreferenceKey, DayEdit } from "../../../shared/planner-intent.mjs";
+
 export interface AnywherePreference {
   key: string;
   sv: string;
@@ -34,6 +36,9 @@ export declare function buildAnywherePayload(options?: {
   placeRef?: string | null;
   dates?: string[];
   preferences?: string[];
+  preferencePriority?: string[] | null;
+  dayEdit?: DayEdit | null;
+  invalidDayEdit?: boolean;
   dayRhythm?: "calm" | "balanced" | "full" | "free";
   excludedCandidateIds?: string[];
   pinnedCandidateIds?: string[];
@@ -56,6 +61,8 @@ export declare function buildAnywherePayload(options?: {
   day_rhythm: string;
   leg_pacing?: string;
   preferences: string[];
+  preference_priority?: PlannerPreferenceKey[];
+  day_edit?: DayEdit | null;
   distance_mode: string;
   budget_tier: string;
   experimental_agnostic_route_output?: number;
