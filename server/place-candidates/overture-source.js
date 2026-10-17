@@ -372,7 +372,7 @@ function buildOvertureQuery({ release, lat, lng, radiusKm = DEFAULT_RADIUS_KM, r
     operating_status,
     websites,
     brand.names.primary AS brand,
-    sources,
+    list_distinct(list_transform(sources, source -> source.license)) AS licenses,
     bbox.xmin AS lng,
     bbox.ymin AS lat,
     ${distance} AS distance_km
@@ -402,7 +402,7 @@ SELECT id,
   operating_status,
   websites,
   brand,
-  list_distinct(list_transform(sources, source -> source.license)) AS licenses,
+  licenses,
   lng,
   lat
 FROM ranked
