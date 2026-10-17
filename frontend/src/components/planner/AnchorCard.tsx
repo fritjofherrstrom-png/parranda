@@ -7,7 +7,7 @@
 import { useEffect, useId, useRef } from "react";
 import { normalizePreferencePriority } from "../../../../shared/planner-intent.mjs";
 import { CheckIcon, ChevronDownIcon, LocationIcon } from "../shared/icons";
-import { compactPillTarget, Eyebrow, panelCard } from "../shared/ui";
+import { compactPillTarget, Eyebrow, panelCard, segmentClass, segmentGroup } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 
 type Option = { key: string; sv: string; en: string };
@@ -80,14 +80,15 @@ export default function AnchorCard({
     : preferences;
   const free = rhythms.find((preset) => preset.key === "free");
   const current = rhythms.find((preset) => preset.key === walkKey);
-  const segment = (active: boolean) =>
-    "inline-flex min-h-11 items-center justify-center px-[18px] text-[13px] transition " +
-    (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink/72 hover:text-parranda-ink");
   return (
-    <section aria-label={t("Dagens utgångspunkt", "Your day's starting point")} className={`overflow-hidden ${panelCard}`}>
-      <div className="flex min-h-14 items-center gap-2.5 py-1.5 pl-4 pr-1.5">
+    // No overflow-hidden: Change and Adjust sit 6px from the card's edge, and
+    // clipping would cut their focus rings.
+    <section aria-label={t("Dagens utgångspunkt", "Your day's starting point")} className={panelCard}>
+      <div className="flex min-h-14 flex-wrap items-center gap-2.5 py-1.5 pl-4 pr-1.5">
         <LocationIcon className="h-4 w-4 text-parranda-ember" />
-        <span className="min-w-0 flex-1 truncate text-base font-extrabold text-parranda-ink">
+        {/* Wraps rather than truncates: at large text sizes "· tomorrow" was
+            cut off. Below ~10rem the row wraps and Change moves under it. */}
+        <span className="min-w-[min(100%,10rem)] flex-1 break-words text-base font-extrabold text-parranda-ink">
           {anchorLabel}
           <span className="font-medium text-parranda-ink/68">
             {" · "}
@@ -102,15 +103,15 @@ export default function AnchorCard({
             }
           }}
           aria-label={t("Byt plats", "Change place")}
-          className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-parranda-ink/8 px-4 text-[13px] font-bold text-parranda-ink transition hover:bg-parranda-ink/14"
+          className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-parranda-ink/8 px-4 text-13 font-bold text-parranda-ink transition hover:bg-parranda-ink/14"
         >
           {t("Byt", "Change")}
         </a>
       </div>
 
       {!adjustOpen && (
-        <div className="flex min-h-12 items-center gap-2.5 border-t border-parranda-ink/10 py-1.5 pl-4 pr-1.5">
-          <span className="min-w-0 flex-1 text-[13px] leading-snug text-parranda-ink/72">
+        <div className="flex min-h-12 flex-wrap items-center gap-2.5 border-t border-parranda-ink/10 py-1.5 pl-4 pr-1.5">
+          <span className="min-w-[min(100%,10rem)] flex-1 text-13 leading-snug text-parranda-ink/72">
             <strong className="font-bold text-parranda-ink">{moodLabel || t("Inga val", "No moods")}</strong>
             {` · ${t("Dagens rytm", "Day rhythm")}: ${walkLabel}`}
           </span>
@@ -119,7 +120,7 @@ export default function AnchorCard({
             ref={adjustButton}
             aria-expanded={false}
             onClick={() => toggleAdjust(true)}
-            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-parranda-ink/18 px-3.5 text-[13px] font-bold text-parranda-ink transition hover:border-parranda-ink/50"
+            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-line border-parranda-ink/18 px-3.5 text-13 font-bold text-parranda-ink transition hover:border-parranda-ink/50"
           >
             {t("Justera", "Adjust")}
             <ChevronDownIcon className="h-3.5 w-3.5" />
@@ -142,7 +143,7 @@ export default function AnchorCard({
               aria-expanded={true}
               aria-controls={panelId}
               onClick={() => toggleAdjust(false)}
-              className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-parranda-ink/18 px-3.5 text-[13px] font-bold text-parranda-ink transition hover:border-parranda-ink/50"
+              className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-line border-parranda-ink/18 px-3.5 text-13 font-bold text-parranda-ink transition hover:border-parranda-ink/50"
             >
               {t("Klar", "Done")}
               <ChevronDownIcon className="h-3.5 w-3.5 rotate-180" />
@@ -171,11 +172,11 @@ export default function AnchorCard({
                         `${compactPillTarget} gap-1.5 px-3.5 ` +
                         (active
                           ? "bg-parranda-ink font-bold text-parranda-paper"
-                          : "border-[1.5px] border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45 hover:text-parranda-ink")
+                          : "border-line border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45 hover:text-parranda-ink")
                       }
                     >
                       {active && (rank
-                        ? <span aria-hidden="true" className="text-[11px] tabular-nums text-parranda-paper/72">{rank}</span>
+                        ? <span aria-hidden="true" className="text-11 tabular-nums text-parranda-paper/72">{rank}</span>
                         : <CheckIcon className="h-3 w-3" />)}
                       {name}
                     </button>
@@ -183,9 +184,11 @@ export default function AnchorCard({
                       <button
                         type="button"
                         aria-label={t(`Höj prioritet för ${name}`, `Increase priority for ${name}`)}
-                        disabled={rank === 1}
-                        onClick={() => onPromoteMood(pref.key)}
-                        className={`${compactPillTarget} min-w-11 justify-center bg-parranda-ink/8 text-parranda-ink/72 enabled:hover:bg-parranda-ink/14 disabled:opacity-40`}
+                        // Unavailable at rank one, but still focusable: the press
+                        // that reached rank one must not drop keyboard focus.
+                        aria-disabled={rank === 1 || undefined}
+                        onClick={rank === 1 ? undefined : () => onPromoteMood(pref.key)}
+                        className={`${compactPillTarget} min-w-11 justify-center bg-parranda-ink/8 text-parranda-ink/72 hover:bg-parranda-ink/14 aria-disabled:opacity-40 aria-disabled:hover:bg-parranda-ink/8`}
                       >
                         <ChevronDownIcon className="h-3.5 w-3.5 rotate-180" />
                       </button>
@@ -198,9 +201,9 @@ export default function AnchorCard({
 
           <div className="flex flex-col gap-2 border-t border-parranda-ink/10 pt-4">
             <Eyebrow tone="glow">{t("När", "When")}</Eyebrow>
-            <div className="inline-flex self-start overflow-hidden rounded-full border-[1.5px] border-parranda-ink/18" role="group" aria-label={t("Vilken dag", "Which day")}>
+            <div className={segmentGroup} role="group" aria-label={t("Vilken dag", "Which day")}>
               {([0, 1] as const).map((offset) => (
-                <button type="button" key={offset} aria-pressed={dayOffset === offset} onClick={() => onSetDay(offset)} className={segment(dayOffset === offset)}>
+                <button type="button" key={offset} aria-pressed={dayOffset === offset} onClick={() => onSetDay(offset)} className={segmentClass(dayOffset === offset)}>
                   {offset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")}
                 </button>
               ))}
@@ -222,9 +225,11 @@ export default function AnchorCard({
                   onClick={() => onSetRhythm(free.key)}
                   className={
                     `${compactPillTarget} shrink-0 gap-1.5 px-3 ` +
+                    // A choice like the moods above. The dashed tone means
+                    // "optional, not part of the day" (ui.tsx), which a rhythm is not.
                     (walkKey === free.key
                       ? "bg-parranda-ink font-bold text-parranda-paper"
-                      : "border-[1.5px] border-dashed border-parranda-ink/30 font-semibold text-parranda-ink/72 hover:border-parranda-ink/50 hover:text-parranda-ink")
+                      : "border-line border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45 hover:text-parranda-ink")
                   }
                 >
                   {walkKey === free.key && <CheckIcon className="h-3 w-3" />}
@@ -233,7 +238,7 @@ export default function AnchorCard({
               )}
             </div>
             <div
-              className="grid grid-cols-3 overflow-hidden rounded-full border-[1.5px] border-parranda-ink/18 sm:max-w-sm"
+              className="grid grid-cols-3 rounded-full border-line border-parranda-ink/18 sm:max-w-sm"
               role="group"
               aria-label={t("Dagens rytm", "Day rhythm")}
             >
@@ -246,8 +251,8 @@ export default function AnchorCard({
                     aria-pressed={active}
                     onClick={() => onSetRhythm(preset.key)}
                     className={
-                      "min-h-11 px-2 text-[13px] leading-tight transition " +
-                      (index > 0 ? "border-l-[1.5px] border-parranda-ink/18 " : "") +
+                      "min-h-11 px-2 text-13 leading-tight transition first:rounded-l-full last:rounded-r-full " +
+                      (index > 0 ? "border-l-line border-parranda-ink/18 " : "") +
                       (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink/72 hover:text-parranda-ink")
                     }
                   >
@@ -257,7 +262,7 @@ export default function AnchorCard({
               })}
             </div>
             {current && (
-              <p className="text-[13px] leading-snug text-parranda-ink/72" aria-live="polite">
+              <p className="text-13 leading-snug text-parranda-ink/72" aria-live="polite">
                 <strong className="font-bold text-parranda-ink">{lang === "en" ? current.en : current.sv}:</strong>{" "}
                 {lang === "en" ? current.noteEn : current.noteSv}
               </p>

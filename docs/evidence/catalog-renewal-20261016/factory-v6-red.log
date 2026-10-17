@@ -1,0 +1,28 @@
+✖ the deployed Overture loader reads verified v6 evidence after restart, never unbound v2/v3/v4/v5 rows (57.185375ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 151.110167
+
+✖ failing tests:
+
+test at tests/source-cache.test.js:294:1
+✖ the deployed Overture loader reads verified v6 evidence after restart, never unbound v2/v3/v4/v5 rows (57.185375ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  1 !== 0
+
+      at TestContext.<anonymous> ($REPO/tests/source-cache.test.js:310:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

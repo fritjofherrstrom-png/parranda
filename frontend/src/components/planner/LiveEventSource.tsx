@@ -7,6 +7,7 @@
  * thing about the same row.
  */
 import { eventSourceLink } from "../../lib/pulse-view.mjs";
+import { ExternalLinkText, inlineLinkTarget } from "../shared/ui";
 import type { Lang } from "./copy";
 import type { PulseEvent } from "./types";
 
@@ -40,11 +41,10 @@ export function liveEventSource(event: PulseEvent, lang: Lang) {
       {link && (
         <>
           {" · "}
-          {/* The 44px target keeps its height, but negative block margins stop
-              it from pushing the text line apart where the row wraps. */}
-          <a href={link.href} target="_blank" rel="noopener noreferrer" className="-my-3 inline-flex min-h-11 min-w-11 items-center underline decoration-parranda-ink/30 underline-offset-2 hover:text-parranda-clay hover:decoration-parranda-clay">
-            {/* One flow, so a wrapped homepage label keeps its arrow after the last word. */}
-            <span>{link.text}<span aria-hidden="true">&nbsp;↗</span></span>
+          {/* Inline in the row's text: the 44px target is drawn by ::before, so
+              a wrapped link keeps the line spacing and its mark after the last word. */}
+          <a href={link.href} target="_blank" rel="noopener noreferrer" className={`${inlineLinkTarget} underline decoration-parranda-ink/30 underline-offset-2 hover:text-parranda-clay hover:decoration-parranda-clay`}>
+            <ExternalLinkText text={link.text} />
           </a>
         </>
       )}

@@ -132,3 +132,21 @@ test("a stop kind this build has no words for gets no chip, never a raw token", 
   assert.match(route, /Kyrka/);
   assert.doesNotMatch(route, /some_new_engine_kind|church/);
 });
+
+test("a working Blitz button keeps keyboard focus and ignores a second press", async (t) => {
+  // A focused button that turns disabled drops focus to the top of the page.
+  // While Blitz reads the moment it stays focusable, busy and unavailable.
+  const h = await planner(t, "http://localhost/anywhere?place=Testville&lang=en", composedDay());
+  const button = blitzButton(h);
+  button.focus();
+  await click(h, button);
+  const working = button; // the same element, now working
+  assert.ok(working.isConnected);
+  assert.match(working.textContent, /Reading the moment/);
+  assert.equal(working.disabled, false, "not disabled, so focus stays");
+  assert.equal(working.getAttribute("aria-busy"), "true");
+  assert.equal(working.getAttribute("aria-disabled"), "true");
+  assert.equal(h.document.activeElement, working, "focus stays on the button");
+  await click(h, working);
+  assert.equal(h.fetchMock.calls.filter((c) => c.url.includes("/api/blitz")).length, 1, "the second press does nothing");
+});

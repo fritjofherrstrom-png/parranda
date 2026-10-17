@@ -1,0 +1,458 @@
+{
+  "days": [],
+  "place_structure": {
+    "provenance": "agnostic_anchor",
+    "area_count": 2,
+    "scattered_count": 6,
+    "areas": [
+      {
+        "size": 9,
+        "center": {
+          "lat": 35.008778,
+          "lng": 135.759672
+        },
+        "dominant_types": [
+          "museum",
+          "gallery"
+        ],
+        "dominant_intents": [],
+        "daypart_hint": "midday",
+        "daypart_weights": {
+          "midday": 9
+        },
+        "member_ids": [
+          "wikidata-Q11375592",
+          "wikidata-Q11482389",
+          "wikidata-Q11533890",
+          "wikidata-Q123124492",
+          "wikidata-Q127602236",
+          "wikidata-Q132529351",
+          "wikidata-Q136892701",
+          "wikidata-Q138315086",
+          "wikidata-Q783923"
+        ]
+      },
+      {
+        "size": 3,
+        "center": {
+          "lat": 35.011805,
+          "lng": 135.780741
+        },
+        "dominant_types": [
+          "museum"
+        ],
+        "dominant_intents": [],
+        "daypart_hint": "midday",
+        "daypart_weights": {
+          "midday": 3
+        },
+        "member_ids": [
+          "wikidata-Q11606115",
+          "wikidata-Q11622794",
+          "wikidata-Q18337620"
+        ]
+      }
+    ],
+    "district_day": {
+      "areas": [
+        {
+          "center": {
+            "lat": 35.008778,
+            "lng": 135.759672
+          },
+          "daypart_hint": "midday",
+          "character": [
+            "museum",
+            "gallery"
+          ],
+          "covers": [
+            "culture"
+          ],
+          "size": 9,
+          "stop_ids": [
+            "wikidata-Q11375592",
+            "wikidata-Q11482389",
+            "wikidata-Q11533890",
+            "wikidata-Q123124492",
+            "wikidata-Q127602236",
+            "wikidata-Q132529351",
+            "wikidata-Q136892701",
+            "wikidata-Q138315086",
+            "wikidata-Q783923"
+          ],
+          "stop_names": [
+            "Museum of Kyoto",
+            "Heian Museum of Ancient History",
+            "Somé Seiryukan",
+            "Gallery of Kyoto Traditional Arts & Crafts"
+          ],
+          "stops": [
+            {
+              "id": "wikidata-Q11375592",
+              "name": "Museum of Kyoto",
+              "lat": 35.009166666,
+              "lng": 135.762222222,
+              "type": "museum",
+              "tags": [],
+              "chain": false,
+              "brand": null,
+              "local_feel_rank": null,
+              "candidate_origin": null,
+              "commitment_eligible": false
+            },
+            {
+              "id": "wikidata-Q11482389",
+              "name": "Heian Museum of Ancient History",
+              "lat": 35.00875,
+              "lng": 135.762222222,
+              "type": "museum",
+              "tags": [],
+              "chain": false,
+              "brand": null,
+              "local_feel_rank": null,
+              "candidate_origin": null,
+              "commitment_eligible": false
+            },
+            {
+              "id": "wikidata-Q11533890",
+              "name": "Somé Seiryukan",
+              "lat": 35.005583,
+              "lng": 135.758389,
+              "type": "museum",
+              "tags": [],
+              "chain": false,
+              "brand": null,
+              "local_feel_rank": null,
+              "candidate_origin": null,
+              "commitment_eligible": false
+            },
+            {
+              "id": "wikidata-Q123124492",
+              "name": "Gallery of Kyoto Traditional Arts & Crafts",
+              "lat": 35.009006,
+              "lng": 135.759449,
+              "type": "museum",
+              "tags": [],
+              "chain": false,
+              "brand": null,
+              "local_feel_rank": null,
+              "candidate_origin": null,
+              "commitment_eligible": false
+            },
+            {
+              "id": "wikidata-Q127602236",
+              "name": "Onishi Seiwemon Museum",
+              "lat": 35.008477,
+              "lng": 135.755747,
+              "type": "museum",
+              "tags": [],
+              "chain": false,
+              "brand": null,
+              "local_feel_rank": null,
+              "candidate_origin": null,
+              "commitment_eligible": false
+            },
+            {
+              "id": "wikidata-Q132529351",
+              "name": "Ikebana History Museum",
+              "lat": 35.008013,
+              "lng": 135.76008,
+              "type": "museum",
+              "tags": [],
+              "chain": false,
+              "brand": null,
+              "local_feel_rank": null,
+              "candidate_origin": null,
+              "commitment_eligible": false
+            },
+            {
+              "id": "wikidata-Q136892701",
+              "name": "Yaosan",
+              "lat": 35.010018885,
+              "lng": 135.760832839,
+              "type": "gallery",
+              "tags": [],
+              "chain": false,
+              "brand": null,
+              "local_feel_rank": null,
+              "candidate_origin": null,
+              "commitment_eligible": false
+            },
+            {
+              "id": "wikidata-Q138315086",
+              "name": "Chisō Gallery",
+              "lat": 35.008303,
+              "lng": 135.758937,
+              "type": "museum",
+              "tags": [],
+              "chain": false,
+              "brand": null,
+              "local_feel_rank": null,
+              "candidate_origin": null,
+              "commitment_eligible": false
+            },
+            {
+              "id": "wikidata-Q783923",
+              "name": "Kyoto International Manga Museum",
+              "lat": 35.0116867,
+              "lng": 135.7591715,
+              "type": "museum",
+              "tags": [],
+              "chain": false,
+              "brand": null,
+              "local_feel_rank": null,
+              "candidate_origin": null,
+              "commitment_eligible": false
+            }
+          ]
+        }
+      ],
+      "legs": [],
+      "covered_intents": [
+        "culture"
+      ],
+      "missing_intents": []
+    }
+  },
+  "agnostic_route_output_experiment": {
+    "source_status": {
+      "status": "loaded:18",
+      "external_candidates_requested": true,
+      "anchor": {
+        "lat": 35.0115754,
+        "lng": 135.7681441
+      },
+      "error": "provider_unavailable",
+      "collection": {
+        "base_radius_km": 3,
+        "selected_radius_km": 3,
+        "attempted_radius_km": null,
+        "expansion_applied": false,
+        "expansion_trigger": null,
+        "selection_reason": "loader_error",
+        "anchor_mode": "place",
+        "requested_intents": [
+          "museums"
+        ],
+        "expansion_query_intents": [],
+        "initial_profile": {
+          "record_count": 0,
+          "category_count": 0,
+          "requested_intent_count": 1,
+          "requested_intents_covered": [],
+          "requested_intents_partial": [],
+          "requested_intents_missing": [
+            "museums"
+          ]
+        },
+        "selected_profile": {
+          "record_count": 18,
+          "category_count": 1,
+          "requested_intent_count": 1,
+          "requested_intents_covered": [
+            "museums"
+          ],
+          "requested_intents_partial": [],
+          "requested_intents_missing": []
+        },
+        "initial_day_capacity": {
+          "target_km": null,
+          "target_floor_km": null,
+          "independent_candidate_count": 0,
+          "category_count": 0,
+          "candidate_span_km": 0,
+          "anchor_reach_km": 0,
+          "can_support_target": null
+        },
+        "selected_day_capacity": {
+          "target_km": null,
+          "target_floor_km": null,
+          "independent_candidate_count": 17,
+          "category_count": 1,
+          "candidate_span_km": 0,
+          "anchor_reach_km": 1.22,
+          "can_support_target": null
+        },
+        "cache": null,
+        "primary_collection": null,
+        "primary_collection_reason": null,
+        "primary_collection_target_km": null,
+        "spatial_scope": {
+          "source": "nominatim_bounds",
+          "kind": "settlement",
+          "collection_mode": "regional_bounded",
+          "diagonal_km": 57.51
+        },
+        "source_completion": {
+          "status": "partial",
+          "reason": "bounded_lifecycle_snapshot",
+          "pending": 1,
+          "completed": 0,
+          "failed": 0
+        },
+        "operator_evidence": {
+          "attempted": 0,
+          "confirmed": 0,
+          "excluded": 0,
+          "candidates": []
+        },
+        "regional_scout": {
+          "attempted": false,
+          "status": null,
+          "reason": "primary_zone_preserved",
+          "selected_anchor": "primary",
+          "cluster_count": 1,
+          "clusters": []
+        }
+      }
+    },
+    "candidate_readiness": {
+      "city": "agnostic-area",
+      "total_candidates": 18,
+      "real_place_count": 18,
+      "structural_count": 0,
+      "coordinate_ready_real_place_count": 18,
+      "coordinate_coverage": 1,
+      "by_candidate_kind": {
+        "real_place": 18
+      },
+      "by_trust_tier": {
+        "inferred": 18
+      },
+      "by_provider": {
+        "curated-catalog": {
+          "provider_id": "curated-catalog",
+          "source_family": "catalog",
+          "source_tier": "curated",
+          "source_policy": "parranda_curated",
+          "count": 0,
+          "by_candidate_kind": {},
+          "by_trust_tier": {}
+        },
+        "open-data-osm-wikidata-v1": {
+          "provider_id": "open-data-osm-wikidata-v1",
+          "source_family": "map",
+          "source_tier": "inferred",
+          "source_policy": "open_data_attribution_required",
+          "count": 18,
+          "by_candidate_kind": {
+            "real_place": 18
+          },
+          "by_trust_tier": {
+            "inferred": 18
+          }
+        }
+      },
+      "has_minimum_real_places": true,
+      "has_coordinates_coverage": true,
+      "can_support_blitz": true,
+      "can_support_planner": false,
+      "warnings": [
+        "insufficient_real_places_for_planner",
+        "low_trust_candidates_dominate"
+      ]
+    },
+    "eligibility": {
+      "eligible": false,
+      "blockers": [
+        "insufficient_geocoded_candidates",
+        "incomplete_geometry"
+      ],
+      "caveats": [
+        "below_planner_candidate_threshold"
+      ],
+      "checks": {
+        "external_candidates_requested": true,
+        "trusted_loader_status": "loaded:18",
+        "geocoded_stop_count": 0,
+        "combination_geocoded_stop_count": 0,
+        "geometry_coherence": "incomplete",
+        "can_support_planner": false,
+        "real_place_count": 18,
+        "coordinate_coverage": 1,
+        "candidate_pipeline": {
+          "coordinate_ready_real_place_count": 18,
+          "identity_resolved_candidate_count": 18,
+          "eligible_pool_candidate_count": 0,
+          "rejected_candidate_count": 18,
+          "availability_evaluated_candidate_count": 0,
+          "availability_excluded_candidate_count": 0,
+          "availability_unresolved_candidate_count": 0,
+          "role_relevant_candidate_count": 0,
+          "role_surface_candidate_count": 0,
+          "reach_eligible_candidate_count": 0,
+          "reach_excluded_candidate_count": 0,
+          "combination_selected_candidate_count": 0,
+          "combination_geocoded_stop_count": 0,
+          "engine_reservoir_geocoded_stop_count": 0
+        },
+        "candidate_reach_policy": {
+          "policy": "focused_day",
+          "max_origin_distance_km": 5,
+          "scope_kind": null
+        }
+      }
+    },
+    "constraint_negotiation": {
+      "status": "unresolved",
+      "route_present": false,
+      "preference_coverage": {
+        "requested_preferences": [
+          "museums"
+        ],
+        "covered_preferences": [],
+        "partial_preferences": [],
+        "missing_preferences": [
+          "museums"
+        ]
+      },
+      "walking": {
+        "status": "not_requested",
+        "target_km": null,
+        "estimated_km": null,
+        "target_floor_km": null,
+        "target_ceiling_km": null,
+        "validation_status": "not_evaluated"
+      },
+      "tradeoffs": [
+        "missing_preference:museums"
+      ],
+      "reasons": [
+        "insufficient_geocoded_candidates",
+        "incomplete_geometry",
+        "no_composed_route"
+      ]
+    },
+    "promotion": {
+      "readiness": "non_promotable",
+      "promote": false,
+      "qualifying_caps": [],
+      "disqualifying_caps": [
+        "capped_by_non_promotable",
+        "capped_by_requested_intent_unmet"
+      ],
+      "unmet_requested_intents": [
+        "museums"
+      ],
+      "reasons": [
+        "status_not_promotable:blocked",
+        "level_not_promotable:unavailable",
+        "requested_intent_unmet:museums",
+        "no_requested_intent_covered"
+      ],
+      "blocked_caps": [
+        "capped_by_non_promotable",
+        "capped_by_requested_intent_unmet"
+      ]
+    },
+    "intake": {
+      "status": "resolved",
+      "resolved": {
+        "label": "Kyoto, 京都府, Japan",
+        "lat": 35.0115754,
+        "lng": 135.7681441
+      }
+    }
+  },
+  "_evidence_limit": "Trimmed terminal response from qa606, without private place receipts or Live tokens. This is not the uncaptured raw provider/cache frame."
+}

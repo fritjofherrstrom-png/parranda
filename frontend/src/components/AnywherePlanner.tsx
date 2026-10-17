@@ -21,7 +21,8 @@ import {
   freezeComposeDateIso,
 } from "../lib/anywhere-payload.mjs";
 import { anywhereBlitzView, type AnywhereBlitzView } from "../lib/blitz-view.mjs";
-import { contextNote, limitationNote, placesStillArriving } from "../lib/day-limitations.mjs";
+import { inertOutside, tabbableWithin } from "../lib/modal-focus.mjs";
+import { contextNote, limitationNote, sourcesIncomplete } from "../lib/day-limitations.mjs";
 import { dayChangeSegments, describeDayChange, type DayChange } from "../lib/day-change.mjs";
 import {
   anchorKey,
@@ -80,7 +81,7 @@ import {
 import { anywhereDecision, type AnywhereClassification } from "../lib/anywhere-decision";
 import AppBar from "./shared/AppBar";
 import { KeepIcon, LocationIcon, MinusIcon, UndoIcon } from "./shared/icons";
-import { buttonClass, noticeCard } from "./shared/ui";
+import { busyButton, buttonClass, noticeCard } from "./shared/ui";
 import { useMediaQuery } from "./shared/useMediaQuery";
 import AnchorCard from "./planner/AnchorCard";
 import BlitzCard from "./planner/BlitzCard";
@@ -198,6 +199,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [placeRef, setPlaceRef] = useState<string | null>(null);
   const [invalidPlaceLink, setInvalidPlaceLink] = useState(false);
   const [invalidDayEditLink, setInvalidDayEditLink] = useState(false);
+  // False in the static HTML and the hydration render: until the arrival
+  // effect has read the URL, nothing is known about the link's place.
+  const [arrivalRead, setArrivalRead] = useState(false);
   const [conflictingPlaceLink, setConflictingPlaceLink] = useState(false);
   const [narrowingPlace, setNarrowingPlace] = useState(false);
   const [narrowingFailed, setNarrowingFailed] = useState(false);
@@ -1178,6 +1182,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   useEffect(() => {
     if (autoPlannedRef.current) return;
     autoPlannedRef.current = true;
+    setArrivalRead(true);
     setSavedDays(readLS<SavedEntry[]>(SAVED_KEY, []));
     // A shared link carries the WHOLE day's inputs (place + prefs + day + length),
     // so it auto-plans exactly what the sharer saw — composed fresh for the opener.
@@ -1602,34 +1607,38 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   // The Live sheet behaves like a modal: focus enters it, stays inside while it
   // is open, returns to the trigger on close, and the page behind does not scroll.
+  // The page behind is inert while it is open, so neither Tab nor a screen
+  // reader's own navigation can reach what the sheet covers.
   useEffect(() => {
     if (!liveSheetOpen) {
       liveQueryAbortRef.current?.abort();
       return;
     }
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const restoreOutside = inertOutside(liveSheetDialogRef.current?.parentElement);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setLiveSheetOpen(false);
         return;
       }
-      if (e.key !== "Tab" || !liveSheetDialogRef.current) return;
-      const focusable = Array.from(
-        liveSheetDialogRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
-        ),
-      );
+      const dialog = liveSheetDialogRef.current;
+      if (e.key !== "Tab" || !dialog) return;
+      const focusable = tabbableWithin(dialog);
       if (!focusable.length) {
         e.preventDefault();
-        liveSheetDialogRef.current.focus();
+        dialog.focus();
         return;
       }
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
+      const active = document.activeElement;
+      if (!active || !dialog.contains(active)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      } else if (e.shiftKey && (active === first || active === dialog)) {
         e.preventDefault();
         last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
+      } else if (!e.shiftKey && active === last) {
         e.preventDefault();
         first.focus();
       }
@@ -1642,6 +1651,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       cancelAnimationFrame(focusFrame);
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = previousOverflow;
+      // The trigger sits in the page behind: make it reachable before focusing it.
+      restoreOutside();
       (liveSheetTriggerRef.current ?? previouslyFocused)?.focus();
     };
   }, [liveSheetOpen]);
@@ -2101,12 +2112,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Some caps have no sentence of their own because a more specific surface
   // already states them (see day-limitations.mjs). Guard on the rendered note,
   // never on the cap count, or those days render an empty bullet.
-  // A place source still fetching when the server answered: more places are on
-  // their way, so the place is not judged on what has arrived so far.
+  // Published source completion is historical evidence, not a live job state.
+  // An incomplete answer cannot judge the place thin or promise more supply.
   const sourceCompletion = safeResponse?.agnostic_route_output_experiment?.source_status?.collection?.source_completion;
-  const placesArriving = phase === "done" && placesStillArriving(sourceCompletion);
+  // Primary failures live alongside collection metadata; the completion failed
+  // count covers background jobs and cannot clear a failed primary source.
+  const sourceError = safeResponse?.agnostic_route_output_experiment?.source_status?.error;
+  const primarySourceFailed = typeof sourceError === "string" && sourceError.trim() !== "";
+  const incompletePlaceSources = phase === "done" && (sourcesIncomplete(sourceCompletion) || primarySourceFailed);
+  const sourceEvidenceNote = incompletePlaceSources ? contextNote([], t, { sourceCompletion, sourceFailed: primarySourceFailed }) : "";
+  const terminalSourceIssue = incompletePlaceSources && !hasPrimaryRoute && !anchorUnresolved && !upgradePending && !serviceRefusal;
   const canUpdateSaved = !restoredAt || Boolean(lastRequestedAnchorRef.current && lastComposeDateIsoRef.current);
-  const dayLimitationNote = limitationNote(dayLimitations, split.core.length, t, { placesStillArriving: placesArriving });
+  const dayLimitationNote = limitationNote(dayLimitations, split.core.length, t, { sourcesIncomplete: incompletePlaceSources });
 
   // The route line joins the stops' own coordinates unless the route carries
   // walking geometry; the map draws that sketch dotted and the caption says so.
@@ -2141,30 +2158,24 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // outage, never as the reader's picks.
   const loadedSourceStatus = safeResponse?.agnostic_route_output_experiment?.source_status;
   const sourcePartlyUnavailable = phase === "done" && classification?.status === "unavailable" && !anchorUnresolved
-    && !sourceUnavailable && !placesArriving && typeof loadedSourceStatus?.error === "string" && loadedSourceStatus.error.trim() !== ""
+    && !sourceUnavailable && !terminalSourceIssue && typeof loadedSourceStatus?.error === "string" && loadedSourceStatus.error.trim() !== ""
     && loadedSourceStatus?.collection?.selection_reason === "loader_error";
   // Preserve the classifier's absences; choices announce themselves, and an
   // outstanding upgrade or service refusal is not a final no-day verdict.
-  const unavailableMessage = phase === "done" && classification?.status === "unavailable" && !upgradePending && !serviceRefusal && !unavailableHasChoices
+  const unavailableMessage = phase === "done" && (classification?.status === "unavailable" || terminalSourceIssue) && !upgradePending && !serviceRefusal && !unavailableHasChoices
     ? anchorUnresolved
       ? placeRef ? referenceFailureMessage : t(
           `Parranda kunde inte hitta ”${typedPlaceLabel}” just nu. Prova en annan stavning eller lägg till land eller region — inget hittas på.`,
           `Parranda couldn't pin down “${typedPlaceLabel}” right now. Try another spelling or add a country or region — nothing is invented in its place.`,
         )
+      : terminalSourceIssue
+        ? `${t("Planeringen avslutades utan rutt.", "Planning finished without a route.")} ${sourceEvidenceNote}`
       : sourceUnavailable
         ? t(
             `Platskällorna svarade inte just nu, så Parranda kunde inte hämta platser ${anchorIsPosition ? "nära dig" : `för ${placeName}`} — inget hittas på. Försök igen om en stund.`,
             `The place sources didn't answer just now, so Parranda couldn't fetch places ${anchorIsPosition ? "near you" : `for ${placeName}`} — nothing is invented in its place. Try again in a moment.`,
           )
-      : placesArriving
-        ? restoredAt ? t(
-            "Källorna hade inte hämtats klart när dagen skapades. Den sparade ögonblicksbilden innehåller ingen dag — det här är inte en pågående hämtning.",
-            "Sources had not finished when this day was created. The saved snapshot contains no day — this is not an ongoing fetch.",
-          ) : t(
-            `Fler platser är på väg. Platserna ${anchorIsPosition ? "nära dig" : `för ${placeName}`} hämtas fortfarande, så Parranda har ingen dag ännu — inget hittas på. Försök igen om en stund.`,
-            `More places are on their way. Places ${anchorIsPosition ? "near you" : `for ${placeName}`} are still being fetched, so Parranda has no day yet — nothing is invented in its place. Try again in a moment.`,
-          )
-      : classification.unavailableReason === "sparse_supply" && classification.realPlaceCount
+      : classification?.unavailableReason === "sparse_supply" && classification.realPlaceCount
         ? t(
             `Parranda hittade ${classification.realPlaceCount === 1 ? "1 riktig plats" : `${classification.realPlaceCount} riktiga platser`} ${anchorIsPosition ? "nära dig" : `nära ${placeName}`}, men inte tillräckligt för en pålitlig dag ännu — inget hittas på.`,
             `Parranda found ${classification.realPlaceCount === 1 ? "1 real place" : `${classification.realPlaceCount} real places`} ${anchorIsPosition ? "near you" : `near ${placeName}`}, but not enough for a reliable day yet — nothing is invented in its place.`,
@@ -2175,7 +2186,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           )
     : "";
   const dayContextNote = contextNote(dayLimitations, t, {
-    sourceCompletion,
+    // The header states source limitations; the map keeps its own facts.
+    sourceCompletion: incompletePlaceSources ? null : sourceCompletion,
     statedElsewhere: sourceBackedDay
       ? ["capped_by_external_only_sources", "capped_by_heuristic_walking"]
       : ["capped_by_heuristic_walking"],
@@ -2313,6 +2325,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       mapExpanded={splitLayout ? undefined : mapExpanded}
       onToggleExpanded={splitLayout ? undefined : () => setMapExpanded((cur) => !cur)}
       heightClass={splitLayout ? "h-full" : mapExpanded ? "h-96 sm:h-112" : "h-48 sm:h-60"}
+      regionLabel={splitLayout ? t("Interaktiv karta", "Interactive map") : undefined}
       t={t}
     />
   ) : null;
@@ -2335,7 +2348,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         />
       </div>
 
-      <div className="flex min-w-0 flex-col gap-10 sm:gap-12">
+      <main className="flex min-w-0 flex-col gap-10 sm:gap-12">
       {hasAnchor && (
         <AnchorCard
           t={t}
@@ -2388,17 +2401,28 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {/* Static hydration and unavailable snapshots must not become another
           place-entry step. Root is the only place picker. */}
       {!hasAnchor && (
+        // One status region from the static HTML on, so the arrival's verdict
+        // is announced as a change. The static page cannot see its own link:
+        // telling a reader with a place link to choose a place on the home
+        // page sent them away while their day was about to be built. Until
+        // the link is read, only "preparing" is true; the app bar links home.
         <div className="flex flex-col items-start gap-3 pt-8" role="status">
-          <p>{invalidPlaceLink
-            ? t("Länken har en ogiltig platsreferens. Välj en plats på startsidan — ingen annan plats väljs automatiskt.", "This link has an invalid place reference. Choose a place on the home page — no other place is selected automatically.")
-            : invalidDayEditLink
-            ? t("Länkens stoppändring är ogiltig. Välj en plats på startsidan — ingen oförändrad heldag skapas automatiskt.", "This link has an invalid stop edit. Choose a place on the home page — no unedited day is generated automatically.")
-            : conflictingPlaceLink
-            ? t("Länken har motstridiga platsankare. Välj en plats på startsidan — ingen annan plats väljs automatiskt.", "This link has conflicting place anchors. Choose a place on the home page — no other place is selected automatically.")
-            : t("Förbereder din dag. Om ingen sparad dag finns, välj en plats på startsidan.", "Preparing your day. If no saved day is available, choose a place on the home page.")}</p>
-          <a href={`/?lang=${lang}`} onClick={() => leavePlanner("home")} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
-            {t("Till startsidan", "Go to home")}
-          </a>
+          {!arrivalRead ? (
+            <p>{t("Förbereder din dag …", "Preparing your day …")}</p>
+          ) : (
+            <>
+              <p>{invalidPlaceLink
+                ? t("Länken har en ogiltig platsreferens. Välj en plats på startsidan — ingen annan plats väljs automatiskt.", "This link has an invalid place reference. Choose a place on the home page — no other place is selected automatically.")
+                : invalidDayEditLink
+                ? t("Länkens stoppändring är ogiltig. Välj en plats på startsidan — ingen oförändrad heldag skapas automatiskt.", "This link has an invalid stop edit. Choose a place on the home page — no unedited day is generated automatically.")
+                : conflictingPlaceLink
+                ? t("Länken har motstridiga platsankare. Välj en plats på startsidan — ingen annan plats väljs automatiskt.", "This link has conflicting place anchors. Choose a place on the home page — no other place is selected automatically.")
+                : t("Förbereder din dag. Om ingen sparad dag finns, välj en plats på startsidan.", "Preparing your day. If no saved day is available, choose a place on the home page.")}</p>
+              <a href={`/?lang=${lang}`} onClick={() => leavePlanner("home")} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                {t("Till startsidan", "Go to home")}
+              </a>
+            </>
+          )}
         </div>
       )}
 
@@ -2415,15 +2439,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           </p>
           <button
             type="button"
-            onClick={useLocationAgain}
-            disabled={relocating}
+            {...busyButton(relocating, useLocationAgain)}
             className={buttonClass("primary", "min-h-11 px-4 text-sm")}
           >
             <LocationIcon className="h-4 w-4" />
             {relocating ? t("Hämtar position …", "Getting location …") : t("Använd min position", "Use my location")}
           </button>
           {relocateDenied && (
-            <p className="text-[13px] text-parranda-ink/72" aria-live="polite">
+            <p className="text-13 text-parranda-ink/72" aria-live="polite">
               {t("Positionen blockerades — byt till en stad eller plats i stället.", "Location was blocked — choose a city or place instead.")}
             </p>
           )}
@@ -2444,7 +2467,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           matters most. Hiding it behind a collapsed panel made the dismissal
           effectively irreversible. */}
       {(excludedCount > 0 || pinnedCount > 0 || liveChoiceCount > 0) && (
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-parranda-ink/72" role="status">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-13 text-parranda-ink/72" role="status">
           {liveChoiceCount > 0 && <span>{t("Live-valet behålls för sitt tillfälle", "Live choice saved for its occurrence")}</span>}
           {pinnedCount > 0 && (
             <span className="inline-flex items-center gap-1.5">
@@ -2477,7 +2500,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           screen is the evidence. Silently dropping it would let the ledger
           claim something the day does not show. */}
       {unkept.count > 0 && (
-        <div className="flex flex-col gap-1.5 rounded-parranda border-[1.5px] border-parranda-glow/40 bg-parranda-glow/8 px-4 py-3 text-[13px] text-parranda-ink/85" role="status">
+        <div className="flex flex-col gap-1.5 rounded-parranda border-line border-parranda-glow/40 bg-parranda-glow/8 px-4 py-3 text-13 text-parranda-ink/85" role="status">
           {unkept.reasons.map((entry: { id: string; label: string; reason: string | null }) => (
             <p key={entry.id}>{isLiveOccurrenceId(entry.id) ? t(`${entry.label || "Det valda tillfället"} kunde inte bekräftas som stopp i den här dagen. Ditt val finns kvar.`, `${entry.label || "The chosen occurrence"} could not be confirmed as a stop in this day. Your choice is retained.`) : unkeptReasonSentence(entry, t)}</p>
           ))}
@@ -2545,7 +2568,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </p>
       )}
 
-      {phase === "done" && classification?.status === "unavailable" && (
+      {phase === "done" && (classification?.status === "unavailable" || terminalSourceIssue) && (
         !upgradePending &&
         <div className={`flex flex-col items-start gap-3 ${noticeCard}`}>
           {/* Three honestly different absences: a typed place Parranda could
@@ -2557,7 +2580,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               primary locality, not the resolver's full admin chain. */}
           {/* Plain visible copy is announced by the permanent result region;
               PlaceChoices instead owns its interactive status. */}
-          <div className="text-[15px] text-parranda-ink">
+          <div className="text-15 text-parranda-ink">
             {unavailableHasChoices ? (
               <PlaceChoices intake={safeResponse?.agnostic_route_output_experiment?.intake}
                 pending={false} locationPending={narrowingPlace} locationFailed={narrowingFailed} t={t}
@@ -2579,12 +2602,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               "One of the place sources didn't answer just now, so the evidence may be incomplete. Try again in a moment.",
             )}</p>
           )}
-          {canUpdateSaved && (sourceUnavailable || sourcePartlyUnavailable || placesArriving) && (
+          {canUpdateSaved && (sourceUnavailable || sourcePartlyUnavailable || terminalSourceIssue) && (
             <button type="button" onClick={() => retryPlan({ sameDate: true })} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
               {t("Försök igen", "Try again")}
             </button>
           )}
-          {!anchorUnresolved && !sourceUnavailable && !sourcePartlyUnavailable && !placesArriving && selected.length > 0 && (
+          {!anchorUnresolved && !sourceUnavailable && !sourcePartlyUnavailable && !terminalSourceIssue && selected.length > 0 && (
             <p>{t(
               "Vi kunde inte bekräfta en gångbar dag med dina val. Andra intressen läggs inte till automatiskt. Du kan ändra datum, dagens rytm eller själv välja fler intressen.",
               "We could not confirm a walkable day with your choices. Other interests are not added automatically. You can change the date, day rhythm or choose more interests yourself.",
@@ -2621,9 +2644,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {dayChange && (phase === "done" || (phase === "error" && stopEditError)) && (!dayIsStale || stopEditError) && (dayChangeLine.length > 0 || stopEditFeedback || stopEditError) && (
         <div
           role="status"
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-parranda border-[1.5px] border-parranda-ink/12 bg-parranda-ink/4 px-4 py-2.5"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-parranda border-line border-parranda-ink/12 bg-parranda-ink/4 px-4 py-2.5"
         >
-          <p className="min-w-0 flex-1 text-[13px] leading-snug text-parranda-ink/75">
+          <p className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink/75">
             {stopEditError ? stopEditErrorMessage : stopEditFeedback ? t(stopEditFeedback === "remove" ? "Borttaget" : "Bytt", stopEditFeedback === "remove" ? "Removed" : "Replaced") : <>
               <span className="font-bold text-parranda-ink">{t("Ändrat", "Changed")}: </span>
               {dayChangeLine.join(" · ")}
@@ -2633,7 +2656,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             type="button"
             onClick={undoDayChange}
             aria-label={t("Ångra ändringen", "Undo this change")}
-            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-parranda-ink/20 px-3.5 text-xs font-bold text-parranda-ink transition hover:border-parranda-ink/50"
+            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-line border-parranda-ink/20 px-3.5 text-xs font-bold text-parranda-ink transition hover:border-parranda-ink/50"
           >
             <UndoIcon className="h-3.5 w-3.5" />
             {t("Ångra", "Undo")}
@@ -2667,7 +2690,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           wovenCount={split.woven.length}
           pickCoverage={pickCoverage}
           dayLimitationNote={dayLimitationNote}
-          placesArriving={placesArriving}
+          sourceEvidenceNote={sourceEvidenceNote}
           onUpdateDay={() => retryPlan({ sameDate: true })}
           restoredAt={restoredAt}
           canUpdateSaved={canUpdateSaved}
@@ -2679,7 +2702,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           remain route actions: offering them here would call an unsequenced
           candidate surface a day. */}
       {showStructure && structure && !(showDay && routeStops.length > 0) && (
-        <section className="rounded-parranda border-[1.5px] border-parranda-glow/40 bg-parranda-glow/8 p-4">
+        <section className="rounded-parranda border-line border-parranda-glow/40 bg-parranda-glow/8 p-4">
           <div className="min-w-0 flex-1">
             {structure.provenance === "agnostic_anchor" && (
               <p className="text-sm font-bold text-parranda-clay">
@@ -2691,7 +2714,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             )}
             {restoredAt && (
               <p className="mt-1 text-xs text-parranda-ink/68">
-                {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE")} —{" "}
+                {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", { day: "numeric", month: "short", year: "numeric" })} —{" "}
                 {canUpdateSaved ? (
                   <button type="button" onClick={() => retryPlan({ sameDate: true })} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-parranda-clay">
                     {t("bygg om för färska events", "rebuild for fresh events")}
@@ -2853,8 +2876,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {savedDays.length > 0 && (
         <SavedDays t={t} lang={lang} savedDays={savedDays} restoreEntry={restoreEntry} removeSavedDay={removeSavedDay} />
       )}
-      </div>
+      </main>
 
+      {/* The wide-screen map column is the "Map of the day" landmark; the
+          map's own canvas region inside it is named "Interactive map", so
+          the two are not one name twice. */}
       {splitLayout && (
         <aside aria-label={t("Karta över dagen", "Map of the day")} className="sticky top-4 h-[calc(100dvh-2rem)] min-h-[30rem]">
           {routeMap}

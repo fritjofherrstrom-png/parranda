@@ -265,6 +265,18 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
   const date = new Date(startsAt);
   if (Number.isNaN(date.getTime())) return "";
   const timezone = ev.timezone || win?.timezone || null;
+  // One way to write a moment: the same "weekday day month" as date-only rows,
+  // then the clock, venue-local. A clock with a weekday but no date read as a
+  // different kind of fact next to dated rows ("Fri 19:00" beside "Fri 16 Oct").
+  const zone = timezone ? { timeZone: timezone } : {};
+  const dateOf = (d) => d.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short", ...zone });
+  const clockOf = (d) => d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", ...(d.getUTCSeconds() ? { second: "2-digit" } : {}), ...zone });
+  const range = (start, end) => {
+    if (!end) return `${dateOf(start)} ${clockOf(start)}`;
+    return dateOf(start) === dateOf(end)
+      ? `${dateOf(start)} ${clockOf(start)}–${clockOf(end)}`
+      : `${dateOf(start)} ${clockOf(start)} – ${dateOf(end)} ${clockOf(end)}`;
+  };
 
   // ONGOING: a run that started earlier and has not ended yet. Its start
   // weekday is history — printing it under "tonight" claims the wrong day. Say
@@ -279,11 +291,7 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
   if (selectedDate && timezone && nowValid) {
     try {
       const today = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(nowDate);
-      if (selectedDate !== today) {
-        const opts = { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: timezone };
-        const startLabel = date.toLocaleString(locale, opts);
-        return endValid ? `${startLabel} – ${endsAt.toLocaleString(locale, opts)}` : startLabel;
-      }
+      if (selectedDate !== today) return range(date, endValid ? endsAt : null);
     } catch {
       return ""; // no viewer-timezone substitution for an unresolvable venue date
     }
@@ -303,16 +311,8 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
   }
 
   try {
-    const opts = { weekday: "short", hour: "2-digit", minute: "2-digit", ...(date.getUTCSeconds() ? { second: "2-digit" } : {}) };
-    if (timezone) opts.timeZone = timezone; // venue-local, never the viewer's
-    const startLabel = date.toLocaleString(locale, opts);
-    if (endValid && endsAt.getTime() > date.getTime()) {
-      const dayOpts = timezone ? { timeZone: timezone } : {};
-      const sameDay = date.toLocaleDateString(locale, dayOpts) === endsAt.toLocaleDateString(locale, dayOpts);
-      const endOpts = { ...(sameDay ? { hour: "2-digit", minute: "2-digit", ...(timezone ? { timeZone: timezone } : {}) } : opts), ...(endsAt.getUTCSeconds() ? { second: "2-digit" } : {}) };
-      return `${startLabel}–${endsAt.toLocaleString(locale, endOpts)}`;
-    }
-    return startLabel;
+    // Venue-local, never the viewer's.
+    return range(date, endValid && endsAt.getTime() > date.getTime() ? endsAt : null);
   } catch {
     return "";
   }

@@ -1,0 +1,80 @@
+✖ explicit click during expansion keeps its marker name after mouseleave and scroll (5732.463875ms)
+✔ hover name still closes on pointer leave without an explicit selection (410.598042ms)
+✖ another explicit selection replaces the name and Escape clears it (470.746791ms)
+✔ keyboard focus opens the marker name and blur closes it (353.225792ms)
+✖ touch selection survives pointer restoration and a new route clears it (462.540459ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 2
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7806.338292
+
+✖ failing tests:
+
+test at tests/route-map-selection.test.js:72:1
+✖ explicit click during expansion keeps its marker name after mouseleave and scroll (5732.463875ms)
+  AssertionError [ERR_ASSERTION]: explicit selection survives geometry-triggered mouseleave
+  + actual - expected
+
+  + []
+  - [
+  -   'Stop A'
+  - ]
+
+      at TestContext.<anonymous> ($REPO/tests/route-map-selection.test.js:104:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ 'Stop A' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/route-map-selection.test.js:120:1
+✖ another explicit selection replaces the name and Escape clears it (470.746791ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+  + []
+  - [
+  -   'Stop A'
+  - ]
+
+      at TestContext.<anonymous> ($REPO/tests/route-map-selection.test.js:124:10)
+      at runNextTicks (node:internal/process/task_queues:65:5)
+      at process.processImmediate (node:internal/timers:472:9)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ 'Stop A' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/route-map-selection.test.js:145:1
+✖ touch selection survives pointer restoration and a new route clears it (462.540459ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+  + []
+  - [
+  -   'Stop A'
+  - ]
+
+      at TestContext.<anonymous> ($REPO/tests/route-map-selection.test.js:151:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ 'Stop A' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

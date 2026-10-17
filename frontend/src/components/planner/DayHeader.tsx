@@ -11,15 +11,15 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
 import { walkingDistanceLabel } from "../../lib/route-context-view.mjs";
 import { CheckIcon, ExternalIcon, HalfCircleIcon, MinusIcon, ShareIcon, StarIcon, SunIcon, WalkIcon } from "../shared/icons";
-import { buttonClass, Eyebrow } from "../shared/ui";
+import { buttonClass, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
 
 type RoutePart = WalkingRoutePart;
 type PickCoverage = { key: string; state: "covered" | "partial" | "missing" };
 
 /** A quiet fact about the day, not a control. */
-const metaChip =
-  "inline-flex items-center gap-1.5 rounded-full bg-parranda-ink/[0.07] px-2.5 py-1 text-xs font-semibold text-parranda-ink/85";
+// The day's facts are labels, not choices (ui.tsx labelChip).
+const metaChip = labelChip;
 
 /** The weather source's daily summary (server/weather.js), in the reader's words. */
 const WEATHER_CONDITIONS: Record<string, [string, string]> = {
@@ -120,7 +120,7 @@ export function PlaceSign({ text }: { text: string }) {
 
 function Note({ children }: { children: ReactNode }) {
   return (
-    <p className="flex items-start gap-2 text-[13px] leading-relaxed text-parranda-ink/72">
+    <p className="flex items-start gap-2 text-13 leading-relaxed text-parranda-ink/72">
       <span aria-hidden="true" className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-glow" />
       <span>{children}</span>
     </p>
@@ -161,7 +161,7 @@ export default function DayHeader({
   wovenCount,
   pickCoverage,
   dayLimitationNote,
-  placesArriving = false,
+  sourceEvidenceNote = "",
   onUpdateDay,
   restoredAt,
   canUpdateSaved = true,
@@ -182,8 +182,8 @@ export default function DayHeader({
   wovenCount: number;
   pickCoverage: PickCoverage[];
   dayLimitationNote: string | null | undefined;
-  /** A place source is still fetching: more places can arrive. */
-  placesArriving?: boolean;
+  /** Historical source limitations of this published answer. */
+  sourceEvidenceNote?: string;
   onUpdateDay?: () => void;
   restoredAt: string | null;
   canUpdateSaved?: boolean;
@@ -213,7 +213,7 @@ export default function DayHeader({
         {staleNotice === "updating" && (
           <span
             aria-live="polite"
-            className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ink/10 px-2.5 py-0.5 text-[11px] font-bold text-parranda-ink/75"
+            className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ink/10 px-2.5 py-0.5 text-11 font-bold text-parranda-ink/75"
           >
             <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-parranda-glow motion-safe:animate-pulse" />
             {t("Uppdaterar dagen …", "Updating your day …")}
@@ -223,7 +223,7 @@ export default function DayHeader({
           <>
             <span
               aria-live="polite"
-              className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ember/12 px-2.5 py-0.5 text-[11px] font-bold text-parranda-clay"
+              className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ember/12 px-2.5 py-0.5 text-11 font-bold text-parranda-clay"
             >
               {navigationInterrupted
                 ? t("Planeringen pausades när du lämnade sidan — visar din förra dag", "Planning paused when you left — showing your previous day")
@@ -232,7 +232,7 @@ export default function DayHeader({
             <button
               type="button"
               onClick={retryPlan}
-              className="inline-flex min-h-11 items-center rounded-full border-[1.5px] border-parranda-ember/50 px-3.5 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
+              className="inline-flex min-h-11 items-center rounded-full border-line border-parranda-ember/50 px-3.5 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
             >
               {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök uppdatera igen", "Try updating again")}
             </button>
@@ -280,18 +280,18 @@ export default function DayHeader({
       {pickCoverage.length > 0 && !allPicksCovered && (
         <ul className="flex flex-wrap gap-2" aria-label={t("Dina val i dagen", "Your picks in this day")}>
           {pickCoverage.map(({ key, state }) => (
+            // Status, not selection: covered and partial are labels like the
+            // facts row (an ink fill would read as a chosen chip, as in Adjust).
+            // Missing keeps the dashed tone, which means "not in the day".
             <li
               key={key}
               className={
-                "inline-flex min-h-7 items-center gap-1.5 rounded-full px-3 text-xs " +
-                (state === "covered"
-                  ? "bg-parranda-ink font-bold text-parranda-paper"
-                  : state === "partial"
-                    ? "border-[1.5px] border-parranda-ink/22 font-semibold text-parranda-ink/80"
-                    : "border-[1.5px] border-dashed border-parranda-ink/30 text-parranda-ink/72")
+                state === "missing"
+                  ? "inline-flex items-center gap-1.5 rounded-full border-line border-dashed border-parranda-ink/30 px-2.5 py-1 text-xs font-semibold text-parranda-ink/72"
+                  : labelChip
               }
             >
-              {state === "covered" && <CheckIcon className="h-3 w-3" />}
+              {state === "covered" && <CheckIcon className="h-3 w-3 text-parranda-ember" />}
               {state === "partial" && <HalfCircleIcon className="h-3 w-3 text-parranda-glow" />}
               {state === "missing" && <MinusIcon className="h-3 w-3" />}
               <span>{pickLabel(key, lang)}</span>
@@ -302,21 +302,15 @@ export default function DayHeader({
           ))}
         </ul>
       )}
-      {/* The server answered within its bounded wait while a place source is
-          still fetching. The day is real but provisional: say that more is on
-          its way and let the reader ask again, rather than judging the place. */}
-      {placesArriving && (
-        <div role="status" className="flex flex-col items-start gap-2 rounded-parranda border-[1.5px] border-parranda-ember/40 bg-parranda-ember/8 px-4 py-3">
-          <p className="text-sm font-bold text-parranda-ink">{restoredAt
-            ? t("Källorna hade inte hämtats klart när dagen skapades", "Sources had not finished when this day was created")
-            : t("Fler platser är på väg", "More places are on their way")}</p>
-          <p className="text-[13px] leading-relaxed text-parranda-ink/80">
-            {restoredAt ? t(
-              "Den sparade dagen bygger på det som hade hunnit komma då. Det här är en ögonblicksbild, inte en pågående hämtning. Uppdatera uttryckligen för att läsa källorna igen.",
-              "This saved day uses what had arrived then. This is a snapshot, not an ongoing fetch. Update explicitly to read the sources again.",
-            ) : t(
-              "En källa hämtar fortfarande platser här. Dagen nedan bygger på det som hunnit komma — uppdatera om en stund för en rikare dag.",
-              "A source is still fetching places here. The day below uses what has arrived so far — update in a moment for a fuller day.",
+      {/* Source limitations describe this published answer, never a live job.
+          The day remains until the reader explicitly asks for an update. */}
+      {sourceEvidenceNote && (
+        <div role="status" className="flex flex-col items-start gap-2 rounded-parranda border-line border-parranda-ember/40 bg-parranda-ember/8 px-4 py-3">
+          <p className="text-sm font-bold text-parranda-ink">{sourceEvidenceNote}</p>
+          <p className="text-13 leading-relaxed text-parranda-ink/80">
+            {t(
+              "Dagen bygger på underlaget i det svaret. Uppdatera uttryckligen för att läsa källorna igen.",
+              "This day uses the evidence in that response. Update explicitly to read the sources again.",
             )}
           </p>
           {onUpdateDay && canUpdateSaved && (
@@ -331,7 +325,7 @@ export default function DayHeader({
       {dayLimitationNote && <Note>{dayLimitationNote}</Note>}
       {restoredAt && (
         <p className="text-xs text-parranda-ink/68">
-          {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE")} —{" "}
+          {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", { day: "numeric", month: "short", year: "numeric" })} —{" "}
           {canUpdateSaved ? (
             <button type="button" onClick={() => resolveAndRun()} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-parranda-clay">
               {t("bygg om för färska events", "rebuild for fresh events")}
@@ -412,17 +406,18 @@ export function DayActions({
                     target="_blank"
                     rel="noopener noreferrer"
                     className={
-                      "flex min-h-14 items-center gap-3 rounded-parranda-btn px-3.5 py-2 text-left text-[15px] transition " +
+                      "flex min-h-14 items-center gap-3 rounded-parranda-btn px-3.5 py-2 text-left text-15 transition " +
                       (first
                         ? "bg-parranda-terracotta font-extrabold text-white hover:brightness-110"
-                        : "border-[1.5px] border-parranda-ink/20 font-bold text-parranda-ink hover:border-parranda-ink/50")
+                        : "border-line border-parranda-ink/20 font-bold text-parranda-ink hover:border-parranda-ink/50")
                     }
                   >
                     <span
                       aria-hidden="true"
                       className={
                         "type-data inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold " +
-                        (first ? "bg-white/22" : "bg-parranda-ink/8")
+                        // A darker disc keeps the white digit at 6.7:1 on terracotta (white/22 gave 3.7:1).
+                        (first ? "bg-black/15" : "bg-parranda-ink/8")
                       }
                     >
                       {index + 1}
@@ -430,7 +425,7 @@ export function DayActions({
                     <span className="min-w-0 flex-1">
                       <span className="sr-only">{t(`Del ${index + 1} i Google Maps: `, `Part ${index + 1} in Google Maps: `)}</span>
                       {routeEndLabel(part.from)} → {routeEndLabel(part.to)}
-                      <span className={"type-data block text-[11px] font-medium " + (first ? "text-white/85" : "text-parranda-ink/68")}>
+                      <span className={"type-data block text-11 font-medium " + (first ? "text-white" : "text-parranda-ink/68")}>
                         {newStops > 0
                           ? t(`${newStops} stopp`, `${newStops} ${newStops === 1 ? "stop" : "stops"}`)
                           : t("Sista biten", "The last stretch")}
@@ -456,7 +451,7 @@ export function DayActions({
             href={routeUrls[0]}
             target="_blank"
             rel="noopener noreferrer"
-            className={buttonClass("primary", "col-span-2 min-h-12 px-5 text-[15px] sm:px-6")}
+            className={buttonClass("primary", "col-span-2 min-h-12 px-5 text-15 sm:px-6")}
           >
             {t("Öppna rutten i Maps", "Open route in Maps")}
             <ExternalIcon />
@@ -464,10 +459,12 @@ export function DayActions({
         )}
         <button
           type="button"
-          onClick={saveDay}
-          disabled={isSaved}
+          // Saved stays focusable: a disabled button would drop the focus
+          // that just pressed it to the top of the page.
+          onClick={isSaved ? undefined : saveDay}
+          aria-disabled={isSaved || undefined}
           aria-label={isSaved ? t("Dagen är sparad", "Day is saved") : t("Spara dagen", "Save this day")}
-          className={buttonClass("secondary", "min-h-12 px-4 text-sm disabled:border-parranda-ember/50 disabled:text-parranda-clay disabled:opacity-100")}
+          className={buttonClass("secondary", "min-h-12 px-4 text-sm aria-disabled:border-parranda-ember/50 aria-disabled:text-parranda-clay aria-disabled:opacity-100")}
         >
           <StarIcon filled={isSaved} />
           {isSaved ? t("Sparad", "Saved") : t("Spara", "Save")}

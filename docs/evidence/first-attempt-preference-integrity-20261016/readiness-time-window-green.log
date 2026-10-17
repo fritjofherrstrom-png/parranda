@@ -1,0 +1,16 @@
+✔ readiness uses real admission and intent evidence, not matching coordinate counts (24.7655ms)
+✔ known closures, reach, identity and exclusions remain subtractive (2.576958ms)
+✔ readiness respects the same trusted remaining-day hours and reach as composition (1.216834ms)
+✔ readiness and composition share one weather acquisition but resolve the actual trusted clock afresh (28.630167ms)
+✔ unadmitted matching rows do not consume the reserve; hard deadline and late completion remain terminal (21.306834ms)
+✔ cancelled consumer and late old generation cannot publish or overwrite the replacement generation (3.510666ms)
+✔ same-anchor changed intent is assessed independently and a published snapshot is immutable (0.812084ms)
+✔ source settlement and cancellation win over an asynchronous readiness check without rearming its timer (0.458ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 205.509

@@ -117,7 +117,9 @@ test("the first explicit priority cannot be promoted while lower priorities can"
   const second = h.container.querySelector('[data-preference-key="culture"] button[aria-label]');
   assert.ok(first);
   assert.ok(second);
-  assert.equal(first.disabled, true, "rank one has nowhere higher to go");
+  // Unavailable, not disabled: the press that reached rank one keeps focus.
+  assert.equal(first.getAttribute("aria-disabled"), "true", "rank one has nowhere higher to go");
+  assert.equal(first.disabled, false);
   await click(h, first);
   assert.deepEqual(promoted, []);
   assert.equal(second.disabled, false);

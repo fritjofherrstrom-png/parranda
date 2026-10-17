@@ -1,0 +1,10 @@
+✔ real HTTP keeps the same cold job pending for knowledge_only matching coordinates (8378.9965ms)
+✔ real HTTP keeps the same cold job pending for closed_remaining_day matching coordinates (8317.556542ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 16880.018333
