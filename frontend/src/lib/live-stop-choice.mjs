@@ -13,6 +13,15 @@ export function liveStopChoiceId(stop) {
   return isLiveOccurrenceId(stop?.live_occurrence_id) ? stop.live_occurrence_id : null;
 }
 
+// Display an action only for an actual server-admitted slot on the day being
+// planned. A series is a container even when its representative has metadata.
+export function selectableLiveOccurrenceId(event, date) {
+  const id = liveStopChoiceId(event);
+  return id && event.live_choice_eligible === true && event.occurrence_date === date &&
+    id.slice(5, 15) === date && !(Array.isArray(event.occurrences) && event.occurrences.length)
+    ? id : null;
+}
+
 export function scopeLiveChoices(entries, date) {
   const scoped = {};
   const liveEventChoices = [];

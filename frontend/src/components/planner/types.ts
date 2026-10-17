@@ -51,6 +51,10 @@ export interface PlaceStructure {
 }
 
 export interface PulseEvent {
+  /** Server-issued eligibility for this exact source occurrence, never a series. */
+  live_occurrence_id?: string;
+  live_choice_eligible?: boolean;
+  occurrence_date?: string;
   tags?: string[];
   /** Exact accepted source slots, grouped only by an explicit source series. */
   occurrences?: PulseEvent[];

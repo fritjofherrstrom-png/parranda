@@ -2,11 +2,9 @@ import { useLiveClock } from "./useLiveClock";
 /**
  * THE LIVE SHEET (design handoff §3B) — explores the live_events buckets only.
  *
- * It never changes the day's anchor or the route, and it cannot: it receives
- * read-only data plus three callbacks — pick a scope (a separate, non-mutating
- * live_event_query_v1 request), pick a time, close. The landing's location
- * consent anchors the DAY; a separate near-me consent applies only to a Live
- * query, and that consent is requested by the planner, not here.
+ * Scope/time navigation reads the supplied Live data. Explicit planning sends
+ * only a server-issued occurrence identity to the planner's commitment path;
+ * it cannot supply event facts or change the day's anchor/date.
  *
  * Focus trapping, Escape and scroll locking stay with the planner, which owns
  * the trigger the focus returns to.
@@ -18,7 +16,8 @@ import { eventTiming, liveEventRelevance } from "../../lib/pulse-view.mjs";
 import { liveEventTags, liveNavigationGroups, type LiveNavigationRow, type LiveSheetSort } from "../../lib/live-navigation.mjs";
 import type { LiveEventScope } from "../../lib/live-event-query.mjs";
 import { CloseIcon, LocationIcon } from "../shared/icons";
-import { busyButton, labelChip, pillClass, segmentClass, segmentGroup } from "../shared/ui";
+import { selectableLiveOccurrenceId } from "../../lib/live-stop-choice.mjs";
+import { busyButton, buttonClass, labelChip, pillClass, segmentClass, segmentGroup } from "../shared/ui";
 import { liveTagLabels } from "../../lib/live-tags.mjs";
 import { liveRelevanceSentence, nearbyDistanceLabel, type Lang, type Translate } from "./copy";
 import { liveEventSource } from "./LiveEventSource";
@@ -47,6 +46,9 @@ export default function LiveSheet({
   liveSheetSort,
   setLiveSheetSort,
   onRetry,
+  planningDate,
+  planningAvailable = false,
+  onPlanOccurrence,
   liveSheetScope,
   requestLiveSheetScope,
   aroundPlaceScopeAvailable,
@@ -82,6 +84,9 @@ export default function LiveSheet({
   liveSheetSort: LiveSheetSort;
   setLiveSheetSort: (sort: LiveSheetSort) => void;
   onRetry: () => void;
+  planningDate?: string | null;
+  planningAvailable?: boolean;
+  onPlanOccurrence?: (event: PulseEvent, label: string) => void;
   liveSheetScope: LiveEventScope;
   requestLiveSheetScope: (scope: LiveEventScope) => void;
   aroundPlaceScopeAvailable: boolean;
@@ -114,6 +119,13 @@ export default function LiveSheet({
   // current picks: matched rows get the picks heading, every other row
   // (the reserved local discovery included) is listed as "other".
   const navigation = liveNavigationGroups(sheetEvents, sheetMoreEvents, { sort: liveSheetSort, selectedPreferences: selected });
+  const choice = (event: PulseEvent, label: string, rowDate = planningDate) => planningAvailable && onPlanOccurrence &&
+    rowDate === planningDate && selectableLiveOccurrenceId(event, planningDate) ? (
+      <button type="button" onClick={() => onPlanOccurrence(event, label)}
+        className={buttonClass("secondary", "mt-2 min-h-11 w-full px-4 text-sm sm:w-auto")}>
+        {t("Planera med evenemanget", "Plan with this event")}
+      </button>
+    ) : null;
   const sheetRow = (ev: PulseEvent, i: number, titleClassName: string, timingDate = sheetLiveEvents?.selected_date,
     navigationRow?: LiveNavigationRow<PulseEvent>) => {
     const relevance = liveRelevanceSentence(liveEventRelevance(navigationRow?.series || ev, selected), lang, t);
@@ -137,7 +149,9 @@ export default function LiveSheet({
           </span>}
           {relevance && <span className="mt-0.5 block text-xs text-parranda-ink/68">{relevance}</span>}
         </span>
-        {!navigationRow && <EventOccurrences event={ev} lang={lang} now={now} selectedDate={timingDate} />}
+        {choice(ev, navigationRow?.series?.title || ev.title || "", navigationRow ? navigationRow.date : planningDate)}
+        {!navigationRow && <EventOccurrences event={ev} lang={lang} now={now} selectedDate={timingDate}
+          renderChoice={slot => choice(slot, ev.title || "")} />}
       </li>
     );
   };

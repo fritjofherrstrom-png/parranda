@@ -1002,6 +1002,7 @@ async function composeAgnosticRouteOutputCore({
   dayEdit = null,
   pinnedStopIds = [],
   liveEventChoices = [],
+  liveSelectionPending = false,
   lens = null,
   // Opt-in "Parranda chooses" mode (see parranda-chooses.js). Never inferred.
   intentMode = null,
@@ -1401,6 +1402,7 @@ async function composeAgnosticRouteOutputCore({
       dayEdit,
       pinnedStopIds,
       liveEventChoices,
+      liveSelectionPending,
       loadedCandidateIds,
       walkingRouter,
       walkingConfig,
@@ -1623,6 +1625,7 @@ async function composeAgnosticRouteViaEngine({
   dayEdit = null,
   pinnedStopIds,
   liveEventChoices = [],
+  liveSelectionPending = false,
   loadedCandidateIds = [],
   walkingRouter = null,
   walkingConfig = null,
@@ -1682,6 +1685,22 @@ async function composeAgnosticRouteViaEngine({
     });
   }
 
+  const activeLiveKeeps = activeLiveChoices(liveEventChoices, effectiveDate).filter(choice => choice.action === 'keep');
+  const currentEvent = eveningEventStructure?.district_day?.evening_event;
+  const currentLiveId = currentEvent?.id ? `live-event-${currentEvent.id}` : null;
+  const retainedLiveRequested = Boolean(dayEdit && dayEdit.preserve_retained !== false && currentLiveId &&
+    dayEdit.retained_candidate_ids.includes(currentLiveId));
+  const exactLiveKeep = Boolean(currentEvent?.live_choice_eligible === true &&
+    activeLiveKeeps.some(choice => choice.occurrence_id === currentEvent.live_occurrence_id));
+  const preserveLive = exactLiveKeep || (retainedLiveRequested && currentEvent?.live_choice_eligible === true);
+  // The stable-place engine does not own ephemeral identities. Reserve their
+  // real slot, then judge the final mixed chain against the ORIGINAL edit.
+  const stableDayEdit = dayEdit && preserveLive ? {
+    ...dayEdit,
+    retained_candidate_ids: dayEdit.retained_candidate_ids.filter(id => id !== currentLiveId),
+    target_stop_count: Math.max(0, dayEdit.target_stop_count - 1),
+  } : dayEdit;
+
   async function runEngine(candidates, pins = pinnedStopIds) {
     const engineCityConfig = buildAgnosticEngineCityConfig({
       anchor: origin,
@@ -1692,7 +1711,8 @@ async function composeAgnosticRouteViaEngine({
       key: agnosticContext.key,
       dayProfile: profileForCandidates(candidates),
       preferencePriority,
-      dayEdit,
+      dayEdit: stableDayEdit,
+      reservedLiveStopCount: preserveLive ? 1 : 0,
     });
     const engineResult = await generateAgnosticRecommendations({
       cityConfig: engineCityConfig,
@@ -1802,7 +1822,7 @@ async function composeAgnosticRouteViaEngine({
     // the ceiling could be published well outside it, with only the diagnostics
     // reconciled afterwards. So the weave runs here, and what this function
     // returns is the day as it will actually be sent.
-    const weave = dayEdit ? { day, route, outcome: null } : await applyEveningEventWeave({ day, route });
+    const weave = dayEdit && !preserveLive ? { day, route, outcome: null } : await applyEveningEventWeave({ day, route });
     return {
       day: weave.day,
       route: weave.route,
@@ -1883,34 +1903,42 @@ async function composeAgnosticRouteViaEngine({
   const eventWeave = finalized.weave || null;
 
   const engineEdit = engineDay?.day_edit || engineRoute?.day_edit;
-  // An explicit occurrence Keep is part of the same atomic edit. The stable
-  // reservoir cannot attest or preserve an ephemeral stop by place ID. Until
-  // the finalizer can keep that exact eligible occurrence within the requested
-  // chain, refuse the edit rather than silently publish fewer stops or restore
-  // the automatic fallback append. The client retains the previous answer.
+  // Explicit selection and mixed edits are atomic. No substitute occurrence,
+  // restored removed stop, lost pin or extra automatic append counts as applied.
   const keptOccurrenceIds = new Set((engineRoute?.main_stops || [])
     .filter(stop => stop.is_live_event === true && stop.live_choice_eligible === true)
     .map(stop => stop.live_occurrence_id));
-  const missingLiveKeep = dayEdit && activeLiveChoices(liveEventChoices, effectiveDate)
-    .some(choice => choice.action === 'keep' && !keptOccurrenceIds.has(choice.occurrence_id));
-  const currentEvent = eveningEventStructure?.district_day?.evening_event;
-  const retainedLiveId = currentEvent?.id ? `live-event-${currentEvent.id}` : null;
-  const missingRetainedLive = dayEdit && dayEdit.preserve_retained !== false && retainedLiveId &&
-    dayEdit.retained_candidate_ids.includes(retainedLiveId) &&
-    !(engineRoute?.main_stops || []).some(stop => stop.id === retainedLiveId);
+  const missingLiveKeep = !liveSelectionPending &&
+    activeLiveKeeps.some(choice => !keptOccurrenceIds.has(choice.occurrence_id));
+  // A previous automatic occurrence can disappear from the current source
+  // snapshot or lose selection. Its retained identity is still an obligation;
+  // checking only the newly selected source event would silently drop it.
+  const missingRetainedLive = dayEdit && dayEdit.preserve_retained !== false &&
+    dayEdit.retained_candidate_ids.some(id => id.startsWith('live-event-') &&
+      !(engineRoute?.main_stops || []).some(stop => stop.id === id));
+  const liveExtent = dayEdit?.target_stop_count ?? ({ light: 4, variation: 5, peak: 6 })[profileForCandidates(sourceCandidates)];
+  const liveCountConflict = preserveLive && engineRoute?.main_stops?.length > liveExtent;
+  const livePinConflict = activeLiveKeeps.length && requestedPins.some(id =>
+    !(engineRoute?.main_stops || []).some(stop => stop.id === id));
   const editRefusal = engineEdit?.status === 'refused' ? engineEdit.reason
     : missingLiveKeep ? 'live_keep_not_preserved'
-    : missingRetainedLive ? 'retained_live_not_preserved' : null;
-  if (dayEdit && editRefusal) {
+    : missingRetainedLive ? 'retained_live_not_preserved'
+    : liveCountConflict ? 'live_choice_extent_conflict'
+    : livePinConflict ? 'live_choice_pin_conflict' : null;
+  if ((dayEdit || activeLiveKeeps.length) && editRefusal) {
     const reason = editRefusal;
     const experiment = buildExperimentBlock({ routeMutation: false,
       eligibility: { ...eligibility, eligible: false, blockers: [...eligibility.blockers, reason] },
       baselineResult, candidateReadiness, experimentalRoute: null, sourceStatus,
       context: contextBlock, requestedDate: effectiveDate, plannerRoles, walkingKmTarget });
-    experiment.day_edit = dayEditOutcome(dayEdit, [], reason);
+    if (dayEdit) experiment.day_edit = dayEditOutcome(dayEdit, [], reason);
     experiment.context = contextBlock;
     experiment.synthesized_via = 'agnostic_compose_engine';
     return { result: baselineResult, experiment, eventWeave, pinnedRefusals };
+  }
+  if (dayEdit && engineRoute) {
+    engineRoute.day_edit = dayEditOutcome(dayEdit, engineRoute.main_stops);
+    if (engineDay?.day_edit) engineDay.day_edit = engineRoute.day_edit;
   }
 
   if (dayEdit?.action === 'remove' && !(engineRoute?.main_stops || []).length) {

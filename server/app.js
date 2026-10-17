@@ -2528,6 +2528,9 @@ function buildApp({
         dayEdit,
         pinnedStopIds: pinnedCandidateIds,
         liveEventChoices,
+        // Only the original, still-running producer and its authorized replay
+        // may defer a missing occurrence verdict. Public payload cannot set it.
+        liveSelectionPending: Boolean(upgradeRequested && liveEvents?.pending),
         lens: request.body?.lens || request.query?.lens || null,
         // Opt-in only: the reader asked Parranda to choose the day's interests.
         // Explicit preferences still win; an absent field changes nothing.
