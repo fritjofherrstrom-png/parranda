@@ -62,3 +62,74 @@ test('reversing explicit two-interest priorities reverses day weight, not visit 
     `priority ignored: ${count(cultureFirst, 'museum')} vs ${count(viewsFirst, 'museum')} museums`);
   assert.ok(count(viewsFirst, 'viewpoint') > count(cultureFirst, 'viewpoint'));
 });
+
+// Frozen regressions for content priority under the same candidate/fact gates.
+// The selector protects the first-ranked interest against a neutral baseline;
+// these fixtures do not establish every possible promotion or published route.
+const frozen = (prefix, rows) => rows.map(([type, lat, lng], index) => record(`${prefix}${index}`, type, 0, { lat, lng }));
+// Frozen offline supplies where unranked Food/Culture/Views composed three
+// culture stops and Culture first composed two (staging Barcelona did the same).
+const CULTURE_DROP = [
+  frozen('a', [['museum', 55.591468, 12.986744], ['gallery', 55.607227, 13.008997], ['viewpoint', 55.592759, 13.009342],
+    ['gallery', 55.603596, 12.992732], ['museum', 55.609529, 12.987850], ['castle', 55.601585, 13.002495],
+    ['theatre', 55.591096, 12.989684], ['gallery', 55.609959, 13.009402], ['museum', 55.591354, 13.009118],
+    ['castle', 55.599765, 13.001776], ['museum', 55.607043, 12.998410], ['bar', 55.592630, 13.006986],
+    ['restaurant', 55.595469, 12.989049], ['cafe', 55.594086, 13.006889], ['restaurant', 55.595930, 13.011076]]),
+  frozen('b', [['museum', 55.599058, 13.014393], ['cafe', 55.601625, 13.014458], ['theatre', 55.602040, 13.004108],
+    ['cinema', 55.593531, 12.994941], ['castle', 55.608177, 12.996310], ['cinema', 55.599008, 13.001996],
+    ['viewpoint', 55.600152, 13.013104], ['museum', 55.600372, 13.000046], ['gallery', 55.594728, 12.993687],
+    ['museum', 55.609545, 12.985699]]),
+];
+const INTENT = { food: 'food', culture: 'museums', views: 'scenic' };
+const SELECTION = ['food', 'culture', 'views'];
+const exactStops = (output, key) => output.stops.filter(stop => stop.covered_preferences.includes(INTENT[key])).length;
+
+test('Culture first preserves the neutral exact count on the frozen drop regressions', async () => {
+  for (const supply of CULTURE_DROP) {
+    const neutral = await compose(structuredClone(supply), SELECTION, { dayRhythm: 'balanced' });
+    const cultureFirst = await compose(structuredClone(supply), SELECTION,
+      { dayRhythm: 'balanced', preferencePriority: ['culture', 'food', 'views'] });
+    assert.ok(exactStops(cultureFirst, 'culture') >= exactStops(neutral, 'culture'),
+      `culture ${exactStops(neutral, 'culture')} -> ${exactStops(cultureFirst, 'culture')}: ${cultureFirst.stops.map(stop => stop.type)}`);
+  }
+});
+
+test('frozen one-step promotion fixtures retain raised exact counts and fact gates', async () => {
+  const parks = () => {
+    const supply = [...rows('meal', 'restaurant'), ...rows('mus', 'museum', 6, 6), ...rows('park', 'park', 6, 12)];
+    supply.find(row => row.id === 'mus-0').opening_hours = 'Mo-Su off';
+    return supply;
+  };
+  const permutations = values => values.length <= 1 ? [values]
+    : values.flatMap((value, index) => permutations([...values.slice(0, index), ...values.slice(index + 1)]).map(rest => [value, ...rest]));
+  for (const supply of [parks, () => CULTURE_DROP[0], () => CULTURE_DROP[1]]) {
+    for (const dayRhythm of ['calm', 'balanced']) {
+      const days = new Map();
+      const day = async priority => {
+        if (!days.has(priority.join())) days.set(priority.join(), await compose(structuredClone(supply()), SELECTION, { dayRhythm, preferencePriority: priority }));
+        return days.get(priority.join());
+      };
+      const steps = SELECTION.map(key => [[], [key, ...SELECTION.filter(other => other !== key)], key]);
+      for (const order of permutations(SELECTION)) {
+        for (let index = 1; index < order.length; index += 1) {
+          const raised = [...order];
+          [raised[index - 1], raised[index]] = [raised[index], raised[index - 1]];
+          steps.push([order, raised, order[index]]);
+        }
+      }
+      for (const [before, after, key] of steps) {
+        const from = await day(before);
+        const to = await day(after);
+        assert.ok(exactStops(to, key) >= exactStops(from, key),
+          `${dayRhythm}: raising ${key} (${before} -> ${after}) lost a stop: ${from.stops.map(stop => stop.id)} -> ${to.stops.map(stop => stop.id)}`);
+        for (const stop of to.stops) {
+          assert.notEqual(stop.id, 'mus-0', 'priority never admits a venue closed on the day');
+          if (stop.type === 'park') {
+            assert.ok(!stop.covered_preferences.includes('scenic') && stop.partial_preferences.includes('scenic'),
+              'a park stays a partial view, never verified Views');
+          }
+        }
+      }
+    }
+  }
+});

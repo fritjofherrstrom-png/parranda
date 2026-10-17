@@ -47,6 +47,7 @@ COPY --chown=node:node scripts/migrate-source-catalog.js ./scripts/migrate-sourc
 COPY --chown=node:node scripts/review-source-profile.js ./scripts/review-source-profile.js
 COPY --chown=node:node scripts/run-source-scout-worker.js ./scripts/run-source-scout-worker.js
 COPY --chown=node:node scripts/scout-local-event-sources.js ./scripts/scout-local-event-sources.js
+COPY --chown=node:node scripts/check-native-runtime.js ./scripts/check-native-runtime.js
 COPY --chown=node:node assets ./assets
 COPY --chown=node:node vendor ./vendor
 COPY --from=build --chown=node:node /app/frontend/dist ./frontend/dist
@@ -67,6 +68,7 @@ COPY --chown=node:node \
     ./
 
 USER node
+RUN node scripts/check-native-runtime.js
 
 EXPOSE 8000
 

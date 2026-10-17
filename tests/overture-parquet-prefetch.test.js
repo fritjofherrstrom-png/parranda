@@ -74,6 +74,19 @@ test('pinned sparse prefetch preserves actual stratified SQL output and overlaps
   assert.ok(!f.requests.some(r=>r.start<=offset&&r.end>=offset),'irrelevant group chunks must remain holes');
 });
 
+test('native license projection preserves the complete ordered SQL result without transferring unused source fields', async t => {
+  const f=await fixture(t),tempDir=path.join(f.dir,'license-only');fs.mkdirSync(tempDir);
+  const result=await native.prefetchOvertureParquet({conn:f.conn,paths:[asset],window:{lat:40,lng:12,radiusKm:5},tempDir,fetcher:f.fetcher});
+  const sql=buildOvertureQuery({release:'2026-09-23.1',lat:40,lng:12,parquetPaths:[asset]});
+  const expected=(await f.conn.runAndReadAll(sql.replaceAll(`'${asset}'`,`'${f.file}'`))).getRowObjectsJson();
+  const actual=(await f.conn.runAndReadAll(native.localizeOvertureSql(sql,result.sqlPaths))).getRowObjectsJson();
+  assert.deepEqual(actual,expected);
+  const metadata=(await f.conn.runAndReadAll(`SELECT * FROM parquet_metadata('${f.file}')`)).getRowObjectsJson();
+  const unnecessary=metadata.find(row=>row.row_group_id==='0'&&row.path_in_schema==='sources, list, element, record_id');
+  const start=Number(unnecessary.dictionary_page_offset||unnecessary.data_page_offset);
+  assert.ok(!f.requests.some(range=>range.start<=start&&range.end>=start),'unused source fields must not consume the native acquisition budget');
+});
+
 test('DOUBLE and dateline windows retain the exact ordered sample, including groups without usable spatial statistics', async t => {
   for (const mode of ['double', 'dateline', 'unknown']) await t.test(mode, async t => {
     const dateline = mode !== 'double';

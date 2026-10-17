@@ -28,6 +28,7 @@ export default function AnchorCard({
   preferencePriority = [],
   onToggleMood,
   onPromoteMood,
+  onClearPriority,
   onSetDay,
   rhythms,
   walkKey,
@@ -47,6 +48,8 @@ export default function AnchorCard({
   preferencePriority?: string[];
   onToggleMood: (key: string) => void;
   onPromoteMood?: (key: string) => void;
+  /** Back to unranked interests: the only way out of a ranking besides Undo. */
+  onClearPriority?: () => void;
   onSetDay: (offset: 0 | 1) => void;
   rhythms: RhythmOption[];
   walkKey: string;
@@ -74,10 +77,9 @@ export default function AnchorCard({
   const scale = rhythms.filter((preset) => preset.key !== "free");
   const priority = normalizePreferencePriority(preferencePriority, selected);
   const priorityRanks = new Map<string, number>(priority.map((key, index) => [key, index + 1]));
-  const orderedPreferences = priority.length
-    ? [...preferences].sort((left, right) =>
-      (priorityRanks.get(left.key) ?? priority.length + 1) - (priorityRanks.get(right.key) ?? priority.length + 1))
-    : preferences;
+  // Chips keep their place; only the numbers change. Re-sorting by rank moved
+  // another chip's promote button under the finger after every press.
+  const orderedPreferences = preferences;
   const free = rhythms.find((preset) => preset.key === "free");
   const current = rhythms.find((preset) => preset.key === walkKey);
   return (
@@ -197,6 +199,15 @@ export default function AnchorCard({
                 );
               })}
             </div>
+            {priority.length > 0 && onClearPriority && (
+              <button
+                type="button"
+                onClick={onClearPriority}
+                className="inline-flex min-h-11 self-start items-center text-xs font-semibold text-parranda-ink/72 underline underline-offset-2 hover:text-parranda-clay"
+              >
+                {t("Ta bort ordningen", "Clear the order")}
+              </button>
+            )}
           </div>
 
           <div className="flex flex-col gap-2 border-t border-parranda-ink/10 pt-4">

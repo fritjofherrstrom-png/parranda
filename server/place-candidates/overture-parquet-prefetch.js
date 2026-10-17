@@ -6,6 +6,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { windowBboxes } = require('./overture-stac-assets');
+const { projectSourcesLicense } = require('./overture-license-footer');
 const ASSET = /^s3:\/\/overturemaps-us-west-2\/release\/\d{4}-\d{2}-\d{2}\.\d+\/theme=places\/type=place\/part-[A-Za-z0-9_-]+\.zstd\.parquet$/;
 const MAX_PHYSICAL_BYTES = 32 * 1024 * 1024;
 const MAX_FOOTER_BYTES = 8 * 1024 * 1024;
@@ -248,15 +249,27 @@ async function prefetchOvertureParquet({ conn, paths, window, tempDir, fetcher =
       const escaped = file.replace(/'/g, "''");
       const metadata = (await conn.runAndReadAll(`SELECT * FROM parquet_metadata('${escaped}')`)).getRowObjectsJson();
       const { groups, selected } = overlappingGroups(metadata, window);
+      let localFooter = footer, projectedMetadata = metadata;
       if (selected.size !== groups.size) {
         const rowCount = integer([...selected].reduce((sum, group) => sum + integer(groups.get(group)[0].row_group_num_rows), 0));
-        const localFooter = pruneFooter(footer, selected, rowCount);
+        localFooter = pruneFooter(footer, selected, rowCount);
+      }
+      // DuckDB reads every leaf of a LIST-of-STRUCT lambda even though the
+      // published query uses only licenses. Narrow the private schema, never
+      // the original object or the source facts returned by the query.
+      if (metadata.some(row => row.path_in_schema.startsWith('sources,')
+        && row.path_in_schema !== 'sources, list, element, license')) {
+        const projection = projectSourcesLicense(localFooter);
+        localFooter = projection.footer;
+        projectedMetadata = metadata.filter(row => projection.keepLeaves[integer(row.column_id)]);
+      }
+      if (localFooter !== footer) {
         if (localFooter.length > footer.length) throw new Error('invalid_overture_footer');
         const localTail = Buffer.from(tail); localTail.writeUInt32LE(localFooter.length, 0);
         fs.writeSync(fd, localFooter, 0, localFooter.length, identity.length - 8 - localFooter.length);
         fs.writeSync(fd, localTail, 0, localTail.length, identity.length - 8);
       }
-      const ranges = selectOvertureChunkRanges(metadata, window, identity.length);
+      const ranges = selectOvertureChunkRanges(projectedMetadata, window, identity.length);
       // Page allocation rather than transfer length is the shared disk budget.
       plannedBytes += allocationBytes([...metadataRanges, ...ranges]);
       if (plannedBytes > budget) throw new Error('overture_prefetch_budget');
