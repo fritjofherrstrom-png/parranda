@@ -1900,7 +1900,15 @@ test("engine compose anchors a today route before geometry and exposes the share
     assert.equal(route.current_local_time_band, "midday");
     assert.equal(route.anchored_to_local_time, true);
     assert.ok(route.trimmed_dayparts.includes("morning"));
-    assert.equal(route.daypart_arc[0], "midday");
+    assert.equal(route.agnostic_daypart_ordering.reason, 'balanced_day_rhythm');
+    assert.equal(route.agnostic_daypart_ordering.fallback, true);
+    assert.deepEqual(route.daypart_arc, [], 'interleaved meal/visit roles must not publish a backwards time arc');
+    assert.ok(route.main_stops.every(stop => !String(stop.id).startsWith('cafe-')),
+      'the source-owned morning candidates were trimmed before geometry');
+    assert.ok(route.main_stops.every(stop => !stop.daypart), 'no per-stop label contradicts the withheld arc');
+    assert.deepEqual(route.map_route_points.filter(point => ['first-stop', 'stop'].includes(point.role)).map(point => point.label),
+      route.main_stops.map(stop => stop.label), 'geometry describes the actual balanced stop chain');
+    assert.equal(route.legs.length, route.map_route_points.length - 1);
     assert.ok(route.caveats.includes("day_anchored_to_current_time"));
     assert.equal(route.caveats.includes("daypart_arc_precedes_local_time"), false);
   } finally {

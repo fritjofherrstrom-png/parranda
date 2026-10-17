@@ -18,6 +18,7 @@ const { normalizeTrustSummary } = require("./route-candidates/contract");
 const { buildDayflowContext } = require("./planner/dayflow-context");
 const { daypartSlotForRole, SLOT_DAYPART } = require("./planner/agnostic-route-ordering");
 const { selectAgnosticCandidateSet } = require("./planner/agnostic-candidate-set");
+const { selectBalancedDay, orderBalancedDay, selectEditedDay, dayEditOutcome } = require("./planner/day-composition-policy");
 
 const { matchesPreferenceFocus, preferenceFit } = require("./planner/preference-focus");
 
@@ -4517,6 +4518,17 @@ function applyAgnosticDaypartOrder(orderedStops, geometry, geomFor, roleById = n
 // role order it considered and rejected. When geometry fallback wins, emitting
 // the original role labels can create a backwards public arc (afternoon before
 // midday). Keep the better walk, but withhold those approximate labels.
+function composeFinalDaypartOrdering(stops, roleById = null, ordering = null) {
+  if (ordering?.reason !== 'balanced_day_rhythm') return ordering;
+  const slots = (Array.isArray(stops) ? stops : [])
+    .map(stop => composeStopDaypartSlot(stop, roleById)).filter(slot => slot !== null);
+  if (!slots.length) return ordering;
+  // Identity swaps within one band preserve chronology. Check the actual final
+  // chain, including later bridge/rebalance changes and trusted anchored bands.
+  const backwards = slots.some((slot, index) => index > 0 && slot < slots[index - 1]);
+  return { ...ordering, fallback: backwards };
+}
+
 function composeRouteDaypartArc(stops, roleById = null, ordering = null) {
   const ordered = Array.isArray(stops) ? stops : [];
   if (ordering?.fallback === true) return ordered.map(() => null);
@@ -5253,8 +5265,13 @@ function buildRouteFromTemplate(
     liveEvents,
     options,
   );
+  const dayEdit = template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID
+    ? options.dayEdit || getActiveCityConfig().__dayEdit || null : null;
+  const retainedIds = dayEdit?.preserve_retained !== false ? dayEdit?.retained_candidate_ids || [] : [];
+  const selectionIds = [...(options.pinnedStopIds || []), ...retainedIds];
+  const editExclusions = new Set(dayEdit ? [dayEdit.candidate_id, ...dayEdit.removed_candidate_ids] : []);
   const withinFocus = (item) => template.id !== AGNOSTIC_COMPOSE_TEMPLATE_ID ||
-    matchesPreferenceFocus(item, preferences, options.pinnedStopIds || []);
+    (!editExclusions.has(item.id) && matchesPreferenceFocus(item, preferences, selectionIds));
   const sortedPool = rawPool
     .filter(withinFocus)
     .map((item, index) => ({
@@ -5279,7 +5296,9 @@ function buildRouteFromTemplate(
       }),
     }))
     .sort((left, right) => right.score - left.score);
-  const selectedCount = desiredStopCount(sortedPool.length, targetKm, distanceMode, dayProfile);
+  const normalSelectedCount = desiredStopCount(sortedPool.length, targetKm, distanceMode, dayProfile);
+  const selectedCount = dayEdit?.action === 'remove' && dayEdit.preserve_retained === false
+    ? Math.min(normalSelectedCount, dayEdit.target_stop_count) : normalSelectedCount;
   const strictPool = strictTags.length
     ? sortedPool.filter((entry) => itemMatchesStrictPreference(entry.item, strictTags))
     : [];
@@ -5429,9 +5448,13 @@ function buildRouteFromTemplate(
       end,
       shape,
       targetKm,
-      allowExpansion: true,
+      allowExpansion: !dayEdit,
     });
-    selectedStops = constrained.selected;
+    selectedStops = selectBalancedDay({
+      rankedCandidates: sortedPool, selected: constrained.selected, preferences,
+      preferencePriority: options.preferencePriority || getActiveCityConfig().__preferencePriority || [],
+      pinnedIds: options.pinnedStopIds || [], start, end, shape, targetKm,
+    });
   }
 
   // selectAgnosticCandidateSet is the authoritative chooser on this path and
@@ -5446,7 +5469,17 @@ function buildRouteFromTemplate(
   // cannot answer: ordering, bridge insertion and capacity repair all still lie
   // ahead, and each changes the distance. That decision therefore belongs to
   // whoever can see the published route — see settlePinsWithinWalkingBudget.
-  selectedStops = applyPinnedSelection(selectedStops, pinnableStops, options.pinnedStopIds);
+  let editRefusal = null;
+  if (dayEdit) {
+    const edited = selectEditedDay({ rankedCandidates: pinnableStops.map(item => ({ item })), dayEdit,
+      selected: applyPinnedSelection(selectedStops, pinnableStops, options.pinnedStopIds),
+      pinnedIds: options.pinnedStopIds || [], preferences, start, end, shape,
+      targetKm: distanceMode === 'no_limit' ? null : targetKm });
+    selectedStops = edited.selected;
+    editRefusal = edited.reason;
+  } else {
+    selectedStops = applyPinnedSelection(selectedStops, pinnableStops, options.pinnedStopIds);
+  }
 
   const { orderedStops, geometry } = optimizeStopOrder(
     selectedStops,
@@ -5487,9 +5520,18 @@ function buildRouteFromTemplate(
     composeOrderedStops = dp.stops;
     composeGeometry = dp.geometry;
     agnosticDaypartOrdering = { applied: dp.applied, fallback: dp.fallback, reason: dp.reason };
+    const balanced = orderBalancedDay({ stops: composeOrderedStops, geometry: composeGeometry,
+      geometryFor: geomFor, chainKm: selectedStopChainKm, preferences, dayEdit });
+    if (balanced.changed) {
+      composeOrderedStops = balanced.stops;
+      composeGeometry = balanced.geometry;
+      // Provisional label suppression: the final projection below distinguishes
+      // genuine cross-band interleaving from harmless same-band identity swaps.
+      agnosticDaypartOrdering = { applied: true, fallback: true, reason: 'balanced_day_rhythm' };
+    }
   }
 
-  const bridgedStops = insertBridgeStopsForLongLegs(composeOrderedStops, {
+  const bridgedStops = dayEdit ? composeOrderedStops : insertBridgeStopsForLongLegs(composeOrderedStops, {
     start,
     end,
     preferences,
@@ -5631,6 +5673,7 @@ function buildRouteFromTemplate(
   // engine geometry + daypart post-pass already set the actual sequence. Null
   // labels are honest for role-less stops (e.g. inserted bridge stops).
   if (agnosticDaypartOrdering) {
+    agnosticDaypartOrdering = composeFinalDaypartOrdering(finalOrderedStops, composeRoleById, agnosticDaypartOrdering);
     const dayparts = composeRouteDaypartArc(finalOrderedStops, composeRoleById, agnosticDaypartOrdering);
     mainStops.forEach((stop, index) => {
       if (dayparts[index]) stop.daypart = dayparts[index];
@@ -5640,6 +5683,7 @@ function buildRouteFromTemplate(
     route.agnostic_daypart_ordering = agnosticDaypartOrdering;
   }
 
+  if (dayEdit) route.day_edit = dayEditOutcome(dayEdit, mainStops, editRefusal);
   return attachRouteLineage(route, routeIdentity);
 }
 
@@ -7158,10 +7202,16 @@ async function generateRecommendations({
         //    coherent walk (< 2 real catalog stops). In both we surface a null
         //    route rather than forcing a one-stop or hallucinated route.
         const agnosticTooThin =
-          usingAgnosticCompose && (primary?.route?.main_stops || []).length < 2;
-        if (!primary || agnosticTooThin) {
+          usingAgnosticCompose && !getActiveCityConfig().__dayEdit &&
+          (primary?.route?.main_stops || []).length < 2;
+        const primaryEdit = usingAgnosticCompose ? primary?.route?.day_edit : null;
+        const manualEmptyDay = primaryEdit?.action === 'remove' && primaryEdit.status === 'applied' &&
+          (primary?.route?.main_stops || []).length === 0;
+        if (!primary || agnosticTooThin || manualEmptyDay || primaryEdit?.status === 'refused') {
           days.push({
             date,
+            ...(primaryEdit ? { day_edit: primaryEdit } : {}),
+            ...(manualEmptyDay ? { manual_empty_day: true } : {}),
             date_signals: dateSignals,
             live_events: [],
             primary_route: null,
@@ -7275,6 +7325,7 @@ module.exports = {
   composeStopDaypartSlot,
   applyAgnosticDaypartOrder,
   composeRouteDaypartArc,
+  composeFinalDaypartOrdering,
   selectedStopChainKm,
   resolvePoint,
   expandDateRange,
