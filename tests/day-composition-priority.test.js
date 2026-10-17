@@ -133,3 +133,20 @@ test('every one-step promotion keeps or adds exact stops for the raised interest
     }
   }
 });
+
+test('an interest the place cannot serve exactly takes no rank and lends no weight', async () => {
+  // Parks only: Views has no exact place here. Ranked Views, Culture, Food used
+  // to give Culture the second-place weight against Food's third and compose an
+  // extra museum, which then vanished when Culture moved up to first.
+  const parks = () => [...rows('meal', 'restaurant'), ...rows('mus', 'museum', 6, 6), ...rows('park', 'park', 6, 12)];
+  const day = priority => compose(parks(), SELECTION, { dayRhythm: 'balanced', preferencePriority: priority });
+  const neutral = await day([]);
+  const viewsFirst = await day(['views', 'culture', 'food']);
+  const cultureUp = await day(['culture', 'food', 'views']);
+  assert.ok(exactStops(viewsFirst, 'culture') <= exactStops(neutral, 'culture'),
+    `Views first lent its weight to Culture: ${viewsFirst.stops.map(stop => stop.type)}`);
+  assert.ok(exactStops(cultureUp, 'culture') >= exactStops(viewsFirst, 'culture'),
+    `moving Culture up lost a stop: ${viewsFirst.stops.map(stop => stop.type)} -> ${cultureUp.stops.map(stop => stop.type)}`);
+  assert.ok(viewsFirst.stops.some(stop => stop.type === 'park' && stop.partial_preferences.includes('scenic')),
+    'the park is still there as a partial view');
+});

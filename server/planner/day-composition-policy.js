@@ -54,7 +54,11 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
   // Two/three interests have a clear leading focus. With many interests the
   // slope tapers rather than treating every numbered chip as a rigid quota.
   const slope = requested.length <= 3 ? 1.8 : requested.length === 4 ? 0.75 : 0.3;
-  priority.forEach((intent, index) => weights.set(intent,
+  // An interest this pool cannot serve exactly (Views where only parks exist)
+  // takes no rank. Its weight used to pass to whatever came next: Views first
+  // gave more museums, and moving Culture up from that second place lost one.
+  const ranked = priority.filter(intent => pool.some(({ item }) => fits.get(item).coveredPreferences.includes(intent)));
+  ranked.forEach((intent, index) => weights.set(intent,
     1 + slope * (priority.length - 1 - index) / Math.max(1, priority.length - 1)));
   const poolIds = new Set(pool.map(({ item }) => item.id));
   const required = pinnedIds.filter(id => poolIds.has(id));
@@ -105,9 +109,9 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
   // unranked one would not have walked.
   const unranked = requested.includes('food') ? pick(neutral)?.entries
     : selected.map(item => unique.get(item.id) || { item, score: 0 });
-  const floor = unranked ? hitsOf(priority[0], unranked) : 0;
+  const floor = unranked && ranked.length ? hitsOf(ranked[0], unranked) : 0;
   const best = pick(({ lead, tail, entries, diagnostics }) => [lead[0],
-    hitsOf(priority[0], entries) >= floor ? 1 : 0, ...lead.slice(1),
+    !ranked.length || hitsOf(ranked[0], entries) >= floor ? 1 : 0, ...lead.slice(1),
     utilityOf(entries, intent => weights.get(intent)), diagnostics.spine_role_count, ...tail]);
   return best ? best.entries.map(({ item }) => item) : selected;
 }
