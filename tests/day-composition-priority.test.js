@@ -63,9 +63,9 @@ test('reversing explicit two-interest priorities reverses day weight, not visit 
   assert.ok(count(viewsFirst, 'viewpoint') > count(cultureFirst, 'viewpoint'));
 });
 
-// Contract: priority steers a day's content, never its visit order, and raising
-// an interest never costs it an exact stop on the same candidates under the
-// same fact, hours and walking gates. There is no absolute per-interest quota.
+// Frozen regressions for content priority under the same candidate/fact gates.
+// The selector protects the first-ranked interest against a neutral baseline;
+// these fixtures do not establish every possible promotion or published route.
 const frozen = (prefix, rows) => rows.map(([type, lat, lng], index) => record(`${prefix}${index}`, type, 0, { lat, lng }));
 // Frozen offline supplies where unranked Food/Culture/Views composed three
 // culture stops and Culture first composed two (staging Barcelona did the same).
@@ -84,7 +84,7 @@ const INTENT = { food: 'food', culture: 'museums', views: 'scenic' };
 const SELECTION = ['food', 'culture', 'views'];
 const exactStops = (output, key) => output.stops.filter(stop => stop.covered_preferences.includes(INTENT[key])).length;
 
-test('raising Culture first never composes fewer culture stops than the unranked day on the same supply', async () => {
+test('Culture first preserves the neutral exact count on the frozen drop regressions', async () => {
   for (const supply of CULTURE_DROP) {
     const neutral = await compose(structuredClone(supply), SELECTION, { dayRhythm: 'balanced' });
     const cultureFirst = await compose(structuredClone(supply), SELECTION,
@@ -94,7 +94,7 @@ test('raising Culture first never composes fewer culture stops than the unranked
   }
 });
 
-test('every one-step promotion keeps or adds exact stops for the raised interest, with gates intact', async () => {
+test('frozen one-step promotion fixtures retain raised exact counts and fact gates', async () => {
   const parks = () => {
     const supply = [...rows('meal', 'restaurant'), ...rows('mus', 'museum', 6, 6), ...rows('park', 'park', 6, 12)];
     supply.find(row => row.id === 'mus-0').opening_hours = 'Mo-Su off';

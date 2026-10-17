@@ -5,7 +5,7 @@
 const { normalizePreferencePriority, normalizeDayEdit } = require('../../shared/planner-intent.mjs');
 const { normalizeUserIntents } = require('../candidates/intent-vocabulary');
 const { preferenceFit } = require('./preference-focus');
-const { selectAgnosticCandidateSet } = require('./agnostic-candidate-set');
+const { selectAgnosticCandidateSet, buildAgnosticEvaluationPool } = require('./agnostic-candidate-set');
 
 const UI_BY_INTENT = Object.freeze({ food: 'food', museums: 'culture', scenic: 'views',
   coffee: 'fika', bars: 'nightlife', green: 'green', second_hand: 'second_hand' });
@@ -42,7 +42,7 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
   // reservoir as the existing chooser, not factorial route-order search.
   const unique = new Map();
   for (const entry of rankedCandidates) if (!unique.has(entry.item.id)) unique.set(entry.item.id, entry);
-  const pool = [...unique.values()].slice(0, 12);
+  const pool = buildAgnosticEvaluationPool({ rankedCandidates, requestedPreferences: preferences });
   const count = Math.min(selected.length, pool.length, 6);
   if (!count) return selected;
   const describe = entries => selectAgnosticCandidateSet({ ...context,
@@ -96,13 +96,10 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
   const neutral = ({ lead, tail, entries, diagnostics }) => [lead[0], diagnostics.spine_role_count, ...lead.slice(1),
     utilityOf(entries, () => 1), ...tail];
   if (!priority.length) return pick(neutral)?.entries.map(({ item }) => item) ?? selected;
-  // Raising an interest never costs it a stop. On this same pool, under the
-  // same walking and pin filters, the first-ranked interest keeps at least the
-  // exact stops the unranked day gives it. A floor relative to that day, not a
-  // quota: Culture first once composed 2 culture stops where unranked gave 3.
-  // It sits right after exact coverage, which the unranked day also maximizes
-  // first, so that day always qualifies and the floor never forces a day the
-  // unranked one would not have walked.
+  // Within this bounded pool, protect the first-ranked interest's exact count
+  // relative to the neutral baseline, after aggregate exact coverage. This is
+  // not a comparison with a previous ranked day or a per-interest quota.
+  // Pins, edits and final walking/publication checks remain caller-owned.
   const unranked = requested.includes('food') ? pick(neutral)?.entries
     : selected.map(item => unique.get(item.id) || { item, score: 0 });
   const floor = unranked ? hitsOf(priority[0], unranked) : 0;
