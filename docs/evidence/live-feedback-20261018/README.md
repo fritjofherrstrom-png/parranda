@@ -41,6 +41,19 @@ Live-selection/completion tests remain. Separate regressions catch re-Keep durin
 400 ms debounce and retry after a refused revalidation; a controlled mutation
 removing acknowledgement invalidation fails the re-Keep assertion.
 
+The first full run on `6bca108e7845c270155022d0de15c98b328f94ee` reported
+4,644 pass, four failures and three skips. One structural test incorrectly
+forbade clearing an older acknowledgement; the mounted no-optimistic-verdict
+tests remain authoritative. Three closure tests injected an object clock while
+the composition context expects a callable clock, so their fixed October 17
+became a past date on the real October 18. The exact main archive reproduced
+the same three failures (29 pass / three fail across the two backend files).
+The follow-up changes only tests: both clock interfaces now use the same fixed
+instant, and the published HTTP days must attest the controlled context date.
+Every closure and publication-refusal assertion is retained. The first CI run
+was cancelled after the local failures were diagnosed; final-head results are
+reported separately. No server or eligibility policy was changed for these tests.
+
 Mounted UI tests use real components with controlled API replies. The built
 browser/HTTP test uses the actual application handlers, composition, event
 normalization and publication with controlled source transport/clock/resolver.
