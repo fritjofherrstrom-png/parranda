@@ -53,28 +53,60 @@ test.after(async () => {
   if (temp) await fs.rm(temp, { recursive: true, force: true });
 });
 
-async function pageFor(t, hasTouch = false) {
+async function pageFor(t, hasTouch = false, diagnostics = null) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch });
   await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto(origin);
-  await page.locator('.route-map-marker').nth(2).waitFor();
   t.after(async () => {
+    if (diagnostics) {
+      try {
+        const state = await page.evaluate(() => {
+          const frame = document.querySelector('[data-route-map]');
+          const animation = window.expansionTransition;
+          return { readyState: document.readyState, markerCount: document.querySelectorAll('.route-map-marker').length,
+            height: frame?.getBoundingClientRect().height, frameClass: frame?.className,
+            animation: animation ? { playState: animation.playState, currentTime: animation.currentTime } : null,
+            tooltips: [...document.querySelectorAll('[role="tooltip"]')].map(node => node.textContent),
+            scrollY, trace: window.selectionTrace || [], body: document.body.innerText.slice(0, 2000) };
+        });
+        t.diagnostic(JSON.stringify({ stage: diagnostics.stage, state }));
+      } catch (error) { t.diagnostic(JSON.stringify({ stage: diagnostics.stage, captureError: String(error) })); }
+    }
     try { assert.deepEqual(errors, [], 'no browser/React errors'); }
     finally { await context.close(); }
   });
+  if (diagnostics) diagnostics.stage = 'navigation';
+  await page.goto(origin);
+  if (diagnostics) diagnostics.stage = 'third marker initialization';
+  await page.locator('.route-map-marker').nth(2).waitFor();
   return page;
 }
 
 test('explicit click during expansion keeps its marker name after mouseleave and scroll', { timeout: 30000 }, async t => {
-  const page = await pageFor(t);
+  const diagnostics = { stage: 'context initialization' };
+  const page = await pageFor(t, false, diagnostics);
+  diagnostics.stage = 'install controlled transition';
   await page.evaluate(() => {
     const frame = document.querySelector('[data-route-map]');
     frame.style.transitionDuration = '1800ms';
     window.selectionTrace = [];
+    window.expansionTransition = null;
+    // React's class update is observed before paint. Pause the native CSS
+    // height transition at 600ms so a slow browser command cannot miss the
+    // short middle-height window. The actual marker click precedes resume.
+    const pauseExpansion = new MutationObserver(() => {
+      const animation = frame.getAnimations().find(animation => animation.transitionProperty === 'height');
+      if (!animation) return;
+      animation.pause();
+      animation.currentTime = 600;
+      window.expansionTransition = animation;
+      window.selectionTrace.push({ kind: 'paused', height: frame.getBoundingClientRect().height });
+      pauseExpansion.disconnect();
+    });
+    pauseExpansion.observe(frame, { attributes: true, attributeFilter: ['class'] });
     for (const kind of ['click', 'mouseout', 'transitionend']) frame.addEventListener(kind, event => {
       window.selectionTrace.push({ kind, target: String(event.target.className), y: event.clientY, height: frame.getBoundingClientRect().height });
     }, true);
@@ -84,18 +116,26 @@ test('explicit click during expansion keeps its marker name after mouseleave and
       }
     }).observe(frame, { childList: true, subtree: true });
   });
+  diagnostics.stage = 'real expand click';
   await page.getByRole('button', { name: 'Expand map', exact: true }).click();
-  // Intentionally click WHILE geometry changes. Do not wait for expansion or
-  // locator actionability to hide the boundary reproduced in CI.
+  // Deliberately hold a real transition in its middle, rather than racing a
+  // wall-clock window. Resume after the real marker click, so subsequent
+  // native geometry-driven mouseleave still exercises selection retention.
+  diagnostics.stage = 'controlled middle height';
   await page.waitForFunction(() => {
     const h = document.querySelector('[data-route-map]').getBoundingClientRect().height;
-    return h > 220 && h < 330;
+    return window.expansionTransition?.playState === 'paused' && h > 220 && h < 330;
   });
+  diagnostics.stage = 'middle-height marker coordinates';
   const point = await page.locator('.route-map-marker').first().evaluate(element => {
     const r = element.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
   });
+  diagnostics.stage = 'real middle-height marker click';
   await page.mouse.click(point.x, point.y);
+  diagnostics.stage = 'resume native height transition';
+  await page.evaluate(() => window.expansionTransition.play());
   await page.waitForFunction(() => document.querySelector('[data-route-map]').getBoundingClientRect().height >= 419.9);
+  diagnostics.stage = 'selection and actual mouseout assertions';
   const trace = await page.evaluate(() => window.selectionTrace);
   const click = trace.find(e => e.kind === 'click' && e.target === 'route-map-marker');
   assert.ok(click && click.height > 220 && click.height < 400, 'real marker click happened during expansion');
@@ -103,10 +143,13 @@ test('explicit click during expansion keeps its marker name after mouseleave and
   assert.ok(trace.some(e => e.kind === 'mouseout' && e.target === 'route-map-marker'), 'movement really moved marker away from pointer');
   assert.deepEqual(await page.getByRole('tooltip').allTextContents(), ['Stop A'], 'explicit selection survives geometry-triggered mouseleave');
   await page.mouse.move(380, 700);
+  diagnostics.stage = 'real wheel scrolling';
   await page.mouse.wheel(0, 120);
   await page.waitForFunction(() => scrollY > 0);
+  diagnostics.stage = 'selection after scroll';
   assert.deepEqual(await page.getByRole('tooltip').allTextContents(), ['Stop A'], 'scrolling does not discard explicit selection');
   t.diagnostic(JSON.stringify({ click, mouseout: trace.filter(e => e.kind === 'mouseout' && e.target === 'route-map-marker') }));
+  diagnostics.stage = 'complete';
 });
 
 test('hover name still closes on pointer leave without an explicit selection', { timeout: 30000 }, async t => {

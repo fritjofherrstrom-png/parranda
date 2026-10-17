@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { dayChangeSegments, describeDayChange } from "../src/lib/day-change.mjs";
+import { liveOccurrenceId } from "../../server/planner/live-occurrence-choice.js";
 
 function entry({ stops = [], km = null, walkKey = "balanced", dayOffset = 0, selected = ["food", "culture"] } = {}) {
   return {
@@ -12,6 +13,12 @@ function entry({ stops = [], km = null, walkKey = "balanced", dayOffset = 0, sel
   };
 }
 const stop = (id, label) => ({ id, label });
+function liveStop(start, overrides = {}) {
+  const event = { id: "same-series", source_provider_id: "controlled-source", timezone: "Europe/Helsinki",
+    starts_at: `2026-10-17T${start}:00:00Z`, ...overrides };
+  return { id: `live-event-${event.id}`, label: "Source concert", is_live_event: true,
+    live_occurrence_id: liveOccurrenceId(event), ...overrides };
+}
 const labels = (lang) => ({
   lang,
   walkLabel: (key) => ({ calm: lang === "sv" ? "Lugn" : "Easy", balanced: lang === "sv" ? "Lagom" : "Balanced", full: lang === "sv" ? "Fylld" : "Full" })[key] ?? key,
@@ -19,7 +26,7 @@ const labels = (lang) => ({
   dayLabel: (offset) => (offset === 0 ? (lang === "sv" ? "Idag" : "Today") : lang === "sv" ? "Imorgon" : "Tomorrow"),
 });
 
-test("a fuller day that changes the route names the inputs, the distance and the stops", () => {
+test("a fuller day that changes the route names the inputs and counts the stops and distance", () => {
   const change = describeDayChange(
     entry({ stops: [stop("a", "Place a"), stop("b", "Place b")], km: 1.2 }),
     entry({ stops: [stop("a", "Place a"), stop("c", "Place c"), stop("d", "Place d")], km: 4.8, walkKey: "full" }),
@@ -30,15 +37,15 @@ test("a fuller day that changes the route names the inputs, the distance and the
   assert.equal(change.routeChanged, true);
   assert.deepEqual(dayChangeSegments(change, labels("en")), [
     "Balanced → Full",
-    "1.2 km → 4.8 km",
-    "+2 stops: Place c, Place d",
-    "−1: Place b",
+    "1 stop swapped",
+    "+1 stop",
+    "1.2 → 4.8 km",
   ]);
   assert.deepEqual(dayChangeSegments(change, labels("sv")), [
     "Lagom → Fylld",
-    "1,2 km → 4,8 km",
-    "+2 stopp: Place c, Place d",
-    "−1: Place b",
+    "1 stopp bytt",
+    "+1 stopp",
+    "1,2 → 4,8 km",
   ]);
 });
 
@@ -57,6 +64,41 @@ test("stops are matched by id, so a renamed label is not a new stop", () => {
   assert.deepEqual(change.stops.added, []);
   assert.deepEqual(change.stops.removed, []);
   assert.equal(change.routeChanged, false);
+});
+
+test("different source occurrences of one series count as one swapped Live stop", () => {
+  const before = liveStop("18");
+  const after = liveStop("19");
+  assert.equal(before.id, after.id, "the source series keeps its existing route id");
+  assert.notEqual(before.live_occurrence_id, after.live_occurrence_id);
+  const change = describeDayChange(entry({ stops: [before], km: 1 }), entry({ stops: [after], km: 1 }));
+  assert.equal(change.routeChanged, true, "a different source start is a different actual visit");
+  assert.equal(change.stops.kept, 0);
+  assert.deepEqual(dayChangeSegments(change, labels("en")), ["1 stop swapped"]);
+  assert.deepEqual(dayChangeSegments(change, labels("sv")), ["1 stopp bytt"]);
+});
+
+test("the same source occurrence stays the same when its label or end time changes", () => {
+  const before = liveStop("18", { ends_at: "2026-10-17T20:00:00Z" });
+  const after = liveStop("18", { label: "Updated source concert", ends_at: "2026-10-17T21:00:00Z" });
+  assert.equal(before.live_occurrence_id, after.live_occurrence_id);
+  const change = describeDayChange(entry({ stops: [before], km: 1 }), entry({ stops: [after], km: 1 }));
+  assert.equal(change.routeChanged, false);
+  assert.equal(change.stops.kept, 1);
+  assert.deepEqual(dayChangeSegments(change, labels("en")), ["same stops and distance"]);
+});
+
+test("ordinary places and malformed legacy Live metadata retain place-id matching", () => {
+  for (const extra of [
+    { is_live_event: false, live_occurrence_id: liveStop("18").live_occurrence_id },
+    { is_live_event: true, live_occurrence_id: "not-an-occurrence" },
+  ]) {
+    const before = { ...stop("a", "A"), ...extra };
+    const after = { ...before, label: "Renamed", live_occurrence_id: liveStop("19").live_occurrence_id };
+    if (extra.is_live_event) after.live_occurrence_id = "also-invalid";
+    const change = describeDayChange(entry({ stops: [before] }), entry({ stops: [after] }));
+    assert.equal(change.routeChanged, false);
+  }
 });
 
 test("stops without an id fall back to their visible name", () => {
@@ -91,13 +133,16 @@ test("a change that produced no route says so, so the previous day is worth offe
   assert.deepEqual(dayChangeSegments(change, labels("sv")).at(-1), "ingen rutt för det här valet");
 });
 
-test("long lists name two stops and count the rest", () => {
+test("the line counts stops instead of naming them, so it stays one short line", () => {
   const change = describeDayChange(
     entry({ stops: [], km: 0 }),
     entry({ stops: [stop("a", "A"), stop("b", "B"), stop("c", "C"), stop("d", "D")], km: 5 }),
   );
-  assert.equal(dayChangeSegments(change, labels("en")).at(-1), "+4 stops: A, B and 2 more");
-  assert.equal(dayChangeSegments(change, labels("sv")).at(-1), "+4 stopp: A, B och 2 till");
+  assert.deepEqual(dayChangeSegments(change, labels("en")).slice(-2), ["+4 stops", "< 0.1 → 5 km"]);
+  assert.deepEqual(dayChangeSegments(change, labels("sv")).slice(-2), ["+4 stopp", "< 0,1 → 5 km"]);
+  const swap = describeDayChange(entry({ stops: [stop("a", "A"), stop("b", "B"), stop("c", "C")], km: 1 }),
+    entry({ stops: [stop("d", "D"), stop("e", "E"), stop("f", "F")], km: 1 }));
+  assert.deepEqual(dayChangeSegments(swap, labels("sv")), ["3 stopp bytta"]);
 });
 
 test("nothing to describe is an empty list, never a throw", () => {
@@ -115,6 +160,6 @@ test("a server-applied Live upgrade says Live moved the day, with the same input
   assert.deepEqual(change.inputs.picksAdded, []);
   assert.deepEqual(dayChangeSegments(change, labels("en")).slice(0, 1), ["Live: event added"]);
   assert.deepEqual(dayChangeSegments(change, labels("sv")).slice(0, 1), ["Live: evenemang tillagt"]);
-  assert.match(dayChangeSegments(change, labels("en")).join(" · "), /\+1 stop: Late concert/);
+  assert.equal(dayChangeSegments(change, labels("en")).join(" · "), "Live: event added · +1 stop · 1.2 → 1.9 km");
   assert.equal(describeDayChange(before, after).cause, null, "an adjustment has no cause of its own");
 });

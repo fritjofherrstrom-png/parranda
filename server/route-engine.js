@@ -5296,7 +5296,10 @@ function buildRouteFromTemplate(
       }),
     }))
     .sort((left, right) => right.score - left.score);
-  const normalSelectedCount = desiredStopCount(sortedPool.length, targetKm, distanceMode, dayProfile);
+  const reservedLiveStopCount = template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID &&
+    getActiveCityConfig().__reservedLiveStopCount === 1 ? 1 : 0;
+  const normalSelectedCount = Math.max(0,
+    desiredStopCount(sortedPool.length + reservedLiveStopCount, targetKm, distanceMode, dayProfile) - reservedLiveStopCount);
   const selectedCount = dayEdit?.action === 'remove' && dayEdit.preserve_retained === false
     ? Math.min(normalSelectedCount, dayEdit.target_stop_count) : normalSelectedCount;
   const strictPool = strictTags.length
@@ -5448,7 +5451,7 @@ function buildRouteFromTemplate(
       end,
       shape,
       targetKm,
-      allowExpansion: !dayEdit,
+      allowExpansion: !dayEdit && !reservedLiveStopCount,
     });
     selectedStops = selectBalancedDay({
       rankedCandidates: sortedPool, selected: constrained.selected, preferences,

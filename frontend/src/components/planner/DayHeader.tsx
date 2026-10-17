@@ -11,7 +11,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
 import { walkingDistanceLabel } from "../../lib/route-context-view.mjs";
 import { CheckIcon, ExternalIcon, HalfCircleIcon, MinusIcon, ShareIcon, StarIcon, SunIcon, WalkIcon } from "../shared/icons";
-import { buttonClass, Eyebrow, labelChip } from "../shared/ui";
+import { busyButton, buttonClass, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
 
 type RoutePart = WalkingRoutePart;
@@ -204,6 +204,22 @@ export default function DayHeader({
   const weatherChip = !weather?.provenance?.stale && Number.isFinite(observed?.max_temp)
     ? [condition ? t(condition[0], condition[1]) : null, `${t("max", "high")} ${Math.round(observed.max_temp)}°`].filter(Boolean).join(" · ")
     : null;
+  // The parent temporarily omits source notes while updating. They still
+  // describe the held day, and its focused update action must stay mounted.
+  const previousSourceNote = useRef(sourceEvidenceNote);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
+  const sourceUpdateRef = useRef<HTMLButtonElement | null>(null);
+  const sourceUpdateHadFocus = useRef(false);
+  const displayedSourceNote = sourceEvidenceNote || (staleNotice ? previousSourceNote.current : "");
+  useEffect(() => {
+    if (sourceEvidenceNote || !staleNotice) previousSourceNote.current = sourceEvidenceNote;
+  }, [sourceEvidenceNote, staleNotice]);
+  useEffect(() => {
+    // A healthy replacement removes the optional action. Keep a reader who
+    // waited there with the day, without taking focus back from another task.
+    if (!displayedSourceNote && sourceUpdateHadFocus.current && document.activeElement === document.body) headingRef.current?.focus();
+    if (staleNotice !== "updating") sourceUpdateHadFocus.current = false;
+  }, [displayedSourceNote, staleNotice]);
   return (
     <header className="@container flex flex-col gap-5" aria-busy={staleNotice === "updating"}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -239,7 +255,7 @@ export default function DayHeader({
           </>
         )}
       </div>
-      <h1 className="type-title text-[2.5rem] text-parranda-ink sm:text-5xl lg:text-[3.25rem]">
+      <h1 ref={headingRef} tabIndex={-1} className="type-title text-[2.5rem] text-parranda-ink sm:text-5xl lg:text-[3.25rem]">
         {mode === "near_me" && !placeLabel ? (
           <>
             {t("En dag", "A day")} <PlaceSign text={t("nära dig", "near you")} />
@@ -304,20 +320,31 @@ export default function DayHeader({
       )}
       {/* Source limitations describe this published answer, never a live job.
           The day remains until the reader explicitly asks for an update. */}
-      {sourceEvidenceNote && (
-        <div role="status" className="flex flex-col items-start gap-2 rounded-parranda border-line border-parranda-ember/40 bg-parranda-ember/8 px-4 py-3">
-          <p className="text-sm font-bold text-parranda-ink">{sourceEvidenceNote}</p>
-          <p className="text-13 leading-relaxed text-parranda-ink/80">
-            {t(
-              "Dagen bygger på underlaget i det svaret. Uppdatera uttryckligen för att läsa källorna igen.",
-              "This day uses the evidence in that response. Update explicitly to read the sources again.",
-            )}
+      {displayedSourceNote && (
+        <div className="flex flex-col items-start gap-1 text-13 leading-relaxed text-parranda-ink/72">
+          <p role="status">
+            <span className="font-semibold text-parranda-ink">{t("Viss platsinformation saknas.", "Some place information is missing.")}</span>{" "}
+            {t("Det kan finnas fler platser än de som visas.", "There may be more places than those shown.")}
           </p>
-          {onUpdateDay && canUpdateSaved && (
-            <button type="button" onClick={onUpdateDay} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
-              {t("Uppdatera dagen", "Update the day")}
-            </button>
-          )}
+          <div className="flex w-full flex-wrap items-start gap-x-4">
+            <details className="min-w-0 flex-1 open:basis-full">
+              <summary className="min-h-11 cursor-pointer py-3 font-semibold text-parranda-ink/75 hover:text-parranda-ink">
+                {t("Om platskällorna", "About the place sources")}
+              </summary>
+              <p>{displayedSourceNote}</p>
+              <p className="mt-1">{t("Du kan uppdatera dagen för att kontrollera källorna igen.", "You can update the day to check the sources again.")}</p>
+            </details>
+            {onUpdateDay && canUpdateSaved && (
+              <button type="button" ref={sourceUpdateRef}
+                {...busyButton(staleNotice === "updating", () => {
+                  sourceUpdateHadFocus.current = document.activeElement === sourceUpdateRef.current;
+                  onUpdateDay();
+                })}
+                className="inline-flex min-h-11 items-center font-semibold text-parranda-ink underline underline-offset-2 hover:text-parranda-clay aria-disabled:opacity-60 aria-busy:cursor-progress">
+                {staleNotice === "updating" ? t("Uppdaterar dagen …", "Updating the day …") : t("Uppdatera dagen", "Update the day")}
+              </button>
+            )}
+          </div>
         </div>
       )}
       {/* What the day CONTAINS stays under the title (a thin day says so);

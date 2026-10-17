@@ -93,8 +93,8 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
     lastStarted=performance.now();
     const url=new URL(endpoint);url.searchParams.set('q',query);url.searchParams.set('limit',String(PROVIDER_LIMIT));
     LAYERS.forEach(layer=>url.searchParams.append('layer',layer));
-    // The public index only supports these languages; others use local names.
-    if(['en','de','fr'].includes(context.language))url.searchParams.set('lang',context.language);
+    // Keep source-owned local names: forcing the UI language can translate an
+    // exact native-query match into a nonprefix title before visible-name ranking.
     if(context.near){url.searchParams.set('lat',String(context.near.lat));url.searchParams.set('lon',String(context.near.lng));url.searchParams.set('zoom','12');}
     transport=Promise.resolve().then(()=>fetcher(url.toString(),{
      headers:{'User-Agent':'Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)'},signal:ownerSignal,

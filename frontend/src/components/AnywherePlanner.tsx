@@ -1,4 +1,4 @@
-import { isLiveOccurrenceId, scopeLiveChoices } from "../lib/live-stop-choice.mjs";
+import { isLiveOccurrenceId, scopeLiveChoices, selectableLiveOccurrenceId } from "../lib/live-stop-choice.mjs";
 import { urlEntryCommitments } from "../lib/url-entry-commitments.mjs";
 import type { Commitments } from "./planner/commitments";
 /**
@@ -12,7 +12,7 @@ import type { Commitments } from "./planner/commitments";
  *   unavailable    → honest empty state (never a crash)
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { normalizeDayEdit, normalizePreferencePriority, promotePreference, togglePreferenceSelection, type DayEdit } from "../../../shared/planner-intent.mjs";
+import { normalizeDayEdit, normalizePreferencePriority, togglePreferenceSelection, type DayEdit } from "../../../shared/planner-intent.mjs";
 import { fetchPlannerLifecycle } from '../lib/planner-lifecycle.mjs';
 import {
   buildAnywherePayload,
@@ -94,7 +94,7 @@ import { selectedDayEmpty, useLiveFallback } from "./planner/useLiveFallback";
 import SavedDays from "./planner/SavedDays";
 import StopLine from "./planner/StopLine";
 import { pickLabel, unkeptReasonSentence, type Lang } from "./planner/copy";
-import type { LiveEvents, PlaceStructure } from "./planner/types";
+import type { LiveEvents, PlaceStructure, PulseEvent } from "./planner/types";
 
 function readLS<T>(key: string, fallback: T): T {
   try {
@@ -214,7 +214,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [stopEditPending, setStopEditPending] = useState(false);
   const pendingStopEditRef = useRef<DayEdit | null>(null);
   const [stopEditFeedback, setStopEditFeedback] = useState<"remove" | "replace" | null>(null);
-  const [stopEditError, setStopEditError] = useState<"no_safe_replacement" | "not_confirmed" | "unsupported" | "rebuild_required" | null>(null);
+  const [stopEditError, setStopEditError] = useState<"no_safe_replacement" | "not_confirmed" | "unsupported" | "rebuild_required" | "live_not_preserved" | null>(null);
+  const livePlanPendingRef = useRef<string | null>(null);
+  const [livePlanPending, setLivePlanPending] = useState(false);
+  const resultStatusRef = useRef<HTMLParagraphElement | null>(null);
+  const focusDayAfterLiveChoiceRef = useRef(false);
   const [dayOffset, setDayOffset] = useState<0 | 1>(0); // today / tomorrow
   const [walkKey, setWalkKey] = useState("balanced");
   const [phase, setPhase] = useState<"idle" | "loading" | "done" | "error">("idle");
@@ -333,7 +337,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // a real axis over the two server buckets. SCOPE uses the separate
   // live_event_query_v1 contract: route geometry and the trusted day anchor are
   // read-only inputs, while a fresh near-me consent supplies coordinates for
-  // Live only. Nothing here re-composes or changes the day anchor.
+  // Live only. Navigation never changes the day; explicit occurrence choice
+  // below uses the ordinary commitment/recomposition path.
   const [liveSheetOpen, setLiveSheetOpen] = useState(false);
   const [liveSheetTime, setLiveSheetTime] = useState<"tonight" | "week">("tonight");
   const [liveSheetSort, setLiveSheetSort] = useState<"for_you" | "by_time">("for_you");
@@ -511,12 +516,28 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setLiveQueryError(null);
       setLiveQueryGeoHint(null);
     }
+    let requestedLiveKeep: string | null = null;
+    const refuseLivePlan = () => {
+      setStopEditError("live_not_preserved");
+      setStopEditFeedback(null);
+      const baseline = undoBaselineRef.current;
+      undoBaselineRef.current = null;
+      if (retention.keepPrevious && baseline) {
+        setDayChange({ previous: baseline.entry, summary: describeDayChange(baseline.entry, baseline.entry) });
+        setDayIsStale(true);
+      }
+      setUpgradePending(false);
+      setLiveFollowing(false);
+      setPhase("done");
+    };
     try {
       const effectiveWalkKey = walkKeyOverride ?? walkKey;
       const effectiveDayOffset = dayOffsetOverride ?? dayOffset;
       const effectiveDateIso = freezeComposeDateIso({
         dayOffset: effectiveDayOffset,
-        dateIsoOverride,
+        // The occurrence was chosen for the displayed absolute day. Crossing
+        // midnight before debounce cannot silently turn it into another day.
+        dateIsoOverride: dateIsoOverride ?? livePlanPendingRef.current?.slice(5, 15),
       });
       lastComposeDateIsoRef.current = effectiveDateIso;
       const effectivePriority = normalizePreferencePriority(preferencePriorityOverride ?? preferencePriority, preferencesOverride ?? selected);
@@ -524,6 +545,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const effectiveDayEdit = dayEditOverride !== undefined ? normalizeDayEdit(dayEditOverride)
         : editScope?.anchorKey === nextAnchorKey && editScope.dateIso === effectiveDateIso ? normalizeDayEdit(dayEdit) : null;
       const activeLedger = scopeLiveChoices(scopedLedger.entries, effectiveDateIso);
+      requestedLiveKeep = activeLedger.liveEventChoices.find(choice => choice.action === "keep")?.occurrence_id ?? null;
+      // An explicit retry still replaces the same on-screen answer. Preserve
+      // its exact Undo baseline just as the debounced initial choice does.
+      if (requestedLiveKeep && !silent && retention.keepPrevious && !undoBaselineRef.current && isUndoableDay(lastEntryRef.current)) {
+        undoBaselineRef.current = { entry: lastEntryRef.current!, anchorKey: displayedAnchorKeyRef.current };
+      }
       const rhythm = DAY_RHYTHMS.find((p: { key: string }) => p.key === effectiveWalkKey) ?? DAY_RHYTHMS[1];
       // Frozen here, beside the request that carries them: whatever the ledger
       // does while this is in flight, THIS is what the answer will have
@@ -580,9 +607,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setSupplyPending(false);
       // The Live completion capability is a bearer token: it leaves the
       // response here, before anything can store, share or render it.
-      const { body, capability: liveCapability } = takeLiveCompletion(rawBody);
+      let { body, capability: liveCapability } = takeLiveCompletion(rawBody);
       const refusal = composeServiceRefusal(response.status, body);
       if (refusal) {
+        if (requestedLiveKeep) {
+          setServiceRefusal(refusal);
+          refuseLivePlan();
+          return;
+        }
         // A refused manual attempt has not replaced the published day. Keep
         // that answer, mark it stale, and retain its Undo baseline for either
         // immediate Undo or a later explicit retry. Ordinary refusals below
@@ -616,6 +648,23 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         return;
       }
       if (!response.ok) throw new Error(`compose_http_${response.status}`);
+      if (requestedLiveKeep && body?.live_events?.pending === true && liveCapability?.routeUpgrade === "explicit_request") {
+        // A cold explicit choice is still the original request. Hold the old
+        // answer until its own bounded producer can publish that exact choice;
+        // never install a preliminary day or start another acquisition.
+        setLiveFollowing(true);
+        const completion = await followLiveCompletion({ capability: liveCapability, signal: controller.signal });
+        if (controller.signal.aborted || requestId !== requestSequenceRef.current || intentId !== intentSequenceRef.current) return;
+        setLiveFollowing(false);
+        if (completion.upgrade?.kind !== "applied") {
+          refuseLivePlan();
+          return;
+        }
+        body = takeLiveCompletion(completion.upgrade.result).body;
+        // This capability was already consumed in the active execution. The
+        // installed result must not start a second background completion run.
+        liveCapability = null;
+      }
       const decision = anywhereDecision();
       // With a coords anchor there is no typed text and no label to fall back
       // on: the engine's resolved label wins when present, and otherwise the
@@ -626,6 +675,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const requestLang = langOverride ?? lang;
       const cls = decision.classifyAnywhereResult(body, { place: fallbackLabel });
       const safe = decision.safeResponseFor(body, cls);
+      if (requestedLiveKeep && (!decision.isComposedStatus(cls.status) || safe?.days?.[0]?.date !== effectiveDateIso ||
+          !primaryRouteStops(safe).some((stop: any) => stop.is_live_event === true &&
+            stop.live_choice_eligible === true && stop.live_occurrence_id === requestedLiveKeep))) {
+        refuseLivePlan();
+        return;
+      }
       if (effectiveDayEdit && body?.agnostic_route_output_experiment?.day_edit?.status !== "applied") {
         setStopEditError(body?.agnostic_route_output_experiment?.day_edit?.reason === "no_safe_replacement"
           ? "no_safe_replacement" : "not_confirmed");
@@ -686,7 +741,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // Reload asks to retain this result instead of replacing the slot again.
       let persistedDayEdit = effectiveDayEdit;
       if (effectiveDayEdit && (composedNow || acceptedEditedEmpty) && body?.agnostic_route_output_experiment?.day_edit?.status === "applied") {
-        const publishedIds = splitRouteStops(primaryRouteStops(safe)).core
+        const publishedIds = primaryRouteStops(safe)
           .map((stop: any) => String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? ""));
         persistedDayEdit = normalizeDayEdit({ ...effectiveDayEdit, action: "remove",
           retained_candidate_ids: publishedIds, target_stop_count: publishedIds.length, replacement_preference: null });
@@ -821,6 +876,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         intentId !== intentSequenceRef.current
       ) return;
       setLiveFollowing(false);
+      if (requestedLiveKeep) {
+        refuseLivePlan();
+        return;
+      }
       if (silent) {
         setUpgradePending(false);
       } else {
@@ -833,6 +892,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         setSupplyPending(false);
         setStopEditPending(false);
         pendingStopEditRef.current = null;
+        livePlanPendingRef.current = null;
+        setLivePlanPending(false);
       }
     }
   }
@@ -898,6 +959,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const cls = decision.classifyAnywhereResult(result, { place: previous.place ?? "" });
     if (!decision.isComposedStatus(cls.status)) return;
     const safe = decision.safeResponseFor(result, cls);
+    const ledger = readCommitmentSnapshot(previous.commitments, { anchorKey: displayedAnchorKeyRef.current, dayKey: previous.id });
+    const choices = scopeLiveChoices(ledger.applies ? ledger.entries : {}, previous.dateIso ?? "").liveEventChoices;
+    if (choices.some(choice => choice.action === "keep" && !primaryRouteStops(safe).some((stop: any) =>
+      stop.is_live_event === true && stop.live_choice_eligible === true && stop.live_occurrence_id === choice.occurrence_id))) return;
     // Same question, same identity: only the day that answers it changed.
     const upgraded: SavedEntry = { ...previous, savedAt: new Date().toISOString(), safeResponse: safe, classification: cls };
     lastEntryRef.current = upgraded;
@@ -916,6 +981,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   }
 
   const cancelActivePlannerForNavigation = () => {
+    livePlanPendingRef.current = null;
+    setLivePlanPending(false);
     navigationSuspendedRef.current = true;
     interruptedPlannerRef.current ||= Boolean(activeRequestRef.current || recomposeTimerRef.current);
     requestSequenceRef.current += 1;
@@ -971,6 +1038,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Show a stored day WITHOUT re-fetching. A restored day is a snapshot (events /
   // "today" may be stale), so restoredAt is set and the UI labels it + offers rebuild.
   function restoreEntry(entry: SavedEntry, restoreViewFromStorage = false) {
+    livePlanPendingRef.current = null;
+    setLivePlanPending(false);
     resetBlitz();
     setNavigationInterrupted(false);
     pendingStopEditRef.current = null;
@@ -1088,6 +1157,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   function undoDayChange() {
     const change = dayChange;
     if (!change) return;
+    livePlanPendingRef.current = null;
+    setLivePlanPending(false);
     resetBlitz();
     const previous = change.previous;
     setDayChange(null);
@@ -1630,7 +1701,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       document.body.style.overflow = previousOverflow;
       // The trigger sits in the page behind: make it reachable before focusing it.
       restoreOutside();
-      (liveSheetTriggerRef.current ?? previouslyFocused)?.focus();
+      if (focusDayAfterLiveChoiceRef.current) {
+        focusDayAfterLiveChoiceRef.current = false;
+        resultStatusRef.current?.focus();
+      } else (liveSheetTriggerRef.current ?? previouslyFocused)?.focus();
     };
   }, [liveSheetOpen]);
 
@@ -1658,9 +1732,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const moodRanks = new Map<string, number>(explicitMoodPriority.map((key, index) => [key, index]));
   const moodLabel = ANYWHERE_PREFERENCES.filter((p: { key: string }) => selected.includes(p.key))
     .sort((left, right) => (moodRanks.get(left.key) ?? moodRanks.size) - (moodRanks.get(right.key) ?? moodRanks.size))
-    .map((p: { sv: string; en: string }, index: number) => {
+    .map((p: { key: string; sv: string; en: string }) => {
       const label = lang === "en" ? p.en : p.sv;
-      return explicitMoodPriority.length ? `${index + 1}. ${label}` : label;
+      // Only picked interests carry a number; the unpicked rest weigh equally.
+      const rank = moodRanks.get(p.key);
+      return rank === undefined ? label : `${rank + 1}. ${label}`;
     })
     .join(" · ");
 
@@ -1937,6 +2013,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // in the day" — reached from two places. Writing the map by key is what makes
   // exclude and pin unable to contradict each other: the newest action wins.
   const invalidateCommitmentIntent = () => {
+    livePlanPendingRef.current = null;
+    setLivePlanPending(false);
     setChoicesNotCarried(false);
     setStopEditFeedback(null);
     setStopEditError(null);
@@ -2005,6 +2083,23 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setLiveSheetSort(next);
     writeLS("parranda:live:sort", { sort: next });
   }
+  const planWithLiveOccurrence = (event: PulseEvent, label: string) => {
+    const date = lastComposeDateIsoRef.current;
+    const identity = selectableLiveOccurrenceId(event, date);
+    if (!identity || livePlanPendingRef.current || stopEditPending || dayIsStale || phase !== "done" || restoredAt) return;
+    invalidateCommitmentIntent();
+    livePlanPendingRef.current = identity;
+    setLivePlanPending(true);
+    commitmentAnchorKeyRef.current = displayedAnchorKeyRef.current;
+    // A new explicit occurrence owns the sole evening choice. Stable pins and
+    // exclusions remain; a shortened day retains its cap and removed places.
+    const next = Object.fromEntries(Object.entries(commitments).filter(([id]) =>
+      !isLiveOccurrenceId(id) || id.slice(5, 15) !== date));
+    setCommitments({ ...next, [identity]: { kind: "pin", label } });
+    relaxDayEditForAdjustment();
+    focusDayAfterLiveChoiceRef.current = true;
+    setLiveSheetOpen(false);
+  };
   const editStop = (identity: string, stopLabel: string, action: "replace" | "remove") => {
     if (!identity || pendingStopEditRef.current || stopEditPending || dayIsStale || phase !== "done") return;
     if (commitments[identity]?.kind === "pin") return;
@@ -2179,7 +2274,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         return [];
       })
     : [];
-  const stopEditErrorMessage = stopEditError === "no_safe_replacement"
+  const stopEditErrorMessage = stopEditError === "live_not_preserved"
+    ? dayOnScreen
+      ? t("Det valda evenemanget kunde inte bekräftas i en gångbar dag. Din tidigare dag är kvar. Försök igen eller ångra valet.", "The chosen event could not be confirmed in a walkable day. Your previous day is retained. Try again or undo the choice.")
+      : t("Det valda evenemanget kunde inte bekräftas i en gångbar dag. Försök igen eller välj ett annat evenemang.", "The chosen event could not be confirmed in a walkable day. Try again or choose another event.")
+    : stopEditError === "no_safe_replacement"
     ? t("Inget liknande stopp kunde bekräftas.", "No similar stop could be confirmed.")
     : stopEditError === "unsupported"
     ? t("Den här ändringen stöds inte för den här dagen. Dagen är oförändrad.", "This change is not supported for this day. Your day is unchanged.")
@@ -2218,13 +2317,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     relaxDayEditForAdjustment();
     const next = togglePreferenceSelection({ selected, preferencePriority }, key);
     setSelected(next.selected);
-    setPreferencePriority(next.preferencePriority);
-  };
-  const promoteMood = (key: string) => {
-    const next = promotePreference({ selected, preferencePriority }, key);
-    if (next.preferencePriority.join(',') === preferencePriority.join(',')) return;
-    invalidateCommitmentIntent();
-    relaxDayEditForAdjustment();
     setPreferencePriority(next.preferencePriority);
   };
   const clearPriority = () => {
@@ -2324,7 +2416,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           selected={selected}
           preferencePriority={preferencePriority}
           onToggleMood={toggleMood}
-          onPromoteMood={promoteMood}
           onClearPriority={clearPriority}
           onSetDay={chooseDay}
           rhythms={DAY_RHYTHMS}
@@ -2336,8 +2427,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {/* One permanently mounted result region: ready or final unavailable.
           Cleared while composing; PlaceChoices carries its own status. */}
-      <p role="status" className="sr-only">
-        {phase === "done" && dayWithRoute && staleNotice !== "updating"
+      <p ref={resultStatusRef} tabIndex={-1} role="status" className="sr-only">
+        {livePlanPending ? t("Planerar dagen med det valda evenemanget.", "Planning the day with the chosen event.") : phase === "done" && dayWithRoute && staleNotice !== "updating"
           ? t(
               `En dag ${anchorIsPosition ? "nära dig" : `i ${anchorLabel}`} är klar: ${routeStops.length} stopp.`,
               `A day ${anchorIsPosition ? "near you" : `in ${anchorLabel}`} is ready: ${routeStops.length} ${routeStops.length === 1 ? "stop" : "stops"}.`,
@@ -2593,10 +2684,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           offers the day before it back. It sits beside the controls it
           answers, and it is gone as soon as it stops being true. */}
       {stopEditError && !dayChange && <p className={noticeCard} role="status">{stopEditErrorMessage}</p>}
+      {stopEditError === "live_not_preserved" && <button type="button" onClick={() => retryPlan({ sameDate: true })}
+        className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+        {t("Försök planera med evenemanget igen", "Try planning with this event again")}
+      </button>}
       {dayChange && (phase === "done" || (phase === "error" && stopEditError)) && (!dayIsStale || stopEditError) && (dayChangeLine.length > 0 || stopEditFeedback || stopEditError) && (
         <div
           role="status"
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-parranda border-line border-parranda-ink/12 bg-parranda-ink/4 px-4 py-2.5"
+          className="flex items-center gap-x-2 rounded-parranda border-line border-parranda-ink/12 bg-parranda-ink/4 py-0.5 pl-4 pr-1"
         >
           <p className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink/75">
             {stopEditError ? stopEditErrorMessage : stopEditFeedback ? t(stopEditFeedback === "remove" ? "Borttaget" : "Bytt", stopEditFeedback === "remove" ? "Removed" : "Replaced") : <>
@@ -2608,7 +2703,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             type="button"
             onClick={undoDayChange}
             aria-label={t("Ångra ändringen", "Undo this change")}
-            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-line border-parranda-ink/20 px-3.5 text-xs font-bold text-parranda-ink transition hover:border-parranda-ink/50"
+            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-bold text-parranda-ink transition hover:bg-parranda-ink/8"
           >
             <UndoIcon className="h-3.5 w-3.5" />
             {t("Ångra", "Undo")}
@@ -2839,9 +2934,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </aside>
       )}
 
-      {/* THE LIVE SHEET (§3B) — explores the live_events buckets only. It never
-          changes the day's anchor or the route: it is handed read-only data and
-          three callbacks (scope, time, close), none of which composes a day. */}
+      {/* Live navigation reads source data; explicit occurrence choice reuses
+          the day's bounded commitment/recomposition path. */}
       {liveSheetOpen && (
         <LiveSheet
           lang={lang}
@@ -2854,6 +2948,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           liveSheetSort={liveSheetSort}
           setLiveSheetSort={changeLiveSheetSort}
           setLiveSheetTime={requestLiveSheetTime}
+          planningDate={lastComposeDateIsoRef.current}
+          planningAvailable={phase === "done" && !dayIsStale && !restoredAt && !stopEditPending && !livePlanPending}
+          onPlanOccurrence={planWithLiveOccurrence}
           onRetry={() => { liveSheetPeriodAutomaticRef.current = false; requestLiveSheetScope(liveSheetScope, liveSheetTime, true).catch(() => {}); }}
           liveSheetScope={liveSheetScope}
           requestLiveSheetScope={(scope) => { liveSheetPeriodAutomaticRef.current = false; requestLiveSheetScope(scope).catch(() => {}); }}

@@ -27,7 +27,6 @@ export default function AnchorCard({
   selected,
   preferencePriority = [],
   onToggleMood,
-  onPromoteMood,
   onClearPriority,
   onSetDay,
   rhythms,
@@ -47,7 +46,6 @@ export default function AnchorCard({
   selected: string[];
   preferencePriority?: string[];
   onToggleMood: (key: string) => void;
-  onPromoteMood?: (key: string) => void;
   /** Back to unranked interests: the only way out of a ranking besides Undo. */
   onClearPriority?: () => void;
   onSetDay: (offset: 0 | 1) => void;
@@ -77,8 +75,8 @@ export default function AnchorCard({
   const scale = rhythms.filter((preset) => preset.key !== "free");
   const priority = normalizePreferencePriority(preferencePriority, selected);
   const priorityRanks = new Map<string, number>(priority.map((key, index) => [key, index + 1]));
-  // Chips keep their place; only the numbers change. Re-sorting by rank moved
-  // another chip's promote button under the finger after every press.
+  // Chips keep their place; only the numbers change, so a tap never moves
+  // another chip under the finger.
   const orderedPreferences = preferences;
   const free = rhythms.find((preset) => preset.key === "free");
   const current = rhythms.find((preset) => preset.key === walkKey);
@@ -154,12 +152,12 @@ export default function AnchorCard({
 
           <div className="flex flex-col gap-2">
             <Eyebrow tone="glow">{t("Känsla", "Mood")}</Eyebrow>
-            {(priority.length > 0 || onPromoteMood) && (
-              <p id={priorityHelpId} className="text-xs text-parranda-ink/68">
-                {t("Siffrorna styr innehållet, inte stoppens ordning.", "The numbers guide the content, not the order of stops.")}
-              </p>
-            )}
-            <div role="group" aria-label={t("Intressen", "Interests")} aria-describedby={priority.length > 0 || onPromoteMood ? priorityHelpId : undefined} className="flex flex-wrap gap-x-1.5 gap-y-2">
+            <p id={priorityHelpId} className="text-xs text-parranda-ink/68">
+              {priority.length > 0
+                ? t("Siffrorna visar ordningen du valde i. Ettan väger tyngst.", "Numbers show the order you picked. 1 weighs most.")
+                : t("Klicka av och på ett intresse för att låta det väga tyngst.", "Tap an interest off and on to make it weigh most.")}
+            </p>
+            <div role="group" aria-label={t("Intressen", "Interests")} aria-describedby={priorityHelpId} className="flex flex-wrap gap-x-1.5 gap-y-2">
               {orderedPreferences.map((pref) => {
                 const active = selected.includes(pref.key);
                 const rank = priorityRanks.get(pref.key);
@@ -182,19 +180,6 @@ export default function AnchorCard({
                         : <CheckIcon className="h-3 w-3" />)}
                       {name}
                     </button>
-                    {active && onPromoteMood && (
-                      <button
-                        type="button"
-                        aria-label={t(`Höj prioritet för ${name}`, `Increase priority for ${name}`)}
-                        // Unavailable at rank one, but still focusable: the press
-                        // that reached rank one must not drop keyboard focus.
-                        aria-disabled={rank === 1 || undefined}
-                        onClick={rank === 1 ? undefined : () => onPromoteMood(pref.key)}
-                        className={`${compactPillTarget} min-w-11 justify-center bg-parranda-ink/8 text-parranda-ink/72 hover:bg-parranda-ink/14 aria-disabled:opacity-40 aria-disabled:hover:bg-parranda-ink/8`}
-                      >
-                        <ChevronDownIcon className="h-3.5 w-3.5 rotate-180" />
-                      </button>
-                    )}
                   </div>
                 );
               })}
