@@ -198,7 +198,7 @@ test("ref-only arrival requests its identity before stored-day fallback and adop
         for (const field of ["selection_id", "place_selection", "lat", "lng"]) assert.equal(url.searchParams.has(field), false, field);
       }
       await click(h, [...h.container.querySelectorAll("button")].find((b) => /^Adjust/.test((b.getAttribute("aria-label") || b.textContent).trim())));
-      await click(h, [...h.container.querySelectorAll("button")].find((b) => /^Easy/.test(b.textContent.trim())));
+      await click(h, [...h.container.querySelectorAll("button")].find((b) => /^Relaxed/.test(b.textContent.trim())));
       await h.clock.advance(450);
       const adjusted = composeCalls(h)[1];
       assert.equal(adjusted.body.place_ref, "r41485");

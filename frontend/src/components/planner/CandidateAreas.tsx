@@ -43,7 +43,7 @@ export default function CandidateAreas({
   return (
     <section className={`flex flex-col gap-4 p-4 sm:p-5 ${panelCard}`}>
       <div>
-        <Eyebrow>{t("Kandidater nära platsen", "Candidates near this place")}</Eyebrow>
+        <Eyebrow>{t("Platser i närheten", "Places nearby")}</Eyebrow>
         {structureOnly && matchCount > 0 && (
           <p className="mt-1.5 text-sm text-parranda-ink/75">
             {t(
@@ -56,7 +56,7 @@ export default function CandidateAreas({
 
       {missingIntents.length > 0 && (
         <p className="text-sm text-parranda-ink/72">
-          {t("Ingen av kandidaterna täcker:", "None of these candidates cover:")} {missingIntents.map((k) => label(INTENT_LABELS, k, lang)).join(", ")}
+          {t("Inga platser för:", "No places for:")} {missingIntents.map((k) => label(INTENT_LABELS, k, lang)).join(", ")}
         </p>
       )}
       {matchCount === 0 && (

@@ -2235,11 +2235,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const unavailableMessage = phase === "done" && (classification?.status === "unavailable" || terminalSourceIssue) && !upgradePending && !serviceRefusal && !unavailableHasChoices
     ? anchorUnresolved
       ? placeRef ? referenceFailureMessage : t(
-          `Parranda kunde inte hitta ”${typedPlaceLabel}” just nu. Prova en annan stavning eller lägg till land eller region — inget hittas på.`,
-          `Parranda couldn't pin down “${typedPlaceLabel}” right now. Try another spelling or add a country or region — nothing is invented in its place.`,
+          `Parranda hittade inte ”${typedPlaceLabel}”. Prova en annan stavning, eller lägg till stad eller land.`,
+          `Parranda couldn't find “${typedPlaceLabel}”. Try another spelling, or add a city or country.`,
         )
       : terminalSourceIssue
-        ? `${t("Planeringen avslutades utan rutt.", "Planning finished without a route.")} ${sourceEvidenceNote}`
+        ? `${t("Parranda kunde inte bygga en dag här just nu.", "Parranda couldn't build a day here right now.")} ${sourceEvidenceNote}`
       : sourceUnavailable
         ? t(
             `Platskällorna svarade inte just nu, så Parranda kunde inte hämta platser ${anchorIsPosition ? "nära dig" : `för ${placeName}`} — inget hittas på. Försök igen om en stund.`,
@@ -2601,8 +2601,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         <p className={noticeCard} role="status">
           {serviceRefusal.kind === "busy"
             ? t(
-                "Parranda bygger så många dagar som är säkert just nu. Försök igen om en liten stund.",
-                "Parranda is composing as many days as it safely can right now. Try again shortly.",
+                "Många planerar just nu. Försök igen om en stund.",
+                "Lots of people are planning right now. Try again in a moment.",
               )
             : t(
                 `Parranda behöver pausa nya anrop en stund${serviceRefusal.retry_after_seconds ? ` — försök igen om cirka ${serviceRefusal.retry_after_seconds} sekunder` : ""}.`,

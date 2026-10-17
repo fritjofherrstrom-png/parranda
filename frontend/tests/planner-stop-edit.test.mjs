@@ -474,7 +474,7 @@ for (const error of ['busy', 'rate_limited']) for (const action of ['Remove', 'R
   await h.fetchMock.respond(routeCalls(h).at(-1), { error, retry_after_seconds: 3 }, 429);
   assert.deepEqual(h.readStorage(LAST), before);
   assert.ok(Boolean(h.container.querySelector('section[aria-label="The route"]')), 'a failed manual attempt does not erase the old answer');
-  assert.match(h.text(), error === 'busy' ? /composing as many days as it safely can/ : /pause new requests briefly/);
+  assert.match(h.text(), error === 'busy' ? /planning right now/ : /pause new requests briefly/);
   assert.match(h.text(), /showing your previous day/);
   assert.doesNotMatch(h.text(), /Removed|Replaced/);
   assert.ok(Boolean(button(h, 'Undo')));
@@ -509,11 +509,11 @@ test('explicit retry of a capacity-refused manual edit keeps its frozen day acro
 test('an ordinary non-edit capacity refusal keeps its existing no-day policy', async t => {
   const h = await completed(t);
   const before = h.readStorage(LAST);
-  await click(h, 'Adjust'); await click(h, 'Easy'); await h.clock.advance(400);
+  await click(h, 'Adjust'); await click(h, 'Relaxed'); await h.clock.advance(400);
   const request = routeCalls(h).at(-1);
   assert.equal(request.body.day_edit, undefined);
   await h.fetchMock.respond(request, { error: 'busy', retry_after_seconds: 3 }, 429);
   assert.ok(!h.container.querySelector('section[aria-label="The route"]'), 'general service-refusal policy is not rewritten');
-  assert.match(h.text(), /composing as many days as it safely can/);
+  assert.match(h.text(), /planning right now/);
   assert.deepEqual(h.readStorage(LAST), before);
 });

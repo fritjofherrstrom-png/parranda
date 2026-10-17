@@ -56,7 +56,7 @@ test('the real candidate surface shows zero matches instead of eleven unrelated 
   const day = composeDistrictDay(sourceRows(Array.from({ length: 11 }, () => ({}))), { candidateSurface: true, intents: ['second_hand'] });
   const { container } = await mountAreas(t, day);
   assert.match(container.textContent, /0 matchningar/);
-  assert.match(container.textContent, /Ingen av kandidaterna täcker: Second hand/);
+  assert.match(container.textContent, /Inga platser för: Second hand/);
   assert.doesNotMatch(container.textContent, /Source place|11 träffar/);
   assert.equal(container.querySelectorAll('li').length, 0);
 });
@@ -66,7 +66,7 @@ test('missing preference explanation precedes the real matching candidate list',
     { name: 'Actual source cafe', type: 'cafe' }, {}, {},
   ]), { candidateSurface: true, intents: ['fika', 'second_hand'] });
   const { container, window } = await mountAreas(t, day);
-  const missing = [...container.querySelectorAll('p')].find(node => /Ingen av kandidaterna täcker: Second hand/.test(node.textContent));
+  const missing = [...container.querySelectorAll('p')].find(node => /Inga platser för: Second hand/.test(node.textContent));
   const list = container.querySelector('ul');
   assert.ok(missing && list);
   assert.ok(missing.compareDocumentPosition(list) & window.Node.DOCUMENT_POSITION_FOLLOWING,

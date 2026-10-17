@@ -44,7 +44,7 @@ function query(events) { return { contract: 'live_event_query_v1', route_mutatio
 
 for (const partial of [false, true]) test(`first open prioritizes real following rows over an empty selected-day display (partial=${partial})`, async t => {
   const h = await start(t, live({ partial }));
-  assert.equal(button(h, 'Following 7 days').getAttribute('aria-pressed'), 'true');
+  assert.equal(button(h, 'Next 7 days').getAttribute('aria-pressed'), 'true');
   assert.match(h.container.querySelector('[role="dialog"]').textContent, /Listed Monday concert/);
   assert.equal(routes(h).length, 1);
   assert.equal(queries(h).length, 0, 'published following rows need no wider-day request');
@@ -59,7 +59,7 @@ test('opening before completion moves automatically to following rows after the 
   const completion = h.fetchMock.calls.find(c => c.url === '/api/planner-live-completion');
   await h.fetchMock.respond(completion, { live_events: live(), live_completion: { version: 1, state: 'ready', route_upgrade: 'not_supported' } });
   await h.fetchMock.respond(initial, query(live()));
-  assert.equal(button(h, 'Following 7 days').getAttribute('aria-pressed'), 'true');
+  assert.equal(button(h, 'Next 7 days').getAttribute('aria-pressed'), 'true');
   const week = queries(h).at(-1); assert.equal(week.body.time, 'this_week'); assert.equal(week.body.scope, 'around_place');
   assert.equal(week.body.selected_date, '2026-10-25');
   await h.fetchMock.respond(week, query(live()));

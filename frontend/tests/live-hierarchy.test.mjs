@@ -71,7 +71,7 @@ test('opening while local calendars are pending keeps the selected day instead o
   const h=await composed(t,live({pending:true},{status:'pending',result:'pending'}),'en',FOLLOWED);
   await click(h,/Explore live|See all live/);
   assert.equal(button(h,/^Wed 7 Oct$/).getAttribute('aria-pressed'),'true');
-  assert.equal(button(h,/^Following 7 days$/).getAttribute('aria-pressed'),'false');
+  assert.equal(button(h,/^Next 7 days$/).getAttribute('aria-pressed'),'false');
   const q=h.fetchMock.pending().find(c=>c.url.includes('/api/live-events'));
   assert.ok(q); assert.equal(q.body.time,'tonight');
   assert.equal(q.body.scope,'around_place');

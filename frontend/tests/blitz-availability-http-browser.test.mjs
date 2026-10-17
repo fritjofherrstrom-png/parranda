@@ -76,7 +76,7 @@ test('actual HTTP → native BlitzCard distinguishes unknown indoor hours from a
   const {page,show}=await harness(t,[structuredClone(observation.selected)]);
   for(const lang of ['sv','en']) {
     const text=await show(lang);
-    assert.match(text,lang==='sv'?/kunde inte bekräfta att det var öppet vid kontrollen/:/could not confirm it was open when checked/);
+    assert.match(text,lang==='sv'?/Öppettiderna är okända/:/Hours unknown/);
     assert.match(text,lang==='sv'?/platsförslag/:/place suggestion/);
     assert.doesNotMatch(text,/utomhus|exterior|outdoor|outside/i);
     assert.equal((await page.evaluate(()=>window.actualResponse)).best_move.availability?.status,'unknown');
@@ -92,6 +92,6 @@ test('actual HTTP → native BlitzCard qualifies late-open hours and labels its 
     const text=await show(lang);
     assert.match(text,lang==='sv'?/Källans schema anger öppet vid kontrollen/:/Listed hours indicate open at the time checked/);
     assert.match(text,/Unconfirmed gallery/);
-    assert.match(text,lang==='sv'?/kunde inte bekräfta att det var öppet vid kontrollen/:/could not confirm it was open when checked/);
+    assert.match(text,lang==='sv'?/Öppettiderna är okända/:/Hours unknown/);
   }
 });

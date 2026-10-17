@@ -16,7 +16,7 @@ import type { Lang, Translate } from "./copy";
 function placeHoursNote(move: BlitzMoveView, t: Translate) {
   return move.availability_status === "available_in_window"
     ? t("Källans schema anger öppet vid kontrollen. Kontrollera att du hinner fram.", "Listed hours indicate open at the time checked. Check that you can arrive in time.")
-    : t("Vi kunde inte bekräfta att det var öppet vid kontrollen. Kontrollera öppettider innan du går.", "We could not confirm it was open when checked. Check opening hours before going.");
+    : t("Öppettiderna är okända. Kolla innan du går.", "Hours unknown. Check before you go.");
 }
 
 export default function BlitzCard({
@@ -57,8 +57,8 @@ export default function BlitzCard({
       {blitzPhase === "idle" && (
         <p className="-mt-1 text-center text-xs text-parranda-ink/68">
           {mode === "near_me"
-            ? t("Ett nästa drag nära dig, just nu", "One next move near you, right now")
-            : t(`Ett nästa drag i ${anchorLabel}, just nu`, `One next move in ${anchorLabel}, right now`)}
+            ? t("Ett förslag nära dig, just nu", "One idea near you, right now")
+            : t(`Ett förslag i ${anchorLabel}, just nu`, `One idea in ${anchorLabel}, right now`)}
           {dayOnScreen ? t(" — din dag ändras inte.", " — your day stays as it is.") : "."}
         </p>
       )}
@@ -76,7 +76,7 @@ export default function BlitzCard({
           {(blitzPhase === "position_needed" || blitzPhase === "locating") && (
             <div className="mt-2 flex flex-col items-start gap-3">
               <p className="text-sm text-parranda-ink/75">
-                {t("Blitz behöver din position. Den sparas inte när dagen öppnas igen. Dela den för ett nästa drag nära dig.", "Blitz needs your position. It isn't kept when a saved day is reopened. Share it for a next move near you.")}
+                {t("Blitz behöver din position. Den sparas inte när dagen öppnas igen. Dela den för ett förslag nära dig.", "Blitz needs your location. It isn't kept when a saved day is reopened. Share it for an idea near you.")}
               </p>
               <button type="button" {...busyButton(blitzPhase === "locating", sharePositionForBlitz)} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
                 {blitzPhase === "locating" ? t("Hämtar position …", "Getting location …") : t("Dela position för Blitz", "Share position for Blitz")}
@@ -93,10 +93,10 @@ export default function BlitzCard({
           {blitzPhase === "done" && blitzResult?.state === "blocked" && (
             <p className="mt-2 text-sm text-parranda-ink/75">
               {mode === "near_me"
-                ? t("Inget tillräckligt pålitligt nästa drag hittades nära dig just nu.", "No sufficiently reliable next move was found near you right now.")
+                ? t("Inget tillräckligt säkert förslag nära dig just nu.", "No reliable idea near you right now.")
                 : t(
-                    `Inget tillräckligt pålitligt nästa drag hittades i ${anchorLabel} just nu.`,
-                    `No sufficiently reliable next move was found in ${anchorLabel} right now.`,
+                    `Inget tillräckligt säkert förslag i ${anchorLabel} just nu.`,
+                    `No reliable idea in ${anchorLabel} right now.`,
                   )}
               {dayOnScreen ? t(" Din plan är oförändrad.", " Your day is unchanged.") : ""}
             </p>
@@ -137,8 +137,8 @@ export default function BlitzCard({
                       ? t("Ett källstött platsförslag. Det ändrar inte dagens rutt.", "A source-backed place suggestion. It does not change today's route.")
                       : t("Ett källstött platsförslag.", "A source-backed place suggestion.")
                     : dayOnScreen
-                    ? t("Ett källstött nästa drag utifrån platsen, tiden och dina val. Det ändrar inte dagens rutt.", "A source-backed next move from your place, time and picks. It does not change today's route.")
-                    : t("Ett källstött nästa drag utifrån platsen, tiden och dina val.", "A source-backed next move from your place, time and picks.")}
+                    ? t("Ett förslag utifrån platsen, tiden och dina intressen. Det ändrar inte dagens rutt.", "An idea from your place, time and interests. It doesn't change today's route.")
+                    : t("Ett förslag utifrån platsen, tiden och dina intressen.", "An idea from your place, time and interests.")}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {mapsUrl && (
