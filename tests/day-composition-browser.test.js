@@ -155,7 +155,9 @@ test('native composed day preserves dominance, removal/reload, replacement, refu
     stages.push('native-clear-completion-and-real-neutral-reload');
 
     // Continue the existing removal/share journey from its culture-first state.
-    await page.getByRole('button', { name: 'Höj prioritet för Kultur', exact: true }).click();
+    // Ranking is the pick order: tapping Kultur off and on ranks it first.
+    const kultur = page.locator('[data-preference-key="culture"] button[aria-pressed]');
+    await kultur.click(); await kultur.click();
     await waitSaved(page, entry => entry.inputs.preferencePriority?.[0] === 'culture');
     saved = await current(page);
     const beforeRemoval = ids(saved);
@@ -206,7 +208,7 @@ test('native composed day preserves dominance, removal/reload, replacement, refu
     await page.getByRole('button', { name: 'Dela dagen', exact: true }).click();
     const sharedUrl = await page.evaluate(() => navigator.clipboard.readText());
     const share = new URL(sharedUrl);
-    assert.equal(share.searchParams.get('prio'), 'culture,second_hand');
+    assert.equal(share.searchParams.get('prio'), 'culture', 'the link carries the picked prefix; Second hand stays unranked');
     assert.equal(JSON.parse(share.searchParams.get('edit')).target_stop_count, 5);
     assert.equal(share.searchParams.has('place_selection'), false);
     const other = await makeContext(); t.after(() => other.close());

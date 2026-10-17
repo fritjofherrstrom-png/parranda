@@ -117,11 +117,13 @@ test('a late Clear response cannot overwrite the ranked composed day restored by
   const clear = calls(h).at(-1);
   assert.equal(clear.body.preference_priority, undefined);
   await h.fetchMock.respond(clear, composedDay('Late neutral'), 200, { deferBody: true });
-  await click(h.container.querySelector('button[aria-label="Increase priority for Culture"]'));
+  // Ranking is the pick order: tapping Culture off and on ranks it alone.
+  const culture = () => h.container.querySelector('[data-preference-key="culture"] button[aria-pressed]');
+  await click(culture()); await click(culture());
   await h.clock.advance(400);
   const ranked = calls(h).at(-1);
   assert.notEqual(ranked, clear);
-  assert.deepEqual(ranked.body.preference_priority, ['culture', 'second_hand']);
+  assert.deepEqual(ranked.body.preference_priority, ['culture']);
   await h.fetchMock.respond(ranked, composedDay('New ranking'));
   await click(h.container.querySelector('button[aria-label="Undo this change"]'));
   await h.clock.advance(500);
