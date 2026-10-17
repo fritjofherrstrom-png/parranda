@@ -173,7 +173,7 @@ test("the surface renders the engine's TRUSTWORTHY richness — and never the co
   assert.match(anywherePlannerSource, /\{stopKindLabel\}/);
   // Unknown opening hours are visible on the stop row, not only when expanded.
   // Said once when it holds for every stop; otherwise on exactly the stops it holds for.
-  assert.match(anywherePlannerSource, /hoursUnknown && !hoursUnknownEverywhere && \(\s*<span className="inline-flex items-center gap-1 text-xs text-parranda-ink\/68">[\s\S]{0,120}\{t\("Öppettider okända", "Hours unknown"\)\}/);
+  assert.match(anywherePlannerSource, /hoursUnknown && !hoursUnknownEverywhere && \(\s*<span className="inline-flex items-center gap-1 text-xs text-parranda-ink\/68">[\s\S]{0,120}\{t\("Öppettider saknas", "Opening hours unavailable"\)\}/);
   assert.match(anywherePlannerSource, /hoursUnknownEverywhere = split\.core\.length > 1 && split\.core\.every\(\(stop: any\) => stopHoursUnknown\(stop\)\)/);
   assert.match(anywherePlannerSource, /DAYPART_LABELS, stop\.daypart/);
   // NEVER rendered: fields that can carry baseline-city phrasing or placeholder
@@ -321,7 +321,7 @@ test("a tapped stop discloses route facts before an explicit Maps action", () =>
   // Do not invent a future availability payload in the view. Hours can render
   // only after the route-stop contract exposes reviewed availability facts.
   assert.doesNotMatch(anywherePlannerSource, /stop\?\.availability|closes_at_local|Open during your visit/);
-  assert.match(anywherePlannerSource, /Source hours unavailable for the selected day/);
+  assert.match(anywherePlannerSource, /Opening hours unavailable for the selected day/);
   // Raw engine reason tokens never render.
   assert.doesNotMatch(anywherePlannerSource, /fit_reasons|time_reasons|lens_reasons|route_roles/);
 });

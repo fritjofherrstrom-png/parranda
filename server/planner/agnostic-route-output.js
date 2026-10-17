@@ -40,6 +40,7 @@ const {
   buildSelectedDayHoursFact,
   buildLocalDayAvailabilityWindow,
   evaluateOpeningHoursForWindow,
+  normalizeOpeningHours,
   normalizeSelectedDayHoursFact,
 } = require("../place-candidates/opening-hours");
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
@@ -61,6 +62,7 @@ const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
 const { replacementKeepsOtherStops } = require("./walking-fit-selection");
 const { dayEditOutcome, normalizeDayEdit } = require('./day-composition-policy');
 const { activeLiveChoices } = require('./live-occurrence-choice');
+const { normalizeSourceWebsite } = require('../lib/source-website');
 const {
   buildAgnosticEngineCityConfig,
   mapPlannerReservoirToSourceCandidates,
@@ -568,6 +570,7 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
   const inputStops = Array.isArray(adaptedBody?.stops) ? adaptedBody.stops : [];
   const stops = inputStops.map((stop) => {
     const selectedDayHours = normalizeSelectedDayHoursFact(stop.selected_day_hours);
+    const website = normalizeSourceWebsite(stop.website);
     return {
       id: stop.candidate_id || null,
       label: stop.label || null,
@@ -581,6 +584,7 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
       lat: stop.coordinates && Number.isFinite(stop.coordinates.lat) ? stop.coordinates.lat : null,
       lng: stop.coordinates && Number.isFinite(stop.coordinates.lng) ? stop.coordinates.lng : null,
       ...(selectedDayHours?.status === "known" ? { selected_day_hours: selectedDayHours } : {}),
+      ...(website ? { website } : {}),
     };
   });
   const stopIds = stops.map((stop) => stop.id).filter(Boolean);
@@ -962,7 +966,51 @@ function buildBlockedAgnosticRouteOutputExperiment({ baselineResult, blocker, so
  *   baseline (unchanged) when not eligible, or a deep-cloned mutated/synthesized
  *   result when eligible. `experiment` is the top-level diagnostics block.
  */
-async function composeAgnosticRouteOutput({
+async function composeAgnosticRouteOutput(args) {
+  if (args.synthesizeVia !== 'engine' || typeof args.openDataLoader?.enrichSelected !== 'function') {
+    return composeAgnosticRouteOutputOnce(args);
+  }
+  let snapshot;
+  const initial = await composeAgnosticRouteOutputOnce({ ...args,
+    onRetainComposition: value => { snapshot = value; },
+  });
+  const stops = initial.result?.days?.[0]?.primary_route?.main_stops || [];
+  if (!snapshot || !stops.length || !Array.isArray(snapshot.records)) {
+    if (snapshot) args.onRetainComposition?.(snapshot);
+    return initial;
+  }
+  // Check only the identities actually selected by the real composer. No new
+  // source discovery, source reacquisition, or unbounded retry is permitted.
+  const updates = await args.openDataLoader.enrichSelected(snapshot.records, {
+    selectedIds: stops.map(stop => String(stop.id || '')).filter(Boolean),
+  });
+  let changed = false;
+  const records = snapshot.records.map((record, index) => {
+    const update = Array.isArray(updates) ? updates[index] : null;
+    if (update?.id !== record.id || update?.lat !== record.lat || update?.lng !== record.lng) return record;
+    const hours = normalizeOpeningHours(update.opening_hours);
+    if (!hours || hours === record.opening_hours) return record;
+    changed = true;
+    // A time fact must not lend a new name, coordinate, type, family, review
+    // decision or place-trust upgrade to an already admitted candidate.
+    return { ...record, opening_hours: hours, opening_hours_source: update.opening_hours_source };
+  });
+  if (!changed) {
+    args.onRetainComposition?.(snapshot);
+    return initial;
+  }
+  for (const key of ['loader_status', 'loader_error', 'loader_metadata', EXCLUDED_LOADED_IDS]) {
+    if (snapshot.records[key] !== undefined) Object.defineProperty(records, key, { value: snapshot.records[key] });
+  }
+  // One replay of the same frozen supply/context applies the new facts through
+  // normal admission, preference, pin/edit and final walking gates. The replay
+  // loader has no enrichment method and cannot restart either acquisition.
+  return composeAgnosticRouteOutputOnce({ ...args, openDataLoader: async () => records,
+    retainedContext: snapshot.context,
+  });
+}
+
+async function composeAgnosticRouteOutputOnce({
   coords,
   baselineResult,
   externalRequested = false,
@@ -1124,8 +1172,13 @@ async function composeAgnosticRouteOutput({
           if (typeof candidate?.opening_hours !== "string") return null;
           const availability = evaluateOpeningHoursForWindow(candidate.opening_hours, availabilityWindow);
           const selectedDayHours = buildSelectedDayHoursFact(candidate.opening_hours, availabilityWindow);
+          const source = candidate.opening_hours_source;
           return selectedDayHours
-            ? { ...availability, selected_day_hours: selectedDayHours }
+            ? { ...availability, selected_day_hours: {
+                ...selectedDayHours,
+                ...(source ? { date: effectiveDate, timezone: ctx.contextBlock.time.timezone,
+                  source_url: source.url, observed_at: source.observed_at } : {}),
+              } }
             : availability;
         },
       }
