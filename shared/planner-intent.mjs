@@ -9,48 +9,30 @@ function selectedPreferences(value) {
 }
 
 /**
- * An absent/empty priority is neutral, never the default chip order. Explicit
- * selected keys lead; any remaining selected keys follow in selection order.
+ * The interests the reader picked, in the order picked: a ranked prefix of the
+ * selection. Selected interests outside it stay unranked and weigh equally.
+ * An absent/empty priority is neutral, never the default chip order.
  */
 export function normalizePreferencePriority(value, selected) {
   const selection = selectedPreferences(selected);
   if (!Array.isArray(value)) return [];
-  const requested = [...new Set(value.filter(key => selection.includes(key)))];
-  return requested.length ? [...requested, ...selection.filter(key => !requested.includes(key))] : [];
+  return [...new Set(value.filter(key => selection.includes(key)))];
 }
 
 /**
- * Toggle a chip; selection order and explicit dominance are separate state.
- * Only a promotion creates a ranking. Ranking a newly added chip first made
- * the same chips compose different days depending on tap history.
+ * Toggle a chip. Every pick ranks after the reader's earlier picks, so tapping
+ * an interest off and on again moves it last; untouched defaults stay unranked.
+ * The same taps therefore always give the same ranking.
  */
 export function togglePreferenceSelection(state, key) {
   const selected = selectedPreferences(state?.selected);
   const preferencePriority = normalizePreferencePriority(state?.preferencePriority, selected);
   if (!preferenceKeys.has(key)) return { selected, preferencePriority };
-  // Deselection keeps the reader's explicit ranks; only "Clear the order" ends them.
   if (selected.includes(key)) return {
     selected: selected.filter(value => value !== key),
     preferencePriority: preferencePriority.filter(value => value !== key),
   };
-  return {
-    selected: [...selected, key],
-    preferencePriority: preferencePriority.length ? [...preferencePriority, key] : [],
-  };
-}
-
-/** Move a selected interest one rank up, or make it first from neutral. */
-export function promotePreference(state, key) {
-  const selected = selectedPreferences(state?.selected);
-  const preferencePriority = normalizePreferencePriority(state?.preferencePriority, selected);
-  if (!selected.includes(key)) return { selected, preferencePriority };
-  if (!preferencePriority.length) return {
-    selected, preferencePriority: [key, ...selected.filter(value => value !== key)],
-  };
-  const index = preferencePriority.indexOf(key);
-  if (index > 0) [preferencePriority[index - 1], preferencePriority[index]] =
-    [preferencePriority[index], preferencePriority[index - 1]];
-  return { selected, preferencePriority };
+  return { selected: [...selected, key], preferencePriority: [...preferencePriority, key] };
 }
 
 function validCandidateId(value) {

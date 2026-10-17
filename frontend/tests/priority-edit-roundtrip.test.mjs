@@ -35,11 +35,14 @@ test("opposite priority gives the same place/date/interests distinct durable ide
 
 test("saved priority is canonical and detached from later caller changes", () => {
   const raw = ["views", "views", "food", "unknown"];
+  // Canonical is the picked prefix: duplicates and unknown keys drop out, and
+  // the unpicked selection (culture) stays unranked rather than appended.
+  const picked = ["views", "food"];
   const entry = saved({ preferencePriority: raw });
-  assert.deepEqual(entry.inputs.preferencePriority, priority);
+  assert.deepEqual(entry.inputs.preferencePriority, picked);
   raw[0] = "culture";
-  assert.deepEqual(entry.inputs.preferencePriority, priority);
-  assert.equal(entry.id, savedEntryId({ ...base, preferencePriority: priority }));
+  assert.deepEqual(entry.inputs.preferencePriority, picked);
+  assert.equal(entry.id, savedEntryId({ ...base, preferencePriority: picked }));
 });
 
 test("explicit priority survives the real share encoder and decoder", () => {

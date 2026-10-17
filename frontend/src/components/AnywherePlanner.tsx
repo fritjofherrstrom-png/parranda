@@ -12,7 +12,7 @@ import type { Commitments } from "./planner/commitments";
  *   unavailable    → honest empty state (never a crash)
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { normalizeDayEdit, normalizePreferencePriority, promotePreference, togglePreferenceSelection, type DayEdit } from "../../../shared/planner-intent.mjs";
+import { normalizeDayEdit, normalizePreferencePriority, togglePreferenceSelection, type DayEdit } from "../../../shared/planner-intent.mjs";
 import { fetchPlannerLifecycle } from '../lib/planner-lifecycle.mjs';
 import {
   buildAnywherePayload,
@@ -1732,9 +1732,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const moodRanks = new Map<string, number>(explicitMoodPriority.map((key, index) => [key, index]));
   const moodLabel = ANYWHERE_PREFERENCES.filter((p: { key: string }) => selected.includes(p.key))
     .sort((left, right) => (moodRanks.get(left.key) ?? moodRanks.size) - (moodRanks.get(right.key) ?? moodRanks.size))
-    .map((p: { sv: string; en: string }, index: number) => {
+    .map((p: { key: string; sv: string; en: string }) => {
       const label = lang === "en" ? p.en : p.sv;
-      return explicitMoodPriority.length ? `${index + 1}. ${label}` : label;
+      // Only picked interests carry a number; the unpicked rest weigh equally.
+      const rank = moodRanks.get(p.key);
+      return rank === undefined ? label : `${rank + 1}. ${label}`;
     })
     .join(" · ");
 
@@ -2317,13 +2319,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setSelected(next.selected);
     setPreferencePriority(next.preferencePriority);
   };
-  const promoteMood = (key: string) => {
-    const next = promotePreference({ selected, preferencePriority }, key);
-    if (next.preferencePriority.join(',') === preferencePriority.join(',')) return;
-    invalidateCommitmentIntent();
-    relaxDayEditForAdjustment();
-    setPreferencePriority(next.preferencePriority);
-  };
   const clearPriority = () => {
     if (!preferencePriority.length) return;
     invalidateCommitmentIntent();
@@ -2421,7 +2416,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           selected={selected}
           preferencePriority={preferencePriority}
           onToggleMood={toggleMood}
-          onPromoteMood={promoteMood}
           onClearPriority={clearPriority}
           onSetDay={chooseDay}
           rhythms={DAY_RHYTHMS}
