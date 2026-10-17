@@ -1,7 +1,8 @@
 import { anchorKey } from './recompose-retention.mjs';
-import { isComposedEntry, savedEntryId, normalizeSavedWalkKey, savedEntryAnchorKey } from './anywhere-storage.mjs';
+import { isComposedEntry, isEditedEmptyEntry, savedEntryId, normalizeSavedWalkKey, savedEntryAnchorKey } from './anywhere-storage.mjs';
 import { readCommitmentSnapshot } from './commitment-snapshot.mjs';
 import { validPlaceRef } from './anywhere-share.mjs';
+import { normalizeDayEdit } from '../../../shared/planner-intent.mjs';
 
 const empty = () => ({ applies: false, entries: {} });
 const label = value => typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -17,9 +18,14 @@ const knownRhythm = value => ['calm', 'balanced', 'full', 'free', 'short', 'long
  * match the coarse identity already carried by the saved ledger. Explicit snapshot
  * restore stays a separate operation with its existing contract.
  */
-export function urlEntryCommitments(entry, { navigationType, anchor, dateIso, selected, walkKey } = {}) {
-  if (navigationType !== 'reload' || !isComposedEntry(entry)) return empty();
+export function urlEntryCommitments(entry, { navigationType, anchor, dateIso, selected, walkKey, preferencePriority, dayEdit, invalidDayEdit } = {}) {
+  const editedEmpty = isEditedEmptyEntry(entry);
+  if (navigationType !== 'reload' || (!isComposedEntry(entry) && !editedEmpty)) return empty();
   const inputs = entry.inputs;
+  // Invalid explicit intent never borrows a neutral or otherwise valid ledger.
+  if (invalidDayEdit === true || inputs?.invalidDayEdit === true ||
+      (dayEdit != null && !normalizeDayEdit(dayEdit)) ||
+      (inputs?.dayEdit != null && !normalizeDayEdit(inputs.dayEdit))) return empty();
   if (!inputs || inputs.city || entry.dateIso !== dateIso ||
       entry.safeResponse?.days?.[0]?.date !== dateIso || !/^\d{4}-\d{2}-\d{2}$/.test(dateIso || '') ||
       !knownRhythm(inputs.walkKey) || !knownRhythm(walkKey) ||
@@ -46,8 +52,12 @@ export function urlEntryCommitments(entry, { navigationType, anchor, dateIso, se
     }
   }
   const expectedDayKey = savedEntryId({ city: inputs.city, place: inputs.place, placeLabel: inputs.placeLabel,
-    dateIso, selected: inputs.selected, walkKey: inputs.walkKey });
-  if (!savedAnchor || entry.id !== expectedDayKey) return empty();
+    dateIso, selected: inputs.selected, walkKey: inputs.walkKey,
+    preferencePriority: inputs.preferencePriority, dayEdit: inputs.dayEdit });
+  const requestedDayKey = savedEntryId({ city: inputs.city, place: inputs.place, placeLabel: inputs.placeLabel,
+    dateIso, selected, walkKey, preferencePriority, dayEdit });
+  if (!savedAnchor || entry.id !== expectedDayKey || requestedDayKey !== expectedDayKey) return empty();
   const snapshot = readCommitmentSnapshot(entry.commitments, { anchorKey: savedAnchor, dayKey: expectedDayKey });
+  if (editedEmpty && entry.commitments == null) return { applies: true, entries: {} };
   return snapshot.applies ? { applies: true, entries: snapshot.entries } : empty();
 }

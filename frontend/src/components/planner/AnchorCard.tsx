@@ -5,6 +5,7 @@
  * recomposes on its own (no submit) — the orchestrator's handlers own that.
  */
 import { useEffect, useId, useRef } from "react";
+import { normalizePreferencePriority } from "../../../../shared/planner-intent.mjs";
 import { CheckIcon, ChevronDownIcon, LocationIcon } from "../shared/icons";
 import { compactPillTarget, Eyebrow, panelCard } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
@@ -24,7 +25,9 @@ export default function AnchorCard({
   setAdjustOpen,
   preferences,
   selected,
+  preferencePriority = [],
   onToggleMood,
+  onPromoteMood,
   onSetDay,
   rhythms,
   walkKey,
@@ -41,7 +44,9 @@ export default function AnchorCard({
   setAdjustOpen: (open: boolean) => void;
   preferences: Option[];
   selected: string[];
+  preferencePriority?: string[];
   onToggleMood: (key: string) => void;
+  onPromoteMood?: (key: string) => void;
   onSetDay: (offset: 0 | 1) => void;
   rhythms: RhythmOption[];
   walkKey: string;
@@ -53,6 +58,7 @@ export default function AnchorCard({
   // that had keyboard focus leaves the DOM. Move focus to its counterpart, but
   // only after the person toggled it here, never on an outside state change.
   const panelId = useId();
+  const priorityHelpId = useId();
   const adjustButton = useRef<HTMLButtonElement>(null);
   const doneButton = useRef<HTMLButtonElement>(null);
   const toggledHere = useRef(false);
@@ -66,6 +72,12 @@ export default function AnchorCard({
     setAdjustOpen(open);
   };
   const scale = rhythms.filter((preset) => preset.key !== "free");
+  const priority = normalizePreferencePriority(preferencePriority, selected);
+  const priorityRanks = new Map<string, number>(priority.map((key, index) => [key, index + 1]));
+  const orderedPreferences = priority.length
+    ? [...preferences].sort((left, right) =>
+      (priorityRanks.get(left.key) ?? priority.length + 1) - (priorityRanks.get(right.key) ?? priority.length + 1))
+    : preferences;
   const free = rhythms.find((preset) => preset.key === "free");
   const current = rhythms.find((preset) => preset.key === walkKey);
   const segment = (active: boolean) =>
@@ -139,25 +151,46 @@ export default function AnchorCard({
 
           <div className="flex flex-col gap-2">
             <Eyebrow tone="glow">{t("Känsla", "Mood")}</Eyebrow>
-            <div className="flex flex-wrap gap-x-1.5 gap-y-2">
-              {preferences.map((pref) => {
+            {(priority.length > 0 || onPromoteMood) && (
+              <p id={priorityHelpId} className="text-xs text-parranda-ink/68">
+                {t("Siffrorna styr innehållet, inte stoppens ordning.", "The numbers guide the content, not the order of stops.")}
+              </p>
+            )}
+            <div role="group" aria-label={t("Intressen", "Interests")} aria-describedby={priority.length > 0 || onPromoteMood ? priorityHelpId : undefined} className="flex flex-wrap gap-x-1.5 gap-y-2">
+              {orderedPreferences.map((pref) => {
                 const active = selected.includes(pref.key);
+                const rank = priorityRanks.get(pref.key);
+                const name = lang === "en" ? pref.en : pref.sv;
                 return (
-                  <button
-                    type="button"
-                    key={pref.key}
-                    aria-pressed={active}
-                    onClick={() => onToggleMood(pref.key)}
-                    className={
-                      `${compactPillTarget} gap-1.5 px-3.5 ` +
-                      (active
-                        ? "bg-parranda-ink font-bold text-parranda-paper"
-                        : "border-[1.5px] border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45 hover:text-parranda-ink")
-                    }
-                  >
-                    {active && <CheckIcon className="h-3 w-3" />}
-                    {lang === "en" ? pref.en : pref.sv}
-                  </button>
+                  <div key={pref.key} data-preference-key={pref.key} role="group" aria-label={rank ? t(`Prioritet ${rank}: ${name}`, `Priority ${rank}: ${name}`) : name} className="inline-flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => onToggleMood(pref.key)}
+                      className={
+                        `${compactPillTarget} gap-1.5 px-3.5 ` +
+                        (active
+                          ? "bg-parranda-ink font-bold text-parranda-paper"
+                          : "border-[1.5px] border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45 hover:text-parranda-ink")
+                      }
+                    >
+                      {active && (rank
+                        ? <span aria-hidden="true" className="text-[11px] tabular-nums text-parranda-paper/72">{rank}</span>
+                        : <CheckIcon className="h-3 w-3" />)}
+                      {name}
+                    </button>
+                    {active && onPromoteMood && (
+                      <button
+                        type="button"
+                        aria-label={t(`Höj prioritet för ${name}`, `Increase priority for ${name}`)}
+                        disabled={rank === 1}
+                        onClick={() => onPromoteMood(pref.key)}
+                        className={`${compactPillTarget} min-w-11 justify-center bg-parranda-ink/8 text-parranda-ink/72 enabled:hover:bg-parranda-ink/14 disabled:opacity-40`}
+                      >
+                        <ChevronDownIcon className="h-3.5 w-3.5 rotate-180" />
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>

@@ -7,6 +7,8 @@
  * Kept as a pure .mjs module so node --test can assert the contract without a DOM.
  */
 
+import { normalizePreferencePriority, normalizeDayEdit } from "../../../shared/planner-intent.mjs";
+
 export const ANYWHERE_PREFERENCES = [
   { key: "food", sv: "Mat & dryck", en: "Food & drink" },
   { key: "culture", sv: "Kultur", en: "Culture" },
@@ -65,6 +67,9 @@ export function buildAnywherePayload({
   placeRef,
   dates,
   preferences = [],
+  preferencePriority,
+  dayEdit,
+  invalidDayEdit = false,
   dayRhythm = "balanced",
   excludedCandidateIds = [],
   pinnedCandidateIds = [],
@@ -82,6 +87,8 @@ export function buildAnywherePayload({
     ? { lat: coords.lat, lng: coords.lng }
     : { place: place || city, place_query: place || city };
   const rhythm = DAY_RHYTHMS.some(({ key }) => key === dayRhythm) ? dayRhythm : "balanced";
+  const priority = normalizePreferencePriority(preferencePriority, preferences);
+  const edit = invalidDayEdit === true ? null : normalizeDayEdit(dayEdit);
   return {
     ...anchor,
     ...(!coords ? {
@@ -97,6 +104,8 @@ export function buildAnywherePayload({
     day_rhythm: rhythm,
     ...(rhythm === "free" ? {} : { leg_pacing: "balanced" }),
     preferences,
+    ...(priority.length ? { preference_priority: priority } : {}),
+    ...(dayEdit != null || invalidDayEdit === true ? { day_edit: edit } : {}),
     // "Parranda chooses": sent only when the reader asked for it, and only
     // without picks of their own (explicit preferences always win). Omitted
     // otherwise, so the default request is unchanged.

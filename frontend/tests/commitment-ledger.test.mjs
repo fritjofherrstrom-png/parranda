@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { plannerSurfaceSource } from "./helpers/planner-source.mjs";
+import { mountPlanner } from "./helpers/planner-harness.mjs";
 
 import { buildAnywherePayload } from "../src/lib/anywhere-payload.mjs";
 
@@ -8,6 +9,16 @@ import { buildAnywherePayload } from "../src/lib/anywhere-payload.mjs";
 // guard and ledger write), then the pieces it renders (components/planner/*,
 // components/shared/*), where the controls now live.
 const component = plannerSurfaceSource();
+
+function assertScopedRequestExclusions() {
+  const expression = component.match(/excludedCandidateIds:\s*([\s\S]*?),\s*pinnedCandidateIds:/)?.[1];
+  assert.ok(expression, "the route request has an exclusion expression");
+  // Manual stop edits may contribute additional exclusions, but must not
+  // replace the scoped ledger or send Live occurrence ids as place ids.
+  assert.match(expression, /excludedOverride\s*\?\?\s*activeLedger\.excludedIds/);
+  assert.match(expression, /\.filter\(id => !id\.startsWith\("live:"\)\)/);
+  assert.doesNotMatch(expression, /Object\.(?:keys|entries)\(commitments\)/);
+}
 
 test("an empty ledger leaves the request contract untouched", () => {
   const bare = buildAnywherePayload({ place: "Somewhere", dates: ["2026-08-22"] });
@@ -36,13 +47,18 @@ test("a ledger travels as its own field and is copied, not aliased", () => {
 test("the ledger reaches the request, scoped to the anchor", () => {
   assert.match(component, /const activeLedger = scopeLiveChoices\(scopedLedger\.entries, effectiveDateIso\);/);
   assert.match(component, /liveEventChoices: activeLedger\.liveEventChoices,/);
-  assert.match(component, /excludedCandidateIds: \(excludedOverride \?\? activeLedger\.excludedIds\)\.filter\(id => !id\.startsWith\("live:"\)\),/);
+  assertScopedRequestExclusions();
 });
 
 test("changing the ledger recomposes the day", () => {
-  // Without excludedIds in the deps, dismissing does nothing until the user
-  // happens to touch some other control.
-  assert.match(component, /\}, \[selected, dayOffset, walkKey, commitments, intentMode\]\);/);
+  // Every output-affecting choice must trigger the real adjustment effect;
+  // additive priority/edit inputs must not make the old ledger disappear.
+  const effect = component.slice(component.indexOf("// AUTO-RECOMPOSE:"), component.indexOf("// The Live sheet behaves"));
+  const dependencies = effect.match(/\}, \[([^\]]*)\]\);/)?.[1].split(",").map(value => value.trim());
+  assert.ok(dependencies, "the automatic adjustment effect has explicit dependencies");
+  for (const required of ["selected", "dayOffset", "walkKey", "commitments", "preferencePriority", "dayEdit", "intentMode"]) {
+    assert.ok(dependencies.includes(required), `${required} changes must recompose the day`);
+  }
 });
 
 test("a silent upgrade carries the ledger, so dismissed places cannot return", () => {
@@ -138,7 +154,7 @@ test("the component scopes the ledger and clears it on a new place", () => {
   assert.match(component, /commitmentAnchorKeyRef\.current = displayedAnchorKeyRef\.current;/);
   assert.match(component, /const scopedLedger = scopeCommitmentsToAnchor\(\{/);
   // The request must send the SCOPED list, never the raw component state.
-  assert.match(component, /excludedCandidateIds: \(excludedOverride \?\? activeLedger\.excludedIds\)\.filter\(id => !id\.startsWith\("live:"\)\),/);
+  assertScopedRequestExclusions();
   assert.match(component, /excludedOverride \?\? activeLedger\.excludedIds;/);
   // And the visible "N dismissed" line must follow, not linger for a place
   // where nothing was dismissed.
@@ -214,10 +230,14 @@ test("exclude and pin cannot contradict each other for the same candidate", () =
 });
 
 test("Keep and Add are the same primitive reached from two places", () => {
-  assert.match(component, /const dismissStop = \(identity: string, stopLabel: string\) => commit\(identity, "exclude", stopLabel\);/);
   assert.match(component, /const keepStop = \(identity: string, stopLabel: string\) => commit\(identity, "pin", stopLabel\);/);
   // Add, on a candidate the day did not choose, writes the identical commitment.
   assert.match(component, /commit\(candidateId, "pin", name\)/);
+});
+
+test("Replace and Remove dispatch distinct edits rather than an ordinary exclusion", () => {
+  assert.match(component, /const dismissStop = \(identity: string, stopLabel: string\) => editStop\(identity, stopLabel, "replace"\);/);
+  assert.match(component, /const removeStop = \(identity: string, stopLabel: string\) => editStop\(identity, stopLabel, "remove"\);/);
 });
 
 test("a commitment can be released without starting over", () => {
@@ -229,10 +249,38 @@ test("a commitment can be released without starting over", () => {
   assert.match(component, /Börja om utan mina val|Start over without my choices/);
 });
 
-test("a kept stop is not also offered as dismissable", () => {
-  // The two verbs are mutually exclusive, so the panel must not present the
-  // contradiction as if it were available.
-  assert.match(component, /\{hasRealId && commitments\[stopIdentity\]\?\.kind !== "pin" && \(/);
+test("a kept stop offers neither Replace nor Remove until it is released", async t => {
+  const h = await mountPlanner({ url: "http://localhost/anywhere?place=Testville&lang=en" });
+  t.after(() => h.unmount());
+  const requests = () => h.fetchMock.calls.filter(call => call.url.includes("route-recommendations"));
+  const published = {
+    days: [{ date: "2026-10-16", experimental_agnostic_route_applied: true, primary_route: {
+      id: "__agnostic_compose__", estimated_km: 1.2,
+      main_stops: [{ id: "museum", label: "Museum", type: "museum", commitment_eligible: true, lat: 55.6, lng: 13 }],
+      legs: [], map_route_points: [], map_path_points: [],
+    }, alternatives: [] }],
+    agnostic_route_output_experiment: { promotion: { promote: true } },
+  };
+  const button = label => [...h.container.querySelectorAll("button")].find(item => item.textContent.trim() === label);
+  const click = async target => {
+    assert.ok(Boolean(target), "the real stop control exists");
+    await h.act(() => target.dispatchEvent(new h.window.MouseEvent("click", { bubbles: true })));
+  };
+  const expand = () => click([...h.container.querySelectorAll("button[aria-controls]")].find(item => item.textContent.includes("Museum")));
+  assert.equal(requests().length, 1);
+  await h.fetchMock.respond(requests()[0], published);
+  await expand();
+  assert.ok(Boolean(button("Replace")) && Boolean(button("Remove")), "an unkept real stop offers both edits");
+  await click(button("Keep this one"));
+  await h.clock.advance(400);
+  assert.deepEqual(requests().at(-1).body.pinned_candidate_ids, ["museum"]);
+  await h.fetchMock.respond(requests().at(-1), published);
+  await expand();
+  assert.ok(Boolean(button("Kept — release")), "precondition: the published stop is kept");
+  assert.ok(!button("Replace"), "a kept stop cannot be replaced before release");
+  assert.ok(!button("Remove"), "a kept stop cannot be removed before release");
+  await click(button("Kept — release"));
+  assert.ok(Boolean(button("Replace")) && Boolean(button("Remove")), "release makes the edits available again");
 });
 
 test("Add is offered only against a real candidate id", () => {
@@ -341,7 +389,7 @@ test("a click alone can never produce a verdict", () => {
   // not yet been asked.
   const body = component.slice(
     component.indexOf("const commit = (identity: string"),
-    component.indexOf("const dismissStop ="),
+    component.indexOf("function changeLiveSheetSort"),
   );
   assert.ok(!body.includes("setAppliedPins"), "commit() must not touch the applied ledger");
   assert.ok(!body.includes("setClassification"), "nor the rendered day");

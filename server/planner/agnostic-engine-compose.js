@@ -32,7 +32,7 @@ const { plannerUsableOptionsForRole } = require("./candidate-combination");
 const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
 
 const { normalizeUserIntents } = require("../candidates/intent-vocabulary");
-const { matchesPreferenceFocus } = require("./preference-focus");
+const { matchesPreferenceFocus, preferenceFit } = require("./preference-focus");
 
 const AGNOSTIC_ENGINE_CITY_KEY = "agnostic-engine-area";
 const MAX_CAPACITY_FRONTIER_CANDIDATES = 2;
@@ -88,6 +88,8 @@ function buildAgnosticEngineCityConfig({
   label = "Nearby",
   key = AGNOSTIC_ENGINE_CITY_KEY,
   dayProfile = null,
+  preferencePriority = [],
+  dayEdit = null,
 } = {}) {
   if (!anchor || !Number.isFinite(anchor.lat) || !Number.isFinite(anchor.lng)) {
     throw new Error("buildAgnosticEngineCityConfig requires a finite anchor lat/lng");
@@ -129,6 +131,8 @@ function buildAgnosticEngineCityConfig({
     // Server-owned any-place depth policy. This sits on the constructed config,
     // not the public request payload, so callers cannot promote their own route.
     __agnosticDayProfile: ["light", "variation", "peak"].includes(dayProfile) ? dayProfile : null,
+    __preferencePriority: Array.isArray(preferencePriority) ? [...preferencePriority] : [],
+    __dayEdit: dayEdit ? structuredClone(dayEdit) : null,
     services: buildAgnosticNoopServices(),
   };
 }
@@ -284,8 +288,10 @@ function toSourceCandidate({
 
 /**
  * Project a bounded, role-safe candidate reservoir into the route engine.
- * Candidate Combination winners remain the spine. Automatic rhythm depth may
- * traverse already admitted requested-role tiers in their existing order, up
+ * Candidate Combination winners remain the neutral spine. Requested coverage
+ * stays reachable before depth so explicit priority can choose another role.
+ * Automatic rhythm depth may traverse already admitted requested-role tiers
+ * in their existing order, up
  * to six per role and the total reservoir bound. This includes honestly labelled
  * experimental admission; it never upgrades source trust or revives a rejected
  * place. Existing explicit pins keep their admitted identities. Support roles
@@ -295,12 +301,13 @@ function mapPlannerReservoirToSourceCandidates({
   selected = [],
   plannerRoles = null,
   city = AGNOSTIC_ENGINE_CITY_KEY,
-  limit = 8,
-  perRole = 2,
   dayRhythm = null,
+  limit = dayRhythm ? 12 : 8,
+  perRole = 2,
   walkingKmTarget = null,
   includeCapacityFrontier = true,
   pinnedIds = [],
+  retainedIds = [],
 } = {}) {
   const richIndex = buildRichCandidateIndex(plannerRoles);
   const selectedPicks = Array.isArray(selected) ? selected : [];
@@ -323,7 +330,9 @@ function mapPlannerReservoirToSourceCandidates({
   // pinning can never introduce a place or revive one the gates rejected — and
   // a pin nowhere in that reservoir simply finds nothing and is reported
   // unhonoured by the caller.
-  const pins = new Set(Array.isArray(pinnedIds) ? pinnedIds : []);
+  const selectionIds = [...new Set([...(Array.isArray(pinnedIds) ? pinnedIds : []),
+    ...(Array.isArray(retainedIds) ? retainedIds : [])])];
+  const pins = new Set(selectionIds);
   if (pins.size > 0) {
     for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
       const role = roleEntry?.role;
@@ -354,7 +363,8 @@ function mapPlannerReservoirToSourceCandidates({
 
   const selectedRoles = new Set(selectedPicks.map((pick) => pick?.role).filter(Boolean));
   const boundedLimit = Math.max(out.length, Math.min(12, Math.max(1, Math.trunc(Number(limit) || 8))));
-  const requestedIntentCount = normalizeUserIntents(requestedIntents || []).intents.length;
+  const requested = normalizeUserIntents(requestedIntents || []).intents;
+  const requestedIntentCount = requested.length;
   const rhythmDepth = Boolean(dayRhythm);
   const variedActivities = requestedIntentCount > 1;
   // Preserve safe requested-interest depth independently of preference count.
@@ -363,40 +373,69 @@ function mapPlannerReservoirToSourceCandidates({
   // admission as an explicit Add. Source confidence must not erase rhythm.
   const boundedPerRole = rhythmDepth ? 6 : Math.min(3, Math.max(1, Math.trunc(Number(perRole) || 2)));
 
-  for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
-    const role = roleEntry?.role;
-    if (!role || !selectedRoles.has(role)) continue;
-    let roleCount = 1;
-    const depthOptions = (rhythmDepth && roleEntry.requested
-      ? requestedRhythmDepthOptions(roleEntry)
-      : plannerUsableOptionsForRole(roleEntry).filter(rich => !isExperimentallyAdmitted(rich)))
-      .filter(rich => rich?.candidate_id && !seen.has(rich.candidate_id) && finiteCoords(rich.coordinates));
-    while (depthOptions.length && roleCount < boundedPerRole && out.length < boundedLimit) {
-      // Keep the selected spine and existing evidence priority. For a
-      // varied request, prefer another factual activity type before repeating
-      // one already present; focused requests retain their same-interest depth.
-      const variedIndex = variedActivities
-        ? depthOptions.findIndex(rich => sameActivityDepthTier(rich, depthOptions[0]) &&
-          rich.type && !out.some(candidate => candidate.type === rich.type)) : -1;
-      const [rich] = depthOptions.splice(variedIndex < 0 ? 0 : variedIndex, 1);
-      const id = rich?.candidate_id;
-      if (!id || seen.has(id)) continue;
-      const coords = finiteCoords(rich.coordinates);
-      if (!coords) continue;
-      seen.add(id);
-      roleCount += 1;
-      out.push(
-        toSourceCandidate({
-          pick: { role, candidate_id: id, coordinates: coords },
-          rich: richIndex.get(`${role}::${id}`) || rich,
-          coords,
-          city,
-          role,
-          requestedIntents,
-        }),
-      );
+  // Combination has only six target-role slots. Its fixed role order must not
+  // erase a requested interest before the engine sees explicit priority. Offer
+  // missing exact coverage BEFORE selected-role depth consumes the bound. This
+  // is choice, not a per-interest stop quota: the chooser still publishes at
+  // most six, using actual fit masks, and neutral requests retain their spine.
+  // Only the existing gate-passing support tier is advanced; experimental
+  // support keeps its stricter deferred admission below.
+  let gatePassingSupportCount = 0;
+  if (rhythmDepth) {
+    const covered = new Set(out.flatMap(candidate => preferenceFit(candidate).coveredPreferences));
+    for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
+      if (out.length >= boundedLimit) break;
+      if (!roleEntry?.requested || selectedRoles.has(roleEntry.role) ||
+          !["anchor", "stop"].includes(roleEntry.slot)) continue;
+      const rich = plannerUsableOptionsForRole(roleEntry).find(candidate =>
+        candidate?.candidate_id && !seen.has(candidate.candidate_id) &&
+        !isExperimentallyAdmitted(candidate) && finiteCoords(candidate.coordinates) &&
+        preferenceFit(candidate).coveredPreferences.some(intent =>
+          requested.includes(intent) && !covered.has(intent)));
+      if (!rich) continue;
+      seen.add(rich.candidate_id);
+      gatePassingSupportCount += 1;
+      out.push(toSourceCandidate({
+        pick: { role: roleEntry.role, candidate_id: rich.candidate_id, coordinates: rich.coordinates },
+        rich: richIndex.get(`${roleEntry.role}::${rich.candidate_id}`) || rich,
+        coords: finiteCoords(rich.coordinates), city, role: roleEntry.role,
+        reservoirSupport: true, requestedIntents,
+      }));
+      for (const intent of preferenceFit(rich).coveredPreferences) covered.add(intent);
     }
-    if (out.length >= boundedLimit) break;
+  }
+
+  const depthStates = (Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : [])
+    .filter(entry => entry?.role && selectedRoles.has(entry.role))
+    .map(roleEntry => ({
+      role: roleEntry.role,
+      count: 1,
+      options: (rhythmDepth && roleEntry.requested
+        ? requestedRhythmDepthOptions(roleEntry)
+        : plannerUsableOptionsForRole(roleEntry).filter(rich => !isExperimentallyAdmitted(rich)))
+        .filter(rich => rich?.candidate_id && !seen.has(rich.candidate_id) && finiteCoords(rich.coordinates)),
+    }));
+  // Round-robin only for modern rhythm requests: an early role cannot consume
+  // the entire reservoir before the chooser even sees the other requested depth.
+  for (let round = 1; round < boundedPerRole && out.length < boundedLimit; round += 1) {
+    for (const state of depthStates) {
+      while (state.options.length && state.count < boundedPerRole && out.length < boundedLimit) {
+        const variedIndex = variedActivities
+          ? state.options.findIndex(rich => sameActivityDepthTier(rich, state.options[0]) &&
+            rich.type && !out.some(candidate => candidate.type === rich.type)) : -1;
+        const [rich] = state.options.splice(variedIndex < 0 ? 0 : variedIndex, 1);
+        const id = rich.candidate_id;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        state.count += 1;
+        out.push(toSourceCandidate({
+          pick: { role: state.role, candidate_id: id, coordinates: rich.coordinates },
+          rich: richIndex.get(`${state.role}::${id}`) || rich,
+          coords: finiteCoords(rich.coordinates), city, role: state.role, requestedIntents,
+        }));
+        if (rhythmDepth) break;
+      }
+    }
   }
 
   // Additional roles may add depth only within the requested intent union.
@@ -409,12 +448,11 @@ function mapPlannerReservoirToSourceCandidates({
       (roleEntry.slot === "anchor" || roleEntry.slot === "stop"),
   );
   const deferredExperimentalSupport = [];
-  let gatePassingSupportCount = 0;
   for (const roleEntry of supportRoles) {
     if (out.length >= boundedLimit) break;
     const role = roleEntry.role;
     const options = plannerUsableOptionsForRole(roleEntry)
-      .filter((candidate) => matchesPreferenceFocus(candidate, requestedIntents, pinnedIds));
+      .filter((candidate) => matchesPreferenceFocus(candidate, requestedIntents, selectionIds));
     const rich = options.find(
       (candidate) =>
         candidate?.candidate_id &&
@@ -478,7 +516,7 @@ function mapPlannerReservoirToSourceCandidates({
     }
   }
 
-  const focused = out.filter((candidate) => matchesPreferenceFocus(candidate, requestedIntents, pinnedIds));
+  const focused = out.filter((candidate) => matchesPreferenceFocus(candidate, requestedIntents, selectionIds));
   out.splice(0, out.length, ...focused);
   seen.clear();
   for (const candidate of out) seen.add(candidate.id);
@@ -508,7 +546,7 @@ function mapPlannerReservoirToSourceCandidates({
     });
   }
 
-  return out.filter((candidate) => matchesPreferenceFocus(candidate, requestedIntents, pinnedIds));
+  return out.filter((candidate) => matchesPreferenceFocus(candidate, requestedIntents, selectionIds));
 }
 
 // A full requested-interest day needs depth, not one winner from its best

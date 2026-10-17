@@ -44,6 +44,8 @@ const {
   summarizePinnedOutcome,
 } = require("./planner/pinned-candidates");
 const { parseRequestedDates } = require("./planner/requested-dates");
+const { normalizeDayEdit, normalizePreferencePriority } = require('../shared/planner-intent.mjs');
+const { dayEditOutcome } = require('./planner/day-composition-policy');
 const { createPlannerLifecycle, lifecycleLoader } = require('./planner/cold-lifecycle');
 const { createLiveCompletionStore } = require('./planner/live-completion');
 const { retainComposition, createRouteUpgrade } = require('./planner/live-route-upgrade');
@@ -1989,12 +1991,21 @@ function buildApp({
         response.status(400).json({ error: requestedDates.error, detail: requestedDates.detail });
         return;
       }
+      // Explicit edit presence is intent. Never turn a malformed shortening
+      // into an ordinary full-day request by silently dropping its fields.
+      const hasDayEdit = Object.hasOwn(request.body ?? {}, 'day_edit');
+      const dayEdit = hasDayEdit ? normalizeDayEdit(request.body.day_edit) : null;
+      if (hasDayEdit && !dayEdit) {
+        response.status(400).json({ error: 'invalid_day_edit' });
+        return;
+      }
       const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.body?.city);
       const city = cityConfig.key;
       const lang = normalizeLanguage(request.query?.lang);
       const preferences = Array.isArray(request.body?.preferences)
         ? request.body.preferences
         : [];
+      const preferencePriority = normalizePreferencePriority(request.body?.preference_priority, preferences);
       const requestedRhythm = ["calm", "balanced", "full", "free"].includes(request.body?.day_rhythm)
         ? request.body.day_rhythm : null;
       const payload = {
@@ -2021,9 +2032,9 @@ function buildApp({
       const parsedLiveChoices = require("./planner/live-occurrence-choice").parseLiveEventChoices(request.body?.live_event_choices);
       if (!parsedLiveChoices.valid) { response.status(400).json({ error: "invalid_live_event_choices" }); return; }
       const liveEventChoices = parsedLiveChoices.choices;
-      const excludedCandidateIds = parseExcludedCandidateIds(
+      const excludedCandidateIds = [...new Set([...parseExcludedCandidateIds(
         request.body?.excluded_candidate_ids ?? request.body?.excludedCandidateIds,
-      );
+      ), ...(dayEdit ? [dayEdit.candidate_id, ...dayEdit.removed_candidate_ids] : [])])];
       let scopedOpenDataLoader = withoutExcludedCandidates(
         lifecycle ? lifecycleLoader(openDataLoader, lifecycle) : openDataLoader,
         excludedCandidateIds,
@@ -2497,6 +2508,8 @@ function buildApp({
         openDataLoader: scopedOpenDataLoader,
         curatedCandidates,
         preferences,
+        preferencePriority,
+        dayEdit,
         pinnedStopIds: pinnedCandidateIds,
         liveEventChoices,
         lens: request.body?.lens || request.query?.lens || null,
@@ -2575,6 +2588,16 @@ function buildApp({
               .map(stop => stop.id)],
           });
           experiment.promotion = promotion;
+          // Empty is an explicit user choice, not a calibrated walking route.
+          // Only the trusted composer's accepted zero-stop state can publish it.
+          const manualEmptyPublished = Boolean(dayEdit?.action === 'remove' && dayEdit.target_stop_count === 0 &&
+            strongAnchor && experiment.eligibility?.eligible === true && experiment.route_mutation === true &&
+            experiment.day_edit?.status === 'applied' && experiment.day_edit.actual_stop_count === 0 &&
+            experimentResult?.days?.[0]?.manual_empty_day === true && !experimentResult.days[0].primary_route);
+          if (manualEmptyPublished) experiment.manual_edit_published = true;
+          if (dayEdit && experiment.day_edit?.status === 'applied' && !promotion.promote && !manualEmptyPublished) {
+            experiment.day_edit = dayEditOutcome(dayEdit, [], 'publication_withheld');
+          }
           // Bounded, count-only echo so an operator can see the day was composed
           // against a reduced reservoir. The ids are the user's own input and are
           // never re-published as evidence.
@@ -2601,25 +2624,32 @@ function buildApp({
           // and if not, exactly what remains. Read-only; promotes nothing.
           experiment.engine_readiness = buildEngineReadinessVerdict(experiment);
           const publicResult = buildAgnosticPublicResult({
-            result: promotion.promote ? experimentResult : baselineBody,
+            result: promotion.promote || manualEmptyPublished ? experimentResult : baselineBody,
             routeApplied: promotion.promote,
+            manualEmptyApplied: manualEmptyPublished,
             requestedCity,
             cityFallbackUsed,
           });
           // Compose already applied this weave INSIDE its authoritative
           // finalisation, so the route it settled on is the route below. Weaving
           // again here would either be a no-op or a second, unjudged mutation.
+          // Manual edits deliberately skip automatic weaving in compose. A
+          // missing weave must not refill their finalized count or change IDs.
           const engineWoven = selectPublishedEventWeave({
             promotionPromote: promotion.promote,
             eventWeave,
             publicResult,
-          }) ?? await weaveEventStopFailSoft({
+          }) ?? (dayEdit ? {
+            result: publicResult,
+            placeStructure: wovenPlaceStructure,
+            applied: false,
+          } : await weaveEventStopFailSoft({
             result: publicResult,
             requestedPreferences: preferences,
             placeStructure: wovenPlaceStructure,
             walkingRouter,
             walkingConfig,
-          });
+          }));
           reconcileConstraintAfterEventWeave({
             experiment,
             woven: engineWoven,

@@ -66,6 +66,8 @@ const { weaveEveningEventRouteStop } = require("../candidates/event-route-stop-w
 const { generateAgnosticRecommendations, buildLegMetrics } = require("../route-engine");
 const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
 const { replacementKeepsOtherStops } = require("./walking-fit-selection");
+const { dayEditOutcome, normalizeDayEdit } = require('./day-composition-policy');
+const { activeLiveChoices } = require('./live-occurrence-choice');
 const {
   buildAgnosticEngineCityConfig,
   mapPlannerReservoirToSourceCandidates,
@@ -422,6 +424,7 @@ function evaluateEligibility({
   candidateCombination = null,
   curatedCandidateCount = 0,
   geometryAuthority = "combination",
+  dayEdit = null,
 }) {
   const blockers = [];
   // Walking-order honesty is decided downstream by the #261 walking-budget
@@ -441,7 +444,8 @@ function evaluateEligibility({
   // External failures remain observable, but cannot veto independently gated
   // catalog supply. Geometry, preferences and walking still decide eligibility.
   // With no catalog supply, keep the existing loader blockers.
-  if (externalRequested && loaderBlocker && curatedCandidateCount === 0) {
+  if (externalRequested && loaderBlocker && curatedCandidateCount === 0 &&
+      !(dayEdit?.action === 'remove' && loaderStatus === 'loaded:0')) {
     blockers.push(loaderBlocker);
   }
 
@@ -460,22 +464,28 @@ function evaluateEligibility({
   );
   const geocodedStops = engineGeocodedStops.length ? engineGeocodedStops : combinationGeocodedStops;
   const geocodedCount = geocodedStops.length;
+  // Manual shortening is not automatic route readiness. Count only factual
+  // eligible supply; a zero/one-stop choice never fabricates a source pair.
+  const minimumCount = dayEdit?.action === 'remove' ? 0
+    : dayEdit ? Math.min(MIN_VIABLE_GEOCODED_STOPS, dayEdit.target_stop_count) : MIN_VIABLE_GEOCODED_STOPS;
   const coherence = (adaptedBody?.geometry_summary && adaptedBody.geometry_summary.coherence) || "incomplete";
   const reachExcludedCount = Number(plannerRoles?.reach_policy?.excluded_candidate_count) || 0;
   const outsideOriginReach =
     (Array.isArray(candidateCombination?.reasons) &&
       candidateCombination.reasons.includes("no_combination_within_origin_reach")) ||
-    (reachExcludedCount > 0 && geocodedCount < MIN_VIABLE_GEOCODED_STOPS);
+    (reachExcludedCount > 0 && geocodedCount < minimumCount);
   checks.geocoded_stop_count = geocodedCount;
   checks.combination_geocoded_stop_count = combinationGeocodedStops.length;
   if (engineGeocodedStops.length) checks.engine_reservoir_geocoded_stop_count = engineGeocodedStops.length;
   checks.geometry_coherence = coherence;
   if (outsideOriginReach) checks.candidate_cluster_within_origin_reach = false;
-  if (geocodedCount < MIN_VIABLE_GEOCODED_STOPS) {
+  if (geocodedCount < minimumCount) {
     blockers.push("insufficient_geocoded_candidates");
   }
   if (outsideOriginReach) {
     blockers.push("candidate_cluster_outside_origin_reach");
+  } else if (dayEdit && geocodedCount < MIN_VIABLE_GEOCODED_STOPS) {
+    checks.geometry_validation = 'manual_short_day';
   } else if (!ACCEPTABLE_COHERENCE.has(coherence)) {
     // Pairwise span describes a role-ordered seed, not the walk the engine
     // selects and sequences. A fixed 2.5 km seed veto made even no-limit days
@@ -856,6 +866,7 @@ function applyRouteMutation({ baselineResult, primaryRoute, date }) {
 function buildAgnosticPublicResult({
   result,
   routeApplied = false,
+  manualEmptyApplied = false,
   requestedCity = null,
   cityFallbackUsed = false,
 } = {}) {
@@ -872,7 +883,10 @@ function buildAgnosticPublicResult({
   publicResult.resolved_end = null;
   publicResult.readiness = null;
   if (!routeApplied) {
-    publicResult.days = [];
+    const day = publicResult.days?.[0];
+    publicResult.days = manualEmptyApplied && day?.manual_empty_day === true && !day.primary_route
+      ? [{ date: day.date, primary_route: null, alternatives: [], manual_empty_day: true }]
+      : [];
   }
   return publicResult;
 }
@@ -984,7 +998,10 @@ async function composeAgnosticRouteOutputCore({
   openDataLoader = null,
   curatedCandidates = [],
   preferences = [],
+  preferencePriority = [],
+  dayEdit = null,
   pinnedStopIds = [],
+  liveEventChoices = [],
   lens = null,
   // Opt-in "Parranda chooses" mode (see parranda-chooses.js). Never inferred.
   intentMode = null,
@@ -1024,6 +1041,18 @@ async function composeAgnosticRouteOutputCore({
   retainedContext = undefined,
   onRetainComposition = null,
 }) {
+  const normalizedEdit = normalizeDayEdit(dayEdit);
+  if (dayEdit != null && !normalizedEdit) {
+    const experiment = buildBlockedAgnosticRouteOutputExperiment({ baselineResult, blocker: 'invalid_day_edit' });
+    experiment.day_edit = { version: 1, action: null, status: 'refused', reason: 'invalid_day_edit',
+      target_stop_count: null, actual_stop_count: 0, retained_candidate_ids: [],
+      unavailable_retained_candidate_ids: [], replacement_candidate_id: null, result_candidate_ids: [] };
+    return { result: baselineResult, experiment };
+  }
+  dayEdit = normalizedEdit;
+  const retainedSelectionIds = dayEdit && (dayEdit.action === 'replace' || dayEdit.preserve_retained !== false)
+    ? dayEdit.retained_candidate_ids : [];
+  const selectionRequestIds = [...new Set([...(Array.isArray(pinnedStopIds) ? pinnedStopIds : []), ...retainedSelectionIds])];
   const agnosticLabel = safeAgnosticPlaceLabel(placeLabel);
   const agnosticContext = buildAgnosticCityContext({
     lat: coords.lat,
@@ -1103,9 +1132,9 @@ async function composeAgnosticRouteOutputCore({
     // Signal the engine's external opt-in so the source-backed provider runs.
     include_external_candidates: externalRequested ? 1 : undefined,
     candidate_sources: externalRequested ? "open" : undefined,
-    // An explicit "keep this one" must not be voided by the per-role ranking
-    // cut. Selection is otherwise unchanged, and an empty list is a no-op.
-    pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
+    // Transient retained IDs use the same ranking rescue as pins, not a
+    // commitment ledger entry or a trust/admission exception.
+    pinnedIds: selectionRequestIds,
   };
 
   // #262 — time-of-day may influence selection ONLY when a trusted timezone is
@@ -1201,6 +1230,7 @@ async function composeAgnosticRouteOutputCore({
           dayRhythm,
           includeCapacityFrontier: false,
           pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
+          retainedIds: retainedSelectionIds,
         })
       : null;
     const capacitySourceCandidates = synthesizeVia === "engine"
@@ -1216,6 +1246,7 @@ async function composeAgnosticRouteOutputCore({
           // pins here, repair composes from a reservoir that never saw them and
           // the replacement silently drops what the user kept.
           pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
+          retainedIds: retainedSelectionIds,
         })
       : null;
 
@@ -1229,6 +1260,7 @@ async function composeAgnosticRouteOutputCore({
       candidateCombination,
       curatedCandidateCount: curatedCandidates.length,
       geometryAuthority: synthesizeVia === "engine" ? "engine" : "combination",
+      dayEdit: synthesizeVia === 'engine' ? dayEdit : null,
     });
     return {
       preferences: selectionPreferences,
@@ -1325,6 +1357,7 @@ async function composeAgnosticRouteOutputCore({
       walkingKmTarget,
     });
     experiment.context = contextBlock;
+    if (dayEdit) experiment.day_edit = dayEditOutcome(dayEdit, [], 'composition_unavailable');
     return {
       result: baselineResult,
       experiment,
@@ -1364,7 +1397,10 @@ async function composeAgnosticRouteOutputCore({
       // Chosen interests focus the day, but only the reader's own picks may
       // keep an eligible Live event out of it.
       weavePreferences: explicitPreferences,
+      preferencePriority,
+      dayEdit,
       pinnedStopIds,
+      liveEventChoices,
       loadedCandidateIds,
       walkingRouter,
       walkingConfig,
@@ -1392,7 +1428,9 @@ async function composeAgnosticRouteOutputCore({
     // A day Parranda focused for the reader must still be a day. When the
     // focus cannot be composed, or answers none of its own interests, the
     // varied day the reader would otherwise have had is published instead.
-    const focusFailure = selection === explicitSelection ? null : focusedDayFailure(composed);
+    // A manual day edit is atomic and answers the day on screen, so it is
+    // never swapped for a different day.
+    const focusFailure = selection === explicitSelection || dayEdit ? null : focusedDayFailure(composed);
     if (!focusFailure || !explicitSelection.eligibility.eligible) return composed;
     interestReport.fellBack = focusFailure;
     applyInfluence(explicitSelection);
@@ -1581,7 +1619,10 @@ async function composeAgnosticRouteViaEngine({
   preferences,
   // The reader's own picks, for the Live weave. Defaults to `preferences`.
   weavePreferences = preferences,
+  preferencePriority = [],
+  dayEdit = null,
   pinnedStopIds,
+  liveEventChoices = [],
   loadedCandidateIds = [],
   walkingRouter = null,
   walkingConfig = null,
@@ -1594,6 +1635,9 @@ async function composeAgnosticRouteViaEngine({
   microBaseSummary = null,
   placeLabel,
 }) {
+  const retainedSelectionIds = dayEdit && (dayEdit.action === 'replace' || dayEdit.preserve_retained !== false)
+    ? dayEdit.retained_candidate_ids : [];
+  const selectionRequestIds = [...new Set([...(pinnedStopIds || []), ...retainedSelectionIds])];
   const sourceCandidates = Array.isArray(suppliedSourceCandidates)
     ? suppliedSourceCandidates
     : mapPlannerReservoirToSourceCandidates({
@@ -1604,6 +1648,7 @@ async function composeAgnosticRouteViaEngine({
         dayRhythm,
         includeCapacityFrontier: false,
         pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
+        retainedIds: retainedSelectionIds,
       });
   const capacitySourceCandidates = Array.isArray(suppliedCapacitySourceCandidates)
     ? suppliedCapacitySourceCandidates
@@ -1615,9 +1660,10 @@ async function composeAgnosticRouteViaEngine({
         dayRhythm,
         includeCapacityFrontier: true,
         pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
+        retainedIds: retainedSelectionIds,
       });
   const timeAnchoring = Number.isInteger(currentTimeBandRank)
-    ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, pinnedStopIds, preferences, Boolean(dayRhythm))
+    ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, selectionRequestIds, preferences, Boolean(dayRhythm))
     : { anchored: false, candidates: sourceCandidates, trimmedDayparts: [] };
 
   function profileForCandidates(candidates) {
@@ -1645,6 +1691,8 @@ async function composeAgnosticRouteViaEngine({
       label: safeAgnosticPlaceLabel(placeLabel) || agnosticContext.label,
       key: agnosticContext.key,
       dayProfile: profileForCandidates(candidates),
+      preferencePriority,
+      dayEdit,
     });
     const engineResult = await generateAgnosticRecommendations({
       cityConfig: engineCityConfig,
@@ -1691,7 +1739,7 @@ async function composeAgnosticRouteViaEngine({
     }
 
     if (
-      hasAdditionalCandidateIds(sourceCandidates, capacitySourceCandidates) &&
+      !dayEdit && hasAdditionalCandidateIds(sourceCandidates, capacitySourceCandidates) &&
       shouldTryCapacityRepair(route, walkingKmTarget)
     ) {
       let capacityAnchoring = anchored && Number.isInteger(currentTimeBandRank)
@@ -1722,7 +1770,7 @@ async function composeAgnosticRouteViaEngine({
     // top-N/role-depth cuts, without adding any lower-trust stops. Deliberately
     // leave commitment settling and event routing on their existing lifecycle;
     // this adds no repeated pin search or extra event-provider calls.
-    if (!pinnedStopIds?.length && distanceMode !== 'no_limit' &&
+    if (!dayEdit && !pinnedStopIds?.length && distanceMode !== 'no_limit' &&
         !eveningEventStructure?.district_day?.evening_event &&
         shouldTryCapacityRepair(route, walkingKmTarget)) {
       const variants = buildWalkingFitReservoirs({sourceCandidates,plannerRoles,origin,walkingKmTarget});
@@ -1754,7 +1802,7 @@ async function composeAgnosticRouteViaEngine({
     // the ceiling could be published well outside it, with only the diagnostics
     // reconciled afterwards. So the weave runs here, and what this function
     // returns is the day as it will actually be sent.
-    const weave = await applyEveningEventWeave({ day, route });
+    const weave = dayEdit ? { day, route, outcome: null } : await applyEveningEventWeave({ day, route });
     return {
       day: weave.day,
       route: weave.route,
@@ -1797,7 +1845,10 @@ async function composeAgnosticRouteViaEngine({
 
   const requestedPins = Array.isArray(pinnedStopIds) ? [...pinnedStopIds] : [];
   let finalized = await finalize(requestedPins);
-  if (requestedPins.length) {
+  // A manual edit is atomic: incompatibility with a commitment must be
+  // refused, not retried as a different edit after silently shedding that pin.
+  // The independent final-chain gate below still owns its walking budgets.
+  if (!dayEdit && requestedPins.length) {
     finalized = await settlePinsWithinWalkingBudget({
       finalize,
       withPins: finalized,
@@ -1830,6 +1881,51 @@ async function composeAgnosticRouteViaEngine({
   // uses this instead of weaving again, so the route the settling judged and
   // the route the client receives are the same object.
   const eventWeave = finalized.weave || null;
+
+  const engineEdit = engineDay?.day_edit || engineRoute?.day_edit;
+  // An explicit occurrence Keep is part of the same atomic edit. The stable
+  // reservoir cannot attest or preserve an ephemeral stop by place ID. Until
+  // the finalizer can keep that exact eligible occurrence within the requested
+  // chain, refuse the edit rather than silently publish fewer stops or restore
+  // the automatic fallback append. The client retains the previous answer.
+  const keptOccurrenceIds = new Set((engineRoute?.main_stops || [])
+    .filter(stop => stop.is_live_event === true && stop.live_choice_eligible === true)
+    .map(stop => stop.live_occurrence_id));
+  const missingLiveKeep = dayEdit && activeLiveChoices(liveEventChoices, effectiveDate)
+    .some(choice => choice.action === 'keep' && !keptOccurrenceIds.has(choice.occurrence_id));
+  const currentEvent = eveningEventStructure?.district_day?.evening_event;
+  const retainedLiveId = currentEvent?.id ? `live-event-${currentEvent.id}` : null;
+  const missingRetainedLive = dayEdit && dayEdit.preserve_retained !== false && retainedLiveId &&
+    dayEdit.retained_candidate_ids.includes(retainedLiveId) &&
+    !(engineRoute?.main_stops || []).some(stop => stop.id === retainedLiveId);
+  const editRefusal = engineEdit?.status === 'refused' ? engineEdit.reason
+    : missingLiveKeep ? 'live_keep_not_preserved'
+    : missingRetainedLive ? 'retained_live_not_preserved' : null;
+  if (dayEdit && editRefusal) {
+    const reason = editRefusal;
+    const experiment = buildExperimentBlock({ routeMutation: false,
+      eligibility: { ...eligibility, eligible: false, blockers: [...eligibility.blockers, reason] },
+      baselineResult, candidateReadiness, experimentalRoute: null, sourceStatus,
+      context: contextBlock, requestedDate: effectiveDate, plannerRoles, walkingKmTarget });
+    experiment.day_edit = dayEditOutcome(dayEdit, [], reason);
+    experiment.context = contextBlock;
+    experiment.synthesized_via = 'agnostic_compose_engine';
+    return { result: baselineResult, experiment, eventWeave, pinnedRefusals };
+  }
+
+  if (dayEdit?.action === 'remove' && !(engineRoute?.main_stops || []).length) {
+    const result = applyRouteMutation({ baselineResult, primaryRoute: null, date: effectiveDate });
+    scrubAgnosticAppliedDay(result, null);
+    result.days[0].manual_empty_day = true;
+    const experiment = buildExperimentBlock({ routeMutation: true, eligibility, baselineResult,
+      candidateReadiness, experimentalRoute: null, sourceStatus, context: contextBlock,
+      requestedDate: effectiveDate, plannerRoles, walkingKmTarget });
+    experiment.day_edit = dayEditOutcome(dayEdit, []);
+    experiment.synthesized_via = 'agnostic_compose_engine';
+    experiment.context = contextBlock;
+    experiment.walking_validation = { valid: null, blockers: [], checks: { status: 'not_required_manual_empty_day' } };
+    return { result, experiment, eventWeave, pinnedRefusals, commitmentEligibleIds: new Set() };
+  }
 
   if (engineRoute) {
     const daypartHonesty = buildRouteDaypartHonesty({
@@ -1873,7 +1969,7 @@ async function composeAgnosticRouteViaEngine({
   // final (post-selection, post-weave, public) stop chain with the SAME safety
   // budgets used by agnostic walking validation. Never validate the unordered
   // reservoir or invent a compactness label for the seed.
-  const deferredWalking = eligibility.checks?.geometry_validation === "engine_walk_pending"
+  const deferredWalking = (dayEdit || eligibility.checks?.geometry_validation === "engine_walk_pending")
     ? await validateAgnosticWalkingOrder({
         stops: engineRoute.map_route_points,
         walkingRouter,
@@ -1896,6 +1992,7 @@ async function composeAgnosticRouteViaEngine({
     });
     experiment.walking_validation = deferredWalking;
     experiment.synthesized_via = "agnostic_compose_engine";
+    if (dayEdit) experiment.day_edit = dayEditOutcome(dayEdit, [], 'walking_validation_failed');
     return { result: baselineResult, experiment, pinnedRefusals };
   }
   if (deferredWalking) {
@@ -1969,6 +2066,7 @@ async function composeAgnosticRouteViaEngine({
   experiment.route_ordering = routeOrdering;
   experiment.context = contextBlock;
   experiment.synthesized_via = "agnostic_compose_engine";
+  if (dayEdit) experiment.day_edit = dayEditOutcome(dayEdit, engineRoute.main_stops);
 
   const result = applyRouteMutation({ baselineResult, primaryRoute: engineRoute, date: effectiveDate });
   // scrubAgnosticAppliedDay is the single owner of the promoted day's fallback-

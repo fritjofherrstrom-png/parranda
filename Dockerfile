@@ -12,6 +12,7 @@ RUN npm ci --prefix frontend
 
 COPY anywhere-render-decision.js ./
 COPY planner-entry.js planner-entry.d.ts ./
+COPY shared ./shared
 COPY frontend ./frontend
 RUN npm run check:frontend && npm run build:frontend
 
@@ -39,6 +40,7 @@ RUN npm ci --omit=dev \
 
 COPY --chown=node:node server.js ./
 COPY --chown=node:node server ./server
+COPY --chown=node:node shared ./shared
 COPY --chown=node:node config ./config
 COPY --chown=node:node migrations ./migrations
 COPY --chown=node:node scripts/migrate-source-catalog.js ./scripts/migrate-source-catalog.js
