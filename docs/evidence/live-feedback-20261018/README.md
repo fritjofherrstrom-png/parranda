@@ -54,6 +54,16 @@ Every closure and publication-refusal assertion is retained. The first CI run
 was cancelled after the local failures were diagnosed; final-head results are
 reported separately. No server or eligibility policy was changed for these tests.
 
+The new built HTTP/browser fixture initially shared that mixed clock contract:
+its event/UI time was controlled while composition read wall time. Its original
+two passes are historical behavior evidence with that limit. The fixture now
+uses the same callable clock and `.now()` instant and requires the published
+composition to attest its controlled date. New browser receipts replace the
+earlier mixed-clock acceptance claim. These fixture corrections do not change
+product code or built assets. The intermediate `0466e2ae` local full run was
+green (4,648 pass / zero fail / three skips); its CI was cancelled for the final
+browser fixture correction. Only the final-head CI is the landing receipt.
+
 Mounted UI tests use real components with controlled API replies. The built
 browser/HTTP test uses the actual application handlers, composition, event
 normalization and publication with controlled source transport/clock/resolver.

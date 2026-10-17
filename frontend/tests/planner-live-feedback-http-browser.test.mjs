@@ -74,7 +74,7 @@ async function harness(t, initialMode) {
     placeResolver: async query => {
       assert.equal(query, 'Fixture Helsinki');
       return [{ ...ANCHOR, label: 'Fixture Helsinki', confidence: 'high', provenance: 'controlled-resolver' }];
-    }, placeSuggestions: null, reviewedPlaceSource: null, sourceCatalog: null, clock: { now: () => NOW },
+    }, placeSuggestions: null, reviewedPlaceSource: null, sourceCatalog: null, clock: Object.assign(() => new Date(NOW), { now: () => NOW }),
     weatherProvider: async () => ({ condition: 'sun', timezone_resolution: {
       timezone: 'Europe/Helsinki', timezone_source: 'weather_provider_auto', utc_offset_seconds: 10800 } }),
   }).listen(0, '127.0.0.1');
@@ -135,6 +135,8 @@ async function harness(t, initialMode) {
   await page.goto(`${origin}/anywhere?place=Fixture%20Helsinki&prefs=culture,views${initialMode === 'empty' ? '&prio=views' : ''}&day=1&rhythm=full&lang=en`);
   const body = await initial;
   assert.equal(body.days[0].date, DATE);
+  assert.equal(body.agnostic_route_output_experiment.context?.time?.now?.slice(0, 10), '2026-10-17',
+    'the actual composition must use the controlled clock rather than the wall date');
   assert.equal(body.agnostic_route_output_experiment.walking_validation.valid, true);
   await page.getByRole('list', { name: 'The stops, in order', exact: true }).waitFor();
   if (initialMode === 'empty') await page.waitForFunction(key => {
