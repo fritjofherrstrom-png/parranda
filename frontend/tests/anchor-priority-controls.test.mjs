@@ -62,7 +62,7 @@ test("explicit dominance numbers five selected choices while every chip keeps it
     preferencePriority,
   });
   const buttons = choices(h);
-  // Re-sorting by rank moved another chip's promote button under the finger.
+  // Re-sorting by rank would move another chip under the finger.
   assert.deepEqual(buttons.map(accessibleName), ANYWHERE_PREFERENCES.map((pref) => pref.en),
     "chips stay in catalogue order; only the numbers express dominance");
   preferencePriority.forEach((key, index) => {
@@ -75,66 +75,23 @@ test("explicit dominance numbers five selected choices while every chip keeps it
   assert.ok(!h.container.querySelector('button[aria-label^="Increase priority"]'), "explicit ranks can render without an editing callback");
 });
 
-test("every neutral selected choice offers its own promotion action without toggling selection", async (t) => {
-  const promoted = [];
+test("every chip is one control: a tap toggles, and neutral explains how to rank", async (t) => {
   const toggled = [];
-  const h = await mountCard(t, {
-    preferencePriority: [],
-    onPromoteMood: (key) => promoted.push(key),
-    onToggleMood: (key) => toggled.push(key),
-  });
-  assert.equal(choices(h).length, ANYWHERE_PREFERENCES.length);
-  assert.ok(choices(h).every((button) => !rankBadge(button)), "neutral selections stay unnumbered");
-  for (const pref of ANYWHERE_PREFERENCES) {
-    const promote = [...h.container.querySelectorAll('button[aria-label]')]
-      .find((button) => button.getAttribute("aria-label") === `Increase priority for ${pref.en}`);
-    if (!defaultSelected.includes(pref.key)) {
-      assert.ok(!promote, "unselected choices have no promotion action");
-      continue;
-    }
-    assert.ok(promote, `${pref.key} can establish the first explicit priority`);
-    const group = h.container.querySelector(`[data-preference-key="${pref.key}"]`);
-    assert.ok(group, `${pref.key} has a stable control group`);
-    assert.equal(promote.getAttribute("aria-label"), `Increase priority for ${pref.en}`);
-    assert.equal(promote.disabled, false, "even the first neutral choice is promotable");
-    assert.equal(group.querySelectorAll("button").length, 2);
-    assert.ok(!promote.closest("button button"), "promotion is not nested in the selection button");
-    await click(h, promote);
+  const h = await mountCard(t, { preferencePriority: [], onToggleMood: (key) => toggled.push(key) });
+  assert.ok(!h.container.querySelector('button[aria-label^="Increase priority"]'), "no separate promote control");
+  for (const key of defaultSelected) {
+    const group = h.container.querySelector(`[data-preference-key="${key}"]`);
+    assert.equal(group.querySelectorAll("button").length, 1, `${key} has a single control`);
+    await click(h, group.querySelector("button[aria-pressed]"));
   }
-  assert.deepEqual(promoted, defaultSelected, "each promotion invokes exactly its own callback once");
-  assert.deepEqual(toggled, [], "promotion never deselects an interest");
-  assert.equal(h.fetchMock.calls.length, 0, "AnchorCard leaves composition to its parent");
+  assert.deepEqual(toggled, defaultSelected);
+  assert.ok([...h.container.querySelectorAll("p")].some((paragraph) => paragraph.textContent === "Tap an interest off and on to make it weigh most."));
 });
 
-test("the first explicit priority cannot be promoted while lower priorities can", async (t) => {
-  const promoted = [];
+test("ranked chips still deselect with one tap", async (t) => {
   const toggled = [];
   const h = await mountCard(t, {
     preferencePriority: ["views", "culture", "food"],
-    onPromoteMood: (key) => promoted.push(key),
-    onToggleMood: (key) => toggled.push(key),
-  });
-  const first = h.container.querySelector('[data-preference-key="views"] button[aria-label]');
-  const second = h.container.querySelector('[data-preference-key="culture"] button[aria-label]');
-  assert.ok(first);
-  assert.ok(second);
-  // Unavailable, not disabled: the press that reached rank one keeps focus.
-  assert.equal(first.getAttribute("aria-disabled"), "true", "rank one has nowhere higher to go");
-  assert.equal(first.disabled, false);
-  await click(h, first);
-  assert.deepEqual(promoted, []);
-  assert.equal(second.disabled, false);
-  await click(h, second);
-  assert.deepEqual(promoted, ["culture"]);
-  assert.deepEqual(toggled, []);
-});
-
-test("selected main buttons still deselect independently of their sibling promotion buttons", async (t) => {
-  const promoted = [];
-  const toggled = [];
-  const h = await mountCard(t, {
-    preferencePriority: ["views", "culture", "food"],
-    onPromoteMood: (key) => promoted.push(key),
     onToggleMood: (key) => toggled.push(key),
   });
   assert.ok(!h.container.querySelector("button button"), "buttons are never nested");
@@ -145,47 +102,36 @@ test("selected main buttons still deselect independently of their sibling promot
     await click(h, main);
   }
   assert.deepEqual(toggled, ["views", "culture"], "each choice invokes its existing toggle once");
-  assert.deepEqual(promoted, [], "deselection never invokes promotion");
 });
 
-for (const [lang, helpText, rankPrefix, promotionPrefix] of [
-  ["sv", "Siffrorna styr innehållet, inte stoppens ordning.", "Prioritet", "Höj prioritet för"],
-  ["en", "The numbers guide the content, not the order of stops.", "Priority", "Increase priority for"],
+for (const [lang, helpText, rankPrefix] of [
+  ["sv", "Siffrorna visar ordningen du valde i. Ettan väger tyngst.", "Prioritet"],
+  ["en", "Numbers show the order you picked. 1 weighs most.", "Priority"],
 ]) {
-  test(`${lang}: explains content dominance outside compact buttons with accessible localized ranks`, async (t) => {
-    const h = await mountCard(t, {
-      lang,
-      preferencePriority: ["views", "culture", "food"],
-      onPromoteMood: () => {},
-    });
+  test(`${lang}: explains pick order outside the chips with accessible localized ranks`, async (t) => {
+    const h = await mountCard(t, { lang, preferencePriority: ["views", "culture", "food"] });
     const help = [...h.container.querySelectorAll("p")].find((paragraph) => paragraph.textContent === helpText);
-    assert.ok(help, "a short sentence distinguishes dominance from route order");
+    assert.ok(help, "one short sentence explains what the numbers mean");
     assert.ok(!help.closest("button"), "explanations stay outside buttons");
-    assert.ok(help.id);
     const preferenceGroup = h.container.querySelector(`[role="group"][aria-describedby="${help.id}"]`);
     assert.ok(preferenceGroup, "the interest group is described by the explanation");
     ["views", "culture", "food"].forEach((key, index) => {
       const group = h.container.querySelector(`[data-preference-key="${key}"]`);
-      const main = group.querySelector("button[aria-pressed]");
-      const promote = group.querySelector("button[aria-label]");
-      assert.equal(group.getAttribute("role"), "group");
       assert.equal(group.getAttribute("aria-label"), `${rankPrefix} ${index + 1}: ${optionName(key, lang)}`);
-      assert.equal(accessibleName(main), optionName(key, lang));
-      assert.equal(promote.getAttribute("aria-label"), `${promotionPrefix} ${optionName(key, lang)}`);
-      assert.equal(promote.textContent, "", "the visible control stays icon-only");
-      assert.ok(promote.querySelector('svg[aria-hidden="true"]'), "the icon is decorative, not an unlabeled glyph");
+      assert.equal(accessibleName(group.querySelector("button[aria-pressed]")), optionName(key, lang));
+      assert.equal(group.querySelectorAll("button").length, 1);
     });
   });
 }
 
-test("partial priority uses the shared normalization contract without mutating selection or hiding other choices", async (t) => {
+test("a partial priority numbers only the picked prefix without mutating selection or hiding other choices", async (t) => {
   const selected = Object.freeze(["views", "food", "culture"]);
   const preferencePriority = Object.freeze(["nightlife", "culture", "culture", "unknown"]);
   const h = await mountCard(t, { selected, preferencePriority });
   const buttons = choices(h);
   assert.deepEqual(buttons.map(accessibleName), ANYWHERE_PREFERENCES.map((pref) => pref.en));
-  assert.deepEqual(buttons.slice(0, 3).map((button) => rankBadge(button)?.textContent), ["3", "1", "2"],
-    "food, culture and views keep their places with culture first");
+  assert.deepEqual(buttons.slice(0, 3).map((button) => rankBadge(button)?.textContent), [undefined, "1", undefined],
+    "only the picked interest is numbered; food and views stay unranked in place");
   assert.ok(buttons.slice(3).every((button) => button.getAttribute("aria-pressed") === "false" && !rankBadge(button)));
   assert.deepEqual(selected, ["views", "food", "culture"]);
   assert.deepEqual(preferencePriority, ["nightlife", "culture", "culture", "unknown"]);
@@ -195,7 +141,6 @@ test("a ranking can be cleared back to neutral", async (t) => {
   let cleared = 0;
   const h = await mountCard(t, {
     preferencePriority: ["views", "culture", "food"],
-    onPromoteMood: () => {},
     onClearPriority: () => { cleared += 1; },
   });
   const clear = [...h.container.querySelectorAll("button")].find((button) => button.textContent === "Clear the order");
@@ -205,6 +150,6 @@ test("a ranking can be cleared back to neutral", async (t) => {
 });
 
 test("neutral interests offer nothing to clear", async (t) => {
-  const h = await mountCard(t, { preferencePriority: [], onPromoteMood: () => {}, onClearPriority: () => {} });
+  const h = await mountCard(t, { preferencePriority: [], onClearPriority: () => {} });
   assert.ok(![...h.container.querySelectorAll("button")].some((button) => button.textContent === "Clear the order"));
 });

@@ -133,3 +133,15 @@ test('every one-step promotion keeps or adds exact stops for the raised interest
     }
   }
 });
+
+test('a picked prefix ranks only the picks; unpicked interests keep equal weight', async () => {
+  // Views exists only as parks here. Re-picking Views alone used to expand to
+  // Views, Culture, Food by selection order and composed an extra museum.
+  const supply = () => [...rows('meal', 'restaurant'), ...rows('mus', 'museum', 6, 6), ...rows('park', 'park', 6, 12)];
+  const preferences = ['culture', 'food', 'views'];
+  const count = (output, type) => output.stops.filter(stop => stop.type === type).length;
+  const neutral = await compose(supply(), preferences, { dayRhythm: 'balanced' });
+  const viewsPicked = await compose(supply(), preferences, { dayRhythm: 'balanced', preferencePriority: ['views'] });
+  assert.ok(count(viewsPicked, 'museum') <= count(neutral, 'museum'),
+    `Views alone spilled its weight to Culture: ${neutral.stops.map(stop => stop.type)} -> ${viewsPicked.stops.map(stop => stop.type)}`);
+});
