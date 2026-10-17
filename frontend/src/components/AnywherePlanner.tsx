@@ -2227,6 +2227,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     relaxDayEditForAdjustment();
     setPreferencePriority(next.preferencePriority);
   };
+  const clearPriority = () => {
+    if (!preferencePriority.length) return;
+    invalidateCommitmentIntent();
+    relaxDayEditForAdjustment();
+    setPreferencePriority([]);
+  };
   const chooseDay = (offset: 0 | 1) => {
     if (dayOffset !== offset) {
       invalidateCommitmentIntent();
@@ -2319,6 +2325,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           preferencePriority={preferencePriority}
           onToggleMood={toggleMood}
           onPromoteMood={promoteMood}
+          onClearPriority={clearPriority}
           onSetDay={chooseDay}
           rhythms={DAY_RHYTHMS}
           walkKey={walkKey}

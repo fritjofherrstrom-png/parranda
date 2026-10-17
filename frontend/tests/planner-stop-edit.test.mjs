@@ -219,7 +219,7 @@ test('a later preference adjustment keeps the shorter cap but releases old venue
   assert.equal(adjusted.body.day_edit.target_stop_count, 4);
   assert.equal(adjusted.body.day_edit.preserve_retained, false, 'new interests can change content without undoing manual shortening');
   assert.ok(adjusted.body.excluded_candidate_ids.includes('museum'));
-  assert.deepEqual(adjusted.body.preference_priority, ['second_hand', 'food', 'culture', 'views']);
+  assert.equal(adjusted.body.preference_priority, undefined, 'adding an interest does not rank it; only a promotion does');
 });
 
 test('Add after removal can pin a new place without freezing the old retained set or refilling the slot', async t => {
