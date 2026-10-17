@@ -41,6 +41,7 @@ const {
   buildLocalDayAvailabilityWindow,
   evaluateOpeningHoursForWindow,
   normalizeOpeningHours,
+  isAlwaysClosedOpeningHours,
   normalizeSelectedDayHoursFact,
 } = require("../place-candidates/opening-hours");
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
@@ -1164,9 +1165,15 @@ async function composeAgnosticRouteOutputOnce({
   const availabilityWindow = trustedTimezoneKnown
     ? buildLocalDayAvailabilityWindow({ requestedDate: effectiveDate, nowLocalIso: ctx.now })
     : null;
-  const availabilityHelpers = availabilityWindow
-    ? {
+  const availabilityHelpers = {
         evaluateCandidateAvailability: ({ candidate }) => {
+          // A complete explicit weekly closure needs no timezone. It remains
+          // an availability fact, not a claim that the business is inactive.
+          if (!availabilityWindow) {
+            return isAlwaysClosedOpeningHours(candidate?.opening_hours)
+              ? { eligible: false, status: 'closed_for_window', reason: 'opening_hours_closed_all_week' }
+              : null;
+          }
           const closure=operatorClosureForWindow(candidate,availabilityWindow);
           if(closure)return closure;
           if (typeof candidate?.opening_hours !== "string") return null;
@@ -1181,8 +1188,7 @@ async function composeAgnosticRouteOutputOnce({
               } }
             : availability;
         },
-      }
-    : {};
+      };
   const candidateReachPolicy = resolveAgnosticCandidateReachPolicy({ anchorMode, spatialScope, dayRhythm, preferences, availabilityWindow });
   const selectionBaseHelpers = {
     ...helpers,

@@ -8,8 +8,6 @@
  * never upgrade source confidence or claim that the place is open right now.
  */
 
-const { isAlwaysClosedOpeningHours } = require('./opening-hours');
-
 const OPERATIONAL_PLACE_TYPES = new Set([
   "restaurant",
   "street-food",
@@ -120,7 +118,7 @@ function normalizeType(value) {
 }
 
 function isExplicitlyClosedSchedule(value) {
-  return isAlwaysClosedOpeningHours(value);
+  return /^(?:closed|off)$/i.test(String(value || "").trim());
 }
 
 function isHttpUrl(value) {
