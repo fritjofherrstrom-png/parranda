@@ -36,6 +36,25 @@ test('mounted priority promotion updates the emitted intent without deselecting 
   assert.equal(h.container.querySelector('[data-preference-key="second_hand"] button[aria-pressed]').getAttribute('aria-pressed'), 'true');
 });
 
+test('clearing the order composes unranked interests and leaves no prio in the address to reload', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-16T10:00:00Z') });
+  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Fixture%20Town&prefs=culture,second_hand&prio=second_hand,culture&lang=en' });
+  t.after(() => h.unmount());
+  await h.fetchMock.respond(calls(h)[0], { days: [] });
+  const click = async target => { assert.ok(Boolean(target), 'real requested control exists'); await h.act(() => target.click()); };
+  await click([...h.container.querySelectorAll('button')].find(button => button.textContent.trim() === 'Adjust'));
+  await click([...h.container.querySelectorAll('button')].find(button => button.textContent.trim() === 'Clear the order'));
+  await h.clock.advance(400);
+  const request = calls(h).at(-1);
+  await h.fetchMock.respond(request, { days: [] });
+  assert.deepEqual(request.body.preferences, ['culture', 'second_hand'], 'clearing never deselects an interest');
+  assert.equal(request.body.preference_priority, undefined, 'an unranked day sends no priority');
+  const address = new URL(h.window.location.href);
+  assert.equal(address.searchParams.get('prio'), null);
+  assert.ok(!h.container.querySelector('[aria-label^="Priority "]'), 'no rank numbers remain');
+  assert.ok(![...h.container.querySelectorAll('button')].some(button => button.textContent.trim() === 'Clear the order'));
+});
+
 test('an explicitly malformed edit link cannot silently compose an unedited Full day', async t => {
   const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Fixture%20Town&edit=null&lang=en' });
   t.after(() => h.unmount());

@@ -17,14 +17,23 @@ test("priority normalization preserves neutral legacy defaults and only known se
   assert.deepEqual(intent.normalizePreferencePriority(["food"], null), []);
 });
 
-test("the first genuinely new selection outranks neutral defaults without reordering their selection", () => {
+test("a new selection keeps neutral interests neutral; only a promotion ranks", () => {
   const before = { selected: [...defaults], preferencePriority: [] };
   const after = intent.togglePreferenceSelection(before, "fika");
   assert.deepEqual(after, {
     selected: ["food", "culture", "views", "fika"],
-    preferencePriority: ["fika", "food", "culture", "views"],
+    preferencePriority: [],
   });
   assert.deepEqual(before, { selected: defaults, preferencePriority: [] }, "state transitions are immutable");
+});
+
+test("the same chips give the same ranking whatever the tap history", () => {
+  // Staging 2026-10-17: Coffee added once became #1 (two cafés); removed and
+  // added again it became #4 (one café). Same chips, different day.
+  const neutral = { selected: [...defaults], preferencePriority: [] };
+  const added = intent.togglePreferenceSelection(neutral, "fika");
+  const readded = intent.togglePreferenceSelection(intent.togglePreferenceSelection(added, "fika"), "fika");
+  assert.deepEqual(readded, added);
 });
 
 test("new choices append after an existing explicit priority", () => {
@@ -43,6 +52,8 @@ test("deselection compacts explicit ranks but leaves a neutral selection neutral
   }, "food"), { selected: ["culture", "views"], preferencePriority: ["views", "culture"] });
   assert.deepEqual(intent.togglePreferenceSelection({ selected: ["food"], preferencePriority: ["food"] }, "food"),
     { selected: [], preferencePriority: [] });
+  assert.deepEqual(intent.togglePreferenceSelection({ selected: ["food", "views"], preferencePriority: ["food", "views"] }, "views"),
+    { selected: ["food"], preferencePriority: ["food"] }, "an explicit rank survives even when it matches the default order");
 });
 
 test("selection rejects unknown keys and does not mutate malformed input", () => {
@@ -51,7 +62,7 @@ test("selection rejects unknown keys and does not mutate malformed input", () =>
   assert.deepEqual(intent.togglePreferenceSelection({ selected: ["food", "food", "evil"], preferencePriority: [] }, null),
     { selected: ["food"], preferencePriority: [] });
   assert.deepEqual(intent.togglePreferenceSelection(undefined, "green"),
-    { selected: ["green"], preferencePriority: ["green"] });
+    { selected: ["green"], preferencePriority: [] });
 });
 
 test("promotion from neutral makes only the chosen selected interest first", () => {
