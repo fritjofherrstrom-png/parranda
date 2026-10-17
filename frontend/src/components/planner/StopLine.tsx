@@ -99,6 +99,7 @@ export default function StopLine({
   expandedCandidateKey,
   setExpandedCandidateKey,
   commitments,
+  confirmedLiveKeepIds = [],
   selected,
   releaseCommitment,
   keepStop,
@@ -134,6 +135,7 @@ export default function StopLine({
   expandedCandidateKey: string | null;
   setExpandedCandidateKey: (key: string | null) => void;
   commitments: Commitments;
+  confirmedLiveKeepIds?: string[];
   selected: string[];
   releaseCommitment: (identity: string) => void;
   keepStop: (identity: string, stopLabel: string) => void;
@@ -553,7 +555,9 @@ export default function StopLine({
                 </p>
                 {liveStopChoiceId(stop) && <div className="mt-3 flex flex-wrap gap-2">
                   {commitments[stop.live_occurrence_id]?.kind === "pin" ? (
-                    <button type="button" className={buttonClass("secondary", "min-h-11 px-4 text-sm")} onClick={() => releaseCommitment(stop.live_occurrence_id)}>{t("Behålls — släpp", "Kept — release")}</button>
+                    <button type="button" className={buttonClass("secondary", "min-h-11 px-4 text-sm")} onClick={() => releaseCommitment(stop.live_occurrence_id)}>{confirmedLiveKeepIds.includes(stop.live_occurrence_id)
+                      ? t("Behålls — släpp", "Kept — release")
+                      : t("Valt — släpp", "Selected — release")}</button>
                   ) : stop.live_choice_eligible === true && (
                     <button type="button" className={buttonClass("secondary", "min-h-11 px-4 text-sm")} onClick={() => keepStop(stop.live_occurrence_id, name)}>{t("Behåll eventet", "Keep this event")}</button>
                   )}
