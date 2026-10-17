@@ -55,22 +55,23 @@ test("legacy selected choices remain neutral without false priority numbers", as
   assert.ok(!h.container.querySelector('button[aria-label^="Increase priority"]'), "old callers get no dead promotion controls");
 });
 
-test("explicit dominance orders five selected choices with contiguous ranks before unselected options", async (t) => {
+test("explicit dominance numbers five selected choices while every chip keeps its place", async (t) => {
   const preferencePriority = ["nightlife", "fika", "views", "culture", "food"];
   const h = await mountCard(t, {
     selected: ["food", "culture", "views", "fika", "nightlife"],
     preferencePriority,
   });
   const buttons = choices(h);
-  assert.deepEqual(buttons.map(accessibleName), [...preferencePriority, "green", "second_hand"]
-    .map((key) => optionName(key)), "displayed order expresses explicit content dominance");
+  // Re-sorting by rank moved another chip's promote button under the finger.
+  assert.deepEqual(buttons.map(accessibleName), ANYWHERE_PREFERENCES.map((pref) => pref.en),
+    "chips stay in catalogue order; only the numbers express dominance");
   preferencePriority.forEach((key, index) => {
-    const button = buttons[index];
+    const button = buttons.find((candidate) => accessibleName(candidate) === optionName(key));
     assert.equal(button.getAttribute("aria-pressed"), "true");
     assert.equal(rankBadge(button)?.textContent, String(index + 1), `${key} has a visible rank`);
     assert.equal(accessibleName(button), optionName(key), "the rank does not become part of the choice name");
   });
-  assert.ok(buttons.slice(preferencePriority.length).every((button) => !rankBadge(button)));
+  assert.ok(buttons.filter((button) => button.getAttribute("aria-pressed") === "false").every((button) => !rankBadge(button)));
   assert.ok(!h.container.querySelector('button[aria-label^="Increase priority"]'), "explicit ranks can render without an editing callback");
 });
 
@@ -182,10 +183,28 @@ test("partial priority uses the shared normalization contract without mutating s
   const preferencePriority = Object.freeze(["nightlife", "culture", "culture", "unknown"]);
   const h = await mountCard(t, { selected, preferencePriority });
   const buttons = choices(h);
-  assert.deepEqual(buttons.map(accessibleName), ["culture", "views", "food", "fika", "nightlife", "green", "second_hand"]
-    .map((key) => optionName(key)));
-  assert.deepEqual(buttons.slice(0, 3).map((button) => rankBadge(button)?.textContent), ["1", "2", "3"]);
+  assert.deepEqual(buttons.map(accessibleName), ANYWHERE_PREFERENCES.map((pref) => pref.en));
+  assert.deepEqual(buttons.slice(0, 3).map((button) => rankBadge(button)?.textContent), ["3", "1", "2"],
+    "food, culture and views keep their places with culture first");
   assert.ok(buttons.slice(3).every((button) => button.getAttribute("aria-pressed") === "false" && !rankBadge(button)));
   assert.deepEqual(selected, ["views", "food", "culture"]);
   assert.deepEqual(preferencePriority, ["nightlife", "culture", "culture", "unknown"]);
+});
+
+test("a ranking can be cleared back to neutral", async (t) => {
+  let cleared = 0;
+  const h = await mountCard(t, {
+    preferencePriority: ["views", "culture", "food"],
+    onPromoteMood: () => {},
+    onClearPriority: () => { cleared += 1; },
+  });
+  const clear = [...h.container.querySelectorAll("button")].find((button) => button.textContent === "Clear the order");
+  assert.ok(clear, "a ranked day offers a way back to unranked interests");
+  await click(h, clear);
+  assert.equal(cleared, 1);
+});
+
+test("neutral interests offer nothing to clear", async (t) => {
+  const h = await mountCard(t, { preferencePriority: [], onPromoteMood: () => {}, onClearPriority: () => {} });
+  assert.ok(![...h.container.querySelectorAll("button")].some((button) => button.textContent === "Clear the order"));
 });

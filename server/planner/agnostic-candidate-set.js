@@ -36,14 +36,7 @@ function selectAgnosticCandidateSet({
   allowExpansion = false,
 } = {}) {
   const preferences = normalizePreferences(requestedPreferences);
-  const rankedPool = uniqueRankedCandidates(rankedCandidates)
-    .filter(({ item }) => finitePoint(item) && matchesPreferenceFocus(item, preferences))
-    .sort(compareRankedCandidates);
-  const pool = buildEvaluationPool(
-    rankedPool,
-    preferences,
-    clampInteger(poolLimit, DEFAULT_POOL_LIMIT, DEFAULT_POOL_LIMIT),
-  );
+  const pool = buildAgnosticEvaluationPool({ rankedCandidates, requestedPreferences: preferences, poolLimit });
   const count = Math.min(pool.length, clampInteger(desiredCount, pool.length, MAX_SET_SIZE));
   if (!count) return { selected: [], diagnostics: withRepairDiagnostics(emptyDiagnostics()) };
 
@@ -450,6 +443,19 @@ function buildEvaluationPool(ranked, preferences, limit) {
   return selected;
 }
 
+// Initial and priority selection use the same finite, on-intent,
+// coverage-aware pool. Retained commitments may enlarge the input reservoir;
+// the exhaustive search still evaluates at most twelve candidates.
+function buildAgnosticEvaluationPool({ rankedCandidates = [], requestedPreferences = [],
+  poolLimit = DEFAULT_POOL_LIMIT } = {}) {
+  const preferences = normalizePreferences(requestedPreferences);
+  const ranked = uniqueRankedCandidates(rankedCandidates)
+    .filter(({ item }) => finitePoint(item) && matchesPreferenceFocus(item, preferences))
+    .sort(compareRankedCandidates);
+  return buildEvaluationPool(ranked, preferences,
+    clampInteger(poolLimit, DEFAULT_POOL_LIMIT, DEFAULT_POOL_LIMIT));
+}
+
 function compareRankedCandidates(left, right) {
   return right.score - left.score || stableId(left.item).localeCompare(stableId(right.item));
 }
@@ -594,4 +600,5 @@ function emptyDiagnostics() {
 
 module.exports = {
   selectAgnosticCandidateSet,
+  buildAgnosticEvaluationPool,
 };

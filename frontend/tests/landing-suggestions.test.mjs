@@ -144,3 +144,24 @@ test('a registered-city suggestion carries its qualified choice into shared any-
   assert.equal(carried?.place,selected.query,'receipt stays bound to the full selected query');
  }finally{await h.unmount();}
 });
+test('Enter with suggestions shown but none highlighted searches the typed text, never the first row',async()=>{
+ const h=await mount();try {
+  await type(h,'Harbour Quarter');await h.clock.advance(200);
+  await h.fetchMock.respond(h.fetchMock.calls[0],{status:'ready',choices:[choice(),choice('Harbour Quarter','Second City · Country')]});
+  assert.equal(h.document.querySelectorAll('[role=option]').length,2);
+  await key(h,'Enter');
+  assert.equal(h.document.querySelector('#landingCity').value,'Harbour Quarter','an unhighlighted Enter does not fill a row');
+  await h.act(()=>h.document.querySelector('form').dispatchEvent(new h.window.Event('submit',{bubbles:true,cancelable:true})));
+  assert.equal(h.window.sessionStorage.getItem('parranda:place-choice'),null,'the server resolves the typed name and asks when it is ambiguous');
+ }finally{await h.unmount();}
+});
+test('editing the text after choosing a row drops that chosen identity',async()=>{
+ const h=await mount();try {
+  await type(h,'Harbour Quarter');await h.clock.advance(200);
+  await h.fetchMock.respond(h.fetchMock.calls[0],{status:'ready',choices:[choice()]});
+  await key(h,'ArrowDown');await key(h,'Enter');
+  await type(h,`${choice().query} North`);
+  await h.act(()=>h.document.querySelector('form').dispatchEvent(new h.window.Event('submit',{bubbles:true,cancelable:true})));
+  assert.equal(h.window.sessionStorage.getItem('parranda:place-choice'),null,'a changed name never travels with the old selection');
+ }finally{await h.unmount();}
+});

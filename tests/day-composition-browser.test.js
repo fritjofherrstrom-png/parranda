@@ -106,6 +106,56 @@ test('native composed day preserves dominance, removal/reload, replacement, refu
     assert.ok(countMuseums(saved) > 3, 'the native priority click changes actual published content');
     stages.push('native-priority-changes-content');
     if (evidence) await page.locator('section[aria-label="Dagens utgångspunkt"]').screenshot({ path: path.join(evidence, 'priority-mobile.png') });
+
+    const beforeClear = structuredClone(saved);
+    await openAdjust(page);
+    await page.getByRole('button', { name: 'Ta bort ordningen', exact: true }).click();
+    await waitSaved(page, entry => (entry.inputs.preferencePriority || []).length === 0 &&
+      entry.safeResponse?.days?.[0]?.primary_route?.main_stops?.length === 6);
+    saved = await current(page);
+    assert.deepEqual(saved.inputs.selected, beforeClear.inputs.selected, 'Clear keeps both selected interests');
+    assert.equal(requests.at(-1).priority, undefined, 'the completed Clear request is neutral');
+    assert.equal(new URL(page.url()).searchParams.has('prio'), false);
+    assert.equal(saved.safeResponse.agnostic_route_output_experiment.walking_validation.valid, true);
+    assert.ok(countMuseums(saved) >= 2 && countMuseums(saved) <= 3, 'the actual composer replaces dominance with a neutral mix');
+    const beforeClearUndoRequests = requests.length;
+    await page.getByRole('button', { name: 'Ångra ändringen', exact: true }).click();
+    await waitSaved(page, (entry, previous) => entry.id === previous.id &&
+      JSON.stringify(entry.safeResponse) === JSON.stringify(previous.safeResponse), beforeClear);
+    assert.deepEqual(await current(page), beforeClear, 'Undo restores the exact previously composed response, inputs and ledger');
+    assert.equal(new URL(page.url()).searchParams.get('prio'), 'culture,second_hand');
+    await page.waitForTimeout(500);
+    assert.equal(requests.length, beforeClearUndoRequests, 'Undo after completed Clear makes no fresh compose');
+    stages.push('native-clear-completion-and-exact-undo-without-compose');
+
+    await openAdjust(page);
+    await page.getByRole('button', { name: 'Ta bort ordningen', exact: true }).click();
+    await waitSaved(page, entry => (entry.inputs.preferencePriority || []).length === 0 &&
+      entry.safeResponse?.days?.[0]?.primary_route?.main_stops?.length === 6);
+    const neutral = await current(page);
+    const beforeNeutralReload = requests.length;
+    const reloadResponse = page.waitForResponse(response =>
+      new URL(response.url()).pathname === '/api/route-recommendations' && response.status() === 200);
+    await page.reload();
+    const reloaded = await (await reloadResponse).json();
+    await waitSaved(page, entry => (entry.inputs.preferencePriority || []).length === 0 &&
+      entry.safeResponse?.days?.[0]?.primary_route?.main_stops?.length === 6);
+    saved = await current(page);
+    assert.ok(requests.length > beforeNeutralReload, 'ordinary reload reaches the real HTTP composer again');
+    assert.equal(requests.at(-1).priority, undefined, 'reload does not revive the old saved ranking');
+    assert.deepEqual(requests.at(-1).preferences, neutral.inputs.selected);
+    assert.equal(new URL(page.url()).searchParams.has('prio'), false);
+    assert.deepEqual(saved.inputs.preferencePriority ?? [], []);
+    assert.deepEqual(saved.safeResponse.days[0].primary_route.main_stops, reloaded.days[0].primary_route.main_stops);
+    assert.ok(countMuseums(saved) >= 2 && countMuseums(saved) <= 3);
+    await openAdjust(page);
+    assert.equal(await page.getByRole('button', { name: 'Ta bort ordningen', exact: true }).count(), 0);
+    stages.push('native-clear-completion-and-real-neutral-reload');
+
+    // Continue the existing removal/share journey from its culture-first state.
+    await page.getByRole('button', { name: 'Höj prioritet för Kultur', exact: true }).click();
+    await waitSaved(page, entry => entry.inputs.preferencePriority?.[0] === 'culture');
+    saved = await current(page);
     const beforeRemoval = ids(saved);
     const list = page.locator('ol[aria-label="Stoppen i ordning"]');
     await list.locator(':scope > li > button').first().click();

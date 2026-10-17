@@ -19,18 +19,23 @@ export function normalizePreferencePriority(value, selected) {
   return requested.length ? [...requested, ...selection.filter(key => !requested.includes(key))] : [];
 }
 
-/** Toggle a chip; selection order and explicit dominance are separate state. */
+/**
+ * Toggle a chip; selection order and explicit dominance are separate state.
+ * Only a promotion creates a ranking. Ranking a newly added chip first made
+ * the same chips compose different days depending on tap history.
+ */
 export function togglePreferenceSelection(state, key) {
   const selected = selectedPreferences(state?.selected);
   const preferencePriority = normalizePreferencePriority(state?.preferencePriority, selected);
   if (!preferenceKeys.has(key)) return { selected, preferencePriority };
+  // Deselection keeps the reader's explicit ranks; only "Clear the order" ends them.
   if (selected.includes(key)) return {
     selected: selected.filter(value => value !== key),
     preferencePriority: preferencePriority.filter(value => value !== key),
   };
   return {
     selected: [...selected, key],
-    preferencePriority: preferencePriority.length ? [...preferencePriority, key] : [key, ...selected],
+    preferencePriority: preferencePriority.length ? [...preferencePriority, key] : [],
   };
 }
 
