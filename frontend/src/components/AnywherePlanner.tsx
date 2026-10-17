@@ -94,6 +94,8 @@ import { selectedDayEmpty, useLiveFallback } from "./planner/useLiveFallback";
 import SavedDays from "./planner/SavedDays";
 import StopLine from "./planner/StopLine";
 import { pickLabel, unkeptReasonSentence, type Lang } from "./planner/copy";
+import ParrandaChoice from "./planner/ParrandaChoice";
+import { parrandaChoiceView, readParrandaChoosesFlag } from "../lib/parranda-choice.mjs";
 import type { LiveEvents, PlaceStructure, PulseEvent } from "./planner/types";
 
 function readLS<T>(key: string, fallback: T): T {
@@ -157,11 +159,12 @@ function adjustmentSignature(
   commitments: Record<string, { kind: "exclude" | "pin"; label: string; liveAction?: "remove" | "replace" }>,
   priority: string[] = [],
   edit: DayEdit | null = null,
+  intentMode: string | null = null,
 ): string {
   const ledger = Object.keys(commitments)
     .sort()
     .map((id) => [id, commitments[id]?.kind ?? null, commitments[id]?.liveAction ?? null]);
-  return JSON.stringify([selected, dayOffset, walkKey, ledger, normalizePreferencePriority(priority, selected), normalizeDayEdit(edit)]);
+  return JSON.stringify([selected, dayOffset, walkKey, ledger, normalizePreferencePriority(priority, selected), normalizeDayEdit(edit), intentMode]);
 }
 
 // A published day or an explicitly empty choice can be restored by Undo;
@@ -221,6 +224,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const focusDayAfterLiveChoiceRef = useRef(false);
   const [dayOffset, setDayOffset] = useState<0 | 1>(0); // today / tomorrow
   const [walkKey, setWalkKey] = useState("balanced");
+  // "Let Parranda choose" (experimental, behind the parranda_chooses flag): the
+  // reader asked Parranda to choose the day's interests. It is sent only while
+  // the reader has no picks of their own, and a pick of their own ends it.
+  const [choosesEnabled, setChoosesEnabled] = useState(false);
+  const [intentMode, setIntentMode] = useState<"parranda_chooses" | null>(null);
+  // The mode the day on screen was composed under, so a choice still on its way
+  // reads as "choosing", not as a day Parranda could not choose for.
+  const [answeredIntentMode, setAnsweredIntentMode] = useState<"parranda_chooses" | null>(null);
+  useEffect(() => {
+    let storage: Storage | null = null;
+    try { storage = window.localStorage; } catch { storage = null; }
+    setChoosesEnabled(readParrandaChoosesFlag({ search: window.location.search, storage }));
+  }, []);
   const [phase, setPhase] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [loadingStage, setLoadingStage] = useState(0);
   const [supplyPending, setSupplyPending] = useState(false);
@@ -580,6 +596,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         ])].filter(id => !id.startsWith("live:")),
         pinnedCandidateIds: sentPinIds.filter(id => !id.startsWith("live:")),
         liveEventChoices: activeLedger.liveEventChoices,
+        intentMode: choosesEnabled ? intentMode : null,
       });
       const { response, body: rawBody } = await fetchPlannerLifecycle(`/api/route-recommendations?lang=${langOverride ?? lang}&${LIVE_COMPLETION_QUERY}`, {
         payload,
@@ -728,6 +745,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // the held day disappears here — it no longer answers the request.
       setClassification(cls);
       setSafeResponse(safe);
+      setAnsweredIntentMode(payload.intent_mode ?? null);
       displayedAnchorKeyRef.current = anchorKey(anchor);
       // This day answered exactly the pins this request carried. Recording them
       // here — beside the classification, not beside the click — is what ties
@@ -780,7 +798,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           classification: cls,
           // The mode is the anchor's, not this render's: an arrival composes
           // from the first render, before the near-me mode it set has landed.
-          inputs: { city: null, place: authoritativePlace ?? null, placeSelection: anchor.placeSelection, placeRef: anchor.placeRef ?? null, placeLabel: anchor.selectionLabel, mode: anchor.coords ? "near_me" : "typed", dayOffset: effectiveDayOffset, walkKey: effectiveWalkKey, selected: prefs, preferencePriority: effectivePriority, dayEdit: persistedDayEdit, liveSheetSort },
+          inputs: { city: null, place: authoritativePlace ?? null, placeSelection: anchor.placeSelection, placeRef: anchor.placeRef ?? null, placeLabel: anchor.selectionLabel, mode: anchor.coords ? "near_me" : "typed", dayOffset: effectiveDayOffset, walkKey: effectiveWalkKey, selected: prefs, preferencePriority: effectivePriority, dayEdit: persistedDayEdit, liveSheetSort, intentMode: payload.intent_mode ?? null },
           // Frozen from the SAME request that produced this day: the ledger it
           // carried and the verdict that came back. Recorded here rather than
           // at save time, because by then the live ledger may have moved on
@@ -1080,6 +1098,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       if (i.dayOffset === 0 || i.dayOffset === 1) setDayOffset(i.dayOffset);
       if (typeof i.walkKey === "string") setWalkKey(normalizeSavedWalkKey(i.walkKey));
       if (Array.isArray(i.selected)) setSelected(i.selected);
+      setIntentMode(i.intentMode === "parranda_chooses" ? "parranda_chooses" : null);
+      setAnsweredIntentMode(i.intentMode === "parranda_chooses" ? "parranda_chooses" : null);
     }
     // A restored snapshot is a NEW authoritative generation, so everything
     // older has to stop before it is installed. Otherwise a compose that
@@ -1194,7 +1214,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const dayAnchorKey = displayedAnchorKeyRef.current;
     const ledger = readCommitmentSnapshot(previous.commitments, { anchorKey: dayAnchorKey, dayKey: previous.id });
     const nextCommitments = ledger.applies ? { ...ledger.entries } : {};
-    undoEchoRef.current = adjustmentSignature(nextSelected, nextDayOffset, nextWalkKey, nextCommitments, nextPriority, nextEdit);
+    const nextIntentMode = inputs.intentMode === "parranda_chooses" ? "parranda_chooses" : null;
+    undoEchoRef.current = adjustmentSignature(nextSelected, nextDayOffset, nextWalkKey, nextCommitments, nextPriority, nextEdit, nextIntentMode);
+    setIntentMode(nextIntentMode);
+    setAnsweredIntentMode(nextIntentMode);
     setSelected(nextSelected);
     setPreferencePriority(nextPriority);
     setDayEdit(nextEdit);
@@ -1633,7 +1656,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       adoptedInputsRef.current = false;
       return;
     }
-    if (undoEcho !== null && undoEcho === adjustmentSignature(selected, dayOffset, walkKey, commitments, preferencePriority, dayEdit)) return;
+    if (undoEcho !== null && undoEcho === adjustmentSignature(selected, dayOffset, walkKey, commitments, preferencePriority, dayEdit, intentMode)) return;
     if (navigationSuspendedRef.current || !hasAnchor || phase === "idle" || restoredAt) return;
     if (recomposeTimerRef.current) clearTimeout(recomposeTimerRef.current);
     recomposeTimerRef.current = setTimeout(() => {
@@ -1651,7 +1674,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       if (recomposeTimerRef.current) clearTimeout(recomposeTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, preferencePriority, dayEdit, dayOffset, walkKey, commitments]);
+  }, [selected, preferencePriority, dayEdit, dayOffset, walkKey, commitments, intentMode]);
 
   // The Live sheet behaves like a modal: focus enters it, stays inside while it
   // is open, returns to the trigger on close, and the page behind does not scroll.
@@ -1730,7 +1753,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   })();
   const explicitMoodPriority = normalizePreferencePriority(preferencePriority, selected);
   const moodRanks = new Map<string, number>(explicitMoodPriority.map((key, index) => [key, index]));
-  const moodLabel = ANYWHERE_PREFERENCES.filter((p: { key: string }) => selected.includes(p.key))
+  const choosing = choosesEnabled && intentMode === "parranda_chooses";
+  const moodLabel = choosing ? t("Parranda väljer", "Parranda chooses") : ANYWHERE_PREFERENCES.filter((p: { key: string }) => selected.includes(p.key))
     .sort((left, right) => (moodRanks.get(left.key) ?? moodRanks.size) - (moodRanks.get(right.key) ?? moodRanks.size))
     .map((p: { key: string; sv: string; en: string }) => {
       const label = lang === "en" ? p.en : p.sv;
@@ -1739,6 +1763,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       return rank === undefined ? label : `${rank + 1}. ${label}`;
     })
     .join(" · ");
+  const parrandaView = parrandaChoiceView(safeResponse?.agnostic_route_output_experiment?.parranda_chooses, lang);
 
   const structure: PlaceStructure | null = safeResponse?.place_structure ?? null;
   const day = structure?.district_day;
@@ -2314,10 +2339,30 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   };
   const toggleMood = (key: string) => {
     invalidateCommitmentIntent();
+    setIntentMode(null);
     relaxDayEditForAdjustment();
     const next = togglePreferenceSelection({ selected, preferencePriority }, key);
     setSelected(next.selected);
     setPreferencePriority(next.preferencePriority);
+  };
+  // "Let Parranda choose": Parranda picks the interests (and, as with the free
+  // rhythm, the density). Taking over keeps Parranda's picks as the reader's
+  // own and opens Adjust on them.
+  const chooseForMe = () => {
+    invalidateCommitmentIntent();
+    relaxDayEditForAdjustment();
+    setIntentMode("parranda_chooses");
+    setSelected([]);
+    setPreferencePriority([]);
+    setWalkKey("free");
+  };
+  const takeOverChoice = (keys: string[]) => {
+    invalidateCommitmentIntent();
+    relaxDayEditForAdjustment();
+    setIntentMode(null);
+    setSelected(keys);
+    setPreferencePriority([]);
+    setAdjustOpen(true);
   };
   const clearPriority = () => {
     if (!preferencePriority.length) return;
@@ -2422,6 +2467,16 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           walkKey={walkKey}
           onSetRhythm={chooseRhythm}
           onChangePlace={cancelActivePlannerForNavigation}
+        />
+      )}
+      {hasAnchor && choosesEnabled && (
+        <ParrandaChoice
+          t={t}
+          active={choosing}
+          view={answeredIntentMode === intentMode ? parrandaView : null}
+          composing={phase === "loading" || (intentMode !== answeredIntentMode && !restoredAt)}
+          onChoose={chooseForMe}
+          onTakeOver={takeOverChoice}
         />
       )}
 

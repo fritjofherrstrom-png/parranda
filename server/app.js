@@ -2532,6 +2532,9 @@ function buildApp({
         // may defer a missing occurrence verdict. Public payload cannot set it.
         liveSelectionPending: Boolean(upgradeRequested && liveEvents?.pending),
         lens: request.body?.lens || request.query?.lens || null,
+        // Opt-in only: the reader asked Parranda to choose the day's interests.
+        // Explicit preferences still win; an absent field changes nothing.
+        intentMode: request.body?.intent_mode ?? null,
         // #262 — payload weather is NOT trusted; trusted weather/time come only
         // from the server-injected seams. `trustedTimezone` is taken from the
         // trusted resolver when present; otherwise agnostic context may derive a
