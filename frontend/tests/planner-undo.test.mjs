@@ -115,7 +115,7 @@ test("an adjustment says what it changed in the day", async (t) => {
   await h.clock.advance(50);
   assert.equal(
     changeNote(h),
-    "Changed: Balanced → Full · 1.2 km → 4.8 km · +2 stops: Place c, Place d · −1: Place b",
+    "Changed: Balanced → Full · 1 stop swapped · +1 stop · 1.2 → 4.8 km",
   );
   assert.ok(buttonNamed(h, /^Undo this change$/));
 });
@@ -163,7 +163,7 @@ test("undo returns to the day on screen, not to a request still in flight", asyn
   assert.ok(calls[1].aborted, "the older request gave way");
   await h.fetchMock.respond(calls[2], composedDay(["e"], 0.6));
   await h.clock.advance(50);
-  assert.match(changeNote(h), /^Changed: Balanced → Easy · 1\.2 km → 0\.6 km/);
+  assert.match(changeNote(h), /^Changed: Balanced → Easy · 1 stop swapped · −1 stop · 1\.2 → 0\.6 km$/);
 
   await click(h, buttonNamed(h, /^Undo this change$/));
   await h.clock.advance(1000);
