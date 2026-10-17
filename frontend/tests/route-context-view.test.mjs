@@ -117,6 +117,23 @@ test("route context rejects distant candidates and never mutates route or area i
   assert.deepEqual(areas, areasBefore);
 });
 
+test("route context excludes source-closed days while retaining unknown and noncommittable ideas", () => {
+  const route = Array.from({ length: 4 }, (_, index) => ({
+    id: `route-${index}`, name: `Route ${index}`, lat: 55.55 + index * .01, lng: 14.34,
+  }));
+  const areas = [{ stops: [
+    { id: "closed", name: "Source-closed museum", lat: 55.5501, lng: 14.34,
+      commitment_eligible: false, selected_day_hours: { status: "closed", all_day: false, windows: [] } },
+    { id: "known", name: "Source-listed museum", lat: 55.5601, lng: 14.34,
+      commitment_eligible: false, selected_day_hours: { status: "known", windows: [{ opens: "10:00", closes: "17:00" }] } },
+    { id: "unknown", name: "Unknown-hours museum", lat: 55.5701, lng: 14.34,
+      commitment_eligible: false, selected_day_hours: { status: "unknown" } },
+    { id: "unreported", name: "Museum without reported hours", lat: 55.5801, lng: 14.34,
+      commitment_eligible: false },
+  ] }];
+  assert.deepEqual(buildRouteContextSuggestions(route, areas).map(stop => stop.id), ["known", "unknown", "unreported"]);
+});
+
 test("walking distances never render a broken zero-kilometre leg", () => {
   assert.equal(walkingDistanceLabel(0.04, "sv"), "< 0,1 km");
   assert.equal(walkingDistanceLabel(0, "en"), "< 0.1 km");

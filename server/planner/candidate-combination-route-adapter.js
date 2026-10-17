@@ -20,6 +20,7 @@
  */
 
 const { normalizeSelectedDayHoursFact } = require("../place-candidates/opening-hours");
+const { normalizeSourceWebsite } = require("../lib/source-website");
 
 function buildRouteCandidateAdapterInspect({ city, candidateCombination, route, context } = {}) {
   const candidate = buildRouteCandidateFromCandidateCombination({ city, candidateCombination, context });
@@ -44,6 +45,7 @@ function buildRouteCandidateFromCandidateCombination({ city, candidateCombinatio
   // sequence. order_confidence is diagnostic_only.
   const stops = selected.map((s) => {
     const selectedDayHours = normalizeSelectedDayHoursFact(s.selected_day_hours);
+    const website = normalizeSourceWebsite(s.website);
     return {
       role: s.role,
       candidate_id: s.candidate_id || null,
@@ -51,6 +53,7 @@ function buildRouteCandidateFromCandidateCombination({ city, candidateCombinatio
       coordinates: resolveCoords(s.coordinates),
       origin: s.origin || null,
       confidence: s.confidence || null,
+      ...(website ? { website } : {}),
       // A bounded fact for the selected local date, never the raw source
       // schedule and never a claim about whether the venue is open now.
       ...(selectedDayHours ? { selected_day_hours: selectedDayHours } : {}),

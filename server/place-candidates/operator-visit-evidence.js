@@ -7,6 +7,9 @@ const {createHash}=require('node:crypto');
 const { parse } = require('parse5');
 const { createSourceCache } = require('./source-cache');
 const { publicAddressesForUrl, pinnedHttpsFetch } = require('./simpleview-europe-place-detail-source');
+const { normalizeOpeningHours } = require('./opening-hours');
+const { parseSelectedPlaceHours, selectedPlaceHoursKey, selectedPlaceHoursSourceMatches } = require('./selected-place-hours');
+const { normalizeSchemaOrgOpeningHours } = require('./schema-org-opening-hours');
 const MAX_CANDIDATES = 4;
 const MAX_BYTES = 512 * 1024;
 const TOTAL_MS = 6000;
@@ -188,15 +191,25 @@ function contactLink(html, root) {
 function createOperatorVisitEnricher({
   env=process.env,fetcher=pinnedHttpsFetch,resolveHost=dns.lookup,now=()=>Date.now(),
   cache=createSourceCache({namespace:'operator-visit-evidence-v3',dir:env.PARRANDA_CACHE_DIR,ttlMs:6*60*60*1000}),
+  hoursCache=createSourceCache({namespace:'selected-place-hours-v1',dir:env.PARRANDA_CACHE_DIR,ttlMs:6*60*60*1000,now}),
   maxMs=TOTAL_MS,
 }={}) {
+  const abortable=(work,signal)=>new Promise((resolve,reject)=>{
+    const abort=()=>reject(signal.reason || new Error('aborted'));
+    if(signal.aborted)return abort();
+    signal.addEventListener('abort',abort,{once:true});
+    Promise.resolve(work).then(resolve,reject).finally(()=>signal.removeEventListener('abort',abort));
+  });
   async function read(url, signal, deadline, outcomes, canonicalHop=false) {
     const remaining=deadline-now();if(remaining<=0 || signal?.aborted)return null;
-    const addresses=await publicAddressesForUrl(url,url,resolveHost,Math.min(remaining,1500));if(!addresses || deadline-now()<=0 || signal?.aborted)return null;
     const controller=new AbortController();const abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});
     const timer=setTimeout(abort,Math.max(1,deadline-now()));const started=now();
     try {
-      const response=await fetcher(url,{redirect:'manual',signal:controller.signal,validatedAddresses:addresses,headers:{'User-Agent':'Parranda/1.0 (bounded operator fact check)',Accept:'text/html'}});
+      const addresses=await abortable(publicAddressesForUrl(url,url,resolveHost,Math.min(remaining,1500)),controller.signal);
+      if(!addresses || deadline-now()<=0 || signal?.aborted)return null;
+      const fetching=Promise.resolve(fetcher(url,{redirect:'manual',signal:controller.signal,validatedAddresses:addresses,headers:{'User-Agent':'Parranda/1.0 (bounded operator fact check)',Accept:'text/html'}}));
+      fetching.then(response=>{if(controller.signal.aborted)Promise.resolve(response?.body?.cancel?.()).catch(()=>{});},()=>{});
+      const response=await abortable(fetching,controller.signal);
       outcomes.push({url,status:response.status,elapsed_ms:now()-started});
       if([301,302,307,308].includes(response.status) && !canonicalHop) {
         let target;
@@ -212,7 +225,7 @@ function createOperatorVisitEnricher({
       const declared=Number(response.headers?.get?.('content-length'));if(declared>MAX_BYTES){await response.body?.cancel?.();return null;}
       const reader=response.body?.getReader?.();if(!reader)return null;
       let size=0;const chunks=[];
-      try {for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>MAX_BYTES){await reader.cancel();return null}chunks.push(Buffer.from(value));}}finally{reader.releaseLock()}
+      try {for(;;){const {done,value}=await abortable(reader.read(),controller.signal);if(done)break;size+=value.length;if(size>MAX_BYTES){await reader.cancel();return null}chunks.push(Buffer.from(value));}}finally{if(controller.signal.aborted)Promise.resolve(reader.cancel()).catch(()=>{});reader.releaseLock()}
       if(controller.signal.aborted||now()>deadline)return null;
       return {html:Buffer.concat(chunks).toString('utf8'),url};
     } catch {outcomes.push({url,status:'unavailable',elapsed_ms:now()-started});return null;}
@@ -221,21 +234,31 @@ function createOperatorVisitEnricher({
   const factKey=record=>createHash('sha256').update(JSON.stringify([
     sourceUrl(record.website),record.name,record.source_address||null,
   ])).digest('hex');
-  const newSession=()=>({deadline:null,targets:new Map(),facts:new Map(),pages:new Map(),outcomes:[]});
+  const newSession=()=>({deadline:null,identities:new Set(),targets:new Map(),facts:new Map(),selectedFacts:new Map(),pages:new Map(),outcomes:[]});
+  const reserve=(record,session)=>{
+    const key=selectedPlaceHoursKey(record);
+    if(session.identities.has(key))return true;
+    if(session.identities.size>=MAX_CANDIDATES)return false;
+    session.identities.add(key);return true;
+  };
+  const deadlineFor=(session,context)=>{
+    if(session.deadline===null)session.deadline=now()+maxMs;
+    return Math.min(session.deadline,Number.isFinite(context.deadline)?context.deadline-5000:Infinity);
+  };
+  const pageFor=(session,url,context,deadline)=>{
+    if(!session.pages.has(url))session.pages.set(url,read(url,context.signal,deadline,session.outcomes));
+    return session.pages.get(url);
+  };
   async function enrichOperatorVisits(records, context={}, session=newSession()) {
     if(!Array.isArray(records))return records;
     for(const record of records.filter(r=>r.type==='vintage-shop'&&sourceUrl(r.website))) {
       const key=factKey(record);
-      if(session.targets.size<MAX_CANDIDATES && !session.targets.has(key))session.targets.set(key,record);
+      if(!session.targets.has(key) && reserve(record,session))session.targets.set(key,record);
     }
     const targets=[...session.targets.values()];
-    if(session.deadline===null && targets.length)session.deadline=now()+maxMs;
-    const deadline=Math.min(session.deadline??now()+maxMs,Number.isFinite(context.deadline)?context.deadline-5000:Infinity);
-    const {facts,pages,outcomes}=session;
-    const page = url => {
-      if(!pages.has(url))pages.set(url,read(url,context.signal,deadline,outcomes));
-      return pages.get(url);
-    };
+    const deadline=targets.length?deadlineFor(session,context):now();
+    const {facts,outcomes}=session;
+    const page = url => pageFor(session,url,context,deadline);
     // Bounded two-wide acquisition; no unbounded request-time fan-out.
     let cursor=0;
     await Promise.all([0,1].map(async()=>{
@@ -274,17 +297,68 @@ function createOperatorVisitEnricher({
     }}});
     return output;
   }
+  async function enrichSelected(records,context={},session=newSession()) {
+    if(!Array.isArray(records))return records;
+    context.signal?.throwIfAborted();
+    const ids=new Set(Array.isArray(context.selectedIds)?context.selectedIds:[]);
+    const targets=records.filter(record=>ids.has(record.id) && !normalizeOpeningHours(record.opening_hours) && sourceUrl(record.website));
+    const validFact=(fact,key,record)=>!!fact && fact.identity_key===key &&
+      normalizeSchemaOrgOpeningHours({openingHours:fact.opening_hours})===fact.opening_hours &&
+      selectedPlaceHoursSourceMatches(record,fact.url) && sourceUrl(fact.url)===fact.url && Number.isFinite(Date.parse(fact.observed_at)) &&
+      Date.parse(fact.observed_at)<=now() && now()-Date.parse(fact.observed_at)<6*60*60*1000;
+    const pending=[];
+    for(const record of targets) {
+      const key=selectedPlaceHoursKey(record);
+      if(session.selectedFacts.has(key))continue;
+      const cached=hoursCache.peek?.(key);
+      if(validFact(cached,key,record)){session.selectedFacts.set(key,cached);continue;}
+      if(reserve(record,session))pending.push(record);
+      else session.selectedFacts.set(key,null);
+    }
+    const deadline=pending.length?deadlineFor(session,context):now();
+    let cursor=0;
+    await Promise.all([0,1].map(async()=>{
+      while(cursor<pending.length && now()<deadline && !context.signal?.aborted) {
+        const record=pending[cursor++],key=selectedPlaceHoursKey(record);
+        if(session.selectedFacts.has(key))continue;
+        // Acquisition belongs to this request's signal and shared visit budget.
+        // Share only completed positive facts; another request must never inherit
+        // a producer whose owning Planner can cancel it.
+        const fact=await (async()=>{
+          const page=await pageFor(session,sourceUrl(record.website),context,deadline);
+          if(!page || context.signal?.aborted || now()>=deadline)return null;
+          const parsed=parseSelectedPlaceHours(page.html,record,page.url);
+          const observed=parsed?{...parsed,identity_key:key,observed_at:new Date(now()).toISOString()}:null;
+          if(validFact(observed,key,record) && now()<deadline && !context.signal?.aborted)hoursCache.set(key,observed);
+          return observed;
+        })().catch(()=>null);
+        session.selectedFacts.set(key,fact);
+      }
+    }));
+    context.signal?.throwIfAborted();
+    const output=records.map(record=>{
+      if(!ids.has(record.id) || normalizeOpeningHours(record.opening_hours))return record;
+      const fact=session.selectedFacts.get(selectedPlaceHoursKey(record));
+      return validFact(fact,selectedPlaceHoursKey(record),record)?{...record,opening_hours:fact.opening_hours,opening_hours_source:{url:fact.url,observed_at:fact.observed_at}}:record;
+    });
+    for(const name of ['loader_status','loader_error','loader_metadata'])if(records[name]!==undefined)Object.defineProperty(output,name,{value:records[name]});
+    return output;
+  }
   // Partial readiness and final composition share one bounded check: at most
   // four identities and the original six-second window, including failures.
   // Serialize overlapping snapshots so settlement cannot duplicate acquisition.
   enrichOperatorVisits.forRequest=()=>{
     const session=newSession();let tail=Promise.resolve();
-    return (records,context)=>{
-      const work=tail.then(()=>enrichOperatorVisits(records,context,session));
+    const enqueue=operation=>{
+      const work=tail.then(operation);
       tail=work.catch(()=>{});
       return work;
     };
+    const request=(records,context)=>enqueue(()=>enrichOperatorVisits(records,context,session));
+    request.enrichSelected=(records,context)=>enqueue(()=>enrichSelected(records,context,session));
+    return request;
   };
+  enrichOperatorVisits.enrichSelected=(records,context)=>enrichSelected(records,context);
   return enrichOperatorVisits;
 }
 module.exports={createOperatorVisitEnricher,parseOperatorVisitEvidence,parseHours,contactLink,sourceUrl,operatorClosureForWindow};

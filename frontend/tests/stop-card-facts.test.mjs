@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { stopHoursUnknown, stopTypeLabel } from "../src/lib/stop-card-facts.mjs";
+import { stopHoursUnknown, stopTypeLabel, stopWebsiteUrl } from "../src/lib/stop-card-facts.mjs";
 
 const secondHand = (category) => ({ type: "vintage-shop", source: category ? { label: "osm", category } : { label: "osm" } });
 
@@ -40,4 +40,34 @@ test("hours are unknown for an hours-dependent stop whose source gives none for 
   );
   assert.equal(stopHoursUnknown({ type: "park" }), false, "a park's visit does not depend on opening hours");
   assert.equal(stopHoursUnknown({ type: "viewpoint" }), false);
+});
+
+test("source-closed days are known rather than missing opening hours", () => {
+  assert.equal(stopHoursUnknown({ type: "museum", selected_day_hours: { status: "closed", windows: [] } }), false);
+});
+
+test("a stop website accepts source-owned absolute HTTP(S) URLs", () => {
+  for (const website of ["https://museum.example/visit?day=saturday#hours", "http://cafe.example/"]) {
+    assert.equal(stopWebsiteUrl({ website }), website);
+  }
+  assert.equal(stopWebsiteUrl({ website: "  https://museum.example/  " }), "https://museum.example/");
+});
+
+test("website links reject malformed, relative, credentialed and non-HTTP destinations", () => {
+  for (const website of [undefined, null, "", "/visit", "//museum.example/", "javascript:alert(1)",
+    "data:text/html,hello", "https:example.org", "https://", "https://user:secret@museum.example/",
+    "https://museum.example/a\nb", "https://museum.example\\@other.example/", { href: "https://museum.example/" }]) {
+    assert.equal(stopWebsiteUrl({ website }), null, String(website));
+  }
+  assert.equal(stopWebsiteUrl({ source: { url: "https://www.openstreetmap.org/node/42" } }), null,
+    "source attribution cannot stand in for a venue website");
+});
+
+test("saved stop websites keep the server's 2048-character boundary", () => {
+  const base = "https://museum.example/";
+  const website = base + "a".repeat(2048 - base.length);
+  assert.equal(stopWebsiteUrl({ website }), website);
+  assert.equal(stopWebsiteUrl({ website: website + "a" }), null);
+  assert.equal(stopWebsiteUrl({ website: base + "ä".repeat(338) }), null,
+    "the normalized destination must also stay inside the source-website bound");
 });

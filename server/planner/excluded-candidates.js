@@ -62,7 +62,7 @@ function withoutExcludedCandidates(loader, excludedIds) {
   const excluded = new Set(Array.isArray(excludedIds) ? excludedIds : []);
   if (excluded.size === 0) return loader;
 
-  return async function loadWithoutExcluded(...args) {
+  const filteredLoader = async function loadWithoutExcluded(...args) {
     const records = await loader(...args);
     // A loader failure shape is passed through untouched: an exclusion must
     // never turn an error into an empty success.
@@ -85,6 +85,12 @@ function withoutExcludedCandidates(loader, excludedIds) {
     });
     return kept;
   };
+  if (typeof loader.enrichSelected === 'function') {
+    filteredLoader.enrichSelected = (records, options = {}) => loader.enrichSelected(records, {
+      ...options, selectedIds: (options.selectedIds || []).filter(id => !excluded.has(id)),
+    });
+  }
+  return filteredLoader;
 }
 
 /**

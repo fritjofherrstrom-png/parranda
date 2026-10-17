@@ -31,14 +31,14 @@ async function planner(t, types) {
 
 test("no hours for any stop is said once, not on every station", async (t) => {
   const route = await planner(t, ["museum", "museum", "gallery"]);
-  assert.match(route, /The sources give no opening hours for today's stops on the chosen day/);
-  assert.doesNotMatch(route, /Hours unknown/);
+  assert.match(route, /Opening hours unavailable for today's stops on the chosen day/);
+  assert.equal(route.match(/Opening hours unavailable/g)?.length, 1);
 });
 
 test("when only some stops lack hours, exactly those stops say so", async (t) => {
   const route = await planner(t, ["museum", "park", "park"]);
-  assert.doesNotMatch(route, /The sources give no opening hours/);
-  assert.equal(route.match(/Hours unknown/g)?.length, 1);
+  assert.doesNotMatch(route, /Opening hours unavailable for today's stops/);
+  assert.equal(route.match(/Opening hours unavailable/g)?.length, 1);
 });
 
 test("following the day asks for the position only on a tap, and keeps it nowhere", () => {
@@ -117,11 +117,11 @@ test("each stop's kind is a compact badge under the name, apart from its hours",
   for (const badge of badges) {
     assert.equal(badge.closest("button")?.getAttribute("aria-expanded"), "false", "the badge sits inside the one row disclosure");
     assert.equal(badge.querySelector("button, a"), null, "the badge is information, not a control");
-    assert.doesNotMatch(badge.textContent, /Hours unknown/, "hours never read as part of the category");
+    assert.doesNotMatch(badge.textContent, /Opening hours unavailable/, "hours never read as part of the category");
   }
   // The restaurant and gallery have no hours (the park needs none): the status
   // sits beside the badge, not inside it.
-  assert.equal(route.textContent.match(/Hours unknown/g)?.length, 2);
+  assert.equal(route.textContent.match(/Opening hours unavailable/g)?.length, 2);
 });
 
 test("a kind this build has no words for shows no badge", async (t) => {
