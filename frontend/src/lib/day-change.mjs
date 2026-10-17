@@ -13,6 +13,7 @@
  */
 
 import { walkingDistanceLabel } from "./route-context-view.mjs";
+import { liveStopChoiceId } from "./live-stop-choice.mjs";
 
 
 function primaryRoute(entry) {
@@ -24,9 +25,11 @@ function routeStops(entry) {
   return Array.isArray(stops) ? stops.filter((stop) => stop && typeof stop === "object") : [];
 }
 
-// A stop is the same stop when the engine gave it the same id. Only a stop the
-// payload carries no id for is matched by its visible name.
+// Live visits use the source-issued occurrence, since one series can have
+// multiple starts. Ordinary places and legacy stops retain their place id.
 function stopIdentity(stop) {
+  const occurrence = stop.is_live_event === true && liveStopChoiceId(stop);
+  if (occurrence) return `occurrence:${occurrence}`;
   const id = stop.id ?? stop.candidate_id ?? stop.place_id ?? null;
   if (id !== null && String(id).trim()) return `id:${String(id).trim()}`;
   const name = stopName(stop).toLowerCase();

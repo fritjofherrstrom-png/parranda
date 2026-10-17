@@ -205,11 +205,16 @@ test('ordinary HTTP browser day preserves the second source occurrence through s
   }
   if (await anchor.getByRole('button', { name: 'Culture', exact: true }).getAttribute('aria-pressed') !== 'true')
     await anchor.getByRole('button', { name: 'Culture', exact: true }).click();
+  // The merged pick-order UI must carry its explicit prefix alongside the
+  // exact Live occurrence, including ordinary and cold completion reloads.
+  await anchor.getByRole('button', { name: 'Culture', exact: true }).click();
+  await anchor.getByRole('button', { name: 'Culture', exact: true }).click();
   await anchor.getByRole('button', { name: 'Tomorrow', exact: true }).click();
   await anchor.getByRole('button', { name: 'Full', exact: true }).click();
   const full = await fullResponse;
   assert.equal(full.days[0].date, DATE);
   assert.deepEqual(requests.at(-1).preferences, ['culture']);
+  assert.deepEqual(requests.at(-1).preference_priority, ['culture']);
   assert.equal(requests.at(-1).day_rhythm, 'full');
   assert.deepEqual(requests.at(-1).dates, [DATE]);
   assert.deepEqual(full.agnostic_route_output_experiment.source_status.anchor, ANCHOR);
@@ -252,6 +257,7 @@ test('ordinary HTTP browser day preserves the second source occurrence through s
   assert.equal(selected.agnostic_route_output_experiment.live_event_choices.honored_count, 1);
   assert.equal(selected.agnostic_route_output_experiment.walking_validation.valid, true);
   assert.deepEqual(requests.at(-1).live_event_choices, [{ occurrence_id: chosenId, action: 'keep' }]);
+  assert.deepEqual(requests.at(-1).preference_priority, ['culture']);
   await assertRenderedDay(page, selectedStops);
   await capture('selected-second-six-total');
   const selectedEntry = await savedDay(page);
@@ -292,6 +298,7 @@ test('ordinary HTTP browser day preserves the second source occurrence through s
   assert.equal(restored.inputs.place, 'Helsinki');
   assert.equal(restored.dateIso, DATE);
   assert.deepEqual(restored.inputs.selected, ['culture']);
+  assert.deepEqual(restored.inputs.preferencePriority, ['culture']);
   assert.equal(restored.inputs.walkKey, 'full');
   await delay(700);
   await assertRenderedDay(page, selectedStops); // A late old response must not replace it.
@@ -324,6 +331,7 @@ test('ordinary HTTP browser day preserves the second source occurrence through s
   assert.ok(routeStops(cold).every(stop => !stop.is_live_event), 'pending supply cannot fabricate a live choice before the source answers');
   assert.equal(cold.agnostic_route_output_experiment.live_event_choices.honored_count, 0);
   assert.deepEqual(requests.at(-1).live_event_choices, [{ occurrence_id: chosenId, action: 'keep' }]);
+  assert.deepEqual(requests.at(-1).preference_priority, ['culture']);
   await pendingCompletionResponse;
   assert.deepEqual(await savedDay(page), confirmedBeforeColdReload,
     'pending acquisition must leave the exact last confirmed day intact');

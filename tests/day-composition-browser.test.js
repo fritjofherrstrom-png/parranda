@@ -107,6 +107,25 @@ test('native composed day preserves dominance, removal/reload, replacement, refu
     saved = await current(page);
     assert.ok(countMuseums(saved) > 3, 'the native priority click changes actual published content');
     stages.push('native-priority-changes-content');
+    // The compact summary may wrap on narrow screens, but its whole message
+    // and native Undo target must remain readable and operable together.
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      const undo = page.getByRole('button', { name: 'Ångra ändringen', exact: true });
+      const layout = await undo.evaluate(button => {
+        const card = button.parentElement;
+        const text = card.querySelector('p');
+        const box = element => { const r = element.getBoundingClientRect(); return { left: r.left, right: r.right, height: r.height }; };
+        return { card: box(card), button: box(button), text: box(text),
+          content: text.textContent, overflow: card.scrollWidth > card.clientWidth,
+          clipped: ['hidden', 'clip'].includes(getComputedStyle(text).overflowY) };
+      });
+      assert.ok(layout.button.height >= 44);
+      assert.ok(layout.button.right <= layout.card.right && layout.text.right <= layout.button.left);
+      assert.equal(layout.overflow, false);
+      assert.equal(layout.clipped, false);
+      assert.match(layout.content, /stopp bytt/);
+    }
     if (evidence) await page.locator('section[aria-label="Dagens utgångspunkt"]').screenshot({ path: path.join(evidence, 'priority-mobile.png') });
 
     const beforeClear = structuredClone(saved);

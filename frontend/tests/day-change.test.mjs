@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { dayChangeSegments, describeDayChange } from "../src/lib/day-change.mjs";
+import { liveOccurrenceId } from "../../server/planner/live-occurrence-choice.js";
 
 function entry({ stops = [], km = null, walkKey = "balanced", dayOffset = 0, selected = ["food", "culture"] } = {}) {
   return {
@@ -12,6 +13,12 @@ function entry({ stops = [], km = null, walkKey = "balanced", dayOffset = 0, sel
   };
 }
 const stop = (id, label) => ({ id, label });
+function liveStop(start, overrides = {}) {
+  const event = { id: "same-series", source_provider_id: "controlled-source", timezone: "Europe/Helsinki",
+    starts_at: `2026-10-17T${start}:00:00Z`, ...overrides };
+  return { id: `live-event-${event.id}`, label: "Source concert", is_live_event: true,
+    live_occurrence_id: liveOccurrenceId(event), ...overrides };
+}
 const labels = (lang) => ({
   lang,
   walkLabel: (key) => ({ calm: lang === "sv" ? "Lugn" : "Easy", balanced: lang === "sv" ? "Lagom" : "Balanced", full: lang === "sv" ? "Fylld" : "Full" })[key] ?? key,
@@ -57,6 +64,41 @@ test("stops are matched by id, so a renamed label is not a new stop", () => {
   assert.deepEqual(change.stops.added, []);
   assert.deepEqual(change.stops.removed, []);
   assert.equal(change.routeChanged, false);
+});
+
+test("different source occurrences of one series count as one swapped Live stop", () => {
+  const before = liveStop("18");
+  const after = liveStop("19");
+  assert.equal(before.id, after.id, "the source series keeps its existing route id");
+  assert.notEqual(before.live_occurrence_id, after.live_occurrence_id);
+  const change = describeDayChange(entry({ stops: [before], km: 1 }), entry({ stops: [after], km: 1 }));
+  assert.equal(change.routeChanged, true, "a different source start is a different actual visit");
+  assert.equal(change.stops.kept, 0);
+  assert.deepEqual(dayChangeSegments(change, labels("en")), ["1 stop swapped"]);
+  assert.deepEqual(dayChangeSegments(change, labels("sv")), ["1 stopp bytt"]);
+});
+
+test("the same source occurrence stays the same when its label or end time changes", () => {
+  const before = liveStop("18", { ends_at: "2026-10-17T20:00:00Z" });
+  const after = liveStop("18", { label: "Updated source concert", ends_at: "2026-10-17T21:00:00Z" });
+  assert.equal(before.live_occurrence_id, after.live_occurrence_id);
+  const change = describeDayChange(entry({ stops: [before], km: 1 }), entry({ stops: [after], km: 1 }));
+  assert.equal(change.routeChanged, false);
+  assert.equal(change.stops.kept, 1);
+  assert.deepEqual(dayChangeSegments(change, labels("en")), ["same stops and distance"]);
+});
+
+test("ordinary places and malformed legacy Live metadata retain place-id matching", () => {
+  for (const extra of [
+    { is_live_event: false, live_occurrence_id: liveStop("18").live_occurrence_id },
+    { is_live_event: true, live_occurrence_id: "not-an-occurrence" },
+  ]) {
+    const before = { ...stop("a", "A"), ...extra };
+    const after = { ...before, label: "Renamed", live_occurrence_id: liveStop("19").live_occurrence_id };
+    if (extra.is_live_event) after.live_occurrence_id = "also-invalid";
+    const change = describeDayChange(entry({ stops: [before] }), entry({ stops: [after] }));
+    assert.equal(change.routeChanged, false);
+  }
 });
 
 test("stops without an id fall back to their visible name", () => {
