@@ -58,7 +58,16 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
     1 + slope * (priority.length - 1 - index) / Math.max(1, priority.length - 1)));
   const poolIds = new Set(pool.map(({ item }) => item.id));
   const required = pinnedIds.filter(id => poolIds.has(id));
-  let best = null;
+  // Exact fits only: a partial fit (a park for Views) is never counted as more
+  // of an interest, so priority cannot hide a missing verified place.
+  const hitsOf = (intent, entries) => entries
+    .filter(({ item }) => (fits.get(item) || preferenceFit(item)).coveredPreferences.includes(intent)).length;
+  const utilityOf = (entries, weightOf) => requested.reduce((sum, intent) => {
+    let utility = sum;
+    for (let hit = 0; hit < hitsOf(intent, entries); hit += 1) utility += weightOf(intent) / (hit + 1);
+    return utility;
+  }, 0);
+  const evaluated = [];
   for (const entries of subsets(pool, count)) {
     if (required.some(id => !entries.some(({ item }) => item.id === id))) continue;
     const diagnostics = describe(entries);
@@ -66,30 +75,40 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
     // existing final engine/walking checks remain authoritative after this.
     if (diagnostics.estimated_km > Math.max(baseline.estimated_km * 1.25, baseline.estimated_km + 0.5)) continue;
     if (diagnostics.longest_leg_km > Math.max(baseline.longest_leg_km, 1.5)) continue;
-    let utility = 0;
-    for (const intent of requested) {
-      const hits = entries.filter(({ item }) => fits.get(item).coveredPreferences.includes(intent)).length;
-      for (let hit = 0; hit < hits; hit += 1) utility += weights.get(intent) / (hit + 1);
-    }
     const meals = entries.filter(({ item }) => isMeal(item)).length;
-    // A fixed six-role combination is a neutral fallback, not a veto on an
-    // explicitly higher-priority seventh interest. Coverage and walking still
-    // lead; only explicit priority moves content utility ahead of that spine.
-    const score = [diagnostics.exact_preference_count,
-      ...(!priority.length ? [diagnostics.spine_role_count] : []), diagnostics.partial_preference_count,
-      // An internal approximate loop target must not trade exact requested
-      // coverage for partial fit. Final independent walking gates still decide.
-      diagnostics.within_budget ? 1 : 0,
-      -Math.max(0, meals - 2), utility,
-      ...(priority.length ? [diagnostics.spine_role_count] : []),
-      diagnostics.local_quality, diagnostics.operational_quality, diagnostics.trust_quality,
+    // An internal approximate loop target must not trade exact requested
+    // coverage for partial fit. Final independent walking gates still decide.
+    const lead = [diagnostics.exact_preference_count, diagnostics.partial_preference_count,
+      diagnostics.within_budget ? 1 : 0, -Math.max(0, meals - 2)];
+    const tail = [diagnostics.local_quality, diagnostics.operational_quality, diagnostics.trust_quality,
       diagnostics.within_target_band ? 1 : 0, -diagnostics.target_distance_km,
       diagnostics.unique_family_count, diagnostics.individual_score];
-    const key = entries.map(({ item }) => item.id).sort().join('|');
-    if (!best || compare(score, best.score) > 0 || (compare(score, best.score) === 0 && key < best.key)) {
-      best = { entries, score, key };
-    }
+    evaluated.push({ entries, diagnostics, lead, tail, key: entries.map(({ item }) => item.id).sort().join('|') });
   }
+  const pick = scoreOf => evaluated.reduce((best, entry) => {
+    const score = scoreOf(entry);
+    return !best || compare(score, best.score) > 0 || (compare(score, best.score) === 0 && entry.key < best.key)
+      ? { entries: entry.entries, score, key: entry.key } : best;
+  }, null);
+  // A fixed six-role combination is a neutral fallback, not a veto on an
+  // explicitly higher-priority seventh interest. Coverage and walking still
+  // lead; only explicit priority moves content utility ahead of that spine.
+  const neutral = ({ lead, tail, entries, diagnostics }) => [lead[0], diagnostics.spine_role_count, ...lead.slice(1),
+    utilityOf(entries, () => 1), ...tail];
+  if (!priority.length) return pick(neutral)?.entries.map(({ item }) => item) ?? selected;
+  // Raising an interest never costs it a stop. On this same pool, under the
+  // same walking and pin filters, the first-ranked interest keeps at least the
+  // exact stops the unranked day gives it. A floor relative to that day, not a
+  // quota: Culture first once composed 2 culture stops where unranked gave 3.
+  // It sits right after exact coverage, which the unranked day also maximizes
+  // first, so that day always qualifies and the floor never forces a day the
+  // unranked one would not have walked.
+  const unranked = requested.includes('food') ? pick(neutral)?.entries
+    : selected.map(item => unique.get(item.id) || { item, score: 0 });
+  const floor = unranked ? hitsOf(priority[0], unranked) : 0;
+  const best = pick(({ lead, tail, entries, diagnostics }) => [lead[0],
+    hitsOf(priority[0], entries) >= floor ? 1 : 0, ...lead.slice(1),
+    utilityOf(entries, intent => weights.get(intent)), diagnostics.spine_role_count, ...tail]);
   return best ? best.entries.map(({ item }) => item) : selected;
 }
 
