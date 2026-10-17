@@ -49,7 +49,7 @@ test("old persisted ambiguity is bypassed and the new decision survives restart"
   const candidates = await resolver("Stockholm");
   assert.equal(fetches, 1, "v2 medium-confidence ambiguity must not survive the semantics change");
   assert.deepEqual(candidates.map((c) => c.confidence), ["medium", "low"]);
-  assert.ok(readdirSync(join(cacheDir, "place-resolver-nominatim-v6")).some((file) => file.startsWith("v6_")));
+  assert.ok(readdirSync(join(cacheDir, "place-resolver-nominatim-v7")).some((file) => file.startsWith("v7_")));
   const restarted = resolverFor([], { cacheDir, fetcher: async () => { throw new Error("cache miss"); } });
   assert.deepEqual(await restarted("Stockholm"), candidates);
 });
@@ -183,10 +183,10 @@ test("a translated name cannot anchor over a place that owns the typed name", as
   assert.deepEqual(result.intake.blockers, ["ambiguous_place"]);
 });
 
-test("a dominant place still anchors on its local or English name", async () => {
+test("a dominant primary name and an explicitly qualified translated name still anchor", async () => {
   const gothenburg = district("Göteborg", { name: "Göteborg", "name:en": "Gothenburg" }, "Sweden", 57.7072, 11.9668, 0.73, 935611, "city");
   const nebraska = district("Gothenburg", { name: "Gothenburg" }, "United States", 40.929, -100.16, 0.43, 128420, "city");
-  for (const query of ["Göteborg", "Gothenburg"]) {
+  for (const query of ["Göteborg", "Gothenburg, Sweden"]) {
     const result = await resolveAgnosticIntake({ placeQuery: query, placeLanguage: "sv", placeResolver: resolverFor([nebraska, gothenburg]) });
     assert.deepEqual(result.anchor, { lat: 57.7072, lng: 11.9668 }, `${query} keeps its dominant own-name answer`);
   }

@@ -150,6 +150,27 @@ function matchingNames(result) {
   return [...new Set(names.filter(x => typeof x === "string" && x.length <= 200).map(normalizeNameForMatch).filter(Boolean))].slice(0, 30);
 }
 
+function primaryNames(result) {
+  const primary = typeof result.namedetails?.name === "string" && result.namedetails.name.trim()
+    ? result.namedetails.name : result.name;
+  const normalized = normalizeNameForMatch(primary);
+  if (!normalized) return [];
+  const names = new Set([normalized]);
+  // A multilingual primary name may join local names ("Bruxelles - Brussel").
+  // Recognize a component only when a source-owned language variant also
+  // attests that complete component. Neither a substring nor a lexical hyphen
+  // creates another identity, and no language code gets special authority.
+  const components = new Set(String(primary).split(/\s*[;/]\s*|\s+[-–—]\s+/u)
+    .map(normalizeNameForMatch).filter(Boolean));
+  for (const [key, value] of Object.entries(result.namedetails || {}).slice(0, 50)) {
+    if (!/^name:[a-zA-Z-]+$/.test(key) || typeof value !== "string" || value.length > 200) continue;
+    for (const variant of value.split(";").slice(0, 5).map(normalizeNameForMatch)) {
+      if (components.has(variant)) names.add(variant);
+    }
+  }
+  return [...names];
+}
+
 function matchesGeographicQuery(candidate, query) {
   const parts = String(query || "").split(",").map(normalizeNameForMatch).filter(Boolean);
   const names = candidate.matching_names || [normalizeNameForMatch(candidate.name)];
@@ -187,11 +208,9 @@ function toRawCandidate(result) {
     label,
     name,
     matching_names: matchingNames(result),
-    // The names a place carries as its own: its local name and its English
-    // one. Other name:xx are translations, and so is the display name, which
-    // follows accept-language (Vyborg's old town is "Gamla stan" in sv).
-    own_names: [...new Set((result.namedetails?.name ? [result.namedetails.name, result.namedetails["name:en"]] : [result.name])
-      .map(normalizeNameForMatch).filter(Boolean))],
+    // The display name can follow accept-language; primary-name evidence is
+    // independent of the reader's language and includes attested local forms.
+    own_names: primaryNames(result),
     // Provider display labels can include additional divisions and postcodes.
     // Keep those source-owned qualifiers so a shared canonical label works too.
     admin_names: [...new Set([...ADMIN_NAME_FIELDS.map(key => normalizeNameForMatch(result.address?.[key])),
@@ -326,13 +345,14 @@ function classifyConfidences(rawCandidates, query = null, context = {}) {
     const near = normalizeBias(context.near);
     const local = near ? exactStructuralMatches.filter(candidate => coordinateDistanceKm(candidate, near) <= PLACE_BIAS_KM) : [];
     const [leader, runnerUp] = exactStructuralMatches;
-    // A translated name may not out-rank a place that carries the typed name
-    // as its own: "Gamla stan" anchored Vyborg (name:sv, 0.308) over Stockholm
-    // (0.147) because Porvoo trailed by 0.103, and "Haga" anchored The Hague
-    // (name:pl). Such a lead stays a choice for the reader.
-    const ownName = candidate => (candidate.own_names || []).includes(normalizedQuery);
+    // Popularity cannot settle competing exact identities when the leader
+    // matches only a translated name. This also applies when every competing
+    // match is translated; no language is evidence of which place was meant.
+    const ownName = candidate => matchesGeographicQuery({ ...candidate,
+      matching_names: candidate.own_names || [],
+    }, query);
     const translatedLeader = !String(query).includes(",") && !ownName(leader) &&
-      exactStructuralMatches.some(ownName);
+      exactStructuralMatches.length > 1;
     const dominant = !translatedLeader && runnerUp &&
       exactStructuralMatches.every((candidate) => candidate.importance !== null) &&
       leader.importance >= JUNK_IMPORTANCE_FLOOR &&
@@ -497,7 +517,7 @@ function createNominatimPlaceResolver({
     .slice(0, 16);
   const lookupEndpointIdentity = createHash("sha256").update(lookupEndpoint).digest("hex").slice(0, 16);
   const cache = sourceCache || createSourceCache({
-    namespace: "place-resolver-nominatim-v6",
+    namespace: "place-resolver-nominatim-v7",
     ttlMs: cacheTtlMs,
     dir: cacheDir,
     now,
@@ -717,7 +737,7 @@ function createNominatimPlaceResolver({
     if (!endpointValid) return [];
     const context = { language: normalizeLanguage(options.language), near: normalizeBias(options.near), purpose: options.purpose === "event_venue" ? "event_venue" : "place" };
     const queryIdentity = createHash("sha256").update(JSON.stringify([query.toLowerCase(), context.language, context.near, context.purpose])).digest("hex");
-    const key = `v6:${endpointIdentity}:${queryIdentity}`;
+    const key = `v7:${endpointIdentity}:${queryIdentity}`;
     const result = await cache.get(
       key,
       () => enqueueProviderTask(() => fetchAndMapQueued(query, context)),
