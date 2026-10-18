@@ -430,8 +430,8 @@ function classifyConfidences(rawCandidates, query = null, context = {}) {
 function finalizeCandidate(candidate) {
   const out = {
     label: candidate.label,
-    // The place's own primary name, for a short visible title and for ordering
-    // offered choices; never identity or match evidence on its own.
+    // The place's own primary name, for a short visible title only; never
+    // identity or match evidence on its own.
     ...(candidate.name ? { name: candidate.name } : {}),
     lat: candidate.lat,
     lng: candidate.lng,

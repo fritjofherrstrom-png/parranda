@@ -192,7 +192,7 @@ async function resolvePlaceRefIntake({ coords, explicitCoordinatesPresent, place
   const strong = (Array.isArray(resolved) ? resolved : []).filter((candidate) => candidate && isStrongConfidence(candidate.confidence));
   return blocked("place_ref_not_found", {
     candidates_considered: strong.length,
-    candidates: orderChoices(strong, placeQuery).slice(0, 5).map((candidate) => placeChoice(candidate, placeQuery, placeSelectionStore)),
+    candidates: strong.slice(0, 5).map((candidate) => placeChoice(candidate, placeQuery, placeSelectionStore)),
   });
 }
 
@@ -213,19 +213,6 @@ function choiceTitle(candidate) {
     .filter(value => typeof value === "string" && value.trim() && !seen.has(foldName(value)) && seen.add(foldName(value)));
   // Without structured context the full label is the only honest qualifier.
   return title && context.length ? { title, context: context.join(" · ") } : {};
-}
-
-// Same rule as the suggestion list: a place whose own name is the query comes
-// before one that only matched a translated or alternate name, then a prefix,
-// then the resolver's order. Ordering only; every strong choice is still offered.
-function orderChoices(candidates, placeQuery) {
-  const query = foldName(placeQuery);
-  const tier = candidate => {
-    const name = foldName(candidate.name || String(candidate.label || "").split(",")[0]);
-    return query && name === query ? 0 : query && name.startsWith(query) ? 1 : 2;
-  };
-  return candidates.map((candidate, index) => ({ candidate, index, tier: tier(candidate) }))
-    .sort((a, b) => a.tier - b.tier || a.index - b.index).map(entry => entry.candidate);
 }
 
 function placeChoice(candidate, placeQuery, placeSelectionStore) {
@@ -350,7 +337,7 @@ async function resolveAgnosticIntake({
   if (selectionInvalid) {
     return { anchor: null, placeContext: null, intake: intake("place", placeQuery, {
       candidates_considered: candidates.length,
-      candidates: orderChoices(strong, placeQuery).slice(0, 5).map(candidateChoice),
+      candidates: strong.slice(0, 5).map(candidateChoice),
       blockers: ["place_selection_invalid"],
     }) };
   }
@@ -374,7 +361,7 @@ async function resolveAgnosticIntake({
       placeContext: null,
       intake: intake("place", placeQuery, {
         candidates_considered: candidates.length,
-        candidates: orderChoices(strong, placeQuery).slice(0, 5).map(candidateChoice),
+        candidates: strong.slice(0, 5).map(candidateChoice),
         blockers: ["ambiguous_place"],
       }),
     };

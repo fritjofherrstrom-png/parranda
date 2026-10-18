@@ -1,8 +1,9 @@
 'use strict';
 
 // Place identity on screen: offered places read as a short name plus context in
-// the reader's language, and Enter orders them by the same visible-name rule as
-// the suggestion list. Recorded provider shapes only; no live geocoder calls.
+// the reader's language. Order stays the resolver's: reordering by own name
+// would fix "Gamla stan" but put Lisbon, Iowa before Lisboa (see place-ref
+// tests), so it waits for recorded importance evidence. No live geocoder calls.
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { createNominatimPlaceResolver } = require('../server/place-candidates/place-resolver');
@@ -28,7 +29,7 @@ const GAMLA_STAN = [
   row(4, 'Gamla stan', 0.49, { city: 'Kalmar', county: 'Kalmar län', country: 'Sweden', country_code: 'se' }),
 ];
 
-test('Enter offers places by short name and context, own-name matches first', async () => {
+test('Enter offers places by short name and context, in the resolver order', async () => {
   const resolver = createNominatimPlaceResolver({
     minIntervalMs: 0, sleep: async () => {}, timeoutMs: 50,
     fetcher: async () => json(GAMLA_STAN),
@@ -38,18 +39,19 @@ test('Enter offers places by short name and context, own-name matches first', as
   assert.deepEqual(intake.blockers, ['ambiguous_place']);
   const choices = intake.candidates;
   assert.ok(choices.length >= 2, 'precondition: the recorded shape stays ambiguous');
-  const titles = choices.map(choice => `${choice.title} | ${choice.context}`);
-  assert.equal(titles[0], 'Gamla stan | Stockholm · Sweden');
-  const firstTranslated = choices.findIndex(choice => choice.title !== 'Gamla stan');
-  const lastOwn = choices.map(choice => choice.title).lastIndexOf('Gamla stan');
-  assert.ok(firstTranslated === -1 || firstTranslated > lastOwn, `own names lead: ${titles.join(' / ')}`);
+  assert.deepEqual(choices.map(choice => `${choice.title} | ${choice.context}`), [
+    'Старый город | Выборг · Ленинградская область · Russia',
+    'Gamla stan | Stockholm · Sweden',
+    'Vanha Porvoo | Porvoo · Uusimaa · Finland',
+    'Gamla stan | Kalmar · Sweden',
+  ]);
   for (const choice of choices) {
     assert.ok(choice.label.includes(choice.title), 'the full provider label still carries identity');
     assert.ok(!/\d{5,}/.test(choice.context), 'no postcode in the visible context');
   }
 });
 
-test('choice ordering keeps the resolver order within a tier and never drops a strong place', async () => {
+test('a choice without structured context keeps its full label as the visible text', async () => {
   const { intake } = await resolveAgnosticIntake({
     placeQuery: 'Springfield',
     placeResolver: async () => [
@@ -60,13 +62,10 @@ test('choice ordering keeps the resolver order within a tier and never drops a s
     ],
   });
   assert.deepEqual(intake.candidates.map(choice => choice.title),
-    ['Springfield', 'Springfield', undefined, undefined]);
-  assert.deepEqual(intake.candidates.map(choice => choice.label.split(',')[0]),
-    ['Springfield', 'Springfield', 'Springfield Township', 'East Springfield']);
-  assert.deepEqual(intake.candidates.slice(0, 2).map(choice => choice.context),
-    ['Illinois · United States', 'Massachusetts · United States']);
-  assert.equal(intake.candidates[3].title, undefined, 'no admin context: the full label stays the visible text');
-  assert.equal(intake.candidates[3].label, 'East Springfield, New York');
+    [undefined, 'Springfield', 'Springfield', undefined]);
+  assert.deepEqual(intake.candidates.map(choice => choice.context),
+    [undefined, 'Illinois · United States', 'Massachusetts · United States', undefined]);
+  assert.equal(intake.candidates[3].label, 'East Springfield, New York', 'no admin context: the full label stays visible');
 });
 
 test('suggestion context names the country in the reader language; the query keeps the source name', async () => {
