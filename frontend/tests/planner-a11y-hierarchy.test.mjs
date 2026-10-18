@@ -173,7 +173,7 @@ test("choices, service refusals and pending upgrades keep their own truthful sta
   const cases = [
     { body: { days: [], agnostic_route_output_experiment: { intake: { status: "unresolved", candidates: [{ label: "Testville, Country", selection_id: "choice-token" }] } } }, expected: "Which place do you mean?" },
     { body: { days: [], agnostic_route_output_experiment: { intake: { status: "unresolved", blockers: ["place_selection_invalid"] } } }, expected: "Your previous place choice needs confirming again." },
-    { body: { error: "busy", retry_after_seconds: 5 }, httpStatus: 429, expected: "Lots of people are planning right now. Try again in a moment." },
+    { body: { error: "busy", retry_after_seconds: 5 }, httpStatus: 429, expected: "Parranda is busy right now. Try again in a moment." },
     { body: { error: "rate_limited", retry_after_seconds: 12 }, httpStatus: 429, expected: "Parranda needs to pause new requests briefly — try again in about 12 seconds." },
   ];
   for (const { body, httpStatus = 200, expected } of cases) {

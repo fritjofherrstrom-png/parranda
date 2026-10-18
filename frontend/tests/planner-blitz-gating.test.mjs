@@ -119,7 +119,7 @@ test("a typed place Parranda could not pin down says so, offers a way forward, a
 
 test("a capacity refusal is not followed by an offer that asks the same server", async (t) => {
   const h = await planner(t, "http://localhost/anywhere?place=Testville&lang=en", { error: "busy" }, { status: 429 });
-  assert.match(h.text(), /Lots of people are planning right now/);
+  assert.match(h.text(), /Parranda is busy right now/);
   assert.equal(blitzButton(h), undefined);
 });
 

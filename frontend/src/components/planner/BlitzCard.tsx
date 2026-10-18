@@ -16,7 +16,7 @@ import type { Lang, Translate } from "./copy";
 function placeHoursNote(move: BlitzMoveView, t: Translate) {
   return move.availability_status === "available_in_window"
     ? t("Källans schema anger öppet vid kontrollen. Kontrollera att du hinner fram.", "Listed hours indicate open at the time checked. Check that you can arrive in time.")
-    : t("Öppettiderna är okända. Kolla innan du går.", "Hours unknown. Check before you go.");
+    : t("Öppet just nu är inte bekräftat. Kolla innan du går.", "Open now is not confirmed. Check before you go.");
 }
 
 export default function BlitzCard({

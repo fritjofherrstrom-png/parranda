@@ -132,7 +132,7 @@ test("classification flows through the SHARED honesty module (no duplicated rule
 
 test("public share capacity refusals render as capacity, never false place absence", () => {
   assert.match(anywherePlannerSource, /composeServiceRefusal\(response\.status, body\)/);
-  assert.match(anywherePlannerSource, /Lots of people are planning right now/);
+  assert.match(anywherePlannerSource, /Parranda is busy right now/);
   assert.match(anywherePlannerSource, /try again in about/);
 });
 

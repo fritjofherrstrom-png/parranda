@@ -2601,8 +2601,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         <p className={noticeCard} role="status">
           {serviceRefusal.kind === "busy"
             ? t(
-                "Många planerar just nu. Försök igen om en stund.",
-                "Lots of people are planning right now. Try again in a moment.",
+                "Parranda har fullt upp just nu. Försök igen om en stund.",
+                "Parranda is busy right now. Try again in a moment.",
               )
             : t(
                 `Parranda behöver pausa nya anrop en stund${serviceRefusal.retry_after_seconds ? ` — försök igen om cirka ${serviceRefusal.retry_after_seconds} sekunder` : ""}.`,
