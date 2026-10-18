@@ -130,7 +130,7 @@ test('native composed day preserves dominance, removal/reload, replacement, refu
 
     const beforeClear = structuredClone(saved);
     await openAdjust(page);
-    await page.getByRole('button', { name: 'Ta bort ordningen', exact: true }).click();
+    await page.getByRole('button', { name: 'Rensa ordningen', exact: true }).click();
     await waitSaved(page, entry => (entry.inputs.preferencePriority || []).length === 0 &&
       entry.safeResponse?.days?.[0]?.primary_route?.main_stops?.length === 6);
     saved = await current(page);
@@ -150,7 +150,7 @@ test('native composed day preserves dominance, removal/reload, replacement, refu
     stages.push('native-clear-completion-and-exact-undo-without-compose');
 
     await openAdjust(page);
-    await page.getByRole('button', { name: 'Ta bort ordningen', exact: true }).click();
+    await page.getByRole('button', { name: 'Rensa ordningen', exact: true }).click();
     await waitSaved(page, entry => (entry.inputs.preferencePriority || []).length === 0 &&
       entry.safeResponse?.days?.[0]?.primary_route?.main_stops?.length === 6);
     const neutral = await current(page);
@@ -170,7 +170,7 @@ test('native composed day preserves dominance, removal/reload, replacement, refu
     assert.deepEqual(saved.safeResponse.days[0].primary_route.main_stops, reloaded.days[0].primary_route.main_stops);
     assert.ok(countMuseums(saved) >= 2 && countMuseums(saved) <= 3);
     await openAdjust(page);
-    assert.equal(await page.getByRole('button', { name: 'Ta bort ordningen', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Rensa ordningen', exact: true }).count(), 0);
     stages.push('native-clear-completion-and-real-neutral-reload');
 
     // Continue the existing removal/share journey from its culture-first state.

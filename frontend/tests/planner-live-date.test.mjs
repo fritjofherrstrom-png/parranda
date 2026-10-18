@@ -110,7 +110,7 @@ test('switching Live time re-queries the selected period and cancels an older re
   await h.fetchMock.respond(h.fetchMock.pending()[0], day('2026-06-29'));
   await h.clock.advance(50);
   await click(h, button(h, /See all live/));
-  await click(h, button(h, /^Following 7 days$/));
+  await click(h, button(h, /^Next 7 days$/));
   const week = h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
   assert.equal(week.body.time, 'this_week');
   assert.equal(week.body.selected_date, '2026-06-29');
@@ -163,7 +163,7 @@ test('changing time near me reuses this Live location and keeps the Planner anch
   assert.equal(near.body.scope, 'near_me');
   await h.fetchMock.respond(near, { contract: 'live_event_query_v1', route_mutation: false,
     day_anchor_mutation: false, live_events: live('2026-06-29') });
-  await click(h, button(h, /^Following 7 days$/));
+  await click(h, button(h, /^Next 7 days$/));
   const week = h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
   assert.equal(week.body.time, 'this_week');
   assert.deepEqual(week.body.anchor, { lat: 60.18, lng: 24.95 });

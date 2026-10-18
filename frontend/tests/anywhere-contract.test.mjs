@@ -132,7 +132,7 @@ test("classification flows through the SHARED honesty module (no duplicated rule
 
 test("public share capacity refusals render as capacity, never false place absence", () => {
   assert.match(anywherePlannerSource, /composeServiceRefusal\(response\.status, body\)/);
-  assert.match(anywherePlannerSource, /Parranda is composing as many days as it safely can right now/);
+  assert.match(anywherePlannerSource, /Parranda is busy right now/);
   assert.match(anywherePlannerSource, /try again in about/);
 });
 
@@ -247,7 +247,7 @@ test("route result has one authoritative route and keeps broader candidates seco
   assert.match(anywherePlannerSource, /de ingår inte i dagens stopp eller Maps-rutten/);
   assert.match(anywherePlannerSource, /destination: routeDestination/);
   assert.doesNotMatch(anywherePlannerSource, /t\("Dagens kvarter", "Today's neighborhoods"\)/);
-  assert.match(anywherePlannerSource, /Candidates near this place/);
+  assert.match(anywherePlannerSource, /Places nearby/);
   assert.match(anywherePlannerSource, /Parranda found place candidates, but not a reliable route yet\./);
   assert.match(anywherePlannerSource, /t\("träffar", "places"\)/);
   assert.doesNotMatch(
@@ -504,12 +504,12 @@ test("grouped controls never clip the focus ring that sits outside them", () => 
 test("adjustments collapse to a summary and re-compose themselves — no submit past the landing", () => {
   // Collapsed summary (mood · day · length) with an aria-expanded toggle...
   assert.match(anywherePlannerSource, /!adjustOpen && \(/);
-  assert.match(anywherePlannerSource, /\{moodLabel \|\| t\("Inga val", "No moods"\)\}/);
+  assert.match(anywherePlannerSource, /\{moodLabel \|\| t\("Inga intressen", "No interests"\)\}/);
   assert.match(anywherePlannerSource, /t\("Justera", "Adjust"\)/);
   assert.match(anywherePlannerSource, /aria-expanded=\{false\}/);
   assert.match(anywherePlannerSource, /aria-expanded=\{true\}/);
   // ...expanding gives the grouped panel...
-  assert.match(anywherePlannerSource, /t\("Känsla", "Mood"\)/);
+  assert.match(anywherePlannerSource, /t\("Intressen", "Interests"\)/);
   assert.match(anywherePlannerSource, /t\("När", "When"\)/);
   assert.match(anywherePlannerSource, /t\("Dagens rytm", "Day rhythm"\)/);
   // ...and a settled change re-composes on its own (debounced).
@@ -616,7 +616,7 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.match(anywherePlannerSource, /sheetSourceHealth\.responding_source_count/);
   assert.match(anywherePlannerSource, /sheetSourceHealth\.event_bearing_source_count/);
   // The card's week summary is a count, not a second list.
-  assert.match(anywherePlannerSource, /händelser listade", "more listed"/);
+  assert.match(anywherePlannerSource, /till", "more"/);
 });
 
 // --------------------------------------------------------------------------
