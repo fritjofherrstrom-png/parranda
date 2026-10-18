@@ -1,0 +1,65 @@
+{
+  "scope": "one diagnostic original-row read; no product/cache/Pi changes",
+  "runtime": {
+    "node": "v24.15.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "identity": {
+    "path": "s3://overturemaps-us-west-2/release/2026-09-23.1/theme=places/type=place/part-00007-61ac23fc-0af6-5d61-8c46-5776ba7e6bf0-c000.zstd.parquet",
+    "etag": "\"e835a9408433ecacea56e8af095b7612-11\"",
+    "length": 728373349
+  },
+  "rowgroup": 98,
+  "source_rows": 22866,
+  "bytes": 1242542,
+  "physical_bytes": 1277952,
+  "elapsed_ms": 1790,
+  "requests": [
+    {
+      "range": "bytes=284433164-284731896",
+      "status": 206,
+      "etag": "\"e835a9408433ecacea56e8af095b7612-11\"",
+      "content_range": "bytes 284433164-284731896/728373349"
+    },
+    {
+      "range": "bytes=285561132-285617007",
+      "status": 206,
+      "etag": "\"e835a9408433ecacea56e8af095b7612-11\"",
+      "content_range": "bytes 285561132-285617007/728373349"
+    },
+    {
+      "range": "bytes=282514020-283009445",
+      "status": 206,
+      "etag": "\"e835a9408433ecacea56e8af095b7612-11\"",
+      "content_range": "bytes 282514020-283009445/728373349"
+    },
+    {
+      "range": "bytes=285360314-285460550",
+      "status": 206,
+      "etag": "\"e835a9408433ecacea56e8af095b7612-11\"",
+      "content_range": "bytes 285360314-285460550/728373349"
+    },
+    {
+      "range": "bytes=283424655-283716924",
+      "status": 206,
+      "etag": "\"e835a9408433ecacea56e8af095b7612-11\"",
+      "content_range": "bytes 283424655-283716924/728373349"
+    }
+  ],
+  "rows": [
+    {
+      "id": "011783b7-1962-49ca-a8ea-4542d15b81a5",
+      "names": {
+        "primary": "攝政公園",
+        "common": null,
+        "rules": null
+      },
+      "lng": -0.12731805443763733,
+      "lat": 51.50711441040039,
+      "websites": [
+        "http://pl.wikipedia.org/wiki/index.html?curid=1191800"
+      ]
+    }
+  ]
+}

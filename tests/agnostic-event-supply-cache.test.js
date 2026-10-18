@@ -305,7 +305,7 @@ test("one neutral warm cache reranks for different preferences without refetchin
     assert.equal(culture.tonight[0].id, "a-concert");
     assert.equal(secondHand.tonight[0].id, "z-loppis");
     assert.equal(fetchCount, 1, "preference changes rerank cached evidence instead of recollecting providers");
-    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v15")), "persist corrected time precision, category facts, bindings and occurrence groups separately from stale result pools");
+    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v16")), "persist corrected time precision, coordinates, category facts, bindings and occurrence identities separately from stale result pools");
     assert.ok(!fs.existsSync(path.join(cacheDir, "agnostic-events-v11")), "old result pools with borrowed timezone/bindings are not written");
     assert.ok(!fs.existsSync(path.join(cacheDir, "agnostic-events-v6")), "v6 pools that widened recurring ranges into daily windows are never read or written");
     const restarted = resolveDefaultEventSupply({

@@ -30,7 +30,7 @@
  */
 
 const { createSourceCache } = require("./source-cache");
-const { createBackgroundSource, SOURCE_COMPLETION, SOURCE_SNAPSHOT } = require("./background-source");
+const { createBackgroundSource, SOURCE_COMPLETION, SOURCE_SNAPSHOT, SOURCE_PENDING } = require("./background-source");
 const { createWikidataSource, WIKIDATA_CACHE_NAMESPACE } = require("./wikidata-source");
 const { normalizeSourceNameAliases } = require("./source-name-aliases");
 const { createOvertureSource } = require("./overture-source");
@@ -1694,13 +1694,40 @@ function createOvertureBackgroundSource({ source, cache }) {
   };
 }
 
-function settleWithin(promise, timeoutMs) {
-  let timer = null;
-  const expired = new Promise((resolve) => {
-    timer = setTimeout(() => resolve({ settled: false }), Math.max(0, Number(timeoutMs) || 0));
+// A cold eager read is a handle to its original producer, not a permanently
+// empty source. Reconsider only those captured jobs as they settle. A later
+// cache generation must never rescue this request, and the primary retains
+// its existing opportunity measured from its original start.
+async function awaitPrimaryOrRescue(primary, groups, requestedIntents, remainingWaitMs) {
+  const completed = new Map();
+  const snapshots = () => groups.map(group => completed.get(group) || group);
+  const adequate = () => {
+    const profile = supplyProfile(snapshots().flat(), requestedIntents);
+    return profile.record_count >= THIN_RECORD_COUNT && profile.category_count >= THIN_CATEGORY_COUNT;
+  };
+  let ready;
+  const readiness = new Promise(resolve => { ready = resolve; });
+  const pending = groups.filter(group => group[SOURCE_COMPLETION]);
+  for (const group of pending) {
+    Promise.resolve(group[SOURCE_COMPLETION]).catch(failedSourceValue).then(rows => {
+      completed.set(group, Array.isArray(rows) ? rows : failedSourceValue());
+      if (adequate()) ready(true);
+      else if (completed.size === pending.length) ready(false);
+    });
+  }
+  if (adequate()) ready(true);
+  else if (!pending.length) return { rescue: false, groups };
+  let timer;
+  const window = new Promise(resolve => {
+    timer = setTimeout(resolve, Math.max(0, remainingWaitMs));
   });
-  return Promise.race([promise.then((value) => ({ settled: true, value })), expired])
-    .finally(() => clearTimeout(timer));
+  try {
+    const rescue = await Promise.race([
+      primary.then(() => false),
+      readiness.then(value => value ? window.then(() => true) : false),
+    ]);
+    return { rescue, groups: snapshots() };
+  } finally { clearTimeout(timer); }
 }
 
 function failedSourceValue() {
@@ -1774,26 +1801,30 @@ function composeOpenDataLoaders(
         Promise.resolve().then(() => source.load(primaryAnchor, request)).catch(failedSourceValue),
       );
     }
+    const primaryStartedAt = Date.now();
+    let primarySettled = false;
     const osmPromise = Promise.resolve(osmLoader(request))
       .catch(() => withLoaderStatus([], "error_failed_closed", "osm_threw"));
-    const eagerRecords = [];
+    osmPromise.then(() => { primarySettled = true; });
     const eagerGroups = [];
     for (const [source, pending] of eagerLoads) {
       if (source.primaryRescue === false) continue;
       const loaded = await pending;
       if (Array.isArray(loaded)) eagerGroups.push(loaded);
-      if (Array.isArray(loaded)) eagerRecords.push(...loaded);
+      // A real captured source job, not a serialized status or an optional
+      // corroborator, can acknowledge this lifecycle before the primary ends.
+      if (loaded?.[SOURCE_COMPLETION] && source.waitForCompletion !== false &&
+          typeof request[SOURCE_PENDING] === 'function') request[SOURCE_PENDING]();
     }
-    const eagerProfile = supplyProfile(eagerRecords, requestedIntents);
-    const eagerAdequate = eagerProfile.record_count >= THIN_RECORD_COUNT &&
-      eagerProfile.category_count >= THIN_CATEGORY_COUNT;
     // A varied directory is a rescue, not a substitute: give the primary a
     // bounded chance to answer first. If it settles — with rows or a failure —
     // the ordinary merge below keeps both families (and still rescues a
     // failed primary). A primary still outstanding at the bound keeps running
     // and caches its answer for the next request; this composition answers
     // now, without asking any provider again.
-    if (eagerAdequate && !(await settleWithin(osmPromise, primaryWaitMs)).settled) {
+    const rescue = await awaitPrimaryOrRescue(osmPromise, eagerGroups, requestedIntents,
+      primaryWaitMs - (Date.now() - primaryStartedAt));
+    if (rescue.rescue && !primarySettled) {
       // Keep the primary promise observed so a background failure can never
       // become an unhandled rejection.
       osmPromise.catch(() => {});
@@ -1819,9 +1850,11 @@ function composeOpenDataLoaders(
           ? await Promise.resolve(source.readCached(primaryAnchor, request)).catch(() => []) : [];
         if (Array.isArray(cached)) held.push(...retainCorroboratingRows(cached, mapEvidence || []));
       }
-      const records = [...(mapEvidence || []), ...eagerGroups.flatMap(rows => retainCorroboratingRows(rows, mapEvidence || [])), ...held];
+      const records = [...(mapEvidence || []), ...rescue.groups.flatMap(rows => retainCorroboratingRows(rows, mapEvidence || [])), ...held];
+      const rescueError = rescue.groups.map(rows => rows?.source_error || rows?.loader_error)
+        .filter(Boolean).map(safeLoaderToken).find(Boolean) || null;
       return withLoaderMetadata(
-        withLoaderStatus(records, `loaded:${records.length}`, null),
+        withLoaderStatus(records, `loaded:${records.length}`, rescueError),
         {
           ...(mapEvidence?.loader_metadata || {}),
           selected_profile: supplyProfile(records, requestedIntents),
