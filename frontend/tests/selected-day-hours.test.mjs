@@ -15,13 +15,12 @@ test("selected-day hours render bounded source facts in sv/en without open-now c
   assert.equal(selectedDayHoursLabel(fact, "en"), "Source hours for selected day: 10:00–14:00, 18:00–24:00");
 });
 
-test("all-day is explicit while unknown, closed, and malformed facts stay silent", () => {
+test("all-day is explicit while unknown and malformed facts stay silent", () => {
   assert.equal(
     selectedDayHoursLabel({ status: "known", all_day: true, windows: [] }, "sv"),
     "Källans tider för vald dag: hela dygnet",
   );
   assert.equal(selectedDayHoursLabel({ status: "unknown", windows: [] }, "en"), null);
-  assert.equal(selectedDayHoursLabel({ status: "closed", windows: [] }, "en"), null);
   assert.equal(
     selectedDayHoursLabel({ status: "known", windows: [{ opens: "payload", closes: "18:00" }] }, "en"),
     null,
@@ -30,6 +29,12 @@ test("all-day is explicit while unknown, closed, and malformed facts stay silent
     selectedDayHoursLabel({ status: "known", windows: [{ opens: "10:00", closes: "24:30" }] }, "en"),
     null,
   );
+});
+
+test("an explicit source-closed day stays distinct from missing hours", () => {
+  const closed = { status: "closed", all_day: false, windows: [] };
+  assert.equal(selectedDayHoursLabel(closed, "sv"), "Källan anger stängt för vald dag");
+  assert.equal(selectedDayHoursLabel(closed, "en"), "Source reports closed for selected day");
 });
 
 test("selected-day copy never claims live availability", () => {

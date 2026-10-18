@@ -64,7 +64,7 @@ test('cold source completion selects following days with every stated occurrence
   await h.fetchMock.respond(completion, terminal.body, terminal.status);
   const answer = await fixture.query(first.body);
   await h.fetchMock.respond(first, answer.body);
-  assert.equal(pressed(h, 'Following 7 days'), 'true');
+  assert.equal(pressed(h, 'Next 7 days'), 'true');
   const following = queries(h).at(-1);
   assert.equal(following.body.time, 'this_week');
   assert.equal(following.body.selected_date, DATE);
@@ -109,14 +109,14 @@ test('manual selected day and near-route geometry survive the late weekly body a
   await h.fetchMock.releaseBody(weekly);
   assert.equal(pressed(h, 'Sun 25 Oct'), 'true');
   assert.equal(pressed(h, 'Near the route'), 'true');
-  await click(h, 'Following 7 days');
+  await click(h, 'Next 7 days');
   const scoped = queries(h).at(-1), reply = await fixture.query(scoped.body);
   assert.deepEqual(datesFor(reply.body.live_events, 'Local workshop series'), ['2026-10-27', '2026-11-01']);
   assert.deepEqual(datesFor(reply.body.live_events, 'Far workshop series'), [], 'far source is outside the real route corridor');
   await h.fetchMock.respond(scoped, reply.body);
   const requests = fixture.requests.length;
   await close(h); await click(h, 'See all live');
-  assert.equal(pressed(h, 'Following 7 days'), 'true');
+  assert.equal(pressed(h, 'Next 7 days'), 'true');
   assert.equal(pressed(h, 'Near the route'), 'true');
   const reopened = queries(h).at(-1);
   await h.fetchMock.respond(reopened, (await fixture.query(reopened.body)).body);

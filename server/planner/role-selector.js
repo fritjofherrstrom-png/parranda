@@ -18,6 +18,7 @@ const { retainWalkingFitAlternatives } = require("./walking-fit-selection");
 const { scoreCandidateFit } = require("../candidates/fit-scorer");
 const { calibrateSource } = require("../candidates/source-calibration");
 const { normalizeWalkingTargetBand } = require("../place-candidates/day-capacity");
+const { normalizeSourceWebsite } = require("../lib/source-website");
 const {
   distanceKm,
   sanitizeCandidateReachPolicy,
@@ -648,6 +649,7 @@ function sourceCategoryOf(candidate) {
 function formatRoleCandidate(entry, role, roleEntries, roleSpec = ROLE_SPEC) {
   const { candidate, derived, fit, gates, calibration, candidate_status, experimental_admission, availability, operational } = entry;
   const provenance = candidateProvenance(candidate, derived);
+  const website = normalizeSourceWebsite(candidate.website);
   return {
     candidate_id: candidate.id,
     label: candidate.label,
@@ -659,6 +661,7 @@ function formatRoleCandidate(entry, role, roleEntries, roleSpec = ROLE_SPEC) {
     confidence: derived.existence_confidence || candidate.trust?.confidence || null,
     provenance,
     attribution: provenance.attribution,
+    ...(website ? { website } : {}),
     covered_preferences: fit.covered_preferences,
     partial_preferences: fit.partial_preferences,
     missing_preferences: fit.missing_preferences,

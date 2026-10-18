@@ -8,6 +8,7 @@ const { requestJson } = require('./helpers/planner-reservoir-compare');
 const { rows } = require('./helpers/day-composition-fixtures');
 
 const DATE = '2026-10-17';
+const NOW = '2026-10-16T08:00:00Z';
 const ANCHOR = { lat: 56.6, lng: 14 };
 const EVENING_EVENT = {
   id: 'publication-evening',
@@ -66,7 +67,7 @@ async function fixture(t, options = {}) {
         timezone: 'Europe/Stockholm', timezone_source: 'weather_provider_auto', utc_offset_seconds: 7200,
       },
     }),
-    clock: { now: () => '2026-10-16T08:00:00Z' },
+    clock: Object.assign(() => new Date(NOW), { now: () => NOW }),
     ...options,
   }).listen(0, '127.0.0.1');
   t.after(async () => {
@@ -101,6 +102,8 @@ async function originalSixStopDay(f) {
   assert.equal(stops(body).length, 6, 'precondition: genuinely published six-stop engine day');
   assert.equal(experiment(body).promotion.promote, true);
   assert.equal(experiment(body).walking_validation.valid, true);
+  assert.equal(experiment(body).context?.time?.now?.slice(0, 10), '2026-10-16',
+    'the published composition must use the controlled clock, not the wall date');
   return stopIds(body);
 }
 

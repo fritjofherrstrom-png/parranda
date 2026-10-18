@@ -63,3 +63,18 @@ export function stopTypeLabel(stop, lang = "en") {
 export function stopHoursUnknown(stop) {
   return HOURS_RELEVANT_TYPES.has(String(stop?.type || "")) && !selectedDayHoursLabel(stop?.selected_day_hours, "en");
 }
+
+// Source attribution is not a venue website. Accept only the distinct website
+// atom, including on saved days, and leave unusable destinations without a link.
+export function stopWebsiteUrl(stop) {
+  if (typeof stop?.website !== "string") return null;
+  const href = stop.website.trim();
+  if (href.length > 2048 || !/^https?:\/\//i.test(href) || /[\u0000-\u0020\u007f\\]/.test(href)) return null;
+  try {
+    const url = new URL(href);
+    return ["https:", "http:"].includes(url.protocol) && url.hostname && !url.username && !url.password && url.href.length <= 2048
+      ? href : null;
+  } catch {
+    return null;
+  }
+}

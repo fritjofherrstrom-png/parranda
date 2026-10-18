@@ -11,6 +11,7 @@ const { mapPlannerReservoirToSourceCandidates } = require('../server/planner/agn
 
 const ANCHOR = { lat: 56.6, lng: 14 };
 const DATE = '2026-10-17';
+const NOW = '2026-10-16T08:00:00Z';
 const INTERESTS = ['food', 'culture', 'views', 'fika', 'nightlife', 'green', 'second_hand'];
 const CANONICAL_INTERESTS = [...INTERESTS].sort();
 const TYPES = { food: 'restaurant', culture: 'museum', views: 'viewpoint', fika: 'cafe',
@@ -57,7 +58,7 @@ async function fixture(t, supply = richSupply(), overrides = {}) {
     weatherProvider: async () => ({ condition: 'sun', maxTemp: 18,
       timezone_resolution: { timezone: 'Europe/Stockholm', timezone_source: 'weather_provider_auto',
         utc_offset_seconds: 7200 } }),
-    clock: { now: () => '2026-10-16T08:00:00Z' },
+    clock: Object.assign(() => new Date(NOW), { now: () => NOW }),
     ...overrides,
   }).listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => {
@@ -84,6 +85,8 @@ async function fixture(t, supply = richSupply(), overrides = {}) {
 function assertPublished(body, count = 6) {
   assert.equal(experiment(body)?.promotion?.promote, true, 'real finalizer must publish the route');
   assert.equal(experiment(body)?.walking_validation?.valid, true, 'independent walking gate passes');
+  assert.equal(experiment(body)?.context?.time?.now?.slice(0, 10), '2026-10-16',
+    'the published composition must use the controlled clock, not the wall date');
   assert.equal(stops(body).length, count);
   assert.equal(new Set(ids(body)).size, count, 'published stops have distinct physical identities');
 }

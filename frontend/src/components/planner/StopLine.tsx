@@ -20,7 +20,7 @@ import { lineProgress } from "../../lib/line-progress.mjs";
 import { eventSourceLink, eventTiming } from "../../lib/pulse-view.mjs";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { selectedDayHoursLabel } from "../../lib/selected-day-hours.mjs";
-import { stopHoursUnknown, stopTypeLabel } from "../../lib/stop-card-facts.mjs";
+import { stopHoursUnknown, stopTypeLabel, stopWebsiteUrl } from "../../lib/stop-card-facts.mjs";
 import { stopCategoryFamily, type StopCategoryFamily } from "../../lib/stop-category.mjs";
 import { walkingDistanceLabel, type RouteContextSuggestion } from "../../lib/route-context-view.mjs";
 import {
@@ -99,6 +99,7 @@ export default function StopLine({
   expandedCandidateKey,
   setExpandedCandidateKey,
   commitments,
+  confirmedLiveKeepIds = [],
   selected,
   releaseCommitment,
   keepStop,
@@ -134,6 +135,7 @@ export default function StopLine({
   expandedCandidateKey: string | null;
   setExpandedCandidateKey: (key: string | null) => void;
   commitments: Commitments;
+  confirmedLiveKeepIds?: string[];
   selected: string[];
   releaseCommitment: (identity: string) => void;
   keepStop: (identity: string, stopLabel: string) => void;
@@ -249,8 +251,8 @@ export default function StopLine({
       {hoursUnknownEverywhere && (
         <p className="mb-1 text-xs leading-relaxed text-parranda-ink/72">
           {t(
-            "Källorna anger inga öppettider för dagens stopp den valda dagen — kolla innan du går.",
-            "The sources give no opening hours for today's stops on the chosen day — check before you go.",
+            "Öppettider saknas för dagens stopp den valda dagen — kolla innan du går.",
+            "Opening hours unavailable for today's stops on the chosen day — check before you go.",
           )}
         </p>
       )}
@@ -291,6 +293,8 @@ export default function StopLine({
           const kept = commitments[stopIdentity]?.kind === "pin";
           const prevName = routeNumber > 1 ? String((split.core[i - 1] as any)?.label || (split.core[i - 1] as any)?.name || "").trim() : "";
           const hoursLabel = selectedDayHoursLabel(stop?.selected_day_hours, lang);
+          const hoursClosed = stop?.selected_day_hours?.status === "closed";
+          const website = stopWebsiteUrl(stop);
           const partialLabels = partialPreferenceLabels(stop, selected, lang);
           const stopKindLabel = stop?.type === "vintage-shop"
             ? stopTypeLabel(stop, lang)
@@ -354,9 +358,9 @@ export default function StopLine({
                       badge under the name (symbol + the stop's own kind).
                       It is information, not a control — the whole row stays
                       the one disclosure. "Kept" and the hours status sit
-                      beside it as plain text, so "Hours unknown" never reads
+                      beside it as plain text, so missing opening hours never read
                       as part of the category. */}
-                  {(stopKindLabel || kept || (hoursUnknown && !hoursUnknownEverywhere)) && (
+                  {(stopKindLabel || kept || hoursClosed || (hoursUnknown && !hoursUnknownEverywhere)) && (
                     <span className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
                       {stopKindLabel && <StopCategory type={stop?.type} label={stopKindLabel} muted={behind} />}
                       {kept && (
@@ -371,7 +375,13 @@ export default function StopLine({
                       {hoursUnknown && !hoursUnknownEverywhere && (
                         <span className="inline-flex items-center gap-1 text-xs text-parranda-ink/68">
                           <ClockIcon className="h-3 w-3" />
-                          {t("Öppettider okända", "Hours unknown")}
+                          {t("Öppettider saknas", "Opening hours unavailable")}
+                        </span>
+                      )}
+                      {hoursClosed && hoursLabel && (
+                        <span className="inline-flex items-center gap-1 text-xs text-parranda-ink/68">
+                          <ClockIcon className="h-3 w-3" />
+                          {hoursLabel}
                         </span>
                       )}
                     </span>
@@ -397,7 +407,7 @@ export default function StopLine({
                     )}
                     {hoursLabel && <span>{hoursLabel}</span>}
                     {hoursUnknown && (
-                      <span>{t("Källtider saknas för den valda dagen", "Source hours unavailable for the selected day")}</span>
+                      <span>{t("Öppettider saknas för den valda dagen", "Opening hours unavailable for the selected day")}</span>
                     )}
                     {stop?.address && <span>{stop.address}</span>}
                   </div>
@@ -422,6 +432,17 @@ export default function StopLine({
                         className={buttonClass("primary", "min-h-11 w-full px-4 text-sm sm:w-auto sm:px-5")}
                       >
                         {t("Öppna i Maps", "Open in Maps")}
+                        <ExternalIcon />
+                      </a>
+                    )}
+                    {website && (
+                      <a
+                        href={website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={buttonClass("secondary", "min-h-11 px-4 text-sm sm:px-5")}
+                      >
+                        {t("Webbplats", "Website")}
                         <ExternalIcon />
                       </a>
                     )}
@@ -553,7 +574,9 @@ export default function StopLine({
                 </p>
                 {liveStopChoiceId(stop) && <div className="mt-3 flex flex-wrap gap-2">
                   {commitments[stop.live_occurrence_id]?.kind === "pin" ? (
-                    <button type="button" className={buttonClass("secondary", "min-h-11 px-4 text-sm")} onClick={() => releaseCommitment(stop.live_occurrence_id)}>{t("Behålls — släpp", "Kept — release")}</button>
+                    <button type="button" className={buttonClass("secondary", "min-h-11 px-4 text-sm")} onClick={() => releaseCommitment(stop.live_occurrence_id)}>{confirmedLiveKeepIds.includes(stop.live_occurrence_id)
+                      ? t("Behålls — släpp", "Kept — release")
+                      : t("Valt — släpp", "Selected — release")}</button>
                   ) : stop.live_choice_eligible === true && (
                     <button type="button" className={buttonClass("secondary", "min-h-11 px-4 text-sm")} onClick={() => keepStop(stop.live_occurrence_id, name)}>{t("Behåll eventet", "Keep this event")}</button>
                   )}

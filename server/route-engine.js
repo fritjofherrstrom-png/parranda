@@ -14,6 +14,7 @@ const {
 const { routeWalkingPath } = require("./walking-router");
 const { normalizeTrust } = require("./place-candidates/contract");
 const { normalizeSelectedDayHoursFact } = require("./place-candidates/opening-hours");
+const { normalizeSourceWebsite } = require("./lib/source-website");
 const { normalizeTrustSummary } = require("./route-candidates/contract");
 const { buildDayflowContext } = require("./planner/dayflow-context");
 const { daypartSlotForRole, SLOT_DAYPART } = require("./planner/agnostic-route-ordering");
@@ -172,6 +173,7 @@ function buildProvisionalComposeStops() {
         : null,
       provisional: candidate.city_pack_owned !== true,
       source: candidate.source || null,
+      website: normalizeSourceWebsite(candidate.website),
       trust: candidate.trust || null,
       provenance: candidate.provenance || null,
       role: candidate.role || null,
@@ -5037,6 +5039,8 @@ function formatMainStop(stop) {
       ? stop.alsoCovers.map((entry) => ({ ...entry }))
       : [];
     formatted.reconciliation = stop.reconciliation || null;
+    const website = normalizeSourceWebsite(stop.website);
+    if (website) formatted.website = website;
     const selectedDayHours = normalizeSelectedDayHoursFact(stop.selectedDayHours);
     if (selectedDayHours && selectedDayHours.status === "known") {
       formatted.selected_day_hours = selectedDayHours;

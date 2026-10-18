@@ -60,7 +60,7 @@ test("an adjustment is written to the address, and reloading that address compos
   await h.clock.advance(50);
 
   await click(h, button(h, /^Adjust/));
-  await click(h, button(h, /^Easy/));
+  await click(h, button(h, /^Relaxed/));
   await click(h, button(h, /^Tomorrow/));
   await h.clock.advance(450);
   const address = new URLSearchParams(h.window.location.search);

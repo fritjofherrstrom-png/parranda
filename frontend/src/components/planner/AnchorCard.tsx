@@ -112,7 +112,7 @@ export default function AnchorCard({
       {!adjustOpen && (
         <div className="flex min-h-12 flex-wrap items-center gap-2.5 border-t border-parranda-ink/10 py-1.5 pl-4 pr-1.5">
           <span className="min-w-[min(100%,10rem)] flex-1 text-13 leading-snug text-parranda-ink/72">
-            <strong className="font-bold text-parranda-ink">{moodLabel || t("Inga val", "No moods")}</strong>
+            <strong className="font-bold text-parranda-ink">{moodLabel || t("Inga intressen", "No interests")}</strong>
             {` · ${t("Dagens rytm", "Day rhythm")}: ${walkLabel}`}
           </span>
           <button
@@ -151,11 +151,11 @@ export default function AnchorCard({
           </div>
 
           <div className="flex flex-col gap-2">
-            <Eyebrow tone="glow">{t("Känsla", "Mood")}</Eyebrow>
+            <Eyebrow tone="glow">{t("Intressen", "Interests")}</Eyebrow>
             <p id={priorityHelpId} className="text-xs text-parranda-ink/68">
               {priority.length > 0
                 ? t("Siffrorna visar ordningen du valde i. Ettan väger tyngst.", "Numbers show the order you picked. 1 weighs most.")
-                : t("Klicka av och på ett intresse för att låta det väga tyngst.", "Tap an interest off and on to make it weigh most.")}
+                : t("Tryck av och på ett intresse för att låta det väga tyngst.", "Tap an interest off and on to make it weigh most.")}
             </p>
             <div role="group" aria-label={t("Intressen", "Interests")} aria-describedby={priorityHelpId} className="flex flex-wrap gap-x-1.5 gap-y-2">
               {orderedPreferences.map((pref) => {
@@ -190,7 +190,7 @@ export default function AnchorCard({
                 onClick={onClearPriority}
                 className="inline-flex min-h-11 self-start items-center text-xs font-semibold text-parranda-ink/72 underline underline-offset-2 hover:text-parranda-clay"
               >
-                {t("Ta bort ordningen", "Clear the order")}
+                {t("Rensa ordningen", "Clear order")}
               </button>
             )}
           </div>

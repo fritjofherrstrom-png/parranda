@@ -26,7 +26,7 @@
  */
 
 const { normalizePlaceCandidate, validatePlaceCandidate } = require("./contract");
-const { normalizeOpeningHours } = require("./opening-hours");
+const { normalizeOpeningHours, normalizeOpeningHoursSource } = require("./opening-hours");
 const { normalizeSourceNameAliases } = require("./source-name-aliases");
 const { createEvidence, SOURCE_FAMILIES } = require("../candidates/evidence");
 
@@ -177,6 +177,14 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
   }
   const openingHours = normalizeOpeningHours(record.opening_hours);
   if (openingHours) base.opening_hours = openingHours;
+  const hoursSource = openingHours && normalizeOpeningHoursSource(record.opening_hours_source);
+  if (hoursSource && website) {
+    const observedUrl = new URL(hoursSource.url), venueUrl = new URL(website);
+    if (observedUrl.hostname.replace(/^www\./, '') === venueUrl.hostname.replace(/^www\./, '') &&
+        observedUrl.pathname === venueUrl.pathname && observedUrl.search === venueUrl.search && observedUrl.port === venueUrl.port) {
+      base.opening_hours_source = hoursSource;
+    }
+  }
   const operationalStatus = normalizeOperationalStatus(record.operational_status);
   if (operationalStatus) base.operational_status = operationalStatus;
   const operationalReasons = normalizeOperationalReasons(record.operational_reasons);
