@@ -1,6 +1,7 @@
 "use strict";
 
 const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
+const { normalizeIanaTimezone, normalizeSourceEventDate, normalizeSourceEventDateTime } = require("./source-event-time");
 
 /**
  * GLOBAL live-event source — Ticketmaster Discovery API.
@@ -34,6 +35,9 @@ const DEFAULT_PAGE_SIZE = 40;
 const DEFAULT_RADIUS_KM = 3;
 
 function toFinite(value) {
+  // Provider geometry must be stated, not created by Number(null/blank/bool).
+  if ((typeof value !== "number" && typeof value !== "string") ||
+      (typeof value === "string" && !value.trim())) return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
@@ -44,6 +48,17 @@ function tmDateTime(value) {
   const d = value instanceof Date ? value : new Date(value);
   if (!Number.isFinite(d.getTime())) return null;
   return d.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+function discoveryStart(start, timezone) {
+  if (!start || start.dateTBA === true || start.dateTBD === true) return null;
+  const localDate = normalizeSourceEventDate(start.localDate);
+  // These flags override even a populated placeholder datetime. A confirmed
+  // date is still useful, but it is not an explicit whole-day statement.
+  if (start.timeTBA === true || start.noSpecificTime === true) return localDate;
+  return normalizeSourceEventDateTime(start.dateTime, { timezone }) ||
+    (localDate && typeof start.localTime === "string"
+      ? normalizeSourceEventDateTime(`${localDate}T${start.localTime}`, { timezone }) : null) || localDate;
 }
 
 function buildDiscoveryUrl({ endpoint = DEFAULT_ENDPOINT, key, anchor, radiusKm, startDateTime, endDateTime, pageSize }) {
@@ -68,9 +83,14 @@ function mapDiscoveryEvent(event) {
   const venue = event._embedded && Array.isArray(event._embedded.venues) ? event._embedded.venues[0] : null;
   const lat = toFinite(venue && venue.location && venue.location.latitude);
   const lng = toFinite(venue && venue.location && venue.location.longitude);
-  if (lat == null || lng == null) return null;
-  const starts =
-    (event.dates && event.dates.start && (event.dates.start.dateTime || event.dates.start.localDate)) || null;
+  if (lat == null || lng == null || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  const start = event.dates && event.dates.start;
+  const timezone = normalizeIanaTimezone(event.dates && event.dates.timezone);
+  const starts = discoveryStart(start, timezone);
+  const exactStart = normalizeSourceEventDateTime(starts, { timezone });
+  const end = event.dates && event.dates.end;
+  const exactEnd = end?.approximate === true ? null
+    : normalizeSourceEventDateTime(discoveryStart(end, timezone), { timezone });
   const status = event.dates && event.dates.status && event.dates.status.code;
   const classification =
     Array.isArray(event.classifications) && event.classifications[0] && event.classifications[0].segment
@@ -78,16 +98,19 @@ function mapDiscoveryEvent(event) {
       : null;
   return {
     id: typeof event.id === "string" ? `tm-${event.id}` : null,
+    // Discovery IDs identify occurrences, not a recurring attraction/series.
+    source_occurrence_id: typeof event.id === "string" && event.id.trim() && event.id.length <= 200 ? event.id : null,
     title,
     starts_at: typeof starts === "string" ? starts : null,
-    ends_at: null, // Discovery rarely carries end times; a ticketed event is inherently time-bounded
+    // Missing/approximate ends stay unknown; never assign a standard duration.
+    ends_at: exactStart && exactEnd && new Date(exactEnd) > new Date(exactStart) ? exactEnd : null,
     source_url: typeof event.url === "string" ? event.url : null,
     place_context: venue && typeof venue.name === "string" ? venue.name : null,
     lat,
     lng,
     tags: classification ? [String(classification).toLowerCase()] : [],
     // Event-level timezone from the API — the truest venue-local clock available.
-    timezone: event.dates && typeof event.dates.timezone === "string" ? event.dates.timezone : null,
+    timezone,
     provenance: {
       source_url: typeof event.url === "string" ? event.url : null,
       source_label: "Ticketmaster",
@@ -154,8 +177,13 @@ function createTicketmasterProvider({
             } catch (_error) {
               return emptyCollection("failed", "source_payload_invalid");
             }
-            const events = body && body._embedded && Array.isArray(body._embedded.events) ? body._embedded.events : [];
+            const events = body && typeof body === "object" && !Array.isArray(body)
+              ? Array.isArray(body._embedded?.events) ? body._embedded.events
+                : !Object.hasOwn(body, "_embedded") && body.page?.totalElements === 0 ? [] : null
+              : null;
+            if (!events) return emptyCollection("failed", "source_payload_invalid");
             const mapped = events.map(mapDiscoveryEvent).filter(Boolean);
+            if (events.length && !mapped.length) return emptyCollection("failed", "source_payload_invalid");
             return {
               time_sensitive_events: mapped,
               collection_status: buildProviderCollectionOutcome(mapped.length ? "ok" : "empty", {
