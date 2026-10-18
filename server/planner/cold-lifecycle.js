@@ -1,7 +1,7 @@
 "use strict";
 
 const { randomBytes } = require('node:crypto');
-const { SOURCE_COMPLETION, SOURCE_SNAPSHOT } = require('../place-candidates/background-source');
+const { SOURCE_COMPLETION, SOURCE_SNAPSHOT, SOURCE_PENDING } = require('../place-candidates/background-source');
 const { normalizeUserIntents, matchCandidateToIntent } = require('../candidates/intent-vocabulary');
 
 const DEADLINE_MS = 60000;
@@ -143,7 +143,8 @@ function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, res
     context.signal.throwIfAborted();
     const key = JSON.stringify(request);
     if (!loads.has(key)) loads.set(key, (async () => {
-      let records = await awaitLifecycleWork(loader({ ...request, preferCachedSupply: true, signal: context.signal }), context.signal);
+      let records = await awaitLifecycleWork(loader({ ...request, preferCachedSupply: true, signal: context.signal,
+        [SOURCE_PENDING]: context.warming }), context.signal);
       if (records?.[SOURCE_COMPLETION]) {
         context.warming();
         const initial = records;
