@@ -1,15 +1,17 @@
 'use strict';
 
 // Place identity on screen: offered places read as a short name plus context in
-// the reader's language. Order stays the resolver's: reordering by own name
-// would fix "Gamla stan" but put Lisbon, Iowa before Lisboa (see place-ref
-// tests), so it waits for recorded importance evidence. No live geocoder calls.
+// the reader's language, areas before bare points. Reordering by own name was
+// rejected: it fixes "Gamla stan" but puts Lisbon, Iowa before Lisboa (see
+// place-ref tests). No live geocoder calls.
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { createNominatimPlaceResolver } = require('../server/place-candidates/place-resolver');
 const { createPlaceSuggestions, mapFeature } = require('../server/place-candidates/place-suggestions');
 const { resolveAgnosticIntake } = require('../server/planner/agnostic-place-intake');
 const { captures } = require('./fixtures/photon-suggestion-language-20261017.json');
+// Enter order and refs recorded from staging 166609c (human-paced, 2026-10-18).
+const recorded = require('./fixtures/staging-place-choices-20261018.json');
 
 const json = body => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => body });
 
@@ -87,4 +89,25 @@ test('an unknown country code or language falls back to the source country name'
   assert.match(mapFeature(feature(''), 'en').context, /Source Country$/);
   assert.match(mapFeature(feature('de'), null).context, /Source Country$/);
   assert.match(mapFeature(feature('de'), 'en').context, /Germany$/);
+});
+
+test('recorded staging ambiguities: mapped areas come before bare points, otherwise resolver order', async () => {
+  const OSM = { n: 'node', w: 'way', r: 'relation' };
+  const expected = {
+    'Gamla stan': ['r5695398', 'r6422394', 'n3024933246', 'n10929256189'],
+    Lisbon: ['r5400890', 'r129082', 'r181625', 'r183306'],
+    Haga: ['r192737', 'r187475', 'r4847039'],
+    'Möllevången': ['r3050065', 'r4055466', 'n260205013'],
+    Springfield: ['r126326', 'r1181618', 'r141244', 'r182868', 'r186721'],
+  };
+  assert.equal(recorded.build_sha.slice(0, 7), '166609c');
+  for (const { query, intake: recordedIntake } of recorded.cases) {
+    const resolved = recordedIntake.candidates.map(({ label, place_ref }, index) => ({
+      label, lat: 50 + index, lng: 10 + index, confidence: 'medium', provenance: 'nominatim_osm',
+      osm_ref: `${OSM[place_ref[0]]}/${place_ref.slice(1)}`, osm_class: 'place',
+    }));
+    const { intake } = await resolveAgnosticIntake({ placeQuery: query, placeResolver: async () => resolved });
+    assert.deepEqual(intake.blockers, ['ambiguous_place'], query);
+    assert.deepEqual(intake.candidates.map(choice => choice.place_ref), expected[query], query);
+  }
 });
