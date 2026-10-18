@@ -68,7 +68,7 @@ async function harness(t, mode) {
     }] };
   } });
   const server = buildApp({ openDataLoader: loader, placeResolver: resolver, placeSuggestions: null,
-    eventSupply: null, sourceCatalog: null, reviewedPlaceSource: null, clock: { now: () => NOW },
+    eventSupply: null, sourceCatalog: null, reviewedPlaceSource: null, clock: Object.assign(() => new Date(NOW), { now: () => NOW }),
     weatherProvider: async () => ({ condition: 'sun', source: 'controlled', stale: false,
       timezone_resolution: { timezone: 'Europe/Stockholm', timezone_source: 'weather_provider_auto', utc_offset_seconds: 7200 } }),
   }).listen(0, '127.0.0.1');
@@ -107,6 +107,8 @@ async function harness(t, mode) {
     return rows.length === names.length && names.every((name, index) => rows[index].textContent.includes(name));
   }, stops.map(stop => stop.label || stop.name));
   assert.equal(body.days[0].date, DATE);
+  assert.equal(body.agnostic_route_output_experiment.context?.time?.now?.slice(0, 10), NOW.slice(0, 10),
+    'the actual composition uses the controlled clock rather than the wall date');
   assert.equal(body.agnostic_route_output_experiment.intake.status, 'resolved');
   assert.equal(body.agnostic_route_output_experiment.walking_validation.valid, true);
   assert.equal(composeRequests.length, 1, 'one ordinary URL entry submits one compose');
@@ -135,7 +137,7 @@ async function harness(t, mode) {
     await page.screenshot({ path: join(evidenceDir, `${mode}-built-ui.png`), fullPage: true });
     writeFileSync(join(evidenceDir, `${mode}-built-ui.json`), JSON.stringify({
       boundary: 'built UI -> actual local HTTP -> real composer/publisher; controlled external source transport; not deployment or live-provider acceptance',
-      date: DATE, requests: composeRequests, source_requests: websiteRequests, resolver_requests: resolverRequests,
+      date: DATE, context_time: body.agnostic_route_output_experiment.context.time.now, requests: composeRequests, source_requests: websiteRequests, resolver_requests: resolverRequests,
       stops, context_stops: body.place_structure?.district_day?.areas?.flatMap(area => area.stops || []) || [],
       pipeline: body.agnostic_route_output_experiment.eligibility.checks.candidate_pipeline, errors,
     }, null, 2));

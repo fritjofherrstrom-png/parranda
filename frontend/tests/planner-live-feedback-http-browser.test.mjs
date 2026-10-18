@@ -12,6 +12,7 @@ const require = createRequire(import.meta.url);
 const { buildApp } = require('../../server/app');
 const { collectAnchorEvents, resolveDefaultEventSupply, HELSINKI_LINKED_EVENTS_FEED } = require('../../server/place-candidates/agnostic-event-supply');
 const { createSourceCache } = require('../../server/place-candidates/source-cache');
+const { createOperatorVisitEnricher } = require('../../server/place-candidates/operator-visit-evidence');
 const { rows } = require('../../tests/helpers/day-composition-fixtures');
 const NOW = '2026-10-17T08:00:00Z', DATE = '2026-10-18';
 const ANCHOR = { lat: 60.17, lng: 24.94 };
@@ -38,10 +39,11 @@ function waitForPublished(page, predicate) {
 }
 
 async function harness(t, initialMode) {
-  const sourceRequests = [], requests = [], responses = [], errors = [], checkpoints = [];
+  const sourceRequests = [], websiteRequests = [], requests = [], responses = [], errors = [], checkpoints = [];
   let current, lastSourceArgs, passed = false;
   const records = [...rows('culture', 'museum', 7), ...rows('views', initialMode === 'empty' ? 'park' : 'viewpoint', 2)]
-    .map(record => ({ ...record, lat: record.lat + 4.57, lng: record.lng + 11.94 }));
+    .map(record => ({ ...record, lat: record.lat + 4.57, lng: record.lng + 11.94,
+      website: `https://${record.id}.example/` }));
   const event = { id: 'feedback-concert', name: { en: 'Source evening concert' },
     start_time: `${DATE}T18:00:00Z`, end_time: `${DATE}T20:00:00Z`,
     location: { position: { coordinates: [24.941, 60.171] }, name: { en: 'Source venue' } },
@@ -69,7 +71,23 @@ async function harness(t, initialMode) {
     return { run, settled: settled.promise };
   }
   current = source(initialMode);
-  const server = buildApp({ openDataLoader: async () => structuredClone(records),
+  const loader = async () => structuredClone(records);
+  loader.enrich = createOperatorVisitEnricher({
+    now: () => Date.parse(NOW), cache: createSourceCache(), hoursCache: createSourceCache({ now: () => Date.parse(NOW) }),
+    resolveHost: async () => [{ address: '93.184.216.34', family: 4 }],
+    fetcher: async url => {
+      websiteRequests.push(url);
+      const record = records.find(record => record.website === url);
+      assert.ok(record, 'website transport only receives an existing source-owned identity');
+      return new Response(`<script type="application/ld+json">${JSON.stringify({
+        '@context': 'https://schema.org', '@type': record.type === 'museum' ? 'Museum' : 'Place',
+        name: record.name, url: record.website,
+        geo: { '@type': 'GeoCoordinates', latitude: record.lat, longitude: record.lng },
+        openingHours: 'Mo-Su 10:00-23:00',
+      })}</script>`, { headers: { 'Content-Type': 'text/html' } });
+    },
+  });
+  const server = buildApp({ openDataLoader: loader,
     eventSupply: args => { lastSourceArgs = args; return current.run(args); },
     placeResolver: async query => {
       assert.equal(query, 'Fixture Helsinki');
@@ -125,7 +143,7 @@ async function harness(t, initialMode) {
         outcome: passed ? 'PASS' : 'FAIL',
         boundary: 'built UI -> local HTTP -> real Linked Events normalizer/composer/publisher; controlled source transport, trusted rows/resolver/weather/clock',
         excluded: ['live providers', 'deployment', 'physical device', 'landing-form acceptance'],
-        requests, responses, sourceRequests, checkpoints, errors,
+        requests, responses, sourceRequests, websiteRequests, checkpoints, errors,
       }, null, 2));
     }
     assert.deepEqual(errors, [], 'built UI raises no browser/React exceptions');
@@ -138,13 +156,15 @@ async function harness(t, initialMode) {
   assert.equal(body.agnostic_route_output_experiment.context?.time?.now?.slice(0, 10), '2026-10-17',
     'the actual composition must use the controlled clock rather than the wall date');
   assert.equal(body.agnostic_route_output_experiment.walking_validation.valid, true);
+  assert.ok(websiteRequests.length > 0 && websiteRequests.length <= 4, 'selected-hours checks share the bounded identity budget');
+  assert.ok(stopsOf(body).some(stop => stop.selected_day_hours?.source_url === stop.website), 'actual website evidence reaches the published day');
   await page.getByRole('list', { name: 'The stops, in order', exact: true }).waitFor();
   if (initialMode === 'empty') await page.waitForFunction(key => {
     const entry = JSON.parse(localStorage.getItem(key) || 'null');
     return Boolean(entry?.safeResponse?.live_events) && entry.safeResponse.live_events.pending !== true;
   }, LAST);
   const route = page.getByRole('region', { name: 'The route', exact: true });
-  return { page, route, requests, responses, capture, pass: () => { passed = true; },
+  return { page, route, requests, responses, websiteRequests, capture, pass: () => { passed = true; },
     switchSource: mode => { current = source(mode); },
     async warmSource(mode) {
       assert.ok(lastSourceArgs, 'the actual HTTP request supplied the source scope');
@@ -202,6 +222,43 @@ test('real HTTP Keep distinguishes source refusal from confirmed Keep and preser
   assert.equal(await h.route.getByRole('button', { name: 'Kept — release', exact: true }).count(), 0);
   await h.route.getByRole('button', { name: 'Keep this event', exact: true }).waitFor();
   await h.capture('undo-confirmed-keep');
+  // Combined contract: a real Keep/reload/release must retain the dated hours
+  // from the selected website without calling those windows "open now".
+  await h.route.getByRole('button', { name: 'Keep this event', exact: true }).click();
+  await h.route.getByRole('button', { name: 'Kept — release', exact: true }).waitFor();
+  const beforeReload = await savedDay(h.page);
+  const hoursStop = stopsOf(beforeReload.safeResponse).find(stop => stop.selected_day_hours?.source_url === stop.website);
+  assert.ok(hoursStop, 'confirmed Keep retains identity-bound selected website hours');
+  const fact = hoursStop.selected_day_hours;
+  assert.equal(fact.date, DATE);
+  assert.equal(fact.timezone, 'Europe/Helsinki');
+  assert.equal(fact.observed_at, '2026-10-17T08:00:00.000Z');
+  assert.deepEqual(fact.windows, [{ opens: '10:00', closes: '23:00' }]);
+  await h.page.reload();
+  await h.route.getByRole('button', { name: 'Kept — release', exact: true }).waitFor();
+  const afterReload = await savedDay(h.page);
+  assert.equal(stopsOf(afterReload.safeResponse).find(stop => stop.is_live_event)?.live_occurrence_id, chosen.live_occurrence_id);
+  assert.equal(afterReload.commitments.entries[chosen.live_occurrence_id]?.kind, 'pin');
+  assert.deepEqual(stopsOf(afterReload.safeResponse).find(stop => stop.id === hoursStop.id)?.selected_day_hours, fact,
+    'ordinary URL reload and Keep revalidation preserve the selected date, website and original observation');
+  await h.page.getByRole('list', { name: 'The stops, in order', exact: true })
+    .locator(':scope > li > button').filter({ hasText: hoursStop.label }).click();
+  const visiblePanel = h.route.locator('[id^="route-stop-panel-"]:visible');
+  await visiblePanel.getByText('Source hours for selected day: 10:00–23:00', { exact: true }).waitFor();
+  assert.equal(await visiblePanel.getByRole('link', { name: 'Website', exact: true }).getAttribute('href'), hoursStop.website);
+  assert.doesNotMatch(await visiblePanel.innerText(), /open now|currently open/i);
+  await h.capture('reload-kept-with-dated-hours');
+  const releasedResponse = waitForPublished(h.page, body => stopsOf(body).length > 0 &&
+    (body.agnostic_route_output_experiment?.live_event_choices?.requested_count ?? 0) === 0);
+  await h.route.getByRole('button', { name: 'Kept — release', exact: true }).click();
+  await releasedResponse;
+  await h.route.getByRole('button', { name: 'Keep this event', exact: true }).waitFor();
+  const released = await savedDay(h.page);
+  assert.notEqual(released.commitments?.entries[chosen.live_occurrence_id]?.kind, 'pin');
+  assert.ok(!h.requests.at(-1).live_event_choices?.some(choice => choice.action === 'keep'));
+  assert.equal(await h.route.getByRole('button', { name: 'Kept — release', exact: true }).count(), 0);
+  assert.deepEqual(stopsOf(released.safeResponse).find(stop => stop.id === hoursStop.id)?.selected_day_hours, fact);
+  await h.capture('released-with-dated-hours');
   h.pass();
 });
 

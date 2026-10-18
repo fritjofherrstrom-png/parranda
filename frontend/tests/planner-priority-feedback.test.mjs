@@ -91,7 +91,7 @@ test('clearing priority removes the note and Undo restores the exact published p
   const previous = h.readStorage(LAST);
   assert.match(note(h), /first choice.*Views.*part(?:ly|ial)/i);
   await click(h, 'Adjust');
-  await click(h, 'Clear the order');
+  await click(h, 'Clear order');
   assert.equal(note(h), '', 'the pending neutral intent must not retain a current first-choice claim');
   await h.clock.advance(400);
   await h.fetchMock.respond(endpointCalls(h).at(-1), day([culture()]));
@@ -110,7 +110,7 @@ test('explicit Save and Restore recover feedback from the saved priority rather 
   const saved = h.readStorage(SAVED)[0];
   assert.deepEqual(saved.inputs.preferencePriority, ['views', 'culture']);
   await click(h, 'Adjust');
-  await click(h, 'Clear the order');
+  await click(h, 'Clear order');
   await h.clock.advance(400);
   await h.fetchMock.respond(endpointCalls(h).at(-1), day([culture()]));
   assert.equal(note(h), '');
