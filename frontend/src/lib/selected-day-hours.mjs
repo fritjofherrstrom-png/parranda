@@ -6,6 +6,9 @@ const LOCAL_END_CLOCK = /^(?:(?:[01]\d|2[0-3]):[0-5]\d|24:00)$/;
  * raw opening-hours expression and never claims that a venue is open now.
  */
 export function selectedDayHoursLabel(value, lang = "en") {
+  if (value?.status === "closed") {
+    return lang === "sv" ? "Källan anger stängt för vald dag" : "Source reports closed for selected day";
+  }
   if (!value || value.status !== "known") return null;
   const prefix = lang === "sv" ? "Källans tider för vald dag" : "Source hours for selected day";
   if (value.all_day === true) {

@@ -200,6 +200,40 @@ test("resolveCandidateIdentity does not mutate its inputs", () => {
   assert.equal(cur.merged_from, undefined);
 });
 
+test("a confirmed duplicate fills a missing venue website without overwriting the canonical link", () => {
+  const site = "https://operator.example/visit";
+  const result = resolveCandidateIdentity([curated(), external({ website: site })], { now: NOW });
+  assert.equal(result.candidates[0].website, site);
+  assert.ok(result.candidates[0].reconciliation.filled.includes("website"));
+  const ownSite = "https://curated.example/visit";
+  const retained = resolveCandidateIdentity([curated({ website: ownSite }), external({ website: site })], { now: NOW });
+  assert.equal(retained.candidates[0].website, ownSite);
+});
+
+test("unsafe links and ambiguous duplicate identities cannot supply a venue website", () => {
+  for (const website of ["javascript:alert(1)", "https://user:secret@operator.example/", "/visit", "https://operator.example/" + "x".repeat(2048)]) {
+    const result = resolveCandidateIdentity([curated(), external({ website })], { now: NOW });
+    assert.equal(result.candidates[0].website, undefined, website);
+  }
+  const result = resolveCandidateIdentity([
+    curated({ id: "one" }), curated({ id: "two", lat: 41.88965 }),
+    external({ website: "https://operator.example/" }),
+  ], { now: NOW });
+  assert.equal(result.summary.merged_count, 0);
+  assert.ok(result.candidates.filter(row => row.city_pack_owned).every(row => row.website === undefined));
+});
+
+test("source metadata follows newly filled hours and cannot overwrite the canonical schedule source", () => {
+  const externalSource = { url: "https://operator.example/", observed_at: "2026-10-17T10:00:00.000Z" };
+  const duplicate = external({ opening_hours: "Mo-Su 09:00-17:00", opening_hours_source: externalSource });
+  const filled = resolveCandidateIdentity([curated(), duplicate], { now: NOW }).candidates[0];
+  assert.deepEqual(filled.opening_hours_source, externalSource);
+  const originalSource = { url: "https://curated.example/", observed_at: "2026-10-17T09:00:00.000Z" };
+  const retained = resolveCandidateIdentity([curated({ opening_hours: "Mo-Su 10:00-18:00", opening_hours_source: originalSource }), duplicate], { now: NOW }).candidates[0];
+  assert.equal(retained.opening_hours, "Mo-Su 10:00-18:00");
+  assert.deepEqual(retained.opening_hours_source, originalSource);
+});
+
 test("near-name branches do not borrow corroboration from a neighbouring place", () => {
   const a = external({ id: "map-place", label: "North Pier Gallery", type: "gallery", evidence: [] });
   const b = external({ id: "official-place", label: "North Pier Gallery Annex", type: "gallery", evidence: [] });

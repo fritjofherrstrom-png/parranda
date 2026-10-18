@@ -3,12 +3,38 @@ const DAY_TOKEN = /^(Su|Mo|Tu|We|Th|Fr|Sa)$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const LOCAL_ISO = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::\d{2})?$/;
 const MAX_OPENING_HOURS_LENGTH = 512;
+const { normalizeSourceWebsite } = require('../lib/source-website');
+
+function normalizeOpeningHoursSource(value) {
+  const url = normalizeSourceWebsite(value?.url);
+  const observed = typeof value?.observed_at === 'string' ? value.observed_at : '';
+  if (!url || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(observed) || !Number.isFinite(Date.parse(observed))) return null;
+  return { url, observed_at: new Date(observed).toISOString() };
+}
+
+function selectedDaySourceMetadata(value) {
+  const source = normalizeOpeningHoursSource({ url: value.source_url, observed_at: value.observed_at });
+  if (!source || typeof value.date !== 'string' || !ISO_DATE.test(value.date) || !isValidIsoDate(value.date) ||
+      typeof value.timezone !== 'string' || value.timezone.length > 80) return {};
+  try { new Intl.DateTimeFormat('en', { timeZone: value.timezone }); } catch { return {}; }
+  return { date: value.date, timezone: value.timezone, source_url: source.url, observed_at: source.observed_at };
+}
 
 function normalizeOpeningHours(value) {
   if (typeof value !== "string") return null;
   const normalized = value.trim().replace(/\s+/g, " ");
   if (!normalized || normalized.length > MAX_OPENING_HOURS_LENGTH) return null;
   return normalized;
+}
+
+// A complete weekly closure is independent of timezone and requested date.
+// An omitted weekday or unsupported expression cannot establish this fact.
+function isAlwaysClosedOpeningHours(value) {
+  const hours = normalizeOpeningHours(value);
+  if (!hours) return false;
+  if (/^(?:closed|off)$/i.test(hours)) return true;
+  const schedule = parseWeeklySchedule(hours);
+  return Boolean(schedule && schedule.every(day => day.seen && day.intervals.length === 0));
 }
 
 /**
@@ -82,11 +108,12 @@ function buildSelectedDayHoursFact(value, { weekday } = {}) {
 
 function normalizeSelectedDayHoursFact(value) {
   if (!value || typeof value !== "object" || !["known", "closed"].includes(value.status)) return null;
+  const source = selectedDaySourceMetadata(value);
   if (value.status === "closed") {
-    return { status: "closed", all_day: false, windows: [] };
+    return { status: "closed", all_day: false, windows: [], ...source };
   }
   if (value.all_day === true) {
-    return { status: "known", all_day: true, windows: [] };
+    return { status: "known", all_day: true, windows: [], ...source };
   }
   const windows = Array.isArray(value.windows)
     ? value.windows
@@ -104,7 +131,7 @@ function normalizeSelectedDayHoursFact(value) {
           closes: formatLocalMinute(endMinute),
         }))
     : [];
-  return windows.length ? { status: "known", all_day: false, windows } : null;
+  return windows.length ? { status: "known", all_day: false, windows, ...source } : null;
 }
 
 /**
@@ -295,6 +322,8 @@ module.exports = {
   buildSelectedDayHoursFact,
   buildLocalDayAvailabilityWindow,
   evaluateOpeningHoursForWindow,
+  isAlwaysClosedOpeningHours,
   normalizeOpeningHours,
+  normalizeOpeningHoursSource,
   normalizeSelectedDayHoursFact,
 };

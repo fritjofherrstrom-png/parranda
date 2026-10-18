@@ -139,7 +139,7 @@ function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, res
     }), context.signal));
     return enriched.get(records);
   };
-  return request => {
+  const load = request => {
     context.signal.throwIfAborted();
     const key = JSON.stringify(request);
     if (!loads.has(key)) loads.set(key, (async () => {
@@ -208,6 +208,12 @@ function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, res
     })());
     return loads.get(key);
   };
+  if (typeof enrich?.enrichSelected === 'function') {
+    load.enrichSelected = (records, options = {}) => awaitLifecycleWork(enrich.enrichSelected(records, {
+      ...options, signal: context.signal, deadline: context.deadline,
+    }), context.signal);
+  }
+  return load;
 }
 
 module.exports = { createPlannerLifecycle, lifecycleLoader, DEADLINE_MS, POLL_MS, MAX_POLLS, PARTIAL_WAIT_MS, COMPOSITION_RESERVE_MS };
