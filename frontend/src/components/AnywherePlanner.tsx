@@ -2157,6 +2157,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const releaseCommitment = (identity: string) => {
     if (!identity || !commitments[identity]) return;
     invalidateCommitmentIntent();
+    // Releasing a Live pin is a new selection intent, not an obligation to
+    // retain that old occurrence. Keep the shorter extent and removed places.
+    if (isLiveOccurrenceId(identity) && commitments[identity]?.kind === "pin") relaxDayEditForAdjustment();
     const next = { ...commitments };
     delete next[identity];
     setCommitments(next);
