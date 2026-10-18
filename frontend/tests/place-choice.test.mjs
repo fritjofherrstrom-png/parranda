@@ -154,3 +154,18 @@ for (const granted of [true, false]) test(`a ${granted ? 'granted' : 'denied'} o
  const newest=h.fetchMock.calls.filter(c=>c.url.startsWith('/api/route-recommendations')).at(-1);
  assert.equal(newest.body.place_bias,undefined,'the new day request keeps its own typed anchor');
 });
+test('an offered place reads as a short name over its context; the full label still identifies the choice',async t=>{
+ const labelled={...ambiguous,agnostic_route_output_experiment:{...ambiguous.agnostic_route_output_experiment,intake:{...ambiguous.agnostic_route_output_experiment.intake,candidates:[
+  {label:'Gamla stan, Stockholm, Stockholms län, 111 29, Sweden',title:'Gamla stan',context:'Stockholm · Sweden',selection_id:'short-token'},
+  {label:selected.label,selection_id:'selected-token'}]}}};
+ const h=await mountPlanner({url:'http://localhost/anywhere?place=Gamla%20stan&lang=en'});t.after(()=>h.unmount());
+ await h.clock.advance(500);
+ await h.fetchMock.respond(h.fetchMock.pending().find(x=>x.url.startsWith('/api/route-recommendations')),labelled);await h.clock.advance(50);
+ const short=button(h,'Gamla stan');assert.ok(short);
+ assert.equal(short.textContent,'Gamla stanStockholm · Sweden');
+ assert.ok(!short.textContent.includes('111 29'),'no postcode or full provider hierarchy on the button');
+ assert.ok(button(h,selected.label),'a choice without structured context keeps its full label');
+ await click(h,short);await h.clock.advance(30);
+ const sent=h.fetchMock.pending().find(x=>x.url.startsWith('/api/route-recommendations'));
+ assert.equal(sent.body.place_selection,'short-token');
+});
