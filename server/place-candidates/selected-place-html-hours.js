@@ -7,6 +7,8 @@ const { parse } = require("parse5");
 const MAX_BYTES = 512 * 1024;
 const MAX_NODES = 12000;
 const MAX_DEPTH = 64;
+const TEXT_BREAKS = new Set(['p', 'div', 'section', 'article', 'aside', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'ul', 'ol', 'li', 'dl', 'dt', 'dd', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'br', 'hr']);
 const DAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const DAY_NAMES = ["monday|mandag(?:ar)?", "tuesday|tisdag(?:ar)?", "wednesday|onsdag(?:ar)?", "thursday|torsdag(?:ar)?", "friday|fredag(?:ar)?", "saturday|lordag(?:ar)?", "sunday|sondag(?:ar)?"];
 const DAY_PATTERN = DAY_NAMES.map(value => `(?:${value})`).join("|");
@@ -16,7 +18,7 @@ const fold = value => String(value || "").normalize("NFKD").replace(/\p{M}/gu, "
 const name = value => fold(value).replace(/[^a-z0-9]+/g, " ").trim();
 const hoursHeading = value => /^(?:oppettider|opening hours)$/.test(fold(value));
 const exceptionText = value => /helgdag|avvikande|holiday|exception|special hours/.test(fold(value));
-const serviceHeading = value => /\b(?:cafe|intake|inlamning|goods|guided tours?|visningar|member|medlem|meetings?)\b/.test(fold(value));
+const serviceHeading = value => /\b(?:cafe(?:ets?|s)?|intake|inlamning|goods|guided tours?|visningar|member|medlem|meetings?)\b/.test(fold(value));
 const serviceLabel = value => serviceHeading(value) && (/\b(?:hours|oppettider)\b/.test(fold(value)) || /^(?:cafe|guided tours?|visningar|goods intake|member meetings?)$/.test(fold(value)));
 const closureNotice = value => /\b(?:closed|stangt|stangning|renovat\w*)\b/.test(fold(value));
 const attr = (node, key) => node.attrs?.find(value => value.name === key)?.value || "";
@@ -51,11 +53,14 @@ function documentView(html) {
   const texts = new Map();
   for (let i = identityNodes.length - 1; i >= 0; i--) {
     const node = identityNodes[i];
-    texts.set(node, node.nodeName === "#text" ? node.value.slice(0, 8192) :
-      (node.childNodes || []).map(child => texts.get(child) || "").join(" ").replace(/\s+/g, " ").trim().slice(0, 8192));
+    const value = node.nodeName === "#text" ? node.value.slice(0, 8192) :
+      (node.childNodes || []).map(child => texts.get(child) || "").join("").slice(0, 8192);
+    // Inline markup does not insert a word boundary. Structural blocks do.
+    texts.set(node, TEXT_BREAKS.has(node.tagName) ? ` ${value} ` : value);
   }
   const mains = nodes.filter(node => node.tagName === "main");
-  return mains.length === 1 ? { nodes, identityNodes, main: mains[0], text: node => texts.get(node) || "" } : null;
+  return mains.length === 1 ? { nodes, identityNodes, main: mains[0], text: node =>
+    (texts.get(node) || "").replace(/\s+/g, " ").trim() } : null;
 }
 
 function within(node, parent) {
@@ -92,7 +97,11 @@ function identifiedView(html, record, sourceUrl) {
     if (!within(node, view.main)) { end = i; break; }
     if (/^h[1-6]$/.test(node.tagName) && Number(node.tagName[1]) <= rank) { end = i; break; }
   }
-  return { ...view, entry, source, scope: view.nodes.slice(start + 1, end) };
+  // The heading's descendants belong to the heading, not to the following
+  // fact section. Retaining them would erase the block boundary at scope start.
+  let contentStart = start + 1;
+  while (contentStart < end && within(view.nodes[contentStart], general[0])) contentStart++;
+  return { ...view, entry, source, scope: view.nodes.slice(contentStart, end) };
 }
 
 function descendant(url, entry) {
@@ -106,15 +115,20 @@ function unscopedConditions(view, { serviceOnly = false } = {}) {
   // condition in another container must remain unknown, not disappear merely
   // because a complete week elsewhere was readable. Navigation is excluded
   // by documentView; normal weekly closures inside assertions are parsed below.
-  return view.scope.some(node => {
-    if (node.nodeName !== '#text') return false;
-    for (let parent = node.parentNode, depth = 0; parent && depth <= MAX_DEPTH; parent = parent.parentNode, depth++) {
-      if (assertions.has(parent)) return false;
-    }
-    const value = fold(view.text(node));
-    if (serviceOnly) return serviceLabel(value);
-    return /\b\d{4}\b/.test(value) || closureNotice(value) || exceptionText(value) || serviceLabel(value);
-  });
+  const scope = new Set(view.scope), pieces = [];
+  const stack = view.scope.filter(node => !scope.has(node.parentNode)).reverse().map(node => [node, false]);
+  while (stack.length) {
+    const [node, exit] = stack.pop();
+    if (exit) { pieces.push(' '); continue; }
+    if (assertions.has(node)) { pieces.push(' '); continue; }
+    if (node.nodeName === '#text') { pieces.push(node.value); continue; }
+    if (TEXT_BREAKS.has(node.tagName)) { pieces.push(' '); stack.push([node, true]); }
+    const children = node.childNodes || [];
+    for (let i = children.length - 1; i >= 0; i--) if (scope.has(children[i])) stack.push([children[i], false]);
+  }
+  const value = fold(pieces.join(''));
+  if (serviceOnly) return serviceHeading(value);
+  return /\b\d{4}\b/.test(value) || closureNotice(value) || exceptionText(value) || serviceHeading(value);
 }
 
 function selectedPlaceHtmlHoursLink(html, record, sourceUrl) {

@@ -169,6 +169,35 @@ test("visible conditions outside supported assertion blocks cannot be discarded"
   assert.ok(parse(detail, record, { ...options('2026-10-19'), entryHtml: currentStatus }));
 });
 
+test("inline markup cannot split a visible service or closure condition past the reader", () => {
+  for (const notice of ['<div>Guided <span>tours</span></div>', '<div>Gui<span>ded</span> tours</div>',
+    '<div><span>Guided </span><span>tours</span></div>', '<div>Caf<span>é</span> opening hours</div>',
+    '<p>Caf<span>éets</span> öppettider</p>']) {
+    assert.equal(parse(english.replace('</main>', notice + '</main>'), other,
+      { date: '2026-10-25', sourceUrl: other.website }), null, notice);
+    const qualifiedEntry = entry.replace('</main>', notice + '</main>');
+    assert.equal(link(qualifiedEntry, record, record.website), null, notice);
+    assert.equal(parse(detail, record, { ...options('2026-10-19'), entryHtml: qualifiedEntry }), null, notice);
+  }
+  assert.equal(parse(english.replace('</main>', '<div>Cl<span>osed</span> until further notice</div></main>'),
+    other, { date: '2026-10-25', sourceUrl: other.website }), null);
+});
+
+test("inline markup preserves the actual weekday text in a complete supported week", () => {
+  const split = english.replace('Monday closed', 'Mon<span>day</span> closed');
+  assert.match(parse(split, other, { date: '2026-10-19', sourceUrl: other.website })?.opening_hours || '', /^Mo off;/);
+});
+
+test("hours-heading and skipped-paragraph boundaries cannot merge away an unsupported condition", () => {
+  const afterHeading = entry.replace('<h2>Öppettider</h2>', '<h2>Öppettider</h2><span>Café opening hours</span>');
+  assert.equal(link(afterHeading, record, record.website), null);
+  assert.equal(parse(detail, record, { ...options('2026-10-19'), entryHtml: afterHeading }), null);
+  const closed = detail.replace('id="h-Oppettider">Öppettider</h1>', 'id="h-Oppettider">Öppettider</h1><span>Closed until further notice</span>');
+  assert.equal(fact(closed), null);
+  const aroundParagraph = entry.replace('</main>', '<span>Café</span><p>Visit information</p><span>opening hours</span></main>');
+  assert.equal(link(aroundParagraph, record, record.website), null);
+});
+
 test("malformed dates, oversized documents and missing main scopes remain unknown", () => {
   for (const date of [undefined, "2026-02-30", "2026-10-19T12:00:00Z", "19 October 2026"]) assert.equal(parse(detail, record, options(date)), null);
   assert.equal(fact(detail.replace(/main/g, "aside")), null);
