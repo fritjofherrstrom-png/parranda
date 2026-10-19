@@ -15,3 +15,9 @@ Scope: continuation from frozen `4eeaa628e6beeaad1b43416b7308c174946da787`; its 
 RED → GREEN evidence is executable in the named test files; the PR includes machine-readable counts. The final independent source-row re-review reran 9 reader tests successfully after the last three source-row findings. Root reviewed the runtime delta and reran real HTTP and built-browser proofs. Original capture and fixture checks are distinct from simulated transport/clock verification.
 
 One source-text UI contract assertion still expected the old unknown-label JSX after the intentional conditional display change. Its exact assertion was updated to require the new qualified-label-or-unavailable branch; mounted DOM/browser tests independently assert the visible behavior. No test was removed, skipped or relaxed to hide product failure.
+
+## Full-suite verification follow-up
+
+The local full run on `da1196ca99196ad99cf7dadd7b34e0fb5c24865e` completed with 4,842 PASS, 1 FAIL and 3 SKIP. Its sole failure was `route-map-selection.test.js` reading the event trace before the native geometry-driven `mouseout` was dispatched. The failure's after-hook captured the same finished height transition, the later actual `mouseout` and retained `Stop A` tooltip. This establishes a precondition-ordering race in that assertion; it does not infer innocence merely from unchanged map files.
+
+The follow-up waits for that actual native event before reading/asserting the trace. Real pointer click, mid-transition geometry, actual mouseout, retained tooltip and wheel-scroll assertions remain. No timeout or product map code changes. The focused real-browser file is rerun; the final head receives a fresh complete CI run. Source/HTTP/UI results remain scoped to the identical product source and built assets; the earlier local full run is never relabelled PASS.
