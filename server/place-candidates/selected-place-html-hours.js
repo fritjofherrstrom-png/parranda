@@ -100,9 +100,30 @@ function descendant(url, entry) {
   return url.origin === entry.origin && url.pathname.startsWith(prefix) && url.pathname !== prefix;
 }
 
+function unscopedConditions(view, { serviceOnly = false } = {}) {
+  const assertions = new Set(view.scope.filter(node => /^(?:p|li|h[1-6])$/.test(node.tagName)));
+  // Only paragraph/list/heading assertions have supported grammar. A visible
+  // condition in another container must remain unknown, not disappear merely
+  // because a complete week elsewhere was readable. Navigation is excluded
+  // by documentView; normal weekly closures inside assertions are parsed below.
+  return view.scope.some(node => {
+    if (node.nodeName !== '#text') return false;
+    for (let parent = node.parentNode, depth = 0; parent && depth <= MAX_DEPTH; parent = parent.parentNode, depth++) {
+      if (assertions.has(parent)) return false;
+    }
+    const value = fold(view.text(node));
+    if (serviceOnly) return serviceLabel(value);
+    return /\b\d{4}\b/.test(value) || closureNotice(value) || exceptionText(value) || serviceLabel(value);
+  });
+}
+
 function selectedPlaceHtmlHoursLink(html, record, sourceUrl) {
   const view = identifiedView(html, record, sourceUrl);
   if (!view || view.source.toString() !== view.entry.toString()) return null;
+  // A current-status badge or an entry's unresolved date condition cannot
+  // supply the selected-day fact. The actual linked document is read instead;
+  // a service label must still prevent borrowing another service's hours.
+  if (unscopedConditions(view, { serviceOnly: true })) return null;
   if (view.scope.some(node => /^(?:p|li|h[1-6])$/.test(node.tagName) && serviceLabel(view.text(node)))) return null;
   const links = new Set();
   let invalid = false;
@@ -179,6 +200,7 @@ function holidayRange(value, year) {
 function parseSelectedPlaceHtmlHours(html, record, { date, sourceUrl, entryHtml, entrySourceUrl } = {}) {
   const selected = validDate(date), view = identifiedView(html, record, sourceUrl);
   if (!selected || !view) return null;
+  if (unscopedConditions(view)) return null;
   if (view.source.toString() !== view.entry.toString()) {
     if (!descendant(view.source, view.entry) || safeUrl(entrySourceUrl)?.toString() !== view.entry.toString() ||
         selectedPlaceHtmlHoursLink(entryHtml, record, entrySourceUrl) !== view.source.toString()) return null;

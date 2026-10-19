@@ -150,6 +150,25 @@ test("unsupported dated or indefinite closure prose cannot become a weekly open 
   }
 });
 
+test("visible conditions outside supported assertion blocks cannot be discarded", () => {
+  for (const notice of [
+    '<div>Closed for renovation 25 October 2026</div>',
+    '<span>Closed until further notice</span>',
+    'Closed for renovation 25 October',
+    '<div>Café opening hours</div>',
+    '<div>2025</div>',
+  ]) {
+    const body = english.replace('</main>', `${notice}</main>`);
+    assert.equal(parse(body, other, { date: '2026-10-25', sourceUrl: other.website }), null, notice);
+  }
+  const cafeEntry = entry.replace('</main>', '<div>Café opening hours</div></main>');
+  assert.equal(link(cafeEntry, record, record.website), null, 'unscoped service labels cannot authorize an hours hop');
+  assert.equal(parse(detail, record, { ...options('2026-10-19'), entryHtml: cafeEntry }), null);
+  const currentStatus = entry.replace('</main>', '<div><span>Stängt</span><span>Öppnar 20 okt kl 12.00</span></div></main>');
+  assert.equal(link(currentStatus, record, record.website), detailUrl, 'an undated current-status badge does not prevent checking the actual linked schedule');
+  assert.ok(parse(detail, record, { ...options('2026-10-19'), entryHtml: currentStatus }));
+});
+
 test("malformed dates, oversized documents and missing main scopes remain unknown", () => {
   for (const date of [undefined, "2026-02-30", "2026-10-19T12:00:00Z", "19 October 2026"]) assert.equal(parse(detail, record, options(date)), null);
   assert.equal(fact(detail.replace(/main/g, "aside")), null);
