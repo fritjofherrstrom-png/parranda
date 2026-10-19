@@ -211,28 +211,36 @@ function holidayRange(value, year) {
   return validDate(from) && validDate(through) ? { from, through } : null;
 }
 
-function parseSelectedPlaceHtmlHours(html, record, { date, sourceUrl, entryHtml, entrySourceUrl } = {}) {
-  const selected = validDate(date), view = identifiedView(html, record, sourceUrl);
-  if (!selected || !view) return null;
-  if (unscopedConditions(view)) return null;
-  if (view.source.toString() !== view.entry.toString()) {
-    if (!descendant(view.source, view.entry) || safeUrl(entrySourceUrl)?.toString() !== view.entry.toString() ||
-        selectedPlaceHtmlHoursLink(entryHtml, record, entrySourceUrl) !== view.source.toString()) return null;
+// The calendar content is acquired once. Date projection belongs to the shared
+// day adapter, never to a cached weekly "off" string.
+function parseSelectedPlaceHoursCalendar(html, record, { sourceUrl, entryHtml, entrySourceUrl } = {}) {
+  const { parseSelectedPlaceContactHours } = require('./selected-place-contact-hours');
+  const contact = parseSelectedPlaceContactHours(html, record, { sourceUrl });
+  if (contact) return contact;
+  const view = identifiedView(html, record, sourceUrl);
+  if (!view || unscopedConditions(view)) return null;
+  if (view.source.toString() !== view.entry.toString() &&
+      (!descendant(view.source, view.entry) || safeUrl(entrySourceUrl)?.toString() !== view.entry.toString() ||
+       selectedPlaceHtmlHoursLink(entryHtml, record, entrySourceUrl) !== view.source.toString())) return null;
+  if (view.scope.some(node => node.tagName === 'a' && exceptionText(view.text(node)))) return null;
+  const assertions = nodes => nodes.filter(node => /^(?:p|li|h[1-6])$/.test(node.tagName));
+  // A peer exception section in the same identified main is still relevant.
+  const scope = [...view.scope], included = new Set(scope);
+  const outside = assertions(view.nodes).filter(node => within(node, view.main) && !included.has(node));
+  let exceptions = false;
+  for (const node of outside) {
+    if (/^h[2-6]$/.test(node.tagName) && exceptionText(view.text(node))) exceptions = true;
+    if (exceptions) { scope.push(node); continue; }
+    if (exceptionText(view.text(node)) || closureNotice(view.text(node)) || /^20\d{2}$/.test(fold(view.text(node)))) return null;
   }
-  // An advertised exception page is read before accepting the shortened week.
-  if (view.scope.some(node => node.tagName === "a" && exceptionText(view.text(node)))) return null;
-  if (view.scope.some(node => /^h[1-6]$/.test(node.tagName) && serviceHeading(view.text(node)))) return null;
-  // A sibling exception section belongs to the same identified document, even
-  // when the general hours h2 ends before it. Its grammar is not merged here.
-  const scopeSet = new Set(view.scope);
-  if (view.nodes.some(node => within(node, view.main) && !scopeSet.has(node) && /^(?:p|li|h[1-6])$/.test(node.tagName) &&
-      (exceptionText(view.text(node)) || closureNotice(view.text(node)) || /^\d{4}$/.test(fold(view.text(node)))))) return null;
-  const blocks = view.scope.filter(node => ["p", "li", "h2", "h3", "h4", "h5", "h6"].includes(node.tagName));
-  const blockSet = new Set(blocks);
-  const seasons = [], holidays = [];
-  let current = null, holiday = false, year = null, invalidHoliday = false;
+  if (assertions(scope).some(node => serviceLabel(view.text(node)) ||
+    /\b(?:phone|telephone|telefon|booking|bokning)\b.*\b(?:hours|oppettider)\b/.test(fold(view.text(node))))) return null;
+  const blocks = assertions(scope), blockSet = new Set(blocks);
+  const rules = [], overrides = [], unresolved = [];
+  let current = null, holiday = false, year = null;
+  const md = value => `${String(Math.floor(value / 100)).padStart(2, '0')}-${String(value % 100).padStart(2, '0')}`;
+  const begin = validity => { current = { week: {}, ...(validity ? { validity } : {}) }; rules.push(current); };
   for (const node of blocks) {
-    // Nested paragraphs/list items are one semantic assertion, never two.
     let nested = false;
     for (let parent = node.parentNode, depth = 0; parent && depth <= MAX_DEPTH; parent = parent.parentNode, depth++) {
       if (blockSet.has(parent)) { nested = true; break; }
@@ -244,35 +252,89 @@ function parseSelectedPlaceHtmlHours(html, record, { date, sourceUrl, entryHtml,
     if (holiday) {
       if (/^20\d{2}$/.test(value)) { year = Number(value); continue; }
       const range = holidayRange(value, year);
-      if (range) holidays.push(range); else invalidHoliday = true;
+      // Closed row grammar: explicit date + optional supported holiday label
+      // + a positive whole status/window. Arbitrary prose cannot gain fact
+      // authority merely by ending in "closed" or a clock. This vocabulary
+      // recognizes labels only; it never infers a holiday's calendar date.
+      const prefix = value.match(/^\d{1,2}(?:\s*-\s*\d{1,2})?\/\d{1,2}(?:\s*-\s*\d{1,2}\/\d{1,2})?(?:\s|$)/);
+      const tail = prefix ? value.slice(prefix[0].length).trim() : '';
+      if (!range || /\b\d{4}\b/.test(tail)) { unresolved.push({ reason: 'unresolved_date_exception' }); continue; }
+      const status = tail.match(/(?:stangt|closed|off)$/);
+      const hours = tail.match(/(\d{1,2}(?:[.:]\d{2})?\s*(?:am|pm)?)\s*-\s*(\d{1,2}(?:[.:]\d{2})?\s*(?:am|pm)?)$/);
+      const marker = status || hours;
+      const label = marker ? tail.slice(0, marker.index).replace(/(?:kl\.?|hours:?)\s*$/, '').trim() : null;
+      const holidayLabel = /^(?:jul(?:afton|dagen)?|christmas(?: eve| day)?|nyar(?:safton|sdagen)?|new year(?:'s)?(?: eve| day)?|alla helgons(?: helg| dag)?|all saints'?(?: day| weekend)?|pask(?:afton|dagen|helg)?|easter(?: sunday| monday| weekend)?|midsommar(?:afton|dagen)?|midsummer(?: eve| day)?|nationaldagen|national day)$/;
+      if (label === null || (label && !holidayLabel.test(label))) { unresolved.push({ reason: 'unresolved_date_exception', ...range }); continue; }
+      if (status) overrides.push({ ...range, status: 'closed', windows: [] });
+      else if (hours && clock(hours[1]) && clock(hours[2]) && clock(hours[1]) < clock(hours[2])) {
+        overrides.push({ ...range, status: 'known', windows: [{ opens: clock(hours[1]), closes: clock(hours[2]) }] });
+      } else unresolved.push({ reason: 'unresolved_date_exception', ...range });
       continue;
     }
-    // Explicit years and unscoped exception notices are outside this annual
-    // grammar. Ignoring them would turn old or qualified hours into a fact.
-    if (/\b\d{4}\b/.test(value) || serviceLabel(value)) return null;
     const season = seasonRange(value);
-    if (season) { current = season; seasons.push(current); continue; }
-    const rule = weeklyRule(value);
-    if (!rule && (closureNotice(value) || exceptionText(value))) return null;
-    if (!current) continue;
-    if (/^(?:kvallsoppet|evening opening|late opening|late hours)$/.test(value)) { current.late = true; continue; }
-    if (current.late) {
-      for (let day = 0; day < 7; day++) if (new RegExp(DAY_NAMES[day]).test(value)) current.lateDays.add(day);
+    if (season) { begin({ kind: 'annual', from: md(season.start), through: md(season.end) }); continue; }
+    const absolute = value.match(new RegExp(`^(\\d{1,2}) (${MONTH_PATTERN}) (20\\d{2})\\s*-\\s*(\\d{1,2}) (${MONTH_PATTERN}) (20\\d{2})$`));
+    if (absolute) {
+      const month = text => MONTHS.findIndex(pattern => new RegExp(`^(?:${pattern})$`).test(text)) + 1;
+      const iso = (day, mon, yr) => `${yr}-${String(month(mon)).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const from = iso(absolute[1], absolute[2], absolute[3]), through = iso(absolute[4], absolute[5], absolute[6]);
+      if (!validDate(from) || !validDate(through) || from > through) return null;
+      begin({ kind: 'absolute', from, through }); continue;
+    }
+    if (/\b\d{4}\b/.test(value)) return null;
+    if (/^(?:kvallsoppet|evening opening|late opening|late hours)$/.test(value)) {
+      if (!current) return null;
+      current.late = true; current.lateDays = new Set(); continue;
+    }
+    if (current?.late) {
+      for (let day = 0; day < 7; day++) if (new RegExp(DAY_NAMES[day]).test(value)) current.lateDays.add((day + 1) % 7);
       continue;
     }
-    if (rule) for (const day of rule.days) {
-      if (current.week.has(day)) current.invalid = true;
-      current.week.set(day, rule.rule);
+    const rule = weeklyRule(value);
+    if (rule) {
+      if (!current) begin();
+      for (const day of rule.days) {
+        if (Object.hasOwn(current.week, DAYS[day])) return null;
+        current.week[DAYS[day]] = rule.rule === 'off' ? [] : [{ opens: rule.rule.slice(0, 5), closes: rule.rule.slice(6) }];
+      }
+    } else if (closureNotice(value) || exceptionText(value) ||
+        new RegExp(`^(?:${DAY_PATTERN})\\b`).test(value) ||
+        (new RegExp(MONTH_PATTERN).test(value) && /\d/.test(value))) {
+      unresolved.push({ reason: 'unsupported_schedule_condition' });
     }
-    else if (new RegExp(`^(?:${DAY_PATTERN})\\b`).test(value)) current.invalid = true;
   }
-  if (invalidHoliday || holidays.some(range => date >= range.from && date <= range.through)) return null;
-  const md = (selected.getUTCMonth() + 1) * 100 + selected.getUTCDate();
-  const matches = seasons.filter(season => season.start <= season.end ? md >= season.start && md <= season.end : md >= season.start || md <= season.end);
-  if (matches.length !== 1) return null;
-  const chosen = matches[0], weekday = (selected.getUTCDay() + 6) % 7;
-  if (chosen.invalid || chosen.week.size !== 7 || (chosen.late && (!chosen.lateDays.size || chosen.lateDays.has(weekday)))) return null;
-  return { opening_hours: DAYS.map((day, i) => `${day} ${chosen.week.get(i)}`).join("; "), url: view.source.toString(), valid_for_date: date, entry_url: view.entry.toString() };
+  for (const rule of rules) {
+    if (rule.late) unresolved.push({ reason: 'unresolved_late_hours', ...(rule.validity ? { validity: rule.validity } : {}),
+      ...(rule.lateDays.size ? { weekdays: [...rule.lateDays] } : {}) });
+    delete rule.late; delete rule.lateDays;
+  }
+  const usable = rules.filter(rule => Object.keys(rule.week).length);
+  if (!(usable.length || overrides.length)) return null;
+  return { entry_url: view.entry.toString(), source_url: view.source.toString(),
+    source_relation: view.source.toString() === view.entry.toString() ? 'entry' : 'direct_hours_link',
+    visit_function: 'general_visit', rules: usable, overrides, unresolved };
 }
 
-module.exports = { parseSelectedPlaceHtmlHours, selectedPlaceHtmlHoursLink };
+// Legacy call sites/tests retain their deliberately narrower complete-week
+// contract. New selected-place acquisition consumes the calendar above.
+function parseSelectedPlaceHtmlHours(html, record, options = {}) {
+  const selected = validDate(options.date);
+  if (!selected) return null;
+  const content = parseSelectedPlaceHoursCalendar(html, record, options);
+  if (!content) return null;
+  const { CALENDAR_CONTRACT, selectedHoursCalendarKey, projectSelectedHoursCalendar } = require('./opening-hours-calendar');
+  const result = projectSelectedHoursCalendar({ ...content, contract: CALENDAR_CONTRACT,
+    identity_key: selectedHoursCalendarKey(record), observed_at: '2000-01-01T00:00:00.000Z' },
+    { date: options.date, timezone: 'UTC' });
+  if (result.status === 'unknown' || content.overrides.some(rule => options.date >= rule.from && options.date <= rule.through)) return null;
+  const md = options.date.slice(5);
+  const matching = content.rules.filter(rule => !rule.validity || (rule.validity.kind === 'absolute' ?
+    options.date >= rule.validity.from && options.date <= rule.validity.through :
+    rule.validity.from <= rule.validity.through ? md >= rule.validity.from && md <= rule.validity.through :
+      md >= rule.validity.from || md <= rule.validity.through));
+  if (matching.length !== 1 || Object.keys(matching[0].week).length !== 7) return null;
+  return { opening_hours: DAYS.map(day => `${day} ${matching[0].week[day].length ?
+    matching[0].week[day].map(window => `${window.opens}-${window.closes}`).join(',') : 'off'}`).join('; '),
+    url: content.source_url, valid_for_date: options.date, entry_url: content.entry_url };
+}
+module.exports = { parseSelectedPlaceHtmlHours, parseSelectedPlaceHoursCalendar, selectedPlaceHtmlHoursLink };

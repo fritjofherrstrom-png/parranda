@@ -360,7 +360,7 @@ export default function StopLine({
                       the one disclosure. "Kept" and the hours status sit
                       beside it as plain text, so missing opening hours never read
                       as part of the category. */}
-                  {(stopKindLabel || kept || hoursClosed || (hoursUnknown && !hoursUnknownEverywhere)) && (
+                  {(stopKindLabel || kept || hoursClosed || (hoursUnknown && (hoursLabel || !hoursUnknownEverywhere))) && (
                     <span className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
                       {stopKindLabel && <StopCategory type={stop?.type} label={stopKindLabel} muted={behind} />}
                       {kept && (
@@ -372,10 +372,10 @@ export default function StopLine({
                       {/* Visitability stays visible without expanding: a place
                           whose source gives no hours for the chosen day says so
                           here instead of reading as a confirmed visit. */}
-                      {hoursUnknown && !hoursUnknownEverywhere && (
+                      {hoursUnknown && (hoursLabel || !hoursUnknownEverywhere) && (
                         <span className="inline-flex items-center gap-1 text-xs text-parranda-ink/68">
                           <ClockIcon className="h-3 w-3" />
-                          {t("Öppettider saknas", "Opening hours unavailable")}
+                          {hoursLabel || t("Öppettider saknas", "Opening hours unavailable")}
                         </span>
                       )}
                       {hoursClosed && hoursLabel && (
@@ -406,7 +406,7 @@ export default function StopLine({
                       </span>
                     )}
                     {hoursLabel && <span>{hoursLabel}</span>}
-                    {hoursUnknown && (
+                    {hoursUnknown && !hoursLabel && (
                       <span>{t("Öppettider saknas för den valda dagen", "Opening hours unavailable for the selected day")}</span>
                     )}
                     {stop?.address && <span>{stop.address}</span>}

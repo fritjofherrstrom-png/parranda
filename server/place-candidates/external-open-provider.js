@@ -27,6 +27,7 @@
 
 const { normalizePlaceCandidate, validatePlaceCandidate } = require("./contract");
 const { normalizeOpeningHours, normalizeOpeningHoursSource } = require("./opening-hours");
+const { normalizeSelectedHoursCalendar } = require('./opening-hours-calendar');
 const { normalizeSourceNameAliases } = require("./source-name-aliases");
 const { createEvidence, SOURCE_FAMILIES } = require("../candidates/evidence");
 
@@ -184,6 +185,11 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
         observedUrl.pathname === venueUrl.pathname && observedUrl.search === venueUrl.search && observedUrl.port === venueUrl.port) {
       base.opening_hours_source = hoursSource;
     }
+  }
+  // An explicit invalid private calendar remains unknown instead of borrowing
+  // a possibly incompatible weekly fact. This never changes place trust.
+  if (Object.prototype.hasOwnProperty.call(record, 'selected_hours_calendar')) {
+    base.selected_hours_calendar = normalizeSelectedHoursCalendar(record.selected_hours_calendar, { record: base });
   }
   const operationalStatus = normalizeOperationalStatus(record.operational_status);
   if (operationalStatus) base.operational_status = operationalStatus;

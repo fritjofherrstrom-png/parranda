@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createOperatorVisitEnricher } = require('../server/place-candidates/operator-visit-evidence');
 const { createSourceCache } = require('../server/place-candidates/source-cache');
+const { projectSelectedHoursCalendar: project, selectedHoursCalendarKey } = require('../server/place-candidates/opening-hours-calendar');
 
 const fixtureDir = path.join(__dirname, 'fixtures/selected-place-visit-hours');
 const entry = fs.readFileSync(path.join(fixtureDir, 'gustavianum-entry.html'), 'utf8');
@@ -18,23 +19,29 @@ const response = body => new Response(body, { status: 200, headers: { 'Content-T
 const options = extra => ({ cache: createSourceCache(), hoursCache: createSourceCache(),
   resolveHost: async () => [{ address: '93.184.216.34', family: 4 }], ...extra });
 const context = date => ({ selectedIds: [row.id], date });
+const dayFact = (record, date) => project(record.selected_hours_calendar, { date, timezone: 'Europe/Stockholm' });
 
-test('positive HTML visit evidence is reused only for its frozen absolute day', async () => {
+test('completed HTML calendar is reused while each frozen absolute day is projected separately', async () => {
   const calls = [];
   const factory = createOperatorVisitEnricher(options({ fetcher: async url => {
     calls.push(url);
     return response(url === row.website ? entry : detail);
   } }));
   const first = (await factory.forRequest().enrichSelected([row], context('2026-10-19')))[0];
-  assert.ok(first.opening_hours?.includes('Mo off'));
-  assert.equal(first.opening_hours_source.valid_for_date, '2026-10-19');
+  assert.equal(first.opening_hours, undefined, 'calendar closure never becomes a permanent weekly off string');
+  assert.equal(first.selected_hours_calendar.identity_key, selectedHoursCalendarKey(row));
+  assert.equal(dayFact(first, '2026-10-19').status, 'closed');
+  assert.equal(dayFact(first, '2026-10-19').selected_day_hours.date, '2026-10-19');
   const cached = (await factory.forRequest().enrichSelected([row], context('2026-10-19')))[0];
-  assert.deepEqual(cached.opening_hours_source, first.opening_hours_source);
+  assert.deepEqual(cached.selected_hours_calendar, first.selected_hours_calendar);
   assert.deepEqual(calls, [row.website, detailUrl]);
   const nextMonday = (await factory.forRequest().enrichSelected([row], context('2026-10-26')))[0];
-  assert.equal(nextMonday.opening_hours_source.valid_for_date, '2026-10-26');
-  assert.equal(nextMonday.opening_hours_source.url, detailUrl);
-  assert.deepEqual(calls, [row.website, detailUrl, row.website, detailUrl], 'a different day cannot inherit a date-specific positive');
+  assert.deepEqual(nextMonday.selected_hours_calendar, first.selected_hours_calendar, 'a new day does not renew source observation');
+  assert.equal(dayFact(nextMonday, '2026-10-26').selected_day_hours.date, '2026-10-26');
+  assert.equal(dayFact(nextMonday, '2026-10-26').selected_day_hours.source_url, detailUrl);
+  const summerMonday = (await factory.forRequest().enrichSelected([row], context('2027-06-07')))[0];
+  assert.equal(dayFact(summerMonday, '2027-06-07').status, 'known', 'winter closure cannot leak into summer projection');
+  assert.deepEqual(calls, [row.website, detailUrl], 'different days reuse completed calendar facts without sharing a projected day');
   assert.equal(row.opening_hours, undefined, 'the original source record remains untouched');
 });
 
@@ -45,16 +52,16 @@ test('expired HTML visit evidence cannot be renewed by an unsuccessful refresh',
     now: () => now, hoursCache: createSourceCache({ now: () => now }),
     fetcher: async url => { calls.push(url); return response(failed ? 'No visit facts' : url === row.website ? entry : detail); },
   }));
-  assert.ok((await factory.forRequest().enrichSelected([row], context('2026-10-19')))[0].opening_hours);
+  assert.ok((await factory.forRequest().enrichSelected([row], context('2026-10-19')))[0].selected_hours_calendar);
   now += 6 * 60 * 60 * 1000; failed = true;
-  assert.equal((await factory.forRequest().enrichSelected([row], context('2026-10-19')))[0].opening_hours, undefined);
-  assert.equal((await factory.forRequest().enrichSelected([row], context('2026-10-19')))[0].opening_hours, undefined);
+  assert.equal((await factory.forRequest().enrichSelected([row], context('2026-10-19')))[0].selected_hours_calendar, undefined);
+  assert.equal((await factory.forRequest().enrichSelected([row], context('2026-10-19')))[0].selected_hours_calendar, undefined);
   assert.deepEqual(calls, [row.website, detailUrl, row.website, row.website]);
 });
 
-test('a persisted HTML positive with another date or another entry identity is rejected', async () => {
+test('a persisted calendar with projected-date metadata, corrupt rules or another source identity is rejected', async () => {
   for (const changed of [{ valid_for_date: '2026-10-26' }, { entry_url: 'https://www.uu.se/other-institution' },
-    { url: 'https://unrelated.example/hours' }, { opening_hours: 'Mo off' }]) {
+    { source_url: 'https://unrelated.example/hours' }, { rules: [{ week: { Mo: [{ opens: '99:00', closes: '99:01' }] } }] }]) {
     const cache = createSourceCache();
     let savedKey;
     const write = cache.set.bind(cache);
@@ -64,13 +71,13 @@ test('a persisted HTML positive with another date or another entry identity is r
       fetcher: async url => { calls++; return response(url === row.website ? entry : detail); },
     }));
     const [first] = await factory.forRequest().enrichSelected([row], context('2026-10-19'));
-    assert.ok(first.opening_hours);
+    assert.ok(first.selected_hours_calendar);
     assert.ok(savedKey);
     write(savedKey, { ...cache.peek(savedKey), ...changed });
     const [next] = await factory.forRequest().enrichSelected([row], context('2026-10-19'));
-    assert.ok(next.opening_hours);
-    assert.equal(next.opening_hours_source.valid_for_date, '2026-10-19');
-    assert.equal(next.opening_hours_source.url, detailUrl);
+    assert.ok(next.selected_hours_calendar);
+    assert.equal(dayFact(next, '2026-10-19').selected_day_hours.date, '2026-10-19');
+    assert.equal(next.selected_hours_calendar.source_url, detailUrl);
     assert.equal(calls, 4, 'invalid persisted evidence requires a new bounded read, not an identity upgrade');
   }
 });
@@ -80,6 +87,7 @@ test('HTML evidence requires a valid absolute date and cannot follow an external
     const calls = [];
     const factory = createOperatorVisitEnricher(options({ fetcher: async url => { calls.push(url); return response(entry); } }));
     const [result] = await factory.forRequest().enrichSelected([row], context(date));
+    assert.equal(result.selected_hours_calendar, undefined);
     assert.equal(result.opening_hours, undefined);
     assert.deepEqual(calls, [row.website]);
   }
@@ -88,7 +96,8 @@ test('HTML evidence requires a valid absolute date and cannot follow an external
     calls.push(url); return response(entry.replace('/gustavianum/besok-oss/oppettider', 'https://unrelated.example/hours'));
   } }));
   const [result] = await factory.forRequest().enrichSelected([row], context('2026-10-19'));
-  assert.equal(result.opening_hours, undefined, 'an unresolved explicit exception page cannot be ignored');
+  assert.equal(result.selected_hours_calendar, undefined, 'an unresolved explicit exception page cannot be ignored');
+  assert.equal(result.opening_hours, undefined);
   assert.deepEqual(calls, [row.website]);
 });
 
@@ -102,6 +111,7 @@ test('a date-specific cached fact cannot masquerade as reusable weekly JSON-LD e
   const factory = createOperatorVisitEnricher(options({ hoursCache, fetcher: async () => { calls++; return response('No visit facts'); } }));
   const [result] = await factory.forRequest().enrichSelected([row], context('2026-10-26'));
   assert.equal(result.opening_hours, undefined, 'a Monday-negative from another date is not a weekly source statement');
+  assert.equal(result.selected_hours_calendar, undefined);
   assert.equal(calls, 1);
 });
 
@@ -112,8 +122,8 @@ test('the linked visit page consumes the original shared deadline instead of sta
     calls.push(url); now += 7000; return response(entry);
   } }));
   const session = factory.forRequest();
-  assert.equal((await session.enrichSelected([row], context('2026-10-19')))[0].opening_hours, undefined);
-  assert.equal((await session.enrichSelected([row], context('2026-10-19')))[0].opening_hours, undefined);
+  assert.equal((await session.enrichSelected([row], context('2026-10-19')))[0].selected_hours_calendar, undefined);
+  assert.equal((await session.enrichSelected([row], context('2026-10-19')))[0].selected_hours_calendar, undefined);
   assert.deepEqual(calls, [row.website]);
 });
 
@@ -131,7 +141,8 @@ test('vintage and selected checks share one source-owned content hop for the sam
   } })).forRequest();
   await session([vintage]);
   const [result] = await session.enrichSelected([vintage], context('2026-10-19'));
-  assert.equal(result.opening_hours, undefined, 'a spent contact hop cannot start a second visit-page hop');
+  assert.equal(result.selected_hours_calendar, undefined, 'a spent contact hop cannot start a second visit-page hop');
+  assert.equal(result.opening_hours, undefined);
   assert.deepEqual(calls, [row.website, contact]);
 });
 
@@ -145,7 +156,8 @@ test('the same already-read hours hop can be reused without fetching another doc
   } })).forRequest();
   await session([vintage]);
   const [result] = await session.enrichSelected([vintage], context('2026-10-19'));
-  assert.equal(result.opening_hours_source?.valid_for_date, '2026-10-19');
+  assert.equal(dayFact(result, '2026-10-19').selected_day_hours?.date, '2026-10-19');
+  assert.equal(result.selected_hours_calendar.source_url, detailUrl);
   assert.deepEqual(calls, [row.website, detailUrl]);
 });
 
@@ -173,9 +185,9 @@ test('a cancelled linked-page response cannot fill the cache or cancel another l
   assert.equal(pending[1].signal.aborted, false);
   pending[1].resolve(response(detail));
   const [live] = await second;
-  assert.equal(live.opening_hours_source.valid_for_date, '2026-10-19');
-  assert.equal(live.opening_hours_source.url, detailUrl);
+  assert.equal(dayFact(live, '2026-10-19').selected_day_hours.date, '2026-10-19');
+  assert.equal(live.selected_hours_calendar.source_url, detailUrl);
   const [cached] = await factory.forRequest().enrichSelected([row], context('2026-10-19'));
-  assert.deepEqual(cached.opening_hours_source, live.opening_hours_source);
+  assert.deepEqual(cached.selected_hours_calendar, live.selected_hours_calendar);
   assert.deepEqual(calls, [row.website, detailUrl, row.website, detailUrl]);
 });

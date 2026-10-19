@@ -9,35 +9,22 @@ const { createSourceCache } = require('./source-cache');
 const { publicAddressesForUrl, pinnedHttpsFetch } = require('./simpleview-europe-place-detail-source');
 const { normalizeOpeningHours } = require('./opening-hours');
 const { parseSelectedPlaceHours, selectedPlaceHoursKey, selectedPlaceHoursSourceMatches } = require('./selected-place-hours');
-const { parseSelectedPlaceHtmlHours, selectedPlaceHtmlHoursLink } = require('./selected-place-html-hours');
+const { parseSelectedPlaceHoursCalendar, selectedPlaceHtmlHoursLink } = require('./selected-place-html-hours');
+const { CALENDAR_CONTRACT, selectedHoursCalendarKey, normalizeSelectedHoursCalendar } = require('./opening-hours-calendar');
 const { normalizeSchemaOrgOpeningHours } = require('./schema-org-opening-hours');
 const MAX_CANDIDATES = 4;
 const MAX_BYTES = 512 * 1024;
 const TOTAL_MS = 6000;
 const EXCLUDED_HOSTS = /(^|\.)(facebook|instagram|google|tripadvisor|yelp|tiktok)\./i;
 const fold = value => String(value || '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]/g, '');
-const HTML_HOURS_CONTRACT = 'selected-place-html-hours-v1';
 
 function selectedDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const date = new Date(value + 'T12:00:00Z');
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : null;
 }
-function htmlHoursKey(record, date) {
-  return createHash('sha256').update(JSON.stringify([HTML_HOURS_CONTRACT, selectedPlaceHoursKey(record), date])).digest('hex');
-}
-function completeHtmlWeek(value) {
-  const rules = typeof value === 'string' ? value.split(';').map(part => part.trim()) : [];
-  const days = rules.map(rule => /^(Mo|Tu|We|Th|Fr|Sa|Su) (?:off|\d{2}:\d{2}-\d{2}:\d{2})$/.exec(rule)?.[1]);
-  return rules.length === 7 && days.every(Boolean) && new Set(days).size === 7 &&
-    normalizeSchemaOrgOpeningHours({ openingHours: value }) === value;
-}
-function htmlSourceMatches(record, entryUrl, factUrl) {
-  if (!selectedPlaceHoursSourceMatches(record, entryUrl) || sourceUrl(entryUrl) !== entryUrl || sourceUrl(factUrl) !== factUrl) return false;
-  const entry = new URL(entryUrl), fact = new URL(factUrl);
-  // Canonical www/apex aliases are already checked and DNS-pinned by read().
-  if (entry.hostname.replace(/^www\./, '') !== fact.hostname.replace(/^www\./, '')) return false;
-  return fact.pathname === entry.pathname || fact.pathname.startsWith(entry.pathname.replace(/\/$/, '') + '/');
+function htmlHoursKey(record) {
+  return createHash('sha256').update(JSON.stringify([CALENDAR_CONTRACT, selectedHoursCalendarKey(record)])).digest('hex');
 }
 
 function sourceUrl(value) {
@@ -336,20 +323,18 @@ function createOperatorVisitEnricher({
       normalizeSchemaOrgOpeningHours({openingHours:fact.opening_hours})===fact.opening_hours &&
       selectedPlaceHoursSourceMatches(record,fact.url) && sourceUrl(fact.url)===fact.url && Number.isFinite(Date.parse(fact.observed_at)) &&
       Date.parse(fact.observed_at)<=now() && now()-Date.parse(fact.observed_at)<6*60*60*1000;
-    const validHtmlFact=(fact,key,record)=>!!date && !!fact && fact.contract===HTML_HOURS_CONTRACT &&
-      fact.identity_key===key && fact.valid_for_date===date && completeHtmlWeek(fact.opening_hours) &&
-      htmlSourceMatches(record,fact.entry_url,fact.url) && Number.isFinite(Date.parse(fact.observed_at)) &&
-      Date.parse(fact.observed_at)<=now() && now()-Date.parse(fact.observed_at)<6*60*60*1000;
-    const accepted=(fact,record)=>validFact(fact,selectedPlaceHoursKey(record),record) ||
-      validHtmlFact(fact,htmlHoursKey(record,date),record);
+    const calendarFact=(fact,record)=>date ? normalizeSelectedHoursCalendar(fact,{record,now:now()}) : null;
     const pending=[];
     for(const record of targets) {
-      const key=date?htmlHoursKey(record,date):selectedPlaceHoursKey(record);
+      const key=date?htmlHoursKey(record):selectedPlaceHoursKey(record);
       if(session.selectedFacts.has(key))continue;
+      const supplied=calendarFact(record.selected_hours_calendar,record);
+      if(supplied){session.selectedFacts.set(key,supplied);continue;}
       const weekly=hoursCache.peek?.(selectedPlaceHoursKey(record));
       if(validFact(weekly,selectedPlaceHoursKey(record),record)){session.selectedFacts.set(key,weekly);continue;}
       const cached=date?hoursCache.peek?.(key):null;
-      if(validHtmlFact(cached,key,record)){session.selectedFacts.set(key,cached);continue;}
+      const validated=calendarFact(cached,record);
+      if(validated){session.selectedFacts.set(key,validated);continue;}
       if(reserve(record,session))pending.push(record);
       else session.selectedFacts.set(key,null);
     }
@@ -357,7 +342,7 @@ function createOperatorVisitEnricher({
     let cursor=0;
     await Promise.all([0,1].map(async()=>{
       while(cursor<pending.length && now()<deadline && !context.signal?.aborted) {
-        const record=pending[cursor++],key=date?htmlHoursKey(record,date):selectedPlaceHoursKey(record);
+        const record=pending[cursor++],key=date?htmlHoursKey(record):selectedPlaceHoursKey(record);
         if(session.selectedFacts.has(key))continue;
         // Acquisition belongs to this request's signal and shared visit budget.
         // Share only completed positive facts; another request must never inherit
@@ -380,10 +365,11 @@ function createOperatorVisitEnricher({
           // public-DNS-pinned transport; no contact or secondary crawl follows.
           const factPage=link?await pageFor(session,link,context,deadline):page;
           if(!factPage || context.signal?.aborted || now()>=deadline)return null;
-          const html=parseSelectedPlaceHtmlHours(factPage.html,record,{date,sourceUrl:factPage.url,
+          const html=parseSelectedPlaceHoursCalendar(factPage.html,record,{sourceUrl:factPage.url,
             ...(link?{entryHtml:page.html,entrySourceUrl:page.url}:{})});
-          const observed=html?{...html,contract:HTML_HOURS_CONTRACT,identity_key:key,observed_at:new Date(now()).toISOString()}:null;
-          if(validHtmlFact(observed,key,record) && now()<deadline && !context.signal?.aborted)hoursCache.set(key,observed);
+          const observed=html?calendarFact({...html,contract:CALENDAR_CONTRACT,identity_key:selectedHoursCalendarKey(record),
+            observed_at:new Date(now()).toISOString()},record):null;
+          if(observed && now()<deadline && !context.signal?.aborted)hoursCache.set(key,observed);
           return observed;
         })().catch(()=>null);
         session.selectedFacts.set(key,fact);
@@ -392,10 +378,13 @@ function createOperatorVisitEnricher({
     context.signal?.throwIfAborted();
     const output=records.map(record=>{
       if(!ids.has(record.id) || normalizeOpeningHours(record.opening_hours))return record;
-      const key=date?htmlHoursKey(record,date):selectedPlaceHoursKey(record);
+      const key=date?htmlHoursKey(record):selectedPlaceHoursKey(record);
       const fact=session.selectedFacts.get(key);
-      return accepted(fact,record)?{...record,opening_hours:fact.opening_hours,opening_hours_source:{url:fact.url,observed_at:fact.observed_at,
-        ...(fact.contract===HTML_HOURS_CONTRACT?{valid_for_date:fact.valid_for_date}:{})}}:record;
+      if(validFact(fact,selectedPlaceHoursKey(record),record))return {...record,opening_hours:fact.opening_hours,
+        opening_hours_source:{url:fact.url,observed_at:fact.observed_at}};
+      const calendar=calendarFact(fact,record);
+      return calendar?{...record,selected_hours_calendar:calendar}:
+        Object.prototype.hasOwnProperty.call(record,'selected_hours_calendar') ? {...record,selected_hours_calendar:null}:record;
     });
     for(const name of ['loader_status','loader_error','loader_metadata'])if(records[name]!==undefined)Object.defineProperty(output,name,{value:records[name]});
     return output;

@@ -46,6 +46,10 @@ const seasonalRecords = [
   ...records.slice(1).map((record, index) => ({ ...record,
     lat: 59.85794448852539 + (index + 1) * .001, lng: 17.63179588317871 })),
 ];
+const cafeRecord = { ...externalRecord('selected-cafe', 'Centralkonditoriet', 'cafe', 59.856815338134766, 17.64398193359375, ['coffee']), website: 'http://www.centralkonditoriet.com/' };
+const cafeRecords = [cafeRecord, ...records.slice(1).map((row, index) => ({ ...row, type: 'cafe', tags: ['coffee'],
+  lat: cafeRecord.lat + (index + 1) * .001, lng: cafeRecord.lng }))];
+const cafeHtml = readFileSync(new URL('../../tests/fixtures/selected-place-visit-hours/centralkonditoriet-owner-structure.html', import.meta.url), 'utf8');
 const stopsOf = body => body.days?.[0]?.primary_route?.main_stops || [];
 const contextStopsOf = body => body.place_structure?.district_day?.areas?.flatMap(area => area.stops || []) || [];
 let browser;
@@ -66,10 +70,13 @@ function sourcePage(record, mode) {
 }
 
 async function harness(t, mode) {
-  const seasonal = mode === 'recorded-seasonal';
-  const fixtureRecords = seasonal ? seasonalRecords : records;
-  const now = seasonal ? SEASONAL_NOW : NOW;
-  const date = seasonal ? SEASONAL_DATE : DATE;
+  const seasonal = ['recorded-seasonal', 'recorded-holiday', 'recorded-closure'].includes(mode);
+  const cafe = mode === 'recorded-cafe';
+  const fixtureRecords = cafe ? cafeRecords : seasonal ? seasonalRecords : records;
+  const now = seasonal || cafe ? SEASONAL_NOW : NOW;
+  const viewerNow = mode === 'recorded-holiday' ? '2026-10-30T10:00:00Z' : mode === 'recorded-closure' ? '2026-12-23T10:00:00Z' : now;
+  const date = mode === 'recorded-holiday' ? '2026-10-31' : mode === 'recorded-closure' ? '2026-12-24' : seasonal || cafe ? SEASONAL_DATE : DATE;
+  const preference = cafe ? 'fika' : 'culture';
   const anchor = fixtureRecords[0];
   const websiteRequests = [], resolverRequests = [], composeRequests = [], errors = [];
   let collections = 0;
@@ -80,6 +87,8 @@ async function harness(t, mode) {
     resolveHost: async () => [{ address: '93.184.216.34', family: 4 }],
     fetcher: async url => {
       websiteRequests.push(url);
+      if (cafe && url === 'https://www.centralkonditoriet.com/') return new Response(cafeHtml,
+        { status: 200, headers: { 'Content-Type': 'text/html' } });
       if (seasonalPages.has(url) && seasonal) return new Response(seasonalPages.get(url),
         { status: 200, headers: { 'Content-Type': 'text/html' } });
       const record = fixtureRecords.find(record => record.website === url);
@@ -126,7 +135,7 @@ async function harness(t, mode) {
       constructor(...args) { super(...(args.length ? args : [epoch])); }
       static now() { return epoch; }
     };
-  }, Date.parse(now));
+  }, Date.parse(viewerNow));
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   page.on('pageerror', error => errors.push(error.message));
@@ -140,7 +149,7 @@ async function harness(t, mode) {
     if (!COMPOSE_PATHS.has(new URL(response.url()).pathname) || response.status() !== 200) return false;
     try { return stopsOf(await response.json()).length > 0; } catch { return false; }
   }).then(response => response.json());
-  await page.goto(`${origin}/anywhere?place=Fixturehaven&prefs=culture&day=1&rhythm=full&lang=en`);
+  await page.goto(`${origin}/anywhere?place=Fixturehaven&prefs=${preference}&day=1&rhythm=full&lang=en`);
   const body = await published;
   const stops = stopsOf(body);
   await page.waitForFunction(names => {
@@ -157,7 +166,7 @@ async function harness(t, mode) {
   assert.equal(composeRequests[0].payload.place, 'Fixturehaven');
   assert.equal(composeRequests[0].payload.place_selection, undefined, 'free text does not invent an autocomplete choice');
   assert.deepEqual(composeRequests[0].payload.dates, [date]);
-  assert.deepEqual(composeRequests[0].payload.preferences, ['culture']);
+  assert.deepEqual(composeRequests[0].payload.preferences, [preference]);
   assert.equal(resolverRequests.length, 1);
   assert.equal(collections, 1, 'hours replay consumes the original frozen supply');
   if (!seasonal) {
@@ -306,15 +315,65 @@ test('built Planner withholds a recorded seasonal Monday closure across reload a
   assert.deepEqual(stopsOf(tuesday).map(stop => stop.id).sort(), [OWNER_ID, 'selected-1', 'selected-2'].sort(),
     'a cached Monday closure cannot exclude Tuesday');
   assert.equal(tuesday.agnostic_route_output_experiment.walking_validation.valid, true);
-  assert.ok(stopsOf(tuesday).every(stop => stop.selected_day_hours === undefined && stop.open_now === undefined),
-    'the bounded closure reader does not invent open windows for another date');
-  assert.equal(contextStopsOf(tuesday).find(stop => stop.id === OWNER_ID)?.selected_day_hours, undefined);
+  assert.ok(stopsOf(tuesday).every(stop => stop.open_now === undefined && (stop.selected_day_hours === undefined || stop.selected_day_hours.status === 'unknown')),
+    'unknown-hour neighbors cannot borrow owner facts');
+  assert.equal(contextStopsOf(tuesday).find(stop => stop.id === OWNER_ID)?.selected_day_hours?.status, 'unknown');
   const ownerButton = f.page.getByRole('list', { name: 'The stops, in order', exact: true })
     .locator(':scope > li > button').filter({ hasText: 'Gustavianum' });
   await ownerButton.click();
   const ownerPanel = f.page.getByRole('region', { name: 'The route', exact: true });
-  assert.match(await ownerPanel.innerText(), /Opening hours unavailable for the selected day/);
+  assert.match(await ownerPanel.innerText(), /Regular hours: 12:00–17:00.*Selected day unconfirmed/);
   assert.equal(await ownerPanel.getByRole('link', { name: 'Website', exact: true }).getAttribute('href'), OWNER_WEBSITE);
   assert.doesNotMatch(await ownerPanel.innerText(), /Source hours for selected day|open now|currently open/i);
   if (evidenceDir) await f.page.screenshot({ path: join(evidenceDir, 'recorded-seasonal-tuesday.png'), fullPage: true });
+});
+
+
+test('built UI publishes actual owner date override and withholds dated closure without permanent inactivity', { timeout: 60000 }, async t => {
+  for (const mode of ['recorded-holiday', 'recorded-closure']) {
+    const f = await harness(t, mode);
+    const stop = stopsOf(f.body).find(row => row.id === OWNER_ID);
+    if (mode === 'recorded-holiday') {
+      assert.equal(stop.selected_day_hours.status, 'known');
+      assert.deepEqual(stop.selected_day_hours.windows, [{ opens: '12:00', closes: '17:00' }]);
+      const button = f.page.getByRole('list', { name: 'The stops, in order', exact: true }).locator(':scope > li > button').filter({ hasText: 'Gustavianum' });
+      if (await button.getAttribute('aria-expanded') !== 'true') await button.click();
+      assert.match(await f.route.innerText(), /Source hours for selected day: 12:00–17:00/);
+    } else {
+      assert.equal(stop, undefined);
+      const withheld = contextStopsOf(f.body).find(row => row.id === OWNER_ID);
+      assert.equal(withheld.selected_day_hours.status, 'closed');
+      assert.equal(withheld.selected_day_hours.date, '2026-12-24');
+      assert.notEqual(withheld.opening_hours, 'off');
+      assert.doesNotMatch(await f.route.innerText(), /Gustavianum/);
+    }
+  }
+});
+
+test('built UI displays recorded café ordinary hours conditionally through HTTP and ordinary reload', { timeout: 30000 }, async t => {
+  const f = await harness(t, 'recorded-cafe');
+  const verify = async body => {
+    const stop = stopsOf(body).find(row => row.id === cafeRecord.id);
+    assert.ok(stop, 'unresolved holiday conditions do not prohibit a route');
+    assert.equal(stop.selected_day_hours.status, 'unknown');
+    assert.equal(stop.open_now, undefined);
+    assert.equal(stop.selected_day_hours.ordinary_status, 'known');
+    assert.deepEqual(stop.selected_day_hours.ordinary_windows, [{ opens: '06:30', closes: '18:00' }]);
+    const button = f.page.getByRole('list', { name: 'The stops, in order', exact: true }).locator(':scope > li > button').filter({ hasText: cafeRecord.name });
+    if (await button.getAttribute('aria-expanded') !== 'true') await button.click();
+    assert.match(await f.route.innerText(), /Regular hours: 06:30–18:00.*Holiday hours unconfirmed/);
+    assert.doesNotMatch(await f.route.innerText(), /currently open|open now|Source hours for selected day/i);
+    return stop.selected_day_hours;
+  };
+  const originalFact = await verify(f.body);
+  const reloaded = f.page.waitForResponse(async response => {
+    if (!COMPOSE_PATHS.has(new URL(response.url()).pathname) || response.status() !== 200) return false;
+    try { return stopsOf(await response.json()).some(row => row.id === cafeRecord.id); } catch { return false; }
+  }).then(response => response.json());
+  await f.page.reload();
+  const body = await reloaded;
+  await f.page.getByRole('list', { name: 'The stops, in order', exact: true }).locator(':scope > li > button').filter({ hasText: cafeRecord.name }).waitFor();
+  assert.deepEqual(await verify(body), originalFact, 'reload keeps original observation and qualified uncertainty');
+  assert.equal(f.collections, 2);
+  assert.equal(f.websiteRequests.filter(url => url.includes('centralkonditoriet')).length, 1, 'date-independent calendar reused without refetch');
 });

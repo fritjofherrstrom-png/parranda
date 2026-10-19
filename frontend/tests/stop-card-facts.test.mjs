@@ -71,3 +71,13 @@ test("saved stop websites keep the server's 2048-character boundary", () => {
   assert.equal(stopWebsiteUrl({ website: base + "ä".repeat(338) }), null,
     "the normalized destination must also stay inside the source-website bound");
 });
+
+test("regular hours do not promote an unknown selected day to confirmed hours", () => {
+  const selected_day_hours = { status: "unknown", all_day: false, windows: [], ordinary_status: "known",
+    ordinary_windows: [{ opens: "06:30", closes: "18:00" }], uncertainty: "holiday_exceptions",
+    date: "2026-10-16", timezone: "Europe/Stockholm", source_url: "https://museum.example/visit",
+    observed_at: "2026-10-15T10:00:00.000Z" };
+  assert.equal(stopHoursUnknown({ type: "museum", selected_day_hours }), true);
+  assert.equal(stopHoursUnknown({ type: "museum", selected_day_hours: {
+    ...selected_day_hours, ordinary_status: "closed", ordinary_windows: [] } }), true);
+});

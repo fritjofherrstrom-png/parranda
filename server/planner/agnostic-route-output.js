@@ -44,6 +44,7 @@ const {
   isAlwaysClosedOpeningHours,
   normalizeSelectedDayHoursFact,
 } = require("../place-candidates/opening-hours");
+const { normalizeSelectedHoursCalendar, resolveCandidateDayHours } = require('../place-candidates/opening-hours-calendar');
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
 const { operatorClosureForWindow } = require('../place-candidates/operator-visit-evidence');
 const { buildAgnosticRouteOrdering, daypartForRole, timeBandRank } = require("./agnostic-route-ordering");
@@ -584,7 +585,7 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
       daypart: daypartForRole(stop.role || null),
       lat: stop.coordinates && Number.isFinite(stop.coordinates.lat) ? stop.coordinates.lat : null,
       lng: stop.coordinates && Number.isFinite(stop.coordinates.lng) ? stop.coordinates.lng : null,
-      ...(selectedDayHours?.status === "known" ? { selected_day_hours: selectedDayHours } : {}),
+      ...(["known", "unknown"].includes(selectedDayHours?.status) ? { selected_day_hours: selectedDayHours } : {}),
       ...(website ? { website } : {}),
     };
   });
@@ -658,7 +659,7 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
   }
 
   // Fallback (no validation supplied): the pre-#261 unvalidated shape.
-  const hasSelectedDayHours = stops.some((stop) => Boolean(stop.selected_day_hours));
+  const hasSelectedDayHours = stops.some((stop) => stop.selected_day_hours?.status === 'known');
   return {
     ...base,
     summary:
@@ -967,6 +968,36 @@ function buildBlockedAgnosticRouteOutputExperiment({ baselineResult, blocker, so
  *   baseline (unchanged) when not eligible, or a deep-cloned mutated/synthesized
  *   result when eligible. `experiment` is the top-level diagnostics block.
  */
+// Availability and publication consume the same authoritative local-day
+// projection. Ordinary windows attached to uncertainty are source context only.
+function calendarObservationNow(clock) {
+  try {
+    const instant = typeof clock === 'function' ? clock() : new Date();
+    return instant instanceof Date && Number.isFinite(instant.getTime()) ? instant.getTime() : NaN;
+  } catch { return NaN; }
+}
+
+function calendarDayAvailability(record, { date, context, window }) {
+  const projected = resolveCandidateDayHours(record, { date,
+    timezone: context?.timezoneKnown ? context.contextBlock?.time?.timezone : null,
+    availabilityWindow: window,
+    now: Number.isFinite(context?.calendarObservedNow) ? context.calendarObservedNow : NaN,
+  });
+  if (!projected) return null;
+  let fact = projected.selected_day_hours;
+  if (!fact && projected.status === 'unknown' && projected.ordinary_day_hours) {
+    const ordinary = projected.ordinary_day_hours;
+    fact = { status: 'unknown', all_day: false, windows: [], ordinary_status: ordinary.status,
+      ordinary_windows: ordinary.windows, uncertainty: /holiday/.test(projected.reason) ? 'holiday_exceptions' : 'unresolved_conditions',
+      date: ordinary.date, timezone: ordinary.timezone, source_url: ordinary.source_url, observed_at: ordinary.observed_at };
+  }
+  const selected = normalizeSelectedDayHoursFact(fact);
+  return { eligible: projected.eligible, reason: projected.reason,
+    status: projected.status === 'unknown' ? 'unknown' : projected.eligible ? 'available_in_window' : 'closed_for_window',
+    ...(selected ? { selected_day_hours: selected } : {}),
+  };
+}
+
 function withCandidateHours(composition, snapshot, requestedDate) {
   // The composer resolves omitted dates too; use that same private day identity
   // even when publication withholds a route. Never infer another date in UI.
@@ -975,6 +1006,11 @@ function withCandidateHours(composition, snapshot, requestedDate) {
   const ctx = snapshot?.context;
   const window = ctx?.timezoneKnown ? buildLocalDayAvailabilityWindow({ requestedDate: date, nowLocalIso: ctx.now }) : null;
   for (const record of snapshot?.records || []) {
+    const calendar = calendarDayAvailability(record, { date, context: ctx, window });
+    if (calendar) {
+      if (calendar.selected_day_hours && record.id != null) facts.set(String(record.id), calendar.selected_day_hours);
+      continue;
+    }
     const closure = window ? operatorClosureForWindow(record, window) : null;
     const fact = closure?.selected_day_hours || (window ? buildSelectedDayHoursFact(record.opening_hours, window) :
       isAlwaysClosedOpeningHours(record.opening_hours) ? { status: 'closed', all_day: false, windows: [] } : null);
@@ -1013,17 +1049,27 @@ async function composeAgnosticRouteOutput(args) {
     selectedIds: stops.map(stop => String(stop.id || '')).filter(Boolean),
     date: snapshot.date,
   });
+  // Observation age uses a trusted UTC instant, separately from the frozen
+  // local-day selection context. Acquisition must not move the planned day.
+  if (snapshot.context) snapshot.context.calendarObservedNow = calendarObservationNow(args.clock);
   let changed = false;
   const records = snapshot.records.map((record, index) => {
     const update = Array.isArray(updates) ? updates[index] : null;
     if (update?.id !== record.id || update?.lat !== record.lat || update?.lng !== record.lng) return record;
+    const hasCalendar = Object.prototype.hasOwnProperty.call(update, 'selected_hours_calendar');
+    const calendar = hasCalendar ? normalizeSelectedHoursCalendar(update.selected_hours_calendar, { record, now: snapshot.context?.calendarObservedNow }) : null;
+    if (hasCalendar && !calendar) return record;
+    const previousCalendar = normalizeSelectedHoursCalendar(record.selected_hours_calendar, { record });
+    const calendarChanged = calendar && JSON.stringify(calendar) !== JSON.stringify(previousCalendar);
     const hours = normalizeOpeningHours(update.opening_hours);
-    if (update.opening_hours_source?.valid_for_date !== undefined && update.opening_hours_source.valid_for_date !== snapshot.date) return record;
-    if (!hours || hours === record.opening_hours) return record;
+    const hoursDateMatches = update.opening_hours_source?.valid_for_date === undefined || update.opening_hours_source.valid_for_date === snapshot.date;
+    const hoursChanged = hoursDateMatches && hours && hours !== record.opening_hours;
+    if (!hoursChanged && !calendarChanged) return record;
     changed = true;
     // A time fact must not lend a new name, coordinate, type, family, review
     // decision or place-trust upgrade to an already admitted candidate.
-    return { ...record, opening_hours: hours, opening_hours_source: update.opening_hours_source };
+    return { ...record, ...(hoursChanged ? { opening_hours: hours, opening_hours_source: update.opening_hours_source } : {}),
+      ...(calendarChanged ? { selected_hours_calendar: calendar } : {}) };
   });
   if (!changed) {
     args.onRetainComposition?.(snapshot);
@@ -1149,17 +1195,24 @@ async function composeAgnosticRouteOutputOnce({
   const loaderStatus = (sourceStatus && sourceStatus.status) || "skipped";
   const willRunTrustedSelection =
     Boolean(externalRequested) && typeof loaderStatus === "string" && (curatedCandidates.length > 0 || (loaderStatus.startsWith("loaded:") && loaderStatus !== "loaded:0"));
+  let calendarObservedNow = null;
+  const observedClock = () => {
+    const instant = typeof clock === 'function' ? clock() : new Date();
+    calendarObservedNow = instant instanceof Date && Number.isFinite(instant.getTime()) ? instant.getTime() : null;
+    return instant;
+  };
   const ctx = retainedContext !== undefined ? structuredClone(retainedContext) : willRunTrustedSelection
     ? await resolveAgnosticContext({
         coords: selectionOrigin,
         date: effectiveDate,
         trustedTimezone,
         weatherProvider,
-        clock,
+        clock: observedClock,
         lang,
         cityLabel: agnosticContext.label,
       })
     : null;
+  if (ctx && retainedContext === undefined) ctx.calendarObservedNow = calendarObservedNow;
   if (typeof onRetainComposition === 'function') onRetainComposition({ records: resolvedTrusted.trustedRecords, context: ctx, date: effectiveDate });
 
   // Rhythm owns day depth; the number of requested interests must not cut
@@ -1197,6 +1250,8 @@ async function composeAgnosticRouteOutputOnce({
     : null;
   const availabilityHelpers = {
         evaluateCandidateAvailability: ({ candidate }) => {
+          const calendar = calendarDayAvailability(candidate, { date: effectiveDate, context: ctx, window: availabilityWindow });
+          if (calendar) return calendar;
           // A complete explicit weekly closure needs no timezone. It remains
           // an availability fact, not a claim that the business is inactive.
           if (!availabilityWindow) {

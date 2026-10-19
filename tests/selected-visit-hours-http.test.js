@@ -98,7 +98,11 @@ test('a seasonal closed day cached for Monday cannot close Tuesday or a Monday i
   assert.equal(summerMonday.status, 200);
   const summerStop = summerMonday.body.days[0].primary_route.main_stops.find(stop => stop.id === owner.id);
   assert.ok(summerStop, 'the winter Monday closure must not leak into another source season');
-  assert.notEqual(summerStop.selected_day_hours?.status, 'closed');
+  assert.equal(summerStop.selected_day_hours?.status, 'known');
+  assert.equal(summerStop.selected_day_hours.date, '2027-06-21');
+  assert.equal(summerStop.selected_day_hours.timezone, 'Europe/Stockholm');
+  assert.equal(summerStop.selected_day_hours.source_url, detailUrl);
+  assert.notEqual(summerStop.opening_hours, 'off', 'a winter closure cannot become permanent inactivity');
 });
 
 test('unmatched owner or wrong-service hours preserve the usable day without inventing a schedule', async t => {

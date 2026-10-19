@@ -172,8 +172,9 @@ test("the surface renders the engine's TRUSTWORTHY richness — and never the co
   assert.match(anywherePlannerSource, /typeLabel\(stop\?\.type, lang\)/);
   assert.match(anywherePlannerSource, /\{stopKindLabel\}/);
   // Unknown opening hours are visible on the stop row, not only when expanded.
-  // Said once when it holds for every stop; otherwise on exactly the stops it holds for.
-  assert.match(anywherePlannerSource, /hoursUnknown && !hoursUnknownEverywhere && \(\s*<span className="inline-flex items-center gap-1 text-xs text-parranda-ink\/68">[\s\S]{0,120}\{t\("Öppettider saknas", "Opening hours unavailable"\)\}/);
+  // Unavailable is said once when all stops are unknown; qualified ordinary
+  // hours still render on their own stop and remain unknown in the shared banner.
+  assert.match(anywherePlannerSource, /hoursUnknown && \(hoursLabel \|\| !hoursUnknownEverywhere\) && \(\s*<span className="inline-flex items-center gap-1 text-xs text-parranda-ink\/68">[\s\S]{0,120}\{hoursLabel \|\| t\("Öppettider saknas", "Opening hours unavailable"\)\}/);
   assert.match(anywherePlannerSource, /hoursUnknownEverywhere = split\.core\.length > 1 && split\.core\.every\(\(stop: any\) => stopHoursUnknown\(stop\)\)/);
   assert.match(anywherePlannerSource, /DAYPART_LABELS, stop\.daypart/);
   // NEVER rendered: fields that can carry baseline-city phrasing or placeholder

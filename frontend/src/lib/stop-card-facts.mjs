@@ -61,7 +61,8 @@ export function stopTypeLabel(stop, lang = "en") {
 // True when the kind of place depends on opening hours and its source gives
 // none for the selected day. Unknown is said as unknown, never filled in.
 export function stopHoursUnknown(stop) {
-  return HOURS_RELEVANT_TYPES.has(String(stop?.type || "")) && !selectedDayHoursLabel(stop?.selected_day_hours, "en");
+  return HOURS_RELEVANT_TYPES.has(String(stop?.type || "")) &&
+    (stop?.selected_day_hours?.status === "unknown" || !selectedDayHoursLabel(stop?.selected_day_hours, "en"));
 }
 
 // Source attribution is not a venue website. Accept only the distinct website
