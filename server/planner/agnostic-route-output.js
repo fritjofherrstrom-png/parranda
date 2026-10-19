@@ -1011,12 +1011,14 @@ async function composeAgnosticRouteOutput(args) {
   // source discovery, source reacquisition, or unbounded retry is permitted.
   const updates = await args.openDataLoader.enrichSelected(snapshot.records, {
     selectedIds: stops.map(stop => String(stop.id || '')).filter(Boolean),
+    date: snapshot.date,
   });
   let changed = false;
   const records = snapshot.records.map((record, index) => {
     const update = Array.isArray(updates) ? updates[index] : null;
     if (update?.id !== record.id || update?.lat !== record.lat || update?.lng !== record.lng) return record;
     const hours = normalizeOpeningHours(update.opening_hours);
+    if (update.opening_hours_source?.valid_for_date !== undefined && update.opening_hours_source.valid_for_date !== snapshot.date) return record;
     if (!hours || hours === record.opening_hours) return record;
     changed = true;
     // A time fact must not lend a new name, coordinate, type, family, review
