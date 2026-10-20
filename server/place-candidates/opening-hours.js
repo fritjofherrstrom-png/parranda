@@ -107,6 +107,7 @@ function buildSelectedDayHoursFact(value, { weekday } = {}) {
 }
 
 function normalizeSelectedDayHoursFact(value) {
+  if (value?.status === "unknown") return normalizeConditionalSelectedDayHoursFact(value);
   if (!value || typeof value !== "object" || !["known", "closed"].includes(value.status)) return null;
   const source = selectedDaySourceMetadata(value);
   if (value.status === "closed") {
@@ -132,6 +133,29 @@ function normalizeSelectedDayHoursFact(value) {
         }))
     : [];
   return windows.length ? { status: "known", all_day: false, windows, ...source } : null;
+}
+
+// A regular schedule is useful context, but never certifies a conditional day.
+// Unlike the legacy known/closed shapes, this fact requires complete provenance.
+function normalizeConditionalSelectedDayHoursFact(value) {
+  if (value.all_day !== false || !Array.isArray(value.windows) || value.windows.length ||
+      !["known", "closed"].includes(value.ordinary_status) || !Array.isArray(value.ordinary_windows) ||
+      !["holiday_exceptions", "unresolved_conditions"].includes(value.uncertainty)) return null;
+  const source = selectedDaySourceMetadata(value);
+  if (!source.date || /[\u0000-\u0020\u007f\\]/.test(value.source_url) ||
+      !isValidIsoDate(value.observed_at.slice(0, 10))) return null;
+  const windows = value.ordinary_windows;
+  if (value.ordinary_status === "closed" ? windows.length !== 0 :
+      !windows.length || windows.length > 4 || windows.some(window =>
+        typeof window?.opens !== "string" || typeof window?.closes !== "string" ||
+        !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(window.opens) ||
+        !/^(?:(?:[01]\d|2[0-3]):[0-5]\d|24:00)$/.test(window.closes) ||
+        window.opens >= window.closes)) return null;
+  return {
+    status: "unknown", all_day: false, windows: [], ordinary_status: value.ordinary_status,
+    ordinary_windows: windows.map(window => ({ opens: window.opens, closes: window.closes })),
+    uncertainty: value.uncertainty, ...source,
+  };
 }
 
 /**

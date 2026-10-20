@@ -5042,7 +5042,7 @@ function formatMainStop(stop) {
     const website = normalizeSourceWebsite(stop.website);
     if (website) formatted.website = website;
     const selectedDayHours = normalizeSelectedDayHoursFact(stop.selectedDayHours);
-    if (selectedDayHours && selectedDayHours.status === "known") {
+    if (selectedDayHours && ["known", "unknown"].includes(selectedDayHours.status)) {
       formatted.selected_day_hours = selectedDayHours;
     }
   }

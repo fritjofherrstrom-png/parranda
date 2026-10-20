@@ -92,3 +92,75 @@ for (const lang of ['sv', 'en']) test(`${lang} restored source-closed day stays 
   await h.clock.advance(500);
   assert.equal(routes(h).length, 0, 'presenting the saved fact does not recompose or block the saved day');
 });
+
+const conditional = { status: 'unknown', all_day: false, windows: [], ordinary_status: 'known',
+  ordinary_windows: [{ opens: '06:30', closes: '18:00' }], uncertainty: 'holiday_exceptions',
+  date: DATE, timezone: 'Europe/Stockholm', source_url: 'https://museum.example/visit',
+  observed_at: '2026-10-15T10:00:00.000Z' };
+
+for (const lang of ['sv', 'en']) test(`${lang} conditional regular hours stay visibly unconfirmed and keep venue controls`, async t => {
+  const h = await completed(t, lang, { website: conditional.source_url, selected_day_hours: conditional });
+  const row = [...h.container.querySelectorAll('button[aria-controls]')].find(b => b.textContent.includes('Fixture Museum'));
+  const label = lang === 'sv' ? /Ordinarie tider: 06:30–18:00 · Helgdagstider ej bekräftade/ : /Regular hours: 06:30–18:00 · Holiday hours unconfirmed/;
+  assert.match(row.textContent, label, 'the collapsed stop does not imply confirmed selected-day hours');
+  const panel = await expandMuseum(h);
+  assert.match(panel.textContent, label);
+  assert.doesNotMatch(panel.textContent, /Source hours for selected day|Källans tider för vald dag|Source reports closed|open now|öppet nu/i);
+  assert.equal([...panel.querySelectorAll('a')].find(a => /Website|Webbplats/.test(a.textContent))?.getAttribute('href'), conditional.source_url);
+  const replace = [...panel.querySelectorAll('button')].find(b => b.textContent.trim() === (lang === 'sv' ? 'Byt' : 'Replace'));
+  assert.ok(replace);
+  await h.act(() => replace.dispatchEvent(new h.window.MouseEvent('click', { bubbles: true })));
+  await h.clock.advance(400);
+  assert.deepEqual(routes(h).at(-1).body.dates, [DATE]);
+  assert.equal(routes(h).at(-1).body.day_edit.candidate_id, 'museum');
+});
+
+test('conditional regular hours still count as unknown in the route-wide hours banner', async t => {
+  const body = response({ selected_day_hours: conditional });
+  body.days[0].primary_route.main_stops[1].type = 'gallery';
+  const h2 = await mountPlanner({ url: 'http://localhost/anywhere?place=Fixture%20Town&lang=en' });
+  t.after(() => h2.unmount());
+  await h2.fetchMock.respond(routes(h2)[0], body);
+  const route = h2.container.querySelector('section[aria-label="The route"]');
+  assert.match(route.textContent, /Opening hours unavailable for today's stops on the chosen day/);
+  assert.match(route.textContent, /Regular hours: 06:30–18:00 · Holiday hours unconfirmed/);
+});
+
+for (const lang of ['sv', 'en']) test(`${lang} restoring regular hours retains the unknown fact and saved day without recomposing`, async t => {
+  const stored = buildSavedEntry({ place: 'Fixture Town', dateIso: DATE, savedAt: `${DATE}T10:00:00.000Z`,
+    safeResponse: response({ selected_day_hours: conditional }),
+    classification: { status: 'composed', hasStructure: false, placeLabel: 'Fixture Town' },
+    inputs: { place: 'Fixture Town', mode: 'typed', selected: ['culture', 'views'], walkKey: 'balanced', dayOffset: 0 },
+  });
+  const h = await mountPlanner({ url: `http://localhost/anywhere?restore=last&lang=${lang}`, storage: { [LAST_KEY]: stored } });
+  t.after(() => h.unmount());
+  const panel = await expandMuseum(h);
+  assert.match(panel.textContent, lang === 'sv' ? /Ordinarie tider: 06:30–18:00 · Helgdagstider ej bekräftade/ : /Regular hours: 06:30–18:00 · Holiday hours unconfirmed/);
+  const restored = h.readStorage(LAST_KEY);
+  assert.deepEqual(restored.safeResponse.days[0].primary_route.main_stops[0].selected_day_hours, conditional);
+  assert.deepEqual(restored.inputs.selected, ['culture', 'views']);
+  assert.equal(restored.inputs.place, 'Fixture Town');
+  assert.equal(restored.dateIso, DATE);
+  await h.clock.advance(500);
+  assert.equal(routes(h).length, 0);
+});
+
+test('known selected-day hours keep their existing detail label', async t => {
+  const h = await completed(t, 'en', { selected_day_hours: { status: 'known', all_day: false, windows: [{ opens: '10:00', closes: '17:00' }] } });
+  const panel = await expandMuseum(h);
+  assert.match(panel.textContent, /Source hours for selected day: 10:00–17:00/);
+  assert.doesNotMatch(panel.textContent, /unconfirmed|Opening hours unavailable/);
+});
+
+test('an unsafe restored conditional fact falls back to unavailable hours', async t => {
+  const stored = buildSavedEntry({ place: 'Fixture Town', dateIso: DATE, savedAt: `${DATE}T10:00:00.000Z`,
+    safeResponse: response({ selected_day_hours: { ...conditional, source_url: 'javascript:alert(1)' } }),
+    classification: { status: 'composed', hasStructure: false, placeLabel: 'Fixture Town' },
+    inputs: { place: 'Fixture Town', mode: 'typed', selected: ['culture', 'views'], walkKey: 'balanced', dayOffset: 0 },
+  });
+  const h = await mountPlanner({ url: 'http://localhost/anywhere?restore=last&lang=en', storage: { [LAST_KEY]: stored } });
+  t.after(() => h.unmount());
+  const panel = await expandMuseum(h);
+  assert.match(panel.textContent, /Opening hours unavailable for the selected day/);
+  assert.doesNotMatch(panel.textContent, /Regular hours|06:30|Source hours|javascript/);
+});

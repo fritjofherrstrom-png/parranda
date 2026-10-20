@@ -9,12 +9,23 @@ const { createSourceCache } = require('./source-cache');
 const { publicAddressesForUrl, pinnedHttpsFetch } = require('./simpleview-europe-place-detail-source');
 const { normalizeOpeningHours } = require('./opening-hours');
 const { parseSelectedPlaceHours, selectedPlaceHoursKey, selectedPlaceHoursSourceMatches } = require('./selected-place-hours');
+const { parseSelectedPlaceHoursCalendar, selectedPlaceHtmlHoursLink } = require('./selected-place-html-hours');
+const { CALENDAR_CONTRACT, selectedHoursCalendarKey, normalizeSelectedHoursCalendar } = require('./opening-hours-calendar');
 const { normalizeSchemaOrgOpeningHours } = require('./schema-org-opening-hours');
 const MAX_CANDIDATES = 4;
 const MAX_BYTES = 512 * 1024;
 const TOTAL_MS = 6000;
 const EXCLUDED_HOSTS = /(^|\.)(facebook|instagram|google|tripadvisor|yelp|tiktok)\./i;
 const fold = value => String(value || '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function selectedDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(value + 'T12:00:00Z');
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : null;
+}
+function htmlHoursKey(record) {
+  return createHash('sha256').update(JSON.stringify([CALENDAR_CONTRACT, selectedHoursCalendarKey(record)])).digest('hex');
+}
 
 function sourceUrl(value) {
   try {
@@ -234,7 +245,12 @@ function createOperatorVisitEnricher({
   const factKey=record=>createHash('sha256').update(JSON.stringify([
     sourceUrl(record.website),record.name,record.source_address||null,
   ])).digest('hex');
-  const newSession=()=>({deadline:null,identities:new Set(),targets:new Map(),facts:new Map(),selectedFacts:new Map(),pages:new Map(),outcomes:[]});
+  const newSession=()=>({deadline:null,identities:new Set(),hops:new Map(),targets:new Map(),facts:new Map(),selectedFacts:new Map(),pages:new Map(),outcomes:[]});
+  const reserveHop=(record,url,session)=>{
+    const key=selectedPlaceHoursKey(record),existing=session.hops.get(key);
+    if(existing && existing!==url)return false;
+    session.hops.set(key,url);return true;
+  };
   const reserve=(record,session)=>{
     const key=selectedPlaceHoursKey(record);
     if(session.identities.has(key))return true;
@@ -271,7 +287,7 @@ function createOperatorVisitEnricher({
           let fact=parseOperatorVisitEvidence(initial.html,record,initial.url);
           if(fact.status==='unresolved') {
             const link=contactLink(initial.html,initial.url);
-            if(link&&link!==initial.url){const next=await page(link);if(next)fact=parseOperatorVisitEvidence(next.html,record,next.url)}
+            if(link&&link!==initial.url&&reserveHop(record,link,session)){const next=await page(link);if(next)fact=parseOperatorVisitEvidence(next.html,record,next.url)}
           }
           return {...fact,observed_at:new Date(now()).toISOString()};
         },{signal:context.signal,shouldStore:v=>!!v && v.status!=='unresolved'}).catch(()=>null);
@@ -301,17 +317,24 @@ function createOperatorVisitEnricher({
     if(!Array.isArray(records))return records;
     context.signal?.throwIfAborted();
     const ids=new Set(Array.isArray(context.selectedIds)?context.selectedIds:[]);
+    const date=selectedDate(context.date);
     const targets=records.filter(record=>ids.has(record.id) && !normalizeOpeningHours(record.opening_hours) && sourceUrl(record.website));
-    const validFact=(fact,key,record)=>!!fact && fact.identity_key===key &&
+    const validFact=(fact,key,record)=>!!fact && fact.valid_for_date===undefined && fact.contract===undefined && fact.identity_key===key &&
       normalizeSchemaOrgOpeningHours({openingHours:fact.opening_hours})===fact.opening_hours &&
       selectedPlaceHoursSourceMatches(record,fact.url) && sourceUrl(fact.url)===fact.url && Number.isFinite(Date.parse(fact.observed_at)) &&
       Date.parse(fact.observed_at)<=now() && now()-Date.parse(fact.observed_at)<6*60*60*1000;
+    const calendarFact=(fact,record)=>date ? normalizeSelectedHoursCalendar(fact,{record,now:now()}) : null;
     const pending=[];
     for(const record of targets) {
-      const key=selectedPlaceHoursKey(record);
+      const key=date?htmlHoursKey(record):selectedPlaceHoursKey(record);
       if(session.selectedFacts.has(key))continue;
-      const cached=hoursCache.peek?.(key);
-      if(validFact(cached,key,record)){session.selectedFacts.set(key,cached);continue;}
+      const supplied=calendarFact(record.selected_hours_calendar,record);
+      if(supplied){session.selectedFacts.set(key,supplied);continue;}
+      const weekly=hoursCache.peek?.(selectedPlaceHoursKey(record));
+      if(validFact(weekly,selectedPlaceHoursKey(record),record)){session.selectedFacts.set(key,weekly);continue;}
+      const cached=date?hoursCache.peek?.(key):null;
+      const validated=calendarFact(cached,record);
+      if(validated){session.selectedFacts.set(key,validated);continue;}
       if(reserve(record,session))pending.push(record);
       else session.selectedFacts.set(key,null);
     }
@@ -319,7 +342,7 @@ function createOperatorVisitEnricher({
     let cursor=0;
     await Promise.all([0,1].map(async()=>{
       while(cursor<pending.length && now()<deadline && !context.signal?.aborted) {
-        const record=pending[cursor++],key=selectedPlaceHoursKey(record);
+        const record=pending[cursor++],key=date?htmlHoursKey(record):selectedPlaceHoursKey(record);
         if(session.selectedFacts.has(key))continue;
         // Acquisition belongs to this request's signal and shared visit budget.
         // Share only completed positive facts; another request must never inherit
@@ -328,8 +351,25 @@ function createOperatorVisitEnricher({
           const page=await pageFor(session,sourceUrl(record.website),context,deadline);
           if(!page || context.signal?.aborted || now()>=deadline)return null;
           const parsed=parseSelectedPlaceHours(page.html,record,page.url);
-          const observed=parsed?{...parsed,identity_key:key,observed_at:new Date(now()).toISOString()}:null;
-          if(validFact(observed,key,record) && now()<deadline && !context.signal?.aborted)hoursCache.set(key,observed);
+          if(parsed) {
+            const weeklyKey=selectedPlaceHoursKey(record);
+            const observed={...parsed,identity_key:weeklyKey,observed_at:new Date(now()).toISOString()};
+            if(validFact(observed,weeklyKey,record) && now()<deadline && !context.signal?.aborted)hoursCache.set(weeklyKey,observed);
+            return observed;
+          }
+          if(!date)return null;
+          const link=selectedPlaceHtmlHoursLink(page.html,record,page.url);
+          if(link && !reserveHop(record,link,session))return null;
+          // The sole optional hop comes from the selected identity's actual
+          // hours section. It consumes this request's original deadline and
+          // public-DNS-pinned transport; no contact or secondary crawl follows.
+          const factPage=link?await pageFor(session,link,context,deadline):page;
+          if(!factPage || context.signal?.aborted || now()>=deadline)return null;
+          const html=parseSelectedPlaceHoursCalendar(factPage.html,record,{sourceUrl:factPage.url,
+            ...(link?{entryHtml:page.html,entrySourceUrl:page.url}:{})});
+          const observed=html?calendarFact({...html,contract:CALENDAR_CONTRACT,identity_key:selectedHoursCalendarKey(record),
+            observed_at:new Date(now()).toISOString()},record):null;
+          if(observed && now()<deadline && !context.signal?.aborted)hoursCache.set(key,observed);
           return observed;
         })().catch(()=>null);
         session.selectedFacts.set(key,fact);
@@ -338,8 +378,13 @@ function createOperatorVisitEnricher({
     context.signal?.throwIfAborted();
     const output=records.map(record=>{
       if(!ids.has(record.id) || normalizeOpeningHours(record.opening_hours))return record;
-      const fact=session.selectedFacts.get(selectedPlaceHoursKey(record));
-      return validFact(fact,selectedPlaceHoursKey(record),record)?{...record,opening_hours:fact.opening_hours,opening_hours_source:{url:fact.url,observed_at:fact.observed_at}}:record;
+      const key=date?htmlHoursKey(record):selectedPlaceHoursKey(record);
+      const fact=session.selectedFacts.get(key);
+      if(validFact(fact,selectedPlaceHoursKey(record),record))return {...record,opening_hours:fact.opening_hours,
+        opening_hours_source:{url:fact.url,observed_at:fact.observed_at}};
+      const calendar=calendarFact(fact,record);
+      return calendar?{...record,selected_hours_calendar:calendar}:
+        Object.prototype.hasOwnProperty.call(record,'selected_hours_calendar') ? {...record,selected_hours_calendar:null}:record;
     });
     for(const name of ['loader_status','loader_error','loader_metadata'])if(records[name]!==undefined)Object.defineProperty(output,name,{value:records[name]});
     return output;
