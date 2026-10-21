@@ -32,6 +32,8 @@ const { normalizeIanaTimezone, normalizeSourceEventDate, normalizeSourceEventDat
 const DEFAULT_ENDPOINT = "https://app.ticketmaster.com/discovery/v2/events.json";
 const DEFAULT_TIMEOUT_MS = 15000;
 const DEFAULT_PAGE_SIZE = 40;
+const MAX_PAGES = 3;
+const MAX_EVENT_ROWS = 120;
 const DEFAULT_RADIUS_KM = 3;
 
 function toFinite(value) {
@@ -61,7 +63,7 @@ function discoveryStart(start, timezone) {
       ? normalizeSourceEventDateTime(`${localDate}T${start.localTime}`, { timezone }) : null) || localDate;
 }
 
-function buildDiscoveryUrl({ endpoint = DEFAULT_ENDPOINT, key, anchor, radiusKm, startDateTime, endDateTime, pageSize }) {
+function buildDiscoveryUrl({ endpoint = DEFAULT_ENDPOINT, key, anchor, radiusKm, startDateTime, endDateTime, pageSize, page = 0 }) {
   const url = new URL(endpoint);
   url.searchParams.set("apikey", key);
   url.searchParams.set("latlong", `${anchor.lat},${anchor.lng}`);
@@ -69,9 +71,27 @@ function buildDiscoveryUrl({ endpoint = DEFAULT_ENDPOINT, key, anchor, radiusKm,
   url.searchParams.set("unit", "km");
   url.searchParams.set("sort", "date,asc");
   url.searchParams.set("size", String(pageSize || DEFAULT_PAGE_SIZE));
+  url.searchParams.set("page", String(page));
   if (startDateTime) url.searchParams.set("startDateTime", startDateTime);
   if (endDateTime) url.searchParams.set("endDateTime", endDateTime);
   return url.toString();
+}
+
+function readDiscoveryPagination(body, pageNumber) {
+  const page = body.page;
+  if (page != null) {
+    if (typeof page !== "object" || Array.isArray(page)) return null;
+    for (const field of ["number", "totalPages", "totalElements", "size"]) {
+      if (Object.hasOwn(page, field) && (!Number.isInteger(page[field]) || page[field] < (field === "size" ? 1 : 0))) return null;
+    }
+    if (Object.hasOwn(page, "number") && page.number !== pageNumber) return null;
+  }
+  return {
+    totalPages: page?.totalPages || 0,
+    totalElements: page?.totalElements || 0,
+    // A next link indicates more inventory; its URL is never a fetch target.
+    hasNext: typeof body._links?.next?.href === "string" && Boolean(body._links.next.href.trim()),
+  };
 }
 
 // One Discovery event → the shared raw-event shape. Coordinate-less events are
@@ -165,37 +185,83 @@ function createTicketmasterProvider({
             endDateTime: tmDateTime(windowEnd || new Date(acquisitionStart.getTime() + windowDays * 24 * 60 * 60 * 1000)),
           });
           const controller = typeof AbortController === "function" ? new AbortController() : null;
-          const timer = controller ? setTimeout(() => controller.abort(), Math.max(1000, timeoutMs)) : null;
+          // Every page shares the existing collection budget, including JSON
+          // reads. Never restart the clock or follow a source-supplied URL.
+          const budgetMs = Math.max(1000, timeoutMs);
+          const deadline = Date.now() + budgetMs;
+          const timer = controller ? setTimeout(() => controller.abort(), budgetMs) : null;
+          const mapped = [];
+          const seenIds = new Set();
+          const seenPages = new Set();
+          let sourceRows = 0;
+          let advertisedPages = 0;
+          let advertisedRows = 0;
+          let collectedPages = 0;
+          let failure = null;
           try {
-            const response = await fetcher(url, controller ? { signal: controller.signal } : {});
-            if (!response || !response.ok) {
-              return emptyCollection("failed", `source_http_${response?.status || "not_ok"}`);
+            for (let pageNumber = 0; pageNumber < MAX_PAGES; pageNumber += 1) {
+              if (controller?.signal.aborted || Date.now() >= deadline) { failure = "source_timeout"; break; }
+              const pageUrl = new URL(url);
+              pageUrl.searchParams.set("page", String(pageNumber));
+              const response = await fetcher(pageUrl.toString(), controller ? { signal: controller.signal } : {});
+              if (!response || !response.ok) {
+                failure = `source_http_${response?.status || "not_ok"}`; break;
+              }
+              let body;
+              try {
+                body = await response.json();
+              } catch (_error) {
+                failure = controller?.signal.aborted ? "source_timeout" : "source_payload_invalid"; break;
+              }
+              if (controller?.signal.aborted || Date.now() >= deadline) { failure = "source_timeout"; break; }
+              const events = body && typeof body === "object" && !Array.isArray(body)
+                ? Array.isArray(body._embedded?.events) ? body._embedded.events
+                  : !Object.hasOwn(body, "_embedded") && body.page?.totalElements === 0 ? [] : null
+                : null;
+              if (!events) { failure = "source_payload_invalid"; break; }
+              const boundedEvents = events.slice(0, MAX_EVENT_ROWS - sourceRows);
+              const pagination = readDiscoveryPagination(body, pageNumber);
+              if (!pagination) { failure = "source_payload_invalid"; break; }
+              // A missing later metadata field cannot retract inventory that
+              // an earlier page explicitly said remained to be collected.
+              advertisedPages = Math.max(advertisedPages, pagination.totalPages);
+              advertisedRows = Math.max(advertisedRows, pagination.totalElements);
+              const hasMore = pagination.hasNext || advertisedPages > pageNumber + 1 ||
+                advertisedRows > sourceRows + boundedEvents.length;
+              const pageSignature = JSON.stringify(boundedEvents);
+              if (seenPages.has(pageSignature)) { failure = "source_collection_truncated"; break; }
+              seenPages.add(pageSignature);
+              const pageEvents = boundedEvents.map(mapDiscoveryEvent).filter(Boolean);
+              if (events.length && !pageEvents.length) { failure = "source_payload_invalid"; break; }
+              const previousRows = mapped.length;
+              for (const event of pageEvents) {
+                const id = typeof event.id === "string" && event.id.slice(3).trim() ? event.id : null;
+                if (id && seenIds.has(id)) continue;
+                if (id) seenIds.add(id);
+                mapped.push(event);
+              }
+              sourceRows += boundedEvents.length;
+              collectedPages += 1;
+              if (events.length > boundedEvents.length || (pageNumber > 0 && mapped.length === previousRows) || (!events.length && hasMore)) {
+                failure = "source_collection_truncated"; break;
+              }
+              if (!hasMore) break;
+              if (pageNumber === MAX_PAGES - 1 || sourceRows >= MAX_EVENT_ROWS) {
+                failure = "source_collection_truncated"; break;
+              }
             }
-            let body;
-            try {
-              body = await response.json();
-            } catch (_error) {
-              return emptyCollection("failed", "source_payload_invalid");
-            }
-            const events = body && typeof body === "object" && !Array.isArray(body)
-              ? Array.isArray(body._embedded?.events) ? body._embedded.events
-                : !Object.hasOwn(body, "_embedded") && body.page?.totalElements === 0 ? [] : null
-              : null;
-            if (!events) return emptyCollection("failed", "source_payload_invalid");
-            const mapped = events.map(mapDiscoveryEvent).filter(Boolean);
-            if (events.length && !mapped.length) return emptyCollection("failed", "source_payload_invalid");
-            return {
-              time_sensitive_events: mapped,
-              collection_status: buildProviderCollectionOutcome(mapped.length ? "ok" : "empty", {
-                reason: mapped.length ? null : "source_empty",
-                eventRows: mapped.length,
-              }),
-            };
           } catch (error) {
-            return emptyCollection("failed", error?.name === "AbortError" ? "source_timeout" : "source_fetch_failed");
+            failure = error?.name === "AbortError" ? "source_timeout" : "source_fetch_failed";
           } finally {
             if (timer) clearTimeout(timer);
           }
+          return {
+            time_sensitive_events: mapped,
+            collection_status: buildProviderCollectionOutcome(mapped.length ? "ok" : failure ? "failed" : "empty", {
+              reason: failure ? collectedPages ? "source_collection_truncated" : failure : mapped.length ? null : "source_empty",
+              eventRows: mapped.length,
+            }),
+          };
         },
       };
     },

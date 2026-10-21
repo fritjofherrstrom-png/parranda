@@ -1,9 +1,11 @@
 export type LiveSheetSort = 'for_you' | 'by_time';
 
 export interface LiveNavigationRow<E extends object> {
-  /** Exact supplied occurrence object; never a generated source identity. */
+  /** Exact supplied occurrence, or a source_program display container whose
+   * occurrences are the exact supplied slots on this local date. No generated
+   * source or choice identity. */
   event: E;
-  /** The original grouped parent, when the row belongs to supplied occurrences. */
+  /** Original grouped parent (explicit source series or display-only programme). */
   series: E | null;
   kind: 'date' | 'range' | 'undated';
   date: string | null;

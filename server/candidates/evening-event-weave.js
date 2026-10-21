@@ -71,14 +71,20 @@ function selectedDayCandidates(liveEvents) {
   const seen = new Set();
   const candidates = [];
   for (const bucket of buckets) {
-    for (const parent of Array.isArray(bucket) ? bucket : []) {
-      for (const event of Array.isArray(parent?.occurrences) && parent.occurrences.length ? parent.occurrences : [parent]) {
-        if (!eventKey(event)) continue;
-        const key = JSON.stringify([eventKey(event), event?.source_provider_id, event?.starts_at, event?.starts_on, event?.time_window?.dates]);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        candidates.push(event);
-      }
+    const occurrences = (Array.isArray(bucket) ? bucket : []).flatMap(parent =>
+      Array.isArray(parent?.occurrences) && parent.occurrences.length ? parent.occurrences : [parent]);
+    // Server-ranked evidence keeps its original route order even when Live
+    // groups booking times or reserves a highlight for another publisher.
+    // Older unranked inputs retain the existing serendipity restoration above.
+    if (occurrences.every(event => Number.isSafeInteger(event?.live_evidence_rank) && event.live_evidence_rank >= 0)) {
+      occurrences.sort((a, b) => a.live_evidence_rank - b.live_evidence_rank);
+    }
+    for (const event of occurrences) {
+      if (!eventKey(event)) continue;
+      const key = JSON.stringify([eventKey(event), event?.source_provider_id, event?.starts_at, event?.starts_on, event?.time_window?.dates]);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      candidates.push(event);
     }
   }
   return candidates;

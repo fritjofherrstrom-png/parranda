@@ -24,7 +24,8 @@ const event = (id, date, extra = {}) => ({ id, title: `Source ${id}`, place: 'So
   timezone: 'Europe/Stockholm', time_window: { kind: 'occurrences', dates: [date], local_start: '18:00', local_end: '20:00' },
   tags: [], source_url: `https://calendar.example/${id}`, source_label: 'Official calendar', ...extra });
 
-async function mountSheet(t, { events = [], more = [], lang = 'en', selected = [], sort = 'for_you' } = {}) {
+async function mountSheet(t, { events = [], more = [], lang = 'en', selected = [], sort = 'for_you',
+  planningDate, planningAvailable = false, onPlanOccurrence } = {}) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });
   const previous = new Map();
   for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document,
@@ -48,6 +49,7 @@ async function mountSheet(t, { events = [], more = [], lang = 'en', selected = [
         lang, t: (sv, en) => lang === 'sv' ? sv : en, anchorLabel: 'Fixture area', selected,
         liveDayLabel: 'Selected day', liveSheetTime: 'week', setLiveSheetTime: () => {},
         liveSheetSort: mode, setLiveSheetSort: setMode, onRetry: () => {},
+        planningDate, planningAvailable, onPlanOccurrence,
         liveSheetScope: 'around_place', requestLiveSheetScope: () => {},
         aroundPlaceScopeAvailable: true, inPlaceScopeAvailable: true, routeScopeAvailable: false,
         liveQueryPending: false, liveQueryGeoHint: null, liveQueryError: null,
@@ -69,8 +71,8 @@ async function mountSheet(t, { events = [], more = [], lang = 'en', selected = [
     dom.window.close();
   });
   return { container,
-    async click(name) {
-      const button = [...container.querySelectorAll('button')].find(node => node.textContent === name || node.getAttribute('aria-label') === name);
+    async click(name, index = 0) {
+      const button = [...container.querySelectorAll('button')].filter(node => node.textContent === name || node.getAttribute('aria-label') === name)[index];
       assert.ok(button, `control '${name}' exists`);
       await act(() => button.dispatchEvent(new dom.window.Event('click', { bubbles: true })));
     },
@@ -82,6 +84,97 @@ async function mountSheet(t, { events = [], more = [], lang = 'en', selected = [
 }
 
 const section = (h, label) => [...h.container.querySelectorAll('section')].find(node => node.getAttribute('aria-label') === label);
+const cardTitles = container => [...container.querySelectorAll('li > span:nth-child(2) > span:first-child')].map(node => node.textContent);
+const programSlot = (id, startsAt, extra = {}) => event(id, null, {
+  title: 'Source programme', source_provider_id: 'source-calendar', source_url: 'https://calendar.example/programme',
+  lat: 59.3, lng: 18.1, time_window: { kind: 'continuous', starts_at: startsAt }, ...extra,
+});
+const sourceProgram = slots => ({ ...slots[0], display_group_kind: 'source_program', occurrences: slots });
+
+// Flattening a display programme into one card per booking time breaks this.
+test('source programmes retain one For you card and disclose same-day slots in one By time card', async t => {
+  const slots = [programSlot('morning', '2026-10-15T08:00:00Z'), programSlot('afternoon', '2026-10-15T12:00:00Z'),
+    programSlot('following-day', '2026-10-16T08:00:00Z')];
+  const earlier = event('earlier', '2026-10-15', { time_window: { kind: 'occurrences', dates: ['2026-10-15'], local_start: '09:00' } });
+  const middle = event('middle', '2026-10-15', { time_window: { kind: 'occurrences', dates: ['2026-10-15'], local_start: '12:00' } });
+  const h = await mountSheet(t, { events: [sourceProgram(slots), middle, earlier] });
+  assert.equal(cardTitles(h.container).filter(title => title === 'Source programme').length, 1);
+  assert.equal(h.container.querySelector('summary')?.textContent.trim(), '3 occurrences');
+  assert.equal(h.container.querySelector('details ul')?.children.length, 3, 'For you preserves every original booking slot');
+  await h.click('By time');
+  assert.deepEqual([...h.container.querySelectorAll('section h4')].map(node => node.textContent), ['Thu 15 Oct', 'Fri 16 Oct']);
+  const firstDay = section(h, 'Thu 15 Oct');
+  assert.deepEqual(cardTitles(firstDay), ['Source earlier', 'Source programme', 'Source middle'], 'the programme sorts by its first local slot');
+  assert.equal(firstDay.querySelector('summary')?.textContent.trim(), '2 occurrences');
+  assert.equal(firstDay.querySelector('details ul')?.children.length, 2);
+  assert.match(firstDay.querySelector('details').textContent, /10:00/);
+  assert.match(firstDay.querySelector('details').textContent, /14:00/);
+  const followingDay = section(h, 'Fri 16 Oct');
+  assert.deepEqual(cardTitles(followingDay), ['Source programme']);
+  assert.equal(followingDay.querySelector('summary')?.textContent.trim(), '1 occurrence');
+  assert.equal(followingDay.querySelector('details ul')?.children.length, 1, 'the next date has only its original slot');
+  assert.doesNotMatch(followingDay.textContent, /14:00/);
+});
+
+// Selecting the representative, changing an occurrence ID, or leaking another
+// date's action through a programme disclosure breaks this real click boundary.
+test('By time programme disclosure selects each exact eligible slot only on the planned local date', async t => {
+  const planned = [];
+  const slots = [
+    programSlot('first', '2026-10-14T23:30:00Z', { live_choice_eligible: true, occurrence_date: '2026-10-15', live_occurrence_id: `live:2026-10-15:${'a'.repeat(32)}` }),
+    programSlot('second', '2026-10-15T12:00:00Z', { live_choice_eligible: true, occurrence_date: '2026-10-15', live_occurrence_id: `live:2026-10-15:${'b'.repeat(32)}` }),
+    programSlot('ineligible', '2026-10-15T16:00:00Z', { live_choice_eligible: false, occurrence_date: '2026-10-15', live_occurrence_id: `live:2026-10-15:${'c'.repeat(32)}` }),
+    programSlot('next', '2026-10-16T08:00:00Z', { live_choice_eligible: true, occurrence_date: '2026-10-16', live_occurrence_id: `live:2026-10-16:${'d'.repeat(32)}` }),
+    programSlot('listed', null, { live_choice_eligible: true, occurrence_date: '2026-10-15', live_occurrence_id: `live:2026-10-15:${'e'.repeat(32)}`,
+      time_window: { kind: 'occurrences', dates: ['2026-10-15', '2026-10-16'], local_start: '19:00' } }),
+  ];
+  const h = await mountSheet(t, { events: [sourceProgram(slots)], sort: 'by_time', planningDate: '2026-10-15',
+    planningAvailable: true, onPlanOccurrence: (slot, label) => planned.push({ slot, label }) });
+  const selectedDay = section(h, 'Thu 15 Oct');
+  assert.equal(selectedDay.querySelectorAll(':scope > ul > li').length, 1, 'the programme itself is one display card');
+  assert.equal(selectedDay.querySelector('details')?.querySelectorAll('button').length, 3, 'only individually admitted slots offer actions');
+  assert.equal(selectedDay.querySelectorAll(':scope > ul > li > button').length, 0, 'the parent is never selectable');
+  assert.equal(section(h, 'Fri 16 Oct').querySelectorAll('button').length, 0, 'listed dates never reuse a selected-day identity on another row');
+  await h.click('Plan with this event', 0);
+  await h.click('Plan with this event', 1);
+  await h.click('Plan with this event', 2);
+  assert.equal(planned.length, 3);
+  assert.strictEqual(planned[0].slot, slots[0]);
+  assert.strictEqual(planned[1].slot, slots[1]);
+  assert.strictEqual(planned[2].slot, slots[4]);
+  assert.deepEqual(planned.map(item => item.slot.live_occurrence_id), [
+    `live:2026-10-15:${'a'.repeat(32)}`, `live:2026-10-15:${'b'.repeat(32)}`, `live:2026-10-15:${'e'.repeat(32)}`,
+  ]);
+  assert.deepEqual(planned.map(item => item.label), ['Source programme', 'Source programme', 'Source programme']);
+});
+
+// The display marker never grants a different venue, publisher, range or an
+// unresolved local date permission to collapse into a dated programme card.
+test('By time source programmes preserve venue, publisher and unresolved-time boundaries', async t => {
+  const base = programSlot('first-boundary', '2026-10-15T08:00:00Z');
+  const slots = [base,
+    programSlot('other-venue', '2026-10-15T10:00:00Z', { place: 'Other source venue' }),
+    programSlot('other-publisher', '2026-10-15T12:00:00Z', { source_provider_id: 'other-calendar', source_url: 'https://other.example/programme', source_label: 'Other calendar' }),
+    programSlot('range', null, { time_window: { kind: 'period', starts_on: '2026-10-15', ends_on: '2026-10-17' } }),
+    programSlot('no-zone', '2026-10-15T16:00:00Z', { timezone: undefined }),
+  ];
+  const h = await mountSheet(t, { events: [sourceProgram(slots)], sort: 'by_time' });
+  const dated = section(h, 'Thu 15 Oct');
+  assert.equal(dated.querySelectorAll(':scope > ul > li').length, 3);
+  assert.deepEqual([...dated.querySelectorAll('summary')].map(node => node.textContent.trim()), ['1 occurrence', '1 occurrence', '1 occurrence']);
+  assert.equal(section(h, 'Source date ranges').querySelectorAll(':scope > ul > li').length, 1);
+  assert.equal(section(h, 'Date not specified').querySelectorAll(':scope > ul > li').length, 1);
+  assert.equal(section(h, 'Source date ranges').querySelector('details'), null, 'ranges remain their exact source row');
+  assert.equal(section(h, 'Date not specified').querySelector('details'), null, 'an absent venue timezone does not acquire a date');
+});
+
+test('By time keeps explicit source-series same-date slots as individual navigation cards', async t => {
+  const slots = [programSlot('series-first', '2026-10-15T08:00:00Z'), programSlot('series-second', '2026-10-15T12:00:00Z')];
+  const h = await mountSheet(t, { events: [{ ...slots[0], source_series_id: 'stated-series', occurrences: slots }], sort: 'by_time' });
+  const dated = section(h, 'Thu 15 Oct');
+  assert.deepEqual(cardTitles(dated), ['Source programme', 'Source programme']);
+  assert.equal(dated.querySelector('details'), null, 'an explicit source series keeps its existing By time navigation');
+});
 
 test('source clocks with seconds retain chronological order and display precision', async t => {
   const h = await mountSheet(t, { sort: 'by_time', events: [
