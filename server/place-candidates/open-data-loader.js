@@ -1416,6 +1416,13 @@ function mapOsmElement(element) {
       .flatMap((value) => value.split(";")),
   ).filter((value) => value !== name);
   const operational = extractOsmOperationalMetadata(tags, { website, openingHours });
+  const detailKind = tags.shop === 'antiques' ? 'antiques'
+    : tags.shop === 'bakery' ? 'bakery'
+    : tags.tourism === 'museum' && tags.museum === 'art' ? 'art_museum'
+    : tags.tourism === 'museum' && tags.museum === 'history' ? 'history_museum'
+    : tags.leisure === 'nature_reserve' ? 'nature_reserve'
+    : tags.leisure === 'garden' && tags['garden:type'] === 'botanical' ? 'botanical_garden' : null;
+  const details = require('./place-details').normalizePlaceDetails({ kind: detailKind }, mapping.type);
 
   return {
     id: `osm-${elementType}-${osmId}`,
@@ -1434,6 +1441,7 @@ function mapOsmElement(element) {
     // exclude a candidate when trusted local-time evaluation proves no overlap.
     ...(website ? { website } : {}),
     ...(sourceAddress ? { source_address: sourceAddress } : {}),
+    ...(details ? { place_details: details } : {}),
     ...(sourceNameAliases.length ? { source_name_aliases: sourceNameAliases } : {}),
     ...(openingHours ? { opening_hours: openingHours } : {}),
     ...(tags.amenity === "marketplace" ? {

@@ -662,6 +662,7 @@ function formatRoleCandidate(entry, role, roleEntries, roleSpec = ROLE_SPEC) {
     provenance,
     attribution: provenance.attribution,
     ...(website ? { website } : {}),
+    ...(candidate.place_details ? { place_details: candidate.place_details } : {}),
     covered_preferences: fit.covered_preferences,
     partial_preferences: fit.partial_preferences,
     missing_preferences: fit.missing_preferences,

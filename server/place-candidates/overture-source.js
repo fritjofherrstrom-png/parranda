@@ -35,6 +35,7 @@ const { createHash } = require('node:crypto');
 const { validSample, validAssets, digest } = require('./overture-sample-cache');
 const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
 const { mapRecordToCandidate } = require('./external-open-provider');
+const { normalizePlaceDetails, OVERTURE_KINDS } = require('./place-details');
 const { resolveCandidateIdentity, matchIdentity } = require('../candidates/entity-resolution');
 const {
   WALKING_REACH_RING_EDGES_KM,
@@ -297,6 +298,7 @@ function mapOvertureRow(row, { minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
   if (!licenses.length) return null;
   const brand = String(row.brand || "").trim() || null;
   const website = firstHttpUrl(row.websites);
+  const details = normalizePlaceDetails({ kind: OVERTURE_KINDS[row.category] }, mapping.type);
   return {
     id: `overture-${id}`,
     name,
@@ -316,6 +318,7 @@ function mapOvertureRow(row, { minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
     operational_status: operational.status,
     operational_reasons: operational.reasons,
     ...(website ? { website } : {}),
+    ...(details ? { place_details: details } : {}),
   };
 }
 

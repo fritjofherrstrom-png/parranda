@@ -174,6 +174,7 @@ function buildProvisionalComposeStops() {
       provisional: candidate.city_pack_owned !== true,
       source: candidate.source || null,
       website: normalizeSourceWebsite(candidate.website),
+      placeDetails: require('./place-candidates/place-details').normalizePlaceDetails(candidate.place_details, candidate.type),
       trust: candidate.trust || null,
       provenance: candidate.provenance || null,
       role: candidate.role || null,
@@ -5041,6 +5042,7 @@ function formatMainStop(stop) {
     formatted.reconciliation = stop.reconciliation || null;
     const website = normalizeSourceWebsite(stop.website);
     if (website) formatted.website = website;
+    if (stop.placeDetails) formatted.place_details = stop.placeDetails;
     const selectedDayHours = normalizeSelectedDayHoursFact(stop.selectedDayHours);
     if (selectedDayHours && ["known", "unknown"].includes(selectedDayHours.status)) {
       formatted.selected_day_hours = selectedDayHours;

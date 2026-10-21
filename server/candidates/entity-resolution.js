@@ -422,6 +422,19 @@ function reconcileFields(canonical, duplicate) {
     filled.push("source_address");
   }
 
+  // These bounded display facts belong to the already matched physical place.
+  // They do not alter its canonical type, preference coverage or source trust.
+  const { sourcePlaceDetails } = require('../place-candidates/place-details');
+  const currentDetails = sourcePlaceDetails(canonical, canonical.type);
+  const incomingDetails = sourcePlaceDetails(duplicate, canonical.type);
+  if (incomingDetails) {
+    const details = { ...incomingDetails, ...currentDetails };
+    if (JSON.stringify(details) !== JSON.stringify(currentDetails)) {
+      patch.place_details = details;
+      filled.push('place_details');
+    }
+  }
+
   const canHas = hasCoords(canonical);
   const dupHas = hasCoords(duplicate);
 
