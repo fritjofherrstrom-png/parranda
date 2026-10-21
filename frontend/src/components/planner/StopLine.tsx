@@ -20,7 +20,7 @@ import { lineProgress } from "../../lib/line-progress.mjs";
 import { eventSourceLink, eventTiming } from "../../lib/pulse-view.mjs";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { selectedDayHoursLabel } from "../../lib/selected-day-hours.mjs";
-import { stopHoursUnknown, stopTypeLabel, stopWebsiteUrl } from "../../lib/stop-card-facts.mjs";
+import { stopHoursUnknown, stopTypeLabel, stopWebsiteUrl, stopMatchedPreferences, stopPlaceDetails } from "../../lib/stop-card-facts.mjs";
 import { stopCategoryFamily, type StopCategoryFamily } from "../../lib/stop-category.mjs";
 import { walkingDistanceLabel, type RouteContextSuggestion } from "../../lib/route-context-view.mjs";
 import {
@@ -44,7 +44,7 @@ import {
   WalkIcon,
 } from "../shared/icons";
 import { busyButton, buttonClass, compactPillTarget, dataLine, Eyebrow, ExternalLinkText, inlineLinkTarget } from "../shared/ui";
-import { DAYPART_LABELS, label, partialPreferenceLabels, typeLabel, type Lang, type Translate } from "./copy";
+import { DAYPART_LABELS, label, partialPreferenceLabels, pickLabel, typeLabel, type Lang, type Translate } from "./copy";
 import { canCommitTo, type Commitments } from "./commitments";
 import { useFollowPosition } from "./useFollowPosition";
 
@@ -154,12 +154,6 @@ export default function StopLine({
     `${leg.minutes != null ? `${leg.minutes} min` : ""}${leg.minutes != null && leg.km != null ? " · " : ""}${leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}`;
   const lastCoreIndex = split.core.length - 1;
 
-  // OPENING HOURS, SAID ONCE. When no source gives hours for any stop on the
-  // chosen day, one line above the line says so; repeating it on every
-  // station made it louder than the places themselves. A day where only some
-  // stops lack hours still marks exactly those stops.
-  const hoursUnknownEverywhere = split.core.length > 1 && split.core.every((stop: any) => stopHoursUnknown(stop));
-
   // "YOU ARE HERE". Today only, and only after an explicit tap: the reader's
   // live position is read against the stations in route order. Stations
   // behind the reader are muted, the next one is marked. The position never
@@ -248,14 +242,6 @@ export default function StopLine({
       {followStatus && (
         <p className="mb-1 text-13 font-semibold text-parranda-ink" aria-live="polite">{followStatus}</p>
       )}
-      {hoursUnknownEverywhere && (
-        <p className="mb-1 text-xs leading-relaxed text-parranda-ink/72">
-          {t(
-            "Öppettider saknas för dagens stopp den valda dagen — kolla innan du går.",
-            "Opening hours unavailable for today's stops on the chosen day — check before you go.",
-          )}
-        </p>
-      )}
       {/* Core stops only, grouped under daypart headings taken from
           stop.daypart — only groups that exist render, and the engine's
           order is never changed to force a grouping. The walk INTO a stop
@@ -295,7 +281,9 @@ export default function StopLine({
           const hoursLabel = selectedDayHoursLabel(stop?.selected_day_hours, lang);
           const hoursClosed = stop?.selected_day_hours?.status === "closed";
           const website = stopWebsiteUrl(stop);
+          const placeDetails = stopPlaceDetails(stop, lang);
           const partialLabels = partialPreferenceLabels(stop, selected, lang);
+          const matchedLabels = stopMatchedPreferences(stop, selected).map((key) => pickLabel(key, lang));
           const stopKindLabel = stop?.type === "vintage-shop"
             ? stopTypeLabel(stop, lang)
             : typeLabel(stop?.type, lang);
@@ -357,25 +345,15 @@ export default function StopLine({
                   {/* What kind of place, at a glance: a compact category
                       badge under the name (symbol + the stop's own kind).
                       It is information, not a control — the whole row stays
-                      the one disclosure. "Kept" and the hours status sit
-                      beside it as plain text, so missing opening hours never read
-                      as part of the category. */}
-                  {(stopKindLabel || kept || hoursClosed || (hoursUnknown && (hoursLabel || !hoursUnknownEverywhere))) && (
+                      the one disclosure. Kept and source-closed facts stay
+                      visible; unknown hours are available inside the place. */}
+                  {(stopKindLabel || kept || hoursClosed) && (
                     <span className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
                       {stopKindLabel && <StopCategory type={stop?.type} label={stopKindLabel} muted={behind} />}
                       {kept && (
                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-parranda-clay">
                           <KeepIcon className="h-3 w-3" />
                           {t("Behålls", "Kept")}
-                        </span>
-                      )}
-                      {/* Visitability stays visible without expanding: a place
-                          whose source gives no hours for the chosen day says so
-                          here instead of reading as a confirmed visit. */}
-                      {hoursUnknown && (hoursLabel || !hoursUnknownEverywhere) && (
-                        <span className="inline-flex items-center gap-1 text-xs text-parranda-ink/68">
-                          <ClockIcon className="h-3 w-3" />
-                          {hoursLabel || t("Öppettider saknas", "Opening hours unavailable")}
                         </span>
                       )}
                       {hoursClosed && hoursLabel && (
@@ -399,6 +377,8 @@ export default function StopLine({
                   {/* Facts only. The schedule row is a bounded source fact
                       for the selected local day, never an "open now" claim. */}
                   <div className="flex flex-col gap-1.5 text-13 leading-snug text-parranda-ink/72">
+                    {placeDetails.kindLabel && <span className="font-semibold text-parranda-ink">{placeDetails.kindLabel}</span>}
+                    {placeDetails.address && <span>{placeDetails.address}</span>}
                     {leg && (leg.minutes != null || leg.km != null) && (
                       <span>
                         {legLabel(leg)}
@@ -409,54 +389,26 @@ export default function StopLine({
                     {hoursUnknown && !hoursLabel && (
                       <span>{t("Öppettider saknas för den valda dagen", "Opening hours unavailable for the selected day")}</span>
                     )}
-                    {stop?.address && <span>{stop.address}</span>}
                   </div>
                   {partialLabels.length > 0 && (
                     <p className="mt-2 text-xs text-parranda-ink/68">
                       {t("Lösare träff för:", "A looser match for:")} {partialLabels.join(", ")}
                     </p>
                   )}
-                  {stop?.candidate_status === "partial" && (
-                    <p className="mt-2 text-xs text-parranda-ink/68">
-                      {sourceLabel
-                        ? t(`Källstöd: ${sourceLabel} · underlaget är fortfarande provisoriskt`, `Source-backed by ${sourceLabel} · evidence is still provisional`)
-                        : t("Källunderlaget är fortfarande provisoriskt", "Source evidence is still provisional")}
+                  {matchedLabels.length > 0 && (
+                    <p className="mt-2 text-xs text-parranda-ink/72">
+                      {t("Matchar dina val:", "Matches your picks:")} {matchedLabels.join(", ")}
                     </p>
                   )}
-                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                    {pin && (
-                      <a
-                        href={pin}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={buttonClass("primary", "min-h-11 w-full px-4 text-sm sm:w-auto sm:px-5")}
-                      >
-                        {t("Öppna i Maps", "Open in Maps")}
-                        <ExternalIcon />
-                      </a>
-                    )}
-                    {website && (
-                      <a
-                        href={website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={buttonClass("secondary", "min-h-11 px-4 text-sm sm:px-5")}
-                      >
-                        {t("Webbplats", "Website")}
-                        <ExternalIcon />
-                      </a>
-                    )}
-                    {/* Two verbs, both anchored to a real candidate id.
-                        Keep says "whatever else changes, this stays";
-                        dismiss removes it from consideration. They are
-                        mutually exclusive by construction — the ledger
-                        holds one commitment per candidate — so a kept stop
-                        offers release rather than the opposite verb. */}
+                  <div role="group" aria-label={t("Ändra stopp", "Edit stop")} className="mt-3 flex flex-wrap items-center gap-1.5">
+                    {/* Existing identity-bound edits stay together. A kept
+                        stop offers release; Replace and Remove keep their
+                        separate orchestration and busy contracts. */}
                     {hasRealId && (commitments[stopIdentity]?.kind === "pin" ? (
                       <button
                         type="button"
                         onClick={() => releaseCommitment(stopIdentity)}
-                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-parranda-btn border-line border-parranda-ember/60 bg-parranda-ember/10 px-4 text-sm font-bold text-parranda-ink transition hover:border-parranda-ember sm:px-5"
+                        className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-parranda-btn border-line border-parranda-ember/60 bg-parranda-ember/10 px-3 text-13 font-bold text-parranda-ink transition hover:border-parranda-ember"
                       >
                         <KeepIcon className="h-4 w-4 text-parranda-ember" />
                         {t("Behålls — släpp", "Kept — release")}
@@ -465,21 +417,21 @@ export default function StopLine({
                       <button
                         type="button"
                         onClick={() => keepStop(stopIdentity, name)}
-                        className={buttonClass("secondary", "min-h-11 px-4 text-sm sm:px-5")}
+                        className={buttonClass("secondary", "min-h-11 px-3 text-13")}
                       >
                         <KeepIcon className="h-4 w-4" />
                         {t("Behåll den här", "Keep this one")}
                       </button>
                     ))}
                     {hasRealId && commitments[stopIdentity]?.kind !== "pin" && (
-                      <div role="group" aria-label={t("Ändra stopp", "Edit stop")} className="grid grid-cols-2 gap-2 sm:inline-flex sm:items-center">
+                      <div className="inline-flex items-center gap-1.5">
                       {/* Busy, not disabled, while the edit runs: the pressed
                           button keeps keyboard focus (ui.tsx busyButton). */}
                       <button
                         type="button"
                         {...busyButton(editPending, () => dismissStop(stopIdentity, name))}
                         title={t("Byt till ett liknande stopp", "Replace with a similar stop")}
-                        className={buttonClass("secondary", "min-h-11 px-4 text-sm sm:px-5")}
+                        className={buttonClass("secondary", "min-h-11 px-3 text-13")}
                       >
                         <ShuffleIcon className="h-4 w-4" />
                         {t("Byt", "Replace")}
@@ -488,7 +440,7 @@ export default function StopLine({
                         type="button"
                         {...busyButton(editPending, () => removeStop(stopIdentity, name))}
                         title={t("Ta bort stoppet utan ersättning", "Remove this stop without replacement")}
-                        className={buttonClass("secondary", "min-h-11 px-4 text-sm sm:px-5")}
+                        className={buttonClass("secondary", "min-h-11 px-3 text-13")}
                       >
                         <TrashIcon className="h-4 w-4" />
                         {t("Ta bort", "Remove")}
@@ -496,6 +448,35 @@ export default function StopLine({
                       </div>
                     )}
                   </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-5">
+                    {pin && (
+                      <a href={pin} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex min-h-11 items-center gap-1.5 text-13 font-semibold text-parranda-ink/80 underline decoration-parranda-ink/30 underline-offset-2 hover:text-parranda-ink">
+                        {t("Öppna i Maps", "Open in Maps")}<ExternalIcon className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                    {website && (
+                      <a href={website} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex min-h-11 items-center gap-1.5 text-13 font-semibold text-parranda-ink/80 underline decoration-parranda-ink/30 underline-offset-2 hover:text-parranda-ink">
+                        {t("Webbplats", "Website")}<ExternalIcon className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                  </div>
+                  {(sourceLabel || stop?.candidate_status === "partial") && (
+                    <details className="group">
+                      <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold text-parranda-ink/72 hover:text-parranda-ink [&::-webkit-details-marker]:hidden">
+                        {t("Om platsinformationen", "About this place information")}
+                        <ChevronDownIcon className="h-3.5 w-3.5 transition group-open:rotate-180" />
+                      </summary>
+                      <p className="text-xs leading-relaxed text-parranda-ink/68">
+                        {stop?.candidate_status === "partial"
+                          ? sourceLabel
+                            ? t(`Källstöd: ${sourceLabel} · underlaget är fortfarande provisoriskt`, `Source-backed by ${sourceLabel} · evidence is still provisional`)
+                            : t("Källunderlaget är fortfarande provisoriskt", "Source evidence is still provisional")
+                          : t(`Källa: ${sourceLabel}`, `Source: ${sourceLabel}`)}
+                      </p>
+                    </details>
+                  )}
                 </div>
               )}
             </li>

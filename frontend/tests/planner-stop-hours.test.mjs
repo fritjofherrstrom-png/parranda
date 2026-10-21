@@ -35,11 +35,14 @@ async function expandMuseum(h) {
   return h.container.querySelector(`#${row.getAttribute('aria-controls')}`);
 }
 
-for (const lang of ['sv', 'en']) test(`${lang} missing source hours are visible before expanding a usable stop`, async t => {
+for (const lang of ['sv', 'en']) test(`${lang} missing source hours are shown once inside the usable stop disclosure`, async t => {
   const h = await completed(t, lang);
   const route = h.container.querySelector(`section[aria-label="${lang === 'sv' ? 'Rutten' : 'The route'}"]`);
-  assert.match(route.textContent, lang === 'sv' ? /Öppettider saknas/ : /Opening hours unavailable/);
+  assert.doesNotMatch(route.textContent, /Öppettider saknas|Opening hours unavailable/,
+    'an unexpanded route keeps missing-hours text inside each place');
   const panel = await expandMuseum(h);
+  assert.equal(route.textContent.match(lang === 'sv' ? /Öppettider saknas/g : /Opening hours unavailable/g)?.length, 1,
+    'opening a place presents its unknown-hours fact once, without a duplicate badge');
   assert.equal([...panel.querySelectorAll('a')].filter(a => /Website|Webbplats/.test(a.textContent)).length, 0,
     'an absent website does not turn source attribution into a website action');
 });
@@ -102,7 +105,7 @@ for (const lang of ['sv', 'en']) test(`${lang} conditional regular hours stay vi
   const h = await completed(t, lang, { website: conditional.source_url, selected_day_hours: conditional });
   const row = [...h.container.querySelectorAll('button[aria-controls]')].find(b => b.textContent.includes('Fixture Museum'));
   const label = lang === 'sv' ? /Ordinarie tider: 06:30–18:00 · Helgdagstider ej bekräftade/ : /Regular hours: 06:30–18:00 · Holiday hours unconfirmed/;
-  assert.match(row.textContent, label, 'the collapsed stop does not imply confirmed selected-day hours');
+  assert.doesNotMatch(row.textContent, label, 'unconfirmed selected-day hours belong inside the stop disclosure');
   const panel = await expandMuseum(h);
   assert.match(panel.textContent, label);
   assert.doesNotMatch(panel.textContent, /Source hours for selected day|Källans tider för vald dag|Source reports closed|open now|öppet nu/i);
@@ -115,15 +118,17 @@ for (const lang of ['sv', 'en']) test(`${lang} conditional regular hours stay vi
   assert.equal(routes(h).at(-1).body.day_edit.candidate_id, 'museum');
 });
 
-test('conditional regular hours still count as unknown in the route-wide hours banner', async t => {
+test('a day of unknown hours waits for a place disclosure and preserves conditional detail', async t => {
   const body = response({ selected_day_hours: conditional });
   body.days[0].primary_route.main_stops[1].type = 'gallery';
   const h2 = await mountPlanner({ url: 'http://localhost/anywhere?place=Fixture%20Town&lang=en' });
   t.after(() => h2.unmount());
   await h2.fetchMock.respond(routes(h2)[0], body);
   const route = h2.container.querySelector('section[aria-label="The route"]');
-  assert.match(route.textContent, /Opening hours unavailable for today's stops on the chosen day/);
-  assert.match(route.textContent, /Regular hours: 06:30–18:00 · Holiday hours unconfirmed/);
+  assert.doesNotMatch(route.textContent, /Opening hours unavailable|Regular hours:|Holiday hours unconfirmed/);
+  const panel = await expandMuseum(h2);
+  assert.match(panel.textContent, /Regular hours: 06:30–18:00 · Holiday hours unconfirmed/);
+  assert.equal(route.textContent.match(/Regular hours:/g)?.length, 1);
 });
 
 for (const lang of ['sv', 'en']) test(`${lang} restoring regular hours retains the unknown fact and saved day without recomposing`, async t => {
@@ -163,4 +168,36 @@ test('an unsafe restored conditional fact falls back to unavailable hours', asyn
   const panel = await expandMuseum(h);
   assert.match(panel.textContent, /Opening hours unavailable for the selected day/);
   assert.doesNotMatch(panel.textContent, /Regular hours|06:30|Source hours|javascript/);
+});
+
+for (const lang of ['sv', 'en']) test(`${lang} stop facts and controls stay compact without hiding source evidence`, async t => {
+  const h = await completed(t, lang, { website: 'https://museum.example/visit', address: '8 Source Street',
+    candidate_status: 'partial', partial_preferences: ['views'] });
+  const panel = await expandMuseum(h);
+  assert.match(panel.textContent, /8 Source Street/);
+  assert.match(panel.textContent, lang === 'sv' ? /Matchar dina val: Kultur/ : /Matches your picks: Culture/);
+  assert.match(panel.textContent, lang === 'sv' ? /Lösare träff för: Utsikt/ : /A looser match for: Views/);
+  const group = panel.querySelector('[role="group"]');
+  assert.ok(group, 'one compact action group owns keep, replace and remove');
+  assert.deepEqual([...group.querySelectorAll('button')].map(b => b.textContent.trim()),
+    lang === 'sv' ? ['Behåll den här', 'Byt', 'Ta bort'] : ['Keep this one', 'Replace', 'Remove']);
+  assert.equal(group.querySelector('a'), null, 'external navigation is separate from day editing');
+  for (const link of panel.querySelectorAll('a')) {
+    assert.doesNotMatch(link.className, /bg-parranda-terracotta/, 'external links do not dominate the place facts');
+  }
+  const evidence = panel.querySelector('details');
+  assert.ok(evidence, 'source information remains available through a real disclosure');
+  assert.equal(evidence.open, false);
+  assert.match(evidence.querySelector('summary').textContent, lang === 'sv' ? /Om platsinformationen/ : /About this place information/);
+  assert.match(evidence.textContent, /Map source/);
+  assert.match(evidence.textContent, lang === 'sv' ? /provisoriskt/ : /provisional/);
+});
+
+for (const lang of ['sv', 'en']) test(`${lang} selected source details add useful specificity without invented descriptions`, async t => {
+  const h = await completed(t, lang, { place_details: { kind: 'art_museum', address: 'Source Street 12' },
+    description: 'Unvalidated wonderful hidden gem' });
+  const panel = await expandMuseum(h);
+  assert.match(panel.textContent, lang === 'sv' ? /Konstmuseum/ : /Art museum/);
+  assert.equal(panel.textContent.match(/Source Street 12/g)?.length, 1);
+  assert.doesNotMatch(panel.textContent, /Unvalidated|wonderful|hidden gem/);
 });

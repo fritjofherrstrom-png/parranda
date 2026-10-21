@@ -174,6 +174,7 @@ function buildProvisionalComposeStops() {
       provisional: candidate.city_pack_owned !== true,
       source: candidate.source || null,
       website: normalizeSourceWebsite(candidate.website),
+      placeDetails: require('./place-candidates/place-details').normalizePlaceDetails(candidate.place_details, candidate.type),
       trust: candidate.trust || null,
       provenance: candidate.provenance || null,
       role: candidate.role || null,
@@ -5041,6 +5042,7 @@ function formatMainStop(stop) {
     formatted.reconciliation = stop.reconciliation || null;
     const website = normalizeSourceWebsite(stop.website);
     if (website) formatted.website = website;
+    if (stop.placeDetails) formatted.place_details = stop.placeDetails;
     const selectedDayHours = normalizeSelectedDayHoursFact(stop.selectedDayHours);
     if (selectedDayHours && ["known", "unknown"].includes(selectedDayHours.status)) {
       formatted.selected_day_hours = selectedDayHours;
@@ -5447,6 +5449,10 @@ function buildRouteFromTemplate(
     const constrainedCount = strictCandidateCount >= 2
       ? Math.min(selectedCount, Math.floor(strictCandidateCount / 0.6))
       : selectedCount;
+    // Modern rhythm has no kilometre goal. The engine's numeric fallback is
+    // useful elsewhere, but must not stretch a compact day toward 6km here.
+    // A genuine legacy walking target keeps its existing set-fit policy.
+    const selectionTargetKm = distanceMode === 'no_limit' ? null : targetKm;
     const constrained = selectAgnosticCandidateSet({
       rankedCandidates: sortedPool,
       desiredCount: constrainedCount,
@@ -5454,13 +5460,13 @@ function buildRouteFromTemplate(
       start,
       end,
       shape,
-      targetKm,
+      targetKm: selectionTargetKm,
       allowExpansion: !dayEdit && !reservedLiveStopCount,
     });
     selectedStops = selectBalancedDay({
       rankedCandidates: sortedPool, selected: constrained.selected, preferences,
       preferencePriority: options.preferencePriority || getActiveCityConfig().__preferencePriority || [],
-      pinnedIds: options.pinnedStopIds || [], start, end, shape, targetKm,
+      pinnedIds: options.pinnedStopIds || [], start, end, shape, targetKm: selectionTargetKm,
     });
   }
 

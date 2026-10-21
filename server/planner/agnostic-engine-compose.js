@@ -249,6 +249,7 @@ function toSourceCandidate({
       : [],
     reconciliation: rich?.reconciliation || null,
     ...(website ? { website } : {}),
+    ...(rich?.place_details ? { place_details: rich.place_details } : {}),
     ...(selectedDayHours ? { selected_day_hours: selectedDayHours } : {}),
     // Keep the server's remaining-day availability verdict separate from the
     // public selected-day hours fact. Typical role timing cannot override an
