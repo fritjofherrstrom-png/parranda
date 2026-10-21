@@ -1,0 +1,61 @@
+{
+  "candidate": "8aa85a2ce6c554a633ae9a7d8c4e132fa0774319",
+  "tree": "e1cbd8106dd48f20b29a8bb94fdcf69a7200044f",
+  "base": "0643bc56202a8d1d552ea09e302a0bb0a1cd2aca",
+  "branch": "codex/compact-days-place-cards-20261021",
+  "full_suite": {
+    "status": "PASS",
+    "command": "npm test -- --test-reporter=tap",
+    "counts": {
+      "tests": 4915,
+      "pass": 4912,
+      "fail": 0,
+      "skipped": 3
+    },
+    "log": "full-suite-final.tap",
+    "head": "8aa85a2ce6c554a633ae9a7d8c4e132fa0774319"
+  },
+  "skips": [
+    {
+      "test": "real child uses bounded temporary disk and parent removes its private directory",
+      "reason": "set PARRANDA_TEST_LIVE_NETWORK=enabled: the DuckDB child downloads the httpfs extension"
+    },
+    {
+      "test": "an unusable extension cache falls back without disabling the bounded query",
+      "reason": "set PARRANDA_TEST_LIVE_NETWORK=enabled: the DuckDB child downloads the httpfs extension"
+    },
+    {
+      "test": "Simpleview real PostgreSQL approval, worker persistence, restart read and fail-closed bindings",
+      "reason": "set PARRANDA_TEST_DATABASE_URL explicitly for a disposable test database"
+    }
+  ],
+  "checks": {
+    "frontend_typecheck": "PASS",
+    "frontend_build": "PASS",
+    "committed_dist_guard": "PASS",
+    "self_hosted_config": "PASS",
+    "independent_review": "NO_OUTSTANDING_CONFIRMED_BLOCKER",
+    "built_http_browser": "PASS_CONTROLLED_SOURCES_CLOCK_WEATHER",
+    "physical_or_live_provider_acceptance": "NOT_RUN"
+  },
+  "runtime": {
+    "node": "v24.15.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "browser": "Chromium153.0.8010.12",
+    "target_node22_linux_arm64": "NOT_RUN_FOR_THIS_HEAD"
+  },
+  "published": false,
+  "merged": false,
+  "deployed": false,
+  "ci": "NOT_PUBLISHED_NOT_RUN",
+  "public_build_sha": "0643bc56202a8d1d552ea09e302a0bb0a1cd2aca",
+  "source_policy_changed": false,
+  "known_limits": [
+    "Catalogue category/identity errors (Flat Service, HAVEX-auto, Chinese London park row) are not automatically repaired by this candidate.",
+    "No proof that every venue in the reported Holešovice day is permanently closed.",
+    "Old normalized source caches and old saved days can lack optional place_details; there is no forced public cache refresh.",
+    "No free-form venue descriptions, prices, inventory, visit durations or accessibility claims are generated.",
+    "Initial full run had an unexplained desktop map-hover failure; later focused and entire final run pass without map code or timeout changes."
+  ]
+}
