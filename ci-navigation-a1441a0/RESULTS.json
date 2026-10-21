@@ -1,0 +1,30 @@
+{
+  "candidate": "a1441a0c73d556959e02fa7bcd0db5c6fc69371a",
+  "tree": "67b01048ad1a33229cd75982fe46c21da831ed21",
+  "previous_candidate": "8aa85a2ce6c554a633ae9a7d8c4e132fa0774319",
+  "base": "0643bc56202a8d1d552ea09e302a0bb0a1cd2aca",
+  "changed_files": [
+    "tests/compact-day-cards-http-browser.test.js"
+  ],
+  "product_sources_and_dist_changed": false,
+  "focused": {
+    "pass": 7,
+    "fail": 0,
+    "skip": 0,
+    "runtime": "Node24.15.0/macOSarm64"
+  },
+  "controlled_readiness_probe": {
+    "without_readiness_wait": "RED: submit returned to /? with empty field and ssr=true",
+    "with_readiness_wait": "GREEN: /anywhere?place=Fixture+Area"
+  },
+  "previous_ci": {
+    "run": 39637869677,
+    "head": "8aa85a2ce6c554a633ae9a7d8c4e132fa0774319",
+    "pass": 4911,
+    "fail": 1,
+    "skip": 3,
+    "failed_at": "tests/compact-day-cards-http-browser.test.js:89"
+  },
+  "source_policy_changed": false,
+  "merge_or_deploy": false
+}

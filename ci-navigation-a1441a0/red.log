@@ -1,0 +1,43 @@
+{
+  "controlled": "Only the landing JavaScript module is held. Product API responses are not intercepted.",
+  "waitForHydration": false,
+  "before": {
+    "url": "http://127.0.0.1:54777/?lang=en",
+    "ready": "complete",
+    "ssr": true,
+    "value": ""
+  },
+  "filled": {
+    "url": "http://127.0.0.1:54777/?lang=en",
+    "ready": "complete",
+    "ssr": true,
+    "value": "Fixture Area"
+  },
+  "after": {
+    "url": "http://127.0.0.1:54777/?",
+    "ready": "complete",
+    "ssr": true,
+    "value": ""
+  },
+  "held": 2,
+  "events": [
+    {
+      "navigation": "http://127.0.0.1:54777/?lang=en"
+    },
+    {
+      "navigation": "http://127.0.0.1:54777/?"
+    }
+  ]
+}
+AssertionError [ERR_ASSERTION]: a single free-text submit must reach the planner
+
+'/' !== '/anywhere'
+
+    at /Users/fritjof/Developer/parranda-evidence/compact-days-place-cards-20261021/ci-navigation/verify-entry.cjs:38:10 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: '/',
+  expected: '/anywhere',
+  operator: 'strictEqual',
+  diff: 'simple'
+}

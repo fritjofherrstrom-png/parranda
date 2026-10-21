@@ -1,0 +1,29 @@
+{
+  "controlled": "Only the landing JavaScript module is held. Product API responses are not intercepted.",
+  "waitForHydration": true,
+  "before": {
+    "url": "http://127.0.0.1:54784/?lang=en",
+    "ready": "complete",
+    "ssr": true,
+    "value": ""
+  },
+  "filled": {
+    "url": "http://127.0.0.1:54784/?lang=en",
+    "ready": "complete",
+    "ssr": false,
+    "value": "Fixture Area"
+  },
+  "after": {
+    "url": "http://127.0.0.1:54784/anywhere?place=Fixture+Area&planner=open&lang=en",
+    "ready": "complete"
+  },
+  "held": 1,
+  "events": [
+    {
+      "navigation": "http://127.0.0.1:54784/?lang=en"
+    },
+    {
+      "navigation": "http://127.0.0.1:54784/anywhere?place=Fixture+Area&planner=open&lang=en"
+    }
+  ]
+}
