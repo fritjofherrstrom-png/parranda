@@ -26,6 +26,7 @@ const { createAccessCheckedSourceFetch } = require("../pulse-sources/access-chec
 const { createDateRangeListingProvider } = require("../pulse-sources/date-range-listing-provider");
 const { createLinkedEventsProvider } = require("../pulse-sources/linked-events-source-provider");
 const { createTicketmasterProvider } = require("../pulse-sources/ticketmaster-source-provider");
+const { groupLiveProgramViews, diversifyLiveHighlights } = require("./live-program-presentation");
 const { createSchemaOrgEventProvider } = require("../pulse-sources/schema-org-event-provider");
 const { createEventsCalendarProvider } = require("../pulse-sources/events-calendar-source-provider");
 const { createRssAtomEventProvider } = require("../pulse-sources/rss-atom-event-provider");
@@ -643,7 +644,13 @@ function rankEventViews(views, preferences = []) {
 }
 
 function buildEventBucketSurface(views, preferences = []) {
-  const ranked = rankEventViews(groupSourceOccurrences(views), preferences);
+  let evidenceRank = 0;
+  const evidence = rankEventViews(groupSourceOccurrences(views), preferences).map(view => {
+    if (view.occurrences?.length) return { ...view, live_evidence_rank: evidenceRank,
+      occurrences: view.occurrences.map(slot => ({ ...slot, live_evidence_rank: evidenceRank++ })) };
+    return { ...view, live_evidence_rank: evidenceRank++ };
+  });
+  const ranked = groupLiveProgramViews(evidence);
   const highlights = selectEventHighlights(ranked, preferences);
   const highlighted = new Set(highlights.map(eventViewIdentity));
   const remaining = ranked.filter((view) => !highlighted.has(eventViewIdentity(view)));
@@ -693,15 +700,15 @@ function selectEventHighlights(ranked, preferences = []) {
     preferences.length === 0 ||
     highlights.some(isSerendipityCandidate)
   ) {
-    return highlights;
+    return diversifyLiveHighlights(ranked, highlights);
   }
 
   const discovery = ranked.slice(MAX_PER_BUCKET).find(isSerendipityCandidate);
-  if (!discovery) return highlights;
-  return [
+  if (!discovery) return diversifyLiveHighlights(ranked, highlights);
+  return diversifyLiveHighlights(ranked, [
     ...highlights.slice(0, -1),
     { ...discovery, highlight_reason: "local_serendipity" },
-  ];
+  ]);
 }
 
 function isSerendipityCandidate(view) {
@@ -1283,7 +1290,7 @@ async function collectEventSource({
       radiusKm: Math.max(1, Math.round(radiusM / 1000)),
       windowDays: THIS_WEEK_HORIZON_DAYS,
       // The global feed carries event-level (not region-level) timezones. One
-      // bounded page covers the possible UTC envelope; final calendar gates
+      // bounded collection covers the possible UTC envelope; final calendar gates
       // use each event's source timezone, never this acquisition padding.
       ...(selectedDate ? {
         windowStart: new Date(Math.max(new Date(`${selectedDate}T00:00:00Z`).getTime() - 14 * 3600000, nowDate.getTime())),
@@ -1672,7 +1679,9 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // tags polluted by a source category's available taxonomy children.
 // v16 excludes Ticketmaster pools with coerced coordinates, placeholder clocks,
 // discarded ends or merged source-owned occurrence identities. No cache purge.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v16";
+// v17 excludes first-page-only global inventory so bounded pagination and its
+// explicit partial outcome are observed without deleting any shared cache.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v17";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read

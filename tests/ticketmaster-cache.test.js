@@ -70,7 +70,7 @@ test("invalid Ticketmaster evidence is failure-held for exactly two minutes, nev
     assert.equal(held.acquisition.source_health.result, "unknown");
     assert.equal(h.calls(), 1);
   }
-  const namespace = path.join(dir, "agnostic-events-v16");
+  const namespace = path.join(dir, "agnostic-events-v17");
   const persisted = fs.existsSync(namespace) ? fs.readdirSync(namespace).filter(file => file.endsWith(".json")) : [];
   assert.deepEqual(persisted, [], "cache lookup may create its directory, but never persists failed evidence");
   h.advance(120000);
@@ -93,7 +93,7 @@ test("healthy Ticketmaster empty pages retain the twenty-minute persistent cache
   assert.equal(settled.acquisition.source_health.status, "healthy");
   assert.equal(settled.acquisition.source_health.result, "empty");
   assert.equal(h.calls(), 1);
-  const namespace = path.join(dir, "agnostic-events-v16");
+  const namespace = path.join(dir, "agnostic-events-v17");
   const files = fs.readdirSync(namespace).filter(file => file.endsWith(".json"));
   assert.equal(files.length, 1);
   const serialized = fs.readFileSync(path.join(namespace, files[0]), "utf8");

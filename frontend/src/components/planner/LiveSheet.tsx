@@ -128,6 +128,7 @@ export default function LiveSheet({
     ) : null;
   const sheetRow = (ev: PulseEvent, i: number, titleClassName: string, timingDate = sheetLiveEvents?.selected_date,
     navigationRow?: LiveNavigationRow<PulseEvent>) => {
+    const displayProgram = ev.display_group_kind === "source_program";
     const relevance = liveRelevanceSentence(liveEventRelevance(navigationRow?.series || ev, selected), lang, t);
     const distance = nearbyDistanceLabel(ev, lang);
     const tags = liveTagLabels(liveEventTags(ev), lang);
@@ -149,9 +150,9 @@ export default function LiveSheet({
           </span>}
           {relevance && <span className="mt-0.5 block text-xs text-parranda-ink/68">{relevance}</span>}
         </span>
-        {choice(ev, navigationRow?.series?.title || ev.title || "", navigationRow ? navigationRow.date : planningDate)}
-        {!navigationRow && <EventOccurrences event={ev} lang={lang} now={now} selectedDate={timingDate}
-          renderChoice={slot => choice(slot, ev.title || "")} />}
+        {!displayProgram && choice(ev, navigationRow?.series?.title || ev.title || "", navigationRow ? navigationRow.date : planningDate)}
+        {(!navigationRow || displayProgram) && <EventOccurrences event={ev} lang={lang} now={now} selectedDate={navigationRow?.date || timingDate}
+          renderChoice={slot => choice(slot, ev.title || "", navigationRow ? navigationRow.date : planningDate)} />}
       </li>
     );
   };
