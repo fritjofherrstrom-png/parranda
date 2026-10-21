@@ -424,7 +424,7 @@ export default function StopLine({
                       </button>
                     ))}
                     {hasRealId && commitments[stopIdentity]?.kind !== "pin" && (
-                      <>
+                      <div className="inline-flex items-center gap-1.5">
                       {/* Busy, not disabled, while the edit runs: the pressed
                           button keeps keyboard focus (ui.tsx busyButton). */}
                       <button
@@ -445,7 +445,7 @@ export default function StopLine({
                         <TrashIcon className="h-4 w-4" />
                         {t("Ta bort", "Remove")}
                       </button>
-                      </>
+                      </div>
                     )}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-5">
