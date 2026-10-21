@@ -1,0 +1,51 @@
+{
+  "main": "aebafefba182dbf3cf8cc96ac24a8db29a762858",
+  "ci": "https://github.com/fritjofherrstrom-png/parranda/actions/runs/39665014935",
+  "conclusion": "success",
+  "runtime": "Node22.23.3/Linux/x64",
+  "root": {
+    "tests": 4915,
+    "pass": 4912,
+    "fail": 0,
+    "skip": 3
+  },
+  "frontend": {
+    "tests": 926,
+    "pass": 926,
+    "fail": 0,
+    "skip": 0
+  },
+  "separate_sql_smoke": {
+    "tests": 1,
+    "pass": 1,
+    "fail": 0,
+    "skip": 0
+  },
+  "skips": [
+    "real child uses bounded temporary disk and parent removes its private directory # SKIP set PARRANDA_TEST_LIVE_NETWORK=enabled: the DuckDB child downloads the httpfs extension",
+    "an unusable extension cache falls back without disabling the bounded query # SKIP set PARRANDA_TEST_LIVE_NETWORK=enabled: the DuckDB child downloads the httpfs extension",
+    "Simpleview real PostgreSQL approval, worker persistence, restart read and fail-closed bindings # SKIP set PARRANDA_TEST_DATABASE_URL explicitly for a disposable test database"
+  ],
+  "successful_steps": [
+    "Set up job",
+    "Checkout",
+    "Setup Node",
+    "Install dependencies",
+    "Install frontend dependencies",
+    "Install Chromium for map acceptance",
+    "Run tests",
+    "Typecheck frontend foundation",
+    "Test frontend foundation",
+    "Build frontend foundation",
+    "Check committed frontend/dist matches the build",
+    "Prepare digest-pinned CI image mirrors",
+    "Validate self-hosted production contract",
+    "Validate self-hosted Compose configuration",
+    "Validate self-hosted Source Catalog profile",
+    "Build self-hosted image",
+    "Smoke-test Source Catalog migration",
+    "Post Setup Node",
+    "Post Checkout",
+    "Complete job"
+  ]
+}

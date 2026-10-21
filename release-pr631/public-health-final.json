@@ -1,0 +1,10 @@
+{
+  "checked_at": "2026-10-21T22:02:58.441484+00:00",
+  "url": "https://tions-dry-tells-chef.trycloudflare.com/api/health",
+  "http_status": 200,
+  "body": {
+    "ok": true,
+    "runtime_profile": "staging-563-564",
+    "build_sha": "aebafefba182dbf3cf8cc96ac24a8db29a762858"
+  }
+}

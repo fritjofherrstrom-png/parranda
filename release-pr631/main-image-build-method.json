@@ -1,0 +1,8 @@
+{
+  "main": "aebafefba182dbf3cf8cc96ac24a8db29a762858",
+  "tree": "67b01048ad1a33229cd75982fe46c21da831ed21",
+  "candidate": "a1441a0c73d556959e02fa7bcd0db5c6fc69371a",
+  "candidate_image": "sha256:018fefa843ff46181a1d0fd809079e3c225622c41ebd9cb9e8179a0294f2d757",
+  "method": "immutable verified candidate image with identical main tree; only build SHA environment/revision labels changed; no dependency/source changes",
+  "dockerfile_sha256": "d3a996655796d08180f946652f42985452e3b8734c298447782f169b7a8d7bb7"
+}
