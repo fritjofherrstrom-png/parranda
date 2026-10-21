@@ -20,3 +20,7 @@ node --require ./tests/helpers/no-live-network.js /path/to/verify-entry.cjs --wa
 ```
 
 The first command must exit1 with `/` versus `/anywhere`; the second must exit0. No external provider traffic, shared-cache mutation or product API interception occurs. This does not fix or certify pre-JavaScript product usability. No merge/deploy is included.
+
+## Final exact-head CI
+
+[Run 39652985817](https://github.com/fritjofherrstrom-png/parranda/actions/runs/39652985817) completed SUCCESS on a1441a0: **4912 PASS / 0 FAIL / 3 SKIP** in the full suite, **926/926** frontend tests, frontend typecheck/build/committed-dist guard, container build and separate PostgreSQL/worker smoke PASS. Node22.23.3/Linux GitHub runner; not Pi/arm64 acceptance. See CI_FINAL.json for machine-readable checks. Main remained 0643bc5 and no merge/deploy occurred.

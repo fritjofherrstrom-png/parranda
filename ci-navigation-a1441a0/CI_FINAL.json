@@ -1,0 +1,70 @@
+{
+  "head": "a1441a0c73d556959e02fa7bcd0db5c6fc69371a",
+  "tree": "67b01048ad1a33229cd75982fe46c21da831ed21",
+  "base": "0643bc56202a8d1d552ea09e302a0bb0a1cd2aca",
+  "test_merge": "f66f9b17e1d659619ef389cd5ad24338e6bf8f93",
+  "test_merge_tree_matches_candidate": true,
+  "run": 39652985817,
+  "url": "https://github.com/fritjofherrstrom-png/parranda/actions/runs/39652985817",
+  "conclusion": "SUCCESS",
+  "runtime": {
+    "node": "22.23.3",
+    "platform": "Linux",
+    "architecture": "GitHub-hosted ubuntu-latest x64; not Pi/arm64"
+  },
+  "full_suite": {
+    "tests": 4915,
+    "pass": 4912,
+    "fail": 0,
+    "skip": 3
+  },
+  "frontend_suite": {
+    "tests": 926,
+    "pass": 926,
+    "fail": 0,
+    "skip": 0
+  },
+  "sql_smoke": {
+    "tests": 1,
+    "pass": 1,
+    "fail": 0,
+    "skip": 0
+  },
+  "checks": {
+    "Set up job": "success",
+    "Checkout": "success",
+    "Setup Node": "success",
+    "Install dependencies": "success",
+    "Install frontend dependencies": "success",
+    "Install Chromium for map acceptance": "success",
+    "Run tests": "success",
+    "Typecheck frontend foundation": "success",
+    "Test frontend foundation": "success",
+    "Build frontend foundation": "success",
+    "Check committed frontend/dist matches the build": "success",
+    "Prepare digest-pinned CI image mirrors": "success",
+    "Validate self-hosted production contract": "success",
+    "Validate self-hosted Compose configuration": "success",
+    "Validate self-hosted Source Catalog profile": "success",
+    "Build self-hosted image": "success",
+    "Smoke-test Source Catalog migration": "success",
+    "Post Setup Node": "success",
+    "Post Checkout": "success",
+    "Complete job": "success"
+  },
+  "skips": [
+    "DuckDB child httpfs download: opt-in live network",
+    "Unusable extension-cache fallback: opt-in live network",
+    "Simpleview PostgreSQL lifecycle: opt-in disposable test database; separate CI SQL smoke passed"
+  ],
+  "main_unchanged": true,
+  "merged": false,
+  "deployed": false,
+  "source_policy_changed": false,
+  "limits": [
+    "Controlled provider/resolver/weather/clock fixtures; not fresh provider acceptance.",
+    "No candidate Node22/Linuxarm64 Pi smoke or physical Safari acceptance.",
+    "This changes only test synchronization and diagnostic capture relative to 8aa85a2; no claim to repair pre-JavaScript product usability.",
+    "The old CI lacks URL/DOM capture; controlled missing-hydration reproduction matches its symptom but does not retrospectively capture its exact internal cause."
+  ]
+}
