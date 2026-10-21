@@ -1,5 +1,5 @@
 /**
- * Facts on the line that hold for the whole day are said once.
+ * Unknown place hours belong in the place disclosure, leaving the route compact.
  * Component evidence with controlled responses, not live-provider acceptance.
  */
 import assert from "node:assert/strict";
@@ -29,16 +29,15 @@ async function planner(t, types) {
   return h.container.querySelector('section[aria-label="The route"]').textContent;
 }
 
-test("no hours for any stop is said once, not on every station", async (t) => {
+test("unknown hours on every stop do not add a route-wide duplicate", async (t) => {
   const route = await planner(t, ["museum", "museum", "gallery"]);
-  assert.match(route, /Opening hours unavailable for today's stops on the chosen day/);
-  assert.equal(route.match(/Opening hours unavailable/g)?.length, 1);
+  assert.doesNotMatch(route, /Opening hours unavailable/);
 });
 
-test("when only some stops lack hours, exactly those stops say so", async (t) => {
+test("mixed stop types do not show unknown-hours badges before disclosure", async (t) => {
   const route = await planner(t, ["museum", "park", "park"]);
   assert.doesNotMatch(route, /Opening hours unavailable for today's stops/);
-  assert.equal(route.match(/Opening hours unavailable/g)?.length, 1);
+  assert.doesNotMatch(route, /Opening hours unavailable/);
 });
 
 test("following the day asks for the position only on a tap, and keeps it nowhere", () => {
@@ -119,9 +118,8 @@ test("each stop's kind is a compact badge under the name, apart from its hours",
     assert.equal(badge.querySelector("button, a"), null, "the badge is information, not a control");
     assert.doesNotMatch(badge.textContent, /Opening hours unavailable/, "hours never read as part of the category");
   }
-  // The restaurant and gallery have no hours (the park needs none): the status
-  // sits beside the badge, not inside it.
-  assert.equal(route.textContent.match(/Opening hours unavailable/g)?.length, 2);
+  // Unknown hours belong to each expanded place, not the category row.
+  assert.doesNotMatch(route.textContent, /Opening hours unavailable/);
 });
 
 test("a kind this build has no words for shows no badge", async (t) => {

@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { stopHoursUnknown, stopTypeLabel, stopWebsiteUrl } from "../src/lib/stop-card-facts.mjs";
 
+import * as cardFacts from "../src/lib/stop-card-facts.mjs";
+
 const secondHand = (category) => ({ type: "vintage-shop", source: category ? { label: "osm", category } : { label: "osm" } });
 
 test("a second-hand stop names the source's own narrower category", () => {
@@ -80,4 +82,47 @@ test("regular hours do not promote an unknown selected day to confirmed hours", 
   assert.equal(stopHoursUnknown({ type: "museum", selected_day_hours }), true);
   assert.equal(stopHoursUnknown({ type: "museum", selected_day_hours: {
     ...selected_day_hours, ordinary_status: "closed", ordinary_windows: [] } }), true);
+});
+
+test("a card explains only selected preferences explicitly covered by its server facts", () => {
+  assert.equal(typeof cardFacts.stopMatchedPreferences, "function", "the fact helper exposes server-backed preference matches");
+  const { stopMatchedPreferences } = cardFacts;
+  assert.deepEqual(stopMatchedPreferences({ covered_preferences: ['museums', 'coffee', 'food', 'unrecognised'],
+    partial_preferences: ['coffee'] }, ['culture', 'fika', 'views']), ['culture']);
+  assert.deepEqual(stopMatchedPreferences({ covered_preferences: ['vintage', 'second_hand'] }, ['second_hand', 'culture']), ['second_hand']);
+  assert.deepEqual(stopMatchedPreferences({ type: 'museum', label: 'Culture destination' }, ['culture']), [],
+    'name and type cannot invent a preference explanation');
+  assert.deepEqual(stopMatchedPreferences({ covered_preferences: 'culture' }, ['culture']), []);
+  assert.deepEqual(stopMatchedPreferences({ covered_preferences: [null, 1, 'culture'] }, null), []);
+});
+
+test("place details use only compatible source-kind tokens and bounded addresses", () => {
+  assert.equal(typeof cardFacts.stopPlaceDetails, "function", "selected source facts have a bounded display helper");
+  const { stopPlaceDetails } = cardFacts;
+  assert.deepEqual(stopPlaceDetails({ type: 'vintage-shop', place_details: { kind: 'second_hand_clothing', address: '  8 Source Street  ' } }, 'en'),
+    { kindLabel: 'Second-hand clothing', address: '8 Source Street' });
+  assert.deepEqual(stopPlaceDetails({ type: 'museum', place_details: { kind: 'art_museum' } }, 'sv'),
+    { kindLabel: 'Konstmuseum', address: null });
+  assert.deepEqual(stopPlaceDetails({ type: 'vintage-shop', source: { category: 'antiques' }, place_details: { kind: 'antiques' } }, 'en'),
+    { kindLabel: null, address: null }, 'an existing specific category badge is not repeated as extra content');
+  for (const details of [{ kind: 'art_museum' }, { kind: 'invented', description: 'Hidden gem' }, ['coffee_shop'], null]) {
+    assert.deepEqual(stopPlaceDetails({ type: 'cafe', place_details: details }, 'en'), { kindLabel: null, address: null });
+  }
+  for (const address of ['x'.repeat(161), '8 Source\nStreet', {}, '']) {
+    assert.deepEqual(stopPlaceDetails({ type: 'museum', place_details: { address } }, 'en'), { kindLabel: null, address: null });
+  }
+  assert.deepEqual(stopPlaceDetails({ type: 'museum', address: 'Legacy Street 4', description: 'A wonderful museum' }, 'en'),
+    { kindLabel: null, address: 'Legacy Street 4' }, 'existing factual addresses survive without publishing unvalidated prose');
+});
+
+test("old or missing stops without details remain safe and gain no invented facts", () => {
+  for (const stop of [null, undefined, {}, { label: 'Legacy stop' }]) {
+    assert.deepEqual(cardFacts.stopPlaceDetails(stop), { kindLabel: null, address: null });
+  }
+});
+
+test("malformed saved kind cannot crash a stop or erase its valid address", () => {
+  const place_details = JSON.parse('{"kind":{"toString":null},"address":"Source Street 1"}');
+  assert.deepEqual(cardFacts.stopPlaceDetails({ type: 'museum', place_details }),
+    { kindLabel: null, address: 'Source Street 1' });
 });
