@@ -263,3 +263,19 @@ for (const later of [false, true]) {
     assert.equal(result.collection_status.reason, later ? 'source_collection_truncated' : 'source_timeout');
   });
 }
+
+// Same source identity can carry a later cancellation. Only truly identical
+// facts may be collapsed; otherwise downstream conflict/stale gates need both.
+test('Ticketmaster preserves changed facts on repeated identities across pages', async () => {
+  const first=event('updated'),cancelled=structuredClone(first);
+  cancelled.dates.status.code='cancelled';
+  const result=await collect(sequence([page([first],0,2,2),page([cancelled],1,2,2)]));
+  assert.equal(result.time_sensitive_events.length,2);
+  assert.deepEqual(result.time_sensitive_events.map(row=>row.freshness),['stale','stale']);
+});
+
+test('a cancellation without a stated occurrence identity cannot stale unrelated unidentified rows', async () => {
+  const active=event(''),cancelled=event('');cancelled.name='Another source programme';cancelled.url='https://tickets.example/another';cancelled.dates.status.code='cancelled';
+  const result=await collect(sequence([page([active,cancelled],0,1,2)]));
+  assert.deepEqual(result.time_sensitive_events.map(row=>row.freshness),[null,'stale']);
+});

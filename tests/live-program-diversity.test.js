@@ -108,3 +108,28 @@ test('a display group cannot move its later slot ahead of a better-ranked interv
  assert.equal(published.tonight.length,2);
  assert.equal(selectedAnchor(published).id,'other','a grouped display is not a new route-priority rule');
 });
+
+test('a cancellation on a later page for an earlier identity reaches the real stale-evidence gate', async () => {
+ const first=raw('cancelled-after-first-page','Museum concert','18:00'),cancelled=structuredClone(first);
+ cancelled.dates.status.code='cancelled';let pages=0;
+ const result=await collectAnchorEvents({anchor,now:NOW,selectedDate:DATE,globalKey:'fixture-only',registry:[],fetcher:async input=>{
+  const n=Number(new URL(input).searchParams.get('page'));pages++;
+  return {ok:true,json:async()=>({_embedded:{events:[n?cancelled:first]},page:{number:n,size:40,totalPages:2,totalElements:2}})};
+ }});
+ assert.equal(pages,2);assert.equal(allRows(result).length,0,'a previously onsale identity is not recommended after its cancellation');
+});
+
+for (const status of ['cancelled', 'postponed']) {
+ test(`a same-ID ${status} marker without geometry suppresses an earlier usable occurrence`, async () => {
+  const first=raw('changed-without-geometry','Museum concert','18:00'),changed=structuredClone(first);
+  changed.dates.status.code=status;delete changed._embedded.venues[0].location;
+  let pages=0;
+  const result=await collectAnchorEvents({anchor,now:NOW,selectedDate:DATE,globalKey:'fixture-only',registry:[],fetcher:async input=>{
+   const n=Number(new URL(input).searchParams.get('page'));pages++;
+   return {ok:true,json:async()=>({_embedded:{events:[n?changed:first]},page:{number:n,size:40,totalPages:2,totalElements:2}})};
+  }});
+  assert.equal(pages,2);
+  assert.equal(allRows(result).length,0,'a stated negative status does not need new geometry for its known identity');
+  assert.equal(result.acquisition.source_health.status,'partial','unusable geometry is still reported honestly');
+ });
+}

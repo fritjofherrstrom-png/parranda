@@ -191,7 +191,8 @@ function createTicketmasterProvider({
           const deadline = Date.now() + budgetMs;
           const timer = controller ? setTimeout(() => controller.abort(), budgetMs) : null;
           const mapped = [];
-          const seenIds = new Set();
+          const staleIds = new Set();
+          const seenRows = new Set();
           const seenPages = new Set();
           let sourceRows = 0;
           let advertisedPages = 0;
@@ -231,13 +232,25 @@ function createTicketmasterProvider({
               const pageSignature = JSON.stringify(boundedEvents);
               if (seenPages.has(pageSignature)) { failure = "source_collection_truncated"; break; }
               seenPages.add(pageSignature);
+              // A stated cancellation belongs to the known occurrence even
+              // when this row cannot provide a positive place/geometry atom.
+              for (const event of boundedEvents) {
+                if (typeof event?.id === "string" && event.id.trim() && event.id.length <= 200 &&
+                    typeof event.dates?.status?.code === "string" && /cancel|postpon/i.test(event.dates.status.code)) {
+                  staleIds.add(event.id);
+                }
+              }
               const pageEvents = boundedEvents.map(mapDiscoveryEvent).filter(Boolean);
               if (events.length && !pageEvents.length) { failure = "source_payload_invalid"; break; }
               const previousRows = mapped.length;
               for (const event of pageEvents) {
                 const id = typeof event.id === "string" && event.id.slice(3).trim() ? event.id : null;
-                if (id && seenIds.has(id)) continue;
-                if (id) seenIds.add(id);
+                // Preserve changed/cancelled evidence for the same identity so
+                // normalization and stale/conflict gates can assess it. A
+                // repeated ID alone does not prove identical source facts.
+                const rowKey = id ? JSON.stringify(event) : null;
+                if (rowKey && seenRows.has(rowKey)) continue;
+                if (rowKey) seenRows.add(rowKey);
                 mapped.push(event);
               }
               sourceRows += boundedEvents.length;
@@ -255,8 +268,11 @@ function createTicketmasterProvider({
           } finally {
             if (timer) clearTimeout(timer);
           }
+          // A later page may explicitly cancel/postpone an identity already
+          // listed as on sale. Carry that stated status to its earlier atoms:
+          // the shared date gate removes stale rows before cross-source fusion.
           return {
-            time_sensitive_events: mapped,
+            time_sensitive_events: mapped.map(event => staleIds.has(event.source_occurrence_id) ? { ...event, freshness: "stale" } : event),
             collection_status: buildProviderCollectionOutcome(mapped.length ? "ok" : failure ? "failed" : "empty", {
               reason: failure ? collectedPages ? "source_collection_truncated" : failure : mapped.length ? null : "source_empty",
               eventRows: mapped.length,

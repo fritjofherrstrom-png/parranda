@@ -28,8 +28,14 @@ endpoint; a source-supplied next URL is never a credential-bearing fetch target.
 
 If more inventory remains, a page repeats, or a later page fails, usable earlier
 events remain available and `source_collection_truncated` marks partial source
-health. A first-page failure retains its specific failure reason. A successful
-bounded collection is never a promise of complete local-event coverage.
+health. Only identical facts for a repeated identity are collapsed; changed
+evidence is retained.
+An explicit cancellation/postponement marks all atoms of that same stated source
+occurrence stale, so an earlier on-sale row cannot survive the existing date gates.
+The negative status remains effective if its row lacks positive venue geometry.
+Unidentified rows cannot cancel another occurrence. A first-page failure retains
+its specific failure reason. A successful bounded collection is never a promise
+of complete local-event coverage.
 
 Event result cache namespace v17 excludes older first-page-only pools. It does
 not delete shared cache files, alter local provider snapshots, or change source
