@@ -84,6 +84,11 @@ test('built free-text day publishes a compact Relaxed route, useful source facts
   // Real landing field and real navigation: no coordinate or route API injection.
   try {
   await page.goto(origin + '/?lang=en');
+  // `load` can precede the client:load island's hydration. Match the other
+  // real-HTTP landing journeys: interact only once its handlers are attached.
+  await page.waitForFunction(() => document.querySelector('[role="combobox"]')?.closest('astro-island')?.hasAttribute('ssr') === false);
+  observations.landing = await page.evaluate(() => ({ readyState: document.readyState,
+    hydrated: document.querySelector('[role="combobox"]')?.closest('astro-island')?.hasAttribute('ssr') === false }));
   await page.getByRole('combobox').fill('Fixture Area');
   await page.getByRole('button', { name: 'Build my day', exact: true }).click();
   await page.waitForURL(url => url.pathname === '/anywhere' && url.searchParams.get('place') === 'Fixture Area');
@@ -205,6 +210,10 @@ test('built free-text day publishes a compact Relaxed route, useful source facts
   if (evidenceDir) fs.writeFileSync(path.join(evidenceDir, 'receipt.json'), JSON.stringify(receipt, null, 2));
   t.diagnostic(JSON.stringify(receipt));
   } catch (error) {
+    observations.failure = await page.evaluate(() => ({ url: location.href, readyState: document.readyState,
+      landingSsr: document.querySelector('[role="combobox"]')?.closest('astro-island')?.hasAttribute('ssr'),
+      fieldValue: document.querySelector('[role="combobox"]')?.value,
+      renderedText: document.body.innerText.slice(0, 2000) })).catch(() => ({ pageUnavailable: true }));
     t.diagnostic(JSON.stringify({ observations, posts: posts.map(({ place, dates, preferences, day_rhythm, pinned_candidate_ids, excluded_candidate_ids, day_edit }) => ({ place, dates, preferences, day_rhythm, pinned_candidate_ids, excluded_candidate_ids, day_edit })), published: published.map(body => ({ intake_status: body.agnostic_route_output_experiment?.intake?.status, km: body.days[0].primary_route.estimated_km, ids: body.days[0].primary_route.main_stops.map(stop => stop.id) })), errors }));
     if (evidenceDir) {
       fs.mkdirSync(evidenceDir, { recursive: true });
