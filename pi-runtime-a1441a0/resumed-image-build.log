@@ -1,0 +1,188 @@
+{"originals_unchanged": true, "health": {"ok": true, "runtime_profile": "staging-563-564", "build_sha": "0643bc56202a8d1d552ea09e302a0bb0a1cd2aca"}}
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.37kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1
+#2 DONE 0.9s
+
+#3 docker-image://docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#3 resolve docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:22-bookworm-slim
+#4 DONE 0.8s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 148B done
+#5 DONE 0.0s
+
+#6 [build  1/11] FROM docker.io/library/node:22-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d
+#6 resolve docker.io/library/node:22-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 30.77kB 0.0s done
+#7 DONE 0.0s
+
+#8 [build  2/11] WORKDIR /app
+#8 CACHED
+
+#9 [build  3/11] COPY package.json package-lock.json ./
+#9 CACHED
+
+#10 [build  4/11] RUN npm ci
+#10 CACHED
+
+#11 [build  5/11] COPY frontend/package.json frontend/package-lock.json ./frontend/
+#11 CACHED
+
+#12 [runtime  7/20] COPY --chown=node:node server ./server
+#12 CACHED
+
+#13 [runtime  8/20] COPY --chown=node:node shared ./shared
+#13 CACHED
+
+#14 [runtime 16/20] COPY --chown=node:node assets ./assets
+#14 CACHED
+
+#15 [runtime  5/20] RUN npm ci --omit=dev     && npm cache clean --force     && mkdir -p /var/lib/parranda/source-cache     && chown -R node:node /var/lib/parranda
+#15 CACHED
+
+#16 [runtime 13/20] COPY --chown=node:node scripts/run-source-scout-worker.js ./scripts/run-source-scout-worker.js
+#16 CACHED
+
+#17 [runtime  3/20] RUN apt-get update     && apt-get install -y --no-install-recommends ca-certificates     && rm -rf /var/lib/apt/lists/*
+#17 CACHED
+
+#18 [runtime 11/20] COPY --chown=node:node scripts/migrate-source-catalog.js ./scripts/migrate-source-catalog.js
+#18 CACHED
+
+#19 [runtime  4/20] COPY package.json package-lock.json ./
+#19 CACHED
+
+#20 [runtime  6/20] COPY --chown=node:node server.js ./
+#20 CACHED
+
+#21 [runtime  9/20] COPY --chown=node:node config ./config
+#21 CACHED
+
+#22 [runtime 14/20] COPY --chown=node:node scripts/scout-local-event-sources.js ./scripts/scout-local-event-sources.js
+#22 CACHED
+
+#23 [runtime 10/20] COPY --chown=node:node migrations ./migrations
+#23 CACHED
+
+#24 [runtime 15/20] COPY --chown=node:node scripts/check-native-runtime.js ./scripts/check-native-runtime.js
+#24 CACHED
+
+#25 [runtime 12/20] COPY --chown=node:node scripts/review-source-profile.js ./scripts/review-source-profile.js
+#25 CACHED
+
+#26 [runtime 17/20] COPY --chown=node:node vendor ./vendor
+#26 CACHED
+
+#27 [build  6/11] RUN npm ci --prefix frontend
+#27 207.1 
+#27 207.1 added 298 packages, and audited 299 packages in 3m
+#27 207.1 
+#27 207.1 91 packages are looking for funding
+#27 207.1   run `npm fund` for details
+#27 207.2 
+#27 207.2 8 high severity vulnerabilities
+#27 207.2 
+#27 207.2 To address issues that do not require attention, run:
+#27 207.2   npm audit fix
+#27 207.2 
+#27 207.2 To address all issues (including breaking changes), run:
+#27 207.2   npm audit fix --force
+#27 207.2 
+#27 207.2 Run `npm audit` for details.
+#27 DONE 218.9s
+
+#28 [build  7/11] COPY anywhere-render-decision.js ./
+#28 DONE 1.0s
+
+#29 [build  8/11] COPY planner-entry.js planner-entry.d.ts ./
+#29 DONE 0.3s
+
+#30 [build  9/11] COPY shared ./shared
+#30 DONE 0.2s
+
+#31 [build 10/11] COPY frontend ./frontend
+#31 DONE 1.6s
+
+#32 [build 11/11] RUN npm run check:frontend && npm run build:frontend
+#32 0.582 
+#32 0.582 > parranda@1.0.0 check:frontend
+#32 0.582 > npm --prefix frontend run check
+#32 0.582 
+#32 0.734 
+#32 0.734 > @parranda/frontend@0.0.0 check
+#32 0.734 > tsc --noEmit
+#32 0.734 
+#32 9.434 
+#32 9.434 > parranda@1.0.0 build:frontend
+#32 9.434 > npm --prefix frontend run build
+#32 9.434 
+#32 9.630 
+#32 9.630 > @parranda/frontend@0.0.0 build
+#32 9.630 > astro build
+#32 9.630 
+#32 10.43 ▶ Astro collects anonymous usage data.
+#32 10.43   This information helps us improve Astro.
+#32 10.43   Run "astro telemetry disable" to opt-out.
+#32 10.43   https://astro.build/telemetry
+#32 10.43 
+#32 11.71 19:39:00 [WARN] [vite] Failed to resolve dependency: leaflet, present in client 'optimizeDeps.include'
+#32 12.09 19:39:01 [types] Generated 451ms
+#32 12.09 19:39:01 [build] output: "static"
+#32 12.09 19:39:01 [build] mode: "static"
+#32 12.09 19:39:01 [build] directory: /app/frontend/dist/
+#32 12.09 19:39:01 [build] Collecting build info...
+#32 12.09 19:39:01 [build] ✓ Completed in 515ms.
+#32 12.10 19:39:01 [build] Building static entrypoints...
+#32 13.66 19:39:02 [vite] ✓ built in 1.51s
+#32 14.71 19:39:03 [WARN] [vite] [plugin builtin:vite-reporter] 
+#32 14.71 (!) Some chunks are larger than 500 kB after minification. Consider:
+#32 14.71 - Using dynamic import() to code-split the application
+#32 14.71 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+#32 14.71 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+#32 14.71 19:39:03 [vite] ✓ built in 1.05s
+#32 14.72 19:39:03 [build] Rearranging server assets...
+#32 14.94 
+#32 14.94  generating static routes 
+#32 14.95 19:39:03   ├─ /anywhere/index.html (+62ms) 
+#32 15.01 19:39:03   ├─ /index.html (+15ms) 
+#32 15.02 19:39:03 ✓ Completed in 185ms.
+#32 15.02 
+#32 15.03 19:39:03 [build] ✓ Completed in 2.93s.
+#32 15.03 19:39:03 [build] 2 page(s) built in 3.45s
+#32 15.03 19:39:03 [build] Complete!
+#32 DONE 20.0s
+
+#33 [runtime 18/20] COPY --from=build --chown=node:node /app/frontend/dist ./frontend/dist
+#33 DONE 0.8s
+
+#34 [runtime 19/20] COPY --chown=node:node     index.html     landing.html     dogfood.html     styles.css     script.js     ux-pass1.js     planner-trust.js     manifest.webmanifest     sw.js     dogfood.js     dogfood-render.js     anywhere-render-decision.js     planner-entry.js     ./
+#34 DONE 1.4s
+
+#35 [runtime 20/20] RUN node scripts/check-native-runtime.js
+#35 1.022 {"status":"native_runtime_ready","package_version":"1.5.5-r.4","platform":"linux","architecture":"arm64","rows":[{"native_ready":1,"engine_version":"v1.5.5"}]}
+#35 DONE 1.2s
+
+#36 exporting to image
+#36 exporting layers
+#36 exporting layers 22.0s done
+#36 exporting manifest sha256:796601fda5e6e63210d7139012a0cf8f4f45f2c033dcad7e00315b4bc7692f09 0.0s done
+#36 exporting config sha256:3c2d5c10dd7f9e58cf23d16a7050dc7aa9e010d7f18fc98826e1eac11da05b11 0.0s done
+#36 exporting attestation manifest sha256:5ce8c840c88877beab907d1a939d6aa29153bce9e096337d2860b880bf25b8b6
+#36 exporting attestation manifest sha256:5ce8c840c88877beab907d1a939d6aa29153bce9e096337d2860b880bf25b8b6 0.1s done
+#36 exporting manifest list sha256:018fefa843ff46181a1d0fd809079e3c225622c41ebd9cb9e8179a0294f2d757 0.0s done
+#36 naming to docker.io/library/parranda-pr631:a1441a0c73d556959e02fa7bcd0db5c6fc69371a done
+#36 unpacking to docker.io/library/parranda-pr631:a1441a0c73d556959e02fa7bcd0db5c6fc69371a
+#36 unpacking to docker.io/library/parranda-pr631:a1441a0c73d556959e02fa7bcd0db5c6fc69371a 6.8s done
+#36 DONE 29.1s
+{"originals_unchanged": true, "health": {"ok": true, "runtime_profile": "staging-563-564", "build_sha": "0643bc56202a8d1d552ea09e302a0bb0a1cd2aca"}}

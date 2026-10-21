@@ -1,0 +1,327 @@
+{"originals_unchanged": true, "health": {"ok": true, "runtime_profile": "staging-563-564", "build_sha": "0643bc56202a8d1d552ea09e302a0bb0a1cd2aca"}}
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile:
+#1 transferring dockerfile: 2.37kB 0.0s done
+#1 DONE 4.2s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1
+#2 DONE 1.2s
+
+#3 docker-image://docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#3 resolve docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e 0.1s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:22-bookworm-slim
+#4 DONE 1.8s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 148B done
+#5 DONE 0.1s
+
+#6 [build  1/11] FROM docker.io/library/node:22-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d
+#6 resolve docker.io/library/node:22-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d 0.0s done
+#6 DONE 0.3s
+
+#7 [internal] load build context
+#7 transferring context: 9.83MB 0.2s done
+#7 DONE 0.3s
+
+#6 [build  1/11] FROM docker.io/library/node:22-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d
+#6 sha256:3d414f437f98e684911193d7be6d963eec339ef59c845c7676528385b8d82b6d 0B / 447B 0.2s
+#6 sha256:3d414f437f98e684911193d7be6d963eec339ef59c845c7676528385b8d82b6d 447B / 447B 0.4s done
+#6 sha256:4dceb4523c022ddfcb19a6a0df4d7f341c21ab6af25a2a2d039c854237ce201a 0B / 1.71MB 0.2s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 0B / 50.02MB 0.2s
+#6 sha256:10e48733c6ecb8ca0b186658d0e103d9ae7728ae2a10e79e4df4a760474ad5fe 0B / 3.31kB 0.2s
+#6 sha256:10e48733c6ecb8ca0b186658d0e103d9ae7728ae2a10e79e4df4a760474ad5fe 3.31kB / 3.31kB 0.9s done
+#6 extracting sha256:10e48733c6ecb8ca0b186658d0e103d9ae7728ae2a10e79e4df4a760474ad5fe 0.0s done
+#6 sha256:4dceb4523c022ddfcb19a6a0df4d7f341c21ab6af25a2a2d039c854237ce201a 1.05MB / 1.71MB 5.1s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 1.05MB / 50.02MB 5.3s
+#6 sha256:4dceb4523c022ddfcb19a6a0df4d7f341c21ab6af25a2a2d039c854237ce201a 1.71MB / 1.71MB 7.8s
+#6 sha256:4dceb4523c022ddfcb19a6a0df4d7f341c21ab6af25a2a2d039c854237ce201a 1.71MB / 1.71MB 7.9s done
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 2.10MB / 50.02MB 10.4s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 5.24MB / 50.02MB 15.0s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 6.29MB / 50.02MB 20.1s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 8.39MB / 50.02MB 25.2s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 10.49MB / 50.02MB 30.3s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 12.58MB / 50.02MB 35.4s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 15.73MB / 50.02MB 39.9s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 17.83MB / 50.02MB 45.0s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 20.97MB / 50.02MB 49.5s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 22.02MB / 50.02MB 54.6s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 22.02MB / 50.02MB 59.7s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 24.12MB / 50.02MB 64.8s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 26.21MB / 50.02MB 69.9s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 29.36MB / 50.02MB 75.0s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 30.41MB / 50.02MB 80.1s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 32.51MB / 50.02MB 85.2s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 34.60MB / 50.02MB 90.3s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 37.75MB / 50.02MB 95.1s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 39.85MB / 50.02MB 100.2s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 40.89MB / 50.02MB 105.3s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 44.04MB / 50.02MB 110.1s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 46.14MB / 50.02MB 115.2s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 48.23MB / 50.02MB 120.3s
+#6 sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 50.02MB / 50.02MB 124.2s done
+#6 extracting sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e
+#6 extracting sha256:45f4d16cf8ff92019a313bb4f67c1b5b8f5861181a5972355c2d8a057224d23e 1.0s done
+#6 DONE 126.4s
+
+#6 [build  1/11] FROM docker.io/library/node:22-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d
+#6 extracting sha256:4dceb4523c022ddfcb19a6a0df4d7f341c21ab6af25a2a2d039c854237ce201a 0.1s done
+#6 extracting sha256:3d414f437f98e684911193d7be6d963eec339ef59c845c7676528385b8d82b6d 0.0s done
+#6 DONE 126.5s
+
+#8 [build  2/11] WORKDIR /app
+#8 DONE 27.3s
+
+#9 [runtime  3/20] RUN apt-get update     && apt-get install -y --no-install-recommends ca-certificates     && rm -rf /var/lib/apt/lists/*
+#9 ...
+
+#10 [build  3/11] COPY package.json package-lock.json ./
+#10 DONE 0.8s
+
+#11 [build  4/11] RUN npm ci
+#11 ...
+
+#9 [runtime  3/20] RUN apt-get update     && apt-get install -y --no-install-recommends ca-certificates     && rm -rf /var/lib/apt/lists/*
+#9 3.341 Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+#9 4.548 Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+#9 4.548 Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
+#9 4.866 Get:4 http://deb.debian.org/debian bookworm/main arm64 Packages [8689 kB]
+#9 ...
+
+#11 [build  4/11] RUN npm ci
+#11 14.68 npm warn deprecated text-encoding@0.6.4: no longer maintained
+#11 ...
+
+#9 [runtime  3/20] RUN apt-get update     && apt-get install -y --no-install-recommends ca-certificates     && rm -rf /var/lib/apt/lists/*
+#9 37.45 Get:5 http://deb.debian.org/debian bookworm-updates/main arm64 Packages [6936 B]
+#9 39.76 Get:6 http://deb.debian.org/debian-security bookworm-security/main arm64 Packages [353 kB]
+#9 41.05 Fetched 9291 kB in 38s (245 kB/s)
+#9 41.05 Reading package lists...
+#9 41.86 Reading package lists...
+#9 43.06 Building dependency tree...
+#9 43.26 Reading state information...
+#9 43.66 The following additional packages will be installed:
+#9 43.66   libssl3 openssl
+#9 43.77 The following NEW packages will be installed:
+#9 43.77   ca-certificates libssl3 openssl
+#9 54.09 0 upgraded, 3 newly installed, 0 to remove and 0 not upgraded.
+#9 54.09 Need to get 3399 kB of archives.
+#9 54.09 After this operation, 8940 kB of additional disk space will be used.
+#9 54.09 Get:1 http://deb.debian.org/debian-security bookworm-security/main arm64 libssl3 arm64 3.0.22-1~deb12u1 [1828 kB]
+#9 74.14 Get:2 http://deb.debian.org/debian-security bookworm-security/main arm64 openssl arm64 3.0.22-1~deb12u1 [1410 kB]
+#9 78.18 Get:3 http://deb.debian.org/debian-security bookworm-security/main arm64 ca-certificates all 20250419~deb12u2 [161 kB]
+#9 78.94 debconf: delaying package configuration, since apt-utils is not installed
+#9 79.05 Fetched 3399 kB in 35s (98.3 kB/s)
+#9 79.43 Selecting previously unselected package libssl3:arm64.
+#9 79.43 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 6090 files and directories currently installed.)
+#9 79.45 Preparing to unpack .../libssl3_3.0.22-1~deb12u1_arm64.deb ...
+#9 79.47 Unpacking libssl3:arm64 (3.0.22-1~deb12u1) ...
+#9 79.70 Selecting previously unselected package openssl.
+#9 79.70 Preparing to unpack .../openssl_3.0.22-1~deb12u1_arm64.deb ...
+#9 79.70 Unpacking openssl (3.0.22-1~deb12u1) ...
+#9 79.86 Selecting previously unselected package ca-certificates.
+#9 79.86 Preparing to unpack .../ca-certificates_20250419~deb12u2_all.deb ...
+#9 79.87 Unpacking ca-certificates (20250419~deb12u2) ...
+#9 85.91 Setting up libssl3:arm64 (3.0.22-1~deb12u1) ...
+#9 85.93 Setting up openssl (3.0.22-1~deb12u1) ...
+#9 85.96 Setting up ca-certificates (20250419~deb12u2) ...
+#9 87.87 debconf: unable to initialize frontend: Dialog
+#9 87.87 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#9 87.87 debconf: falling back to frontend: Readline
+#9 87.87 debconf: unable to initialize frontend: Readline
+#9 87.87 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/aarch64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/aarch64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/aarch64-linux-gnu/perl-base /usr/lib/aarch64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#9 87.87 debconf: falling back to frontend: Teletype
+#9 88.36 Updating certificates in /etc/ssl/certs...
+#9 89.02 148 added, 0 removed; done.
+#9 89.54 Processing triggers for libc-bin (2.36-9+deb12u14) ...
+#9 89.63 Processing triggers for ca-certificates (20250419~deb12u2) ...
+#9 89.64 Updating certificates in /etc/ssl/certs...
+#9 90.13 0 added, 0 removed; done.
+#9 90.13 Running hooks in /etc/ca-certificates/update.d...
+#9 90.26 done.
+#9 DONE 98.2s
+
+#11 [build  4/11] RUN npm ci
+#11 ...
+
+#12 [runtime  4/20] COPY package.json package-lock.json ./
+#12 DONE 2.2s
+
+#11 [build  4/11] RUN npm ci
+#11 ...
+
+#13 [runtime  5/20] RUN npm ci --omit=dev     && npm cache clean --force     && mkdir -p /var/lib/parranda/source-cache     && chown -R node:node /var/lib/parranda
+#13 6.099 npm warn deprecated text-encoding@0.6.4: no longer maintained
+#13 530.8 
+#13 530.8 added 132 packages, and audited 133 packages in 9m
+#13 530.8 
+#13 530.8 34 packages are looking for funding
+#13 530.8   run `npm fund` for details
+#13 530.8 
+#13 530.8 2 vulnerabilities (1 moderate, 1 critical)
+#13 530.8 
+#13 530.8 To address all issues, run:
+#13 530.8   npm audit fix
+#13 530.8 
+#13 530.8 Run `npm audit` for details.
+#13 530.8 npm notice
+#13 530.8 npm notice New major version of npm available! 10.9.9 -> 12.2.0
+#13 530.8 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+#13 530.8 npm notice To update run: npm install -g npm@12.2.0
+#13 530.8 npm notice
+#13 531.0 npm warn using --force Recommended protections disabled.
+#13 DONE 535.8s
+
+#11 [build  4/11] RUN npm ci
+#11 ...
+
+#14 [runtime  6/20] COPY --chown=node:node server.js ./
+#14 DONE 0.7s
+
+#11 [build  4/11] RUN npm ci
+#11 ...
+
+#15 [runtime  7/20] COPY --chown=node:node server ./server
+#15 DONE 1.3s
+
+#11 [build  4/11] RUN npm ci
+#11 ...
+
+#16 [runtime  8/20] COPY --chown=node:node shared ./shared
+#16 DONE 0.6s
+
+#11 [build  4/11] RUN npm ci
+#11 ...
+
+#17 [runtime  9/20] COPY --chown=node:node config ./config
+#17 DONE 0.3s
+
+#11 [build  4/11] RUN npm ci
+#11 ...
+
+#18 [runtime 10/20] COPY --chown=node:node migrations ./migrations
+#18 DONE 0.3s
+
+#11 [build  4/11] RUN npm ci
+#11 ...
+
+#19 [runtime 11/20] COPY --chown=node:node scripts/migrate-source-catalog.js ./scripts/migrate-source-catalog.js
+#19 DONE 0.3s
+
+#11 [build  4/11] RUN npm ci
+#11 ...
+
+#20 [runtime 12/20] COPY --chown=node:node scripts/review-source-profile.js ./scripts/review-source-profile.js
+#20 DONE 0.3s
+
+#11 [build  4/11] RUN npm ci
+#11 ...
+
+#21 [runtime 13/20] COPY --chown=node:node scripts/run-source-scout-worker.js ./scripts/run-source-scout-worker.js
+#21 DONE 0.3s
+
+#11 [build  4/11] RUN npm ci
+#11 ...
+
+#22 [runtime 14/20] COPY --chown=node:node scripts/scout-local-event-sources.js ./scripts/scout-local-event-sources.js
+#22 DONE 0.5s
+
+#11 [build  4/11] RUN npm ci
+#11 ...
+
+#23 [runtime 15/20] COPY --chown=node:node scripts/check-native-runtime.js ./scripts/check-native-runtime.js
+#23 DONE 0.3s
+
+#11 [build  4/11] RUN npm ci
+#11 ...
+
+#24 [runtime 16/20] COPY --chown=node:node assets ./assets
+#24 DONE 0.8s
+
+#11 [build  4/11] RUN npm ci
+#11 ...
+
+#25 [runtime 17/20] COPY --chown=node:node vendor ./vendor
+#25 DONE 0.7s
+
+#11 [build  4/11] RUN npm ci
+#11 686.3 
+#11 686.3 added 133 packages, and audited 134 packages in 11m
+#11 686.3 
+#11 686.3 34 packages are looking for funding
+#11 686.3   run `npm fund` for details
+#11 686.3 
+#11 686.3 2 vulnerabilities (1 moderate, 1 critical)
+#11 686.3 
+#11 686.3 To address all issues, run:
+#11 686.3   npm audit fix
+#11 686.3 
+#11 686.3 Run `npm audit` for details.
+#11 686.3 npm notice
+#11 686.3 npm notice New major version of npm available! 10.9.9 -> 12.2.0
+#11 686.3 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+#11 686.3 npm notice To update run: npm install -g npm@12.2.0
+#11 686.3 npm notice
+#11 DONE 689.3s
+
+#26 [build  5/11] COPY frontend/package.json frontend/package-lock.json ./frontend/
+#26 DONE 1.0s
+
+#27 [build  6/11] RUN npm ci --prefix frontend
+#27 214.1 npm error code 1
+#27 214.1 npm error path /app/frontend/node_modules/esbuild
+#27 214.1 npm error command failed
+#27 214.1 npm error command sh -c node install.js
+#27 214.1 npm error node:internal/child_process:1120
+#27 214.1 npm error     result.error = new ErrnoException(result.error, 'spawnSync ' + options.file);
+#27 214.1 npm error                    ^
+#27 214.1 npm error
+#27 214.1 npm error <ref *1> Error: spawnSync /app/frontend/node_modules/esbuild/bin/esbuild ETXTBSY
+#27 214.1 npm error     at Object.spawnSync (node:internal/child_process:1120:20)
+#27 214.1 npm error     at spawnSync (node:child_process:902:24)
+#27 214.1 npm error     at Object.execFileSync (node:child_process:945:15)
+#27 214.1 npm error     at validateBinaryVersion (/app/frontend/node_modules/esbuild/install.js:103:28)
+#27 214.1 npm error     at /app/frontend/node_modules/esbuild/install.js:298:5 {
+#27 214.1 npm error   errno: -26,
+#27 214.1 npm error   code: 'ETXTBSY',
+#27 214.1 npm error   syscall: 'spawnSync /app/frontend/node_modules/esbuild/bin/esbuild',
+#27 214.1 npm error   path: '/app/frontend/node_modules/esbuild/bin/esbuild',
+#27 214.1 npm error   spawnargs: [ '--version' ],
+#27 214.1 npm error   error: [Circular *1],
+#27 214.1 npm error   status: null,
+#27 214.1 npm error   signal: null,
+#27 214.1 npm error   output: null,
+#27 214.1 npm error   pid: 0,
+#27 214.1 npm error   stdout: undefined,
+#27 214.1 npm error   stderr: undefined
+#27 214.1 npm error }
+#27 214.1 npm error
+#27 214.1 npm error Node.js v22.23.4
+#27 214.1 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-10-21T19_29_54_426Z-debug-0.log
+#27 ERROR: process "/bin/sh -c npm ci --prefix frontend" did not complete successfully: exit code: 1
+------
+ > [build  6/11] RUN npm ci --prefix frontend:
+214.1 npm error   status: null,
+214.1 npm error   signal: null,
+214.1 npm error   output: null,
+214.1 npm error   pid: 0,
+214.1 npm error   stdout: undefined,
+214.1 npm error   stderr: undefined
+214.1 npm error }
+214.1 npm error
+214.1 npm error Node.js v22.23.4
+214.1 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-10-21T19_29_54_426Z-debug-0.log
+------
+Dockerfile:11
+--------------------
+   9 |     
+  10 |     COPY frontend/package.json frontend/package-lock.json ./frontend/
+  11 | >>> RUN npm ci --prefix frontend
+  12 |     
+  13 |     COPY anywhere-render-decision.js ./
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c npm ci --prefix frontend" did not complete successfully: exit code: 1

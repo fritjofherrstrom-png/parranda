@@ -1,0 +1,12 @@
+{
+  "sha": "a1441a0c73d556959e02fa7bcd0db5c6fc69371a",
+  "exit_code": 0,
+  "lines": [
+    {
+      "controlled_ready": true,
+      "sha": "a1441a0c73d556959e02fa7bcd0db5c6fc69371a",
+      "node": "v22.23.4",
+      "arch": "arm64"
+    }
+  ]
+}

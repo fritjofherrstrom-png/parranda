@@ -1,0 +1,4 @@
+Only the external runtime observer changed:
+- await import('../frontend/src/lib/url-entry-commitments.mjs')
++ await import(pathToFileURL(path.join(PARRANDA_SMOKE_REPO, 'frontend/src/lib/url-entry-commitments.mjs')).href)
+Product source/dist, candidate SHA, immutable image, assertions and timeouts were unchanged. The failed first attempt was fully cleaned before the second.

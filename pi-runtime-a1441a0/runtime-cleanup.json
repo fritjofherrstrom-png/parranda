@@ -1,0 +1,13 @@
+{
+  "sha": "a1441a0c73d556959e02fa7bcd0db5c6fc69371a",
+  "image_id": "sha256:018fefa843ff46181a1d0fd809079e3c225622c41ebd9cb9e8179a0294f2d757",
+  "owned_container_removed": true,
+  "owned_internal_network_removed": true,
+  "exit_code": 0,
+  "shared_targets_unchanged": true,
+  "public_health": {
+    "ok": true,
+    "runtime_profile": "staging-563-564",
+    "build_sha": "0643bc56202a8d1d552ea09e302a0bb0a1cd2aca"
+  }
+}

@@ -1,0 +1,29 @@
+✖ immutable Pi compact day/card HTTP journey preserves real user edits (4286.019958ms)
+ℹ {"observations":{"landing":{"readyState":"complete","hydrated":true},"mobile":{"panelWidth":302,"viewport":390,"documentWidth":390,"controls":[{"text":"Keep this one","width":135.21875,"height":44},{"text":"Replace","width":100.53125,"height":44},{"text":"Remove","width":100.796875,"height":44},{"text":"Open in Maps","width":105.703125,"height":44},{"text":"About this place information","width":181.953125,"height":44}]},"beforeReload":{"url":"http://127.0.0.1:55506/anywhere?place=Fixture+Area&planner=open&prefs=second_hand&prio=second_hand&day=1&rhythm=calm&lang=en","id":"Fixture Area::2026-10-22::second_hand::rhythm=calm::prio=second_hand","dateIso":"2026-10-22","savedDate":"2026-10-22","inputs":{"mode":"typed","place":"Fixture Area","placeLabel":"Fixture Area","hasPlaceRef":false,"walkKey":"calm","selected":["second_hand"],"preferencePriority":["second_hand"]},"commitments":{"version":3,"anchorKey":"place:fixture area","dayKey":"Fixture Area::2026-10-22::second_hand::rhythm=calm::prio=second_hand","entries":{"osm-node-99800":{"kind":"pin","label":"Source Closet 0"}},"appliedPins":[{"id":"osm-node-99800","kind":"pin","label":"Source Closet 0"}],"refusals":[]},"classification":{"status":"composed_limited","hasStructure":true,"placeLabel":"Fixture Area","limitations":["capped_by_derived_timezone","capped_by_partial_context","capped_by_external_only_sources","capped_by_below_planner_candidate_threshold"]}},"failure":{"url":"http://127.0.0.1:55506/anywhere?place=Fixture+Area&planner=open&prefs=second_hand&prio=second_hand&day=1&rhythm=calm&lang=en","readyState":"complete","renderedText":"PARRANDA\nEN\nSV\nFixture Area · tomorrow\nChange\n\nADJUST THE DAY\n\nThe day rebuilds as you change it.\n\nDone\n\nINTERESTS\n\nNumbers show the order you picked. 1 weighs most.\n\nFood & drink\nCulture\nViews\nCoffee\nNightlife\nGreen & walks\n1\nSecond hand\nClear order\n\nWHEN\n\nToday\nTomorrow\n\nDAY RHYTHM\n\nLet Parranda choose\nRelaxed\nBalanced\nFull\n\nRelaxed: Fewer stops, more time at each place.\n\nA day in Fixture Area is ready: 4 stops.\n\n1 place kept\nStart over without my choices\n\nChanged: same stops and distance\n\nUndo\n\nYOUR DAY\n\nA DAY IN\nFIXTURE AREA\n≈ 0.3 km on foot\n4 stops\nAll picks included\n\nFew places to choose between here.\n\nTHE STOPS, IN ORDER\nMIDDAY\n1\nSource Closet 0\nSecond hand\nKept\n2 MIN · 0.1 KM\n2\nSource Closet 1\nSecond hand\n2 MIN · 0.1 KM\n3\nSource Closet 2\nSecond hand\n2 MIN · 0.1 KM\n4\nSource Closet 3\nSecond hand\n1\n2\n3\n4\nOpenFreeMap © OpenMapTiles Data from OpenStreetMap\n\nThe map background couldn't be loaded — the route and stops are still shown.\n\nAbout this day and map\nOpen route in Maps\nSave\nShare\n\nGoogle Maps works out the walking path when you open the route.\n\nLIVE IN FIXTURE AREA\nExplore live\nBlitz right now\n\nOne idea in Fixture Area, right now — your day stays as it is."}},"posts":[{"place":"Fixture Area","dates":["2026-10-21"],"preferences":["food","culture","views"],"day_rhythm":"balanced"},{"place":"Fixture Area","dates":["2026-10-22"],"preferences":["second_hand"],"day_rhythm":"calm"},{"place":"Fixture Area","dates":["2026-10-22"],"preferences":["second_hand"],"day_rhythm":"calm","pinned_candidate_ids":["osm-node-99800"]}],"published":[{"intake_status":"resolved","km":0.3,"ids":["osm-node-99800","osm-node-99801","osm-node-99802","osm-node-99803"]},{"intake_status":"resolved","km":0.3,"ids":["osm-node-99800","osm-node-99801","osm-node-99802","osm-node-99803"]}],"errors":[]}
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4651.657125
+
+✖ failing tests:
+
+test at ../../Developer/parranda-evidence/pr631-runtime-20261021/controlled-browser.test.cjs:14:1
+✖ immutable Pi compact day/card HTTP journey preserves real user edits (4286.019958ms)
+  Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/Users/fritjof/Developer/parranda-evidence/frontend/src/lib/url-entry-commitments.mjs' imported from /Users/fritjof/Developer/parranda-evidence/pr631-runtime-20261021/controlled-browser.test.cjs
+      at finalizeResolution (node:internal/modules/esm/resolve:271:11)
+      at moduleResolve (node:internal/modules/esm/resolve:861:10)
+      at defaultResolve (node:internal/modules/esm/resolve:988:11)
+      at #cachedDefaultResolve (node:internal/modules/esm/loader:697:20)
+      at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:714:38)
+      at ModuleLoader.resolveSync (node:internal/modules/esm/loader:746:52)
+      at #resolve (node:internal/modules/esm/loader:679:17)
+      at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:599:35)
+      at node:internal/modules/esm/loader:628:32
+      at TracingChannel.tracePromise (node:diagnostics_channel:362:14) {
+    code: 'ERR_MODULE_NOT_FOUND',
+    url: 'file:///Users/fritjof/Developer/parranda-evidence/frontend/src/lib/url-entry-commitments.mjs'
+  }

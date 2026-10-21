@@ -1,0 +1,16 @@
+{
+  "outcome": "PASS_CONTROLLED_NODE22_ARM64_UI_HTTP_COMPACT_CARDS",
+  "sha": "a1441a0c73d556959e02fa7bcd0db5c6fc69371a",
+  "tree": "67b01048ad1a33229cd75982fe46c21da831ed21",
+  "image_id": "sha256:018fefa843ff46181a1d0fd809079e3c225622c41ebd9cb9e8179a0294f2d757",
+  "runtime": {
+    "node": "v22.23.4",
+    "architecture": "arm64",
+    "platform": "linux",
+    "sha": "a1441a0c73d556959e02fa7bcd0db5c6fc69371a"
+  },
+  "source_and_built_dist_match": true,
+  "test_count": 1,
+  "controlled_sources_clock_resolver_weather": true,
+  "live_provider_acceptance": false
+}
