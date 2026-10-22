@@ -147,7 +147,7 @@ test("undo puts the previous day and its inputs back without composing", async (
   assert.doesNotMatch(h.text(), /Saved day/, "the day put back is not a saved snapshot");
 
   // The echo is spent on the undo itself: the next real change recomposes.
-  await adjustRhythm(h, /^Easy/);
+  await adjustRhythm(h, /^Relaxed/);
   assert.equal(composeCalls(h).length, 3);
   assert.equal(composeCalls(h)[2].body.day_rhythm, "calm");
 });
@@ -157,13 +157,13 @@ test("undo returns to the day on screen, not to a request still in flight", asyn
   await adjustRhythm(h, /^Full/);
   // A second change before the first answer lands: the day to return to is
   // still the arrival's.
-  await adjustRhythm(h, /^Easy/);
+  await adjustRhythm(h, /^Relaxed/);
   const calls = composeCalls(h);
   assert.equal(calls.length, 3);
   assert.ok(calls[1].aborted, "the older request gave way");
   await h.fetchMock.respond(calls[2], composedDay(["e"], 0.6));
   await h.clock.advance(50);
-  assert.match(changeNote(h), /^Changed: Balanced → Easy · 1 stop swapped · −1 stop · 1\.2 → 0\.6 km$/);
+  assert.match(changeNote(h), /^Changed: Balanced → Relaxed · 1 stop swapped · −1 stop · 1\.2 → 0\.6 km$/);
 
   await click(h, buttonNamed(h, /^Undo this change$/));
   await h.clock.advance(1000);

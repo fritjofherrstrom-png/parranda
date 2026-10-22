@@ -22,6 +22,28 @@ const {
 const ORIGINAL_FETCH = global.fetch;
 const { createSourceCache } = require("../server/place-candidates/source-cache");
 
+test("a persisted first-page-only Ticketmaster pool cannot bypass the bounded pagination policy", async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-first-page-pool-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const request = { anchor: { lat: 60.17, lng: 24.94 }, now: "2026-10-21T08:00:00Z", selectedDate: "2026-10-22" };
+  const key = eventCacheKey(request.anchor, request.now, ["ticketmaster-global"], 3000, null, request.selectedDate);
+  await createSourceCache({ namespace: "agnostic-events-v16", dir }).get(key, async () => ({
+    coverage: "covered", selected_date: request.selectedDate, tonight: [], this_week: [],
+    acquisition: { source_health: { status: "healthy", result: "empty" } },
+  }));
+  let collections = 0;
+  const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_CACHE_DIR: dir,
+    PARRANDA_TICKETMASTER_KEY: "fixture-only" }, {
+    requestTimeDiscovery: null, collectEvents: async () => {
+      collections += 1;
+      return { coverage: "covered", tonight: [], this_week: [], acquisition: { source_health: { status: "healthy", result: "empty" } } };
+    },
+  });
+  assert.equal((await supply(request)).pending, true, "old truncated inventory must not masquerade as the corrected complete collection");
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(collections, 1);
+});
+
 // Coverage is opt-in — the product default has no baked-in city. A deployment
 // configures its region's open feed via env; here the Helsinki fixture stands in.
 const FEEDS_ENV = JSON.stringify([HELSINKI_LINKED_EVENTS_FEED]);
@@ -305,7 +327,7 @@ test("one neutral warm cache reranks for different preferences without refetchin
     assert.equal(culture.tonight[0].id, "a-concert");
     assert.equal(secondHand.tonight[0].id, "z-loppis");
     assert.equal(fetchCount, 1, "preference changes rerank cached evidence instead of recollecting providers");
-    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v15")), "persist corrected time precision, category facts, bindings and occurrence groups separately from stale result pools");
+    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v17")), "persist bounded multi-page inventory and corrected occurrence facts separately from stale first-page pools");
     assert.ok(!fs.existsSync(path.join(cacheDir, "agnostic-events-v11")), "old result pools with borrowed timezone/bindings are not written");
     assert.ok(!fs.existsSync(path.join(cacheDir, "agnostic-events-v6")), "v6 pools that widened recurring ranges into daily windows are never read or written");
     const restarted = resolveDefaultEventSupply({

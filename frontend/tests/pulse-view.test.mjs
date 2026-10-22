@@ -6,6 +6,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { selectableLiveOccurrenceId } from "../src/lib/live-stop-choice.mjs";
 import {
   splitRouteStops,
   wovenEventIds,
@@ -67,6 +68,90 @@ test("browse buckets preserve remaining accepted events and exclude woven occurr
   assert.deepEqual(buckets.tonight.map((event) => event.id), ["ev4"]);
   assert.deepEqual(buckets.thisWeek.map((event) => event.id), ["ev5"]);
   assert.equal(buckets.tonight[0].source_url, "https://x/ev4");
+});
+
+// Filtering a representative id instead of exact members either hides the
+// whole programme/series or repeats the woven slot inside its disclosure.
+for (const [bucketName, buckets, supply] of [
+  ["highlight", pulseEventBuckets, rows => ({ tonight: rows, this_week: rows })],
+  ["browse", pulseBrowseBuckets, rows => ({ browse: { tonight: { more: rows }, this_week: { more: rows } } })],
+]) for (const [groupName, metadata] of [
+  ["source programme", { display_group_kind: "source_program" }],
+  ["explicit source series", { source_series_id: "publisher-series" }],
+]) for (const wovenId of ["early", "late"]) {
+  test(`${bucketName} buckets exclude only the ${wovenId} woven member of a ${groupName}`, () => {
+    const early = Object.freeze({ id: "early", title: "Source programme", starts_at: "2026-10-15T08:00:00Z",
+      timezone: "Europe/Stockholm", source_url: "https://calendar.example/programme", source_occurrence_id: "provider-early",
+      live_choice_eligible: true, occurrence_date: "2026-10-15", live_occurrence_id: `live:2026-10-15:${"a".repeat(32)}` });
+    const late = Object.freeze({ id: "late", title: "Source programme", starts_at: "2026-10-15T12:00:00Z",
+      timezone: "Europe/Stockholm", source_url: "https://calendar.example/programme", source_occurrence_id: "provider-late",
+      live_choice_eligible: true, occurrence_date: "2026-10-15", live_occurrence_id: `live:2026-10-15:${"b".repeat(32)}` });
+    const group = Object.freeze({ ...early, ...metadata, highlight_reason: "local_serendipity",
+      preference_match: "strong", requested_preferences: ["museums"], matched_preferences: ["museums"],
+      partial_preferences: [], occurrences: Object.freeze([early, late]) });
+    const unrelated = Object.freeze({ id: "other", title: "Unrelated source event" });
+    const input = supply([group, unrelated]);
+    const filtered = buckets(input, wovenEventIds([{ ...WOVEN, event_id: wovenId }]));
+    const remaining = wovenId === "early" ? late : early;
+    for (const rows of [filtered.tonight, filtered.thisWeek]) {
+      assert.equal(rows.length, 2, "unwoven programme slots and unrelated events stay visible");
+      assert.strictEqual(rows[1], unrelated);
+      assert.equal(rows[0].id, remaining.id, "the representative is the first remaining source occurrence");
+      assert.equal(rows[0].starts_at, remaining.starts_at);
+      assert.equal(rows[0].source_occurrence_id, remaining.source_occurrence_id);
+      assert.equal(rows[0].live_occurrence_id, remaining.live_occurrence_id);
+      assert.equal(rows[0].highlight_reason, "local_serendipity", "the server's group-level display reason survives");
+      assert.equal(rows[0].display_group_kind, metadata.display_group_kind);
+      assert.equal(rows[0].source_series_id, metadata.source_series_id);
+      assert.deepEqual(liveEventRelevance(rows[0], ["culture"]), { kind: "match", preferences: ["culture"] },
+        "server preference fit can belong to the group parent rather than its individual source slots");
+      assert.deepEqual(liveHighlightGroups(rows, ["culture"]).picks, [rows[0]], "remaining slots keep the group's supplied highlights placement");
+      assert.equal(rows[0].occurrences.length, 1, "one remaining occurrence keeps its disclosure container");
+      assert.strictEqual(rows[0].occurrences[0], remaining, "source facts and choice identity remain the exact supplied object");
+      assert.equal(selectableLiveOccurrenceId(rows[0], "2026-10-15"), null, "the container cannot duplicate the member's choice");
+      assert.equal(selectableLiveOccurrenceId(rows[0].occurrences[0], "2026-10-15"), remaining.live_occurrence_id);
+    }
+    const unchanged = buckets(input, new Set(["unrelated-woven-id"]));
+    assert.strictEqual(unchanged.tonight[0], group, "without a matching woven member the original group passes through");
+    assert.strictEqual(unchanged.thisWeek[0], group);
+    const allWoven = buckets(input, new Set(["early", "late"]));
+    assert.deepEqual(allWoven.tonight, [unrelated], "a group disappears only when all its actual occurrences are woven");
+    assert.deepEqual(allWoven.thisWeek, [unrelated]);
+  });
+}
+
+test("replacing a woven group representative never lends its choice or time metadata to the remaining slot", () => {
+  const early = { id: "early", starts_at: "2026-10-15T08:00:00Z", live_choice_eligible: true,
+    occurrence_date: "2026-10-15", live_occurrence_id: `live:2026-10-15:${"a".repeat(32)}` };
+  const later = { id: "later", title: "Source programme", timezone: "Europe/Stockholm",
+    time_window: { kind: "continuous", starts_at: "2026-10-15T12:00:00Z" } };
+  const group = { ...early, display_group_kind: "source_program", occurrences: [early, later] };
+  for (const rows of [
+    pulseEventBuckets({ tonight: [group] }, new Set(["early"])).tonight,
+    pulseBrowseBuckets({ browse: { tonight: { more: [group] } } }, new Set(["early"])).tonight,
+  ]) {
+    assert.equal(rows.length, 1);
+    assert.strictEqual(rows[0].occurrences[0], later);
+    for (const key of ["starts_at", "live_occurrence_id", "live_choice_eligible", "occurrence_date"]) {
+      assert.equal(Object.hasOwn(rows[0], key), false, `absent remaining ${key} cannot come from the woven representative`);
+    }
+    assert.equal(eventTiming(rows[0], "en", new Date("2026-10-14T08:00:00Z"), "2026-10-15"), "Thu 15 Oct 14:00");
+  }
+});
+
+test("a group's server-reserved local discovery reason survives excluding one woven member", () => {
+  const early = { id: "early" };
+  const late = { id: "late" };
+  const group = { ...early, source_series_id: "publisher-series", occurrences: [early, late],
+    preference_match: "none", requested_preferences: ["museums"], matched_preferences: [], partial_preferences: [],
+    highlight_reason: "local_serendipity" };
+  for (const rows of [
+    pulseEventBuckets({ tonight: [group] }, new Set(["early"])).tonight,
+    pulseBrowseBuckets({ browse: { tonight: { more: [group] } } }, new Set(["early"])).tonight,
+  ]) {
+    assert.deepEqual(liveEventRelevance(rows[0], ["culture"]), { kind: "local_discovery", preferences: [] });
+    assert.strictEqual(rows[0].occurrences[0], late, "preserving display metadata never changes the remaining source object");
+  }
 });
 
 test("ambient helpers derive context — they never produce stop-shaped objects", () => {

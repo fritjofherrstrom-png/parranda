@@ -113,7 +113,7 @@ for (const [arrival, url, picks] of [
     await h.clock.advance(50);
 
     await click(h, button(h, /^Adjust/));
-    await click(h, button(h, /^Easy/));
+    await click(h, button(h, /^Relaxed/));
     await h.clock.advance(450);
     const calls = composeCalls(h);
     assert.equal(calls.length, 2, "one recompose for the change");

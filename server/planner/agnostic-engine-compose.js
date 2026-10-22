@@ -28,6 +28,7 @@
 
 const { buildAgnosticCityContext } = require("../candidates/agnostic-context");
 const { normalizeSelectedDayHoursFact } = require("../place-candidates/opening-hours");
+const { normalizeSourceWebsite } = require("../lib/source-website");
 const { plannerUsableOptionsForRole } = require("./candidate-combination");
 const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
 
@@ -214,6 +215,7 @@ function toSourceCandidate({
       ? [...rich.missing_preferences]
       : [];
   const selectedDayHours = normalizeSelectedDayHoursFact(rich?.availability?.selected_day_hours);
+  const website = normalizeSourceWebsite(rich?.website);
   return {
     id: pick.candidate_id,
     city,
@@ -246,6 +248,8 @@ function toSourceCandidate({
       ? rich.also_covers.map((entry) => ({ ...entry }))
       : [],
     reconciliation: rich?.reconciliation || null,
+    ...(website ? { website } : {}),
+    ...(rich?.place_details ? { place_details: rich.place_details } : {}),
     ...(selectedDayHours ? { selected_day_hours: selectedDayHours } : {}),
     // Keep the server's remaining-day availability verdict separate from the
     // public selected-day hours fact. Typical role timing cannot override an

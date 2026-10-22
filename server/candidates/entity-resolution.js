@@ -29,6 +29,7 @@
 const { deriveEvidenceFromPlaceCandidate } = require("./evidence");
 const { normalizeSourceNameAliases } = require("../place-candidates/source-name-aliases");
 const { normalizeOpeningHours } = require("../place-candidates/opening-hours");
+const { normalizeSourceWebsite } = require("../lib/source-website");
 const { evaluateOperationalViability } = require("../place-candidates/operational-viability");
 
 // Thresholds — intentionally tight. Tune up (looser) only with evidence.
@@ -396,7 +397,20 @@ function reconcileFields(canonical, duplicate) {
     const hours = normalizeOpeningHours(duplicate.opening_hours);
     if (hours) {
       patch.opening_hours = hours;
+      if (duplicate.opening_hours_source && typeof duplicate.opening_hours_source === "object") {
+        patch.opening_hours_source = { ...duplicate.opening_hours_source };
+      }
       filled.push("opening_hours");
+    }
+  }
+
+  // Retain the venue link from an already confirmed duplicate, independently
+  // of its attribution URL. Existing canonical links keep their identity.
+  if (typeof canonical.website !== "string" || !canonical.website.trim()) {
+    const website = normalizeSourceWebsite(duplicate.website);
+    if (website) {
+      patch.website = website;
+      filled.push("website");
     }
   }
 
@@ -406,6 +420,19 @@ function reconcileFields(canonical, duplicate) {
   if (!sourceAddressKey(canonical.source_address) && sourceAddressKey(duplicate.source_address)) {
     patch.source_address = { ...duplicate.source_address };
     filled.push("source_address");
+  }
+
+  // These bounded display facts belong to the already matched physical place.
+  // They do not alter its canonical type, preference coverage or source trust.
+  const { sourcePlaceDetails } = require('../place-candidates/place-details');
+  const currentDetails = sourcePlaceDetails(canonical, canonical.type);
+  const incomingDetails = sourcePlaceDetails(duplicate, canonical.type);
+  if (incomingDetails) {
+    const details = { ...incomingDetails, ...currentDetails };
+    if (JSON.stringify(details) !== JSON.stringify(currentDetails)) {
+      patch.place_details = details;
+      filled.push('place_details');
+    }
   }
 
   const canHas = hasCoords(canonical);

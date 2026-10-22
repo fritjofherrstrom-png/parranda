@@ -26,7 +26,8 @@
  */
 
 const { normalizePlaceCandidate, validatePlaceCandidate } = require("./contract");
-const { normalizeOpeningHours } = require("./opening-hours");
+const { normalizeOpeningHours, normalizeOpeningHoursSource } = require("./opening-hours");
+const { normalizeSelectedHoursCalendar } = require('./opening-hours-calendar');
 const { normalizeSourceNameAliases } = require("./source-name-aliases");
 const { createEvidence, SOURCE_FAMILIES } = require("../candidates/evidence");
 
@@ -144,6 +145,8 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
 
   // Spine extras (validatePlaceCandidate tolerates additional fields).
   base.evidence = evidence;
+  const details = require('./place-details').sourcePlaceDetails(record, type);
+  if (details) base.place_details = details;
   base.candidate_origin = CANDIDATE_ORIGIN;
   base.provider_id = EXTERNAL_OPEN_PROVIDER_META.provider_id;
   base.source_family = primaryFamily;
@@ -177,6 +180,19 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
   }
   const openingHours = normalizeOpeningHours(record.opening_hours);
   if (openingHours) base.opening_hours = openingHours;
+  const hoursSource = openingHours && normalizeOpeningHoursSource(record.opening_hours_source);
+  if (hoursSource && website) {
+    const observedUrl = new URL(hoursSource.url), venueUrl = new URL(website);
+    if (observedUrl.hostname.replace(/^www\./, '') === venueUrl.hostname.replace(/^www\./, '') &&
+        observedUrl.pathname === venueUrl.pathname && observedUrl.search === venueUrl.search && observedUrl.port === venueUrl.port) {
+      base.opening_hours_source = hoursSource;
+    }
+  }
+  // An explicit invalid private calendar remains unknown instead of borrowing
+  // a possibly incompatible weekly fact. This never changes place trust.
+  if (Object.prototype.hasOwnProperty.call(record, 'selected_hours_calendar')) {
+    base.selected_hours_calendar = normalizeSelectedHoursCalendar(record.selected_hours_calendar, { record: base });
+  }
   const operationalStatus = normalizeOperationalStatus(record.operational_status);
   if (operationalStatus) base.operational_status = operationalStatus;
   const operationalReasons = normalizeOperationalReasons(record.operational_reasons);

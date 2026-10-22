@@ -84,6 +84,7 @@ export function buildRouteContextSuggestions(routeStops, areas, options = {}) {
 
   (Array.isArray(areas) ? areas : []).forEach((area, areaIndex) => {
     (Array.isArray(area && area.stops) ? area.stops : []).forEach((stop, sourceIndex) => {
+      if (stop?.selected_day_hours?.status === "closed") return;
       const name = normalizedName(stop);
       const ids = stableIds(stop);
       if (!name || !coordinates(stop)) return;

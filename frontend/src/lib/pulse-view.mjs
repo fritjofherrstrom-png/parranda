@@ -44,23 +44,51 @@ export function wovenEventIds(stops) {
  */
 export function pulseEventBuckets(liveEvents, wovenIds) {
   const exclude = wovenIds instanceof Set ? wovenIds : new Set();
-  const keep = (list) =>
-    (Array.isArray(list) ? list : []).filter((ev) => ev && !(ev.id != null && exclude.has(String(ev.id))));
   return {
-    tonight: keep(liveEvents && liveEvents.tonight),
-    thisWeek: keep(liveEvents && liveEvents.this_week),
+    tonight: excludeWovenEvents(liveEvents && liveEvents.tonight, exclude),
+    thisWeek: excludeWovenEvents(liveEvents && liveEvents.this_week, exclude),
   };
 }
 
 /** Remaining accepted events after the six highlighted rows in each bucket. */
 export function pulseBrowseBuckets(liveEvents, wovenIds) {
   const exclude = wovenIds instanceof Set ? wovenIds : new Set();
-  const keep = (list) =>
-    (Array.isArray(list) ? list : []).filter((ev) => ev && !(ev.id != null && exclude.has(String(ev.id))));
   return {
-    tonight: keep(liveEvents?.browse?.tonight?.more),
-    thisWeek: keep(liveEvents?.browse?.this_week?.more),
+    tonight: excludeWovenEvents(liveEvents?.browse?.tonight?.more, exclude),
+    thisWeek: excludeWovenEvents(liveEvents?.browse?.this_week?.more, exclude),
   };
+}
+
+function excludeWovenEvents(list, exclude) {
+  const kept = [];
+  const isWoven = event => event?.id != null && exclude.has(String(event.id));
+  for (const event of Array.isArray(list) ? list : []) {
+    if (!event) continue;
+    const slots = event.occurrences;
+    if (!Array.isArray(slots) || !slots.length) {
+      if (!isWoven(event)) kept.push(event);
+      continue;
+    }
+    // A group represents distinct source occurrences. The route owns only its
+    // exact woven members; the rest keep their original facts and choice ids.
+    const remaining = slots.filter(slot => slot && !isWoven(slot));
+    if (!remaining.length) continue;
+    if (remaining.length === slots.length) {
+      kept.push(event);
+      continue;
+    }
+    // Keep even a one-member container so the parent cannot duplicate its
+    // occurrence action. Never lend the old representative's optional facts.
+    const group = { ...remaining[0], occurrences: remaining };
+    // Group-level display fit is assigned by the server after source-series
+    // grouping, so individual slots need not carry it.
+    for (const key of ["display_group_kind", "source_series_id", "highlight_reason", "preference_match", "preference_score",
+      "requested_preferences", "matched_preferences", "partial_preferences", "missing_preferences", "preference_reasons"]) {
+      if (Object.hasOwn(event, key)) group[key] = event[key];
+    }
+    kept.push(group);
+  }
+  return kept;
 }
 
 // Server intents in the Planner's chip vocabulary (the same aliases route

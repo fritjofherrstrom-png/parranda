@@ -1,7 +1,8 @@
 import { liveHighlightGroups } from './pulse-view.mjs';
 
 // Navigation is a view of the supplied evidence. Neither identity, eligibility
-// nor rank is manufactured here; all rows retain their original event objects.
+// nor rank is manufactured here. Display programme rows retain their original
+// occurrence objects inside a date-scoped container.
 export function liveNavigationGroups(events, moreEvents, { sort = 'for_you', selectedPreferences = [] } = {}) {
   const list = values(events);
   const more = values(moreEvents);
@@ -12,14 +13,15 @@ export function liveNavigationGroups(events, moreEvents, { sort = 'for_you', sel
   const dates = new Map();
   for (const event of [...list, ...more]) {
     const slots = values(event.occurrences);
-    for (const slot of slots.length ? slots : [event]) {
-      for (const row of navigationRows(slot, slots.length ? event : null)) {
-        if (row.kind === 'range') result.ranges.push(row);
-        else if (!row.date) result.undated.push(row);
-        else {
-          if (!dates.has(row.date)) dates.set(row.date, []);
-          dates.get(row.date).push(row);
-        }
+    const rows = event.display_group_kind === 'source_program' && slots.length
+      ? programNavigationRows(event, slots)
+      : (slots.length ? slots : [event]).flatMap(slot => navigationRows(slot, slots.length ? event : null));
+    for (const row of rows) {
+      if (row.kind === 'range') result.ranges.push(row);
+      else if (!row.date) result.undated.push(row);
+      else {
+        if (!dates.has(row.date)) dates.set(row.date, []);
+        dates.get(row.date).push(row);
       }
     }
   }
@@ -46,6 +48,32 @@ export function liveEventTags(event) {
 
 function values(list) {
   return (Array.isArray(list) ? list : []).filter(value => value && typeof value === 'object');
+}
+
+function programNavigationRows(program, slots) {
+  const result = [];
+  const dated = new Map();
+  for (const slot of slots) {
+    for (const row of navigationRows(slot, program)) {
+      if (row.kind !== 'date' || !row.date) {
+        result.push(row);
+        continue;
+      }
+      // Coalesce only within the supplied display group and the same actual
+      // source/venue/local date. Ranges and missing date evidence stay intact.
+      const key = JSON.stringify([row.date, slot.source_provider_id, slot.source_url, slot.source_label,
+        slot.title, slot.place, slot.lat, slot.lng, slot.timezone || slot.time_window?.timezone]);
+      if (!dated.has(key)) dated.set(key, []);
+      dated.get(key).push(row);
+    }
+  }
+  for (const rows of dated.values()) {
+    rows.sort((a, b) => (a.clock || '').localeCompare(b.clock || ''));
+    const first = rows[0];
+    result.push({ ...first, event: { ...first.event, display_group_kind: 'source_program',
+      occurrences: rows.map(row => row.event) } });
+  }
+  return result;
 }
 
 function navigationRows(event, series) {

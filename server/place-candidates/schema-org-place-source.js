@@ -2,6 +2,7 @@
 
 const { createHash } = require("node:crypto");
 const { createSourceCache } = require("./source-cache");
+const { normalizeSchemaOrgOpeningHours } = require("./schema-org-opening-hours");
 const {
   resolveReviewedPlaceSourceProfileFeeds,
 } = require("./reviewed-place-source-profile");
@@ -488,7 +489,7 @@ function mapSchemaOrgPlaceToRecord(place, feed) {
     type,
     ...coords,
     website: safeHttpUrl(firstString(place.url, place["@id"])),
-    openingHours: firstString(place.openingHours),
+    openingHours: normalizeSchemaOrgOpeningHours(place),
   }, feed);
 }
 
@@ -1025,6 +1026,7 @@ module.exports = {
   inspectSchemaOrgPlacePayload,
   mapSchemaOrgPlaceToRecord,
   parseSchemaOrgPlacesFromHtml,
+  parseJsonLdPayloadsFromHtml,
   probeReviewedPlaceFeed,
   probeSchemaOrgPlaceFeed,
   resolveDefaultReviewedPlaceSource,

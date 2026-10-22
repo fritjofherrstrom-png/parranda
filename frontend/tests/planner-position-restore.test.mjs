@@ -195,7 +195,7 @@ test('Blitz on a restored position explains missing consent and offers a deliber
   await click(h, 'Blitz right now');
   assert.equal(h.fetchMock.calls.filter(c => c.url.includes('/api/blitz')).length, 0);
   assert.equal(gps.requests.length, 0);
-  assert.match(h.text(), /Blitz needs your position/);
+  assert.match(h.text(), /Blitz needs your location/);
   assert.doesNotMatch(h.text(), /Blitz could not read the moment/);
   await click(h, 'Share position for Blitz'); await gps.grant();
   const blitz = h.fetchMock.calls.find(c => c.url.includes('/api/blitz'));

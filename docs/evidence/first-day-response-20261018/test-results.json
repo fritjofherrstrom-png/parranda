@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "base_sha": "25e688391c874efca6969cba729cba816efc41d1",
+  "branch": "codex/first-day-response-20261018",
+  "runtime": {
+    "node": "v24.15.0",
+    "os": "macOS 27.0.1",
+    "arch": "arm64"
+  },
+  "red_exact_base": {
+    "tests": 11,
+    "pass": 7,
+    "fail": 4,
+    "cancelled": 0,
+    "skipped": 0,
+    "duration_ms": 79.456416
+  },
+  "green_focused": {
+    "tests": 11,
+    "pass": 11,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "duration_ms": 57.796083
+  },
+  "initial_full_attempt": {
+    "tests": 4721,
+    "pass": 4717,
+    "fail": 1,
+    "cancelled": 0,
+    "skipped": 3,
+    "duration_ms": 337547.43575
+  },
+  "initial_attempt_failure": "Concurrent build removed dist/_astro while LiveSheet test read it (ENOENT); no product fix",
+  "final_full_suite": {
+    "tests": 4722,
+    "pass": 4719,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 3,
+    "duration_ms": 338659.418917
+  },
+  "independent_review": {
+    "focused_pass": 37,
+    "fail": 0,
+    "skips": 0,
+    "blocking_findings": 0,
+    "final_test_assertion_delta": "inspected; no new blocker; no additional reviewer rerun"
+  },
+  "frontend_typecheck": "PASS",
+  "frontend_build": "PASS",
+  "dist_drift": "PASS",
+  "diff_check": "PASS",
+  "skips": [
+    "2 DuckDB/httpfs live-network opt-in cases",
+    "1 disposable PostgreSQL opt-in case"
+  ],
+  "evidence_boundary": "Built UI -> real HTTP/lifecycle -> directory normalizer -> actual composer; controlled sources/resolver/weather/clock and private new cache. No provider/public/Pi acceptance.",
+  "new_head_ci": "NOT_RUN_LOCAL_ONLY",
+  "public_sha_last_read": "25e688391c874efca6969cba729cba816efc41d1"
+}

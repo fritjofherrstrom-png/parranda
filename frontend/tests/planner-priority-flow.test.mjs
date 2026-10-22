@@ -80,7 +80,7 @@ test('completed Clear keeps a real neutral day, and Undo restores the exact prio
   assert.equal(previous.safeResponse.days[0].primary_route.main_stops.length, 2);
   const click = async target => { assert.ok(Boolean(target), 'real requested control exists'); await h.act(() => target.click()); };
   await click([...h.container.querySelectorAll('button')].find(button => button.textContent.trim() === 'Adjust'));
-  await click([...h.container.querySelectorAll('button')].find(button => button.textContent.trim() === 'Clear the order'));
+  await click([...h.container.querySelectorAll('button')].find(button => button.textContent.trim() === 'Clear order'));
   await h.clock.advance(400);
   const request = calls(h).at(-1);
   await h.fetchMock.respond(request, composedDay('Neutral'));
@@ -89,7 +89,7 @@ test('completed Clear keeps a real neutral day, and Undo restores the exact prio
   const address = new URL(h.window.location.href);
   assert.equal(address.searchParams.get('prio'), null);
   assert.ok(!h.container.querySelector('[aria-label^="Priority "]'), 'no rank numbers remain');
-  assert.ok(![...h.container.querySelectorAll('button')].some(button => button.textContent.trim() === 'Clear the order'));
+  assert.ok(![...h.container.querySelectorAll('button')].some(button => button.textContent.trim() === 'Clear order'));
   assert.deepEqual(h.readStorage(LAST).inputs.preferencePriority ?? [], []);
   const routeText = () => h.container.querySelector('ol[aria-label="The stops, in order"]').textContent;
   assert.match(routeText(), /Neutral place 0/);
@@ -112,7 +112,7 @@ test('a late Clear response cannot overwrite the ranked composed day restored by
   const previous = h.readStorage(LAST);
   const click = async target => { assert.ok(Boolean(target), 'real requested control exists'); await h.act(() => target.click()); };
   await click([...h.container.querySelectorAll('button')].find(button => button.textContent.trim() === 'Adjust'));
-  await click([...h.container.querySelectorAll('button')].find(button => button.textContent.trim() === 'Clear the order'));
+  await click([...h.container.querySelectorAll('button')].find(button => button.textContent.trim() === 'Clear order'));
   await h.clock.advance(400);
   const clear = calls(h).at(-1);
   assert.equal(clear.body.preference_priority, undefined);

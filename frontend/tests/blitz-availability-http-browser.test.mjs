@@ -40,10 +40,12 @@ const bundle = await build({
   bundle: true, write: false, format: 'iife', platform: 'browser', jsx: 'automatic',
 });
 
-async function harness(t, records) {
+async function harness(t, records, { weatherProvider = async () => ({
+  timezone_resolution: { timezone: observation.timezone, timezone_source: 'weather_provider_auto' },
+}) } = {}) {
   const app = buildApp({
     clock: { now: () => observation.observed_at },
-    weatherProvider: async () => ({ timezone_resolution: { timezone: observation.timezone, timezone_source: 'weather_provider_auto' } }),
+    weatherProvider,
     openDataLoader: async () => records,
   });
   const server = http.createServer((req,res) => {
@@ -76,15 +78,16 @@ test('actual HTTP → native BlitzCard distinguishes unknown indoor hours from a
   const {page,show}=await harness(t,[structuredClone(observation.selected)]);
   for(const lang of ['sv','en']) {
     const text=await show(lang);
-    assert.match(text,lang==='sv'?/kunde inte bekräfta att det var öppet vid kontrollen/:/could not confirm it was open when checked/);
+    assert.match(text,lang==='sv'?/Öppet just nu är inte bekräftat/:/Open now is not confirmed/);
     assert.match(text,lang==='sv'?/platsförslag/:/place suggestion/);
     assert.doesNotMatch(text,/utomhus|exterior|outdoor|outside/i);
-    assert.equal((await page.evaluate(()=>window.actualResponse)).best_move.availability?.status,'unknown');
+    assert.deepEqual((await page.evaluate(()=>window.actualResponse)).best_move.availability,
+      {status:'unknown',reason:'opening_hours_unavailable'},'missing source hours stay an honest unknown assessment');
   }
 });
 
 test('actual HTTP → native BlitzCard qualifies late-open hours and labels its unknown backup', async t=>{
-  const {show}=await harness(t,[
+  const {page,show}=await harness(t,[
     {...structuredClone(observation.selected),opening_hours:'Th 22:00-02:00'},
     {...structuredClone(observation.selected),id:'backup',name:'Unconfirmed gallery',type:'gallery',lat:59.334,lng:18.07},
   ]);
@@ -92,6 +95,36 @@ test('actual HTTP → native BlitzCard qualifies late-open hours and labels its 
     const text=await show(lang);
     assert.match(text,lang==='sv'?/Källans schema anger öppet vid kontrollen/:/Listed hours indicate open at the time checked/);
     assert.match(text,/Unconfirmed gallery/);
-    assert.match(text,lang==='sv'?/kunde inte bekräfta att det var öppet vid kontrollen/:/could not confirm it was open when checked/);
+    assert.match(text,lang==='sv'?/Öppet just nu är inte bekräftat/:/Open now is not confirmed/);
+    const actual=await page.evaluate(()=>window.actualResponse);
+    assert.equal(actual.best_move.availability.status,'available_in_window');
+    assert.deepEqual(actual.backup_option.availability,{status:'unknown',reason:'opening_hours_unavailable'});
+  }
+});
+
+test('actual HTTP → native BlitzCard distinguishes known source hours from unconfirmed local-time assessment in sv/en', async t=>{
+  // Mutating the fallback back to "Hours unknown" must fail: these source
+  // schedules are known, while the independent trusted local-time seam fails.
+  const {page,show}=await harness(t,[
+    {...structuredClone(observation.selected),opening_hours:'24/7'},
+    {...structuredClone(observation.selected),id:'known-hours-backup',name:'Known-hours gallery',type:'gallery',lat:59.334,lng:18.07,opening_hours:'24/7'},
+  ], {weatherProvider:async()=>null});
+  for(const lang of ['sv','en']) {
+    const text=await show(lang);
+    const actual=await page.evaluate(()=>window.actualResponse);
+    assert.equal(actual.context.date,'2026-10-15','the injected server instant is retained without inventing local time');
+    assert.equal(actual.context.timezone,null,'no trusted timezone was supplied');
+    assert.equal(actual.context.time_status,'timezone_unavailable');
+    assert.equal(actual.best_move.candidate_id,observation.selected.id);
+    assert.equal(actual.backup_option.candidate_id,'known-hours-backup');
+    for(const move of [actual.best_move,actual.backup_option]) {
+      assert.deepEqual(move.availability,{status:'unknown',reason:'opening_hours_local_day_unavailable'});
+    }
+    assert.doesNotMatch(text,lang==='sv'?/Öppettider(?:na)? (?:är )?okända/:/Hours unknown/i,
+      'known source schedules must not be relabeled as missing source hours');
+    const unconfirmed=lang==='sv'?/Öppet just nu är inte bekräftat/g:/Open now is not confirmed/g;
+    assert.equal((text.match(unconfirmed)||[]).length,2,
+      'best and backup each disclose that current opening could not be confirmed');
+    assert.match(text,/Known-hours gallery/);
   }
 });

@@ -45,7 +45,7 @@ for (const [outcome, result] of [['without a day', response], ['with a composed 
  } else {
   assert.equal(stored.inputs.placeSelection,'selected-token');
  }
- await click(h,button(h,'Adjust'));await click(h,button(h,'Easy'));await h.clock.advance(500);
+ await click(h,button(h,'Adjust'));await click(h,button(h,'Relaxed'));await h.clock.advance(500);
  const adjusted=h.fetchMock.pending().find(x=>x.url.startsWith('/api/route-recommendations'));
  assert.equal(adjusted.body.place_selection,'selected-token');
  });
@@ -103,7 +103,7 @@ test('expired stored choice asks for confirmation before selecting a fresh candi
 test('choosing a place cancels an older adjustment debounce', async t => {
  const h=await mountPlanner({url:'http://localhost/anywhere?place=Harbour&lang=en'});t.after(()=>h.unmount());
  await h.clock.advance(500);await h.fetchMock.respond(h.fetchMock.pending()[0],ambiguous);await h.clock.advance(30);
- await click(h,button(h,'Adjust'));await click(h,button(h,'Easy'));
+ await click(h,button(h,'Adjust'));await click(h,button(h,'Relaxed'));
  await click(h,button(h,'Harbour, Second City'));await h.clock.advance(500);
  const calls=h.fetchMock.calls.filter(x=>x.url.startsWith('/api/route-recommendations'));
  assert.equal(calls.length,2);assert.equal(calls[1].body.place_selection,'selected-token');assert.equal(calls[1].aborted,false);

@@ -144,7 +144,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
         </div>}
       </div>}
       <span role="status" className={status === "unavailable" ? "mt-1 block text-xs text-parranda-ink/68" : "sr-only"}>
-        {status === "loading" ? t("Söker platser …", "Finding places …") : status === "unavailable" ? t("Förslag kunde inte hämtas. Du kan ändå söka.", "Suggestions unavailable. You can still search.") : ""}
+        {status === "loading" ? t("Söker platser …", "Finding places …") : status === "unavailable" ? t("Förslag saknas just nu. Du kan ändå söka med Bygg min dag.", "Suggestions are unavailable. You can still search with Build my day.") : ""}
       </span>
       {status === "unavailable" && <button type="button"
         onClick={() => { setRetryGeneration(generation => generation + 1); inputRef.current?.focus(); }}

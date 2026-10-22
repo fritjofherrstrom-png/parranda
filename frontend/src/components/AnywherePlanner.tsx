@@ -546,6 +546,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         : editScope?.anchorKey === nextAnchorKey && editScope.dateIso === effectiveDateIso ? normalizeDayEdit(dayEdit) : null;
       const activeLedger = scopeLiveChoices(scopedLedger.entries, effectiveDateIso);
       requestedLiveKeep = activeLedger.liveEventChoices.find(choice => choice.action === "keep")?.occurrence_id ?? null;
+      if (requestedLiveKeep) {
+        // Revalidation (including retry) needs a fresh acknowledgement too.
+        setAppliedPins(previous => previous.filter(pin => pin.id !== requestedLiveKeep));
+      }
       // An explicit retry still replaces the same on-screen answer. Preserve
       // its exact Undo baseline just as the debounced initial choice does.
       if (requestedLiveKeep && !silent && retention.keepPrevious && !undoBaselineRef.current && isUndoableDay(lastEntryRef.current)) {
@@ -2077,6 +2081,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         !dayEdit.retained_candidate_ids.includes(identity)) relaxDayEditForAdjustment();
     // The label travels with the commitment so a day that could not keep a
     // place can name it, without a second map to fall out of sync.
+    if (kind === "pin" && isLiveOccurrenceId(identity)) {
+      // A new request is intent, not the publication that will confirm it.
+      setAppliedPins(previous => previous.filter(pin => pin.id !== identity));
+    }
     setCommitments({ ...commitments, [identity]: { kind, label: commitLabel, ...(liveAction ? { liveAction } : {}) } });
   };
   function changeLiveSheetSort(next: "for_you" | "by_time") {
@@ -2095,6 +2103,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // exclusions remain; a shortened day retains its cap and removed places.
     const next = Object.fromEntries(Object.entries(commitments).filter(([id]) =>
       !isLiveOccurrenceId(id) || id.slice(5, 15) !== date));
+    setAppliedPins(previous => previous.filter(pin => pin.id !== identity));
     setCommitments({ ...next, [identity]: { kind: "pin", label } });
     relaxDayEditForAdjustment();
     focusDayAfterLiveChoiceRef.current = true;
@@ -2148,6 +2157,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const releaseCommitment = (identity: string) => {
     if (!identity || !commitments[identity]) return;
     invalidateCommitmentIntent();
+    // Releasing a Live pin is a new selection intent, not an obligation to
+    // retain that old occurrence. Keep the shorter extent and removed places.
+    if (isLiveOccurrenceId(identity) && commitments[identity]?.kind === "pin") relaxDayEditForAdjustment();
     const next = { ...commitments };
     delete next[identity];
     setCommitments(next);
@@ -2163,6 +2175,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const excludedCount = Object.entries(commitments).filter(([id, entry]) => !id.startsWith("live:") && entry.kind === "exclude").length;
   const pinnedCount = Object.entries(commitments).filter(([id, entry]) => !id.startsWith("live:") && entry.kind === "pin").length;
   const liveChoiceCount = Object.keys(commitments).filter(isLiveOccurrenceId).length;
+  // Confirmation belongs to the exact published occurrence and its answered
+  // request, never merely to the optimistic ledger or an older visible event.
+  const confirmedLiveKeepIds = stopEditError === "live_not_preserved" ? [] : appliedPins
+    .filter(pin => isLiveOccurrenceId(pin.id) &&
+      !appliedRefusals.some(refusal => refusal.id === pin.id) &&
+      routeStops.some((stop: any) => stop.is_live_event === true &&
+        stop.live_choice_eligible === true && stop.live_occurrence_id === pin.id))
+    .map(pin => pin.id);
   // A pin the composed day does not contain. The server resolves pins against
   // the candidates it loaded itself and will not invent a place to satisfy
   // one — so this is reported, never swallowed.
@@ -2235,11 +2255,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const unavailableMessage = phase === "done" && (classification?.status === "unavailable" || terminalSourceIssue) && !upgradePending && !serviceRefusal && !unavailableHasChoices
     ? anchorUnresolved
       ? placeRef ? referenceFailureMessage : t(
-          `Parranda kunde inte hitta ”${typedPlaceLabel}” just nu. Prova en annan stavning eller lägg till land eller region — inget hittas på.`,
-          `Parranda couldn't pin down “${typedPlaceLabel}” right now. Try another spelling or add a country or region — nothing is invented in its place.`,
+          `Parranda hittade inte ”${typedPlaceLabel}”. Prova en annan stavning, eller lägg till stad eller land.`,
+          `Parranda couldn't find “${typedPlaceLabel}”. Try another spelling, or add a city or country.`,
         )
       : terminalSourceIssue
-        ? `${t("Planeringen avslutades utan rutt.", "Planning finished without a route.")} ${sourceEvidenceNote}`
+        ? `${t("Parranda kunde inte bygga en dag här just nu.", "Parranda couldn't build a day here right now.")} ${sourceEvidenceNote}`
       : sourceUnavailable
         ? t(
             `Platskällorna svarade inte just nu, så Parranda kunde inte hämta platser ${anchorIsPosition ? "nära dig" : `för ${placeName}`} — inget hittas på. Försök igen om en stund.`,
@@ -2274,10 +2294,27 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         return [];
       })
     : [];
+  // Judge only the request this published day actually answered. A new
+  // priority is visible before its 400 ms debounce, while the old route remains.
+  const feedbackEntry = lastEntryRef.current;
+  const feedbackInputs = feedbackEntry?.inputs;
+  const feedbackLedger = readCommitmentSnapshot(feedbackEntry?.commitments, {
+    anchorKey: displayedAnchorKeyRef.current, dayKey: feedbackEntry?.id,
+  });
+  const feedbackMatchesIntent = feedbackEntry?.safeResponse?.days === safeResponse?.days &&
+    feedbackEntry?.dateIso === safeResponse?.days?.[0]?.date && Array.isArray(feedbackInputs?.selected) &&
+    adjustmentSignature(selected, dayOffset, walkKey, commitments, preferencePriority, dayEdit) ===
+      adjustmentSignature(feedbackInputs.selected, feedbackInputs.dayOffset === 1 ? 1 : 0,
+        feedbackInputs.walkKey ?? "", feedbackLedger.applies ? feedbackLedger.entries : {},
+        feedbackInputs.preferencePriority ?? [], feedbackInputs.dayEdit);
+  const publishedFirstChoice = normalizePreferencePriority(feedbackInputs?.preferencePriority, feedbackInputs?.selected)[0];
+  const priorityShortfall = phase === "done" && !dayIsStale && feedbackMatchesIntent && publishedFirstChoice
+    ? pickCoverage.find(({ key, state }) => key === publishedFirstChoice && state !== "covered") ?? null
+    : null;
   const stopEditErrorMessage = stopEditError === "live_not_preserved"
     ? dayOnScreen
-      ? t("Det valda evenemanget kunde inte bekräftas i en gångbar dag. Din tidigare dag är kvar. Försök igen eller ångra valet.", "The chosen event could not be confirmed in a walkable day. Your previous day is retained. Try again or undo the choice.")
-      : t("Det valda evenemanget kunde inte bekräftas i en gångbar dag. Försök igen eller välj ett annat evenemang.", "The chosen event could not be confirmed in a walkable day. Try again or choose another event.")
+      ? t("Det valda evenemanget kunde inte bekräftas för den här dagen. Din tidigare dag är kvar. Försök igen eller ångra valet.", "The chosen event could not be confirmed for this day. Your previous day is retained. Try again or undo the choice.")
+      : t("Det valda evenemanget kunde inte bekräftas för den här dagen. Försök igen eller välj ett annat evenemang.", "The chosen event could not be confirmed for this day. Try again or choose another event.")
     : stopEditError === "no_safe_replacement"
     ? t("Inget liknande stopp kunde bekräftas.", "No similar stop could be confirmed.")
     : stopEditError === "unsupported"
@@ -2601,8 +2638,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         <p className={noticeCard} role="status">
           {serviceRefusal.kind === "busy"
             ? t(
-                "Parranda bygger så många dagar som är säkert just nu. Försök igen om en liten stund.",
-                "Parranda is composing as many days as it safely can right now. Try again shortly.",
+                "Parranda har fullt upp just nu. Försök igen om en stund.",
+                "Parranda is busy right now. Try again in a moment.",
               )
             : t(
                 `Parranda behöver pausa nya anrop en stund${serviceRefusal.retry_after_seconds ? ` — försök igen om cirka ${serviceRefusal.retry_after_seconds} sekunder` : ""}.`,
@@ -2736,6 +2773,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           coreCount={split.core.length}
           wovenCount={split.woven.length}
           pickCoverage={pickCoverage}
+          priorityShortfall={priorityShortfall}
           dayLimitationNote={dayLimitationNote}
           sourceEvidenceNote={sourceEvidenceNote}
           onUpdateDay={() => retryPlan({ sameDate: true })}
@@ -2809,6 +2847,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           expandedCandidateKey={expandedCandidateKey}
           setExpandedCandidateKey={setExpandedCandidateKey}
           commitments={commitments}
+          confirmedLiveKeepIds={confirmedLiveKeepIds}
           selected={selected}
           releaseCommitment={releaseCommitment}
           keepStop={keepStop}

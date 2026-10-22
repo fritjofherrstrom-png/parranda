@@ -69,7 +69,7 @@ test('completion preserves a newer near-route × week query including its late b
   await h.fetchMock.respond(queries(h).at(-1), queryResponse(live(false)));
   await click(h, 'Near the route');
   await h.fetchMock.respond(queries(h).at(-1), queryResponse(live(false)));
-  await click(h, 'Following 7 days');
+  await click(h, 'Next 7 days');
   const newer = queries(h).at(-1);
   const events = live(false);
   events.this_week = [{ id: 'filtered', title: 'Filtered occurrence', time_window: { kind: 'occurrences', dates: ['2026-10-10'] } }];
@@ -78,7 +78,7 @@ test('completion preserves a newer near-route × week query including its late b
   await h.fetchMock.respond(reads(h)[0], completion(live(false)));
   assert.equal(newer.aborted, false, 'a completed Live result is not a new published day');
   assert.equal(button(h, 'Near the route').getAttribute('aria-pressed'), 'true');
-  assert.equal(button(h, 'Following 7 days').getAttribute('aria-pressed'), 'true');
+  assert.equal(button(h, 'Next 7 days').getAttribute('aria-pressed'), 'true');
   await h.act(() => newer.releaseBody());
   assert.match(h.text(), /Filtered occurrence/);
   assert.equal(queries(h).length, 3);

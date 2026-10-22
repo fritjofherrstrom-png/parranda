@@ -143,7 +143,7 @@ test("a ranking can be cleared back to neutral", async (t) => {
     preferencePriority: ["views", "culture", "food"],
     onClearPriority: () => { cleared += 1; },
   });
-  const clear = [...h.container.querySelectorAll("button")].find((button) => button.textContent === "Clear the order");
+  const clear = [...h.container.querySelectorAll("button")].find((button) => button.textContent === "Clear order");
   assert.ok(clear, "a ranked day offers a way back to unranked interests");
   await click(h, clear);
   assert.equal(cleared, 1);
@@ -151,5 +151,5 @@ test("a ranking can be cleared back to neutral", async (t) => {
 
 test("neutral interests offer nothing to clear", async (t) => {
   const h = await mountCard(t, { preferencePriority: [], onClearPriority: () => {} });
-  assert.ok(![...h.container.querySelectorAll("button")].some((button) => button.textContent === "Clear the order"));
+  assert.ok(![...h.container.querySelectorAll("button")].some((button) => button.textContent === "Clear order"));
 });

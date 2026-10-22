@@ -14,7 +14,7 @@ for(const lang of ['en','sv']) for(const kind of ['partial','failed','primary_fa
     if(kind==='primary_failed') data.agnostic_route_output_experiment.source_status.collection.source_completion={status:'complete',pending:0,completed:1,failed:0};
     await h.fetchMock.respond(calls(h)[0],data);
     const text=h.text();
-    assert.match(text,lang==='en'?/Planning finished without a route/:/Planeringen avslutades utan rutt/);
+    assert.match(text,lang==='en'?/Parranda couldn't build a day here right now/:/Parranda kunde inte bygga en dag här just nu/);
     assert.match(text,kind==='partial'
       ? lang==='en'?/incomplete when the response was produced/:/ofullständigt när svaret skapades/
       : lang==='en'?/One or more place sources failed/:/En eller flera platskällor misslyckades/);

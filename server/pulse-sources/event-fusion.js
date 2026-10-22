@@ -73,6 +73,12 @@ function eventsRepresentSameOccurrence(left, right) {
   // it cannot erase two separately identified slots from the same publisher.
   if (samePublisher && left.source_series_id && right.source_series_id &&
       nonEmpty(left.id) && nonEmpty(right.id) && !sameStableId) return false;
+  // Some providers attest a distinct identity for each performance. Scope it
+  // to that provider: unrelated REST/iCal row IDs are not this evidence.
+  if (samePublisher && nonEmpty(left.source_provider_id) &&
+      left.source_provider_id === right.source_provider_id &&
+      nonEmpty(left.source_occurrence_id) && nonEmpty(right.source_occurrence_id) &&
+      left.source_occurrence_id !== right.source_occurrence_id) return false;
   const leftSourceUrl = canonicalUrl(left.source_url || left.provenance?.source_url);
   const rightSourceUrl = canonicalUrl(right.source_url || right.provenance?.source_url);
   const sameSourceUrl = Boolean(leftSourceUrl && leftSourceUrl === rightSourceUrl);
@@ -288,6 +294,7 @@ function sourceEvidence(event) {
   return compactObject({
     identity: sourceIdentity(event),
     provider_id: nonEmpty(event.source_provider_id),
+    occurrence_id: nonEmpty(event.source_occurrence_id),
     family: nonEmpty(event.source_family || event.source_type),
     label: nonEmpty(event.source_label || event.provenance?.source_label),
     url: nonEmpty(event.source_url || event.provenance?.source_url),

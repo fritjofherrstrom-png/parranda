@@ -1,5 +1,5 @@
 /**
- * Day rhythm is one three-step scale (Easy · Balanced · Full) plus "Let
+ * Day rhythm is one three-step scale (Relaxed · Balanced · Full) plus "Let
  * Parranda choose", which is not a fourth step. Each tap sends one compose with
  * the existing payload value; the note under the scale says what the engine
  * does with the choice. Mounted component with controlled responses.
@@ -41,7 +41,7 @@ test("the scale has three steps and 'Let Parranda choose' sits apart from it", a
   const h = await openAdjust(t);
   const scale = h.container.querySelector('[role="group"][aria-label="Day rhythm"]');
   assert.deepEqual([...scale.querySelectorAll("button")].map((b) => [b.textContent, b.getAttribute("aria-pressed")]), [
-    ["Easy", "false"],
+    ["Relaxed", "false"],
     ["Balanced", "true"],
     ["Full", "false"],
   ]);
