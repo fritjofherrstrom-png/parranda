@@ -13,6 +13,11 @@ const DEFAULT_PROBE_TIMEOUT_MS = 10_000;
 const QUALIFIED_RUNTIME_MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000;
 const PROBEABLE_STATUSES = new Set(["viable_provider_probe"]);
 const PROBATIONARY_TERMS_STATUSES = new Set(["open_license", "api_terms_compatible", "public_factual_evidence"]);
+// The scout evaluates JSON-LD found inside an HTML page as a `schema_org_event`
+// candidate and names `schema_org_html`, the reader of such pages, as its
+// manifest adapter. That pair is the same interface. Comparing their
+// normalized names alone dropped every schema.org page the scout found.
+const SCOUT_CANDIDATE_MANIFEST_ADAPTERS = Object.freeze({ schema_org_event: "schema_org_html" });
 
 async function qualifyDiscoveredSourceProfile({
   profile,
@@ -84,7 +89,8 @@ function bindManifestCandidate(manifest, candidate, { qualifiedRuntime = false }
   const endpoint = safeHttpsUrl(manifest.endpoint);
   const candidateEndpoint = safeHttpsUrl(candidate.url);
   const adapter = normalizeLocalEventAdapter(manifest.adapter);
-  const candidateAdapter = normalizeLocalEventAdapter(candidate.adapter);
+  const candidateAdapters = new Set([candidate.adapter, SCOUT_CANDIDATE_MANIFEST_ADAPTERS[candidate.adapter]]
+    .filter(Boolean).map(normalizeLocalEventAdapter));
   const sourceIdentity = publicString(manifest.source_identity);
   const candidateIdentity = publicString(candidate.source_identity);
   const bbox = normalizeBounds(manifest.bbox);
@@ -109,7 +115,7 @@ function bindManifestCandidate(manifest, candidate, { qualifiedRuntime = false }
     endpoint !== candidateEndpoint ||
     (manifest.review?.robots_checked_url != null && safeHttpsUrl(manifest.review.robots_checked_url) !== endpoint) ||
     !adapter ||
-    adapter !== candidateAdapter ||
+    !candidateAdapters.has(adapter) ||
     !sourceIdentity ||
     sourceIdentity.toLowerCase() !== candidateIdentity.toLowerCase() ||
     !bbox ||

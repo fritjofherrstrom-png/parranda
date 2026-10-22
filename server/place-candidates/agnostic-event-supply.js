@@ -1788,8 +1788,12 @@ function resolveRequestTimeDiscovery(env) {
   if (["disabled", "0", "false", "off", "no"].includes(setting)) return null;
   // Required here, not at the top: source-qualification requires this module.
   const { resolveDefaultSourceSearch } = require("../pulse-sources/source-search-provider");
+  const { resolveDefaultEventVenueSeeds } = require("../pulse-sources/event-venue-seeds");
   const { createRequestTimeEventDiscovery } = require("../pulse-sources/request-time-event-discovery");
-  return createRequestTimeEventDiscovery({ sourceSearch: resolveDefaultSourceSearch(env) });
+  return createRequestTimeEventDiscovery({
+    sourceSearch: resolveDefaultSourceSearch(env),
+    venueSeeds: resolveDefaultEventVenueSeeds(env),
+  });
 }
 
 function resolveDefaultEventSupply(

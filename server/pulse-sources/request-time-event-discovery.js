@@ -27,7 +27,13 @@ const { buildTrustedScoutPlace, sanitizeSearchSeeds } = require("./place-event-s
 const { bindManifestCandidate, sourceRowForBinding } = require("./source-qualification");
 
 const MAX_QUERIES = 2;
-const MAX_SEEDS = 6;
+const MAX_SEARCH_SEEDS = 6;
+// The venues around the anchor are read first: up to nine of their own sites,
+// in three groups side by side, inside the same discovery budget.
+const MAX_VENUE_SEEDS = 9;
+const SCOUT_GROUPS = 3;
+const VENUE_RADIUS_KM = 3;
+const VENUE_LOOKUP_WAIT_MS = 12_000;
 const SCOUT_TIMEOUT_MS = 8_000;
 // Live capabilities last 120 s. Spend at most 30 s on finding sources, leaving
 // the rest for ordinary bounded collection, venue lookup and completion reads.
@@ -58,14 +64,16 @@ const DEFAULT_ADAPTER_PRIORITY = 190;
 const LOCALITY_SCOPES = new Set(["locality", "resolved_label"]);
 
 function createRequestTimeEventDiscovery({
-  sourceSearch,
+  sourceSearch = null,
+  venueSeeds = null,
   scout = scoutLocalEventSources,
   fetcher,
-  cache = createSourceCache({ namespace: "request-time-event-discovery-v4", ttlMs: FOUND_TTL_MS }),
+  cache = createSourceCache({ namespace: "request-time-event-discovery-v5", ttlMs: FOUND_TTL_MS }),
   timezoneForPoint = coordinateTimezone,
   now = () => Date.now(),
+  venueLookupWaitMs = VENUE_LOOKUP_WAIT_MS,
 } = {}) {
-  if (typeof sourceSearch !== "function") return null;
+  if (typeof sourceSearch !== "function" && typeof venueSeeds !== "function") return null;
   const holds = new Map();
 
   // Resolves to { status: "found" | "empty" | "failed", reason, feeds }.
@@ -114,11 +122,56 @@ function createRequestTimeEventDiscovery({
         localDiscoveryTerms: [],
         localPlaceDiscoveryTerms: [],
       });
-      if (!place.name) return outcome("empty", "no_locality_name");
+      // Two lanes at once: the venues around the anchor (their own websites)
+      // and the locality-scoped web search. Either can find a source alone.
+      const [venue, search] = await Promise.all([
+        typeof venueSeeds === "function" ? findVenueSeeds() : null,
+        typeof sourceSearch === "function" ? findSearchSeeds(signal, place, bounds) : null,
+      ]);
+      const seeds = combineLaneSeeds(venue?.seeds || [], search?.seeds || [], place);
+      if (!seeds.length) {
+        if (search?.failed) return search.failed;
+        if (venue && venue.status !== "ok") return outcome("failed", "venue_seed_lookup_incomplete");
+        return outcome("empty", search?.emptyReason || "no_venue_websites");
+      }
+      const scouted = await scoutInGroups(seeds, { signal, place, bounds });
+      if (!scouted) return outcome("failed", "source_scout_failed");
+      const feeds = feedsFromScout(scouted, { timezone: timezoneForPoint(anchor.lat, anchor.lng) });
+      if (feeds.length) return outcome("found", null, feeds);
+      // Without a feed, absence is proven only by a mostly complete look: more
+      // than half of the sites failing, or an interface whose robots policy
+      // could not be read, keeps the answer retryable rather than empty.
+      if (scoutMostlyFailed(scouted, seeds.length) ||
+          scouted.manifest_candidates.some(manifest => manifest?.review?.robots_status === "unknown" &&
+            /^(?:source_|robots_endpoint_budget_)/.test(String(manifest.review.robots_reason || "")))) {
+        return outcome("failed", "source_scout_failed");
+      }
+      if (search?.acquisitionFailed) return outcome("failed", "source_search_failed");
+      if (venue && venue.status !== "ok") return outcome("failed", "venue_seed_lookup_incomplete");
+      return outcome("empty", "no_structured_event_source");
+    }
+
+    // A cold venue lookup may outlast this collection. It keeps running and
+    // warms its own cache; this round continues with what has arrived.
+    async function findVenueSeeds() {
+      let timer;
+      try {
+        return await Promise.race([
+          Promise.resolve(venueSeeds({ anchor, radiusKm: VENUE_RADIUS_KM }))
+            .catch(() => ({ status: "failed", seeds: [] })),
+          new Promise(resolve => { timer = setTimeout(() => resolve({ status: "pending", seeds: [] }), venueLookupWaitMs); }),
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    async function findSearchSeeds(signal, place, bounds) {
+      if (!place.name) return { seeds: [], emptyReason: "no_locality_name" };
       const queryPlan = buildLocalEventDiscoveryQueryPlan({ place, localDiscoveryTerms: place.local_discovery_terms })
         .filter((item) => LOCALITY_SCOPES.has(item.label_scope))
         .slice(0, MAX_QUERIES);
-      if (!queryPlan.length) return outcome("empty", "no_locality_query");
+      if (!queryPlan.length) return { seeds: [], emptyReason: "no_locality_query" };
       let searched;
       try {
         searched = await sourceSearch({
@@ -130,54 +183,98 @@ function createRequestTimeEventDiscovery({
           bounds,
         });
       } catch (_error) {
-        return outcome("failed", "source_search_failed");
+        return { seeds: [], failed: outcome("failed", "source_search_failed") };
       }
-      const seeds = sanitizeSearchSeeds(searched?.seeds, place).slice(0, MAX_SEEDS);
+      const seeds = sanitizeSearchSeeds(searched?.seeds, place).slice(0, MAX_SEARCH_SEEDS);
       if (!seeds.length) {
         const searchStatus = typeof searched?.status === "string" ? searched.status : "failed";
         return searchAcquisitionFailed(searched) || !searched
-          ? outcome("failed", `source_search_${FAILED_SEARCH_STATUSES.has(searchStatus) ? searchStatus : "failed"}`)
-          : outcome("empty", "no_search_results");
+          ? { seeds, failed: outcome("failed", `source_search_${FAILED_SEARCH_STATUSES.has(searchStatus) ? searchStatus : "failed"}`) }
+          : { seeds, emptyReason: "no_search_results" };
       }
-      let scouted;
-      try {
-        scouted = await scout({
-          place,
-          anchor,
-          bounds,
-          seeds,
-          maxSeeds: MAX_SEEDS,
-          timeoutMs: SCOUT_TIMEOUT_MS,
-          fetcher: async (url, options = {}) => {
-            signal.throwIfAborted();
-            const transport = typeof fetcher === "function" ? fetcher : globalThis.fetch;
-            const response = await transport(url, { ...options,
-              signal: options.signal ? AbortSignal.any([signal, options.signal]) : signal });
-            signal.throwIfAborted();
-            return response;
-          },
-          eventReader: null,
-        });
-      } catch (_error) {
-        return outcome("failed", "source_scout_failed");
-      }
-      const feeds = feedsFromScout(scouted, { timezone: timezoneForPoint(anchor.lat, anchor.lng) });
-      if (feeds.length) return outcome("found", null, feeds);
-      // The scout normally returns transport failures as data, not exceptions.
-      // Without useful feeds, incomplete acquisition cannot prove absence.
-      if (FAILED_SEARCH_STATUSES.has(scouted?.status) || Number(scouted?.failed_source_count) > 0 ||
-          scouted?.manifest_candidates?.some(manifest => manifest?.review?.robots_status === "unknown" &&
-            /^(?:source_|robots_endpoint_budget_)/.test(String(manifest.review.robots_reason || ""))) ||
-          scouted?.results?.some(result => FAILED_SEARCH_STATUSES.has(result?.status) ||
-            (result?.robots?.status === "unknown" && String(result.robots.reason || "").startsWith("source_")))) {
-        return outcome("failed", "source_scout_failed");
-      }
-      if (searchAcquisitionFailed(searched)) {
-        return outcome("failed", "source_search_failed");
-      }
-      return outcome("empty", "no_structured_event_source");
+      return { seeds, acquisitionFailed: searchAcquisitionFailed(searched) };
+    }
+
+    // Different sites are read side by side, a few groups at a time, so a
+    // dozen sites fit the collection budget. Seeds are dealt round-robin so
+    // every group starts with the most promising ones.
+    async function scoutInGroups(seeds, { signal, place, bounds }) {
+      const groupCount = Math.min(SCOUT_GROUPS, seeds.length);
+      const groups = Array.from({ length: groupCount }, (_, index) => seeds.filter((_seed, i) => i % groupCount === index));
+      const settled = await Promise.all(groups.map(group => Promise.resolve().then(() => scout({
+        place,
+        anchor,
+        bounds,
+        seeds: group,
+        maxSeeds: group.length,
+        timeoutMs: SCOUT_TIMEOUT_MS,
+        fetcher: async (url, options = {}) => {
+          signal.throwIfAborted();
+          const transport = typeof fetcher === "function" ? fetcher : globalThis.fetch;
+          const response = await transport(url, { ...options,
+            signal: options.signal ? AbortSignal.any([signal, options.signal]) : signal });
+          signal.throwIfAborted();
+          return response;
+        },
+        eventReader: null,
+      })).then(value => ({ value, size: group.length }), () => ({ thrown: group.length }))));
+      if (settled.every(group => group.thrown)) return null;
+      return {
+        status: "complete",
+        results: settled.flatMap(group => group.value?.results || []),
+        manifest_candidates: settled.flatMap(group => group.value?.manifest_candidates || []),
+        thrown_seed_count: settled.reduce((sum, group) => sum + (group.thrown || 0), 0),
+        group_statuses: settled.map(group => group.value?.status || "failed"),
+      };
     }
   };
+}
+
+// Venue seeds lead (they are the places events happen), then search seeds;
+// one seed per site.
+function combineLaneSeeds(venueSeedList, searchSeedList, place) {
+  const out = [];
+  const sites = new Set();
+  const add = (seed) => {
+    const url = normalizeSeedUrl(seed?.url);
+    if (!url) return;
+    const site = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+    if (sites.has(site)) return;
+    sites.add(site);
+    out.push({ ...seed, url, place: seed.place || place?.label || place?.name || null });
+  };
+  venueSeedList.slice(0, MAX_VENUE_SEEDS).forEach(add);
+  searchSeedList.forEach(add);
+  return out;
+}
+
+function normalizeSeedUrl(value) {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value.trim());
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return null;
+    url.hash = "";
+    return url.href;
+  } catch (_error) {
+    return null;
+  }
+}
+
+// A site failed when its page, a programme page or its robots policy could
+// not be read; a robots exclusion or an unsafe redirect is a decision, not a
+// failure. Counted per listed site, against every site the round tried.
+function scoutMostlyFailed(scouted, seedCount) {
+  const failedSites = new Set();
+  for (const result of scouted.results) {
+    const site = result?.discovered_from || result?.source_url;
+    if (!site) continue;
+    if (FAILED_SEARCH_STATUSES.has(result?.status) ||
+        (result?.robots?.status === "unknown" && String(result.robots.reason || "").startsWith("source_"))) {
+      failedSites.add(site);
+    }
+  }
+  const failed = failedSites.size + Number(scouted.thrown_seed_count || 0);
+  return failed > 0 && failed * 2 > Math.max(1, seedCount);
 }
 
 function outcome(status, reason, feeds = []) {
