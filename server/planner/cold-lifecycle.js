@@ -101,7 +101,11 @@ function createPlannerLifecycle({ deadlineMs = DEADLINE_MS, maxActive = MAX_ACTI
       clearTimeout(timer);
       wake();
     });
-    await first;
+    // Warm completion/validation can finish in the current microtask turn.
+    // Otherwise acknowledge the SAME bounded job on the next event-loop turn;
+    // the first provider response must not hold the initial HTTP connection.
+    // warming() still signals source progress, not permission to create a job.
+    await Promise.race([first, new Promise(resolve => setImmediate(resolve))]);
     signal?.removeEventListener('abort', abandon);
     const result = read(token, false);
     if (result.status !== 202) remove(token); // direct warm/error response needs no retention
