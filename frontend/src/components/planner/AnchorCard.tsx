@@ -88,7 +88,7 @@ export default function AnchorCard({
   useEffect(() => {
     if (rebuild?.state !== "updating") setTouched(null);
   }, [rebuild?.state]);
-  const ring = (key: string) => (rebuilding && touched === key ? " motion-safe:animate-[parranda-ring_1.2s_ease-out_infinite]" : "");
+  const ring = (key: string) => (rebuilding && touched === key ? " motion-safe:animate-[parranda-ring_2.4s_ease-out_infinite]" : "");
   const scale = rhythms.filter((preset) => preset.key !== "free");
   const priority = normalizePreferencePriority(preferencePriority, selected);
   const priorityRanks = new Map<string, number>(priority.map((key, index) => [key, index + 1]));

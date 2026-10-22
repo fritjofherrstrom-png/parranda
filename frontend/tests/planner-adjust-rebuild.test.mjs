@@ -92,9 +92,14 @@ test("the day on screen stays, traces its line again, and the new pick is pendin
   const route = h.container.querySelector('section[aria-label="The route"]');
   assert.equal(route.dataset.rebuilding, "true");
   assert.match(h.text(), /Place a/, "never a silent swap: the old day is still there");
+  // One slow wash down a quiet line; stations no longer flash ember in turn,
+  // which read as hectic on an iPhone (23 Oct 2026).
+  const line = route.querySelector("ol");
+  assert.match(line.className, /(^|\s)route-redraw(\s|$)/);
+  assert.doesNotMatch(line.className, /before:bg-parranda-ember/);
   const stations = route.querySelectorAll("ol > li .h-11.w-11");
   assert.ok(stations.length >= 3);
-  for (const station of stations) assert.match(station.className, /parranda-trace/);
+  for (const station of stations) assert.doesNotMatch(station.className, /ember|animate-/);
   assert.ok(picks(h).includes("Coffee · finding places …"), picks(h).join(" | "));
   assert.doesNotMatch(picks(h).join(" | "), /Coffee · not in this day/, "the old day never answered Coffee");
 });

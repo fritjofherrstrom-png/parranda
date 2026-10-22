@@ -223,7 +223,7 @@ export default function StopLine({
       // so they sit closer than the page's section rhythm.
       // While an adjustment rebuilds the day, the day on screen stays — never
       // a silent swap — but reads as the one being replaced: its names fade,
-      // the ember line goes quiet and the empty stations trace it again.
+      // the ember line goes quiet and one soft wash slides down it again.
       data-rebuilding={stale || undefined}
       className={`${map ? "-mt-6" : ""} flex flex-col`}
     >
@@ -267,7 +267,7 @@ export default function StopLine({
         </p>
       )}
       <ol
-        className={"relative flex flex-col before:pointer-events-none before:absolute before:bottom-7 before:left-[19px] before:top-7 before:w-1.5 before:rounded-full before:transition-colors before:content-[''] " + (stale ? "before:bg-parranda-ink/12" : "before:bg-parranda-ember")}
+        className={"relative flex flex-col before:pointer-events-none before:absolute before:bottom-7 before:left-[19px] before:top-7 before:w-1.5 before:rounded-full before:transition-colors before:content-[''] " + (stale ? "route-redraw before:bg-parranda-ink/12" : "before:bg-parranda-ember")}
         aria-label={t("Stoppen i ordning", "The stops, in order")}
       >
         {split.core.map((stop: any, i: number) => {
@@ -301,7 +301,7 @@ export default function StopLine({
           const behind = currentIndex != null && i < currentIndex;
           const isCurrent = currentIndex === i;
           const station = stale
-            ? "border-parranda-ink/12 bg-parranda-paper text-parranda-ink/68 motion-safe:animate-[parranda-trace_3.2s_ease-in-out_infinite]"
+            ? "border-parranda-ink/18 bg-parranda-paper text-parranda-ink/68"
             : expanded
             ? "border-parranda-ink bg-parranda-terracotta text-white"
             : isCurrent
@@ -339,7 +339,6 @@ export default function StopLine({
               >
                 <span
                   className={`type-data relative z-[1] flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-4 text-sm font-semibold transition ${station}`}
-                  style={stale ? { animationDelay: `${(i % 7) * 0.45}s` } : undefined}
                 >
                   {isCurrent && (
                     <span aria-hidden="true" className="absolute -inset-2 rounded-full border-2 border-parranda-ember motion-safe:animate-ping" />

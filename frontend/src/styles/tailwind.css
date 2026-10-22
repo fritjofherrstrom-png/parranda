@@ -133,32 +133,59 @@
   }
 }
 
-/* The choice just made, while the day rebuilds around it: an ember ring that
-   widens and fades from the chip that was tapped. Used only under
-   motion-safe. */
+/* The choice just made, while the day rebuilds around it: a soft ember ring
+   that slowly widens and fades from the chip that was tapped. Used only
+   under motion-safe. */
 @keyframes parranda-ring {
   0% {
-    box-shadow: 0 0 0 0 rgb(var(--p-color-ember) / 0.7);
+    box-shadow: 0 0 0 0 rgb(var(--p-color-ember) / 0.45);
   }
   100% {
     box-shadow: 0 0 0 7px rgb(var(--p-color-ember) / 0);
   }
 }
 
-/* The small status dots that say "rebuilding": the same trace as the loading
-   day's stations, on a fill instead of a border. */
+/* The small status dots that say "rebuilding": each warms to ember and back
+   in a slow, even swell, never a flash. */
 @utility trace-dot {
   background-color: rgb(var(--p-color-ink) / 0.18);
 }
 @keyframes parranda-trace-dot {
   0%,
-  45%,
   100% {
     background-color: rgb(var(--p-color-ink) / 0.18);
   }
-  12%,
-  28% {
-    background-color: rgb(var(--p-color-ember));
+  40% {
+    background-color: rgb(var(--p-color-ember) / 0.8);
+  }
+}
+
+/* While an adjustment rebuilds the day, its line goes quiet and one soft
+   ember wash slides slowly down it, then rests: the route drawn again, in
+   the loading day's calm tempo rather than stations flashing in turn. */
+.route-redraw::before {
+  background-image: linear-gradient(
+    to bottom,
+    transparent,
+    rgb(var(--p-color-ember) / 0.55),
+    transparent
+  );
+  background-position: 0 -67%;
+  background-repeat: no-repeat;
+  background-size: 100% 40%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .route-redraw::before {
+    animation: parranda-redraw 3.2s ease-in-out infinite;
+  }
+}
+@keyframes parranda-redraw {
+  0% {
+    background-position: 0 -67%;
+  }
+  75%,
+  100% {
+    background-position: 0 167%;
   }
 }
 
