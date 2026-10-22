@@ -89,6 +89,7 @@ import CandidateAreas from "./planner/CandidateAreas";
 import DayHeader, { DayActions, dayAssemblyNotes } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
+import DayPlaceholder, { DayMapPlaceholder } from "./planner/DayPlaceholder";
 import LiveSheet from "./planner/LiveSheet";
 import { selectedDayEmpty, useLiveFallback } from "./planner/useLiveFallback";
 import SavedDays from "./planner/SavedDays";
@@ -1716,10 +1717,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // A reverse city label does not attest a precise neighborhood. Keep the
   // authoritative label in the response; only project near-me UI as Near you.
   const primaryLocality = (value?: string | null) => String(value || "").split(",")[0].trim();
+  // A chosen suggestion ("Stockholm, Stockholms län, Sverige", with its
+  // place_ref) already names its place first, so the pill reads that name
+  // while the day composes instead of wrapping and then shrinking when the
+  // resolver's label arrives. Free text stays as typed until it resolves.
   const anchorLabel =
     mode === "near_me"
       ? t("Nära dig", "Near you")
-      : primaryLocality(classification?.placeLabel) || typedPlaceLabel;
+      : primaryLocality(classification?.placeLabel) || (placeRef ? primaryLocality(typedPlaceLabel) : typedPlaceLabel);
   const anchorIsPosition = mode === "near_me";
   const placeName = primaryLocality(classification?.placeLabel) || typedPlaceLabel || t("den här platsen", "this place");
   // A typed place with no trusted anchor (unresolved, ambiguous, or a resolver
@@ -2402,7 +2407,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // shown (the static build and the first client render are the phone layout).
   const wideScreen = useMediaQuery("(min-width: 64rem)");
   const dayWithRoute = showDay && routeStops.length > 0;
-  const splitLayout = wideScreen && dayWithRoute;
+  // While a day composes, wide screens already hold both columns — the day's
+  // shape on the left, the map's frame on the right — so the day lands where
+  // its shape stood instead of jumping sideways when it arrives.
+  const dayIsComing = phase === "loading" && !staleNotice;
+  const splitLayout = wideScreen && (dayWithRoute || dayIsComing);
   const routeMap = dayWithRoute ? (
     <RouteMap
       hasPrimaryRoute={hasPrimaryRoute}
@@ -2588,39 +2597,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       )}
 
       {phase === "loading" && !staleNotice && (
-        <div className="flex flex-col gap-5">
-          <p className="flex items-center gap-2.5 text-sm text-parranda-ink/75" aria-live="polite">
-            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-parranda-ember motion-safe:animate-pulse" />
-            <span>
-              {supplyPending && t("Hämtar källbelagda platser för din dag. Planen fortsätter automatiskt — du behöver inte försöka igen.", "Fetching source-backed places for your day. Your plan will continue automatically — no need to try again.")}
-              {!supplyPending && loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
-              {!supplyPending && loadingStage === 1 && t("Läser kartan och letar efter riktiga platser …", "Reading the map and looking for real places …")}
-              {!supplyPending && loadingStage === 2 &&
-                t(
-                  "Komponerar dagen genom områdena — platser utan full kurering kan ta lite längre …",
-                  "Composing the day across the areas — places without full curation can take a little longer …",
-                )}
-            </span>
-          </p>
-          {/* The shape of the day that is coming — a line with empty
-              stations — so it lands without a jump. Decorative only: it
-              carries no place, number or claim. */}
-          <div aria-hidden="true" className="flex flex-col gap-3 motion-safe:animate-pulse">
-            <span className="h-3 w-20 rounded-full bg-parranda-ink/10" />
-            <span className="h-10 w-3/4 rounded-parranda-btn bg-parranda-ink/10" />
-            <span className="h-14 w-2/3 rounded-parranda-btn bg-parranda-ink/10" />
-            <span className="h-3 w-1/2 rounded-full bg-parranda-ink/10" />
-            <span className="mt-2 h-56 rounded-parranda bg-parranda-ink/8" />
-            <div className="relative mt-2 flex flex-col gap-5 before:absolute before:bottom-5 before:left-[19px] before:top-5 before:w-1.5 before:rounded-full before:bg-parranda-ink/10 before:content-['']">
-              {[0, 1, 2].map((row) => (
-                <span key={row} className="flex items-center gap-3">
-                  <span className="relative h-11 w-11 rounded-full border-4 border-parranda-ink/12 bg-parranda-paper" />
-                  <span className="h-4 flex-1 rounded-full bg-parranda-ink/10" />
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
+        <DayPlaceholder
+          inlineMap={!splitLayout}
+          status={
+            // Where "Your day" will stand, with its ember rule: the day lands
+            // under the line the reader is already looking at.
+            <p className="flex items-start gap-2.5 text-sm text-parranda-ink/75" aria-live="polite">
+              <span aria-hidden="true" className="mt-2 h-1 w-5 shrink-0 rounded-full bg-parranda-ember" />
+              <span>
+                {supplyPending && t("Hämtar källbelagda platser för din dag. Planen fortsätter automatiskt — du behöver inte försöka igen.", "Fetching source-backed places for your day. Your plan will continue automatically — no need to try again.")}
+                {!supplyPending && loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
+                {!supplyPending && loadingStage === 1 && t("Läser kartan och letar efter riktiga platser …", "Reading the map and looking for real places …")}
+                {!supplyPending && loadingStage === 2 &&
+                  t(
+                    "Komponerar dagen genom områdena — platser utan full kurering kan ta lite längre …",
+                    "Composing the day across the areas — places without full curation can take a little longer …",
+                  )}
+              </span>
+            </p>
+          }
+        />
       )}
 
       {phase === "error" && staleNotice !== "update_failed" && (
@@ -2967,11 +2963,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {/* The wide-screen map column is the "Map of the day" landmark; the
           map's own canvas region inside it is named "Interactive map", so
           the two are not one name twice. */}
-      {splitLayout && (
+      {splitLayout && (dayWithRoute ? (
         <aside aria-label={t("Karta över dagen", "Map of the day")} className="sticky top-4 h-[calc(100dvh-2rem)] min-h-[30rem]">
           {routeMap}
         </aside>
-      )}
+      ) : (
+        <DayMapPlaceholder />
+      ))}
 
       {/* Live navigation reads source data; explicit occurrence choice reuses
           the day's bounded commitment/recomposition path. */}
