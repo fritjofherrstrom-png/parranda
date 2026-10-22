@@ -83,9 +83,9 @@ test("the panel says the day is rebuilding, and the tapped chip carries it", asy
   const { h } = await rebuildingWithCoffee(t);
   assert.equal(panelStatus(h)?.dataset.adjustRebuild, "updating");
   assert.match(panelStatus(h).textContent, /Updating your day/);
-  // One "working" sign everywhere it is said: the loading day's walker.
-  assert.ok(panelStatus(h).querySelector("[data-walk-mark]"));
-  assert.ok(h.container.querySelector('main header [aria-live="polite"] [data-walk-mark]'), "the heading chip walks too");
+  // One "working" sign everywhere it is said: the loading day's drawing ring.
+  assert.ok(panelStatus(h).querySelector("[data-ring-mark]"));
+  assert.ok(h.container.querySelector('main header [aria-live="polite"] [data-ring-mark]'), "the heading chip carries it too");
   assert.match(button(h, /Coffee/).className, /parranda-ring/, "the choice that caused the wait is marked");
   assert.doesNotMatch(button(h, /Culture/).className, /parranda-ring/, "only that choice");
 });
@@ -105,7 +105,7 @@ test("the day on screen stays, traces its line again, and the new pick is pendin
   for (const station of stations) assert.doesNotMatch(station.className, /ember|animate-/);
   assert.ok(picks(h).includes("Coffee · finding places …"), picks(h).join(" | "));
   const pending = [...h.container.querySelectorAll('ul[aria-label="Your picks in this day"] > li')].find((li) => /Coffee/.test(li.textContent));
-  assert.ok(pending.querySelector("[data-walk-mark]"));
+  assert.ok(pending.querySelector("[data-ring-mark]"));
   assert.doesNotMatch(picks(h).join(" | "), /Coffee · not in this day/, "the old day never answered Coffee");
 });
 
