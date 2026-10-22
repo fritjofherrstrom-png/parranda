@@ -99,6 +99,8 @@ test('unadmitted matching rows do not consume the reserve; hard deadline and lat
   for(const ms of [8000,8000,8000,8000,8000,5000]) { t.mock.timers.tick(ms); await flush(); }
   assert.equal(r.jobs.read(token).status,202,'no admitted supply at the 45s reserve boundary');
   t.mock.timers.tick(15000); await flush();
+  assert.equal(r.jobs.read(token).status,202,'the same job can continue past the superseded60s boundary');
+  t.mock.timers.tick(30000); await flush();
   assert.equal(r.jobs.read(token).body.error,'supply_wait_expired');
   assert.equal(r.works[0].signal.aborted,true);
   r.works[0].resolve(rows('open_directory')); await flush();
