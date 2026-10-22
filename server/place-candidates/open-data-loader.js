@@ -137,6 +137,13 @@ const MAX_REMEMBERED_BUDGETS = 4;
 // Only source-owned selections can retain a re-selection over their original
 // bounded sample. JSON/public inputs cannot supply this process-private seam.
 const SOURCE_CORROBORATION_SELECTION = Symbol('sourceCorroborationSelection');
+// Retained evidence is source-owned metadata, never a public payload claim.
+// Keep the oldest age when several source snapshots contain a fallback.
+function fallbackCacheSummary(groups) {
+  const summaries = groups.map(rows => rows?.loader_metadata?.cache)
+    .filter(cache => cache?.served_stale === true);
+  return summaries.sort((a, b) => (b.stale_age_seconds || 0) - (a.stale_age_seconds || 0))[0] || null;
+}
 function retainCorroboratingRows(rows, primary) {
   return typeof rows?.[SOURCE_CORROBORATION_SELECTION] === 'function'
     ? rows[SOURCE_CORROBORATION_SELECTION](primary) : rows;
@@ -1679,6 +1686,7 @@ function createOvertureBackgroundSource({ source, cache }) {
     const select = primary => {
       const selected = source.select(retainedSample, { ...selection, corroborationRecords: primary });
       if (rows.source_error) Object.defineProperty(selected, 'source_error', { value: rows.source_error });
+      if (rows.loader_metadata) withLoaderMetadata(selected, rows.loader_metadata);
       return selected;
     };
     const selected = select([]);
@@ -1870,6 +1878,7 @@ function composeOpenDataLoaders(
         withLoaderStatus(records, `loaded:${records.length}`, rescueError),
         {
           ...(mapEvidence?.loader_metadata || {}),
+          cache: fallbackCacheSummary([mapEvidence, ...rescue.groups]),
           selected_profile: supplyProfile(records, requestedIntents),
           selected_day_capacity: dayCapacityProfile(records, {
             origin: primaryAnchor,
@@ -1990,9 +1999,11 @@ function composeOpenDataLoaders(
           primary_collection_reason: "primary_failed",
         }
       : osm.loader_metadata;
-    const metadata = mapMetadata
+    const fallbackCache = fallbackCacheSummary([mapRecords, ...backgroundGroups]);
+    const metadata = mapMetadata || fallbackCache
       ? {
           ...mapMetadata,
+          ...(fallbackCache ? { cache: fallbackCache } : {}),
           requested_intents: requestedIntents,
           selected_profile: supplyProfile(records, requestedIntents),
           selected_day_capacity: dayCapacityProfile(records, {
@@ -2037,6 +2048,7 @@ function composeOpenDataLoaders(
           unique.length ? `loaded:${unique.length}` : failed ? 'error_failed_closed' : status,
           collectionError || completionError || (failed ? 'fetch_error' : null)), {
           ...metadata,
+          cache: fallbackCacheSummary([primaryRows, ...backgroundGroups, ...backgroundCompleted]) || metadata?.cache,
           source_completion: {
             status: finished.size === completions.length ? 'complete' : 'partial',
             completed: finished.size, pending: completions.length - finished.size,

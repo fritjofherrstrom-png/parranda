@@ -1,5 +1,5 @@
-const MAX_WAIT_MS = 60000;
-const MAX_POLLS = 20;
+const MAX_WAIT_MS = 90000;
+const MAX_POLLS = 30;
 
 function pause(ms, signal) {
   return new Promise((resolve, reject) => {

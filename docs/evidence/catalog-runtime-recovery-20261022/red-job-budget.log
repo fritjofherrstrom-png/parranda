@@ -1,0 +1,63 @@
+✖ a real server job may complete past60s inside the bounded90s window without resubmitting intent (9.750833ms)
+✖ measured55.5s native acquisition can complete, with a hard75s watchdog (36.563583ms)
+✖ default lifecycle retains its original producer past60s and finishes inside90s (12.440875ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 0
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 840.488
+
+✖ failing tests:
+
+test at frontend/tests/planner-lifecycle.test.mjs:98:1
+✖ a real server job may complete past60s inside the bounded90s window without resubmitting intent (9.750833ms)
+  Error: supply_wait_expired
+      at fetchPlannerLifecycle (file://<repo>/frontend/src/lib/planner-lifecycle.mjs:66:86)
+      at async TestContext.<anonymous> (file://<repo>/frontend/tests/planner-lifecycle.test.mjs:100:16)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)
+
+test at tests/bounded-overture-query.test.js:200:1
+✖ measured55.5s native acquisition can complete, with a hard75s watchdog (36.563583ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+  +   error: 'overture_timeout'
+  -   rows: [
+  -     {
+  -       id: 'complete-source-row'
+  -     }
+  -   ]
+    }
+  
+      at TestContext.<anonymous> (<repo>/tests/bounded-overture-query.test.js:205:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { error: 'overture_timeout' },
+    expected: { rows: [ [Object] ] },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/planner-cold-lifecycle.test.js:371:1
+✖ default lifecycle retains its original producer past60s and finishes inside90s (12.440875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  503 !== 202
+  
+      at TestContext.<anonymous> (<repo>/tests/planner-cold-lifecycle.test.js:376:60)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 503,
+    expected: 202,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

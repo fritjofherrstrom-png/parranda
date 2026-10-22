@@ -79,8 +79,8 @@ function phrases(stopCount) {
       en: "places come from external sources",
     },
     capped_by_stale_candidate_cache: {
-      sv: "platserna kommer från en något äldre cache",
-      en: "places come from a slightly older cache",
+      sv: "källan kunde inte uppdateras; sparade platsuppgifter används",
+      en: "a source could not be refreshed; saved place information is used",
     },
     // The timezone was inferred from the coordinates (by the weather service)
     // rather than attested by the place resolver. Say what that means for the

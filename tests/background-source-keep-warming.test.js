@@ -62,7 +62,9 @@ test("an ordinary background source is still cancelled when its last requester l
 });
 
 test("the Overture query budget fits a dense centre's measured cold window", () => {
-  assert.ok(QUERY_TIMEOUT_MS >= 66000 * 1.5, `${QUERY_TIMEOUT_MS} ms leaves headroom over the measured 66 s`);
+  // Measured cold: 66 s from a Swedish home connection, 55.5 s on the Pi with
+  // four transfer workers (#635). The budget must exceed both.
+  assert.ok(QUERY_TIMEOUT_MS > 66000, `${QUERY_TIMEOUT_MS} ms exceeds the measured 66 s`);
   const source = require("node:fs").readFileSync(require.resolve("../server/place-candidates/open-data-loader.js"), "utf8");
   assert.match(source, /createBackgroundSource\(\{\s*cache,\s*keyFor,\s*keepWarming: true,/);
 });

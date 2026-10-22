@@ -4,10 +4,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { validateOverturePrefetchPlan } = require('./overture-parquet-prefetch');
-// Measured cold from Sweden on 2026-10-22: Stockholm 27 s, Paris 40 s at
-// 2.5–3 km and 66 s for the 5 km window. At 45 s dense centres never finished.
-// The query runs out of band (see createOvertureBackgroundSource).
-const QUERY_TIMEOUT_MS = 120000;
+// The Oct21 dense official asset completed on Pi in55.5s with four
+// bounded transfer workers. Reserve75s for at most32MiB transfer+native work;
+// the owning HTTP job has90s including normalization/composition. No retries.
+const QUERY_TIMEOUT_MS = 75000;
 const MAX_TEMP_DIRECTORY_SIZE = '64MiB';
 // One native query per web/worker process; cache coalescing handles identical
 // windows. Distinct windows are refused, never queued behind a stuck query.

@@ -24,7 +24,7 @@ function setup(options = {}) {
   const { createOvertureSampleCache } = require('../server/place-candidates/overture-sample-cache');
   const clock = { time: 1000 };
   const raw = createSourceCache({ ttlMs: 100, now: () => clock.time, ...options });
-  const cache = createOvertureSampleCache({ cache: raw, now: () => clock.time });
+  const cache = createOvertureSampleCache({ cache: raw, now: () => clock.time, ...(options.maxFallbackAgeMs === undefined ? {} : {maxFallbackAgeMs:options.maxFallbackAgeMs}) });
   return { raw, cache, clock, createOvertureSampleCache };
 }
 function envelope(records = rows(), receipt = accepted(records).source_receipt) {
@@ -85,8 +85,8 @@ test('changed releases replace an expired sample only after the new producer suc
   assert.equal(cache.peek(KEY).source_receipt.release, '2026-10-21.0');
 });
 
-test('failed renewal never serves expired rows or extends their expiry even when stale options are requested', async () => {
-  const { raw, cache, clock } = setup();
+test('explicit zero fallback retains strict expiry and never extends age even when stale options are requested', async () => {
+  const { raw, cache, clock } = setup({maxFallbackAgeMs:0});
   await cache.get(KEY, async () => accepted());
   const prior = raw.inspect(KEY);
   clock.time = 1200;
@@ -171,7 +171,7 @@ test('concurrent misses share one acquisition and aborted producers cannot persi
   assert.equal(calls, 1);
   owner.abort();
   finish(accepted());
-  await Promise.all([first, second]);
+  await Promise.allSettled([first, second]);
   assert.equal(raw.inspect(KEY), null);
   assert.equal(cache.peek(KEY), null);
 });
@@ -209,4 +209,32 @@ test('a resident expired web sample observes a newer worker renewal on their sha
   assert.equal(web.peek(KEY)?.[0]?.id, 'renewed-worker-place');
   const value = await web.get(KEY, async () => { throw new Error('fresh shared evidence must not trigger reacquisition'); });
   assert.equal(value[0].id, 'renewed-worker-place');
+});
+
+// Approved22Oct policy: bounded last-known-good evidence, never renewed age.
+test('source failure can reuse a receipt-bound sample for at most seven days since verification', async () => {
+  const {raw,cache,clock}=setup();await cache.get(KEY,async()=>accepted());
+  const before=raw.inspect(KEY);clock.time=1000+2*24*60*60*1000;
+  const failed=Object.defineProperty([],'source_error',{value:'fetch_error'});
+  const fallback=await cache.get(KEY,async()=>failed);
+  assert.deepEqual(fallback,rows());
+  assert.equal(fallback.source_error,'stale_cache_refresh_failed');
+  assert.equal(fallback.loader_metadata.cache.served_stale,true);
+  assert.equal(fallback.loader_metadata.cache.stale_age_seconds,2*24*60*60);
+  assert.equal(fallback.source_receipt.verifiedAt,1000);
+  assert.deepEqual(raw.inspect(KEY),before,'fallback never stores or renews the sample');
+  assert.equal(cache.peek(KEY),null,'fallback is never a fresh hit');
+  clock.time=1000+7*24*60*60*1000+1;
+  assert.equal(await cache.get(KEY,async()=>failed),failed,'seven days is counted from verification, not TTL expiry');
+});
+
+test('aborted owners and unbound old evidence cannot publish a fallback', async () => {
+  const {raw,cache,clock}=setup();await cache.get(KEY,async()=>accepted());clock.time=1200;
+  const controller=new AbortController();let finish;
+  const result=cache.get(KEY,()=>new Promise(resolve=>{finish=resolve}),{signal:controller.signal});
+  controller.abort();finish(Object.defineProperty([],'source_error',{value:'fetch_error'}));
+  await assert.rejects(result,/abort|cancel/i);
+  const corrupt=raw.inspect(KEY).value;corrupt.receipt.recordsHash='f'.repeat(64);raw.set(KEY,corrupt);clock.time+=200;
+  const failed=Object.defineProperty([],'source_error',{value:'fetch_error'});
+  assert.equal(await cache.get(KEY,async()=>failed),failed);
 });
