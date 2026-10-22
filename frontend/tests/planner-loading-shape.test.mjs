@@ -116,19 +116,22 @@ test("a chosen place reads by its own name while the day composes", async (t) =>
   assert.doesNotMatch(pill, /Testshire/);
 });
 
-test("while the day composes the wordmark draws its ring, and the status walks its route", async (t) => {
+test("while the day composes the wordmark stays still and the status line carries the drawing ring", async (t) => {
+  // A drawing wordmark, a walker and the skeleton all moving at once read as
+  // too busy (iPhone, 23 Oct 2026): the ring moved down to the status line.
   const { h, compose } = await composing(t);
-  const mark = () => h.container.querySelector("nav [data-brand-mark]");
-  assert.equal(mark().dataset.brandMark, "busy");
-  assert.equal(mark().getAttribute("aria-hidden"), "true");
-  assert.match(mark().querySelector("circle[pathLength]").getAttribute("class"), /parranda-mark-draw/);
+  const wordmark = () => h.container.querySelector("nav a[aria-label] > [aria-hidden='true']");
+  assert.equal(wordmark().tagName, "SPAN");
+  assert.doesNotMatch(wordmark().className, /animate-/, "the wordmark's ring never moves");
   const status = h.container.querySelector('main [aria-live="polite"]');
-  assert.ok(status.querySelector("[data-walk-mark] .walk-step"), "a walker instead of a still rule");
+  const ring = status.querySelector("svg[data-ring-mark]");
+  assert.ok(ring, "the status line carries the drawing ring");
+  assert.equal(ring.getAttribute("aria-hidden"), "true");
+  assert.match(ring.querySelector("circle[pathLength]").getAttribute("class"), /parranda-mark-draw/);
+  assert.equal(h.container.querySelector("[data-walk-mark], [data-brand-mark]"), null);
 
   await h.fetchMock.respond(compose, composedDay());
   await h.clock.advance(50);
-  assert.equal(mark().dataset.brandMark, "still", "the ring closes once the day is on screen");
-  assert.match(mark().className, /parranda-mark-land/, "with a small settle");
-  await h.clock.advance(700);
-  assert.doesNotMatch(mark().className, /parranda-mark-land/);
+  assert.equal(wordmark().tagName, "SPAN");
+  assert.doesNotMatch(wordmark().className, /animate-/);
 });
