@@ -192,14 +192,47 @@ async function resolvePlaceRefIntake({ coords, explicitCoordinatesPresent, place
   const strong = (Array.isArray(resolved) ? resolved : []).filter((candidate) => candidate && isStrongConfidence(candidate.confidence));
   return blocked("place_ref_not_found", {
     candidates_considered: strong.length,
-    candidates: strong.slice(0, 5).map((candidate) => placeChoice(candidate, placeQuery, placeSelectionStore)),
+    candidates: orderChoices(strong).slice(0, 5).map((candidate) => placeChoice(candidate, placeQuery, placeSelectionStore)),
   });
+}
+
+const foldName = value => typeof value === "string"
+  ? value.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+  : "";
+
+// A short visible title and context for an offered place, when the resolver
+// supplied structured admin context. `label` keeps the provider's full name
+// because it carries the choice's identity downstream.
+function choiceTitle(candidate) {
+  const title = typeof candidate.name === "string" && candidate.name.trim()
+    ? candidate.name.trim()
+    : String(candidate.label || "").split(",")[0].trim();
+  const admin = candidate.admin_context || {};
+  const seen = new Set([foldName(title)]);
+  const context = [admin.locality || admin.municipality, admin.region, admin.country]
+    .filter(value => typeof value === "string" && value.trim() && !seen.has(foldName(value)) && seen.add(foldName(value)));
+  // Without structured context the full label is the only honest qualifier.
+  return title && context.length ? { title, context: context.join(" · ") } : {};
+}
+
+// Offered order: a place mapped as an area (OSM way/relation) before one that
+// is only a point (node). Language-independent structure, recorded on staging
+// 166609c (2026-10-18): point nodes led "Gamla stan" (Vyborg, Porvoo) and
+// "Möllevången" (an Östra Grevie hamlet) by importance, ahead of the Stockholm,
+// Kalmar, Malmö and Lund areas; "Lisbon" (all areas) keeps Lisboa first.
+// Ordering only; every strong choice is still offered, nothing is chosen.
+function orderChoices(candidates) {
+  const pointOnly = candidate => /^node\//.test(candidate?.osm_ref || "") ? 1 : 0;
+  return candidates.map((candidate, index) => ({ candidate, index }))
+    .sort((a, b) => pointOnly(a.candidate) - pointOnly(b.candidate) || a.index - b.index)
+    .map(entry => entry.candidate);
 }
 
 function placeChoice(candidate, placeQuery, placeSelectionStore) {
   const placeRef = linkRefFor(candidate);
   return {
     label: candidate.label || null,
+    ...choiceTitle(candidate),
     confidence: candidate.confidence ?? null,
     provenance: candidate.provenance || null,
     attribution: typeof candidate.attribution === "string" ? candidate.attribution : null,
@@ -317,7 +350,7 @@ async function resolveAgnosticIntake({
   if (selectionInvalid) {
     return { anchor: null, placeContext: null, intake: intake("place", placeQuery, {
       candidates_considered: candidates.length,
-      candidates: strong.slice(0, 5).map(candidateChoice),
+      candidates: orderChoices(strong).slice(0, 5).map(candidateChoice),
       blockers: ["place_selection_invalid"],
     }) };
   }
@@ -341,7 +374,7 @@ async function resolveAgnosticIntake({
       placeContext: null,
       intake: intake("place", placeQuery, {
         candidates_considered: candidates.length,
-        candidates: strong.slice(0, 5).map(candidateChoice),
+        candidates: orderChoices(strong).slice(0, 5).map(candidateChoice),
         blockers: ["ambiguous_place"],
       }),
     };
