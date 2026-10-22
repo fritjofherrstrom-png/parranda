@@ -194,3 +194,17 @@ test('an unusable extension cache falls back without disabling the bounded query
   const query = createBoundedOvertureQuery({ cacheDir: '/dev/null', timeoutMs: 10000 });
   assert.deepEqual(await query('SELECT 1 AS id'), [{ id: 1 }]);
 });
+
+// Actual Pi catalogue acquisition completed at55.5s; the old45s watchdog
+// killed valid transfer. Replay the boundary without live network or sleeping.
+test('measured55.5s native acquisition can complete, with a hard75s watchdog', async t => {
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:0});
+  const child=childFixture();const result=createBoundedOvertureQuery({spawn:()=>child})('controlled transfer');
+  const observed=result.then(rows=>({rows}),error=>({error:error.message}));
+  t.mock.timers.tick(55500);child.emit('message',{rows:[{id:'complete-source-row'}]});
+  assert.deepEqual(await observed,{rows:[{id:'complete-source-row'}]});
+  await new Promise(setImmediate);
+  const late=childFixture(),timeout=createBoundedOvertureQuery({spawn:()=>late})('never finishes');
+  const rejected=assert.rejects(timeout,/overture_timeout/);t.mock.timers.tick(75000);await rejected;
+  assert.deepEqual(late.kills,['SIGKILL']);
+});
