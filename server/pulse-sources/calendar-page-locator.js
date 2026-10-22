@@ -7,11 +7,24 @@
  * It performs no network access and does not classify or activate providers.
  */
 
+// Calendar words plus the words venues use for their programme pages
+// (German "Spielplan", Spanish "cartelera" …): a venue's own site lists its
+// events there rather than under "events".
 const CALENDAR_LINK_TERMS = [
   "agenda",
   "calendar",
   "calendario eventi",
   "calendrier",
+  "cartelera",
+  "concerts",
+  "forestillinger",
+  "föreställningar",
+  "konserter",
+  "konzerte",
+  "spectacles",
+  "spielplan",
+  "termine",
+  "voorstellingen",
   "evenemang",
   "evenemangskalender",
   "evenementen",
