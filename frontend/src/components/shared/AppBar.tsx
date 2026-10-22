@@ -22,7 +22,7 @@ type Theme = "day" | "night";
 function currentTheme(): Theme {
   return document.documentElement.getAttribute("data-theme") === "night" ? "night" : "day";
 }
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MoonIcon, SunIcon } from "./icons";
 
 type Lang = "sv" | "en";
@@ -34,12 +34,69 @@ function withLang(search: string, lang: Lang): string {
   return `?${params.toString()}`;
 }
 
+/**
+ * The mark: a station ring on the route colour. While the engine works
+ * (`busy`) the ring draws itself as a loop and lets it go again, turning
+ * slowly; when the work ends it closes into the still ring with a small
+ * settle. The static build and the first render are always the still ring,
+ * and reduced motion keeps it still throughout.
+ */
+function BrandMark({ busy }: { busy: boolean }) {
+  const [settling, setSettling] = useState(false);
+  const wasBusy = useRef(false);
+  useEffect(() => {
+    if (busy) {
+      wasBusy.current = true;
+      return;
+    }
+    if (!wasBusy.current) return;
+    wasBusy.current = false;
+    setSettling(true);
+    const timer = setTimeout(() => setSettling(false), 600);
+    return () => clearTimeout(timer);
+  }, [busy]);
+  if (busy) {
+    return (
+      <svg
+        aria-hidden="true"
+        data-brand-mark="busy"
+        viewBox="0 0 18 18"
+        className="h-[18px] w-[18px] shrink-0 text-parranda-ember motion-safe:animate-[parranda-mark-turn_4.8s_linear_infinite]"
+      >
+        <circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" strokeWidth="4" opacity="0.22" />
+        <circle
+          cx="9"
+          cy="9"
+          r="7"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="4"
+          strokeLinecap="round"
+          pathLength={100}
+          className="motion-safe:animate-[parranda-mark-draw_2.4s_ease-in-out_infinite]"
+        />
+      </svg>
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      data-brand-mark="still"
+      className={
+        "h-[18px] w-[18px] rounded-full border-4 border-parranda-ember transition group-hover:scale-110" +
+        (settling ? " motion-safe:animate-[parranda-mark-land_0.5s_ease-out]" : "")
+      }
+    />
+  );
+}
+
 export default function AppBar({
   lang,
   homeLabel,
   languageLabel,
   onNavigate,
   languageHref,
+  busy = false,
 }: {
   lang: Lang;
   /** Accessible name for the wordmark link ("Parranda — start"). */
@@ -54,6 +111,8 @@ export default function AppBar({
   onNavigate?: (target: AppBarTarget) => void;
   /** Where the link to `option` leads; defaults to this page's query with `lang` swapped. */
   languageHref?: (option: Lang) => string;
+  /** The engine is working on this page's day: the mark draws itself until it is done. */
+  busy?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [night, setNight] = useState<boolean | undefined>(undefined);
@@ -89,8 +148,7 @@ export default function AppBar({
         aria-label={homeLabel}
         className="group inline-flex min-h-11 items-center gap-2.5 text-parranda-ink transition hover:text-parranda-clay"
       >
-        {/* The mark: a station ring on the route colour. */}
-        <span aria-hidden="true" className="h-[18px] w-[18px] rounded-full border-4 border-parranda-ember transition group-hover:scale-110" />
+        <BrandMark busy={busy} />
         <span className="type-display text-15 tracking-[0.02em] min-[360px]:text-17">Parranda</span>
       </a>
       <div className="flex items-center gap-2">

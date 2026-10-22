@@ -133,6 +133,122 @@
   }
 }
 
+/* The loading day's stations breathe: each disc swells a little and lightens,
+   then settles, a soft wave rolling down the line (DayPlaceholder staggers
+   them). Used only under motion-safe. */
+@keyframes parranda-breathe {
+  0%,
+  100% {
+    background-color: rgb(var(--p-color-ink) / 0.07);
+    transform: scale(0.9);
+  }
+  50% {
+    background-color: rgb(var(--p-color-ink) / 0.17);
+    transform: scale(1);
+  }
+}
+
+/* While the engine works, the wordmark's ring draws itself as a loop and
+   lets it go again, turning slowly (BrandMark in AppBar.tsx); when the day
+   lands the ring closes with a small settle. */
+@keyframes parranda-mark-draw {
+  0% {
+    stroke-dasharray: 0 100;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 100 100;
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dasharray: 100 100;
+    stroke-dashoffset: -100;
+  }
+}
+@keyframes parranda-mark-turn {
+  from {
+    transform: rotate(-90deg);
+  }
+  to {
+    transform: rotate(270deg);
+  }
+}
+@keyframes parranda-mark-land {
+  0% {
+    transform: scale(0.7);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* "Working on it" in Parranda's own terms (WalkMark): a walker crossing a
+   short route in three small steps, the route filling in behind it, then
+   both fade and the walk starts again. Under reduced motion only the filled
+   route shows, the plain ember rule it replaced. */
+@media (prefers-reduced-motion: no-preference) {
+  .walk-trail {
+    animation: parranda-walk-trail 2.4s ease-in-out infinite;
+    transform-origin: left center;
+  }
+  .walk-step {
+    animation: parranda-walk-step 2.4s ease-in-out infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .walk-step {
+    display: none;
+  }
+}
+@keyframes parranda-walk-trail {
+  0% {
+    opacity: 1;
+    transform: scaleX(0.15);
+  }
+  70%,
+  85% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
+}
+@keyframes parranda-walk-step {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  11.7% {
+    transform: translate(3.3px, -1.5px);
+  }
+  23.3% {
+    transform: translate(6.7px, 0);
+  }
+  35% {
+    transform: translate(10px, -1.5px);
+  }
+  46.7% {
+    transform: translate(13.3px, 0);
+  }
+  58.3% {
+    transform: translate(16.7px, -1.5px);
+  }
+  70%,
+  85% {
+    opacity: 1;
+    transform: translate(20px, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(20px, 0);
+  }
+}
+
 /* The choice just made, while the day rebuilds around it: a soft ember ring
    that slowly widens and fades from the chip that was tapped. Used only
    under motion-safe. */
