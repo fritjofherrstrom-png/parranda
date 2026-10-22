@@ -1,0 +1,52 @@
+{
+  "source_url": "https://centralkonditoriet.com/",
+  "raw_file": "centralkonditoriet-root.raw.html",
+  "raw_sha256": "fc59015c3b4a7a599d7b08bec6983683cb03299b6e666d8c3abf7ff9d1ddbcc9",
+  "receipt": "receipt.json",
+  "fixture": "centralkonditoriet-owner-structure.html",
+  "fixture_sha256": "756932bb61413104105a408c95e51552b3f0bdd0df0418bd1773c479d708136d",
+  "transform": "parse5 parse/serialize; remove scripts/styles/noscript/svg/images/picture/forms/nav/link/iframe/comments/social panel3; retain structural parents, all h1, title and meta descriptions, contact panel2, news panel4 and footer; attributes restricted to id/class/href/datetime/name/content/property/aria-current. No text/dates/hours synthesized. Final fixture removes trailing line whitespace only; no visible text changed.",
+  "scope_preserved": [
+    "branding h1 inside header",
+    "three content h1 inside main",
+    "hours strong label inside paragraph in article panel2",
+    "dated historical news inside panel4",
+    "duplicate normal hours in footer"
+  ],
+  "expected_ordinary_week": {
+    "Mo-Fr": "06:30-18:00",
+    "Sa": "09:00-15:30",
+    "Su": "closed explicitly"
+  },
+  "unresolved": [
+    "red-day/holiday mapping has no explicit calendar/date rules",
+    "Storhelger points to news page; no additional fetch authorized/performed",
+    "SEO Saturday15:00 is not used as visitor-hours evidence; both marked visible blocks say15:30. No claim that actual future opening is verified.",
+    "undated repeated Christmas text in news panel cannot be treated as present-day closure; dated related post establishes Dec2025/Jan2026 context but not a current general exception"
+  ],
+  "identity": {
+    "brand": "Centralkonditoriet Uppsala",
+    "address": "Vretgränd 16 753 22 Uppsala",
+    "geometry": "none published in captured source",
+    "canonical": "https://centralkonditoriet.com/",
+    "selected_production_candidate": {
+      "id": "overture-76e7b96c-ee58-47de-9bd5-e84b080c1e86",
+      "name": "Centralkonditoriet",
+      "type": "cafe",
+      "lat": 59.856815338134766,
+      "lng": 17.64398193359375,
+      "website": "http://www.centralkonditoriet.com/",
+      "evidence": "original audit ui/18-uppsala-coffee-full.json; identity scaffold controlled during local HTTP replay"
+    }
+  },
+  "not_claimed": [
+    "future actual opening",
+    "same-domain ownership sufficient by itself",
+    "production incident reproduced",
+    "new general holiday resolver"
+  ],
+  "interpretation": {
+    "ordinary_schedule_authority": "The explicitly marked, identity-bound visitor/contact schedule is read; generic SEO prose is not a visitor-hours block. Conflicting marked schedule blocks are rejected. This never confirms the selected holiday date.",
+    "transport": "One bounded authorized root fetch succeeded; current provider health and future opening are not established."
+  }
+}

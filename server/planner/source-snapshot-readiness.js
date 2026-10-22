@@ -3,6 +3,7 @@
 const { buildAgnosticCityContext } = require('../candidates/agnostic-context');
 const { buildEligibleCandidatePool } = require('../candidates/candidate-pool');
 const { normalizeUserIntents, matchCandidateToIntent } = require('../candidates/intent-vocabulary');
+const { resolveCandidateDayHours } = require('../place-candidates/opening-hours-calendar');
 const { operatorClosureForWindow } = require('../place-candidates/operator-visit-evidence');
 const { evaluateOpeningHoursForWindow, buildLocalDayAvailabilityWindow } = require('../place-candidates/opening-hours');
 const { admitExperimentalInferredExternalCandidate, MIN_VIABLE_GEOCODED_STOPS } = require('./agnostic-route-output');
@@ -35,8 +36,16 @@ function assessPlannerSourceSnapshot({ records, request, independentSupply = [],
     resolveNowContext: () => ({ date: selectedDate, hour: null, weekday: null, now_iso: null }),
     resolveTimeBand: () => null,
     experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
-    evaluateCandidateAvailability: ({ candidate }) => operatorClosureForWindow(candidate, window) ||
-      evaluateOpeningHoursForWindow(candidate.opening_hours, window),
+    evaluateCandidateAvailability: ({ candidate }) => {
+      const calendar = resolveCandidateDayHours(candidate, { date: selectedDate,
+        timezone: context?.timezoneKnown ? context.contextBlock?.time?.timezone : null,
+        availabilityWindow,
+        now: Number.isFinite(context?.calendarObservedNow) ? context.calendarObservedNow : NaN,
+      });
+      if (calendar) return { eligible: calendar.eligible, reason: calendar.reason,
+        status: calendar.status === 'unknown' ? 'unknown' : calendar.eligible ? 'available_in_window' : 'closed_for_window' };
+      return operatorClosureForWindow(candidate, window) || evaluateOpeningHoursForWindow(candidate.opening_hours, window);
+    },
   });
   const reach = resolveAgnosticCandidateReachPolicy({
     anchorMode: request.anchorMode, spatialScope: request.spatialScope,

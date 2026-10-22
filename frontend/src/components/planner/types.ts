@@ -51,13 +51,19 @@ export interface PlaceStructure {
 }
 
 export interface PulseEvent {
-  /** Server-issued eligibility for this exact source occurrence, never a series. */
+  /** Server-issued eligibility for this exact source occurrence, never a group. */
   live_occurrence_id?: string;
   live_choice_eligible?: boolean;
   occurrence_date?: string;
   tags?: string[];
-  /** Exact accepted source slots, grouped only by an explicit source series. */
+  /** Exact accepted source slots in an explicit source series or display group. */
   occurrences?: PulseEvent[];
+  /** Display-only programme grouping; establishes neither recurrence nor eligibility. */
+  display_group_kind?: "source_program";
+  source_provider_id?: string;
+  /** An explicit publisher series identity, never inferred from a display group. */
+  source_series_id?: string;
+  source_occurrence_id?: string;
   id?: string;
   title?: string;
   starts_at?: string;

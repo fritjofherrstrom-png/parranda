@@ -185,7 +185,7 @@ for (const [label, path, anchor] of [
   await dialog.getByRole('button', { name: 'Whole area', exact: true }).click();
   // This fixture is on the selected day. Changing area must preserve that
   // tab, and a same-day event must not require a switch to following days.
-  assert.equal(await dialog.getByRole('button', { name: 'Following 7 days', exact: true }).getAttribute('aria-pressed'), 'false');
+  assert.equal(await dialog.getByRole('button', { name: 'Next 7 days', exact: true }).getAttribute('aria-pressed'), 'false');
   await dialog.getByText(`${label} concert`, { exact: true }).waitFor();
   assert.equal(liveQueries.at(-1).time, 'tonight', 'selected-day fixture is queried in the selected-day bucket');
   assert.equal(liveQueries[0].selected_date, DATE);

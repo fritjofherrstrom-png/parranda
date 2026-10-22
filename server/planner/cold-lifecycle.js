@@ -1,7 +1,7 @@
 "use strict";
 
 const { randomBytes } = require('node:crypto');
-const { SOURCE_COMPLETION, SOURCE_SNAPSHOT } = require('../place-candidates/background-source');
+const { SOURCE_COMPLETION, SOURCE_SNAPSHOT, SOURCE_PENDING } = require('../place-candidates/background-source');
 const { normalizeUserIntents, matchCandidateToIntent } = require('../candidates/intent-vocabulary');
 
 const DEADLINE_MS = 60000;
@@ -139,11 +139,12 @@ function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, res
     }), context.signal));
     return enriched.get(records);
   };
-  return request => {
+  const load = request => {
     context.signal.throwIfAborted();
     const key = JSON.stringify(request);
     if (!loads.has(key)) loads.set(key, (async () => {
-      let records = await awaitLifecycleWork(loader({ ...request, preferCachedSupply: true, signal: context.signal }), context.signal);
+      let records = await awaitLifecycleWork(loader({ ...request, preferCachedSupply: true, signal: context.signal,
+        [SOURCE_PENDING]: context.warming }), context.signal);
       if (records?.[SOURCE_COMPLETION]) {
         context.warming();
         const initial = records;
@@ -208,6 +209,12 @@ function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, res
     })());
     return loads.get(key);
   };
+  if (typeof enrich?.enrichSelected === 'function') {
+    load.enrichSelected = (records, options = {}) => awaitLifecycleWork(enrich.enrichSelected(records, {
+      ...options, signal: context.signal, deadline: context.deadline,
+    }), context.signal);
+  }
+  return load;
 }
 
 module.exports = { createPlannerLifecycle, lifecycleLoader, DEADLINE_MS, POLL_MS, MAX_POLLS, PARTIAL_WAIT_MS, COMPOSITION_RESERVE_MS };

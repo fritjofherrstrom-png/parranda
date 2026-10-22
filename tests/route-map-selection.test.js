@@ -135,6 +135,12 @@ test('explicit click during expansion keeps its marker name after mouseleave and
   diagnostics.stage = 'resume native height transition';
   await page.evaluate(() => window.expansionTransition.play());
   await page.waitForFunction(() => document.querySelector('[data-route-map]').getBoundingClientRect().height >= 419.9);
+  diagnostics.stage = 'native geometry-driven mouseout';
+  // Finished geometry and browser pointer dispatch are separate events. The
+  // full-suite trace showed mouseout arriving after the old synchronous read.
+  // Require the actual native precondition before asserting retained selection.
+  await page.waitForFunction(() => window.selectionTrace.some(event =>
+    event.kind === 'mouseout' && event.target === 'route-map-marker'));
   diagnostics.stage = 'selection and actual mouseout assertions';
   const trace = await page.evaluate(() => window.selectionTrace);
   const click = trace.find(e => e.kind === 'click' && e.target === 'route-map-marker');

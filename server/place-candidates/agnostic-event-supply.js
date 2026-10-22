@@ -26,6 +26,7 @@ const { createAccessCheckedSourceFetch } = require("../pulse-sources/access-chec
 const { createDateRangeListingProvider } = require("../pulse-sources/date-range-listing-provider");
 const { createLinkedEventsProvider } = require("../pulse-sources/linked-events-source-provider");
 const { createTicketmasterProvider } = require("../pulse-sources/ticketmaster-source-provider");
+const { groupLiveProgramViews, diversifyLiveHighlights } = require("./live-program-presentation");
 const { createSchemaOrgEventProvider } = require("../pulse-sources/schema-org-event-provider");
 const { createEventsCalendarProvider } = require("../pulse-sources/events-calendar-source-provider");
 const { createRssAtomEventProvider } = require("../pulse-sources/rss-atom-event-provider");
@@ -522,14 +523,36 @@ function dedupeViews(views) {
     if (id && seenIds.has(id)) continue;
     const titleVenue = `${String(view.title || "").toLowerCase()}|${view.place || ""}${view.calendar_fact ? `|${JSON.stringify(view.calendar_fact)}` : ""}`;
     const start = view.starts_at || view.starts_on || view.time_window?.starts_at || view.time_window?.starts_on || null;
+    const occurrences = providerOccurrenceIds(view);
     const seenStarts = byTitleVenue.get(titleVenue) || [];
-    if (seenStarts.some((previous) => !previous || !start || previous === start)) continue;
+    if (seenStarts.some((previous) => {
+      for (const [provider, ids] of occurrences) {
+        const other = previous.occurrences.get(provider);
+        if (other && [...ids].every(id => !other.has(id))) return false;
+      }
+      return !previous.start || !start || previous.start === start;
+    })) continue;
     if (id) seenIds.add(id);
-    seenStarts.push(start);
+    seenStarts.push({ start, occurrences });
     byTitleVenue.set(titleVenue, seenStarts);
     out.push(view);
   }
   return out;
+}
+
+// A fused row's primary publisher may be municipal. Keep each provider's
+// occurrence evidence independent of that display/authority choice; sources
+// are plain JSON atoms and therefore survive the persistent pool round-trip.
+function providerOccurrenceIds(view) {
+  const byProvider = new Map();
+  const add = (provider, id) => {
+    if (typeof provider !== "string" || !provider || typeof id !== "string" || !id) return;
+    if (!byProvider.has(provider)) byProvider.set(provider, new Set());
+    byProvider.get(provider).add(id);
+  };
+  add(view.source_provider_id, view.source_occurrence_id);
+  for (const source of Array.isArray(view.sources) ? view.sources : []) add(source?.provider_id, source?.occurrence_id);
+  return byProvider;
 }
 
 // Honest, prose-free user view of one event. The UI/i18n layer renders the label;
@@ -553,6 +576,7 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
     starts_at: event.starts_at || null,
     source_provider_id: feed?.id || null,
     source_series_id: event.source_series_id || null,
+    source_occurrence_id: event.source_occurrence_id || null,
     ends_at: event.ends_at || null,
     starts_on: event.starts_on || null,
     ends_on: event.ends_on || null,
@@ -621,7 +645,13 @@ function rankEventViews(views, preferences = []) {
 }
 
 function buildEventBucketSurface(views, preferences = []) {
-  const ranked = rankEventViews(groupSourceOccurrences(views), preferences);
+  let evidenceRank = 0;
+  const evidence = rankEventViews(groupSourceOccurrences(views), preferences).map(view => {
+    if (view.occurrences?.length) return { ...view, live_evidence_rank: evidenceRank,
+      occurrences: view.occurrences.map(slot => ({ ...slot, live_evidence_rank: evidenceRank++ })) };
+    return { ...view, live_evidence_rank: evidenceRank++ };
+  });
+  const ranked = groupLiveProgramViews(evidence);
   const highlights = selectEventHighlights(ranked, preferences);
   const highlighted = new Set(highlights.map(eventViewIdentity));
   const remaining = ranked.filter((view) => !highlighted.has(eventViewIdentity(view)));
@@ -671,15 +701,15 @@ function selectEventHighlights(ranked, preferences = []) {
     preferences.length === 0 ||
     highlights.some(isSerendipityCandidate)
   ) {
-    return highlights;
+    return diversifyLiveHighlights(ranked, highlights);
   }
 
   const discovery = ranked.slice(MAX_PER_BUCKET).find(isSerendipityCandidate);
-  if (!discovery) return highlights;
-  return [
+  if (!discovery) return diversifyLiveHighlights(ranked, highlights);
+  return diversifyLiveHighlights(ranked, [
     ...highlights.slice(0, -1),
     { ...discovery, highlight_reason: "local_serendipity" },
-  ];
+  ]);
 }
 
 function isSerendipityCandidate(view) {
@@ -1264,7 +1294,7 @@ async function collectEventSource({
       radiusKm: Math.max(1, Math.round(radiusM / 1000)),
       windowDays: THIS_WEEK_HORIZON_DAYS,
       // The global feed carries event-level (not region-level) timezones. One
-      // bounded page covers the possible UTC envelope; final calendar gates
+      // bounded collection covers the possible UTC envelope; final calendar gates
       // use each event's source timezone, never this acquisition padding.
       ...(selectedDate ? {
         windowStart: new Date(Math.max(new Date(`${selectedDate}T00:00:00Z`).getTime() - 14 * 3600000, nowDate.getTime())),
@@ -1651,7 +1681,11 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // Earlier pools can contain one first-day atom for an entire stated series.
 // v15 excludes midnight sentinels represented as exact instants and event
 // tags polluted by a source category's available taxonomy children.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v15";
+// v16 excludes Ticketmaster pools with coerced coordinates, placeholder clocks,
+// discarded ends or merged source-owned occurrence identities. No cache purge.
+// v17 excludes first-page-only global inventory so bounded pagination and its
+// explicit partial outcome are observed without deleting any shared cache.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v17";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read

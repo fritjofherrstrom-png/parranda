@@ -160,6 +160,7 @@ export default function DayHeader({
   coreCount,
   wovenCount,
   pickCoverage,
+  priorityShortfall = null,
   dayLimitationNote,
   sourceEvidenceNote = "",
   onUpdateDay,
@@ -181,6 +182,7 @@ export default function DayHeader({
   coreCount: number;
   wovenCount: number;
   pickCoverage: PickCoverage[];
+  priorityShortfall?: PickCoverage | null;
   dayLimitationNote: string | null | undefined;
   /** Historical source limitations of this published answer. */
   sourceEvidenceNote?: string;
@@ -317,6 +319,15 @@ export default function DayHeader({
             </li>
           ))}
         </ul>
+      )}
+      {priorityShortfall && (
+        <p className="text-13 leading-relaxed text-parranda-ink/72" role="status">
+          {priorityShortfall.state === "partial"
+            ? t(`Ditt förstaval ${pickLabel(priorityShortfall.key, lang)} finns bara delvis med i den här dagen.`,
+                `Your first choice ${pickLabel(priorityShortfall.key, lang)} is only partly represented in this day.`)
+            : t(`Ditt förstaval ${pickLabel(priorityShortfall.key, lang)} finns inte med i den här dagen.`,
+                `Your first choice ${pickLabel(priorityShortfall.key, lang)} is not represented in this day.`)}
+        </p>
       )}
       {/* Source limitations describe this published answer, never a live job.
           The day remains until the reader explicitly asks for an update. */}

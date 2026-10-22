@@ -67,7 +67,8 @@ export function describeDayChange(previous, next, { cause = null } = {}) {
   const before = byIdentity(beforeStops);
   const after = byIdentity(afterStops);
 
-  const added = [...after].filter(([key]) => !before.has(key)).map(([, stop]) => stopName(stop)).filter(Boolean);
+  const addedStops = [...after].filter(([key]) => !before.has(key)).map(([, stop]) => stop);
+  const added = addedStops.map(stopName).filter(Boolean);
   const removed = [...before].filter(([key]) => !after.has(key)).map(([, stop]) => stopName(stop)).filter(Boolean);
   const keptKeys = [...after.keys()].filter((key) => before.has(key));
   const sameSet = added.length === 0 && removed.length === 0 && before.size === after.size;
@@ -109,8 +110,9 @@ export function describeDayChange(previous, next, { cause = null } = {}) {
     km,
     hasRoute: afterStops.length > 0,
     routeChanged: !sameSet || reordered || kmChanged,
-    // What moved the day when the user did not: a server-applied Live upgrade.
-    cause: cause === "live" ? "live" : null,
+    // A real Live occurrence may arrive in an ordinary adjustment or a separate
+    // completion. Compare the published identities, not the response lane.
+    cause: cause === "live" || addedStops.some((stop) => stop.is_live_event === true && liveStopChoiceId(stop)) ? "live" : null,
   };
 }
 

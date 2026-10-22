@@ -1,0 +1,568 @@
+{
+  "outcome": "PASS",
+  "boundary": "built UI -> local HTTP -> real Linked Events normalizer/composer/publisher; controlled source transport, trusted rows/resolver/weather/clock",
+  "excluded": [
+    "live providers",
+    "deployment",
+    "physical device",
+    "landing-form acceptance"
+  ],
+  "compose_posts": 6,
+  "source_transport_calls": 3,
+  "website_transport_calls": 14,
+  "errors": [],
+  "checkpoints": [
+    {
+      "label": "keep-source-refused",
+      "date": "2026-10-18",
+      "context_time": "2026-10-17T11:00:00",
+      "inputs": {
+        "selected": [
+          "culture",
+          "views"
+        ],
+        "preferencePriority": null,
+        "walkKey": "full",
+        "dateIso": null,
+        "dayOffset": 1
+      },
+      "stops": [
+        {
+          "id": "culture-0",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-0.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-0.example/"
+        },
+        {
+          "id": "views-0",
+          "type": "viewpoint",
+          "is_live_event": false,
+          "website": "https://views-0.example/"
+        },
+        {
+          "id": "views-1",
+          "type": "viewpoint",
+          "is_live_event": false,
+          "website": "https://views-1.example/"
+        },
+        {
+          "id": "culture-1",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-1.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-1.example/"
+        },
+        {
+          "id": "culture-2",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-2.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-2.example/"
+        },
+        {
+          "id": "culture-5",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-5.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-5.example/"
+        },
+        {
+          "id": "live-event-feedback-concert",
+          "type": null,
+          "is_live_event": true,
+          "live_occurrence_id": "live:2026-10-18:a0e90ae5ffeee5d2a0ad07749a74d4a3"
+        }
+      ],
+      "live_choice_summary": null
+    },
+    {
+      "label": "keep-confirmed",
+      "date": "2026-10-18",
+      "context_time": "2026-10-17T11:00:00",
+      "inputs": {
+        "selected": [
+          "culture",
+          "views"
+        ],
+        "preferencePriority": null,
+        "walkKey": "full",
+        "dateIso": null,
+        "dayOffset": 1
+      },
+      "stops": [
+        {
+          "id": "culture-0",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-0.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-0.example/"
+        },
+        {
+          "id": "views-0",
+          "type": "viewpoint",
+          "is_live_event": false,
+          "website": "https://views-0.example/"
+        },
+        {
+          "id": "views-1",
+          "type": "viewpoint",
+          "is_live_event": false,
+          "website": "https://views-1.example/"
+        },
+        {
+          "id": "culture-1",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-1.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-1.example/"
+        },
+        {
+          "id": "culture-5",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-5.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-5.example/"
+        },
+        {
+          "id": "live-event-feedback-concert",
+          "type": null,
+          "is_live_event": true,
+          "live_occurrence_id": "live:2026-10-18:a0e90ae5ffeee5d2a0ad07749a74d4a3"
+        }
+      ],
+      "live_choice_summary": {
+        "requested_count": 1,
+        "ignored_other_day_count": 0,
+        "remove_requested": false,
+        "honored_count": 1,
+        "unhonored": []
+      }
+    },
+    {
+      "label": "undo-confirmed-keep",
+      "date": "2026-10-18",
+      "context_time": "2026-10-17T11:00:00",
+      "inputs": {
+        "selected": [
+          "culture",
+          "views"
+        ],
+        "preferencePriority": null,
+        "walkKey": "full",
+        "dateIso": null,
+        "dayOffset": 1
+      },
+      "stops": [
+        {
+          "id": "culture-0",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-0.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-0.example/"
+        },
+        {
+          "id": "views-0",
+          "type": "viewpoint",
+          "is_live_event": false,
+          "website": "https://views-0.example/"
+        },
+        {
+          "id": "views-1",
+          "type": "viewpoint",
+          "is_live_event": false,
+          "website": "https://views-1.example/"
+        },
+        {
+          "id": "culture-1",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-1.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-1.example/"
+        },
+        {
+          "id": "culture-2",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-2.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-2.example/"
+        },
+        {
+          "id": "culture-5",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-5.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-5.example/"
+        },
+        {
+          "id": "live-event-feedback-concert",
+          "type": null,
+          "is_live_event": true,
+          "live_occurrence_id": "live:2026-10-18:a0e90ae5ffeee5d2a0ad07749a74d4a3"
+        }
+      ],
+      "live_choice_summary": null
+    },
+    {
+      "label": "reload-kept-with-dated-hours",
+      "date": "2026-10-18",
+      "context_time": "2026-10-17T11:00:00",
+      "inputs": {
+        "selected": [
+          "culture",
+          "views"
+        ],
+        "preferencePriority": null,
+        "walkKey": "full",
+        "dateIso": null,
+        "dayOffset": 1
+      },
+      "stops": [
+        {
+          "id": "culture-0",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-0.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-0.example/"
+        },
+        {
+          "id": "views-0",
+          "type": "viewpoint",
+          "is_live_event": false,
+          "website": "https://views-0.example/"
+        },
+        {
+          "id": "views-1",
+          "type": "viewpoint",
+          "is_live_event": false,
+          "website": "https://views-1.example/"
+        },
+        {
+          "id": "culture-1",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-1.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-1.example/"
+        },
+        {
+          "id": "culture-5",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-5.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-5.example/"
+        },
+        {
+          "id": "live-event-feedback-concert",
+          "type": null,
+          "is_live_event": true,
+          "live_occurrence_id": "live:2026-10-18:a0e90ae5ffeee5d2a0ad07749a74d4a3"
+        }
+      ],
+      "live_choice_summary": {
+        "requested_count": 1,
+        "ignored_other_day_count": 0,
+        "remove_requested": false,
+        "honored_count": 1,
+        "unhonored": []
+      }
+    },
+    {
+      "label": "released-with-dated-hours",
+      "date": "2026-10-18",
+      "context_time": "2026-10-17T11:00:00",
+      "inputs": {
+        "selected": [
+          "culture",
+          "views"
+        ],
+        "preferencePriority": null,
+        "walkKey": "full",
+        "dateIso": null,
+        "dayOffset": 1
+      },
+      "stops": [
+        {
+          "id": "culture-0",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-0.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-0.example/"
+        },
+        {
+          "id": "views-0",
+          "type": "viewpoint",
+          "is_live_event": false,
+          "website": "https://views-0.example/"
+        },
+        {
+          "id": "views-1",
+          "type": "viewpoint",
+          "is_live_event": false,
+          "website": "https://views-1.example/"
+        },
+        {
+          "id": "culture-1",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-1.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-1.example/"
+        },
+        {
+          "id": "culture-2",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-2.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-2.example/"
+        },
+        {
+          "id": "culture-5",
+          "type": "museum",
+          "is_live_event": false,
+          "selected_day_hours": {
+            "status": "known",
+            "all_day": false,
+            "windows": [
+              {
+                "opens": "10:00",
+                "closes": "23:00"
+              }
+            ],
+            "date": "2026-10-18",
+            "timezone": "Europe/Helsinki",
+            "source_url": "https://culture-5.example/",
+            "observed_at": "2026-10-17T08:00:00.000Z"
+          },
+          "website": "https://culture-5.example/"
+        },
+        {
+          "id": "live-event-feedback-concert",
+          "type": null,
+          "is_live_event": true,
+          "live_occurrence_id": "live:2026-10-18:a0e90ae5ffeee5d2a0ad07749a74d4a3"
+        }
+      ],
+      "live_choice_summary": null
+    }
+  ]
+}
