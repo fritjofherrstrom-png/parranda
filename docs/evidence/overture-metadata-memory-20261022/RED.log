@@ -1,0 +1,44 @@
+✖ official 512-row-group footer can prefetch inside the existing 64MiB child heap (978.8345ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1053.10175
+
+✖ failing tests:
+
+test at tests/overture-large-metadata.test.js:8:1
+✖ official 512-row-group footer can prefetch inside the existing 64MiB child heap (978.8345ms)
+  AssertionError [ERR_ASSERTION]: metadata child failed (SIGABRT): 
+  <--- Last few GCs --->
+  
+  [50910:0x793940c000]      669 ms: Mark-Compact 67.7 (101.2) -> 48.6 (178.2) MB, pooled: 0 MB, 26.25 / 0.00 ms  (average mu = 0.907, current mu = 0.779) allocation failure; scavenge might not succeed
+  [50910:0x793940c000]      774 ms: Mark-Compact 112.8 (178.7) -> 67.5 (197.2) MB, pooled: 0 MB, 34.25 / 0.04 ms  (average mu = 0.814, current mu = 0.674) allocation failure; scavenge might not succeed
+  
+  FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory
+  ----- Native stack trace -----
+  
+   1: 0x102885aec node::OOMErrorHandler(char const*, v8::OOMDetails const&) [/Users/fritjof/.local/node-v24.15.0/bin/node]
+   2: 0x102ad8314 v8::internal::V8::FatalProcessOutOfMemory(v8::internal::Isolate*, char const*, v8::OOMDetails const&) [/Users/fritjof/.local/node-v24.15.0/bin/node]
+   3: 0x102d37700 v8::internal::Heap::stack() [/Users/fritjof/.local/node-v24.15.0/bin/node]
+   4: 0x102d355e8 v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags) [/Users/fritjof/.local/node-v24.15.0/bin/node]
+   5: 0x102d2a110 v8::internal::HeapAllocator::AllocateRawWithRetryOrFailSlowPath(int, v8::internal::AllocationType, v8::internal::AllocationOrigin, v8::internal::AllocationAlignment) [/Users/fritjof/.local/node-v24.15.0/bin/node]
+   6: 0x102d0b478 v8::internal::Factory::AllocateRawWithAllocationSite(v8::internal::DirectHandle<v8::internal::Map>, v8::internal::AllocationType, v8::internal::Direct
+  
+  null !== 0
+  
+      at TestContext.<anonymous> (/Users/fritjof/Developer/parranda-branches/codex-pr617-review-fixes-20261017/tests/overture-large-metadata.test.js:10:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.start (node:internal/test_runner/test:1096:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

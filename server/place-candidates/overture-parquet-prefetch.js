@@ -12,6 +12,16 @@ const MAX_PHYSICAL_BYTES = 32 * 1024 * 1024;
 const MAX_FOOTER_BYTES = 8 * 1024 * 1024;
 const PROJECTED = new Set(['id', 'confidence', 'operating_status', 'websites', 'sources']);
 const LEAVES = new Set(['names.primary', 'taxonomy.primary', 'taxonomy.hierarchy', 'brand.names.primary', 'bbox.xmin', 'bbox.ymin']);
+// Materialize only range-planning fields in the bounded JS child. A release
+// can have tens of thousands of metadata rows: SELECT * duplicates unrelated
+// statistics/schema fields into JS and exhausts the child's 64MiB heap.
+const METADATA_COLUMNS = `row_group_id, row_group_num_rows, column_id, path_in_schema,
+  CASE WHEN path_in_schema IN ('bbox, xmin', 'bbox, ymin') THEN stats_min_value END AS stats_min_value,
+  CASE WHEN path_in_schema IN ('bbox, xmin', 'bbox, ymin') THEN stats_max_value END AS stats_max_value,
+  dictionary_page_offset, index_page_offset, data_page_offset, total_compressed_size,
+  bloom_filter_offset, bloom_filter_length`;
+const METADATA_PATHS = [...PROJECTED, ...LEAVES].map(value => value.replaceAll('.', ', '));
+const METADATA_FILTER = METADATA_PATHS.map(value => `(path_in_schema = '${value}' OR starts_with(path_in_schema, '${value}, '))`).join(' OR ');
 
 function assetUrl(value) {
   if (typeof value !== 'string' || !ASSET.test(value)) throw new Error('invalid_overture_asset');
@@ -138,7 +148,11 @@ function varint(value) {
 // This makes optimizer pruning order irrelevant, including decimal cast paths.
 function pruneFooter(footer, selected, rowCount) {
   let offset = 0, operations = 0;
-  const ensure = size => { if (++operations > 2000000 || size < 0 || offset + size > footer.length) throw new Error('invalid_overture_footer'); };
+  // Every byte read advances the cursor; a zero-length binary adds at most
+  // one extra check after its length byte. Keep work linear in the already
+  // byte-capped footer rather than rejecting a valid >2M-operation footer.
+  const maxOperations = Math.max(2000000, footer.length * 2 + 1);
+  const ensure = size => { if (++operations > maxOperations || size < 0 || offset + size > footer.length) throw new Error('invalid_overture_footer'); };
   const byte = () => { ensure(1); return footer[offset++]; };
   const readVarint = () => {
     let result = 0n, shift = 0n;
@@ -247,7 +261,7 @@ async function prefetchOvertureParquet({ conn, paths, window, tempDir, fetcher =
       if (header.toString('ascii') !== 'PAR1') throw new Error('invalid_overture_parquet');
       fs.writeSync(fd, header, 0, header.length, 0); fs.writeSync(fd, footer, 0, footer.length, footerStart); fs.writeSync(fd, tail, 0, tail.length, identity.length - 8); checkBudget();
       const escaped = file.replace(/'/g, "''");
-      const metadata = (await conn.runAndReadAll(`SELECT * FROM parquet_metadata('${escaped}')`)).getRowObjectsJson();
+      const metadata = (await conn.runAndReadAll(`SELECT ${METADATA_COLUMNS} FROM parquet_metadata('${escaped}') WHERE ${METADATA_FILTER}`)).getRowObjectsJson();
       const { groups, selected } = overlappingGroups(metadata, window);
       let localFooter = footer, projectedMetadata = metadata;
       if (selected.size !== groups.size) {
