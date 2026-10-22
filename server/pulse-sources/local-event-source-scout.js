@@ -961,6 +961,7 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
     id: candidate.id,
     label: candidate.source_label,
     endpoint: candidate.url,
+    host_venue: hostVenueForInterface(seed, candidate.url),
     adapter,
     format:
       adapter === "schema_org_html"
@@ -1840,6 +1841,23 @@ function safeHttpStatus(value) {
 }
 
 const siteHost = hostname => String(hostname || "").toLowerCase().replace(/^www\./, "");
+
+// The venue whose own website an interface belongs to: a Wikidata venue seed
+// with a name and a coordinate, on the same site. Its events may later be
+// placed there on evidence (host-venue-geometry.js); it is no event fact.
+function hostVenueForInterface(seed, endpoint) {
+  const lat = Number(seed?.lat);
+  const lng = Number(seed?.lng);
+  const name = firstString(seed?.label);
+  if (!/^Q\d+$/.test(String(seed?.wikidata_ref || "")) || !name || !Number.isFinite(lat) || !Number.isFinite(lng)) return undefined;
+  try {
+    if (siteHost(new URL(endpoint).hostname) !== siteHost(new URL(seed.listed_url || seed.url).hostname) &&
+        siteHost(new URL(endpoint).hostname) !== siteHost(new URL(seed.url).hostname)) return undefined;
+  } catch (_error) {
+    return undefined;
+  }
+  return { name: name.slice(0, 160), lat, lng, wikidata_ref: seed.wikidata_ref };
+}
 
 // The canonical origin of a listed website: up to three redirects of its
 // /robots.txt that stay on the same site (the host, with or without "www."),

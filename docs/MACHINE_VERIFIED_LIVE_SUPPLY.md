@@ -65,6 +65,19 @@ hour-long verified empty. The lane is on wherever the source search is
 configured; `PARRANDA_EVENT_VENUE_SEEDS=enabled` turns it on without a
 search, `disabled` turns it off.
 
+**Host venue.** An interface found on the venue's own site (same host as the
+venue seed) carries that venue (Wikidata name, coordinate and item) as its
+`host_venue`. An event from it without coordinates gets the host venue's point
+only on evidence: the place it names is the host venue (its distinctive name,
+without articles, bare kinds of place or the town), or it names no place and
+nothing else in the same source points elsewhere (no event names another
+place and no located event lies more than 300 m from the host). A site that
+lists several venues therefore proves nothing for its unnamed rows, which
+keep the ordinary venue resolution. Existing coordinates are never replaced.
+The event keeps `venue_resolution: { source: "host_venue", basis:
+"host_venue_name" | "host_venue_programme", provider: "wikidata", ref }` with
+CC0 attribution, and the ordinary radius gate still applies.
+
 **Canonical websites.** A listed website often names an older origin
 (`http://`, with or without `www.`) that redirects to the canonical one. The
 scout follows only that: up to three redirects of `/robots.txt` that stay on

@@ -4,6 +4,7 @@ const {
   collectAnchorEvents,
   normalizeLocalEventAdapter,
 } = require("../place-candidates/agnostic-event-supply");
+const { validHostVenue } = require("../place-candidates/host-venue-geometry");
 
 const QUALIFICATION_SCHEMA_VERSION = 1;
 const MAX_PROBES_PER_RUN = 2;
@@ -142,6 +143,7 @@ function bindManifestCandidate(manifest, candidate, { qualifiedRuntime = false }
     format: publicString(manifest.format),
     license: safeHttpsUrl(manifest.license),
     bbox,
+    hostVenue: validHostVenue(manifest.host_venue),
   };
 }
 
@@ -425,6 +427,7 @@ function sourceRowForBinding(binding) {
     terms_status: binding.termsStatus,
     robots_status: binding.robotsStatus,
     source_scoped_pulse: bindingAllowsSourceScopedPulse(binding),
+    host_venue: binding.hostVenue || undefined,
   });
 }
 

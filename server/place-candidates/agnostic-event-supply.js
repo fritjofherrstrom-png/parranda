@@ -67,6 +67,7 @@ const {
 } = require("./live-event-query");
 const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
 const { resolveEventVenueGeometry } = require("./event-venue-resolution");
+const { placeAtHostVenue } = require("./host-venue-geometry");
 const { spatialScopeCacheKey } = require("./spatial-scope");
 const {
   listedOccurrenceDates,
@@ -976,6 +977,7 @@ async function collectAnchorEvents({
   const normalizedEvidence = [];
   for (const collection of collectedSources) {
     const source = collection.source;
+    const sourceEvidence = [];
     for (const rawEvent of collection.raw) {
       const enriched = applyReviewedSourceTrust(rawEvent, source);
       const normalized = normalizeTimeSensitiveSourceEvent(enriched, {
@@ -991,8 +993,10 @@ async function collectAnchorEvents({
       if (reviewedVenue && Number.isFinite(normalized.lat) && Number.isFinite(normalized.lng)) {
         normalized.venue_resolution = reviewedVenue;
       }
-      normalizedEvidence.push(normalized);
+      sourceEvidence.push(normalized);
     }
+    // A source found on a venue's own website places its rows there on evidence.
+    normalizedEvidence.push(...placeAtHostVenue(sourceEvidence, source.host_venue, { placeContext }));
   }
 
   // Only rows that can appear in the requested Live period may use the
