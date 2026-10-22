@@ -1,0 +1,62 @@
+{
+  "outcome": "PASS_BUILT_UI_REAL_HTTP_REPLAY_OF_REAL_ACQUIRED_OVERTURE_RECORDS",
+  "release": "2026-10-21.0",
+  "rendered": [
+    "1Kungliga SlottetCastle",
+    "2Grillska HusetRestaurant",
+    "3Gallery HgGallery",
+    "4Jewish MuseumMuseum",
+    "5PaneFresco - Italiensk Restaurang & Caf\u00e9Restaurant"
+  ],
+  "receipts": [
+    {
+      "http": 200,
+      "blockers": [],
+      "source": {
+        "status": "loaded:80",
+        "external_candidates_requested": true,
+        "anchor": {
+          "lat": 59.3251172,
+          "lng": 18.0710935
+        },
+        "error": null
+      },
+      "walking": {
+        "valid": true,
+        "blockers": [],
+        "checks": {
+          "walking_source": "agnostic_compose"
+        }
+      },
+      "stops": [
+        {
+          "id": "overture-c4529856-cf5e-4c6f-b296-5833f2054a07",
+          "name": "Kungliga Slottet",
+          "type": "castle"
+        },
+        {
+          "id": "overture-0e5e5501-6910-4d1b-a41d-64c7ca293405",
+          "name": "Grillska Huset",
+          "type": "restaurant"
+        },
+        {
+          "id": "overture-10ec8b5e-f585-45ef-8229-3a414f96ae94",
+          "name": "Gallery Hg",
+          "type": "gallery"
+        },
+        {
+          "id": "overture-0095cf69-76cf-4add-bb9e-62512e2835f4",
+          "name": "Jewish Museum",
+          "type": "museum"
+        },
+        {
+          "id": "overture-197a39c0-ea88-4234-8bf5-58fd0025b32a",
+          "name": "PaneFresco - Italiensk Restaurang & Caf\u00e9",
+          "type": "restaurant"
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "boundaries": "Stockholm resolver replayed from actual public attestation; weather controlled; actual freshly acquired Overture records replayed through real source selection and HTTP/composer; no live HTTP/provider/browser coordinate claim"
+}

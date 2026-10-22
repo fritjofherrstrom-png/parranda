@@ -1,0 +1,14 @@
+{
+  "path": "s3://overturemaps-us-west-2/release/2026-10-21.0/theme=places/type=place/part-00011-472205f3-e3ff-5474-98a4-b9b3361f7306-c000.zstd.parquet",
+  "etag": "\"a77c4beb9d0e1f4873c8657c0f251b9e-11\"",
+  "length": 714390669,
+  "footer_sha256": "242894b6f0b8204735520175d39f8a6f5f664224f07157f1cb0ea16e7e16bf3c",
+  "footer_bytes": 3138758,
+  "window": {
+    "lat": 59.3251172,
+    "lng": 18.0710935,
+    "radiusKm": 5
+  },
+  "captured_at": "2026-10-22",
+  "boundary": "Actual official Parquet footer/strong object identity only. No place data pages. Synthetic zero data pages are used only by the offline metadata prefetch regression."
+}

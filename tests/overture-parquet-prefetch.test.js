@@ -25,7 +25,7 @@ async function fixture(t, { x = 'CASE WHEN i<2048 OR (i>=4096 AND i<6144) THEN 1
     0.99 AS confidence, CASE WHEN i%19=0 THEN 'closed' ELSE 'open' END AS operating_status,
     ['https://example.test/' || i] AS websites,
     {'names':{'primary':CASE WHEN i%7=0 THEN 'Chain' END}} AS brand,
-    [{'property':'name','dataset':'fixture','license':'CC0-1.0','record_id':i::VARCHAR,
+    [{'property':'name','dataset':'fixture','license':'CC0-1.0','record_id':repeat(md5(i::VARCHAR),4),
       'update_time':'2026-01-01','confidence':0.99,'between':[0.1,0.2],
       'provider':'fixture','resource':'fixture','version':'v1'}] AS sources,
     {'xmin':${x}, 'ymin':${y}} AS bbox,
@@ -185,4 +185,52 @@ test('physical block budget and cancellation stop prefetch without leaving parti
   const controller=new AbortController();let began=false;
   const cancelled=native.prefetchOvertureParquet({conn:f.conn,paths:[asset],window:{lat:40,lng:12,radiusKm:5},tempDir,signal:controller.signal,fetcher:async(_url,{signal})=>{began=true;return new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('cancelled')),{once:true}));}});
   controller.abort();await assert.rejects(cancelled);assert.ok(began);assert.deepEqual(fs.readdirSync(tempDir),[]);
+});
+
+// Coalescing is an optional transport optimization. It must not spend sparse
+// pages needed by another asset, or reject an exact original allocation.
+test('tight aggregate allocation keeps both original asset plans and their exact SQL results', async t => {
+  const f=await fixture(t),metadata=(await f.conn.runAndReadAll(`SELECT * FROM parquet_metadata('${f.file}')`)).getRowObjectsJson();
+  const footerLength=f.bytes.readUInt32LE(f.bytes.length-8),footerStart=f.bytes.length-8-footerLength;
+  const {projectSourcesLicense}=require('../server/place-candidates/overture-license-footer');
+  const projection=projectSourcesLicense(f.bytes.subarray(footerStart,f.bytes.length-8));
+  const required=native.selectOvertureChunkRanges(metadata.filter(row=>projection.keepLeaves[Number(row.column_id)]),{lat:40,lng:12,radiusKm:5},f.bytes.length);
+  const blocks=new Set();
+  for(const r of [{start:0,end:3},{start:footerStart,end:f.bytes.length-1},...required]){
+    for(let block=Math.floor(r.start/4096);block<=Math.floor(r.end/4096);block++)blocks.add(block);
+  }
+  const exact=blocks.size*4096,other=asset.replace('00001','00002'),tempDir=path.join(f.dir,'exact-two-assets');fs.mkdirSync(tempDir);
+  const result=await native.prefetchOvertureParquet({conn:f.conn,paths:[asset,other],window:{lat:40,lng:12,radiusKm:5},tempDir,fetcher:f.fetcher,maxPhysicalBytes:exact*2});
+  assert.equal(result.sourceAssets.length,2);
+  assert.equal(result.physicalBytes,exact*2,'transport cannot borrow the second asset reservation');
+  const sql=buildOvertureQuery({release:'2026-09-23.1',lat:40,lng:12,parquetPaths:[asset]});
+  const expected=(await f.conn.runAndReadAll(sql.replaceAll(`'${asset}'`,`'${f.file}'`))).getRowObjectsJson();
+  for(const source of [asset,other]){
+    const actual=(await f.conn.runAndReadAll(native.localizeOvertureSql(sql.replaceAll(asset,source),result.sqlPaths))).getRowObjectsJson();
+    assert.deepEqual(actual,expected);
+  }
+  assert.ok(f.maxActive()<=4,'all segmented transfers retain the concurrency cap');
+});
+
+test('one rejected metadata piece promptly cancels sibling reads and never starts queued pieces', async t => {
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'parranda-footer-cancel-'));
+  const identity=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/overture-dense-footer-20261021/identity.json')));
+  const footer=require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/overture-dense-footer-20261021/footer.bin.gz')));
+  const footerStart=identity.length-footer.length-8,tail=Buffer.alloc(8);tail.writeUInt32LE(footer.length);tail.write('PAR1',4);
+  const controller=new AbortController();let pending=0,aborted=0,settled=false,failure;
+  const operation=native.prefetchOvertureParquet({conn:{},paths:[identity.path],window:{lat:40,lng:12,radiusKm:5},tempDir:dir,signal:controller.signal,fetcher:async(_url,options)=>{
+    if(options.method==='HEAD')return new Response(null,{headers:{etag:identity.etag,'content-length':String(identity.length)}});
+    const [,a,b]=options.headers.Range.match(/bytes=(\d+)-(\d+)/),start=Number(a),end=Number(b);
+    if(start===footerStart)throw Error('fixture_footer_piece_failed');
+    if(start>footerStart&&start!==identity.length-8){pending++;return new Promise((_resolve,reject)=>options.signal.addEventListener('abort',()=>{aborted++;reject(Error('fixture_sibling_cancelled'));},{once:true}));}
+    const bytes=start===0?Buffer.from('PAR1'):tail;
+    return new Response(bytes,{status:206,headers:{etag:identity.etag,'content-range':`bytes ${start}-${end}/${identity.length}`,'content-length':String(end-start+1)}});
+  }}).then(()=>{settled=true},error=>{settled=true;failure=error});
+  t.after(async()=>{controller.abort();await operation;fs.rmSync(dir,{recursive:true,force:true});});
+  await new Promise(setImmediate);
+  assert.equal(settled,true,'metadata failure must not wait for other transfers to time out');
+  assert.match(failure.message,/fixture_footer_piece_failed/);
+  assert.equal(aborted,pending,'all in-flight siblings must be cancelled');
+  assert.ok(pending<=3,'queued metadata chunks must not start after failure');
+  assert.deepEqual(fs.readdirSync(dir),[]);
 });

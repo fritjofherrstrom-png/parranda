@@ -1,0 +1,2 @@
+{"interface": "eth0", "exit": 0, "http": 206, "bytes": 524288, "seconds": 1.751545, "speed_bps": 299328, "connect": 0.191428, "tls": 0.378135, "first_byte": 0.594382, "error": ""}
+{"interface": "wlan0", "exit": 0, "http": 206, "bytes": 524288, "seconds": 1.907295, "speed_bps": 274885, "connect": 0.183933, "tls": 0.382, "first_byte": 0.591924, "error": ""}

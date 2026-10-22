@@ -1,0 +1,22 @@
+✔ official 512-row-group footer can prefetch inside the existing 64MiB child heap (545.595375ms)
+✔ pinned sparse prefetch preserves actual stratified SQL output and overlaps range requests (320.951375ms)
+✔ native license projection preserves the complete ordered SQL result without transferring unused source fields (146.601792ms)
+▶ DOUBLE and dateline windows retain the exact ordered sample, including groups without usable spatial statistics
+  ✔ double (119.908291ms)
+  ✔ dateline (110.081583ms)
+  ✔ unknown (133.727833ms)
+✔ DOUBLE and dateline windows retain the exact ordered sample, including groups without usable spatial statistics (364.359667ms)
+✔ metadata selects both sides of a dateline window and keeps every overlapping group (0.353375ms)
+✔ legacy index pages are included at the exact chunk start used by the pinned DuckDB reader (0.124292ms)
+✔ identity verification rejects weak validators, noncanonical assets and invalid lengths (0.862167ms)
+✔ combined sparse allocation is refused before projected chunks are fetched across assets (97.095584ms)
+✔ changed source, whole-body response, wrong range, truncation and oversized body fail closed (28.532042ms)
+✔ physical block budget and cancellation stop prefetch without leaving partial source files (32.59575ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1180.766416

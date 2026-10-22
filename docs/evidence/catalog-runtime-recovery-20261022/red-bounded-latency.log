@@ -1,0 +1,38 @@
+✖ dense catalogue transfer fits the unchanged45s bound under controlled latency (803.583333ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 912.230334
+
+✖ failing tests:
+
+test at tests/overture-large-metadata.test.js:48:1
+✖ dense catalogue transfer fits the unchanged45s bound under controlled latency (803.583333ms)
+  AssertionError [ERR_ASSERTION]: bounded latency model failed: Error: overture_cancelled
+      at abortCheck (<repo>/server/place-candidates/overture-parquet-prefetch.js:42:58)
+      at fetchRange (<repo>/server/place-candidates/overture-parquet-prefetch.js:225:9)
+      at async <repo>/server/place-candidates/overture-parquet-prefetch.js:343:23
+      at async <repo>/server/place-candidates/overture-parquet-prefetch.js:71:30
+      at async Promise.allSettled (index 3)
+      at async parallel (<repo>/server/place-candidates/overture-parquet-prefetch.js:68:3)
+      at async prefetchOvertureParquet (<repo>/server/place-candidates/overture-parquet-prefetch.js:341:5)
+  
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (<repo>/tests/overture-large-metadata.test.js:50:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.start (node:internal/test_runner/test:1096:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
