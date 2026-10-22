@@ -19,6 +19,7 @@ test.before(async () => {
 });
 test.after(async () => { await browser?.close(); });
 
+const NOW = '2026-10-21T08:00:00Z';
 const interests = [
   ['second_hand', 'vintage-shop', 'shop', 'second_hand'],
   ['fika', 'cafe', 'amenity', 'cafe'],
@@ -49,7 +50,10 @@ for (const [intent, type] of interests) {
       eventSupply: null, sourceCatalog: null, reviewedPlaceSource: null,
       weatherProvider: async () => ({ condition: 'sun', source: 'controlled', stale: false,
         timezone_resolution: { timezone: 'Europe/Stockholm', timezone_source: 'weather_provider_auto', utc_offset_seconds: 7200 } }),
-      clock: { now: () => '2026-10-21T08:00:00Z' },
+      // The composer reads the clock as a function; an object with only now()
+      // fell back to the wall clock, and after 22:00 Stockholm on 22 Oct every
+      // fixture place (09:00-22:00) had closed (same fix as #623).
+      clock: Object.assign(() => new Date(NOW), { now: () => NOW }),
     });
     const server = app.listen(0, '127.0.0.1'); await once(server, 'listening');
     t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
@@ -63,7 +67,7 @@ for (const [intent, type] of interests) {
         constructor(...args) { super(...(args.length ? args : [epoch])); }
         static now() { return epoch; }
       };
-    }, new Date('2026-10-21T08:00:00Z').getTime());
+    }, new Date(NOW).getTime());
     const page = await context.newPage(), requests = [], errors = [], observations = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('request', request => {
@@ -94,6 +98,8 @@ for (const [intent, type] of interests) {
       const body = await (await result).json(), route = body.days[0].primary_route;
       const stops = route.main_stops, experiment = body.agnostic_route_output_experiment;
       assert.equal(experiment.intake.status, 'resolved');
+      assert.equal(experiment.context?.time?.now?.slice(0, 10), '2026-10-21',
+        'the published composition must use the controlled clock, not the wall date');
       assert.equal(experiment.walking_validation.valid, true, 'published route must pass actual walking validation');
       assert.ok(stops.every(stop => stop.type === type), 'only the selected interest supplies the automatic day');
       assert.ok(stops.every(stop => !String(stop.label || stop.name).endsWith(' 8')), 'known closed supply must stay excluded');
