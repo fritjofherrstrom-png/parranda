@@ -49,7 +49,9 @@ for (const [intent, type] of interests) {
       eventSupply: null, sourceCatalog: null, reviewedPlaceSource: null,
       weatherProvider: async () => ({ condition: 'sun', source: 'controlled', stale: false,
         timezone_resolution: { timezone: 'Europe/Stockholm', timezone_source: 'weather_provider_auto', utc_offset_seconds: 7200 } }),
-      clock: { now: () => '2026-10-21T08:00:00Z' },
+      // Composition consumes a callable clock. An object silently falls back
+      // to wall time, eventually making the fixed selected date a past day.
+      clock: () => new Date('2026-10-21T08:00:00Z'),
     });
     const server = app.listen(0, '127.0.0.1'); await once(server, 'listening');
     t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });

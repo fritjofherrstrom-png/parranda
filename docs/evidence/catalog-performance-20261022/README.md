@@ -74,7 +74,27 @@ read-only final-diff review: no remaining actionable findings; its native and
 large-metadata rerun: 24 PASS, 0 FAIL, 0 SKIP. Exact final commit and full-suite
 results belong in the delivery report; they are not inferred from these runs.
 
-Next bounded performance question, outside this implementation: would one
-coordinate-only read eliminate enough remaining boundary groups to repay the
-extra transfer phase? No parallel implementation or provider retry loop is
-introduced here. PR634's detached warming behavior is not integrated.
+## One bounded coordinate probe: do not add a prepass
+
+The approved one-shot probe read only coordinates for the remaining boundary
+groups of the same pinned October asset: 1 strong HEAD, 66 verified If-Match/206
+GETs, 2,053,369 bytes, four workers, 17.1s, no retry. Actual DuckDB decoded and
+attributed 365,193 rows. Every boundary group has a point inside the unchanged
+SQL circle/rectangle: London 0/16 empty; Paris 0/17 empty. Thus zero further
+non-coordinate chunk bytes could be omitted by an empty-coordinate-group phase.
+That phase is not implemented. This proves coordinate distribution only, not
+usable venue supply, day delivery, hours or a Pi latency improvement.
+
+## Full-suite clock defect, separate from performance
+
+The first full run found three selected-hours assertions failing in
+`product-integration-browser.test.js`. All three reproduce on an untouched
+snapshot of base main with the same browser and wall clock. The fixture passes
+an object clock where composition consumes a callable clock, so it falls back
+to wall time; once October22 is past, selected-day hours are omitted. The test
+now supplies a callable Date clock, aligned with its browser date. All original
+hours, closed-place, trust, walking and 4/5/6 assertions remain and pass.
+This test-only correction is a separate commit; product code is unchanged.
+
+No parallel implementation or provider retry loop is introduced. PR634's
+detached warming behavior is not integrated.
