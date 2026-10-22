@@ -1,5 +1,18 @@
 # Parranda — gemensam arbetshistorik
 
+## Aktuell Live-kostnadsgräns — 2026-10-12
+
+- Fritjof: inga nya betal-API:er, betald sökning eller modelläsaranrop nu.
+  Målet är att motorn hittar aktuella källbelagda evenemang med befintlig egen
+  SearXNG, kostnadsfria källor och deterministisk parsning.
+- Codex rättar webbprocessens sökkonfiguration och platsuppslagens fördelning
+  i befintlig draft #593; ingen ny PR-stack, merge eller Pi-deploy ingår.
+- `PARRANDA_EVENT_READER=disabled` gäller detta runtime-prov. Aktivera inte
+  betalläsaren som fallback. Äldre text om en möjlig billig modell är inte
+  godkännande att använda den i detta arbete.
+- GitHub main/PR-head och CI är auktoritativa; äldre MVP-snapshots nedan är
+  historiska och fastställer inte den aktuella runtime-versionen.
+
 ## Aktuellt uppdrag
 
 - 2026-10-08: Fritjof bad att läsa senaste repo/staging bf91fa9 och starta

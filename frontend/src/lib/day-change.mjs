@@ -13,8 +13,8 @@
  */
 
 import { walkingDistanceLabel } from "./route-context-view.mjs";
+import { liveStopChoiceId } from "./live-stop-choice.mjs";
 
-const NAMED_STOPS = 2;
 
 function primaryRoute(entry) {
   return entry?.safeResponse?.days?.[0]?.primary_route ?? null;
@@ -25,9 +25,11 @@ function routeStops(entry) {
   return Array.isArray(stops) ? stops.filter((stop) => stop && typeof stop === "object") : [];
 }
 
-// A stop is the same stop when the engine gave it the same id. Only a stop the
-// payload carries no id for is matched by its visible name.
+// Live visits use the source-issued occurrence, since one series can have
+// multiple starts. Ordinary places and legacy stops retain their place id.
 function stopIdentity(stop) {
+  const occurrence = stop.is_live_event === true && liveStopChoiceId(stop);
+  if (occurrence) return `occurrence:${occurrence}`;
   const id = stop.id ?? stop.candidate_id ?? stop.place_id ?? null;
   if (id !== null && String(id).trim()) return `id:${String(id).trim()}`;
   const name = stopName(stop).toLowerCase();
@@ -65,7 +67,8 @@ export function describeDayChange(previous, next, { cause = null } = {}) {
   const before = byIdentity(beforeStops);
   const after = byIdentity(afterStops);
 
-  const added = [...after].filter(([key]) => !before.has(key)).map(([, stop]) => stopName(stop)).filter(Boolean);
+  const addedStops = [...after].filter(([key]) => !before.has(key)).map(([, stop]) => stop);
+  const added = addedStops.map(stopName).filter(Boolean);
   const removed = [...before].filter(([key]) => !after.has(key)).map(([, stop]) => stopName(stop)).filter(Boolean);
   const keptKeys = [...after.keys()].filter((key) => before.has(key));
   const sameSet = added.length === 0 && removed.length === 0 && before.size === after.size;
@@ -107,16 +110,10 @@ export function describeDayChange(previous, next, { cause = null } = {}) {
     km,
     hasRoute: afterStops.length > 0,
     routeChanged: !sameSet || reordered || kmChanged,
-    // What moved the day when the user did not: a server-applied Live upgrade.
-    cause: cause === "live" ? "live" : null,
+    // A real Live occurrence may arrive in an ordinary adjustment or a separate
+    // completion. Compare the published identities, not the response lane.
+    cause: cause === "live" || addedStops.some((stop) => stop.is_live_event === true && liveStopChoiceId(stop)) ? "live" : null,
   };
-}
-
-function names(list, lang) {
-  const shown = list.slice(0, NAMED_STOPS).join(", ");
-  const rest = list.length - NAMED_STOPS;
-  if (rest <= 0) return shown;
-  return lang === "sv" ? `${shown} och ${rest} till` : `${shown} and ${rest} more`;
 }
 
 /**
@@ -150,14 +147,15 @@ export function dayChangeSegments(change, { lang = "en", walkLabel = (key) => ke
     segments.push(sv ? "samma stopp och sträcka" : "same stops and distance");
     return segments;
   }
+  // One short line: counts, not names. The new stops are listed in the day
+  // right below, and five wrapped lines of names made the card bulky.
+  const count = (n) => `${n} ${sv ? "stopp" : n === 1 ? "stop" : "stops"}`;
+  const swapped = Math.min(stops.added.length, stops.removed.length);
+  if (swapped) segments.push(sv ? `${count(swapped)} ${swapped === 1 ? "bytt" : "bytta"}` : `${count(swapped)} swapped`);
+  if (stops.added.length > swapped) segments.push(`+${count(stops.added.length - swapped)}`);
+  if (stops.removed.length > swapped) segments.push(`−${count(stops.removed.length - swapped)}`);
   if (km && Math.round(km.before * 10) !== Math.round(km.after * 10)) {
-    segments.push(`${walkingDistanceLabel(km.before, lang)} → ${walkingDistanceLabel(km.after, lang)}`);
-  }
-  if (stops.added.length) {
-    segments.push(`+${stops.added.length} ${sv ? "stopp" : stops.added.length === 1 ? "stop" : "stops"}: ${names(stops.added, lang)}`);
-  }
-  if (stops.removed.length) {
-    segments.push(`−${stops.removed.length}: ${names(stops.removed, lang)}`);
+    segments.push(`${walkingDistanceLabel(km.before, lang).replace(/ km$/, "")} → ${walkingDistanceLabel(km.after, lang)}`);
   }
   if (stops.reordered) segments.push(sv ? "samma stopp i ny ordning" : "same stops, new order");
   return segments;

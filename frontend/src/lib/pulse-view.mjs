@@ -44,23 +44,51 @@ export function wovenEventIds(stops) {
  */
 export function pulseEventBuckets(liveEvents, wovenIds) {
   const exclude = wovenIds instanceof Set ? wovenIds : new Set();
-  const keep = (list) =>
-    (Array.isArray(list) ? list : []).filter((ev) => ev && !(ev.id != null && exclude.has(String(ev.id))));
   return {
-    tonight: keep(liveEvents && liveEvents.tonight),
-    thisWeek: keep(liveEvents && liveEvents.this_week),
+    tonight: excludeWovenEvents(liveEvents && liveEvents.tonight, exclude),
+    thisWeek: excludeWovenEvents(liveEvents && liveEvents.this_week, exclude),
   };
 }
 
 /** Remaining accepted events after the six highlighted rows in each bucket. */
 export function pulseBrowseBuckets(liveEvents, wovenIds) {
   const exclude = wovenIds instanceof Set ? wovenIds : new Set();
-  const keep = (list) =>
-    (Array.isArray(list) ? list : []).filter((ev) => ev && !(ev.id != null && exclude.has(String(ev.id))));
   return {
-    tonight: keep(liveEvents?.browse?.tonight?.more),
-    thisWeek: keep(liveEvents?.browse?.this_week?.more),
+    tonight: excludeWovenEvents(liveEvents?.browse?.tonight?.more, exclude),
+    thisWeek: excludeWovenEvents(liveEvents?.browse?.this_week?.more, exclude),
   };
+}
+
+function excludeWovenEvents(list, exclude) {
+  const kept = [];
+  const isWoven = event => event?.id != null && exclude.has(String(event.id));
+  for (const event of Array.isArray(list) ? list : []) {
+    if (!event) continue;
+    const slots = event.occurrences;
+    if (!Array.isArray(slots) || !slots.length) {
+      if (!isWoven(event)) kept.push(event);
+      continue;
+    }
+    // A group represents distinct source occurrences. The route owns only its
+    // exact woven members; the rest keep their original facts and choice ids.
+    const remaining = slots.filter(slot => slot && !isWoven(slot));
+    if (!remaining.length) continue;
+    if (remaining.length === slots.length) {
+      kept.push(event);
+      continue;
+    }
+    // Keep even a one-member container so the parent cannot duplicate its
+    // occurrence action. Never lend the old representative's optional facts.
+    const group = { ...remaining[0], occurrences: remaining };
+    // Group-level display fit is assigned by the server after source-series
+    // grouping, so individual slots need not carry it.
+    for (const key of ["display_group_kind", "source_series_id", "highlight_reason", "preference_match", "preference_score",
+      "requested_preferences", "matched_preferences", "partial_preferences", "missing_preferences", "preference_reasons"]) {
+      if (Object.hasOwn(event, key)) group[key] = event[key];
+    }
+    kept.push(group);
+  }
+  return kept;
 }
 
 // Server intents in the Planner's chip vocabulary (the same aliases route
@@ -213,9 +241,17 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
       Boolean(venueNow && date === venueNow.date && win.local_start && win.local_end &&
         win.local_end > win.local_start && venueNow.clock >= win.local_end);
     const dates = listedDates(win.dates);
-    const next = dates.find((date) => (!reference || date >= reference) && !endedToday(date));
+    const next = dates.find((date) => (!reference || date >= reference) && (selectedDate || !endedToday(date)));
     const label = next ? day(next) : null;
     if (!label) return "";
+    if (next === venueNow?.date && (!selectedDate || selectedDate === venueNow.date) &&
+        win.local_start && win.local_end && win.local_end > win.local_start &&
+        venueNow.clock >= (win.local_start.length === 5 ? win.local_start + ":00" : win.local_start) && venueNow.clock < (win.local_end.length === 5 ? win.local_end + ":00" : win.local_end)) {
+      const onNow = ev.recurrence?.occurrence_status === "unconfirmed"
+        ? en ? "scheduled now" : "enligt schema nu"
+        : en ? "on now" : "pågår nu";
+      return `${onNow} · ${en ? "until" : "till"} ${win.local_end}`;
+    }
     return clockRange ? `${label} ${clockRange}` : label;
   }
 
@@ -247,9 +283,9 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
     const endsOn = (win && win.ends_on) || ev.ends_on || startsOn;
     const start = startsOn ? day(startsOn) : null;
     if (!start) return "";
-    if (!endsOn || endsOn === startsOn) return start;
-    const end = day(endsOn);
-    return end ? `${start} – ${end}` : start;
+    const end = endsOn && endsOn !== startsOn ? day(endsOn) : null;
+    const dateLabel = end ? `${start} – ${end}` : start;
+    return kind === "all_day" && win?.all_day_explicit === true ? `${dateLabel} · ${en ? "All day" : "Hela dagen"}` : dateLabel;
   }
 
   const startsAt = (win && win.starts_at) || ev.starts_at || null;
@@ -257,6 +293,18 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
   const date = new Date(startsAt);
   if (Number.isNaN(date.getTime())) return "";
   const timezone = ev.timezone || win?.timezone || null;
+  // One way to write a moment: the same "weekday day month" as date-only rows,
+  // then the clock, venue-local. A clock with a weekday but no date read as a
+  // different kind of fact next to dated rows ("Fri 19:00" beside "Fri 16 Oct").
+  const zone = timezone ? { timeZone: timezone } : {};
+  const dateOf = (d) => d.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short", ...zone });
+  const clockOf = (d) => d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", ...(d.getUTCSeconds() ? { second: "2-digit" } : {}), ...zone });
+  const range = (start, end) => {
+    if (!end) return `${dateOf(start)} ${clockOf(start)}`;
+    return dateOf(start) === dateOf(end)
+      ? `${dateOf(start)} ${clockOf(start)}–${clockOf(end)}`
+      : `${dateOf(start)} ${clockOf(start)} – ${dateOf(end)} ${clockOf(end)}`;
+  };
 
   // ONGOING: a run that started earlier and has not ended yet. Its start
   // weekday is history — printing it under "tonight" claims the wrong day. Say
@@ -271,11 +319,7 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
   if (selectedDate && timezone && nowValid) {
     try {
       const today = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(nowDate);
-      if (selectedDate !== today) {
-        const opts = { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: timezone };
-        const startLabel = date.toLocaleString(locale, opts);
-        return endValid ? `${startLabel} – ${endsAt.toLocaleString(locale, opts)}` : startLabel;
-      }
+      if (selectedDate !== today) return range(date, endValid ? endsAt : null);
     } catch {
       return ""; // no viewer-timezone substitution for an unresolvable venue date
     }
@@ -287,7 +331,7 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
       const sameDay =
         endsAt.toLocaleDateString(locale, dayOpts) === nowDate.toLocaleDateString(locale, dayOpts);
       if (!sameDay) return onNow;
-      const clockOpts = { hour: "2-digit", minute: "2-digit", ...(timezone ? { timeZone: timezone } : {}) };
+      const clockOpts = { hour: "2-digit", minute: "2-digit", ...(endsAt.getUTCSeconds() ? { second: "2-digit" } : {}), ...(timezone ? { timeZone: timezone } : {}) };
       return `${onNow} · ${en ? "until" : "till"} ${endsAt.toLocaleTimeString(locale, clockOpts)}`;
     } catch {
       return onNow;
@@ -295,9 +339,8 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
   }
 
   try {
-    const opts = { weekday: "short", hour: "2-digit", minute: "2-digit" };
-    if (timezone) opts.timeZone = timezone; // venue-local, never the viewer's
-    return date.toLocaleString(locale, opts);
+    // Venue-local, never the viewer's.
+    return range(date, endValid && endsAt.getTime() > date.getTime() ? endsAt : null);
   } catch {
     return "";
   }
@@ -321,10 +364,10 @@ function venueLocalNow(nowDate, timezone) {
     const parts = Object.fromEntries(
       new Intl.DateTimeFormat("en-CA", {
         timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
-        hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+        hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
       }).formatToParts(nowDate).map((part) => [part.type, part.value]),
     );
-    return { date: `${parts.year}-${parts.month}-${parts.day}`, clock: `${parts.hour}:${parts.minute}` };
+    return { date: `${parts.year}-${parts.month}-${parts.day}`, clock: `${parts.hour}:${parts.minute}:${parts.second}` };
   } catch {
     return null;
   }

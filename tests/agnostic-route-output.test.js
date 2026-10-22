@@ -1397,12 +1397,14 @@ test(
 
 test(
   "api: real loader non-200 surfaces loader_error instead of genuine empty",
-  withServer(createOpenDataLoader({ fetcher: async () => ({ ok: false, status: 429 }) }), async (server) => {
+  // HTTP500 starts a short endpoint hold; the API's second pass must retain
+  // that failed-provider health rather than reinterpret it as genuine empty.
+  withServer(createOpenDataLoader({ fetcher: async () => ({ ok: false, status: 500 }) }), async (server) => {
     const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
     const exp = r.body.agnostic_route_output_experiment;
     assert.equal(exp.route_mutation, false);
     assert.equal(exp.source_status.status, "error_failed_closed");
-    assert.equal(exp.source_status.error, "http_non_200");
+    assert.equal(exp.source_status.error, "provider_unavailable");
     assert.ok(exp.readiness_blockers.includes("loader_error"));
     assert.equal(exp.readiness_blockers.includes("no_usable_trusted_records"), false);
     assert.equal(exp.readiness_calibration.status, "blocked");
@@ -2023,7 +2025,15 @@ test("engine compose anchors a today route before geometry and exposes the share
     assert.equal(route.current_local_time_band, "midday");
     assert.equal(route.anchored_to_local_time, true);
     assert.ok(route.trimmed_dayparts.includes("morning"));
-    assert.equal(route.daypart_arc[0], "midday");
+    assert.equal(route.agnostic_daypart_ordering.reason, 'balanced_day_rhythm');
+    assert.equal(route.agnostic_daypart_ordering.fallback, true);
+    assert.deepEqual(route.daypart_arc, [], 'interleaved meal/visit roles must not publish a backwards time arc');
+    assert.ok(route.main_stops.every(stop => !String(stop.id).startsWith('cafe-')),
+      'the source-owned morning candidates were trimmed before geometry');
+    assert.ok(route.main_stops.every(stop => !stop.daypart), 'no per-stop label contradicts the withheld arc');
+    assert.deepEqual(route.map_route_points.filter(point => ['first-stop', 'stop'].includes(point.role)).map(point => point.label),
+      route.main_stops.map(stop => stop.label), 'geometry describes the actual balanced stop chain');
+    assert.equal(route.legs.length, route.map_route_points.length - 1);
     assert.ok(route.caveats.includes("day_anchored_to_current_time"));
     assert.equal(route.caveats.includes("daypart_arc_precedes_local_time"), false);
   } finally {

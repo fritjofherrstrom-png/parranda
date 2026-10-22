@@ -138,7 +138,7 @@ test("Blitz view fails closed for malformed, unavailable and unrelated responses
 });
 
 test("product Blitz calls the trusted contract without re-composing or mutating the day", () => {
-  const body = plannerSource.match(/async function blitz\(\)[\s\S]*?\n  }\n\n  \/\/ An ANCHOR/)?.[0] || "";
+  const body = plannerSource.split("async function blitz(")[1]?.split("\n  async function sharePositionForBlitz")[0] || "";
 
   assert.match(body, /\/api\/blitz\?anywhere_blitz=1/);
   assert.match(body, /preferences: selected/);

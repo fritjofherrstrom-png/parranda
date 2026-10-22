@@ -8,6 +8,26 @@ const {
 
 const NOW = "2026-07-10T18:30:00.000Z";
 
+test("a split occurrence retains validated complete series timing and rejects incoherent provenance", () => {
+  const source = { id: "series@2026-10-13", title: "Workshop", source_url: "https://source.example/series",
+    starts_on: "2026-10-13", ends_on: "2026-10-13",
+    time_window: { kind: "occurrences", dates: ["2026-10-13"], local_start: "12:30", local_end: "15:30" },
+    source_series_time_window: { kind: "occurrences", dates: ["2026-10-01", "2026-10-13", "2026-11-01"], local_start: "12:30", local_end: "15:30" } };
+  const normalized = normalizeTimeSensitiveSourceEvent(source, { timezone: "Europe/Stockholm" });
+  assert.deepEqual(normalized.source_series_time_window.dates, source.source_series_time_window.dates);
+  assert.deepEqual(normalized.time_window.dates, ["2026-10-13"]);
+  for (const change of [
+    { dates: ["2026-10-01", "2026-11-01"] },
+    { dates: ["2026-02-30"] },
+    { dates: [] },
+    { kind: "period" },
+    { local_start: "14:00" },
+  ]) {
+    assert.equal(normalizeTimeSensitiveSourceEvent({ ...source,
+      source_series_time_window: { ...source.source_series_time_window, ...change } }, { timezone: "Europe/Stockholm" }), null);
+  }
+});
+
 function event(overrides = {}) {
   return {
     id: "night-market-1",
@@ -418,4 +438,23 @@ test("a declared but unknown recurrence kind never widens into a daily window", 
     time_window: { local_start: "18:00", local_end: "21:00" },
   }), { now: "2026-07-09T17:00:00.000Z", timezone: "Europe/Stockholm" });
   assert.equal(undeclared.time_window.kind, "daily");
+});
+
+test('normalization and public Live views distinguish date-only uncertainty from source-explicit whole-day timing',async()=>{
+ const {toEventView}=require('../server/place-candidates/agnostic-event-supply');
+ const {eventTiming}=await import('../frontend/src/lib/pulse-view.mjs');
+ const raw={id:'date-precision',title:'Dated source item',source_url:'https://calendar.example/dated',starts_on:'2026-10-22'};
+ const options={timezone:'Europe/Stockholm',now:'2026-10-15T12:00:00Z'};
+ for(const input of [raw,{...raw,time_window:{kind:'all_day',starts_on:'2026-10-22'}},{...raw,time_window:{kind:'all_day',starts_on:'2026-10-22',all_day_explicit:'true'}}]){
+  const normalized=normalizeTimeSensitiveSourceEvent(input,options);
+  const {fuseTimeSensitiveEvents}=require('../server/pulse-sources');
+  const view=toEventView(fuseTimeSensitiveEvents([normalized])[0],{id:'calendar',label:'Source'});
+  assert.equal(view.time_window.kind,'all_day');
+  assert.doesNotMatch(eventTiming(view,'en'),/All day/,'a missing clock never establishes whole-day availability');
+ }
+ const normalized=normalizeTimeSensitiveSourceEvent({...raw,time_window:{kind:'all_day',starts_on:'2026-10-22',all_day_explicit:true}},options);
+ const {fuseTimeSensitiveEvents}=require('../server/pulse-sources');
+  const view=toEventView(fuseTimeSensitiveEvents([normalized])[0],{id:'calendar',label:'Source'});
+ assert.equal(view.time_window.all_day_explicit,true);
+ assert.equal(eventTiming(view,'en'),'Thu 22 Oct · All day');
 });

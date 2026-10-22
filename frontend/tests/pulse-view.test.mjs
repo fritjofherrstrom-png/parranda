@@ -6,6 +6,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { selectableLiveOccurrenceId } from "../src/lib/live-stop-choice.mjs";
 import {
   splitRouteStops,
   wovenEventIds,
@@ -67,6 +68,90 @@ test("browse buckets preserve remaining accepted events and exclude woven occurr
   assert.deepEqual(buckets.tonight.map((event) => event.id), ["ev4"]);
   assert.deepEqual(buckets.thisWeek.map((event) => event.id), ["ev5"]);
   assert.equal(buckets.tonight[0].source_url, "https://x/ev4");
+});
+
+// Filtering a representative id instead of exact members either hides the
+// whole programme/series or repeats the woven slot inside its disclosure.
+for (const [bucketName, buckets, supply] of [
+  ["highlight", pulseEventBuckets, rows => ({ tonight: rows, this_week: rows })],
+  ["browse", pulseBrowseBuckets, rows => ({ browse: { tonight: { more: rows }, this_week: { more: rows } } })],
+]) for (const [groupName, metadata] of [
+  ["source programme", { display_group_kind: "source_program" }],
+  ["explicit source series", { source_series_id: "publisher-series" }],
+]) for (const wovenId of ["early", "late"]) {
+  test(`${bucketName} buckets exclude only the ${wovenId} woven member of a ${groupName}`, () => {
+    const early = Object.freeze({ id: "early", title: "Source programme", starts_at: "2026-10-15T08:00:00Z",
+      timezone: "Europe/Stockholm", source_url: "https://calendar.example/programme", source_occurrence_id: "provider-early",
+      live_choice_eligible: true, occurrence_date: "2026-10-15", live_occurrence_id: `live:2026-10-15:${"a".repeat(32)}` });
+    const late = Object.freeze({ id: "late", title: "Source programme", starts_at: "2026-10-15T12:00:00Z",
+      timezone: "Europe/Stockholm", source_url: "https://calendar.example/programme", source_occurrence_id: "provider-late",
+      live_choice_eligible: true, occurrence_date: "2026-10-15", live_occurrence_id: `live:2026-10-15:${"b".repeat(32)}` });
+    const group = Object.freeze({ ...early, ...metadata, highlight_reason: "local_serendipity",
+      preference_match: "strong", requested_preferences: ["museums"], matched_preferences: ["museums"],
+      partial_preferences: [], occurrences: Object.freeze([early, late]) });
+    const unrelated = Object.freeze({ id: "other", title: "Unrelated source event" });
+    const input = supply([group, unrelated]);
+    const filtered = buckets(input, wovenEventIds([{ ...WOVEN, event_id: wovenId }]));
+    const remaining = wovenId === "early" ? late : early;
+    for (const rows of [filtered.tonight, filtered.thisWeek]) {
+      assert.equal(rows.length, 2, "unwoven programme slots and unrelated events stay visible");
+      assert.strictEqual(rows[1], unrelated);
+      assert.equal(rows[0].id, remaining.id, "the representative is the first remaining source occurrence");
+      assert.equal(rows[0].starts_at, remaining.starts_at);
+      assert.equal(rows[0].source_occurrence_id, remaining.source_occurrence_id);
+      assert.equal(rows[0].live_occurrence_id, remaining.live_occurrence_id);
+      assert.equal(rows[0].highlight_reason, "local_serendipity", "the server's group-level display reason survives");
+      assert.equal(rows[0].display_group_kind, metadata.display_group_kind);
+      assert.equal(rows[0].source_series_id, metadata.source_series_id);
+      assert.deepEqual(liveEventRelevance(rows[0], ["culture"]), { kind: "match", preferences: ["culture"] },
+        "server preference fit can belong to the group parent rather than its individual source slots");
+      assert.deepEqual(liveHighlightGroups(rows, ["culture"]).picks, [rows[0]], "remaining slots keep the group's supplied highlights placement");
+      assert.equal(rows[0].occurrences.length, 1, "one remaining occurrence keeps its disclosure container");
+      assert.strictEqual(rows[0].occurrences[0], remaining, "source facts and choice identity remain the exact supplied object");
+      assert.equal(selectableLiveOccurrenceId(rows[0], "2026-10-15"), null, "the container cannot duplicate the member's choice");
+      assert.equal(selectableLiveOccurrenceId(rows[0].occurrences[0], "2026-10-15"), remaining.live_occurrence_id);
+    }
+    const unchanged = buckets(input, new Set(["unrelated-woven-id"]));
+    assert.strictEqual(unchanged.tonight[0], group, "without a matching woven member the original group passes through");
+    assert.strictEqual(unchanged.thisWeek[0], group);
+    const allWoven = buckets(input, new Set(["early", "late"]));
+    assert.deepEqual(allWoven.tonight, [unrelated], "a group disappears only when all its actual occurrences are woven");
+    assert.deepEqual(allWoven.thisWeek, [unrelated]);
+  });
+}
+
+test("replacing a woven group representative never lends its choice or time metadata to the remaining slot", () => {
+  const early = { id: "early", starts_at: "2026-10-15T08:00:00Z", live_choice_eligible: true,
+    occurrence_date: "2026-10-15", live_occurrence_id: `live:2026-10-15:${"a".repeat(32)}` };
+  const later = { id: "later", title: "Source programme", timezone: "Europe/Stockholm",
+    time_window: { kind: "continuous", starts_at: "2026-10-15T12:00:00Z" } };
+  const group = { ...early, display_group_kind: "source_program", occurrences: [early, later] };
+  for (const rows of [
+    pulseEventBuckets({ tonight: [group] }, new Set(["early"])).tonight,
+    pulseBrowseBuckets({ browse: { tonight: { more: [group] } } }, new Set(["early"])).tonight,
+  ]) {
+    assert.equal(rows.length, 1);
+    assert.strictEqual(rows[0].occurrences[0], later);
+    for (const key of ["starts_at", "live_occurrence_id", "live_choice_eligible", "occurrence_date"]) {
+      assert.equal(Object.hasOwn(rows[0], key), false, `absent remaining ${key} cannot come from the woven representative`);
+    }
+    assert.equal(eventTiming(rows[0], "en", new Date("2026-10-14T08:00:00Z"), "2026-10-15"), "Thu 15 Oct 14:00");
+  }
+});
+
+test("a group's server-reserved local discovery reason survives excluding one woven member", () => {
+  const early = { id: "early" };
+  const late = { id: "late" };
+  const group = { ...early, source_series_id: "publisher-series", occurrences: [early, late],
+    preference_match: "none", requested_preferences: ["museums"], matched_preferences: [], partial_preferences: [],
+    highlight_reason: "local_serendipity" };
+  for (const rows of [
+    pulseEventBuckets({ tonight: [group] }, new Set(["early"])).tonight,
+    pulseBrowseBuckets({ browse: { tonight: { more: [group] } } }, new Set(["early"])).tonight,
+  ]) {
+    assert.deepEqual(liveEventRelevance(rows[0], ["culture"]), { kind: "local_discovery", preferences: [] });
+    assert.strictEqual(rows[0].occurrences[0], late, "preserving display metadata never changes the remaining source object");
+  }
 });
 
 test("ambient helpers derive context — they never produce stop-shaped objects", () => {
@@ -151,10 +236,23 @@ test("without the server's classification there is no link — the client never 
 
 test("eventTiming: continuous instants render venue-local, never the viewer's clock", () => {
   const ev = { starts_at: "2026-07-17T17:00:00Z", timezone: "Europe/Helsinki" };
-  assert.equal(eventTiming(ev, "sv"), "fre 20:00", "17:00Z is 20:00 in Helsinki (EEST)");
-  assert.equal(eventTiming(ev, "en"), "Fri 20:00");
+  assert.equal(eventTiming(ev, "sv"), "fre 17 juli 20:00", "17:00Z is 20:00 in Helsinki (EEST)");
+  assert.equal(eventTiming(ev, "en"), "Fri 17 Jul 20:00");
   // time_window.continuous starts_at wins over a missing top-level field.
-  assert.equal(eventTiming({ time_window: { kind: "continuous", starts_at: "2026-07-17T17:00:00Z" }, timezone: "Europe/Helsinki" }, "sv"), "fre 20:00");
+  assert.equal(eventTiming({ time_window: { kind: "continuous", starts_at: "2026-07-17T17:00:00Z" }, timezone: "Europe/Helsinki" }, "sv"), "fre 17 juli 20:00");
+});
+
+test("eventTiming: a timed row names its date the way dated rows do", () => {
+  // 7fb8c10 design-system audit: "FRE 19:00–22:30" sat beside "FRE 16 OKT. 18:30–20:30".
+  const timed = { starts_at: "2026-10-16T17:00:00Z", ends_at: "2026-10-16T20:30:00Z", timezone: "Europe/Stockholm" };
+  const listed = { time_window: { kind: "occurrences", dates: ["2026-10-16"], local_start: "18:30", local_end: "20:30" }, timezone: "Europe/Stockholm" };
+  const now = new Date("2026-10-15T08:00:00Z");
+  assert.equal(eventTiming(timed, "sv", now), "fre 16 okt. 19:00–22:30");
+  assert.equal(eventTiming(listed, "sv", now), "fre 16 okt. 18:30–20:30");
+  assert.equal(eventTiming(timed, "en", now), "Fri 16 Oct 19:00–22:30");
+  // Across midnight both ends carry their own date.
+  const late = { starts_at: "2026-10-16T20:00:00Z", ends_at: "2026-10-17T01:00:00Z", timezone: "Europe/Stockholm" };
+  assert.equal(eventTiming(late, "en", now), "Fri 16 Oct 22:00 – Sat 17 Oct 03:00");
 });
 
 test("eventTiming: daily windows render the LOCAL clock range without timezone re-conversion", () => {
@@ -419,4 +517,32 @@ test("Live highlights split into server matches and other rows, keeping server o
   assert.deepEqual(liveHighlightGroups(rows, []).picks, [], "without picks nothing is presented as a pick");
   assert.equal(liveHighlightGroups(rows, []).other.length, rows.length);
   assert.deepEqual(liveHighlightGroups(null, PICKS), { picks: [], other: [] });
+});
+
+test('listed occurrence clocks can be ongoing only on the stated venue day with a known end', () => {
+  const ev={timezone:'Europe/Stockholm',time_window:{kind:'occurrences',dates:['2026-10-15','2026-10-22'],local_start:'20:00',local_end:'22:00'}};
+  const now=new Date('2026-10-15T18:55:00Z');
+  assert.equal(eventTiming(ev,'sv',now,'2026-10-15'),'pågår nu · till 22:00');
+  assert.equal(eventTiming(ev,'en',now,'2026-10-15'),'on now · until 22:00');
+  assert.doesNotMatch(eventTiming(ev,'en',now,'2026-10-22'),/on now/);
+  assert.doesNotMatch(eventTiming({...ev,timezone:undefined},'en',now,'2026-10-15'),/on now/);
+  assert.doesNotMatch(eventTiming({...ev,time_window:{...ev.time_window,local_end:undefined}},'en',now,'2026-10-15'),/on now/);
+  assert.doesNotMatch(eventTiming({...ev,time_window:{...ev.time_window,local_start:'22:00',local_end:'02:00'}},'en',now,'2026-10-15'),/on now/,'do not invent an overnight end date');
+  assert.equal(eventTiming(ev,'en',new Date('2026-10-15T20:00:00Z'),'2026-10-15'),'Thu 15 Oct 20:00–22:00','an explicitly browsed past session retains its stated time');
+  const unconfirmed={...ev,recurrence:{rule:'Th 20:00-22:00',occurrence_status:'unconfirmed'}};
+  assert.equal(eventTiming(unconfirmed,'en',now,'2026-10-15'),'scheduled now · until 22:00','time matching must not upgrade an unconfirmed occurrence');
+});
+
+test('explicit all-day facts say all day; date-only fallback and genuine midnight times do not gain precision',()=>{
+  const ev={time_window:{kind:'all_day',starts_on:'2026-10-22',ends_on:'2026-10-22',all_day_explicit:true}};
+  assert.equal(eventTiming(ev,'en'),'Thu 22 Oct · All day');
+  assert.equal(eventTiming(ev,'sv'),'tors 22 okt. · Hela dagen');
+  assert.doesNotMatch(eventTiming({starts_at:'2026-10-21T22:00:00Z',timezone:'Europe/Stockholm'},'en'),/All day/);
+  assert.equal(eventTiming({starts_on:'2026-10-22'},'en'),'Thu 22 Oct','a bare date does not assert whole-day availability');
+});
+
+test('continuous sessions retain a known end before starting and after ending on the selected venue day',()=>{
+ const ev={timezone:'Europe/Stockholm',starts_at:'2026-10-15T20:00:00Z',ends_at:'2026-10-15T21:00:00Z'};
+ assert.equal(eventTiming(ev,'en',new Date('2026-10-15T19:00:00Z'),'2026-10-15'),'Thu 15 Oct 22:00–23:00');
+ assert.equal(eventTiming(ev,'en',new Date('2026-10-15T21:00:00Z'),'2026-10-15'),'Thu 15 Oct 22:00–23:00');
 });

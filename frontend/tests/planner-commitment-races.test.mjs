@@ -244,7 +244,7 @@ test('a terminal cold timeout offers one explicit retry with the current inputs'
   await click(h, buttonMatching(h, /Adjust/));
   await click(h, buttonMatching(h, /Tomorrow/));
   await click(h, buttonMatching(h, /^Coffee$/));
-  await click(h, buttonMatching(h, /^Easy$/));
+  await click(h, buttonMatching(h, /^Relaxed$/));
   const retry = buttonMatching(h, /try building the day again/i);
   assert.ok(retry, 'terminal timeout provides a real retry action');
   const oldStatusCalls = h.fetchMock.calls.filter(call => call.url === '/api/planner-status' && call.method === 'POST').length;

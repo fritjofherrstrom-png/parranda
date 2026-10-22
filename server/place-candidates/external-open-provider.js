@@ -26,7 +26,8 @@
  */
 
 const { normalizePlaceCandidate, validatePlaceCandidate } = require("./contract");
-const { normalizeOpeningHours } = require("./opening-hours");
+const { normalizeOpeningHours, normalizeOpeningHoursSource } = require("./opening-hours");
+const { normalizeSelectedHoursCalendar } = require('./opening-hours-calendar');
 const { normalizeSourceNameAliases } = require("./source-name-aliases");
 const { createEvidence, SOURCE_FAMILIES } = require("../candidates/evidence");
 
@@ -100,14 +101,18 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
 
   const hasCoords = Number.isFinite(record.lat) && Number.isFinite(record.lng);
   const type = firstString(record.type, record.category, "place");
-  const sources = Array.isArray(record.sources) ? record.sources.filter(Boolean) : [];
+  // Unclassified attribution and computed/environmental context do not assert
+  // a place. Ignore them rather than manufacturing existence corroboration.
+  const sources = Array.isArray(record.sources)
+    ? record.sources.filter(source => source && normalizeFamily(source.family)) : [];
+  if (!sources.length) return null;
 
   const evidence = buildEvidence(record, sources, hasCoords, type, observedAt);
 
   // Source tier = the strongest tier any contributing source claims. Provider
   // default applies when a source omits it.
   const sourceTier = strongestTier(sources) || EXTERNAL_OPEN_PROVIDER_META.source_tier;
-  const primaryFamily = firstString(sources[0]?.family, EXTERNAL_OPEN_PROVIDER_META.source_family);
+  const primaryFamily = normalizeFamily(sources[0].family);
 
   const base = normalizePlaceCandidate({
     id: firstString(record.id, `${cityConfig.key}-ext-${index}`),
@@ -140,6 +145,8 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
 
   // Spine extras (validatePlaceCandidate tolerates additional fields).
   base.evidence = evidence;
+  const details = require('./place-details').sourcePlaceDetails(record, type);
+  if (details) base.place_details = details;
   base.candidate_origin = CANDIDATE_ORIGIN;
   base.provider_id = EXTERNAL_OPEN_PROVIDER_META.provider_id;
   base.source_family = primaryFamily;
@@ -173,6 +180,19 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
   }
   const openingHours = normalizeOpeningHours(record.opening_hours);
   if (openingHours) base.opening_hours = openingHours;
+  const hoursSource = openingHours && normalizeOpeningHoursSource(record.opening_hours_source);
+  if (hoursSource && website) {
+    const observedUrl = new URL(hoursSource.url), venueUrl = new URL(website);
+    if (observedUrl.hostname.replace(/^www\./, '') === venueUrl.hostname.replace(/^www\./, '') &&
+        observedUrl.pathname === venueUrl.pathname && observedUrl.search === venueUrl.search && observedUrl.port === venueUrl.port) {
+      base.opening_hours_source = hoursSource;
+    }
+  }
+  // An explicit invalid private calendar remains unknown instead of borrowing
+  // a possibly incompatible weekly fact. This never changes place trust.
+  if (Object.prototype.hasOwnProperty.call(record, 'selected_hours_calendar')) {
+    base.selected_hours_calendar = normalizeSelectedHoursCalendar(record.selected_hours_calendar, { record: base });
+  }
   const operationalStatus = normalizeOperationalStatus(record.operational_status);
   if (operationalStatus) base.operational_status = operationalStatus;
   const operationalReasons = normalizeOperationalReasons(record.operational_reasons);
@@ -317,7 +337,7 @@ function buildEvidence(record, sources, hasCoords, type, observedAt) {
 
 function normalizeFamily(family) {
   const value = firstString(family).toLowerCase();
-  return SOURCE_FAMILIES.has(value) ? value : "map";
+  return SOURCE_FAMILIES.has(value) && !["computed", "environmental"].includes(value) ? value : null;
 }
 
 const TIER_RANK = { official: 5, verified: 4, curated: 3, computed: 2, editorial: 2, inferred: 1, fallback: 0 };

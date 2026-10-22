@@ -42,6 +42,7 @@ const { isValidCoordinate } = require("../planner/agnostic-place-intake");
 const { normalizeNominatimSpatialScope } = require("./spatial-scope");
 const { createWikidataPlaceResolver } = require("./wikidata-place-resolver");
 const { createSourceCache } = require("./source-cache");
+const { createSharedRateGate } = require("./shared-rate-gate");
 const { parsePlaceRef, isLinkablePlace } = require("./place-ref");
 const { createHash } = require("node:crypto");
 
@@ -54,7 +55,9 @@ const DEFAULT_REVERSE_TIMEOUT_MS = 2500;
 const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 10;
 const DEFAULT_CACHE_TTL_MS = 30 * 60 * 1000;
-const DEFAULT_MIN_INTERVAL_MS = 1100; // honor Nominatim's ~1 req/sec, per instance
+// Nominatim allows ~1 req/sec per application. With PARRANDA_CACHE_DIR the web
+// process and the scout worker share one gate in that volume (shared-rate-gate).
+const DEFAULT_MIN_INTERVAL_MS = 1100;
 const DEFAULT_MAX_PENDING_REQUESTS = 8;
 const MAX_PENDING_REQUESTS = 100;
 const DEFAULT_PROVIDER_COOLDOWN_MS = 5000;
@@ -147,6 +150,27 @@ function matchingNames(result) {
   return [...new Set(names.filter(x => typeof x === "string" && x.length <= 200).map(normalizeNameForMatch).filter(Boolean))].slice(0, 30);
 }
 
+function primaryNames(result) {
+  const primary = typeof result.namedetails?.name === "string" && result.namedetails.name.trim()
+    ? result.namedetails.name : result.name;
+  const normalized = normalizeNameForMatch(primary);
+  if (!normalized) return [];
+  const names = new Set([normalized]);
+  // A multilingual primary name may join local names ("Bruxelles - Brussel").
+  // Recognize a component only when a source-owned language variant also
+  // attests that complete component. Neither a substring nor a lexical hyphen
+  // creates another identity, and no language code gets special authority.
+  const components = new Set(String(primary).split(/\s*[;/]\s*|\s+[-–—]\s+/u)
+    .map(normalizeNameForMatch).filter(Boolean));
+  for (const [key, value] of Object.entries(result.namedetails || {}).slice(0, 50)) {
+    if (!/^name:[a-zA-Z-]+$/.test(key) || typeof value !== "string" || value.length > 200) continue;
+    for (const variant of value.split(";").slice(0, 5).map(normalizeNameForMatch)) {
+      if (components.has(variant)) names.add(variant);
+    }
+  }
+  return [...names];
+}
+
 function matchesGeographicQuery(candidate, query) {
   const parts = String(query || "").split(",").map(normalizeNameForMatch).filter(Boolean);
   const names = candidate.matching_names || [normalizeNameForMatch(candidate.name)];
@@ -184,6 +208,9 @@ function toRawCandidate(result) {
     label,
     name,
     matching_names: matchingNames(result),
+    // The display name can follow accept-language; primary-name evidence is
+    // independent of the reader's language and includes attested local forms.
+    own_names: primaryNames(result),
     // Provider display labels can include additional divisions and postcodes.
     // Keep those source-owned qualifiers so a shared canonical label works too.
     admin_names: [...new Set([...ADMIN_NAME_FIELDS.map(key => normalizeNameForMatch(result.address?.[key])),
@@ -318,7 +345,15 @@ function classifyConfidences(rawCandidates, query = null, context = {}) {
     const near = normalizeBias(context.near);
     const local = near ? exactStructuralMatches.filter(candidate => coordinateDistanceKm(candidate, near) <= PLACE_BIAS_KM) : [];
     const [leader, runnerUp] = exactStructuralMatches;
-    const dominant = runnerUp &&
+    // Popularity cannot settle competing exact identities when the leader
+    // matches only a translated name. This also applies when every competing
+    // match is translated; no language is evidence of which place was meant.
+    const ownName = candidate => matchesGeographicQuery({ ...candidate,
+      matching_names: candidate.own_names || [],
+    }, query);
+    const translatedLeader = !String(query).includes(",") && !ownName(leader) &&
+      exactStructuralMatches.length > 1;
+    const dominant = !translatedLeader && runnerUp &&
       exactStructuralMatches.every((candidate) => candidate.importance !== null) &&
       leader.importance >= JUNK_IMPORTANCE_FLOOR &&
       // Decimal boundary scores can round to a gap just above the margin.
@@ -435,8 +470,14 @@ function createNominatimPlaceResolver({
   maxProviderCooldownMs = MAX_PROVIDER_COOLDOWN_MS,
   now = () => Date.now(),
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  // A directory every process using this provider mounts (the source cache
+  // volume): Nominatim's 1 request/s is per application, not per process.
+  sharedGateDir = null,
 } = {}) {
   const clampedLimit = clampInt(limit, 1, MAX_LIMIT, DEFAULT_LIMIT);
+  const sharedGate = typeof sharedGateDir === "string" && sharedGateDir
+    ? createSharedRateGate({ dir: sharedGateDir, name: "nominatim", intervalMs: minIntervalMs, now, sleep })
+    : null;
   const clampedMaxPending = clampInt(
     maxPendingRequests,
     1,
@@ -476,7 +517,7 @@ function createNominatimPlaceResolver({
     .slice(0, 16);
   const lookupEndpointIdentity = createHash("sha256").update(lookupEndpoint).digest("hex").slice(0, 16);
   const cache = sourceCache || createSourceCache({
-    namespace: "place-resolver-nominatim-v5",
+    namespace: "place-resolver-nominatim-v7",
     ttlMs: cacheTtlMs,
     dir: cacheDir,
     now,
@@ -501,34 +542,56 @@ function createNominatimPlaceResolver({
     const current = now();
     const start = Math.max(current, nextSlot, cooldownUntil);
     nextSlot = start + minIntervalMs;
-    const wait = start - current;
-    if (wait > 0) await sleep(wait);
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
-    try {
-      const url = buildUrl();
-
-      const response = await fetcher(url.toString(), {
-        signal: controller.signal,
-        headers: { "User-Agent": userAgent, Accept: "application/json" },
-      });
-      if (!response || !response.ok) {
-        const cooldownMs = providerCooldownMs(
-          response,
-          now(),
-          clampInt(fallbackProviderCooldownMs, 0, MAX_PROVIDER_COOLDOWN_MS, DEFAULT_PROVIDER_COOLDOWN_MS),
-          clampInt(maxProviderCooldownMs, 0, MAX_PROVIDER_COOLDOWN_MS, MAX_PROVIDER_COOLDOWN_MS),
-        );
-        if (cooldownMs > 0) cooldownUntil = Math.max(cooldownUntil, now() + cooldownMs);
+    const execute = async (sharedTurn = null) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
+      try {
+        const url = buildUrl();
+        let pendingResponse;
+        try {
+          pendingResponse = fetcher(url.toString(), {
+            signal: controller.signal,
+            headers: { "User-Agent": userAgent, Accept: "application/json" },
+          });
+        } finally {
+          // Account for pauses between admission and invocation. The timestamp
+          // after fetch starts is conservative even if this process was delayed.
+          const dispatchedAt = now();
+          nextSlot = Math.max(nextSlot, dispatchedAt + minIntervalMs);
+          if (sharedTurn) sharedTurn.noteStarted(dispatchedAt);
+        }
+        const response = await pendingResponse;
+        if (!response || !response.ok) {
+          const cooldownMs = providerCooldownMs(
+            response,
+            now(),
+            clampInt(fallbackProviderCooldownMs, 0, MAX_PROVIDER_COOLDOWN_MS, DEFAULT_PROVIDER_COOLDOWN_MS),
+            clampInt(maxProviderCooldownMs, 0, MAX_PROVIDER_COOLDOWN_MS, MAX_PROVIDER_COOLDOWN_MS),
+          );
+          if (cooldownMs > 0) {
+            cooldownUntil = Math.max(cooldownUntil, now() + cooldownMs);
+            if (sharedTurn) sharedTurn.noteCooldown(cooldownUntil);
+          }
+          return { ok: false, data: null };
+        }
+        return { ok: true, data: await response.json() };
+      } catch (_error) {
+        return { ok: false, data: null };
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    if (sharedGate) {
+      try {
+        return await sharedGate.run(execute, { earliest: start });
+      } catch (_error) {
+        // Unconfirmed shared state or an occupied lock must never bypass the gate.
         return { ok: false, data: null };
       }
-      return { ok: true, data: await response.json() };
-    } catch (_error) {
-      return { ok: false, data: null };
-    } finally {
-      clearTimeout(timer);
     }
+    const wait = start - now();
+    if (wait > 0) await sleep(wait);
+    return execute();
   }
 
   async function fetchAndMapQueued(query, context) {
@@ -674,7 +737,7 @@ function createNominatimPlaceResolver({
     if (!endpointValid) return [];
     const context = { language: normalizeLanguage(options.language), near: normalizeBias(options.near), purpose: options.purpose === "event_venue" ? "event_venue" : "place" };
     const queryIdentity = createHash("sha256").update(JSON.stringify([query.toLowerCase(), context.language, context.near, context.purpose])).digest("hex");
-    const key = `v5:${endpointIdentity}:${queryIdentity}`;
+    const key = `v7:${endpointIdentity}:${queryIdentity}`;
     const result = await cache.get(
       key,
       () => enqueueProviderTask(() => fetchAndMapQueued(query, context)),
@@ -779,6 +842,7 @@ function resolveDefaultPlaceResolver(env = process.env, overrides = {}) {
     reverseTimeoutMs,
     cacheTtlMs,
     cacheDir: env && env.PARRANDA_CACHE_DIR,
+    sharedGateDir: (env && env.PARRANDA_CACHE_DIR) || null,
     maxPendingRequests,
     ...nominatimOverrides,
   });

@@ -12,12 +12,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { mountPlanner } from "./helpers/planner-harness.mjs";
+import dayPolicy from "../../server/planner/day-composition-policy.js";
 
 function stop(id, extra = {}) {
-  return { id, label: `Place ${id}`, lat: 55.6, lng: 13, type: "museum", commitment_eligible: true, ...extra };
+  return { id, label: `Place ${id}`, lat: 55.6, lng: 13, type: "museum", covered_preferences: ["culture"], commitment_eligible: true, ...extra };
 }
 
-function composedDay(stopIds, km) {
+function composedDay(stopIds, km, dayEdit = null) {
   const stops = stopIds.map((id) => stop(id));
   return {
     days: [{
@@ -37,6 +38,8 @@ function composedDay(stopIds, km) {
     agnostic_route_output_experiment: {
       intake: { status: "resolved", resolved: { label: "Testville", lat: 55.6, lng: 13 } },
       promotion: { promote: true, readiness: "promotable" },
+      // Controlled transport acknowledgement, not evidence of provider supply.
+      ...(dayEdit ? { day_edit: dayPolicy.dayEditOutcome(dayEdit, stops) } : {}),
     },
   };
 }
@@ -112,7 +115,7 @@ test("an adjustment says what it changed in the day", async (t) => {
   await h.clock.advance(50);
   assert.equal(
     changeNote(h),
-    "Changed: Balanced → Full · 1.2 km → 4.8 km · +2 stops: Place c, Place d · −1: Place b",
+    "Changed: Balanced → Full · 1 stop swapped · +1 stop · 1.2 → 4.8 km",
   );
   assert.ok(buttonNamed(h, /^Undo this change$/));
 });
@@ -144,7 +147,7 @@ test("undo puts the previous day and its inputs back without composing", async (
   assert.doesNotMatch(h.text(), /Saved day/, "the day put back is not a saved snapshot");
 
   // The echo is spent on the undo itself: the next real change recomposes.
-  await adjustRhythm(h, /^Easy/);
+  await adjustRhythm(h, /^Relaxed/);
   assert.equal(composeCalls(h).length, 3);
   assert.equal(composeCalls(h)[2].body.day_rhythm, "calm");
 });
@@ -154,13 +157,13 @@ test("undo returns to the day on screen, not to a request still in flight", asyn
   await adjustRhythm(h, /^Full/);
   // A second change before the first answer lands: the day to return to is
   // still the arrival's.
-  await adjustRhythm(h, /^Easy/);
+  await adjustRhythm(h, /^Relaxed/);
   const calls = composeCalls(h);
   assert.equal(calls.length, 3);
   assert.ok(calls[1].aborted, "the older request gave way");
   await h.fetchMock.respond(calls[2], composedDay(["e"], 0.6));
   await h.clock.advance(50);
-  assert.match(changeNote(h), /^Changed: Balanced → Easy · 1\.2 km → 0\.6 km/);
+  assert.match(changeNote(h), /^Changed: Balanced → Relaxed · 1 stop swapped · −1 stop · 1\.2 → 0\.6 km$/);
 
   await click(h, buttonNamed(h, /^Undo this change$/));
   await h.clock.advance(1000);
@@ -168,30 +171,47 @@ test("undo returns to the day on screen, not to a request still in flight", asyn
   assert.equal(buttonNamed(h, /^Balanced/).getAttribute("aria-pressed"), "true");
 });
 
-test("a dismissed stop comes back with its day, and the ledger forgets the dismissal", async (t) => {
+test("a replaced stop comes back with its day, and Undo forgets the exclusion and applied edit", async (t) => {
   const h = await arrive(t);
+  const previous = h.readStorage("parranda:anywhere:last");
   await click(h, [...h.container.querySelectorAll("button")].find((b) => /Place b/.test(b.textContent || "")));
-  await click(h, buttonNamed(h, /Not this one/));
+  const replace = buttonNamed(h, /^Replace$/);
+  assert.ok(Boolean(replace), "the real, distinct Replace action exists");
+  await click(h, replace);
   await h.clock.advance(450);
   const calls = composeCalls(h);
   assert.equal(calls.length, 2);
   assert.deepEqual(calls[1].body.excluded_candidate_ids, ["b"]);
-  await h.fetchMock.respond(calls[1], composedDay(["a", "c"], 1.4));
+  assert.deepEqual(calls[1].body.day_edit, {
+    version: 1, action: "replace", candidate_id: "b", retained_candidate_ids: ["a"],
+    target_stop_count: 2, slot_index: 1, replacement_preference: "culture", removed_candidate_ids: [],
+  });
+  await h.fetchMock.respond(calls[1], composedDay(["a", "c"], 1.4, calls[1].body.day_edit));
   await h.clock.advance(50);
-  assert.match(changeNote(h), /\+1 stop: Place c · −1: Place b/);
+  assert.ok([...h.container.querySelectorAll('[role="status"] p')].some(p => p.textContent.trim() === "Replaced"),
+    "the explicit edit is acknowledged beside its Undo control");
 
   assert.match(h.text(), /1 place dismissed/, "precondition: the ledger shows the dismissal");
+  assert.deepEqual(routeStopNames(h).slice(0, 2), ["Place a", "Place c"], "replacement preserves the other stop and the count");
+  const replaced = h.readStorage("parranda:anywhere:last");
+  assert.deepEqual(replaced.safeResponse.days[0].primary_route.main_stops.map(stop => stop.id), ["a", "c"]);
+  assert.equal(replaced.safeResponse.days[0].primary_route.estimated_km, 1.4);
+  assert.equal(replaced.inputs.dayEdit.action, "remove", "saved state retains the applied answer rather than replaying Replace");
+  assert.deepEqual(replaced.inputs.dayEdit.retained_candidate_ids, ["a", "c"]);
 
   await click(h, buttonNamed(h, /^Undo this change$/));
   await h.clock.advance(1000);
   assert.equal(composeCalls(h).length, 2);
   assert.deepEqual(routeStopNames(h).slice(0, 2), ["Place a", "Place b"]);
   assert.doesNotMatch(h.text(), /place dismissed/, "the restored day was composed with no dismissal");
+  assert.deepEqual(h.readStorage("parranda:anywhere:last"), previous, "Undo restores the exact original snapshot, inputs and ledger");
+  assert.equal(new URL(h.window.location.href).searchParams.has("edit"), false);
 
   // The next compose carries the ledger the restored day answered: nothing.
   await adjustRhythm(h, /^Full/);
   assert.equal(composeCalls(h).length, 3);
   assert.equal(composeCalls(h)[2].body.excluded_candidate_ids, undefined);
+  assert.equal(composeCalls(h)[2].body.day_edit, undefined, "the old replacement cannot survive Undo into another adjustment");
 });
 
 test("a change that leaves no route says so and offers the day back", async (t) => {

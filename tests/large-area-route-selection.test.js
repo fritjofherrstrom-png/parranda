@@ -23,19 +23,33 @@ function replay(overrides = {}) {
 test('recorded London supply reaches the engine and walking validation instead of a fixed pairwise veto', async () => {
   const {result,experiment} = await replay();
   const pipeline = experiment.eligibility.checks.candidate_pipeline;
+  // Acquisition facts remain unchanged. Ten encyclopedia-only records no
+  // longer bypass the current-visit evidence gates (the fixture includes
+  // historical museums). The other 21 candidates still support an actual
+  // five-stop walk with all requested interests and a bounded twelve-place reservoir.
+  const knowledgeOnly = recorded.records.filter(record => record.sources?.length &&
+    record.sources.every(source => source.family === 'open_knowledge'));
+  assert.equal(knowledgeOnly.length,10);
+  const expectedPipeline = { ...recorded.provenance.expected_pipeline,
+    eligible_pool_candidate_count:21,rejected_candidate_count:14,
+    role_relevant_candidate_count:21,role_surface_candidate_count:21,
+    engine_reservoir_geocoded_stop_count:12 };
   for (const key of ['coordinate_ready_real_place_count','identity_resolved_candidate_count',
     'eligible_pool_candidate_count','rejected_candidate_count','availability_evaluated_candidate_count',
     'availability_excluded_candidate_count','availability_unresolved_candidate_count',
     'role_relevant_candidate_count','role_surface_candidate_count','engine_reservoir_geocoded_stop_count']) {
-    assert.equal(pipeline[key],recorded.provenance.expected_pipeline[key],key);
+    assert.equal(pipeline[key],expectedPipeline[key],key);
   }
   const route = result.days?.[0]?.primary_route;
-  assert.ok(route,'the same 35 records / 31 admitted / four reservoir places support an actual walk');
+  assert.ok(route,'the same 35 records / 21 admitted / twelve reservoir places support an actual walk');
+  assert.equal(route.main_stops.length,5,'Balanced uses the richer reservoir, without changing the recorded source facts');
   assert.equal(experiment.eligibility.checks.geometry_coherence,'weak','do not relabel the 3.037 km diagnostic');
   assert.equal(experiment.walking_validation.valid,true);
   assert.ok(experiment.walking_validation.checks.total_walk_km > 0);
   const ids = new Set(recorded.records.map(record=>record.id));
   assert.ok(route.main_stops.every(stop=>ids.has(stop.id)));
+  const withheld = new Set(knowledgeOnly.map(record=>record.id));
+  assert.ok(route.main_stops.every(stop=>!withheld.has(stop.id)), 'no unsupported encyclopedia visit fills the recorded day');
   const coverage = new Set(route.main_stops.flatMap(stop=>stop.covered_preferences || []));
   assert.deepEqual([...coverage].sort(),['food','museums','scenic']);
   assert.ok(route.main_stops.every(stop=>stop.provisional && stop.trust.human_verified === false));
@@ -153,16 +167,36 @@ test('exact-coordinate validation keeps the user-owned start and end anchors', a
 });
 
 test('the validated final walking result is the geometry and distance actually published', async () => {
+  let original, returned;
   const out = await replay({walkingRouter:async(points,opts)=>{
-    const result = await routeWalkingPath(points,opts);
-    return {...result,estimatedKm:7,
-      legs:result.legs.map(leg=>({...leg,distance_km:leg.distance_km+1}))};
+    original = await routeWalkingPath(points,opts);
+    const legs = original.legs.map(leg=>({...leg,distance_km:leg.distance_km+1}));
+    // Keep the router fixture internally consistent for any composed stop
+    // count. The old fixed 7 km was only valid for the old four-stop route.
+    returned = {...original,legs,
+      estimatedKm:Number(legs.reduce((sum,leg)=>sum+leg.distance_km,0).toFixed(1))};
+    return returned;
   }});
   const route = out.result.days[0]?.primary_route;
   assert.ok(route);
-  assert.equal(out.experiment.walking_validation.checks.total_walk_km,7);
-  assert.equal(route.estimated_km,7,'publish the distance validated, not the old heuristic distance');
+  assert.equal(out.experiment.walking_validation.valid,true);
+  assert.notEqual(returned.estimatedKm,original.estimatedKm,'the fixture must change the validated distance');
+  assert.equal(out.experiment.walking_validation.checks.total_walk_km,returned.estimatedKm);
+  assert.equal(route.estimated_km,returned.estimatedKm,'publish the distance validated, not the old heuristic distance');
+  assert.deepEqual(route.legs,returned.legs,'publish the exact validated legs');
+  assert.deepEqual(route.map_path_points,returned.pathPoints,'publish the exact validated geometry');
   assert.ok(route.legs.every(leg=>leg.distance_km>=1));
+});
+
+test('a final router total inconsistent with its legs remains unpublished', async () => {
+  const out = await replay({walkingRouter:async(points,opts)=>{
+    const result = await routeWalkingPath(points,opts);
+    const legTotal = result.legs.reduce((sum,leg)=>sum+leg.distance_km,0);
+    return {...result,estimatedKm:legTotal+1};
+  }});
+  assert.deepEqual(out.result.days,[]);
+  assert.equal(out.experiment.walking_validation.valid,false);
+  assert.ok(out.experiment.eligibility.blockers.includes('walking_validation_failed'));
 });
 
 test('published walking-time aggregates use the validated router minutes', async () => {
@@ -179,15 +213,18 @@ test('published walking-time aggregates use the validated router minutes', async
 
 test('mixed validated leg times retain the longest and rounded average', async () => {
   const minutes=[0,'120',15.5];
+  let returnedLegs;
   const out=await replay({walkingRouter:async(points,opts)=>{
     const routed=await routeWalkingPath(points,opts);
-    return {...routed,source:'osrm',legs:routed.legs.map((leg,index)=>({...leg,
-      estimated_walk_minutes:minutes[index % minutes.length]}))};
+    returnedLegs=routed.legs.map((leg,index)=>({...leg,
+      estimated_walk_minutes:minutes[index % minutes.length]}));
+    return {...routed,source:'osrm',legs:returnedLegs};
   }});
   const route=out.result.days[0]?.primary_route;
   assert.ok(route);
-  assert.deepEqual(route.legs.map(leg=>leg.estimated_walk_minutes),minutes);
-  const actualMinutes=route.legs.map(leg=>Number(leg.estimated_walk_minutes));
+  assert.ok(returnedLegs.length>=minutes.length,'exercise zero, numeric-string and fractional minutes');
+  assert.deepEqual(route.legs,returnedLegs,'retain every validated leg when rhythm adds another stop');
+  const actualMinutes=returnedLegs.map(leg=>Number(leg.estimated_walk_minutes));
   assert.equal(route.longest_leg_minutes,120);
   assert.equal(route.average_leg_minutes,Math.round(actualMinutes.reduce((sum,value)=>sum+value,0)/actualMinutes.length));
 });

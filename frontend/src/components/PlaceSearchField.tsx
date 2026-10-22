@@ -38,6 +38,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
   const [active, setActive] = useState(-1);
   const [above, setAbove] = useState(false);
   const [composing, setComposing] = useState(false);
+  const [retryGeneration, setRetryGeneration] = useState(0);
   const dismissed = useRef(false);
   const sequence = useRef(0);
   const t = (sv: string, en: string) => lang === "sv" ? sv : en;
@@ -68,7 +69,9 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
         const data = await response.json();
         if (!current()) return;
         clearTimeout(timeout);
-        if ((data.status === "busy" || response.status === 429) && !retried) {
+        // A provider deadline is a transient unavailable response too. Retry
+        // once for this query; repeated failures stay explicit and actionable.
+        if ((data.status === "busy" || response.status === 429 || (response.ok && data.status === "unavailable")) && !retried) {
           timer = setTimeout(() => search(true), Math.max(500, Math.min(2000, Number(data.retry_after_ms) || 1000)));
           return;
         }
@@ -82,7 +85,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
     }
     timer = setTimeout(() => search(), 200);
     return () => { controller.abort(); clearTimeout(timer); clearTimeout(timeout); };
-  }, [value, lang, selected, composing]);
+  }, [value, lang, selected, composing, retryGeneration]);
 
   function dismiss() { dismissed.current = true; setOpen(false); setActive(-1); }
   function choose(choice: PlaceSuggestion) { dismiss(); onSelect(choice); }
@@ -94,6 +97,13 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
     const offset = window.visualViewport?.offsetTop ?? 0;
     if (rect) setAbove(height + offset - rect.bottom < 220 && rect.top - offset > 220);
   }, [shown, inputRef]);
+  // Typing a place is the landing's one task, so a reader with a mouse and
+  // keyboard starts in the field. On touch an autofocused field raises the
+  // on-screen keyboard over the page (it once caught a tap meant for
+  // Continue), so there the field waits for a tap.
+  useEffect(() => {
+    if (window.matchMedia?.("(pointer: fine)").matches) inputRef.current?.focus({ preventScroll: true });
+  }, [inputRef]);
   useEffect(() => {
     if (shown && active >= 0) document.getElementById(`${listId}-${active}`)?.scrollIntoView?.({ block: "nearest" });
   }, [shown, active, listId]);
@@ -115,10 +125,10 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
             }
             if (shown && active >= 0 && event.key === "Enter") { event.preventDefault(); choose(choices[active]); }
           }}
-          placeholder={t("T.ex. Lyon eller Kyoto", "e.g. Lyon or Kyoto")} autoComplete="off" autoFocus
+          placeholder={t("T.ex. Lyon eller Kyoto", "e.g. Lyon or Kyoto")} autoComplete="off"
           className="min-w-0 flex-1 bg-transparent text-lg text-parranda-ink outline-hidden placeholder:text-parranda-ink/68 focus-visible:outline-hidden sm:text-xl" />
       </div>
-      {shown && <div className={"absolute inset-x-0 z-40 overflow-hidden rounded-parranda border border-parranda-ink/20 bg-parranda-paper shadow-xl " + (above ? "bottom-full mb-1" : "top-full mt-1")}>
+      {shown && <div className={"absolute inset-x-0 z-(--p-z-popover) overflow-hidden rounded-parranda border border-parranda-ink/20 bg-parranda-paper shadow-pop " + (above ? "bottom-full mb-1" : "top-full mt-1")}>
         <ul id={listId} role="listbox" aria-label={t("Platsförslag", "Place suggestions")} className="max-h-72 overflow-y-auto py-1">
           {choices.map((choice, index) => <li key={choice.selection_id} id={`${listId}-${index}`} role="option" aria-selected={active === index}
             onMouseDown={event => event.preventDefault()} onClick={() => choose(choice)} onMouseEnter={() => setActive(index)}
@@ -129,13 +139,18 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
             </span>}
           </li>)}
         </ul>
-        {choices.some(choice => choice.attribution) && <div className="border-t border-parranda-ink/10 px-5 py-1.5 text-[11px] text-parranda-ink/60">
+        {choices.some(choice => choice.attribution) && <div className="border-t border-parranda-ink/10 px-5 py-1.5 text-11 text-parranda-ink/68">
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
         </div>}
       </div>}
       <span role="status" className={status === "unavailable" ? "mt-1 block text-xs text-parranda-ink/68" : "sr-only"}>
-        {status === "loading" ? t("Söker platser …", "Finding places …") : status === "unavailable" ? t("Förslag kunde inte hämtas. Du kan ändå söka.", "Suggestions unavailable. You can still search.") : ""}
+        {status === "loading" ? t("Söker platser …", "Finding places …") : status === "unavailable" ? t("Förslag saknas just nu. Du kan ändå söka med Bygg min dag.", "Suggestions are unavailable. You can still search with Build my day.") : ""}
       </span>
+      {status === "unavailable" && <button type="button"
+        onClick={() => { setRetryGeneration(generation => generation + 1); inputRef.current?.focus(); }}
+        className="mt-1 text-xs font-semibold text-parranda-ink underline underline-offset-2">
+        {t("Försök igen", "Try again")}
+      </button>}
     </div>
   );
 }

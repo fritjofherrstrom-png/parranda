@@ -38,6 +38,15 @@ test('immutable release cache is reused but file choice is recomputed for each a
  assert.deepEqual(await resolve({release,lat:51,lng:-0.5,radiusKm:5}),[asset('00000')]);
  assert.deepEqual(await resolve({release,lat:51,lng:0.5,radiusKm:5}),[asset('00001')]);assert.equal(calls.length,3);
 });
+test('explicit renewal rereads the complete manifest and cannot reuse a formerly overlapping asset',async()=>{
+ const boxes=[[-1,50,0,52],[10,10,11,11]];
+ const {fetcher,calls}=fixtureFetcher(boxes);const resolve=createOvertureAssetResolver({fetcher});
+ const request={release,lat:51,lng:-0.5,radiusKm:5};
+ assert.deepEqual(await resolve(request),[asset('00000')]);
+ boxes[0]=[20,20,21,21];boxes[1]=[-1,50,0,52];
+ assert.deepEqual(await resolve({...request,revalidate:true}),[asset('00001')], 'renewal must prove the current complete source basis');
+ assert.equal(calls.length,6);
+});
 for(const [name,change]of [['coercible bbox',item=>{item.bbox[0]=null;}],['external asset',item=>{item.assets.aws.alternate.s3.href='s3://evil/part-x.zstd.parquet';}],['other release',item=>{item.assets.aws.alternate.s3.href=asset(item.id).replace(release,'2026-08-19.0');}],['mismatched identity',item=>{item.id='99999';}]])test(name+' cannot cause native acquisition',async()=>{
  const {fetcher}=fixtureFetcher([[-1,50,1,52]],{change});let queries=0;
  const source=createOvertureSource({releaseResolver:async()=>release,assetFetcher:fetcher,queryRows:async()=>{queries++;return [];}});

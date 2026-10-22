@@ -6,6 +6,8 @@ const assert = require('node:assert/strict');
 const { once } = require('node:events');
 const { chromium } = require('playwright-core');
 const { buildApp } = require('../server/app');
+const { dayEditOutcome } = require('../server/planner/day-composition-policy');
+const { writeMapInteractionTrace } = require('./helpers/map-interaction-trace');
 const DATE = '2026-10-07';
 const HEALTH = Object.fromEntries(['selected_source_count', 'responding_source_count', 'event_bearing_source_count',
   'empty_source_count', 'failed_source_count', 'unavailable_source_count', 'raw_event_count',
@@ -32,9 +34,26 @@ function day(label, anchor, payload) {
   const points = ['a', 'b', 'c', 'extra'].map((id, index) => ({ id, label: `${label} ${id}`, name: `${label} ${id}`,
     type: index % 2 ? 'cafe' : 'museum', lat: anchor.lat + index * .001, lng: anchor.lng + index * .001,
     covered_preferences: [index % 2 ? 'coffee' : 'museums'], commitment_eligible: true }));
-  const ids = new Set(['a', 'b', 'c', ...(payload.pinned_candidate_ids || [])]);
+  const retained = payload.day_edit?.preserve_retained !== false
+    ? payload.day_edit?.retained_candidate_ids : null;
+  const ids = new Set([...(retained || ['a', 'b', 'c']), ...(payload.pinned_candidate_ids || [])]);
   const excluded = new Set(payload.excluded_candidate_ids || []);
-  const stops = points.filter(p => ids.has(p.id) && !excluded.has(p.id));
+  let stops = points.filter(p => ids.has(p.id) && !excluded.has(p.id));
+  if (payload.day_edit?.preserve_retained === false) {
+    // Add is a new pin within the explicitly shortened extent, not permission
+    // for this fixture to refill a removed slot or ignore the requested pin.
+    const pins = new Set(payload.pinned_candidate_ids || []);
+    const chosen = new Set([...stops.filter(stop => pins.has(stop.id)),
+      ...stops.filter(stop => !pins.has(stop.id))]
+      .slice(0, payload.day_edit.target_stop_count).map(stop => stop.id));
+    stops = stops.filter(stop => chosen.has(stop.id));
+  }
+  if (payload.day_edit) {
+    assert.equal(stops.length, payload.day_edit.target_stop_count,
+      'the fixture must actually publish the requested extent before acknowledging an edit');
+    assert.ok(!stops.some(stop => stop.id === payload.day_edit.candidate_id),
+      'an acknowledged manual removal must not silently restore its target');
+  }
   return { days: [{ date: DATE, experimental_agnostic_route_applied: true,
     primary_route: { id: '__agnostic_compose__', main_stops: stops, estimated_km: 1.5,
       legs: [], map_route_points: [], map_path_points: stops.map(({ lat, lng }) => ({ lat, lng })), confidence: 'medium' }, alternatives: [] }],
@@ -45,7 +64,8 @@ function day(label, anchor, payload) {
       acquisition: { source_health: { ...HEALTH, status: 'healthy', result: 'empty', reasons: [], selected_source_count: 1, responding_source_count: 1, empty_source_count: 1 } } },
     agnostic_route_output_experiment: { promotion: { promote: true, readiness: 'promotable' },
       intake: { status: 'resolved', query: label, resolved: { ...anchor, label } }, source_status: { anchor },
-      pinned_candidates: { unhonored: [] } } };
+      pinned_candidates: { unhonored: [] },
+      ...(payload.day_edit ? { day_edit: dayEditOutcome(payload.day_edit, stops) } : {}) } };
 }
 for (const [label, path, anchor] of [
   ['Rome', '/rome', { lat: 41.889, lng: 12.47 }],
@@ -55,7 +75,36 @@ for (const [label, path, anchor] of [
 ]) test(`${label} uses the same map, add/remove and Live UI`, { timeout: 60000 }, async t => {
   const { browser, origin } = await start();
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
-  t.after(() => context.close());
+  let diagnosticPage;
+  t.after(async () => {
+    try {
+      await writeMapInteractionTrace(diagnosticPage, label);
+    } finally { await context.close(); }
+  });
+  // Observational only: retain the actual CI pointer/resize/focus boundary.
+  // No waits, retries, animation changes, or product state writes.
+  await context.addInitScript(() => {
+    const events = window.__routeInteractionTrace = [];
+    const bounds = e => { const r = e?.getBoundingClientRect(); return r ? { x:r.x,y:r.y,w:r.width,h:r.height } : null; };
+    const record = (kind, data) => { if (events.length === 256) events.shift(); events.push({ t:performance.now(),kind,...data }); };
+    for (const kind of ['mousedown','mouseup','click','mouseover','mouseout','focus','blur','transitionrun','transitionend']) {
+      document.addEventListener(kind, e => {
+        const frame = e.target?.closest?.('[data-route-map]');
+        if (!frame) return;
+        record(kind, { target:String(e.target.className),text:e.target.textContent?.slice(0,80),
+          trusted:e.isTrusted,x:e.clientX,y:e.clientY,scrollY,frame:bounds(frame),targetBounds:bounds(e.target),
+          active:document.activeElement?.getAttribute('aria-label'),
+          tooltip:frame.querySelector('[role="tooltip"]')?.textContent || null });
+      }, true);
+    }
+    new MutationObserver(mutations => {
+      for (const m of mutations) for (const [kind,nodes] of [['added',m.addedNodes],['removed',m.removedNodes]]) {
+        for (const n of nodes) if (n.nodeType === 1 && n.matches('[role="tooltip"],.route-map-marker-shell')) {
+          record(kind, { target:String(n.className),text:n.textContent?.slice(0,80),label:n.getAttribute('aria-label') });
+        }
+      }
+    }).observe(document, {childList:true,subtree:true});
+  });
   const composes = [], liveQueries = [], errors = [];
   await context.route('**/*', route => {
     const url = new URL(route.request().url());
@@ -78,6 +127,7 @@ for (const [label, path, anchor] of [
     return route.continue();
   });
   const page = await context.newPage();
+  diagnosticPage = page;
   page.setDefaultTimeout(15000);
   page.on('pageerror', error => errors.push(error.message));
   await page.clock.setFixedTime(new Date(`${DATE}T10:00:00Z`));
@@ -101,12 +151,17 @@ for (const [label, path, anchor] of [
   await page.getByRole('button', { name: 'Keep this one', exact: true }).click();
   await keepResponse;
   assert.deepEqual(composes.at(-1).pinned_candidate_ids, ['a']);
-  // The next rendered day must retain the pin and can dismiss another stop.
+  // The next rendered day retains the pin; Remove is distinct from Replace.
   await region.locator('button[aria-controls="route-stop-panel-1"]').click();
-  const removeResponse = page.waitForResponse(r => new URL(r.url()).pathname === '/api/route-recommendations');
-  await page.getByRole('button', { name: 'Not this one', exact: true }).click();
-  await removeResponse;
+  await Promise.all([
+    page.waitForResponse(r => new URL(r.url()).pathname === '/api/route-recommendations'),
+    page.getByRole('button', { name: 'Remove', exact: true }).click(),
+  ]);
   assert.deepEqual(composes.at(-1).excluded_candidate_ids, ['b']);
+  assert.equal(composes.at(-1).day_edit.action, 'remove');
+  assert.equal(composes.at(-1).day_edit.target_stop_count, 2);
+  assert.deepEqual(composes.at(-1).day_edit.retained_candidate_ids, ['a', 'c']);
+  assert.deepEqual(composes.at(-1).pinned_candidate_ids, ['a']);
   // The map must follow the new route, not merely the request ledger.
   await page.waitForFunction(label => {
     const labels = Array.from(document.querySelectorAll('.route-map-marker-shell')).map(e => e.getAttribute('aria-label'));
@@ -118,9 +173,11 @@ for (const [label, path, anchor] of [
   await page.getByRole('button', { name: 'Add to my day', exact: true }).click();
   await addResponse;
   assert.deepEqual(composes.at(-1).pinned_candidate_ids, ['a', 'extra']);
+  assert.equal(composes.at(-1).day_edit.target_stop_count, 2);
+  assert.equal(composes.at(-1).day_edit.preserve_retained, false);
   await page.waitForFunction(label => {
     const labels = Array.from(document.querySelectorAll('.route-map-marker-shell')).map(e => e.getAttribute('aria-label'));
-    return JSON.stringify(labels) === JSON.stringify([`1. ${label} a`, `2. ${label} c`, `3. ${label} extra`]);
+    return JSON.stringify(labels) === JSON.stringify([`1. ${label} a`, `2. ${label} extra`]);
   }, label);
   const beforeLive = composes.length;
   await page.getByRole('button', { name: /See all live|Explore live/ }).click();
@@ -128,7 +185,7 @@ for (const [label, path, anchor] of [
   await dialog.getByRole('button', { name: 'Whole area', exact: true }).click();
   // This fixture is on the selected day. Changing area must preserve that
   // tab, and a same-day event must not require a switch to following days.
-  assert.equal(await dialog.getByRole('button', { name: 'Following 7 days', exact: true }).getAttribute('aria-pressed'), 'false');
+  assert.equal(await dialog.getByRole('button', { name: 'Next 7 days', exact: true }).getAttribute('aria-pressed'), 'false');
   await dialog.getByText(`${label} concert`, { exact: true }).waitFor();
   assert.equal(liveQueries.at(-1).time, 'tonight', 'selected-day fixture is queried in the selected-day bucket');
   assert.equal(liveQueries[0].selected_date, DATE);

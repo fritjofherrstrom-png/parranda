@@ -115,6 +115,112 @@ function showcasePage(...states) {
   return showcase(states.map((state) => registeredState(state)).join(""));
 }
 
+function futureSeriesFixture({ dates = ["2026-10-13", "2026-10-15", "2026-10-20"], clock = "12:30 – 15:30" } = {}) {
+  const label = date => new Intl.DateTimeFormat("sv-SE", { day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
+  const article = soleilArticle({ id: "event-1", title: "Town event", date: `${label(dates[0])} – ${label(dates.at(-1))}`, datetime: dates[0], time: "" })
+    .replace('/calendar/Programpunkt.html?id=event-1', '/event?id=event-1');
+  const detail = showcasePage(showcaseState({}, {
+    dateRange: { date: dates[0] },
+    occasions: dates.map(date => ({ date, time: clock, formatted: date, location: "Town hall" })),
+    locations: [{ name: "Town hall", coordinate: "55.601, 13.001", adress: "Main street 4" }],
+  }));
+  return { dates, article, detail };
+}
+
+test("Sitevision source occurrences retain both selected-day and following-day facts through the real collector", async () => {
+  const fixture = futureSeriesFixture();
+  const endpoint = "https://municipality.example/calendar";
+  const fetcher = async url => ({ ok: true, text: async () => url === endpoint ? soleilListingHtml([fixture.article]) : fixture.detail });
+  const provider = createSitevisionCalendarProvider({ endpoint, fetcher, timezone: "Europe/Stockholm", detailLimit: 1 });
+  const raw = await provider.create(city).collect({ date: "2026-10-13" });
+  assert.equal(raw.time_sensitive_events.length, 3, "each stated date is an occurrence, not a single first-day atom");
+  assert.deepEqual(raw.time_sensitive_events.map(event => event.time_window.dates), fixture.dates.map(date => [date]));
+  const feed = { id: "municipal-series", adapter: "sitevision_calendar", endpoint, timezone: "Europe/Stockholm",
+    bbox: [12.9, 55.5, 13.1, 55.7], detail_limit: 1, source_tier: "official", source_scoped_pulse: true };
+  const registry = resolveEventFeedRegistry({ PARRANDA_EVENT_FEEDS: JSON.stringify([feed]) });
+  const live = await collectAnchorEvents({ anchor: { lat: 55.6, lng: 13 }, registry, fetcher,
+    selectedDate: "2026-10-13", now: "2026-10-13T08:00:00Z" });
+  assert.equal(live.tonight.length, 1);
+  assert.equal(live.this_week.length, 1, "future instances must survive even while today's instance is still upcoming");
+  assert.deepEqual(live.this_week[0].occurrences.map(event => event.time_window.dates[0]), fixture.dates.slice(1));
+  assert.equal(live.acquisition.source_health.accepted_event_count, 3);
+  assert.equal(live.acquisition.source_health.rejected_event_count, 0);
+});
+
+test("the unchanged Sitevision detail budget clarifies a repeated date range before an already timed row", async () => {
+  const fixture = futureSeriesFixture(), endpoint = "https://municipality.example/calendar", calls = [];
+  const complete = soleilArticle({ id: "complete", title: "Already timed", date: "13 oktober", datetime: "2026-10-13", time: "18:00 – 19:00" });
+  const fetcher = async url => {
+    calls.push(url);
+    return { ok: true, text: async () => url === endpoint ? soleilListingHtml([complete, fixture.article]) : fixture.detail };
+  };
+  const provider = createSitevisionCalendarProvider({ endpoint, fetcher, timezone: "Europe/Stockholm", detailLimit: 1 });
+  const result = await provider.create(city).collect({ date: "2026-10-13" });
+  assert.deepEqual(calls, [endpoint, "https://municipality.example/event?id=event-1"]);
+  assert.equal(result.time_sensitive_events.filter(event => event.title === "Town event").length, 3);
+  assert.equal(result.time_sensitive_events.find(event => event.title === "Already timed").starts_at, "2026-10-13T16:00:00.000Z");
+});
+
+test("Sitevision occurrence splitting keeps source-local dates across midnight and the autumn timezone fold", async () => {
+  const fixture = futureSeriesFixture({ dates: ["2026-10-24", "2026-10-25", "2026-10-26"], clock: "23:30 – 00:30" });
+  const endpoint = "https://municipality.example/calendar";
+  const fetcher = async url => textResponse(url === endpoint ? soleilListingHtml([fixture.article]) : fixture.detail);
+  const feed = { id: "night-series", adapter: "sitevision_calendar", endpoint, timezone: "Europe/Stockholm",
+    bbox: [12.9, 55.5, 13.1, 55.7], detail_limit: 1, source_tier: "official", source_scoped_pulse: true };
+  const registry = resolveEventFeedRegistry({ PARRANDA_EVENT_FEEDS: JSON.stringify([feed]) });
+  // UTC 23 Oct is source-local 24 Oct: filtering must use the reviewed zone.
+  const provider = createSitevisionCalendarProvider({ endpoint, fetcher, timezone: "Europe/Stockholm", detailLimit: 1 });
+  const raw = await provider.create(city).collect({ date: "2026-10-23T22:00:00Z" });
+  assert.deepEqual(raw.time_sensitive_events.map(event => event.starts_on), fixture.dates);
+  const live = await collectAnchorEvents({ anchor: { lat: 55.6, lng: 13 }, registry, fetcher,
+    selectedDate: "2026-10-24", now: "2026-10-24T08:00:00Z" });
+  assert.equal(live.tonight[0].time_window.local_start, "23:30");
+  assert.equal(live.tonight[0].time_window.local_end, "00:30");
+  assert.deepEqual(live.this_week[0].occurrences.map(event => event.starts_on), fixture.dates.slice(1));
+  assert.equal(live.this_week[0].occurrences[0].timezone, "Europe/Stockholm");
+});
+
+test("splitting a long publisher series retains its Pulse-only route bound", async () => {
+  const fixture = futureSeriesFixture({ dates: ["2026-10-01", "2026-10-13", "2026-11-01"] });
+  const endpoint = "https://municipality.example/calendar";
+  const fetcher = async url => textResponse(url === endpoint ? soleilListingHtml([fixture.article]) : fixture.detail);
+  const registry = resolveEventFeedRegistry({ PARRANDA_EVENT_FEEDS: JSON.stringify([{
+    id: "long-series", adapter: "sitevision_calendar", endpoint, timezone: "Europe/Stockholm",
+    bbox: [12.9, 55.5, 13.1, 55.7], detail_limit: 1, source_tier: "official", source_scoped_pulse: true,
+  }]) });
+  const live = await collectAnchorEvents({ anchor: { lat: 55.6, lng: 13 }, registry, fetcher,
+    selectedDate: "2026-10-13", now: "2026-10-13T08:00:00Z" });
+  assert.equal(live.tonight.length, 1, "a stated session remains visible");
+  assert.deepEqual(live.tonight[0].time_window.dates, ["2026-10-13"]);
+  assert.equal(live.tonight[0].route_eligible, false, "atomization must not bypass the original 14-day series bound");
+});
+
+test("the forty-row source budget retains today's event ahead of repeated future atoms", async () => {
+  const endpoint = "https://municipality.example/calendar", articles = [], details = new Map(), calls = [];
+  for (let index = 0; index < 6; index += 1) {
+    const fixture = futureSeriesFixture({ dates: Array.from({ length: 7 }, (_, day) => `2026-10-${14 + day}`) });
+    const id = `series-${index}`, title = `Series ${index}`;
+    articles.push(fixture.article.replaceAll("event-1", id).replaceAll("Town event", title));
+    details.set(`https://municipality.example/event?id=${id}`, fixture.detail.replaceAll("event-1", id).replaceAll("Town event", title));
+  }
+  articles.push(soleilArticle({ id: "today", title: "Today's concert", date: "13 oktober", datetime: "2026-10-13", time: "18:00 – 19:00" }));
+  const fetcher = async url => {
+    calls.push(String(url));
+    return textResponse(url === endpoint ? soleilListingHtml(articles) : details.get(String(url)) || "<main></main>");
+  };
+  const registry = resolveEventFeedRegistry({ PARRANDA_EVENT_FEEDS: JSON.stringify([{
+    id: "bounded-series", adapter: "sitevision_calendar", endpoint, timezone: "Europe/Stockholm",
+    bbox: [12.9, 55.5, 13.1, 55.7], detail_limit: 8, source_tier: "official", source_scoped_pulse: true,
+  }]) });
+  const live = await collectAnchorEvents({ anchor: { lat: 55.6, lng: 13 }, registry, fetcher,
+    selectedDate: "2026-10-13", now: "2026-10-13T08:00:00Z" });
+  assert.deepEqual(live.tonight.map(event => event.title), ["Today's concert"]);
+  assert.equal(live.acquisition.source_health.raw_event_count, 40, "the existing collector budget stays bounded");
+  assert.ok(live.acquisition.source_health.reasons.includes("source_collection_truncated"));
+  assert.equal(calls.length, 8, "listing plus at most eight detail requests");
+  assert.equal(new Set(live.this_week.map(event => event.title)).size, 6, "all six series retain a following-week representative");
+});
+
 test("event-owned Sitevision state supplies its matching venue coordinates", () => {
   const event = extractSitevisionEventDetail(showcasePage(showcaseState()), SHOWCASE_OPTIONS);
   assert.equal(event.place_context, "Town hall");
@@ -704,10 +810,10 @@ test("provider bounds detail fetches and keeps listing rows when detail enrichme
   assert.equal(enriched.starts_at, undefined);
   assert.equal(enriched.ends_at, undefined);
   assert.equal(enriched.source_label, "Municipal calendar");
-  assert.equal(enriched.starts_on, "2026-06-25");
+  assert.equal(enriched.starts_on, "2026-07-16");
   assert.equal(enriched.ends_on, "2026-07-16");
   assert.equal(enriched.time_window.kind, "occurrences");
-  assert.deepEqual(enriched.time_window.dates, THURSDAYS);
+  assert.deepEqual(enriched.time_window.dates, ["2026-07-16"], "only the next stated Thursday is inside this collection window");
   const listingOnly = result.time_sensitive_events.find((event) => event.title === "Two");
   assert.equal(listingOnly.time_window.kind, "continuous", "a failed detail keeps the listing row");
 });
@@ -740,7 +846,7 @@ test("a detail page that cannot bind a pin still supplies its other facts", asyn
   assert.equal(result.time_sensitive_events.length, 2);
   for (const event of result.time_sensitive_events) {
     assert.equal(event.time_window.kind, "occurrences", event.title);
-    assert.deepEqual(event.time_window.dates, THURSDAYS, event.title);
+    assert.deepEqual(event.time_window.dates, ["2026-07-16"], event.title);
     assert.equal(event.recurrence, "Every Thursday", event.title);
     assert.equal(event.place_context, "Town museum", event.title);
     assert.equal(event.address, "Example street 1", event.title);
@@ -972,14 +1078,16 @@ test("selected-day Live never places a recurring municipal entry on a day its so
   assert.deepEqual(friday.this_week.map((event) => event.title).sort(), ["Kvällsvandring", "Sommarkväll på torget"]);
   const series = friday.this_week.find((event) => event.title === "Sommarkväll på torget");
   assert.equal(series.time_window.kind, "occurrences");
-  assert.deepEqual(series.time_window.dates, THURSDAYS);
+  assert.deepEqual(series.time_window.dates, ["2026-07-16"], "the following week retains its own source-stated occurrence");
   const unstated = friday.this_week.find((event) => event.title === "Kvällsvandring");
   assert.equal(unstated.time_window.kind, "period");
   assert.equal(unstated.route_eligible, false, "a range without stated days cannot anchor a route");
 
   const thursday = await collect("2026-07-09");
   assert.deepEqual(thursday.tonight.map((event) => event.title), ["Sommarkväll på torget"]);
-  assert.deepEqual(thursday.this_week.map((event) => event.title).sort(), ["Konsert i parken", "Kvällsvandring"]);
+  assert.deepEqual(thursday.this_week.map((event) => event.title).sort(), ["Konsert i parken", "Kvällsvandring", "Sommarkväll på torget"]);
+  assert.deepEqual(thursday.tonight[0].time_window.dates, ["2026-07-09"]);
+  assert.deepEqual(thursday.this_week.find(event => event.title === "Sommarkväll på torget").time_window.dates, ["2026-07-16"]);
 
   for (const event of [...friday.tonight, ...friday.this_week, ...thursday.tonight, ...thursday.this_week]) {
     assert.notEqual(event.time_window?.kind, "daily", `${event.title} must not be widened into daily`);

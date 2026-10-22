@@ -130,7 +130,7 @@ for (const lang of ['en', 'sv']) test(`${lang} Live credits survive without URLs
   await click(h, button(h, /See all live|Se allt live/));
   for (const period of ['this_week', 'tonight']) {
     await click(h, button(h, period === 'this_week'
-      ? /^(Following 7 days|Följande 7 dagar)$/ : /^(Fri 25 Sept|fre 25 sep\.)$/));
+      ? /^(Next 7 days|Kommande 7 dagar)$/ : /^(Fri 25 Sept|fre 25 sep\.)$/));
     const query = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));
     assert.equal(query.body.time, period);
     await h.fetchMock.respond(query, { contract: 'live_event_query_v1', route_mutation: false,
@@ -183,7 +183,7 @@ for (const lang of ['en', 'sv']) test(`${lang} calendar facts keep date/admin sc
   await click(h, button(h, /See all live|Se allt live/));
   for (const period of ['this_week', 'tonight']) {
     await click(h, button(h, period === 'this_week'
-      ? /^(Following 7 days|Följande 7 dagar)$/ : /^(Fri 25 Sept|fre 25 sep\.)$/));
+      ? /^(Next 7 days|Kommande 7 dagar)$/ : /^(Fri 25 Sept|fre 25 sep\.)$/));
     const call = h.fetchMock.pending().find(call => call.url.includes('/api/live-events'));
     assert.equal(call.body.time, period);
     await h.fetchMock.respond(call, { contract: 'live_event_query_v1', route_mutation: false,

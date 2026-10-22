@@ -6,12 +6,18 @@
  * Its copy says "near you" only when the anchor IS the reader's position, and
  * promises the day stays as it is only when there is a day on screen.
  */
-import type { AnywhereBlitzView } from "../../lib/blitz-view.mjs";
+import type { AnywhereBlitzView, BlitzMoveView } from "../../lib/blitz-view.mjs";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { eventSourceLink, eventTiming } from "../../lib/pulse-view.mjs";
 import { BoltIcon, ExternalIcon } from "../shared/icons";
-import { buttonClass, Eyebrow } from "../shared/ui";
+import { busyButton, buttonClass, Eyebrow } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
+
+function placeHoursNote(move: BlitzMoveView, t: Translate) {
+  return move.availability_status === "available_in_window"
+    ? t("Källans schema anger öppet vid kontrollen. Kontrollera att du hinner fram.", "Listed hours indicate open at the time checked. Check that you can arrive in time.")
+    : t("Öppet just nu är inte bekräftat. Kolla innan du går.", "Open now is not confirmed. Check before you go.");
+}
 
 export default function BlitzCard({
   t,
@@ -21,6 +27,8 @@ export default function BlitzCard({
   dayOnScreen,
   blitz,
   blitzPhase,
+  sharePositionForBlitz,
+  blitzPositionFailed,
   blitzResult,
   typedPlaceLabel,
 }: {
@@ -30,7 +38,9 @@ export default function BlitzCard({
   anchorLabel: string;
   dayOnScreen: boolean;
   blitz: () => void;
-  blitzPhase: "idle" | "loading" | "done" | "error";
+  blitzPhase: "idle" | "loading" | "done" | "error" | "position_needed" | "locating";
+  sharePositionForBlitz: () => void;
+  blitzPositionFailed: boolean;
   blitzResult: AnywhereBlitzView | null;
   typedPlaceLabel: string;
 }) {
@@ -38,8 +48,7 @@ export default function BlitzCard({
     <div className="flex flex-col gap-3">
       <button
         type="button"
-        onClick={blitz}
-        disabled={blitzPhase === "loading"}
+        {...busyButton(blitzPhase === "loading" || blitzPhase === "locating", blitz)}
         className={buttonClass("secondary", "min-h-11 w-full px-4 text-sm")}
       >
         <BoltIcon className="h-4 w-4 text-parranda-glow" />
@@ -48,13 +57,13 @@ export default function BlitzCard({
       {blitzPhase === "idle" && (
         <p className="-mt-1 text-center text-xs text-parranda-ink/68">
           {mode === "near_me"
-            ? t("Ett nästa drag nära dig, just nu", "One next move near you, right now")
-            : t(`Ett nästa drag i ${anchorLabel}, just nu`, `One next move in ${anchorLabel}, right now`)}
+            ? t("Ett förslag nära dig, just nu", "One idea near you, right now")
+            : t(`Ett förslag i ${anchorLabel}, just nu`, `One idea in ${anchorLabel}, right now`)}
           {dayOnScreen ? t(" — din dag ändras inte.", " — your day stays as it is.") : "."}
         </p>
       )}
       {blitzPhase !== "idle" && (
-        <section className="rounded-parranda border-[1.5px] border-parranda-ink/14 bg-parranda-ink/4 p-4" aria-live="polite">
+        <section className="rounded-parranda border-line border-parranda-ink/14 bg-parranda-ink/4 p-4" aria-live="polite">
           <div className="flex items-center gap-2">
             <BoltIcon className="h-3.5 w-3.5 text-parranda-glow" />
             <Eyebrow tone="glow">{t("Blitz just nu", "Blitz right now")}</Eyebrow>
@@ -63,6 +72,17 @@ export default function BlitzCard({
             <p className="mt-2 text-sm text-parranda-ink/75">
               {t("Läser tiden, platsen och vad som händer nära dig …", "Reading the time, place and what is happening nearby …")}
             </p>
+          )}
+          {(blitzPhase === "position_needed" || blitzPhase === "locating") && (
+            <div className="mt-2 flex flex-col items-start gap-3">
+              <p className="text-sm text-parranda-ink/75">
+                {t("Blitz behöver din position. Den sparas inte när dagen öppnas igen. Dela den för ett förslag nära dig.", "Blitz needs your location. It isn't kept when a saved day is reopened. Share it for an idea near you.")}
+              </p>
+              <button type="button" {...busyButton(blitzPhase === "locating", sharePositionForBlitz)} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                {blitzPhase === "locating" ? t("Hämtar position …", "Getting location …") : t("Dela position för Blitz", "Share position for Blitz")}
+              </button>
+              {blitzPositionFailed && <p className="text-sm text-parranda-ink/75">{t("Positionen kunde inte delas. Försök igen eller välj en plats på startsidan.", "Your position could not be shared. Try again or choose a place on the home page.")}</p>}
+            </div>
           )}
           {blitzPhase === "error" && (
             <p className="mt-2 text-sm text-parranda-ink/75">
@@ -73,10 +93,10 @@ export default function BlitzCard({
           {blitzPhase === "done" && blitzResult?.state === "blocked" && (
             <p className="mt-2 text-sm text-parranda-ink/75">
               {mode === "near_me"
-                ? t("Inget tillräckligt pålitligt nästa drag hittades nära dig just nu.", "No sufficiently reliable next move was found near you right now.")
+                ? t("Inget tillräckligt säkert förslag nära dig just nu.", "No reliable idea near you right now.")
                 : t(
-                    `Inget tillräckligt pålitligt nästa drag hittades i ${anchorLabel} just nu.`,
-                    `No sufficiently reliable next move was found in ${anchorLabel} right now.`,
+                    `Inget tillräckligt säkert förslag i ${anchorLabel} just nu.`,
+                    `No reliable idea in ${anchorLabel} right now.`,
                   )}
               {dayOnScreen ? t(" Din plan är oförändrad.", " Your day is unchanged.") : ""}
             </p>
@@ -101,17 +121,24 @@ export default function BlitzCard({
               <div className="mt-2 flex flex-col gap-3">
                 <div>
                   <p className="type-title text-2xl text-parranda-ink">{move.title}</p>
-                  <div className="type-data mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-parranda-ink/72">
+                  <div className="type-data mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-11 text-parranda-ink/72">
                     {move.kind === "live_event" && <span>{t("Live-händelse", "Live event")}</span>}
                     {timing && <span>{timing}</span>}
                     {Number.isFinite(move.walking_minutes) && <span>{move.walking_minutes} {t("min till fots", "min walk")}</span>}
                     {move.source.label && <span>{move.source.label}</span>}
                   </div>
                 </div>
+                {move.kind === "place" && (
+                  <p className="text-sm text-parranda-ink/85">{placeHoursNote(move, t)}</p>
+                )}
                 <p className="text-xs text-parranda-ink/68">
-                  {dayOnScreen
-                    ? t("Ett källstött nästa drag utifrån platsen, tiden och dina val. Det ändrar inte dagens rutt.", "A source-backed next move from your place, time and picks. It does not change today's route.")
-                    : t("Ett källstött nästa drag utifrån platsen, tiden och dina val.", "A source-backed next move from your place, time and picks.")}
+                  {move.kind === "place"
+                    ? dayOnScreen
+                      ? t("Ett källstött platsförslag. Det ändrar inte dagens rutt.", "A source-backed place suggestion. It does not change today's route.")
+                      : t("Ett källstött platsförslag.", "A source-backed place suggestion.")
+                    : dayOnScreen
+                    ? t("Ett förslag utifrån platsen, tiden och dina intressen. Det ändrar inte dagens rutt.", "An idea from your place, time and interests. It doesn't change today's route.")
+                    : t("Ett förslag utifrån platsen, tiden och dina intressen.", "An idea from your place, time and interests.")}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {mapsUrl && (
@@ -123,7 +150,8 @@ export default function BlitzCard({
                   {move.kind === "live_event"
                     ? liveSourceLink && (
                         <a href={liveSourceLink.href} target="_blank" rel="noreferrer" className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
-                          <span>{liveSourceLink.text}<span aria-hidden="true">&nbsp;↗</span></span>
+                          <span>{liveSourceLink.text}</span>
+                          <ExternalIcon />
                         </a>
                       )
                     : move.source.url && (
@@ -137,6 +165,7 @@ export default function BlitzCard({
                   <p className="border-t border-parranda-ink/12 pt-2 text-xs text-parranda-ink/68">
                     {secondary.kind === "live_event" ? t("Senare i närheten: ", "Later nearby: ") : t("Annars i närheten: ", "Otherwise nearby: ")}
                     <span className="font-bold text-parranda-ink/85">{secondary.title}</span>
+                    {secondary.kind === "place" && <span className="mt-1 block">{placeHoursNote(secondary, t)}</span>}
                   </p>
                 )}
               </div>

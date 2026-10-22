@@ -70,7 +70,11 @@ test('scarce two-stop supply stays honest for every rhythm', async () => {
   for (const route of Object.values(routes)) assert.equal(route.main_stops.length, 2);
 });
 
-test('uncorroborated supply is not multiplied to fill a full rhythm day', async () => {
+test('already admitted single-family supply follows rhythm without pretending corroboration', async () => {
   const routes = await compareRhythms(supply(6, false));
-  for (const route of Object.values(routes)) assert.ok(route.main_stops.length <= 2);
+  assert.deepEqual(['calm','balanced','full'].map(rhythm=>routes[rhythm].main_stops.length),[4,5,6]);
+  for (const route of Object.values(routes)) {
+    assert.equal(route.trust_summary.human_verified,false);
+    assert.ok(route.main_stops.every(stop=>stop.trust.confidence==='low' && stop.provenance.attribution.length===1));
+  }
 });

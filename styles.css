@@ -1474,7 +1474,8 @@ body.is-planner-entry .planner-mode-button.is-active {
   margin-bottom: 22px;
   padding: 24px;
   border-radius: 30px;
-  overflow: hidden;
+  /* Clip the off-edge glow without a scroll area that can displace the text. */
+  overflow: clip;
   color: var(--text);
   background:
     radial-gradient(circle at 86% 0%, rgba(215, 160, 77, 0.14), transparent 24%),

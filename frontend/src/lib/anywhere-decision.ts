@@ -15,6 +15,7 @@ export type AnywhereStatus =
   | "composed"
   | "composed_limited"
   | "structure_only"
+  | "edited_empty"
   | "unavailable";
 
 export interface AnywhereClassification {

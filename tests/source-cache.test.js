@@ -226,23 +226,25 @@ test("concurrent loader lookups for the same anchor coalesce to one Overpass cal
   assert.equal(calls, 1);
 });
 
-test("a failed Overpass response is not cached (the next lookup retries)", async () => {
+test("a failed Overpass response is not cached (acquisition resumes after endpoint cooldown)", async () => {
   let calls = 0;
+  const now = mutableClock();
   const fetcher = async () => {
     calls += 1;
-    return { ok: false, status: 429 };
+    return { ok: false, status: 500 };
   };
-  // Single explicit endpoint so this stays a CACHE test (mirror failover, which
-  // would multiply the call count, is covered in open-data-loader.test.js).
   const loader = createOpenDataLoader({
-    fetcher,
+    fetcher, now,
     endpoint: "https://example.org/overpass",
-    cache: createSourceCache({ namespace: "overpass", ttlMs: 60000, now: mutableClock() }),
+    cache: createSourceCache({ namespace: "overpass", ttlMs: 60000, now }),
   });
   const first = await loader({ lat: 1, lng: 1 });
-  const second = await loader({ lat: 1, lng: 1 });
+  assert.equal((await loader({ lat: 1, lng: 1 })).loader_error, "provider_unavailable");
+  assert.equal(calls, 1, "a short endpoint hold is not a cached empty answer");
+  now.advance(60001);
+  await loader({ lat: 1, lng: 1 });
   assert.equal(first.loader_status, "error_failed_closed");
-  assert.equal(calls, 2, "an error must not be frozen into the cache");
+  assert.equal(calls, 2, "an error must not be frozen into the cache after the hold expires");
 });
 
 test("a cached loader serves prior trusted records with explicit stale metadata after a refresh failure", async () => {
@@ -289,7 +291,7 @@ test("an uncached loader (no cache option) is byte-for-byte the prior behavior",
 
 // --- deploy wiring ---------------------------------------------------------
 
-test("the deployed Overture loader reads its v5 anchor sample after restart, never legacy v2/v3/v4 rows", async (t) => {
+test("the deployed Overture loader reads verified v6 evidence after restart, never unbound v2/v3/v4/v5 rows", async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-overture-revision-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   // No provider acceptance: deterministic failure at the real factory's fetch seam.
@@ -300,18 +302,29 @@ test("the deployed Overture loader reads its v5 anchor sample after restart, nev
   for (const namespace of ["overture-v2", "overture-v3", "overture-v4"]) {
     await createSourceCache({ namespace, dir }).get(legacyKey, async () => legacy);
   }
+  await createSourceCache({ namespace: 'overture-v5', dir }).get('41.900,12.500:r5:c0.95', async () => legacy);
   const env = {
     PARRANDA_OPEN_DATA_LOADER: "enabled", PARRANDA_OVERTURE_SOURCE: "enabled",
     PARRANDA_CACHE_DIR: dir, PARRANDA_OVERPASS_ENDPOINTS: "https://example.org/overpass",
   };
   assert.equal((await resolveDefaultOpenDataLoader(env)({ lat: 41.9, lng: 12.5 })).length, 0);
-  // v5 caches one stratified sample per anchor window (default 5 km, 0.95 floor);
-  // every request, whatever its preferences, re-selects from it.
-  const current = [{ id: "current-primary", type: "garden", lat: 41.9, lng: 12.5 }];
-  await createSourceCache({ namespace: "overture-v5", dir }).get("41.900,12.500:r5:c0.95", async () => current);
+  // The real source builds the receipt; only the external query is controlled.
+  const { createOvertureSource } = require('../server/place-candidates/overture-source');
+  const { createOvertureSampleCache } = require('../server/place-candidates/overture-sample-cache');
+  const release = '2026-09-23.1';
+  const asset = `s3://overturemaps-us-west-2/release/${release}/theme=places/type=place/part-00001-fixture.zstd.parquet`;
+  const source = createOvertureSource({ releaseResolver: async () => release, assetResolver: async () => [asset], queryRows: async () => {
+    const rows = [{ id: '10000000-0000-0000-0000-000000000001', name: 'Verified source garden', category: 'garden', category_hierarchy: ['garden'],
+      confidence: .99, operating_status: 'open', licenses: ['CC0-1.0'], lat: 41.9, lng: 12.5 }];
+    Object.defineProperty(rows, 'source_assets', { value: [{ path: asset, etag: '"fixture-a"', length: 128 }] });
+    return rows;
+  } });
+  const current = await source.acquire({ lat: 41.9, lng: 12.5 });
+  const cache = createOvertureSampleCache({ cache: createSourceCache({ namespace: 'overture-v6', dir }), validateReceipt: source.validateReceipt });
+  await cache.get(source.cacheKeyFor({ lat: 41.9, lng: 12.5 }), async () => current);
   for (const requestedIntents of [[], ["green"], ["food", "museums"]]) {
     const records = await resolveDefaultOpenDataLoader(env)({ lat: 41.9, lng: 12.5, requestedIntents });
-    assert.deepEqual(records.map((record) => record.id), ["current-primary"], requestedIntents.join("+"));
+    assert.deepEqual(records.map((record) => record.id), ['overture-10000000-0000-0000-0000-000000000001'], requestedIntents.join("+"));
   }
   for (const namespace of ["overture-v2", "overture-v4"]) {
     assert.deepEqual(createSourceCache({ namespace, dir }).peek(legacyKey), legacy,

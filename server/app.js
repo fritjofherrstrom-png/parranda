@@ -44,7 +44,11 @@ const {
   summarizePinnedOutcome,
 } = require("./planner/pinned-candidates");
 const { parseRequestedDates } = require("./planner/requested-dates");
+const { normalizeDayEdit, normalizePreferencePriority } = require('../shared/planner-intent.mjs');
+const { dayEditOutcome } = require('./planner/day-composition-policy');
 const { createPlannerLifecycle, lifecycleLoader } = require('./planner/cold-lifecycle');
+const { createPlannerSnapshotAssessor, memoizePlannerWeather } = require('./planner/source-snapshot-readiness');
+const { resolveAgnosticContext, defaultWeatherProvider } = require('./planner/agnostic-route-context');
 const { createLiveCompletionStore } = require('./planner/live-completion');
 const { retainComposition, createRouteUpgrade } = require('./planner/live-route-upgrade');
 const { nearbyCuratedSupply } = require('./planner/nearby-curated-supply');
@@ -1549,8 +1553,13 @@ function buildApp({
     if (query.length < 3) return response.json({ status: 'ready', choices: [] });
     if (typeof placeSuggestions !== 'function') return response.json({ status: 'unavailable', choices: [] });
     const previous = placeSelectionStore.read(request.body?.context_selection);
+    const controller = new AbortController();
+    const cancel = () => { if (!response.writableEnded) controller.abort(); };
+    request.once('aborted', cancel);
+    response.once('close', cancel);
     try {
-      const result = await placeSuggestions(query, { language: normalizeLanguage(request.query?.lang), ...(previous ? { near: { lat: previous.lat, lng: previous.lng } } : {}) });
+      const result = await placeSuggestions(query, { language: normalizeLanguage(request.query?.lang), signal: controller.signal, ...(previous ? { near: { lat: previous.lat, lng: previous.lng } } : {}) });
+      if (controller.signal.aborted) return;
       const registry = buildLandingCityRegistry(normalizeLanguage(request.query?.lang));
       const choices = (result.choices || []).slice(0, 5).flatMap(choice => {
         const selection = placeSelectionStore.issue(choice.candidate, choice.query);
@@ -1563,7 +1572,12 @@ function buildApp({
         return [{ title: choice.title, context: choice.context, query: choice.query, kind: choice.kind, ...(placeRef ? { place_ref: placeRef } : {}), selection_id: selection, attribution: point.attribution, license: point.license, ...(cityKey ? { city_key: cityKey } : {}) }];
       });
       response.json({ status: result.status, choices, ...(result.retry_after_ms ? { retry_after_ms: result.retry_after_ms } : {}) });
-    } catch (_) { response.json({ status: 'unavailable', choices: [] }); }
+    } catch (_) {
+      if (!controller.signal.aborted) response.json({ status: 'unavailable', choices: [] });
+    } finally {
+      request.removeListener('aborted', cancel);
+      response.removeListener('close', cancel);
+    }
   });
   // GET / — the new frontend IS the landing (sole owner since the old shell was
   // retired). The committed frontend/dist makes the build always present; if a
@@ -1979,12 +1993,21 @@ function buildApp({
         response.status(400).json({ error: requestedDates.error, detail: requestedDates.detail });
         return;
       }
+      // Explicit edit presence is intent. Never turn a malformed shortening
+      // into an ordinary full-day request by silently dropping its fields.
+      const hasDayEdit = Object.hasOwn(request.body ?? {}, 'day_edit');
+      const dayEdit = hasDayEdit ? normalizeDayEdit(request.body.day_edit) : null;
+      if (hasDayEdit && !dayEdit) {
+        response.status(400).json({ error: 'invalid_day_edit' });
+        return;
+      }
       const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.body?.city);
       const city = cityConfig.key;
       const lang = normalizeLanguage(request.query?.lang);
       const preferences = Array.isArray(request.body?.preferences)
         ? request.body.preferences
         : [];
+      const preferencePriority = normalizePreferencePriority(request.body?.preference_priority, preferences);
       const requestedRhythm = ["calm", "balanced", "full", "free"].includes(request.body?.day_rhythm)
         ? request.body.day_rhythm : null;
       const payload = {
@@ -2008,11 +2031,23 @@ function buildApp({
       // payload may remove a place from consideration and nothing else. One
       // filter on the loader itself, so the composed day and the candidate panel
       // cannot disagree about what the user dismissed.
-      const excludedCandidateIds = parseExcludedCandidateIds(
+      const parsedLiveChoices = require("./planner/live-occurrence-choice").parseLiveEventChoices(request.body?.live_event_choices);
+      if (!parsedLiveChoices.valid) { response.status(400).json({ error: "invalid_live_event_choices" }); return; }
+      const liveEventChoices = parsedLiveChoices.choices;
+      const excludedCandidateIds = [...new Set([...parseExcludedCandidateIds(
         request.body?.excluded_candidate_ids ?? request.body?.excludedCandidateIds,
-      );
+      ), ...(dayEdit ? [dayEdit.candidate_id, ...dayEdit.removed_candidate_ids] : [])])];
+      let snapshotTimezone = null;
+      const scopedWeatherProvider = lifecycle && requestedRhythm
+        ? memoizePlannerWeather(weatherProvider || defaultWeatherProvider) : weatherProvider;
+      const snapshotOptions = requestedRhythm && isAgnosticRouteOutputExperimentRequested(request)
+        ? { assessSnapshot: createPlannerSnapshotAssessor({
+          selectedDate: payload.dates[0], excludedIds: excludedCandidateIds,
+          resolveContext: ({coords,date}) => resolveAgnosticContext({coords,date,
+            trustedTimezone:snapshotTimezone,weatherProvider:scopedWeatherProvider,clock,lang}),
+        }) } : {};
       let scopedOpenDataLoader = withoutExcludedCandidates(
-        lifecycle ? lifecycleLoader(openDataLoader, lifecycle) : openDataLoader,
+        lifecycle ? lifecycleLoader(openDataLoader, lifecycle, snapshotOptions) : openDataLoader,
         excludedCandidateIds,
       );
       // Ledger v2: "keep this one". Selection-only — a pin can name a candidate
@@ -2258,6 +2293,7 @@ function buildApp({
             const day = composeDistrictDay(structureCandidates, {
               intents: Array.isArray(payload.preferences) ? payload.preferences : [],
               maxAreas: 3,
+              candidateSurface: true,
             });
             if (day.structure.area_count > 0) {
               placeStructureSidecar = {
@@ -2270,6 +2306,7 @@ function buildApp({
                     areas: day.areas,
                     legs: day.legs,
                     covered_intents: day.covered_intents,
+                    partial_intents: day.partial_intents,
                     missing_intents: day.missing_intents,
                   },
                 },
@@ -2317,6 +2354,7 @@ function buildApp({
         ...placeResolutionInputs(request.body),
         explicitCoordinatesPresent: hasExplicitCoordinateFields(request),
       });
+      snapshotTimezone = intake.resolved?.timezone || null;
 
       if (!anchor) {
         // No trusted anchor → no route. Place resolution alone never produces a
@@ -2357,7 +2395,7 @@ function buildApp({
         : [];
       if (lifecycle && curatedCandidates.length) {
         scopedOpenDataLoader = withoutExcludedCandidates(
-          lifecycleLoader(openDataLoader, lifecycle, { independentSupply: curatedCandidates }),
+          lifecycleLoader(openDataLoader, lifecycle, { ...snapshotOptions, independentSupply: curatedCandidates }),
           excludedCandidateIds,
         );
       }
@@ -2380,6 +2418,7 @@ function buildApp({
             const day = composeDistrictDay(structureCandidates, {
               intents: Array.isArray(preferences) ? preferences : [],
               maxAreas: 3,
+              candidateSurface: true,
             });
             if (day.structure.area_count > 0) {
               agnosticPlaceStructure = {
@@ -2395,6 +2434,7 @@ function buildApp({
                   areas: day.areas,
                   legs: day.legs,
                   covered_intents: day.covered_intents,
+                  partial_intents: day.partial_intents,
                   missing_intents: day.missing_intents,
                 },
               };
@@ -2461,6 +2501,7 @@ function buildApp({
         const selectedRouteDate = resolveSelectedRouteDate(payload, baselineBody, cityConfig);
         wovenPlaceStructure = weaveEveningEvent(agnosticPlaceStructure, liveEvents, {
           selectedDate: selectedRouteDate,
+          liveEventChoices,
         });
       } catch (_error) {
         wovenPlaceStructure = agnosticPlaceStructure;
@@ -2483,7 +2524,13 @@ function buildApp({
         openDataLoader: scopedOpenDataLoader,
         curatedCandidates,
         preferences,
+        preferencePriority,
+        dayEdit,
         pinnedStopIds: pinnedCandidateIds,
+        liveEventChoices,
+        // Only the original, still-running producer and its authorized replay
+        // may defer a missing occurrence verdict. Public payload cannot set it.
+        liveSelectionPending: Boolean(upgradeRequested && liveEvents?.pending),
         lens: request.body?.lens || request.query?.lens || null,
         // #262 — payload weather is NOT trusted; trusted weather/time come only
         // from the server-injected seams. `trustedTimezone` is taken from the
@@ -2502,7 +2549,7 @@ function buildApp({
         // the response will carry, rather than settling on a route that is
         // then extended underneath it.
         eveningEventStructure: wovenPlaceStructure,
-        weatherProvider,
+        weatherProvider: scopedWeatherProvider,
         clock,
         trustedTimezone: intake.resolved?.timezone || null,
         // ONLY the resolver-attested label may drive route prose. The raw public
@@ -2532,7 +2579,7 @@ function buildApp({
       // route stays in the diagnostic experiment block.
       if (useEngineCompose) {
         // Original publication and authorized replay share the identical gates.
-        async function publishComposition({ result: experimentResult, experiment, eventWeave, pinnedRefusals, precompositionPinnedRefusals, commitmentEligibleIds }, wovenPlaceStructure, liveEventsSidecar) {
+        async function publishComposition({ result: experimentResult, experiment, eventWeave, pinnedRefusals, precompositionPinnedRefusals, commitmentEligibleIds, candidateHours }, wovenPlaceStructure, liveEventsSidecar) {
           experiment.intake = intake;
           const strongAnchor =
             intake.resolved?.confidence === "explicit" ||
@@ -2548,9 +2595,25 @@ function buildApp({
             requestedIntents: normalizeUserIntents(preferences).intents,
             preferenceCoverage: experiment.constraint_negotiation?.preference_coverage,
             primaryStops: experimentResult?.days?.[0]?.primary_route?.main_stops,
-            pinnedIds: pinnedCandidateIds,
+            // Reuse the existing soft preference exception only for a kept
+            // occurrence that actually passed source/time/walking validation.
+            // Request IDs cannot promote a missing or ineligible event.
+            pinnedIds: [...pinnedCandidateIds, ...(experimentResult?.days?.[0]?.primary_route?.main_stops || [])
+              .filter(stop => stop.is_live_event === true && stop.live_choice_eligible === true &&
+                liveEventChoices.some(choice => choice.action === "keep" && choice.occurrence_id === stop.live_occurrence_id))
+              .map(stop => stop.id)],
           });
           experiment.promotion = promotion;
+          // Empty is an explicit user choice, not a calibrated walking route.
+          // Only the trusted composer's accepted zero-stop state can publish it.
+          const manualEmptyPublished = Boolean(dayEdit?.action === 'remove' && dayEdit.target_stop_count === 0 &&
+            strongAnchor && experiment.eligibility?.eligible === true && experiment.route_mutation === true &&
+            experiment.day_edit?.status === 'applied' && experiment.day_edit.actual_stop_count === 0 &&
+            experimentResult?.days?.[0]?.manual_empty_day === true && !experimentResult.days[0].primary_route);
+          if (manualEmptyPublished) experiment.manual_edit_published = true;
+          if (dayEdit && experiment.day_edit?.status === 'applied' && !promotion.promote && !manualEmptyPublished) {
+            experiment.day_edit = dayEditOutcome(dayEdit, [], 'publication_withheld');
+          }
           // Bounded, count-only echo so an operator can see the day was composed
           // against a reduced reservoir. The ids are the user's own input and are
           // never re-published as evidence.
@@ -2577,25 +2640,32 @@ function buildApp({
           // and if not, exactly what remains. Read-only; promotes nothing.
           experiment.engine_readiness = buildEngineReadinessVerdict(experiment);
           const publicResult = buildAgnosticPublicResult({
-            result: promotion.promote ? experimentResult : baselineBody,
+            result: promotion.promote || manualEmptyPublished ? experimentResult : baselineBody,
             routeApplied: promotion.promote,
+            manualEmptyApplied: manualEmptyPublished,
             requestedCity,
             cityFallbackUsed,
           });
           // Compose already applied this weave INSIDE its authoritative
           // finalisation, so the route it settled on is the route below. Weaving
           // again here would either be a no-op or a second, unjudged mutation.
+          // Manual edits deliberately skip automatic weaving in compose. A
+          // missing weave must not refill their finalized count or change IDs.
           const engineWoven = selectPublishedEventWeave({
             promotionPromote: promotion.promote,
             eventWeave,
             publicResult,
-          }) ?? await weaveEventStopFailSoft({
+          }) ?? (dayEdit ? {
+            result: publicResult,
+            placeStructure: wovenPlaceStructure,
+            applied: false,
+          } : await weaveEventStopFailSoft({
             result: publicResult,
             requestedPreferences: preferences,
             placeStructure: wovenPlaceStructure,
             walkingRouter,
             walkingConfig,
-          });
+          }));
           reconcileConstraintAfterEventWeave({
             experiment,
             woven: engineWoven,
@@ -2608,7 +2678,14 @@ function buildApp({
           const publishedPlaceStructure = markCommitmentEligibility(
             engineWoven.placeStructure,
             publishedEligibleIds({ promotionPromote: promotion.promote, commitmentEligibleIds }),
+            candidateHours,
           );
+          if (liveEventChoices.length) {
+            experiment.live_event_choices = require("./planner/live-occurrence-choice").summarizeLiveChoices(
+              liveEventChoices, engineWoven.result?.days?.[0]?.primary_route?.main_stops,
+              engineWoven.result?.days?.[0]?.date || payload.dates[0],
+            );
+          }
           return {
             ...engineWoven.result,
             ...(publishedPlaceStructure ? { place_structure: publishedPlaceStructure } : {}),

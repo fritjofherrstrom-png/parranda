@@ -1,11 +1,10 @@
+import { useLiveClock } from "./useLiveClock";
 /**
  * THE LIVE SHEET (design handoff §3B) — explores the live_events buckets only.
  *
- * It never changes the day's anchor or the route, and it cannot: it receives
- * read-only data plus three callbacks — pick a scope (a separate, non-mutating
- * live_event_query_v1 request), pick a time, close. The landing's location
- * consent anchors the DAY; a separate near-me consent applies only to a Live
- * query, and that consent is requested by the planner, not here.
+ * Scope/time navigation reads the supplied Live data. Explicit planning sends
+ * only a server-issued occurrence identity to the planner's commitment path;
+ * it cannot supply event facts or change the day's anchor/date.
  *
  * Focus trapping, Escape and scroll locking stay with the planner, which owns
  * the trigger the focus returns to.
@@ -13,21 +12,27 @@
 import type { RefObject } from "react";
 import { nextSourceDate, type LiveFallback } from "./useLiveFallback";
 import { liveDateLabel } from "../../lib/live-event-query.mjs";
-import { eventTiming, liveEventRelevance, liveHighlightGroups } from "../../lib/pulse-view.mjs";
+import { eventTiming, liveEventRelevance } from "../../lib/pulse-view.mjs";
+import { liveEventTags, liveNavigationGroups, type LiveNavigationRow, type LiveSheetSort } from "../../lib/live-navigation.mjs";
 import type { LiveEventScope } from "../../lib/live-event-query.mjs";
 import { CloseIcon, LocationIcon } from "../shared/icons";
+import { selectableLiveOccurrenceId } from "../../lib/live-stop-choice.mjs";
+import { busyButton, buttonClass, labelChip, pillClass, segmentClass, segmentGroup } from "../shared/ui";
+import { liveTagLabels } from "../../lib/live-tags.mjs";
 import { liveRelevanceSentence, nearbyDistanceLabel, type Lang, type Translate } from "./copy";
 import { liveEventSource } from "./LiveEventSource";
+import EventOccurrences from "./EventOccurrences";
 import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
 import type { LiveEvents, LiveFailure, LiveSourceHealth, PulseEvent } from "./types";
 
 type SheetState = "hidden" | "uncovered" | "pending" | "unavailable" | "partial" | "ok" | "rejected_empty" | "soft_empty";
 
+// Where is a set of chips, not a segment: one of four, and some can be off.
+// Selected uses the system's one "chosen" fill (ink); Live blue stays for Live content.
+// An unavailable scope is disabled; while a query runs the chips are busy
+// (busyButton), so the pressed chip keeps keyboard focus.
 const scopeChip = (active: boolean) =>
-  "inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-[13px] transition disabled:cursor-not-allowed disabled:opacity-40 " +
-  (active
-    ? "border-parranda-live bg-parranda-live font-bold text-parranda-on-live"
-    : "border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45");
+  pillClass(active, "gap-2 disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:opacity-60 aria-busy:cursor-progress");
 
 export default function LiveSheet({
   lang,
@@ -38,7 +43,12 @@ export default function LiveSheet({
   liveDayLabel,
   liveSheetTime,
   setLiveSheetTime,
+  liveSheetSort,
+  setLiveSheetSort,
   onRetry,
+  planningDate,
+  planningAvailable = false,
+  onPlanOccurrence,
   liveSheetScope,
   requestLiveSheetScope,
   aroundPlaceScopeAvailable,
@@ -71,7 +81,12 @@ export default function LiveSheet({
   liveDayLabel: string;
   liveSheetTime: "tonight" | "week";
   setLiveSheetTime: (time: "tonight" | "week") => void;
+  liveSheetSort: LiveSheetSort;
+  setLiveSheetSort: (sort: LiveSheetSort) => void;
   onRetry: () => void;
+  planningDate?: string | null;
+  planningAvailable?: boolean;
+  onPlanOccurrence?: (event: PulseEvent, label: string) => void;
   liveSheetScope: LiveEventScope;
   requestLiveSheetScope: (scope: LiveEventScope) => void;
   aroundPlaceScopeAvailable: boolean;
@@ -99,26 +114,54 @@ export default function LiveSheet({
 }) {
   const sheetEvents: PulseEvent[] = liveSheetTime === "tonight" ? sheetBuckets.tonight : sheetBuckets.thisWeek;
   const sheetMoreEvents: PulseEvent[] = liveSheetTime === "tonight" ? sheetBrowseBuckets.tonight : sheetBrowseBuckets.thisWeek;
+  const now = useLiveClock([...sheetEvents, ...sheetMoreEvents]);
   // Relevance is claimed only where the server established it for the
   // current picks: matched rows get the picks heading, every other row
   // (the reserved local discovery included) is listed as "other".
-  const highlightGroups = liveHighlightGroups(sheetEvents, selected);
-  const sheetRow = (ev: PulseEvent, i: number, titleClassName: string, timingDate = sheetLiveEvents?.selected_date) => {
-    const relevance = liveRelevanceSentence(liveEventRelevance(ev, selected), lang, t);
+  const navigation = liveNavigationGroups(sheetEvents, sheetMoreEvents, { sort: liveSheetSort, selectedPreferences: selected });
+  const choice = (event: PulseEvent, label: string, rowDate = planningDate) => planningAvailable && onPlanOccurrence &&
+    rowDate === planningDate && selectableLiveOccurrenceId(event, planningDate) ? (
+      <button type="button" onClick={() => onPlanOccurrence(event, label)}
+        className={buttonClass("secondary", "mt-2 min-h-11 w-full px-4 text-sm sm:w-auto")}>
+        {t("Planera med evenemanget", "Plan with this event")}
+      </button>
+    ) : null;
+  const sheetRow = (ev: PulseEvent, i: number, titleClassName: string, timingDate = sheetLiveEvents?.selected_date,
+    navigationRow?: LiveNavigationRow<PulseEvent>) => {
+    const displayProgram = ev.display_group_kind === "source_program";
+    const relevance = liveRelevanceSentence(liveEventRelevance(navigationRow?.series || ev, selected), lang, t);
     const distance = nearbyDistanceLabel(ev, lang);
+    const tags = liveTagLabels(liveEventTags(ev), lang);
+    const timing = navigationRow?.kind === "undated" ? ""
+      : eventTiming(ev, lang, now, navigationRow?.date || timingDate);
     return (
-      <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 sm:gap-2">
-        <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">{eventTiming(ev, lang, undefined, timingDate)}</span>
+      <li key={`${ev.id || "event"}:${i}`} className="flex min-w-0 flex-col gap-1 sm:gap-2">
+        <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">{timing}</span>
         <span className="min-w-0 max-w-full break-words text-sm leading-relaxed text-parranda-ink/90">
           <span className={titleClassName}>{ev.title}</span>
           {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
           {distance && <span className="font-semibold text-parranda-live"> · {distance}</span>}
           {liveEventSource(ev, lang)}
+          {/* A named list: aria-label on a plain span is not read, a list's is. */}
+          {tags.length > 0 && <span role="list" aria-label={t("Taggar", "Tags")} className="mt-1 flex flex-wrap gap-1">
+            {/* overflow-wrap:anywhere, not break-words: inside an inline-flex chip
+                only "anywhere" lets an unbroken source word wrap at 320px. */}
+            {tags.map(tag => <span role="listitem" key={tag} className={`${labelChip} min-w-0 max-w-full [overflow-wrap:anywhere]`}>{tag}</span>)}
+          </span>}
           {relevance && <span className="mt-0.5 block text-xs text-parranda-ink/68">{relevance}</span>}
         </span>
+        {!displayProgram && choice(ev, navigationRow?.series?.title || ev.title || "", navigationRow ? navigationRow.date : planningDate)}
+        {(!navigationRow || displayProgram) && <EventOccurrences event={ev} lang={lang} now={now} selectedDate={navigationRow?.date || timingDate}
+          renderChoice={slot => choice(slot, ev.title || "", navigationRow ? navigationRow.date : planningDate)} />}
       </li>
     );
   };
+  const dateSection = (label: string, rows: LiveNavigationRow<PulseEvent>[]) => (
+    <section key={label} aria-label={label} className="flex flex-col gap-3">
+      <h4 className="text-xs font-bold text-parranda-ink/68">{label}</h4>
+      <ul className="flex flex-col gap-3">{rows.map((row, i) => sheetRow(row.event, i, "font-semibold", row.date || undefined, row))}</ul>
+    </section>
+  );
   const scopePhrase =
     liveSheetScope === "near_route"
       ? t("nära rutten", "near the route")
@@ -131,7 +174,7 @@ export default function LiveSheet({
           : t(`runt ${anchorLabel}`, `around ${anchorLabel}`);
 
   return (
-    <div className="fixed inset-0 z-1100">
+    <div className="fixed inset-0 z-(--p-z-sheet)">
       <div aria-hidden="true" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
       <div
         ref={dialogRef}
@@ -139,7 +182,7 @@ export default function LiveSheet({
         aria-modal="true"
         aria-label={t("Live-händelser", "Live events")}
         tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t border-parranda-ink/14 bg-parranda-paper px-5 pb-8 pt-4 shadow-2xl sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:rounded-3xl sm:border sm:px-7"
+        className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t border-parranda-ink/14 bg-parranda-paper px-5 pb-8 pt-4 shadow-sheet sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:rounded-3xl sm:border sm:px-7"
       >
         <div className="flex justify-center sm:hidden" aria-hidden="true">
           <span className="h-1 w-11 rounded-full bg-parranda-ink/20" />
@@ -176,8 +219,8 @@ export default function LiveSheet({
             <button
               type="button"
               aria-pressed={liveSheetScope === "around_place"}
-              disabled={!aroundPlaceScopeAvailable || liveQueryPending}
-              onClick={() => requestLiveSheetScope("around_place")}
+              disabled={!aroundPlaceScopeAvailable}
+              {...busyButton(liveQueryPending, () => requestLiveSheetScope("around_place"))}
               className={scopeChip(liveSheetScope === "around_place")}
             >
               {anchorIsPosition ? t("Runt din position", "Around your position") : t(`Runt ${anchorLabel}`, `Around ${anchorLabel}`)}
@@ -185,8 +228,8 @@ export default function LiveSheet({
             <button
               type="button"
               aria-pressed={liveSheetScope === "in_place"}
-              disabled={!inPlaceScopeAvailable || liveQueryPending}
-              onClick={() => requestLiveSheetScope("in_place")}
+              disabled={!inPlaceScopeAvailable}
+              {...busyButton(liveQueryPending, () => requestLiveSheetScope("in_place"))}
               className={scopeChip(liveSheetScope === "in_place")}
             >
               {t("Hela området", "Whole area")}
@@ -194,8 +237,8 @@ export default function LiveSheet({
             <button
               type="button"
               aria-pressed={liveSheetScope === "near_route"}
-              disabled={!routeScopeAvailable || liveQueryPending}
-              onClick={() => requestLiveSheetScope("near_route")}
+              disabled={!routeScopeAvailable}
+              {...busyButton(liveQueryPending, () => requestLiveSheetScope("near_route"))}
               className={scopeChip(liveSheetScope === "near_route")}
             >
               {t("Nära rutten", "Near the route")}
@@ -203,8 +246,7 @@ export default function LiveSheet({
             <button
               type="button"
               aria-pressed={liveSheetScope === "near_me"}
-              disabled={liveQueryPending}
-              onClick={() => requestLiveSheetScope("near_me")}
+              {...busyButton(liveQueryPending, () => requestLiveSheetScope("near_me"))}
               className={scopeChip(liveSheetScope === "near_me")}
             >
               <LocationIcon className="h-3.5 w-3.5 text-parranda-ember" />
@@ -223,19 +265,28 @@ export default function LiveSheet({
         {/* WHEN — a real axis over the live_events buckets. */}
         <div className="mt-4 flex flex-col gap-2">
           <p className="type-eyebrow text-parranda-live">{t("När", "When")}</p>
-          <div className="inline-flex self-start overflow-hidden rounded-full border border-parranda-ink/14" role="group" aria-label={t("Vilken tid", "Which time")}>
+          <div className={segmentGroup} role="group" aria-label={t("Vilken tid", "Which time")}>
             {(["tonight", "week"] as const).map((key) => (
               <button
                 type="button"
                 key={key}
                 aria-pressed={liveSheetTime === key}
                 onClick={() => setLiveSheetTime(key)}
-                className={
-                  "inline-flex min-h-11 items-center px-[18px] text-[13px] transition " +
-                  (liveSheetTime === key ? "bg-parranda-ink font-bold text-parranda-paper" : "text-parranda-ink/68 hover:text-parranda-ink")
-                }
+                className={segmentClass(liveSheetTime === key)}
               >
-                {key === "tonight" ? liveDayLabel : t("Följande 7 dagar", "Following 7 days")}
+                {key === "tonight" ? liveDayLabel : t("Kommande 7 dagar", "Next 7 days")}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2">
+          <p className="type-eyebrow text-parranda-live">{t("Ordning", "Order")}</p>
+          <div className={segmentGroup} role="group" aria-label={t("Live-ordning", "Live order")}>
+            {(["for_you", "by_time"] as const).map(sort => (
+              <button key={sort} type="button" aria-pressed={liveSheetSort === sort} onClick={() => setLiveSheetSort(sort)}
+                className={segmentClass(liveSheetSort === sort)}>
+                {sort === "for_you" ? t("För dig", "For you") : t("Efter tid", "By time")}
               </button>
             ))}
           </div>
@@ -244,7 +295,7 @@ export default function LiveSheet({
         {/* The ACTIVE scope×time cell — heading, list or honest emptiness. */}
         <div className="mt-5 flex flex-col gap-3 border-t border-parranda-ink/10 pt-4">
           <p className="type-eyebrow text-parranda-ink/68">
-            {liveSheetTime === "tonight" ? liveDayLabel : t("Följande 7 dagar", "Following 7 days")} · {scopePhrase}
+            {liveSheetTime === "tonight" ? liveDayLabel : t("Kommande 7 dagar", "Next 7 days")} · {scopePhrase}
           </p>
           {liveSheetScope !== "near_me" && liveSheetTime === "tonight" && wovenNames.length > 0 && (
             <p className="text-xs text-parranda-ink/68">
@@ -294,21 +345,26 @@ export default function LiveSheet({
             </div>
           ) : sheetEvents.length > 0 || sheetMoreEvents.length > 0 ? (
             <div className="flex flex-col gap-3">
-              {highlightGroups.picks.length > 0 && (
+              {liveSheetSort === "by_time" ? <>
+                {navigation.dates.map(group => dateSection(liveDateLabel(group.date, lang), group.rows))}
+                {navigation.ranges.length > 0 && dateSection(t("Källans datumintervall", "Source date ranges"), navigation.ranges)}
+                {navigation.undated.length > 0 && dateSection(t("Datum ej angivet", "Date not specified"), navigation.undated)}
+              </> : <>
+              {navigation.picks.length > 0 && (
                 <>
                   <p className="text-xs font-bold text-parranda-ink/68">{t("Höjdpunkter för dina val", "Highlights for your picks")}</p>
                   <ul className="flex flex-col gap-3">
-                    {highlightGroups.picks.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-bold"))}
+                    {navigation.picks.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-bold"))}
                   </ul>
                 </>
               )}
-              {highlightGroups.other.length > 0 && (
+              {navigation.other.length > 0 && (
                 <>
                   <p className="text-xs font-bold text-parranda-ink/68">
-                    {highlightGroups.picks.length > 0 ? t("Andra lokala höjdpunkter", "Other local highlights") : t("Höjdpunkter", "Highlights")}
+                    {navigation.picks.length > 0 ? t("Andra lokala höjdpunkter", "Other local highlights") : t("Höjdpunkter", "Highlights")}
                   </p>
                   <ul className="flex flex-col gap-3">
-                    {highlightGroups.other.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-bold"))}
+                    {navigation.other.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-bold"))}
                   </ul>
                 </>
               )}
@@ -322,6 +378,7 @@ export default function LiveSheet({
                   </ul>
                 </details>
               )}
+              </>}
             </div>
           ) : (
             <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
@@ -354,7 +411,7 @@ export default function LiveSheet({
                 <button
                   type="button"
                   onClick={() => setLiveSheetTime("week")}
-                  className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-live px-4 text-[13px] font-extrabold text-parranda-on-live hover:brightness-110"
+                  className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-live px-4 text-13 font-extrabold text-parranda-on-live hover:brightness-110"
                 >
                   {t("Visa följande dagar", "Show following days")}
                 </button>
@@ -363,7 +420,7 @@ export default function LiveSheet({
                 <button
                   type="button"
                   onClick={() => setLiveSheetTime("tonight")}
-                  className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-live px-4 text-[13px] font-extrabold text-parranda-on-live hover:brightness-110"
+                  className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-live px-4 text-13 font-extrabold text-parranda-on-live hover:brightness-110"
                 >
                   {liveDayLabel}
                 </button>
@@ -403,7 +460,7 @@ export default function LiveSheet({
           )}
           {(liveQueryError || (!liveQueryPending && (sheetPulseState === "pending" || sheetPulseState === "unavailable"))) && (
             <button type="button" onClick={onRetry}
-              className="inline-flex min-h-11 items-center self-start rounded-full border-[1.5px] border-parranda-live/60 px-4 text-sm font-bold text-parranda-live">
+              className="inline-flex min-h-11 items-center self-start rounded-full border-line border-parranda-live/60 px-4 text-sm font-bold text-parranda-live">
               {t("Försök igen", "Try again")}
             </button>
           )}
@@ -411,7 +468,7 @@ export default function LiveSheet({
             <p className="text-xs text-parranda-ink/68">
               {sheetSourceHealth?.reasons?.includes("source_collection_truncated")
             ? t("Vissa kalendrar kunde bara läsas delvis — fler händelser kan finnas hos källan.", "Some calendars were only partly read — more events may be listed at the source.")
-            : t("Alla källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
+            : t("Några källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
             </p>
           )}
           {/* Counts describe a finished collection; while waiting, "0/1
@@ -419,7 +476,7 @@ export default function LiveSheet({
           {sheetSourceHealth && Number.isInteger(sheetSourceHealth.selected_source_count) &&
             !liveQueryPending && sheetPulseState !== "pending" && sheetPulseState !== "uncovered" && (sheetSourceHealth.selected_source_count ?? 0) > 0 && (
             <p className="text-xs text-parranda-ink/68">
-              {t("Källstatus", "Source health")}: {sheetSourceHealth.responding_source_count ?? 0}/{sheetSourceHealth.selected_source_count ?? 0} {t("svarade", "responded")}
+              {t("Kalendrar", "Calendars")}: {sheetSourceHealth.responding_source_count ?? 0} {t("av", "of")} {sheetSourceHealth.selected_source_count ?? 0} {t("svarade", "responded")}
               {/* Returned rows are not hits: every row can still be
                   rejected by date, geometry or trust gates. Name hits
                   only when accepted events actually surfaced. */}

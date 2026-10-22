@@ -14,6 +14,79 @@ const input = {
   anchor: { lat: 60.17, lng: 24.94 }, selectedDate: '2026-06-28',
   now: '2026-06-28T12:00:00Z', placeContext: { name: 'Fixture' }, spatialScope: { kind: 'fixture' },
 };
+
+function discoveryFailureSupply({ discovery, responding = 0 }) {
+  let clock = 0;
+  let collections = 0;
+  const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: 'enabled' }, {
+    requestTimeDiscovery: discovery,
+    failedRefreshClock: () => clock,
+    collectEvents: async () => {
+      collections += 1;
+      return {
+        coverage: 'covered', selected_date: input.selectedDate, tonight: [], this_week: [],
+        acquisition: { source_health: {
+          status: 'healthy', result: 'empty', responding_source_count: responding, reasons: [],
+        } },
+      };
+    },
+  });
+  return { supply, count: () => collections, expire: () => { clock = 120000; } };
+}
+
+for (const [label, discovery] of [
+  ['typed', async () => ({ status: 'failed', reason: 'source_search_failed', feeds: [] })],
+  ['thrown', async () => { throw new Error('fixture search outage'); }],
+]) test(`${label} discovery failure is held without starting another collection and retries after expiry`, async () => {
+  const h = discoveryFailureSupply({ discovery });
+  const first = await h.supply(input);
+  const store = createLiveCompletionStore();
+  const original = store.issue(first);
+  await tick();
+  const failure = first[LIVE_COLLECTION_READ]();
+  assert.equal(failure.acquisition.request_time_discovery.status, 'failed');
+  const held = await h.supply(input);
+  assert.equal(held.pending, undefined, 'a finished failed discovery must not re-enter pending during its hold');
+  assert.equal(held.acquisition.request_time_discovery.status, 'failed');
+  assert.equal(h.count(), 1);
+  h.expire();
+  const next = await h.supply(input);
+  assert.equal(next.pending, true);
+  await tick();
+  assert.equal(h.count(), 2, 'failure is retried after the bounded hold, never healthy-empty cached');
+  assert.deepEqual(first[LIVE_COLLECTION_READ](), failure, 'later refresh cannot overwrite the first generation');
+  assert.equal(store.read(original.token).status, 200);
+});
+
+for (const responding of [0, 1]) test(`failed discovery with ${responding} responding sources reaches the existing unavailable UI state`, async () => {
+  const h = discoveryFailureSupply({
+    discovery: async () => ({ status: 'failed', reason: 'source_search_failed', feeds: [] }), responding,
+  });
+  const first = await h.supply(input);
+  const store = createLiveCompletionStore();
+  const completion = store.issue(first);
+  await tick();
+  const result = store.read(completion.token);
+  assert.equal(result.status, 200);
+  const live = result.body.live_events;
+  assert.equal(live.acquisition.source_health.status, responding ? 'partial' : 'unavailable');
+  assert.equal(live.acquisition.source_health.result, 'unknown', 'selected-date projection must not restore proven-empty semantics');
+  assert.ok(live.acquisition.source_health.reasons.includes('request_time_discovery_failed'));
+  const { pulseHealthState } = await import('../frontend/src/lib/pulse-view.mjs');
+  assert.equal(pulseHealthState(live, { tonight: [], thisWeek: [] }), 'unavailable');
+});
+
+test('verified empty discovery keeps the legitimate healthy-empty cache', async () => {
+  const h = discoveryFailureSupply({ discovery: async () => ({ status: 'empty', feeds: [] }), responding: 1 });
+  const first = await h.supply(input);
+  await tick();
+  assert.equal(first[LIVE_COLLECTION_READ]().acquisition.source_health.status, 'healthy');
+  h.expire();
+  const cached = await h.supply(input);
+  assert.equal(cached.pending, undefined);
+  assert.equal(cached.acquisition.source_health.result, 'empty');
+  assert.equal(h.count(), 1);
+});
 function setup() {
   const jobs = [];
   let clock = 0;

@@ -17,25 +17,10 @@
         "provisional_stop_count": 2,
         "credibility_tier": "medium",
         "estimated_km": 7.4,
-        "longest_leg_km": 2.1,
-        "longest_leg_minutes": 25,
+        "longest_leg_km": 2.5,
+        "longest_leg_minutes": 30,
         "average_leg_minutes": 15,
         "stops": [
-          {
-            "label": "Ama Lachei stis Nefelis",
-            "area": "exarchia",
-            "live": false
-          },
-          {
-            "label": "Alexandrino",
-            "area": "exarchia",
-            "live": false
-          },
-          {
-            "label": "Klimataria",
-            "area": "monastiraki-psyrri",
-            "live": false
-          },
           {
             "label": "Filopappou Hill",
             "area": "koukaki-makrygianni",
@@ -51,32 +36,29 @@
             "provisional": true,
             "source_tier": "inferred",
             "confidence": "needs_review"
+          },
+          {
+            "label": "Klimataria",
+            "area": "monastiraki-psyrri",
+            "live": false
+          },
+          {
+            "label": "Alexandrino",
+            "area": "exarchia",
+            "live": false
+          },
+          {
+            "label": "Ama Lachei stis Nefelis",
+            "area": "exarchia",
+            "live": false
           }
         ],
         "legs": [
           {
             "from": "Athens",
-            "to": "Ama Lachei stis Nefelis",
-            "km": 1.2,
-            "minutes": 14
-          },
-          {
-            "from": "Ama Lachei stis Nefelis",
-            "to": "Alexandrino",
-            "km": 0.3,
-            "minutes": 4
-          },
-          {
-            "from": "Alexandrino",
-            "to": "Klimataria",
-            "km": 1.3,
-            "minutes": 16
-          },
-          {
-            "from": "Klimataria",
             "to": "Filopappou Hill",
-            "km": 2.1,
-            "minutes": 25
+            "km": 2.5,
+            "minutes": 30
           },
           {
             "from": "Filopappou Hill",
@@ -86,9 +68,27 @@
           },
           {
             "from": "Pnyx",
+            "to": "Klimataria",
+            "km": 1.4,
+            "minutes": 17
+          },
+          {
+            "from": "Klimataria",
+            "to": "Alexandrino",
+            "km": 1.3,
+            "minutes": 16
+          },
+          {
+            "from": "Alexandrino",
+            "to": "Ama Lachei stis Nefelis",
+            "km": 0.3,
+            "minutes": 4
+          },
+          {
+            "from": "Ama Lachei stis Nefelis",
             "to": "Athens",
-            "km": 1.8,
-            "minutes": 22
+            "km": 1.2,
+            "minutes": 14
           }
         ]
       },

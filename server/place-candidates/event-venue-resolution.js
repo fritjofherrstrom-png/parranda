@@ -35,6 +35,69 @@ function buildEventVenueQuery(event, { placeContext = null } = {}) {
   return appendBoundedQueryParts(sourceParts, contextParts);
 }
 
+// Geocoders answer a street address or a venue name, rarely both glued
+// together ("via X 5, Trieste, Risiera di San Sabba – Monumento Nazionale").
+// Try the source's own address first, then its venue name (and the name
+// before a descriptive dash suffix), each with the source's town, then the
+// combined query. Every variant is source-owned text; nothing is invented.
+function buildEventVenueQueries(event, { placeContext = null } = {}) {
+  const combined = buildEventVenueQuery(event, { placeContext });
+  if (!combined) return [];
+  const country = uniqueStrings([event.country])[0];
+  // Only an explicit source city counts as the town; `area` often carries the
+  // venue or a neighbourhood. Without one, the place context supplies it.
+  const town = uniqueStrings([event.city])[0] || null;
+  // The same context the combined query uses; without any, a bare street or
+  // venue name could match anywhere, so only the combined query is tried.
+  const contextParts = country ? [country] : town
+    ? [placeContext?.region, placeContext?.country]
+    : [placeContext?.locality, placeContext?.municipality, placeContext?.region, placeContext?.country];
+  const hasContext = Boolean(town) || uniqueStrings(contextParts).length > 0;
+  const variant = (head) => {
+    if (!head || !hasContext) return null;
+    const townPart = town && !head.toLocaleLowerCase("en").includes(town.toLocaleLowerCase("en")) ? [town] : [];
+    return appendBoundedQueryParts([head, ...townPart], contextParts);
+  };
+  const name = uniqueStrings([event.place_context])[0];
+  const shortName = name && /\s[–—-]\s/.test(name) ? name.split(/\s[–—-]\s/)[0].trim() : null;
+  return uniqueStrings([
+    variant(uniqueStrings([event.address])[0]),
+    variant(name),
+    shortName && shortName.split(/\s+/).length >= 2 ? variant(shortName) : null,
+    combined,
+  ]);
+}
+
+// A bare kind of place ("teatro", "museum") names no particular venue.
+const GENERIC_VENUE_NAMES = new Set([
+  "teatro", "theatre", "theater", "teater", "teatr", "museum", "museo", "musee", "museu", "muzeum",
+  "kino", "cinema", "biograf", "bibliothek", "biblioteca", "bibliotek", "library", "biblioteka",
+  "kirche", "chiesa", "kyrka", "church", "eglise", "iglesia", "kosciol", "park", "parco", "parque",
+  "piazza", "plaza", "square", "arena", "stadium", "stadion", "hall", "sala", "aula", "galleria",
+  "gallery", "galerie", "castle", "castello", "schloss", "centrum", "center", "centre", "club",
+  "auditorium", "markt", "market", "mercato", "mercado", "online",
+]);
+
+function isDistinctiveVenueName(value) {
+  return typeof value === "string" && value.length >= 5 && !GENERIC_VENUE_NAMES.has(value);
+}
+
+// Venue names are compared whole after folding case, accents and punctuation.
+function normalizeVenueName(value) {
+  return typeof value === "string"
+    ? value.normalize("NFKD").replace(/\p{M}/gu, "").toLocaleLowerCase("en")
+      .replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+    : "";
+}
+
+function venueNameVariants(event) {
+  const name = typeof event?.place_context === "string" ? event.place_context.trim() : "";
+  if (!name) return [];
+  const variants = [name];
+  if (/\s[–—-]\s/.test(name)) variants.push(name.split(/\s[–—-]\s/)[0]);
+  return [...new Set(variants.map(normalizeVenueName).filter(isDistinctiveVenueName))];
+}
+
 async function resolveEventVenueGeometry(
   events,
   {
@@ -68,29 +131,49 @@ async function resolveEventVenueGeometry(
   const resolutions = new Map();
   let attempts = 0;
   const output = [];
+  const work = rows.map(event => ({
+    event,
+    queries: !event || typeof event !== "object" || hasCoordinates(event)
+      ? [] : buildEventVenueQueries(event, { placeContext }),
+    resolution: null,
+    resolvedQuery: null,
+  }));
+  const rounds = Math.max(0, ...work.map(item => item.queries.length));
 
-  for (const event of rows) {
-    if (!event || typeof event !== "object" || hasCoordinates(event)) {
-      output.push(event);
-      continue;
-    }
-    const query = buildEventVenueQuery(event, { placeContext });
-    if (!query || (attempts >= cap && !resolutions.has(query))) {
-      output.push(event);
-      continue;
-    }
-
-    if (!resolutions.has(query)) {
-      attempts += 1;
-      summary.attempted_count += 1;
-      resolutions.set(query, resolveVenueQuery(query, {
-        resolver,
+  // Give the next venue its first attempt before spending the whole shared
+  // budget on alternate spellings of one difficult venue. Duplicate queries
+  // still share an answer, including when the unique-call cap is exhausted.
+  for (let round = 0; round < rounds; round += 1) {
+    for (const item of work) {
+      if (["resolved", "outside_scope"].includes(item.resolution?.status)) continue;
+      const query = item.queries[round];
+      if (!query || (attempts >= cap && !resolutions.has(query))) continue;
+      if (!resolutions.has(query)) {
+        attempts += 1;
+        summary.attempted_count += 1;
+        // Share the provider answer, not a name-verification verdict belonging
+        // to another event at the same textual address.
+        resolutions.set(query, Promise.resolve().then(() => resolver(query, { purpose: "event_venue" })));
+      }
+      item.resolution = await resolveVenueQuery(query, {
+        resolver: () => resolutions.get(query),
         anchor,
         radiusKm,
         regionalScope,
-      }));
+        venueNames: venueNameVariants(item.event),
+      });
+      item.resolvedQuery = query;
     }
-    const resolution = await resolutions.get(query);
+  }
+
+  for (const item of work) {
+    const { event, resolvedQuery } = item;
+    let { resolution } = item;
+    if (!resolution) {
+      output.push(event);
+      continue;
+    }
+    const queryBasis = event.address && resolvedQuery?.startsWith(event.address.trim()) ? "source_address" : "source_venue";
     if (resolution.status === "resolved") {
       summary.resolved_count += 1;
       output.push({
@@ -101,15 +184,17 @@ async function resolveEventVenueGeometry(
           status: "resolved",
           source: "trusted_place_resolver",
           confidence: normalizeConfidence(resolution.candidate.confidence),
+          ...(resolution.candidate.name_verified ? { name_verified: true } : {}),
           provenance: resolution.candidate.provenance || null,
           attribution: resolution.candidate.attribution || null,
           license: resolution.candidate.license || null,
-          query_basis: event.address ? "source_address" : "source_venue",
+          query_basis: queryBasis,
           geometry_scope: regionalScope ? "resolver_attested_region" : "anchor_radius",
         },
       });
       continue;
     }
+    if (resolution.status === "outside_scope") resolution = { ...resolution, status: "not_found" };
     if (resolution.status === "ambiguous") summary.ambiguous_count += 1;
     else if (resolution.status === "failed") summary.failed_count += 1;
     else summary.not_found_count += 1;
@@ -118,7 +203,7 @@ async function resolveEventVenueGeometry(
       venue_resolution: {
         status: resolution.status,
         source: "trusted_place_resolver",
-        query_basis: event.address ? "source_address" : "source_venue",
+        query_basis: queryBasis,
         geometry_scope: regionalScope ? "resolver_attested_region" : "anchor_radius",
       },
     });
@@ -127,21 +212,40 @@ async function resolveEventVenueGeometry(
   return { events: output, summary };
 }
 
-async function resolveVenueQuery(query, { resolver, anchor, radiusKm, regionalScope }) {
+async function resolveVenueQuery(query, { resolver, anchor, radiusKm, regionalScope, venueNames = [] }) {
   try {
     const candidates = await resolver(query, { purpose: "event_venue" });
-    const trusted = (Array.isArray(candidates) ? candidates : [])
-      .filter(hasCoordinates)
-      .filter((candidate) => confidenceRank(candidate.confidence) >= confidenceRank("medium"))
-      .filter((candidate) => regionalScope
-        ? pointWithinTrustedSpatialScope(candidate, regionalScope)
-        : haversineKm(anchor, candidate) <= radiusKm);
+    const located = (Array.isArray(candidates) ? candidates : []).filter(hasCoordinates);
+    const inArea = (candidate) => regionalScope
+      ? pointWithinTrustedSpatialScope(candidate, regionalScope)
+      : haversineKm(anchor, candidate) <= radiusKm;
+    const confident = located.filter((candidate) => confidenceRank(candidate.confidence) >= confidenceRank("medium"));
+    const trusted = confident.filter(inArea);
     if (trusted.length === 1) return { status: "resolved", candidate: trusted[0] };
     if (trusted.length > 1) return { status: "ambiguous", candidate: null };
+    if (confident.length) return { status: "outside_scope", candidate: null };
+    // A small venue is "low" only because the geocoder ranks it as little
+    // known. When the one place found in the area carries the very name the
+    // event source gives, that name is the evidence; nothing else is.
+    const nameMatched = located.filter((candidate) =>
+      confidenceRank(candidate.confidence) === confidenceRank("low") && placeNamedAs(candidate, venueNames));
+    const named = nameMatched.filter(inArea);
+    if (named.length === 1) return { status: "resolved", candidate: { ...named[0], name_verified: true } };
+    if (named.length > 1) return { status: "ambiguous", candidate: null };
+    if (nameMatched.length) return { status: "outside_scope", candidate: null };
     return { status: "not_found", candidate: null };
   } catch (_error) {
     return { status: "failed", candidate: null };
   }
+}
+
+// The resolved place's own name (first label segment) equals the source's
+// venue name, or appears in it as whole words ("biograf panora" ⊇ "panora").
+function placeNamedAs(candidate, venueNames) {
+  const own = normalizeVenueName(String(candidate?.name || candidate?.label || "").split(",")[0]);
+  if (!isDistinctiveVenueName(own)) return false;
+  return (Array.isArray(venueNames) ? venueNames : []).some((venue) =>
+    venue === own || ` ${venue} `.includes(` ${own} `));
 }
 
 function appendBoundedQueryParts(sourceParts, contextParts) {
@@ -186,6 +290,7 @@ function clampInteger(value, min, max, fallback) {
 
 module.exports = {
   DEFAULT_RESOLUTION_LIMIT,
+  buildEventVenueQueries,
   buildEventVenueQuery,
   resolveEventVenueGeometry,
 };

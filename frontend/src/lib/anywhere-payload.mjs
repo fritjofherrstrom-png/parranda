@@ -7,6 +7,8 @@
  * Kept as a pure .mjs module so node --test can assert the contract without a DOM.
  */
 
+import { normalizePreferencePriority, normalizeDayEdit } from "../../../shared/planner-intent.mjs";
+
 export const ANYWHERE_PREFERENCES = [
   { key: "food", sv: "Mat & dryck", en: "Food & drink" },
   { key: "culture", sv: "Kultur", en: "Culture" },
@@ -49,7 +51,7 @@ export function freezeComposeDateIso({ dayOffset = 0, dateIsoOverride = null, no
 // fourth step: the reader leaves the choice to Parranda. Each `note` says what
 // the engine does with it — "free" adapts to eligible supply and trusted time.
 export const DAY_RHYTHMS = [
-  { key: "calm", sv: "Lugn", en: "Easy", noteSv: "Färre stopp, mer tid på varje plats.", noteEn: "Fewer stops, more time at each place." },
+  { key: "calm", sv: "Lugn", en: "Relaxed", noteSv: "Färre stopp, mer tid på varje plats.", noteEn: "Fewer stops, more time at each place." },
   { key: "balanced", sv: "Lagom", en: "Balanced", noteSv: "Några stopp med luft emellan.", noteEn: "A few stops with room in between." },
   { key: "full", sv: "Fylld", en: "Full", noteSv: "Så många stopp som dagen rymmer.", noteEn: "As many stops as the day holds." },
   { key: "free", sv: "Parranda väljer", en: "Parranda chooses", noteSv: "Anpassar rytmen efter möjliga stopp och tiden som finns.", noteEn: "Adapts the rhythm to usable stops and the time available." },
@@ -65,9 +67,13 @@ export function buildAnywherePayload({
   placeRef,
   dates,
   preferences = [],
+  preferencePriority,
+  dayEdit,
+  invalidDayEdit = false,
   dayRhythm = "balanced",
   excludedCandidateIds = [],
   pinnedCandidateIds = [],
+  liveEventChoices = [],
 } = {}) {
   const autoPoint = { type: "auto", label: "Parranda väljer" };
   // Two exclusive anchor modes, mirroring the engine's intake precedence:
@@ -80,6 +86,8 @@ export function buildAnywherePayload({
     ? { lat: coords.lat, lng: coords.lng }
     : { place: place || city, place_query: place || city };
   const rhythm = DAY_RHYTHMS.some(({ key }) => key === dayRhythm) ? dayRhythm : "balanced";
+  const priority = normalizePreferencePriority(preferencePriority, preferences);
+  const edit = invalidDayEdit === true ? null : normalizeDayEdit(dayEdit);
   return {
     ...anchor,
     ...(!coords ? {
@@ -95,6 +103,8 @@ export function buildAnywherePayload({
     day_rhythm: rhythm,
     ...(rhythm === "free" ? {} : { leg_pacing: "balanced" }),
     preferences,
+    ...(priority.length ? { preference_priority: priority } : {}),
+    ...(dayEdit != null || invalidDayEdit === true ? { day_edit: edit } : {}),
     distance_mode: "no_limit",
     budget_tier: "standard",
     experimental_agnostic_route_output: 1,
@@ -108,6 +118,9 @@ export function buildAnywherePayload({
       : {}),
     // "Keep this one" — selection-only, and omitted entirely when empty so the
     // default request is unchanged.
+    ...(Array.isArray(liveEventChoices) && liveEventChoices.length
+      ? { live_event_choices: liveEventChoices.map(({ occurrence_id, action }) => ({ occurrence_id, action })) }
+      : {}),
     ...(Array.isArray(pinnedCandidateIds) && pinnedCandidateIds.length
       ? { pinned_candidate_ids: [...pinnedCandidateIds] }
       : {}),

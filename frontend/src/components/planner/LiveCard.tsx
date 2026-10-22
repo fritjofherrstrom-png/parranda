@@ -1,3 +1,4 @@
+import { useLiveClock } from "./useLiveClock";
 /**
  * LIVE — the city's now-context: weather read, clothing advice and current
  * events. It renders independently of route composition (live_events survives a
@@ -16,6 +17,7 @@ import { ChevronRightIcon } from "../shared/icons";
 import { buttonClass, Eyebrow } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 import { liveEventSource } from "./LiveEventSource";
+import EventOccurrences from "./EventOccurrences";
 import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
 import type { LiveEvents, PulseEvent } from "./types";
 
@@ -60,9 +62,10 @@ export default function LiveCard({
   liveSheetTriggerRef: Ref<HTMLButtonElement>;
   openLiveSheet: () => void;
 }) {
+  const now = useLiveClock([...pulseBuckets.tonight, ...pulseBuckets.thisWeek]);
   return (
     <section
-      className="rounded-parranda border-[1.5px] border-parranda-live/35 bg-parranda-live/8 p-5 sm:p-6"
+      className="rounded-parranda border-line border-parranda-live/35 bg-parranda-live/8 p-5 sm:p-6"
     >
       <Eyebrow as="h2" tone="live" dot>
         {mode === "near_me"
@@ -76,7 +79,7 @@ export default function LiveCard({
       {((showDay && dayflow?.weather?.headline) || clothing) && (
         <div className="mt-3 flex flex-col gap-1">
           {showDay && dayflow?.weather?.headline && (
-            <p className="text-[15px] font-bold leading-snug text-parranda-ink">
+            <p className="text-15 font-bold leading-snug text-parranda-ink">
               {dayflow.weather.headline}
               {dayflow.weather.pitch ? <span className="font-medium text-parranda-ink/75"> — {dayflow.weather.pitch}</span> : null}
             </p>
@@ -91,7 +94,7 @@ export default function LiveCard({
       )}
 
       {wovenNames.length > 0 && (
-        <p className="mt-3 text-[13px] text-parranda-ink/72">
+        <p className="mt-3 text-13 text-parranda-ink/72">
           {wovenNames.map((n: string) => `${n} · ${includedInRoute}`).join(" · ")}
         </p>
       )}
@@ -132,13 +135,14 @@ export default function LiveCard({
             {pulseBuckets.tonight.slice(0, 4).map((ev: PulseEvent, i: number) => (
               <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-parranda-ink/85">
                 <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">
-                  {eventTiming(ev, lang, undefined, liveEvents?.selected_date)}
+                  {eventTiming(ev, lang, now, liveEvents?.selected_date)}
                 </span>
                 <span className="min-w-0 max-w-full break-words">
                   <span className="font-bold text-parranda-ink">{ev.title}</span>
                   {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
                   {liveEventSource(ev, lang)}
                 </span>
+                <EventOccurrences event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} />
               </li>
             ))}
           </ul>
@@ -149,10 +153,10 @@ export default function LiveCard({
           from copy. */}
       {pulseBuckets.thisWeek.length > 0 && (
         <p className="mt-4 border-t border-parranda-live/25 pt-3 text-sm text-parranda-ink/75">
-          <span className="font-bold text-parranda-ink">{t("Följande 7 dagar", "Following 7 days")}</span>
+          <span className="font-bold text-parranda-ink">{t("Kommande 7 dagar", "Next 7 days")}</span>
           {" · "}
           {pulseBuckets.thisWeek.length}{" "}
-          {pulseBuckets.thisWeek.length === 1 ? t("händelse listad", "more listed") : t("händelser listade", "more listed")}
+          {pulseBuckets.thisWeek.length === 1 ? t("till", "more") : t("till", "more")}
         </p>
       )}
       {showExplore && (
@@ -172,7 +176,7 @@ export default function LiveCard({
         <p className="mt-2 text-xs text-parranda-ink/68">
           {liveEvents?.acquisition?.source_health?.reasons?.includes("source_collection_truncated")
             ? t("Vissa kalendrar kunde bara läsas delvis — fler händelser kan finnas hos källan.", "Some calendars were only partly read — more events may be listed at the source.")
-            : t("Alla källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
+            : t("Några källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
         </p>
       )}
 

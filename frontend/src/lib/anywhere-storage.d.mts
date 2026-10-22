@@ -5,6 +5,7 @@ export declare const DEFAULT_SAVED_WALK_KEY: "balanced";
 export declare function normalizeSavedWalkKey(value?: unknown): "calm" | "balanced" | "full" | "free";
 
 import type { CommitmentSnapshot } from "./commitment-snapshot.mjs";
+import type { DayEdit } from "../../../shared/planner-intent.mjs";
 
 export interface SavedInputs {
   city?: string | null;
@@ -16,6 +17,10 @@ export interface SavedInputs {
   dayOffset?: number;
   walkKey?: string;
   selected?: string[];
+  preferencePriority?: string[] | null;
+  liveSheetSort?: "for_you" | "by_time";
+  dayEdit?: DayEdit | null;
+  invalidDayEdit?: boolean;
 }
 
 export interface SavedEntry {
@@ -31,7 +36,10 @@ export interface SavedEntry {
   commitments: CommitmentSnapshot | null;
 }
 
+export declare function savedEntryAnchorKey(entry: SavedEntry | null): string | null;
+
 export declare function isComposedEntry(entry: unknown): boolean;
+export declare function isEditedEmptyEntry(entry: unknown): boolean;
 
 export declare function savedEntryId(options?: {
   placeLabel?: string | null;
@@ -40,6 +48,9 @@ export declare function savedEntryId(options?: {
   dateIso?: string | null;
   selected?: string[];
   walkKey?: string | null;
+  preferencePriority?: string[] | null;
+  dayEdit?: DayEdit | null;
+  invalidDayEdit?: boolean;
 }): string;
 
 export declare function buildSavedEntry(options?: {

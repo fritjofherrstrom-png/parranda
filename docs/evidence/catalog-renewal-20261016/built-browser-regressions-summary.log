@@ -1,0 +1,20 @@
+✔ cold UI publishes actual catalog stops; expired unchanged, changed and failed refreshes obey source proof (14765.093916ms)
+✖ explicit click during expansion keeps its marker name after mouseleave and scroll (26067.984458ms)
+✖ hover name still closes on pointer leave without an explicit selection (15572.961917ms)
+✔ another explicit selection replaces the name and Escape clears it (7205.797416ms)
+✔ keyboard focus opens the marker name and blur closes it (4957.466625ms)
+✔ touch selection survives pointer restoration and a new route clears it (8027.531792ms)
+✖ Rome uses the same map, add/remove and Live UI (35299.731917ms)
+✔ Barcelona uses the same map, add/remove and Live UI (40705.776208ms)
+✔ Athens uses the same map, add/remove and Live UI (10903.010958ms)
+✔ Stockholm uses the same map, add/remove and Live UI (4356.335084ms)
+ℹ tests 10
+ℹ pass 7
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ duration_ms 94347.973334
+✖ failing tests:
+✖ explicit click during expansion keeps its marker name after mouseleave and scroll (26067.984458ms)
+✖ hover name still closes on pointer leave without an explicit selection (15572.961917ms)
+✖ Rome uses the same map, add/remove and Live UI (35299.731917ms)

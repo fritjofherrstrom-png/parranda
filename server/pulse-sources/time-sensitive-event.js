@@ -35,6 +35,15 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     endsOn,
     timezone,
   });
+  const seriesWindow = rawEvent.source_series_time_window == null ? null
+    : normalizeTimeWindow(rawEvent.source_series_time_window, { timezone });
+  // A split occurrence carries the complete source schedule as a route bound.
+  // Incoherent or malformed provenance must not silently disappear and turn
+  // the remaining single date into a newly eligible route anchor.
+  if (rawEvent.source_series_time_window != null &&
+      (seriesWindow?.kind !== "occurrences" || timeWindow?.kind !== "occurrences" ||
+       !timeWindow.dates.every(date => seriesWindow.dates.includes(date)) ||
+       seriesWindow.local_start !== timeWindow.local_start || seriesWindow.local_end !== timeWindow.local_end)) return null;
   const sourceUrl = firstString(rawEvent.source_url, rawEvent.url);
   const sourceLabel = firstString(rawEvent.source_label, rawEvent.provider, rawEvent.source?.label);
   const provenance = normalizeProvenance(rawEvent.provenance, { sourceUrl, sourceLabel });
@@ -69,6 +78,10 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     source_type: firstString(rawEvent.source_type, rawEvent.sourceType, rawEvent.source?.type),
     source_tier: firstString(rawEvent.source_tier, rawEvent.sourceTier, rawEvent.source?.tier),
     source_provider_id: firstString(rawEvent.source_provider_id, rawEvent.sourceProviderId, rawEvent.source?.id),
+    source_series_id: typeof rawEvent.source_series_id === "string" && rawEvent.source_series_id.length <= 200
+      ? rawEvent.source_series_id : null,
+    source_occurrence_id: typeof rawEvent.source_occurrence_id === "string" && rawEvent.source_occurrence_id.trim() && rawEvent.source_occurrence_id.length <= 200
+      ? rawEvent.source_occurrence_id : null,
     source_identity: firstString(rawEvent.source_identity, rawEvent.publisher_id, rawEvent.publisherId),
     source_family: firstString(rawEvent.source_family, rawEvent.sourceFamily, rawEvent.source?.family),
     city: firstString(rawEvent.city, options.city),
@@ -88,6 +101,7 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     starts_on: startsOn,
     ends_on: endsOn,
     time_window: timeWindow,
+    source_series_time_window: seriesWindow,
     recurrence: normalizeRecurrence(rawEvent.recurrence),
     calendar_fact: calendarFact,
     freshness: firstString(rawEvent.freshness) || (timingRelevance === "stale" ? "stale" : null),
@@ -278,6 +292,8 @@ function normalizeTimeWindow(value, facts = {}) {
     if (kind === "all_day") {
       return compactObject({
         kind,
+        // Date-only inference is not an explicit whole-day statement.
+        all_day_explicit: value.all_day_explicit === true || undefined,
         label: firstString(value.label),
         starts_on: windowStartsOn,
         ends_on: windowEndsOn || windowStartsOn,

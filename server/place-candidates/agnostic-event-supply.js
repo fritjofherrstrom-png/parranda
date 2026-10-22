@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
+const { createAccessCheckedSourceFetch } = require("../pulse-sources/access-checked-source-fetch");
 
 /**
  * Agnostic live-event supply — "what's alive near here, right now".
@@ -25,6 +26,7 @@ const { createHash } = require("node:crypto");
 const { createDateRangeListingProvider } = require("../pulse-sources/date-range-listing-provider");
 const { createLinkedEventsProvider } = require("../pulse-sources/linked-events-source-provider");
 const { createTicketmasterProvider } = require("../pulse-sources/ticketmaster-source-provider");
+const { groupLiveProgramViews, diversifyLiveHighlights } = require("./live-program-presentation");
 const { createSchemaOrgEventProvider } = require("../pulse-sources/schema-org-event-provider");
 const { createEventsCalendarProvider } = require("../pulse-sources/events-calendar-source-provider");
 const { createRssAtomEventProvider } = require("../pulse-sources/rss-atom-event-provider");
@@ -32,6 +34,8 @@ const { createHtmlVenueCalendarProvider } = require("../pulse-sources/html-venue
 const { createSitevisionCalendarProvider } = require("../pulse-sources/sitevision-calendar-provider");
 const { createWixEventSitemapProvider } = require("../pulse-sources/wix-event-sitemap-provider");
 const { createLocalizedEventsApiProvider } = require("../pulse-sources/localized-events-api-provider");
+const { createMappedEventSourceProvider } = require("../pulse-sources/mapped-event-source-provider");
+const { trustedReviewedVenueResolution } = require("../pulse-sources/reviewed-event-venues");
 const { createEmbeddedProgramRscProvider } = require("../pulse-sources/embedded-program-rsc-provider");
 const { createScheduledEventCardProvider } = require("../pulse-sources/scheduled-event-card-provider");
 const {
@@ -118,6 +122,7 @@ const LOCAL_EVENT_ADAPTERS = new Set([
   "sitevision_calendar",
   "wix_event_sitemap",
   "localized_events_api",
+  "mapped_events",
   "embedded_program_rsc",
   "official_program_article",
   "scheduled_event_cards",
@@ -255,6 +260,7 @@ function normalizeEventFeedRow(f, index = 0) {
     bbox,
     license: f.license != null ? String(f.license) : null,
     timezone: f.timezone != null ? String(f.timezone) : null,
+    fallback_timezone: normalizeIanaTimezone(f.fallback_timezone),
     timezone_offset: firstString(f.timezone_offset, f.timezoneOffset),
     source_language: firstString(f.source_language, f.sourceLanguage),
     supported_languages: Array.isArray(f.supported_languages)
@@ -281,6 +287,7 @@ function normalizeEventFeedRow(f, index = 0) {
       ? Math.max(1, Math.floor(Number(f.horizon_days)))
       : null,
     event_path_prefix: firstString(f.event_path_prefix, f.eventPathPrefix),
+    wire_profile: firstString(f.wire_profile, f.wireProfile),
     // Configuring an endpoint proves collection intent, not ownership or
     // official status. Missing review metadata stays conservative.
     source_tier: f.source_tier != null ? String(f.source_tier) : "unknown",
@@ -429,6 +436,12 @@ function withinEventHorizon(event, now, days) {
 // exercise (they inject payloads, not query params).
 function isEphemeralHappening(event, now) {
   const window = event?.time_window;
+  // Corroboration can prefer another source's session facts. It must retain
+  // the complete publisher series' route bound independently of that choice.
+  if (event?.source_series_time_window) {
+    const seriesDates = listedOccurrenceDates(event.source_series_time_window);
+    if (!seriesDates.length || !boundedDateOnlyRange(seriesDates[0], seriesDates.at(-1), MAX_HAPPENING_DAYS)) return false;
+  }
   // A range without stated session days cannot anchor a route on any date.
   if (window?.kind === "period") return false;
   if (window?.kind === "occurrences") {
@@ -509,14 +522,36 @@ function dedupeViews(views) {
     if (id && seenIds.has(id)) continue;
     const titleVenue = `${String(view.title || "").toLowerCase()}|${view.place || ""}${view.calendar_fact ? `|${JSON.stringify(view.calendar_fact)}` : ""}`;
     const start = view.starts_at || view.starts_on || view.time_window?.starts_at || view.time_window?.starts_on || null;
+    const occurrences = providerOccurrenceIds(view);
     const seenStarts = byTitleVenue.get(titleVenue) || [];
-    if (seenStarts.some((previous) => !previous || !start || previous === start)) continue;
+    if (seenStarts.some((previous) => {
+      for (const [provider, ids] of occurrences) {
+        const other = previous.occurrences.get(provider);
+        if (other && [...ids].every(id => !other.has(id))) return false;
+      }
+      return !previous.start || !start || previous.start === start;
+    })) continue;
     if (id) seenIds.add(id);
-    seenStarts.push(start);
+    seenStarts.push({ start, occurrences });
     byTitleVenue.set(titleVenue, seenStarts);
     out.push(view);
   }
   return out;
+}
+
+// A fused row's primary publisher may be municipal. Keep each provider's
+// occurrence evidence independent of that display/authority choice; sources
+// are plain JSON atoms and therefore survive the persistent pool round-trip.
+function providerOccurrenceIds(view) {
+  const byProvider = new Map();
+  const add = (provider, id) => {
+    if (typeof provider !== "string" || !provider || typeof id !== "string" || !id) return;
+    if (!byProvider.has(provider)) byProvider.set(provider, new Set());
+    byProvider.get(provider).add(id);
+  };
+  add(view.source_provider_id, view.source_occurrence_id);
+  for (const source of Array.isArray(view.sources) ? view.sources : []) add(source?.provider_id, source?.occurrence_id);
+  return byProvider;
 }
 
 // Honest, prose-free user view of one event. The UI/i18n layer renders the label;
@@ -538,6 +573,9 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
     id: event.id || null,
     title,
     starts_at: event.starts_at || null,
+    source_provider_id: feed?.id || null,
+    source_series_id: event.source_series_id || null,
+    source_occurrence_id: event.source_occurrence_id || null,
     ends_at: event.ends_at || null,
     starts_on: event.starts_on || null,
     ends_on: event.ends_on || null,
@@ -584,7 +622,7 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
     source_scope_verified: event.source_scope_verified === true,
     local_significance: event.local_significance || null,
     // The venue-local timezone so the UI shows the real local start time.
-    timezone: eventTimezone || feed.timezone || null,
+    timezone: eventTimezone || feed.timezone || feed.fallback_timezone || null,
   };
 }
 
@@ -606,7 +644,13 @@ function rankEventViews(views, preferences = []) {
 }
 
 function buildEventBucketSurface(views, preferences = []) {
-  const ranked = rankEventViews(views, preferences);
+  let evidenceRank = 0;
+  const evidence = rankEventViews(groupSourceOccurrences(views), preferences).map(view => {
+    if (view.occurrences?.length) return { ...view, live_evidence_rank: evidenceRank,
+      occurrences: view.occurrences.map(slot => ({ ...slot, live_evidence_rank: evidenceRank++ })) };
+    return { ...view, live_evidence_rank: evidenceRank++ };
+  });
+  const ranked = groupLiveProgramViews(evidence);
   const highlights = selectEventHighlights(ranked, preferences);
   const highlighted = new Set(highlights.map(eventViewIdentity));
   const remaining = ranked.filter((view) => !highlighted.has(eventViewIdentity(view)));
@@ -623,6 +667,25 @@ function buildEventBucketSurface(views, preferences = []) {
   };
 }
 
+function groupSourceOccurrences(views) {
+  const groups = new Map();
+  for (const view of views) {
+    // Only an explicit publisher series identity establishes recurrence.
+    // Different sources, venues and titles remain separate even for one ID.
+    const key = view.source_provider_id && view.source_series_id
+      ? JSON.stringify([view.source_provider_id, view.source_series_id, view.title, view.place, view.lat, view.lng, view.timezone])
+      : view;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(view);
+  }
+  return [...groups.values()].map(rows => {
+    if (rows.length < 2) return rows[0];
+    const occurrences = [...rows].sort((a, b) =>
+      String(a.starts_at || a.starts_on).localeCompare(String(b.starts_at || b.starts_on)));
+    return { ...occurrences[0], occurrences };
+  });
+}
+
 // Preference fit should personalize Live without turning it into a filter
 // bubble. When all highlight slots are occupied by requested matches, reserve
 // at most one slot for a genuinely salient local happening. The candidate has
@@ -637,15 +700,15 @@ function selectEventHighlights(ranked, preferences = []) {
     preferences.length === 0 ||
     highlights.some(isSerendipityCandidate)
   ) {
-    return highlights;
+    return diversifyLiveHighlights(ranked, highlights);
   }
 
   const discovery = ranked.slice(MAX_PER_BUCKET).find(isSerendipityCandidate);
-  if (!discovery) return highlights;
-  return [
+  if (!discovery) return diversifyLiveHighlights(ranked, highlights);
+  return diversifyLiveHighlights(ranked, [
     ...highlights.slice(0, -1),
     { ...discovery, highlight_reason: "local_serendipity" },
-  ];
+  ]);
 }
 
 function isSerendipityCandidate(view) {
@@ -753,7 +816,9 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
     projectedHealth = {
       accepted_event_count: projectedCount,
       out_of_period_event_count: (Number(baseHealth.out_of_period_event_count) || 0) + endedSinceCollection,
-      result: projectedCount > 0 ? "events_found" : baseHealth.responding_source_count > 0 ? "empty" : "unknown",
+      result: projectedCount > 0 ? "events_found"
+        : requestTimeDiscoveryFailed(collected) ? "unknown"
+        : baseHealth.responding_source_count > 0 ? "empty" : "unknown",
       reasons,
     };
   }
@@ -922,7 +987,7 @@ async function collectAnchorEvents({
         source,
         anchor,
         nowDate,
-        startParam: selectedDate ? sourceWindowStart(selectedDate, source.timezone, nowDate) : startParam,
+        startParam: selectedDate ? sourceWindowStart(selectedDate, source.timezone || source.fallback_timezone, nowDate) : startParam,
         selectedDate,
         fetcher,
         sourceCollectionCache,
@@ -945,10 +1010,17 @@ async function collectAnchorEvents({
       const enriched = applyReviewedSourceTrust(rawEvent, source);
       const normalized = normalizeTimeSensitiveSourceEvent(enriched, {
         ...(nowDate ? { now: nowDate } : {}),
-        timezone: rawEvent.timezone || source.timezone || undefined,
+        timezone: rawEvent.timezone || source.timezone || source.fallback_timezone || undefined,
       });
       if (!normalized) continue;
       if (rawEvent.timezone) normalized.timezone = rawEvent.timezone;
+      // A reviewed venue-registry point keeps its geocoder attribution.
+      const reviewedVenue = trustedReviewedVenueResolution(rawEvent.venue_resolution, {
+        lat: normalized.lat, lng: normalized.lng, sourceId: source.id,
+      });
+      if (reviewedVenue && Number.isFinite(normalized.lat) && Number.isFinite(normalized.lng)) {
+        normalized.venue_resolution = reviewedVenue;
+      }
       normalizedEvidence.push(normalized);
     }
   }
@@ -1210,6 +1282,7 @@ async function collectEventSource({
   globalKey,
 }) {
   let provider;
+  fetcher = createAccessCheckedSourceFetch(fetcher || globalThis.fetch?.bind(globalThis));
   if (source.kind === "global") {
     provider = createTicketmasterProvider({
       key: globalKey,
@@ -1217,7 +1290,7 @@ async function collectEventSource({
       radiusKm: Math.max(1, Math.round(radiusM / 1000)),
       windowDays: THIS_WEEK_HORIZON_DAYS,
       // The global feed carries event-level (not region-level) timezones. One
-      // bounded page covers the possible UTC envelope; final calendar gates
+      // bounded collection covers the possible UTC envelope; final calendar gates
       // use each event's source timezone, never this acquisition padding.
       ...(selectedDate ? {
         windowStart: new Date(Math.max(new Date(`${selectedDate}T00:00:00Z`).getTime() - 14 * 3600000, nowDate.getTime())),
@@ -1253,7 +1326,7 @@ async function collectEventSource({
     // DATAtourisme also binds its date-window/geographic query to the snapshot.
     // The local API has no date/geometry filter. Final gates remain per view.
     const snapshotKey = createHash("sha256").update(JSON.stringify(["datatourisme", "osm_market_schedules", "public_holidays"].includes(source.adapter)
-      ? { source, anchor, radiusM, placeContext: source.adapter === "public_holidays" ? placeContext : null, date: String(startParam || "").slice(0, 10) } : source)).digest("hex");
+      ? { accessPolicy: "redirect-v1", source, anchor, radiusM, placeContext: source.adapter === "public_holidays" ? placeContext : null, date: String(startParam || "").slice(0, 10) } : source)).digest("hex");
     const collected = ["localized_events_api", "datatourisme", "osm_market_schedules", "public_holidays"].includes(source.adapter) && sourceCollectionCache
       ? await sourceCollectionCache.get(snapshotKey, collect, {
           shouldStore: value => ["ok", "empty"].includes(value?.collection_status?.status),
@@ -1268,7 +1341,8 @@ async function collectEventSource({
       reason: outcome.reason,
     };
   } catch (_error) {
-    return { source, raw: [], status: "failed", reason: "source_collect_failed" };
+    return { source, raw: [], status: "failed", reason: String(_error?.code || "").startsWith("source_redirect_")
+      ? _error.code : "source_collect_failed" };
   }
 }
 
@@ -1289,7 +1363,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
   if (["ckan_agenda", "tourism_listing"].includes(adapter)) {
     return createDateRangeListingProvider({ ...common, adapter,
       resourceId: source.resource_id, maxPages: source.max_pages,
-      timezone: source.timezone, sourceLanguage: source.source_language });
+      timezone: source.timezone || source.fallback_timezone, sourceLanguage: source.source_language });
   }
   if (adapter === "datatourisme") {
     return createDatatourismeEventProvider({ key: datatourismeKey, anchor, fetcher: fetcher || undefined, radiusM, timeoutMs });
@@ -1302,7 +1376,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
   }
 
   if (adapter === "quoted_public_document") {
-    return createQuotedEventProvider({ ...common, eventReader, timezone: source.timezone, sourceLanguage: source.source_language });
+    return createQuotedEventProvider({ ...common, eventReader, timezone: source.timezone || source.fallback_timezone, sourceLanguage: source.source_language });
   }
   if (adapter === "linked_events") {
     return createLinkedEventsProvider({
@@ -1321,6 +1395,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
       ...common,
       format: adapter === "ical" ? "ical" : source.format,
       timezone: source.timezone || undefined,
+      fallbackTimezone: source.fallback_timezone || undefined,
       status: "active",
     });
   }
@@ -1341,7 +1416,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
       status: "active",
       baseUrl: endpoint,
       timezoneOffset: source.timezone_offset || undefined,
-      timezone: source.timezone || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       routeRoleHint: source.route_role_hint || undefined,
       fetchDetails: source.fetch_details !== false,
@@ -1352,7 +1427,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
       ...common,
       status: "active",
       baseUrl: endpoint,
-      timezone: source.timezone || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       routeRoleHint: source.route_role_hint || undefined,
       fetchDetails: source.fetch_details !== false,
@@ -1364,7 +1439,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
       ...common,
       status: "active",
       sitemapUrl: endpoint,
-      timezone: source.timezone || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       routeRoleHint: source.route_role_hint || undefined,
       detailLimit: source.detail_limit || undefined,
@@ -1377,18 +1452,30 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
     return createLocalizedEventsApiProvider({
       ...common,
       status: "active",
-      timezone: source.timezone || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       supportedLanguages: source.supported_languages || undefined,
       limit: source.page_size || undefined,
       maxPages: source.max_pages || 10,
     });
   }
+  if (adapter === "mapped_events") {
+    return createMappedEventSourceProvider({
+      ...common,
+      id: source.id,
+      status: "active",
+      wireProfile: source.wire_profile || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
+      sourceLanguage: source.source_language || undefined,
+      limit: source.page_size || undefined,
+      horizonDays: source.horizon_days || undefined,
+    });
+  }
   if (adapter === "embedded_program_rsc") {
     return createEmbeddedProgramRscProvider({
       ...common,
       status: "active",
-      timezone: source.timezone || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       sourceTier: source.source_tier || undefined,
       confidence: source.confidence || undefined,
@@ -1402,7 +1489,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
     return createScheduledEventCardProvider({
       ...common,
       status: "active",
-      timezone: source.timezone || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       sourceTier: source.source_tier || undefined,
       confidence: source.confidence || undefined,
@@ -1414,7 +1501,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
     return createOfficialProgramArticleProvider({
       ...common,
       status: "active",
-      timezone: source.timezone || undefined,
+      timezone: source.timezone || source.fallback_timezone || undefined,
       sourceLanguage: source.source_language || undefined,
       sourceTier: source.source_tier || undefined,
       confidence: source.confidence || undefined,
@@ -1585,7 +1672,16 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // v7 excludes recurring ranges that v6 normalized as every-day daily windows.
 // v9 prevents non-displayable listings from exhausting the bounded venue budget.
 // v10 applies source-owned event timezones during normalization, not afterward.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v10";
+// Old empty pools must not bypass request-time discovery or retain the previous
+// venue-variant allocation after this code is deployed.
+// Earlier pools can contain one first-day atom for an entire stated series.
+// v15 excludes midnight sentinels represented as exact instants and event
+// tags polluted by a source category's available taxonomy children.
+// v16 excludes Ticketmaster pools with coerced coordinates, placeholder clocks,
+// discarded ends or merged source-owned occurrence identities. No cache purge.
+// v17 excludes first-page-only global inventory so bounded pagination and its
+// explicit partial outcome are observed without deleting any shared cache.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v17";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read
@@ -1601,14 +1697,51 @@ function shouldCacheEventSupplyResult(result) {
   // Keep useful partial results and proven healthy empties. A partial/unavailable
   // empty result may be a transient provider failure and must remain retryable.
   if (health.result === "events_found") return true;
+  // The sources that ran may be healthy, but looking for this place's own
+  // sources failed: the absence is unproven, so it is not a healthy empty.
+  if (requestTimeDiscoveryFailed(result)) return false;
   return health.status === "healthy" && health.result === "empty";
 }
 
-// Exactly the covered outcomes the event cache refuses because a source failed.
+// Failed acquisition stays terminal even with no source yet covering the place.
 function isFailedEventRefresh(result) {
-  if (!result || result.coverage !== "covered" || shouldCacheEventSupplyResult(result)) return false;
+  if (!result || shouldCacheEventSupplyResult(result)) return false;
+  if (requestTimeDiscoveryFailed(result)) return true;
+  if (result.coverage !== "covered") return false;
   const status = result.acquisition?.source_health?.status;
   return status === "unavailable" || status === "partial";
+}
+
+function requestTimeDiscoveryFailed(result) {
+  return result?.acquisition?.request_time_discovery?.status === "failed";
+}
+
+// Which of found / verified empty / failed the request-time lane answered.
+function withRequestTimeDiscovery(collected, discovery) {
+  if (!discovery || !collected || typeof collected !== "object") return collected;
+  const health = collected.acquisition?.source_health;
+  // Discovery is part of the acquisition outcome consumed by Live's existing
+  // health UI. Do not let a responding broad calendar prove local absence when
+  // the attempt to find local sources failed. Keep real events and source counts.
+  const discoveryFailed = discovery.status === "failed" && health;
+  const sourceHealth = discoveryFailed ? {
+    ...health,
+    status: health.result === "events_found" || health.responding_source_count > 0 ? "partial" : "unavailable",
+    result: health.result === "events_found" ? "events_found" : "unknown",
+    reasons: [...new Set([...(health.reasons || []), "request_time_discovery_failed"])],
+  } : health;
+  return {
+    ...collected,
+    acquisition: {
+      ...(collected.acquisition || {}),
+      ...(sourceHealth ? { source_health: sourceHealth } : {}),
+      request_time_discovery: {
+        status: discovery.status,
+        reason: discovery.reason || null,
+        feed_count: Array.isArray(discovery.feeds) ? discovery.feeds.length : 0,
+      },
+    },
+  };
 }
 
 function createFailedRefreshHold({
@@ -1678,6 +1811,21 @@ function failedEventCollection({ sourcePlan, selectedDate, radiusM }) {
  * A refresh that failed is held briefly and served as that failure, so a
  * failing source is reported as failed instead of as another `pending`.
  */
+// Sources found at request time carry their venues as text more often than
+// as coordinates; give their one collection a little more lookup room.
+const REQUEST_TIME_VENUE_RESOLUTION_LIMIT = 6;
+
+// Uses the same bounded source search the discovery worker uses; an operator
+// can switch the request-time lane off without touching the worker.
+function resolveRequestTimeDiscovery(env) {
+  const setting = String((env && env.PARRANDA_REQUEST_TIME_EVENT_DISCOVERY) || "").trim().toLowerCase();
+  if (["disabled", "0", "false", "off", "no"].includes(setting)) return null;
+  // Required here, not at the top: source-qualification requires this module.
+  const { resolveDefaultSourceSearch } = require("../pulse-sources/source-search-provider");
+  const { createRequestTimeEventDiscovery } = require("../pulse-sources/request-time-event-discovery");
+  return createRequestTimeEventDiscovery({ sourceSearch: resolveDefaultSourceSearch(env) });
+}
+
 function resolveDefaultEventSupply(
   env = process.env,
   {
@@ -1688,10 +1836,12 @@ function resolveDefaultEventSupply(
     failedRefreshClock,
     eventReader = resolveDefaultEventReader(env),
     marketLoader = null,
+    requestTimeDiscovery = undefined,
   } = {},
 ) {
   const flag = String((env && env.PARRANDA_AGNOSTIC_EVENTS) || "").trim().toLowerCase();
   if (!["enabled", "1", "true", "on", "yes"].includes(flag)) return null;
+  if (requestTimeDiscovery === undefined) requestTimeDiscovery = resolveRequestTimeDiscovery(env);
   const registry = resolveEventFeedRegistry(env);
   const globalKey = resolveGlobalEventKey(env);
   const datatourismeKey = String(env?.PARRANDA_DATATOURISME_KEY || "").trim() || null;
@@ -1707,7 +1857,8 @@ function resolveDefaultEventSupply(
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   });
   const sourceCollectionCache = createSourceCache({
-    namespace: "agnostic-event-source-v1", ttlMs: EVENT_CACHE_TTL_MS,
+    // Source snapshots also contain normalized atoms, including category tags.
+    namespace: "agnostic-event-source-v2", ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   });
   const calendarReferenceCache = createSourceCache({
@@ -1807,7 +1958,10 @@ function resolveDefaultEventSupply(
       });
       if (!discoveryHealth) discoveryHealth = demandHealth;
     }
-    if (sourcePlan.length === 0) {
+    // A place without its own approved or qualified source looks for one now,
+    // inside the out-of-band collection below; the day never waits for it.
+    const discoverNow = !hasApprovedLocalSource && typeof requestTimeDiscovery === "function";
+    if (sourcePlan.length === 0 && !discoverNow) {
       return {
         coverage: "uncovered",
         ...(selectedDate ? { selected_date: selectedDate } : {}),
@@ -1853,6 +2007,11 @@ function resolveDefaultEventSupply(
       cache.warm(key, async () => {
         try {
           let collected;
+          const discovery = discoverNow
+            ? await requestTimeDiscovery({ anchor, placeLabel, placeContext })
+              .catch(() => ({ status: "failed", reason: "request_time_discovery_failed", feeds: [] }))
+            : null;
+          const discovered = Array.isArray(discovery?.feeds) ? discovery.feeds : [];
           try {
             collected = await collectEvents({
               anchor,
@@ -1860,7 +2019,8 @@ function resolveDefaultEventSupply(
               now,
               selectedDate,
               time,
-              registry: requestRegistry,
+              registry: discovered.length ? [...requestRegistry, ...discovered] : requestRegistry,
+              ...(discovered.length ? { venueResolutionLimit: REQUEST_TIME_VENUE_RESOLUTION_LIMIT } : {}),
               radiusM: effectiveRadiusM,
               timeoutMs: WARM_TIMEOUT_MS,
               sourceCollectionCache,
@@ -1883,8 +2043,8 @@ function resolveDefaultEventSupply(
             failedRefreshes.remember(key, collection.result);
             throw error;
           }
-          collection.result = withDiscoveryHealth(collected);
-          if (isFailedEventRefresh(collected)) failedRefreshes.remember(key, collected);
+          collection.result = withDiscoveryHealth(withRequestTimeDiscovery(collected, discovery));
+          if (isFailedEventRefresh(collection.result)) failedRefreshes.remember(key, collection.result);
           else failedRefreshes.forget(key);
           return collection.result;
         } finally {
@@ -2018,6 +2178,7 @@ module.exports = {
   isFailedEventRefresh,
   shouldCacheEventSupplyResult,
   resolveDefaultEventSupply,
+  resolveRequestTimeDiscovery,
   resolveEventFeedRegistry,
   resolveEventFeedForAnchor,
   resolveEventFeedsForAnchor,

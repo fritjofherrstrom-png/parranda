@@ -27,6 +27,7 @@
 
 const { GENERIC_PROVIDER_CITY } = require("./provider-registry");
 const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
+const { createAccessCheckedSourceFetch } = require("./access-checked-source-fetch");
 
 const SCHEMA_ORG_EVENT_PROVIDER_ID = "generic-schema-org-events";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -85,9 +86,9 @@ function createSchemaOrgEventProvider(providerOptions = {}) {
         descriptor: boundDescriptor,
         async collect(collectionContext = {}) {
           const endpoint = providerOptions.endpoint || context.endpoint || collectionContext.endpoint || null;
-          const fetcher =
+          const fetcher = createAccessCheckedSourceFetch(
             providerOptions.fetcher ||
-            (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null);
+            (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null));
           if (!endpoint) return emptyCollection("unavailable", "source_endpoint_unavailable");
           if (typeof fetcher !== "function") return emptyCollection("unavailable", "source_fetch_unavailable");
 
@@ -126,7 +127,7 @@ function createSchemaOrgEventProvider(providerOptions = {}) {
               events = extractSchemaOrgEvents(payload);
             }
           } catch (error) {
-            const reason = error?.name === "AbortError"
+            const reason = String(error?.code || "").startsWith("source_redirect_") ? error.code : error?.name === "AbortError"
               ? "source_timeout"
               : phase === "payload"
                 ? "source_payload_invalid"
@@ -168,16 +169,33 @@ function emptyCollection(status, reason) {
   };
 }
 
-// schema.org JSON-LD comes in several envelopes: a bare object, an array, or a
-// `@graph` wrapper. Pull out the records whose @type is (or includes) Event.
+// schema.org JSON-LD comes in several envelopes: a bare object, an array, a
+// `@graph` wrapper, or a listing page whose events sit in an ItemList
+// (`CollectionPage.mainEntity.itemListElement[].item`, `hasPart`). Pull out
+// the records whose @type is (or includes) Event. An event's own nested parts
+// (`subEvent`, offers, location) are not walked: only listed events count.
+const LISTING_KEYS = ["@graph", "items", "mainEntity", "itemListElement", "item", "hasPart"];
+const MAX_LISTING_DEPTH = 6;
+const MAX_LISTED_EVENTS = 500;
+
 function extractSchemaOrgEvents(payload) {
-  if (!payload) return [];
-  let records = [];
-  if (Array.isArray(payload)) records = payload;
-  else if (Array.isArray(payload["@graph"])) records = payload["@graph"];
-  else if (Array.isArray(payload.items)) records = payload.items; // common feed wrapper
-  else if (typeof payload === "object") records = [payload];
-  return records.filter((record) => record && typeof record === "object" && isEventType(record));
+  const events = [];
+  const visit = (node, depth) => {
+    if (!node || typeof node !== "object" || depth > MAX_LISTING_DEPTH || events.length >= MAX_LISTED_EVENTS) return;
+    if (Array.isArray(node)) {
+      for (const child of node) visit(child, depth + 1);
+      return;
+    }
+    if (isEventType(node)) {
+      events.push(node);
+      return;
+    }
+    for (const key of LISTING_KEYS) {
+      if (node[key] && typeof node[key] === "object") visit(node[key], depth + 1);
+    }
+  };
+  visit(payload, 0);
+  return events;
 }
 
 /**

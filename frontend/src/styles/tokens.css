@@ -31,10 +31,22 @@
   --p-color-glow: 138 86 0; /* #8A5600 */
   --p-color-live: 35 66 200; /* #2342C8 */
   --p-color-on-live: 255 255 255;
-  --p-color-accent: var(--p-color-ember); /* legacy alias → ember */
   --p-map-tiles: grayscale(1) contrast(0.92) brightness(1.04);
   --p-radius-card: 18px;
   --p-radius-button: 14px;
+  /* The weight of every hairline frame: cards, pills, segments, notices. */
+  --p-line: 1.5px;
+  /* Elevation, low to high. Theme-independent: a shadow is darkness. */
+  --p-shadow-control: 0 1px 4px rgb(0 0 0 / 0.18);
+  --p-shadow-marker: 0 2px 8px rgb(0 0 0 / 0.28);
+  --p-shadow-pop: 0 6px 20px rgb(0 0 0 / 0.25);
+  --p-shadow-sheet: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  /* Stacking order, low to high. MapLibre's own controls sit at 2 inside the
+     map; the map's tooltip stays under the Live sheet. */
+  --p-z-popover: 40;
+  --p-z-map-control: 1001;
+  --p-z-map-tooltip: 1002;
+  --p-z-sheet: 1100;
   --p-font-display: "Archivo";
   --p-font-body: "Archivo";
   --p-font-mono: "IBM Plex Mono";

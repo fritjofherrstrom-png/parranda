@@ -30,10 +30,11 @@
  */
 
 const { createSourceCache } = require("./source-cache");
-const { createBackgroundSource, SOURCE_COMPLETION, SOURCE_SNAPSHOT } = require("./background-source");
-const { createWikidataSource } = require("./wikidata-source");
+const { createBackgroundSource, SOURCE_COMPLETION, SOURCE_SNAPSHOT, SOURCE_PENDING } = require("./background-source");
+const { createWikidataSource, WIKIDATA_CACHE_NAMESPACE } = require("./wikidata-source");
 const { normalizeSourceNameAliases } = require("./source-name-aliases");
 const { createOvertureSource } = require("./overture-source");
+const { createOvertureSampleCache } = require('./overture-sample-cache');
 const {
   createCachedVisitSwedenNapiSource,
   createVisitSwedenNapiSource,
@@ -69,7 +70,8 @@ const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 // faster/self-hosted Overpass. A deploy that runs such mirrors lists them via
 // PARRANDA_OVERPASS_ENDPOINTS to get HA failover.
 //
-// Measured correction: when overpass-api.de became globally unreachable, the
+// Measured correction: when overpass-api.de became unreachable from the
+// operator's network (an IP ban was suspected, not proven for every host), the
 // disk cache did NOT carry a cold place — a cold cache plus a dead primary lost
 // the request outright. What actually kept days alive was a second SOURCE
 // (Overture), not a second Overpass mirror. Cross-source rescue is therefore
@@ -93,6 +95,16 @@ const OVERPASS_FETCH_CAP = 150;
 // before Overpass has exhausted the budget we explicitly gave it.
 const OVERPASS_QUERY_TIMEOUT_SECONDS = 25;
 const DEFAULT_TIMEOUT_MS = 30000;
+// Overpass bans an IP automatically when it keeps querying after a 429/406 or
+// runs too many queries at once (2 slots per IP on overpass-api.de; measured
+// 2026-10-10 as a TCP-level "connection refused" for our whole network while
+// the service answered everyone else). These are that service's own signals,
+// so the loader obeys them per endpoint instead of letting every request retry.
+const OVERPASS_MAX_CONCURRENT_QUERIES = 1;
+const OVERPASS_RATE_LIMIT_BACKOFF_MS = 60 * 1000;
+const OVERPASS_RATE_LIMIT_BACKOFF_CAP_MS = 30 * 60 * 1000;
+const OVERPASS_REJECTED_PAUSE_MS = 6 * 60 * 60 * 1000;
+const OVERPASS_UNREACHABLE_PAUSE_MS = 5 * 60 * 1000;
 // Stable map/place facts can safely bridge a short provider outage, but stale
 // data must stay bounded and visible in source/readiness metadata.
 const DEFAULT_STALE_IF_ERROR_MS = 7 * 24 * 60 * 60 * 1000;
@@ -122,6 +134,13 @@ const PRIMARY_CACHE_MISS = Symbol("primaryCacheMiss");
 // How many walking budgets per anchor, mode, intent set and scope the loader
 // remembers as neighbours of each other (Kort/Lagom/Lång plus one custom).
 const MAX_REMEMBERED_BUDGETS = 4;
+// Only source-owned selections can retain a re-selection over their original
+// bounded sample. JSON/public inputs cannot supply this process-private seam.
+const SOURCE_CORROBORATION_SELECTION = Symbol('sourceCorroborationSelection');
+function retainCorroboratingRows(rows, primary) {
+  return typeof rows?.[SOURCE_CORROBORATION_SELECTION] === 'function'
+    ? rows[SOURCE_CORROBORATION_SELECTION](primary) : rows;
+}
 
 const LOADER_SUPPORTED_INTENTS = new Set([
   "scenic",
@@ -322,6 +341,8 @@ function createOpenDataLoader({
   userAgent = DEFAULT_USER_AGENT,
   cache = null,
   staleIfErrorMs = 0,
+  now = () => Date.now(),
+  elapsedNow = () => performance.now(),
 } = {}) {
   if (typeof fetcher !== "function") {
     return null; // honest fail closed: no fetcher → no loader
@@ -342,41 +363,93 @@ function createOpenDataLoader({
         ? [endpoint]
         : [DEFAULT_OVERPASS_ENDPOINT, ...DEFAULT_OVERPASS_FALLBACKS];
 
+  const gate = createOverpassGate({ now, maxWaitMs: boundedTimeoutMs });
+
   // One attempt against one mirror. Returns { ok, payload } on a usable response,
   // or { ok:false, status, error } so the caller can fail over to the next mirror.
   async function attemptOverpass(targetEndpoint, query) {
+    const started = elapsedNow();
+    const paused = gate.pausedReason(targetEndpoint);
+    if (paused) return { ok: false, status: "error_failed_closed", error: paused };
+    if (!(await gate.acquire(targetEndpoint))) {
+      return { ok: false, status: "error_failed_closed", error: "provider_slot_busy" };
+    }
+    // The endpoint may have paused while this query waited for its slot.
+    const pausedWhileWaiting = gate.pausedReason(targetEndpoint);
+    if (pausedWhileWaiting) {
+      gate.release(targetEndpoint);
+      return { ok: false, status: "error_failed_closed", error: pausedWhileWaiting };
+    }
+    const remainingMs = boundedTimeoutMs - (elapsedNow() - started);
+    if (remainingMs <= 0) {
+      gate.release(targetEndpoint);
+      return { ok: false, status: "error_failed_closed", error: "timeout_or_abort" };
+    }
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), boundedTimeoutMs);
-    try {
-      const response = await fetcher(targetEndpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": userAgent,
-          Accept: "application/json",
-        },
-        body: `data=${encodeURIComponent(query)}`,
-        signal: controller.signal,
-      });
-      if (!response || response.ok !== true) {
-        return { ok: false, status: "error_failed_closed", error: "http_non_200" };
+    let deadlineObserved = false;
+    const timedOut = () => {
+      if (!deadlineObserved) {
+        deadlineObserved = true;
+        gate.observeQueryTimeout(targetEndpoint);
       }
+      return { ok: false, status: "error_failed_closed", error: "timeout_or_abort" };
+    };
+    let timer, transport, response;
+    const expired = new Promise(resolve => {
+      timer = setTimeout(() => { controller.abort(); resolve(timedOut()); }, remainingMs);
+    });
+    const work = (async () => {
       try {
-        return { ok: true, payload: await response.json() };
-      } catch (_error) {
-        return { ok: false, status: "error_failed_closed", error: "parse_error" };
+        transport = Promise.resolve().then(() => fetcher(targetEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": userAgent,
+            Accept: "application/json",
+          },
+          body: `data=${encodeURIComponent(query)}`,
+          signal: controller.signal,
+        }));
+        response = await transport;
+        // Provider slow-down/rejection is endpoint health, not a late place
+        // result. Retain it before handing this transport's slot to a waiter.
+        if (!response || response.ok !== true) gate.observeStatus(targetEndpoint, response);
+        if (controller.signal.aborted || elapsedNow() - started >= boundedTimeoutMs) return timedOut();
+        if (!response || response.ok !== true) {
+          return { ok: false, status: "error_failed_closed", error: "http_non_200" };
+        }
+        try {
+          const payload = await response.json();
+          if (controller.signal.aborted || elapsedNow() - started >= boundedTimeoutMs) return timedOut();
+          gate.observeSuccess(targetEndpoint);
+          return { ok: true, payload };
+        } catch (_error) {
+          return controller.signal.aborted ? timedOut()
+            : { ok: false, status: "error_failed_closed", error: "parse_error" };
+        }
+      } catch (error) {
+        gate.observeError(targetEndpoint, error);
+        return { ok: false, status: "error_failed_closed", error: classifyFetchError(error) };
+      } finally {
+        if (controller.signal.aborted && response?.body) {
+          try { Promise.resolve(response.body.cancel()).catch(() => {}); } catch {}
+        }
       }
-    } catch (error) {
-      return { ok: false, status: "error_failed_closed", error: classifyFetchError(error) };
+    })();
+    try {
+      return await Promise.race([work, expired]);
     } finally {
       clearTimeout(timer);
+      // Headers alone do not settle an abort-ignoring response body. The full
+      // native fetch+body operation owns the slot, independently of its caller.
+      work.then(() => gate.release(targetEndpoint), () => gate.release(targetEndpoint));
     }
   }
 
   // One geocoded query at a given radius, with mirror failover. Fetch wider than
   // the final limit so scarce-but-important categories (scenic in a food-dense
   // centre) survive, then balance down to `boundedLimit` client-side.
-  async function fetchAtRadius(lat, lng, radiusM, { queryIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
+  async function fetchAtRadius(lat, lng, radiusM, { queryIntents = [], requestedIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
     const fetchBreadth = Math.min(boundedLimit * 6, OVERPASS_FETCH_CAP);
     const query = buildOverpassQuery({
       lat,
@@ -393,6 +466,7 @@ function createOpenDataLoader({
       if (attempt.ok) {
         const records = mapOverpassResponse(attempt.payload, boundedLimit, {
           origin: { lat, lng },
+          requestedIntents,
           walkingTargetBand,
           availabilityWindow,
         });
@@ -403,7 +477,7 @@ function createOpenDataLoader({
     return withLoaderStatus([], last.status, last.error);
   }
 
-  async function fetchAcrossAnchors(anchors, radiusM) {
+  async function fetchAcrossAnchors(anchors, radiusM, { requestedIntents = [] } = {}) {
     const boundedAnchors = (Array.isArray(anchors) ? anchors : [])
       .filter((anchor) => Number.isFinite(anchor?.lat) && Number.isFinite(anchor?.lng))
       .slice(0, 2);
@@ -446,7 +520,7 @@ function createOpenDataLoader({
       const clusters = boundedAnchors.map((anchor, index) => ({
         anchor,
         records: withLoaderStatus(
-          balanceMappedRecords(buckets[index], boundedLimit, anchor),
+          balanceMappedRecords(buckets[index], boundedLimit, anchor, { requestedIntents }),
           buckets[index].length ? `loaded:${Math.min(buckets[index].length, boundedLimit)}` : "loaded:0",
           null,
         ),
@@ -468,6 +542,10 @@ function createOpenDataLoader({
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return withLoaderStatus([], "loaded:0", null);
 
     const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents);
+    // Preserve already-acquired requested experiences before the bounded map
+    // cut. Modern rhythm owns density; unrelated category variety must not
+    // consume its supply. Query, factual gates and provider caps stay unchanged.
+    const selectionIntents = dayRhythm ? normalizedRequestedIntents : [];
     const normalizedWalkingTargetBand = normalizeWalkingTargetBand(walkingTargetBand);
     const normalizedWindow = normalizeAvailabilityWindow(availabilityWindow);
     const origin = { lat, lng };
@@ -476,6 +554,7 @@ function createOpenDataLoader({
     const requestRadiusKm = pinnedRadiusKm ?? rhythmAwareRadiusKm(normalizedWalkingTargetBand, dayRhythm);
 
     const first = await fetchAtRadius(lat, lng, Math.round(requestRadiusKm * 1000), {
+      requestedIntents: selectionIntents,
       walkingTargetBand: normalizedWalkingTargetBand,
       availabilityWindow: normalizedWindow,
     });
@@ -542,10 +621,12 @@ function createOpenDataLoader({
       }
       const wider = await fetchAtRadius(lat, lng, Math.round(widerKm * 1000), {
         queryIntents: expansionQueryIntents,
+        requestedIntents: selectionIntents,
         walkingTargetBand: normalizedWalkingTargetBand,
         availabilityWindow: normalizedWindow,
       });
       const combined = mergeLoaderRecords(first, wider, boundedLimit, origin, {
+        requestedIntents: selectionIntents,
         walkingTargetBand: normalizedWalkingTargetBand,
         availabilityWindow: normalizedWindow,
       });
@@ -641,7 +722,9 @@ function createOpenDataLoader({
         { ...baseMetadata, selection_reason: "regional_scout_outstanding" },
       ));
     }
-    const regional = await fetchAcrossAnchors(secondaryAnchors, REGIONAL_CLUSTER_RADIUS_KM * 1000);
+    const regional = await fetchAcrossAnchors(secondaryAnchors, REGIONAL_CLUSTER_RADIUS_KM * 1000, {
+      requestedIntents: request.dayRhythm ? normalizeRequestedIntents(request.requestedIntents) : [],
+    });
     const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
     let selected = primary;
     let selectedAnchor = { id: "primary", lat: request.lat, lng: request.lng };
@@ -692,7 +775,8 @@ function createOpenDataLoader({
   };
 
   // One request's identity: the ~110 m anchor bucket plus everything that
-  // shaped its query. v9 includes the trusted availability window and rhythm aperture.
+  // shaped its query. v10 invalidates the modern category-only source cut;
+  // v9 included the trusted availability window and rhythm aperture.
   // v8 invalidates every row collected before the aperture
   // followed the walking budget: a `t9` row cached under v7 was gathered from
   // a 1.5 km disc, so reusing it would keep serving the narrow day this fixes.
@@ -709,9 +793,9 @@ function createOpenDataLoader({
     return {
       key: !request.dayRhythm && !window
         ? `v8:${anchorKey}:r${radiusKm}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`
-        : `v9:${anchorKey}:r${radiusKm}:w${windowKey}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
-      budgetsKey: `v8-budgets:${anchorKey}:${shape}:s${scopeKey}`,
-      evidenceKey: `v8-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
+        : `${request.dayRhythm ? 'v10' : 'v9'}:${anchorKey}:r${radiusKm}:w${windowKey}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
+      budgetsKey: `${request.dayRhythm ? 'v10' : 'v8'}-budgets:${anchorKey}:${shape}:s${scopeKey}`,
+      evidenceKey: `${request.dayRhythm ? 'v10' : 'v8'}-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
       radiusKm,
       targetKm: band ? band.targetKm : null,
     };
@@ -905,7 +989,7 @@ function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_
   return `[out:json][timeout:${OVERPASS_QUERY_TIMEOUT_SECONDS}];${blocks.join("")}`;
 }
 
-function mapOverpassResponse(payload, limit, { origin = null, walkingTargetBand = null, availabilityWindow = null } = {}) {
+function mapOverpassResponse(payload, limit, { origin = null, requestedIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
   if (!payload || !Array.isArray(payload.elements)) return [];
   // Map + dedupe everything Overpass returned (already bounded by the fetch
   // cap), preserving response order.
@@ -918,12 +1002,32 @@ function mapOverpassResponse(payload, limit, { origin = null, walkingTargetBand 
     seenIds.add(record.id);
     mapped.push(record);
   }
-  return balanceMappedRecords(mapped, limit, origin, { walkingTargetBand, availabilityWindow });
+  return balanceMappedRecords(mapped, limit, origin, { requestedIntents, walkingTargetBand, availabilityWindow });
 }
 
-function balanceMappedRecords(mapped, limit, origin, { walkingTargetBand = null, availabilityWindow = null } = {}) {
+function balanceMappedRecords(mapped, limit, origin, { requestedIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
   const ranked = rankMappedRecords(mapped, origin, availabilityWindow);
   if (mapped.length <= limit) return ranked;
+
+  const intents = normalizeRequestedIntents(requestedIntents);
+  if (intents.length) {
+    const level = record => intents.some(intent => matchCandidateToIntent(record, intent).level === 'strong') ? 2
+      : intents.some(intent => matchCandidateToIntent(record, intent).level === 'weak') ? 1 : 0;
+    const window = normalizeAvailabilityWindow(availabilityWindow);
+    const usable = record => record.operational_status !== 'inactive' &&
+      (!window || evaluateOpeningHoursForWindow(record.opening_hours, window).eligible !== false);
+    const selected = [];
+    for (const tier of [5, 4, 3, 2, 1, 0]) {
+      if (selected.length >= limit) break;
+      const group = ranked.filter(record => level(record) + (usable(record) ? 3 : 0) === tier);
+      // Reuse the category/reach balancing within the requested union. This
+      // preserves minority interests as well as repeated same-interest depth.
+      // Known closed/inactive matches cannot consume the positive quota; their
+      // source facts remain available behind viable options, never reopened.
+      selected.push(...balanceMappedRecords(group, limit - selected.length, origin, { walkingTargetBand, availabilityWindow }));
+    }
+    return selected;
+  }
 
   // Category-balanced round-robin: a food-dense centre must not crowd out the
   // single scenic anchor. Buckets keep response order; we take one per category
@@ -981,7 +1085,7 @@ function mappingsForRequestedIntents(requestedIntents = []) {
   return mappings.length ? mappings : OSM_TAG_MAP;
 }
 
-function mergeLoaderRecords(first, wider, limit, origin, { walkingTargetBand = null, availabilityWindow = null } = {}) {
+function mergeLoaderRecords(first, wider, limit, origin, { requestedIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
   const deduped = [];
   const ids = new Set();
   for (const record of [...(Array.isArray(first) ? first : []), ...(Array.isArray(wider) ? wider : [])]) {
@@ -989,7 +1093,7 @@ function mergeLoaderRecords(first, wider, limit, origin, { walkingTargetBand = n
     ids.add(record.id);
     deduped.push(record);
   }
-  const selected = balanceMappedRecords(deduped, limit, origin, { walkingTargetBand, availabilityWindow });
+  const selected = balanceMappedRecords(deduped, limit, origin, { requestedIntents, walkingTargetBand, availabilityWindow });
   return withLoaderStatus(
     selected,
     selected.length ? `loaded:${selected.length}` : first?.loader_status || wider?.loader_status || "loaded:0",
@@ -1118,6 +1222,130 @@ function distanceKm(a, b) {
   return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
+// Per-endpoint politeness for one loader (one per process in the app): at most
+// OVERPASS_MAX_CONCURRENT_QUERIES in flight, and a pause after the provider says
+// "slow down" (429/503/504, honouring Retry-After and doubling while it
+// repeats), "not you" (403/406, manual bans) or cannot be connected to at all
+// (refused or connect timeout: how an IP ban looks, and each attempt otherwise
+// costs a request ~10 s). An actually started query exceeding its own total
+// deadline has a separate short hold; unrelated upstream aborts and other
+// errors keep their former behaviour. A paused endpoint fails fast, so cached,
+// stale and other-source rescue paths still answer.
+function createOverpassGate({ now, maxWaitMs }) {
+  const endpoints = new Map();
+  const state = (endpoint) => {
+    if (!endpoints.has(endpoint)) {
+      endpoints.set(endpoint, { pausedUntil: 0, reason: null, strikes: 0, active: 0, waiters: [] });
+    }
+    return endpoints.get(endpoint);
+  };
+  const pause = (entry, ms, reason) => {
+    entry.strikes += 1;
+    entry.pausedUntil = Math.max(entry.pausedUntil, now() + ms);
+    entry.reason = reason;
+  };
+  return {
+    pausedReason(endpoint) {
+      const entry = state(endpoint);
+      return now() < entry.pausedUntil ? entry.reason : null;
+    },
+    acquire(endpoint) {
+      const entry = state(endpoint);
+      if (entry.active < OVERPASS_MAX_CONCURRENT_QUERIES) {
+        entry.active += 1;
+        return Promise.resolve(true);
+      }
+      return new Promise((resolve) => {
+        const waiter = { resolve };
+        waiter.timer = setTimeout(() => {
+          entry.waiters = entry.waiters.filter((candidate) => candidate !== waiter);
+          resolve(false);
+        }, maxWaitMs);
+        entry.waiters.push(waiter);
+      });
+    },
+    release(endpoint) {
+      const entry = state(endpoint);
+      const next = entry.waiters.shift();
+      if (next) {
+        clearTimeout(next.timer);
+        next.resolve(true);
+      } else {
+        entry.active = Math.max(0, entry.active - 1);
+      }
+    },
+    observeSuccess(endpoint) {
+      const entry = state(endpoint);
+      entry.strikes = 0;
+      entry.reason = null;
+    },
+    observeStatus(endpoint, response) {
+      const entry = state(endpoint);
+      const status = Number(response?.status);
+      if (status === 429 || status === 503 || status === 504) {
+        const backoff = Math.min(
+          OVERPASS_RATE_LIMIT_BACKOFF_MS * 2 ** Math.min(entry.strikes, 10),
+          OVERPASS_RATE_LIMIT_BACKOFF_CAP_MS,
+        );
+        // The 30-minute cap bounds our own exponential backoff. An explicit
+        // provider Retry-After takes precedence, bounded separately to six
+        // hours; never reinterpret that cap as permission to retry earlier.
+        pause(entry, Math.max(backoff, retryAfterMs(response, now())), "provider_rate_limited");
+      } else if (status === 403 || status === 406) {
+        pause(entry, OVERPASS_REJECTED_PAUSE_MS, "provider_rejected_client");
+      } else if (status === 500 || status === 502) {
+        // A server/gateway failure is neither a query answer nor an IP ban.
+        // Keep a short quiet period (or explicit Retry-After), without strikes.
+        const until = now() + Math.max(OVERPASS_RATE_LIMIT_BACKOFF_MS, retryAfterMs(response, now()));
+        if (until > entry.pausedUntil) {
+          entry.pausedUntil = until;
+          entry.reason = "provider_unavailable";
+        }
+      }
+    },
+    observeQueryTimeout(endpoint) {
+      const entry = state(endpoint);
+      const at = now();
+      // This attempt exhausted its real queue+transport budget. Briefly stop
+      // repeated cold queries; do not classify it as a connect failure/IP ban,
+      // increment exponential strikes, or overwrite a stronger provider pause.
+      if (at >= entry.pausedUntil) {
+        entry.pausedUntil = at + OVERPASS_RATE_LIMIT_BACKOFF_MS;
+        entry.reason = "provider_timed_out";
+      }
+    },
+    observeError(endpoint, error) {
+      if (!isConnectFailure(error)) return;
+      const entry = state(endpoint);
+      pause(
+        entry,
+        Math.min(OVERPASS_UNREACHABLE_PAUSE_MS * 2 ** Math.min(entry.strikes, 10), OVERPASS_REJECTED_PAUSE_MS),
+        "provider_unreachable",
+      );
+    },
+  };
+}
+
+function retryAfterMs(response, nowMs) {
+  const raw = response?.headers?.get?.("retry-after");
+  if (typeof raw !== "string" || !raw.trim()) return 0;
+  const seconds = Number(raw.trim());
+  if (Number.isFinite(seconds)) return Math.max(0, Math.min(seconds * 1000, OVERPASS_REJECTED_PAUSE_MS));
+  const at = Date.parse(raw);
+  return Number.isFinite(at) ? Math.max(0, Math.min(at - nowMs, OVERPASS_REJECTED_PAUSE_MS)) : 0;
+}
+
+// No TCP connection at all, as Node's fetch reports it: refused, or (when an
+// address family hangs) undici's connect timeout. Never a slow query.
+const CONNECT_FAILURE_CODES = new Set(["ECONNREFUSED", "UND_ERR_CONNECT_TIMEOUT"]);
+function isConnectFailure(error) {
+  for (let current = error, depth = 0; current && depth < 4; current = current.cause, depth += 1) {
+    if (CONNECT_FAILURE_CODES.has(current.code)) return true;
+    if (Array.isArray(current.errors) && current.errors.some((inner) => CONNECT_FAILURE_CODES.has(inner?.code))) return true;
+  }
+  return false;
+}
+
 function classifyFetchError(error) {
   const name = typeof error?.name === "string" ? error.name.toLowerCase() : "";
   const message = typeof error?.message === "string" ? error.message.toLowerCase() : "";
@@ -1188,6 +1416,13 @@ function mapOsmElement(element) {
       .flatMap((value) => value.split(";")),
   ).filter((value) => value !== name);
   const operational = extractOsmOperationalMetadata(tags, { website, openingHours });
+  const detailKind = tags.shop === 'antiques' ? 'antiques'
+    : tags.shop === 'bakery' ? 'bakery'
+    : tags.tourism === 'museum' && tags.museum === 'art' ? 'art_museum'
+    : tags.tourism === 'museum' && tags.museum === 'history' ? 'history_museum'
+    : tags.leisure === 'nature_reserve' ? 'nature_reserve'
+    : tags.leisure === 'garden' && tags['garden:type'] === 'botanical' ? 'botanical_garden' : null;
+  const details = require('./place-details').normalizePlaceDetails({ kind: detailKind }, mapping.type);
 
   return {
     id: `osm-${elementType}-${osmId}`,
@@ -1206,6 +1441,7 @@ function mapOsmElement(element) {
     // exclude a candidate when trusted local-time evaluation proves no overlap.
     ...(website ? { website } : {}),
     ...(sourceAddress ? { source_address: sourceAddress } : {}),
+    ...(details ? { place_details: details } : {}),
     ...(sourceNameAliases.length ? { source_name_aliases: sourceNameAliases } : {}),
     ...(openingHours ? { opening_hours: openingHours } : {}),
     ...(tags.amenity === "marketplace" ? {
@@ -1332,7 +1568,7 @@ function resolveDefaultOpenDataLoader(env = process.env) {
     const wikiRaw = createWikidataSource({ labelLanguages });
     if (typeof wikiRaw === "function") {
       const wikiCache = createSourceCache({
-        namespace: "wikidata",
+        namespace: WIKIDATA_CACHE_NAMESPACE,
         dir: env?.PARRANDA_CACHE_DIR || null,
         ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
       });
@@ -1369,16 +1605,14 @@ function resolveDefaultOpenDataLoader(env = process.env) {
       minConfidence: Number(env?.PARRANDA_OVERTURE_MIN_CONFIDENCE) || undefined,
     });
     const overtureCache = createSourceCache({
-      // v5 stores one stratified sample per anchor window (walking-reach rings
-      // x route type) that each request re-selects from. v4 rows are an
-      // 80-record nearest-window selection per preference set — in a dense
-      // centre a few hundred metres across — so they are never read here.
-      // v4 also still binds the taxonomy contract; v2/v3 remain excluded.
-      namespace: "overture-v5",
+      // v6 retains the same stratified sample plus pinned source/query proof.
+      // Bare v5 arrays cannot be revalidated, so remain in their old namespace.
+      namespace: "overture-v6",
       dir: env?.PARRANDA_CACHE_DIR || null,
       ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
     });
-    overtureSource = createOvertureBackgroundSource({ source: overtureRaw, cache: overtureCache });
+    overtureSource = createOvertureBackgroundSource({ source: overtureRaw,
+      cache: createOvertureSampleCache({ cache: overtureCache, validateReceipt: overtureRaw.validateReceipt }) });
   }
 
   // Official Swedish place supply through Visit Sweden's documented NAPI
@@ -1423,17 +1657,29 @@ function resolveDefaultOpenDataLoader(env = process.env) {
 // the selection can never be a different window's leftovers.
 function createOvertureBackgroundSource({ source, cache }) {
   const sampleKey = typeof source?.sampleKey === "string" ? source.sampleKey : "default";
+  const keyFor = typeof source.cacheKeyFor === 'function' ? source.cacheKeyFor
+    : ({ lat, lng } = {}) => `${Number(lat).toFixed(3)},${Number(lng).toFixed(3)}:${sampleKey}`;
   const background = createBackgroundSource({
     cache,
-    keyFor: ({ lat, lng } = {}) => `${Number(lat).toFixed(3)},${Number(lng).toFixed(3)}:${sampleKey}`,
-    load: (anchor) => source.acquire(anchor),
+    keyFor,
+    load: (anchor) => source.acquire({ ...anchor, previousSample: cache.previous?.(keyFor(anchor)) || null }),
   });
-  const forRequest = (rows, anchor = {}, request = {}) => source.select(rows, {
-    lat: anchor.lat,
-    lng: anchor.lng,
-    requestedIntents: normalizeRequestedIntents(request.requestedIntents),
-    walkingTargetBand: request.walkingTargetBand,
-  });
+  const forRequest = (rows, anchor = {}, request = {}) => {
+    const selection = {
+      lat: anchor.lat, lng: anchor.lng,
+      requestedIntents: normalizeRequestedIntents(request.requestedIntents),
+      walkingTargetBand: request.walkingTargetBand,
+    };
+    const retainedSample = [...rows];
+    const select = primary => {
+      const selected = source.select(retainedSample, { ...selection, corroborationRecords: primary });
+      if (rows.source_error) Object.defineProperty(selected, 'source_error', { value: rows.source_error });
+      return selected;
+    };
+    const selected = select([]);
+    Object.defineProperty(selected, SOURCE_CORROBORATION_SELECTION, { value: select });
+    return selected;
+  };
   return {
     eager: true,
     readCached(anchor, request) {
@@ -1447,18 +1693,49 @@ function createOvertureBackgroundSource({ source, cache }) {
       Object.defineProperty(pending, SOURCE_COMPLETION, {
         value: Promise.resolve(completion).then((rows) => forRequest(rows, anchor, request)),
       });
+      Object.defineProperty(pending, SOURCE_SNAPSHOT, { value: () => {
+        const snapshot = typeof value[SOURCE_SNAPSHOT] === 'function' ? value[SOURCE_SNAPSHOT]() : null;
+        return Array.isArray(snapshot) ? forRequest(snapshot, anchor, request) : null;
+      } });
       return pending;
     },
   };
 }
 
-function settleWithin(promise, timeoutMs) {
-  let timer = null;
-  const expired = new Promise((resolve) => {
-    timer = setTimeout(() => resolve({ settled: false }), Math.max(0, Number(timeoutMs) || 0));
+// A cold eager read is a handle to its original producer, not a permanently
+// empty source. Reconsider only those captured jobs as they settle. A later
+// cache generation must never rescue this request, and the primary retains
+// its existing opportunity measured from its original start.
+async function awaitPrimaryOrRescue(primary, groups, requestedIntents, remainingWaitMs) {
+  const completed = new Map();
+  const snapshots = () => groups.map(group => completed.get(group) || group);
+  const adequate = () => {
+    const profile = supplyProfile(snapshots().flat(), requestedIntents);
+    return profile.record_count >= THIN_RECORD_COUNT && profile.category_count >= THIN_CATEGORY_COUNT;
+  };
+  let ready;
+  const readiness = new Promise(resolve => { ready = resolve; });
+  const pending = groups.filter(group => group[SOURCE_COMPLETION]);
+  for (const group of pending) {
+    Promise.resolve(group[SOURCE_COMPLETION]).catch(failedSourceValue).then(rows => {
+      completed.set(group, Array.isArray(rows) ? rows : failedSourceValue());
+      if (adequate()) ready(true);
+      else if (completed.size === pending.length) ready(false);
+    });
+  }
+  if (adequate()) ready(true);
+  else if (!pending.length) return { rescue: false, groups };
+  let timer;
+  const window = new Promise(resolve => {
+    timer = setTimeout(resolve, Math.max(0, remainingWaitMs));
   });
-  return Promise.race([promise.then((value) => ({ settled: true, value })), expired])
-    .finally(() => clearTimeout(timer));
+  try {
+    const rescue = await Promise.race([
+      primary.then(() => false),
+      readiness.then(value => value ? window.then(() => true) : false),
+    ]);
+    return { rescue, groups: snapshots() };
+  } finally { clearTimeout(timer); }
 }
 
 function failedSourceValue() {
@@ -1503,8 +1780,9 @@ function composeOpenDataLoaders(
       const sameAnchor = !selected || (selected.lat === primaryAnchor.lat && selected.lng === primaryAnchor.lng);
       const cachedGroups = await Promise.all(sources.map(source => typeof source.readCached === 'function'
         ? source.readCached(primaryAnchor, request) : []));
-      const cached = [...primaryCached, ...cachedGroups.flat()];
-      const rescue = [...primaryCached, ...cachedGroups.filter((_, index) => sources[index].primaryRescue !== false).flat()];
+      const selectedGroups = cachedGroups.map(rows => retainCorroboratingRows(rows, primaryCached));
+      const cached = [...primaryCached, ...selectedGroups.flat()];
+      const rescue = [...primaryCached, ...selectedGroups.filter((_, index) => sources[index].primaryRescue !== false).flat()];
       const profile = supplyProfile(rescue, requestedIntents);
       const capacity = dayCapacityProfile(cached, { origin: primaryAnchor, walkingTargetBand: request.walkingTargetBand });
       const answersRequest = profile.requested_intents_missing.length === 0 && capacity.can_support_target !== false;
@@ -1531,24 +1809,30 @@ function composeOpenDataLoaders(
         Promise.resolve().then(() => source.load(primaryAnchor, request)).catch(failedSourceValue),
       );
     }
+    const primaryStartedAt = Date.now();
+    let primarySettled = false;
     const osmPromise = Promise.resolve(osmLoader(request))
       .catch(() => withLoaderStatus([], "error_failed_closed", "osm_threw"));
-    const eagerRecords = [];
+    osmPromise.then(() => { primarySettled = true; });
+    const eagerGroups = [];
     for (const [source, pending] of eagerLoads) {
       if (source.primaryRescue === false) continue;
       const loaded = await pending;
-      if (Array.isArray(loaded)) eagerRecords.push(...loaded);
+      if (Array.isArray(loaded)) eagerGroups.push(loaded);
+      // A real captured source job, not a serialized status or an optional
+      // corroborator, can acknowledge this lifecycle before the primary ends.
+      if (loaded?.[SOURCE_COMPLETION] && source.waitForCompletion !== false &&
+          typeof request[SOURCE_PENDING] === 'function') request[SOURCE_PENDING]();
     }
-    const eagerProfile = supplyProfile(eagerRecords, requestedIntents);
-    const eagerAdequate = eagerProfile.record_count >= THIN_RECORD_COUNT &&
-      eagerProfile.category_count >= THIN_CATEGORY_COUNT;
     // A varied directory is a rescue, not a substitute: give the primary a
     // bounded chance to answer first. If it settles — with rows or a failure —
     // the ordinary merge below keeps both families (and still rescues a
     // failed primary). A primary still outstanding at the bound keeps running
     // and caches its answer for the next request; this composition answers
     // now, without asking any provider again.
-    if (eagerAdequate && !(await settleWithin(osmPromise, primaryWaitMs)).settled) {
+    const rescue = await awaitPrimaryOrRescue(osmPromise, eagerGroups, requestedIntents,
+      primaryWaitMs - (Date.now() - primaryStartedAt));
+    if (rescue.rescue && !primarySettled) {
       // Keep the primary promise observed so a background failure can never
       // become an unhandled rejection.
       osmPromise.catch(() => {});
@@ -1572,11 +1856,13 @@ function composeOpenDataLoaders(
         if (source?.eager === true && source.primaryRescue !== false) continue; // already in the rescue
         const cached = typeof source?.readCached === "function"
           ? await Promise.resolve(source.readCached(primaryAnchor, request)).catch(() => []) : [];
-        if (Array.isArray(cached)) held.push(...cached);
+        if (Array.isArray(cached)) held.push(...retainCorroboratingRows(cached, mapEvidence || []));
       }
-      const records = [...(mapEvidence || []), ...eagerRecords, ...held];
+      const records = [...(mapEvidence || []), ...rescue.groups.flatMap(rows => retainCorroboratingRows(rows, mapEvidence || [])), ...held];
+      const rescueError = rescue.groups.map(rows => rows?.source_error || rows?.loader_error)
+        .filter(Boolean).map(safeLoaderToken).find(Boolean) || null;
       return withLoaderMetadata(
-        withLoaderStatus(records, `loaded:${records.length}`, null),
+        withLoaderStatus(records, `loaded:${records.length}`, rescueError),
         {
           ...(mapEvidence?.loader_metadata || {}),
           selected_profile: supplyProfile(records, requestedIntents),
@@ -1617,7 +1903,7 @@ function composeOpenDataLoaders(
     const neighbour = primaryErrored && typeof osmLoader.readNeighbouring === "function"
       ? osmLoader.readNeighbouring(primaryAnchor, request) : null;
     const mapRecords = neighbour?.length ? neighbour : osmRecords;
-    const backgroundRecords = [];
+    const backgroundGroups = [];
     const backgroundFailures = [];
     const completions = [];
     for (const source of sources) {
@@ -1655,11 +1941,11 @@ function composeOpenDataLoaders(
         const originalSnapshot = typeof eagerRecords[SOURCE_SNAPSHOT] === 'function'
           ? eagerRecords[SOURCE_SNAPSHOT]() : null;
         if (Array.isArray(originalSnapshot)) {
-          backgroundRecords.push(...originalSnapshot);
+          backgroundGroups.push(originalSnapshot);
           if (originalSnapshot.source_error) backgroundFailures.push(safeLoaderToken(originalSnapshot.source_error));
           continue;
         }
-        backgroundRecords.push(...eagerRecords);
+        backgroundGroups.push(eagerRecords);
         if (eagerRecords.source_error) backgroundFailures.push(safeLoaderToken(eagerRecords.source_error));
         if (primaryFailed || source.waitForCompletion !== false) {
           completions.push(eagerRecords[SOURCE_COMPLETION]);
@@ -1680,14 +1966,15 @@ function composeOpenDataLoaders(
             ? (typeof source === "function" ? source(wikiAnchor) : source.load(wikiAnchor, request))
             : eagerResult || (typeof source === "function" ? source(wikiAnchor) : source.load(wikiAnchor, request)),
       ).catch(failedSourceValue);
-      if (Array.isArray(loaded)) backgroundRecords.push(...loaded);
+      if (Array.isArray(loaded)) backgroundGroups.push(loaded);
       if (loaded?.source_error) backgroundFailures.push(safeLoaderToken(loaded.source_error));
       if (loaded?.[SOURCE_COMPLETION] && (primaryFailed || source.waitForCompletion !== false)) {
         completions.push(loaded[SOURCE_COMPLETION]);
       }
     }
-    if (osm?.[SOURCE_COMPLETION]) completions.push(osm[SOURCE_COMPLETION]);
-    const records = [...mapRecords, ...backgroundRecords];
+    const primaryCompletionIndex = osm?.[SOURCE_COMPLETION] ? completions.length : null;
+    if (primaryCompletionIndex !== null) completions.push(osm[SOURCE_COMPLETION]);
+    const records = [...mapRecords, ...backgroundGroups.flatMap(rows => retainCorroboratingRows(rows, mapRecords))];
     const status = records.length > 0 ? `loaded:${records.length}`
       : backgroundFailures.length ? 'error_failed_closed' : (osm.loader_status || "loaded:0");
     const collectionError = osm.loader_error || backgroundFailures[0] || null;
@@ -1722,16 +2009,24 @@ function composeOpenDataLoaders(
         // Reviewed-source composition can wrap an already composed primary.
         // Read its private progress too: awaiting its all-sources completion
         // again would otherwise hide individually finished source jobs.
-        const primarySnapshot = typeof osm?.[SOURCE_SNAPSHOT] === 'function' ? osm[SOURCE_SNAPSHOT]() : [];
-        const settled = [...records, ...(Array.isArray(primarySnapshot) ? primarySnapshot : []), ...groups.flatMap(rows => Array.isArray(rows) ? rows : [])];
+        const primarySnapshot = typeof osm?.[SOURCE_SNAPSHOT] === 'function' ? osm[SOURCE_SNAPSHOT]() : null;
+        const primaryCompleted = primaryCompletionIndex !== null ? finished.get(primaryCompletionIndex) : null;
+        // A source snapshot/completion is its current frame, not a delta. A
+        // nested composer may have replaced its directory selection within the
+        // same cap; unioning the old flattened frame would resurrect evictions.
+        const primaryRows = Array.isArray(primarySnapshot) ? primarySnapshot
+          : Array.isArray(primaryCompleted) ? primaryCompleted : mapRecords;
+        const backgroundCompleted = [...finished.entries()].filter(([index]) => index !== primaryCompletionIndex).map(([, rows]) => rows);
+        const settled = [...primaryRows, ...[...backgroundGroups, ...backgroundCompleted].flatMap(rows =>
+          Array.isArray(rows) ? retainCorroboratingRows(rows, primaryRows) : [])];
         const unique = [...new Map(settled.map(row => [row.id, row])).values()];
         const hasFailure = rows => Boolean(rows?.source_error || rows?.loader_error ||
           rows?.loader_status === 'error_failed_closed' ||
           (Number.isFinite(rows?.loader_metadata?.source_completion?.failed) &&
             rows.loader_metadata.source_completion.failed > 0));
         const failedGroups = groups.filter(hasFailure);
-        const failed = failedGroups.length > 0 || hasFailure(primarySnapshot);
-        const completionError = [...groups, primarySnapshot].map(rows =>
+        const failed = failedGroups.length > 0 || hasFailure(primaryRows);
+        const completionError = [...groups, primaryRows].map(rows =>
           rows?.source_error || rows?.loader_error).filter(Boolean).map(safeLoaderToken).find(Boolean);
         return withLoaderMetadata(withLoaderStatus(unique,
           unique.length ? `loaded:${unique.length}` : failed ? 'error_failed_closed' : status,

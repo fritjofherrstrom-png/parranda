@@ -12,6 +12,7 @@ RUN npm ci --prefix frontend
 
 COPY anywhere-render-decision.js ./
 COPY planner-entry.js planner-entry.d.ts ./
+COPY shared ./shared
 COPY frontend ./frontend
 RUN npm run check:frontend && npm run build:frontend
 
@@ -39,12 +40,14 @@ RUN npm ci --omit=dev \
 
 COPY --chown=node:node server.js ./
 COPY --chown=node:node server ./server
+COPY --chown=node:node shared ./shared
 COPY --chown=node:node config ./config
 COPY --chown=node:node migrations ./migrations
 COPY --chown=node:node scripts/migrate-source-catalog.js ./scripts/migrate-source-catalog.js
 COPY --chown=node:node scripts/review-source-profile.js ./scripts/review-source-profile.js
 COPY --chown=node:node scripts/run-source-scout-worker.js ./scripts/run-source-scout-worker.js
 COPY --chown=node:node scripts/scout-local-event-sources.js ./scripts/scout-local-event-sources.js
+COPY --chown=node:node scripts/check-native-runtime.js ./scripts/check-native-runtime.js
 COPY --chown=node:node assets ./assets
 COPY --chown=node:node vendor ./vendor
 COPY --from=build --chown=node:node /app/frontend/dist ./frontend/dist
@@ -65,6 +68,7 @@ COPY --chown=node:node \
     ./
 
 USER node
+RUN node scripts/check-native-runtime.js
 
 EXPOSE 8000
 

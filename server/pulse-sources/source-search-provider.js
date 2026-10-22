@@ -118,7 +118,8 @@ function createSearxngSourceSearch({
   const runRetryBudget = clampInteger(retryBudget, 0, MAX_RETRY_BUDGET);
   const wait = typeof delay === "function" ? delay : defaultDelay;
 
-  return async function searchSourceSeeds({ queries = [], query_plan: queryPlan = [], place = {} } = {}) {
+  return async function searchSourceSeeds({ queries = [], query_plan: queryPlan = [], place = {}, signal } = {}) {
+    signal?.throwIfAborted();
     const generatedPlan = normalizeQueryPlan(queries, queryPlan);
     const scheduledPlan = diversityFirstQueryPlan(generatedPlan);
     const boundedPlan = scheduledPlan.slice(0, hardLimit);
@@ -146,12 +147,15 @@ function createSearxngSourceSearch({
       const trancheOutcomes = [];
 
       for (const item of tranche) {
+        signal?.throwIfAborted();
         // Pace the burst. Firing the whole budget back-to-back is what trips the
         // proxied engines into rate limiting, which then reads as "no results".
         if (queryIndex > 0 && paceMs > 0) await wait(paceMs);
+        signal?.throwIfAborted();
         queryIndex += 1;
 
         const outcome = await executeSourceSearchQuery({
+          signal,
           item,
           normalizedEndpoint,
           endpointOrigin,
@@ -267,6 +271,7 @@ function createSearxngSourceSearch({
 }
 
 async function executeSourceSearchQuery({
+  signal,
   item,
   normalizedEndpoint,
   endpointOrigin,
@@ -285,6 +290,7 @@ async function executeSourceSearchQuery({
   const query = item.query;
   const key = searchCacheKey(normalizedEndpoint, query, language, perQueryLimit);
   const producer = () => runQueryWithRetry({
+    signal,
     endpoint: normalizedEndpoint,
     endpointOrigin,
     query,
@@ -302,6 +308,7 @@ async function executeSourceSearchQuery({
   try {
     return cache && typeof cache.get === "function"
       ? await cache.get(key, producer, {
+          signal,
           // Only trustworthy answers may be cached. A degraded or failed
           // query must stay re-askable, or one bad window would be frozen in.
           shouldStore: (value) => ["ok", "partial"].includes(value?.status),
@@ -381,6 +388,7 @@ async function runQueryWithRetry({ attemptLimit, backoffMs, wait, budget, ...opt
   let outcome = null;
   let attempts = 0;
   for (let attempt = 1; attempt <= attemptLimit; attempt += 1) {
+    options.signal?.throwIfAborted();
     attempts = attempt;
     outcome = await fetchSearxngQuery(options);
     if (!isRetryableOutcome(outcome) || attempt === attemptLimit) break;
@@ -404,6 +412,7 @@ function isRetryableOutcome(outcome) {
 }
 
 async function fetchSearxngQuery({
+  signal,
   endpoint,
   endpointOrigin,
   query,
@@ -421,6 +430,7 @@ async function fetchSearxngQuery({
   url.searchParams.set("language", normalizeSearchLanguage(language));
 
   const page = await fetchSearchPage({
+    signal,
     url: url.toString(),
     requiredOrigin: endpointOrigin,
     fetcher,
@@ -525,6 +535,7 @@ function boundSearchSeeds(results, { endpointOrigin, place, limit, perOriginLimi
 }
 
 async function fetchSearchPage({
+  signal,
   url,
   requiredOrigin,
   fetcher,
@@ -541,13 +552,14 @@ async function fetchSearchPage({
     let currentUrl = url;
     let response;
     for (let redirectCount = 0; redirectCount <= 3; redirectCount += 1) {
+      signal?.throwIfAborted();
       response = await fetcher(currentUrl, {
         headers: {
           "User-Agent": userAgent,
           Accept: "application/json",
         },
         redirect: "manual",
-        signal: controller.signal,
+        signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
       });
       if (!isRedirectResponse(response)) break;
       if (redirectCount === 3) {

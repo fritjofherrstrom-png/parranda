@@ -31,6 +31,54 @@ catalog/search environment is not evidence that a place has no events. Code
 defaults do not themselves migrate a database, obtain credentials or deploy.
 The separate place-reservoir human-approval contract is unchanged.
 
+## Request-time discovery lane
+
+The 2026-10-12 delivery has an explicit no-paid-integration boundary: use the
+existing operator-owned SearXNG and deterministic factual source adapters.
+Set `PARRANDA_EVENT_READER=disabled` for runtime QA; the request-time scout
+already passes a null reader. No paid search/model reader is activated or
+used as a fallback. HTML calendars may need an additional deterministic
+adapter or a discoverable structured interface; a paid reader is not assumed.
+
+A place with no approved or machine-qualified local event source looks for one
+during its own Live collection, which already runs out of band while the day is
+built; the day never waits for it and Live may arrive later. The lane uses the
+same bounded source search as the discovery worker (at most two
+locality-scoped queries, at most six seeds), the ordinary source scout and the
+same manifest binding as qualification. Only structured event interfaces the
+scout recognises become feeds; prose and the model reader are not used here.
+Robots exclusions and restricted or permission-required terms remain blockers.
+
+A feed found this way is a single observation: `status: probationary`,
+`runtime_trust: request_time_single_observation`, Pulse-only, low confidence,
+never a route/day input or an approved catalog row, with its actual source URL
+kept. Local floating times use a source-declared zone, otherwise the zone
+derived offline from the trusted anchor coordinates. The ordinary time,
+geography, venue-resolution and display gates decide every event; nothing is
+invented. Venue resolution tries the source's address, then its venue name with
+the town; a geocoder hit the geocoder itself rates "low" (little-known venues)
+counts only when it is the one place in the trusted area and its own name is
+the source's venue name, never a bare kind of place such as "teatro". One discovery per ~1 km cell is reused for six hours. Its answer is
+typed: found, verified empty (a working search with no usable source, held for
+an hour) or failed (search or scout failed, held five minutes to spare the
+search service). A failed discovery never becomes a cached healthy-empty Live
+pool; the collection is held briefly as a failed refresh and retried. The
+existing scout demand still asks the worker
+to qualify the source over two UTC days. `PARRANDA_REQUEST_TIME_EVENT_DISCOVERY=disabled`
+is an operator opt-out; without a configured source search the lane is off.
+
+The production web service forwards the same operator search endpoint,
+timeout, pacing and identifying user agent as the scout worker. Search stays
+default-off until the operator configures that existing service; the web also
+forwards the request-time opt-out. Venue query variants share the existing
+collection budget in rounds: later venues get a first attempt before earlier
+venues spend the budget on alternate spellings. Answers are still deduplicated,
+output order retained, and a confident out-of-scope match stops that venue's
+variants. No provider limits or geography/confidence gates are widened.
+Result pools use `agnostic-events-v13` so old healthy-empty answers cannot
+bypass discovery or retain the previous venue allocation. Existing operator
+cache files are preserved.
+
 ## Main reader for local documents
 
 `quoted_public_document` reads municipal news, association pages, notices,
@@ -229,3 +277,16 @@ runtime operation/credentials and any additional runtime QA require a concrete
 separate handoff. #550 calendar acceptance and the separately owned #556/#555 UI evidence remain
 separate. GitHub reports those PRs merged; this workstream performed no merge
 or deployment.
+
+### Feed redirects
+
+The ordinary collector and direct TEC/iCal/schema.org providers fetch with manual
+redirect handling. A redirect cannot expand the bound publisher origin. Each
+same-origin destination waits for an allowed robots decision for its full path
+and query and the actual request User-Agent before an event request is sent.
+Unknown policy, malformed Location, loops and more than three automatic hops
+fail closed. Scout page/policy caches also bind the actual User-Agent.
+Providers that already use manual redirects keep their own stricter
+limits and interface rules. Scout redirects enforce the same access gate;
+source-page-v2, discovery-v4 and result-pool-v13 exclude snapshots and
+bindings from the earlier fetch/access-decision path.

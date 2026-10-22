@@ -1,7 +1,8 @@
 "use strict";
 
-const { weaveEveningEvent } = require('../candidates/evening-event-weave');
+const { weaveEveningEvent, selectedDayCandidates } = require('../candidates/evening-event-weave');
 const { matchesPreferenceFocus } = require('./preference-focus');
+const { activeLiveChoices } = require('./live-occurrence-choice');
 const { composeAgnosticRouteOutput } = require('./agnostic-route-output');
 const MAX_CONTEXT_BYTES = 2 * 1024 * 1024;
 
@@ -96,8 +97,24 @@ function occurrenceKey(event) {
 }
 
 function createRouteUpgrade({ args, retained, structure, initialLive, published, publish }) {
-  if (!retained || !published?.agnostic_route_output_experiment?.promotion?.promote || !structure) return null;
+  if (!retained || !structure) return null;
   if (!contextFits({ args, retained, structure, initialLive, published })) return null;
+  const selectedDate = published?.days?.[0]?.date || args?.date;
+  const blockers = published?.agnostic_route_output_experiment?.eligibility?.blockers;
+  const edit = published?.agnostic_route_output_experiment?.day_edit;
+  // A strict saved edit can contain an ephemeral ID absent only because its
+  // original producer is still running. Keep that preliminary answer withheld,
+  // but allow THIS producer to finish it. Every terminal replay still runs the
+  // unchanged composition/publication gates below. Other withheld days never
+  // acquire this capability.
+  const keeps = activeLiveChoices(args?.liveEventChoices, selectedDate).filter(choice => choice.action === 'keep');
+  const deferredLiveChoice = args?.liveSelectionPending === true && initialLive?.pending === true &&
+    initialLive.selected_date === selectedDate && keeps.length === 1 &&
+    args.dayEdit?.preserve_retained !== false &&
+    args.dayEdit?.retained_candidate_ids?.some(id => id.startsWith('live-event-')) &&
+    edit?.status === 'refused' && edit.reason === 'retained_live_not_preserved' &&
+    Array.isArray(blockers) && blockers.length === 1 && blockers[0] === 'retained_live_not_preserved';
+  if (!published?.agnostic_route_output_experiment?.promotion?.promote && !deferredLiveChoice) return null;
   const savedArgs = cloneTrusted(args);
   // Omitted dates were normalized by composition, not by the public request.
   savedArgs.date = published?.days?.[0]?.date || savedArgs.date;
@@ -111,10 +128,12 @@ function createRouteUpgrade({ args, retained, structure, initialLive, published,
   // Every occurrence already considered by the original selected-day weave,
   // even when it lost salience or walking gates, remains previous evidence.
   const previous = new Set();
-  const pools = live => [...(live?.tonight || []), ...(live?.this_week || []), ...(live?.browse?.tonight?.more || []), ...(live?.browse?.this_week?.more || [])];
+  // Share the selected-day candidate spine: a series wrapper is not evidence
+  // for each occurrence's eligibility, clock or venue.
+  const pools = selectedDayCandidates;
   const originalRows = cloneTrusted(pools(initialLive));
   for (const row of originalRows) {
-    const woven = weaveEveningEvent(savedStructure, { tonight: [row] }, { selectedDate: savedArgs.date });
+    const woven = weaveEveningEvent(savedStructure, { tonight: [row] }, { selectedDate: savedArgs.date, liveEventChoices: savedArgs.liveEventChoices || [] });
     const event = woven?.district_day?.evening_event;
     if (event) previous.add(occurrenceKey(event));
   }
@@ -128,9 +147,10 @@ function createRouteUpgrade({ args, retained, structure, initialLive, published,
       // Source-normalized explicit route eligibility is mandatory for this new
       // capability. The existing weaker legacy fixture fallback is not proof.
       if (row?.route_eligible !== true) return false;
-      const woven = weaveEveningEvent(savedStructure, { tonight: [row] }, { selectedDate: savedArgs.date });
+      const woven = weaveEveningEvent(savedStructure, { tonight: [row] }, { selectedDate: savedArgs.date, liveEventChoices: savedArgs.liveEventChoices || [] });
       const event = woven?.district_day?.evening_event;
-      const eligible = event && !previous.has(occurrenceKey(event)) && matchesPreferenceFocus(event, savedArgs.preferences);
+      const eligible = event && !previous.has(occurrenceKey(event)) &&
+        (event.explicit_live_choice === true || matchesPreferenceFocus(event, savedArgs.preferences));
       if (eligible) newKeys.add(occurrenceKey(event));
       return eligible;
     });
@@ -140,13 +160,14 @@ function createRouteUpgrade({ args, retained, structure, initialLive, published,
     // an unchanged higher-ranked original anchor with a losing newcomer.
     const replayLive = cloneTrusted(live);
     replayLive.this_week = [...(replayLive.this_week || []), ...originalRows];
-    const nextStructure = weaveEveningEvent(savedStructure, replayLive, { selectedDate: savedArgs.date });
+    const nextStructure = weaveEveningEvent(savedStructure, replayLive, { selectedDate: savedArgs.date, liveEventChoices: savedArgs.liveEventChoices || [] });
     if (!newKeys.has(occurrenceKey(nextStructure?.district_day?.evening_event))) return no('not_eligible');
     const composed = await composeAgnosticRouteOutput({
       ...cloneTrusted(savedArgs),
       openDataLoader: async () => cloneTrusted(retained.records),
       retainedContext: retained.context,
       onRetainComposition: null,
+      liveSelectionPending: false,
       eveningEventStructure: nextStructure,
     });
     const result = await publish(composed, nextStructure, { live_events: live });

@@ -137,7 +137,10 @@ function Harness(){const [expanded,setExpanded]=React.useState(false);const [sto
             await page.mouse.down(); await page.mouse.move(box.x + box.width / 2 - 180, box.y + box.height / 2, { steps: 8 }); await page.mouse.up();
           }
           await page.waitForTimeout(900);
-          const markers = await page.locator('.route-map-marker').evaluateAll(es => es.map(e => { const r=e.getBoundingClientRect();return {number:e.textContent,x:r.left+r.width/2,y:r.top+r.height/2}; }));
+          // Visible numbers only: a stop panned out of the view stays at its
+          // coordinate, clipped by the frame, rather than pinned to the edge.
+          const markers = await page.locator('.route-map-marker').evaluateAll(es => { const box=document.querySelector('.maplibregl-map').getBoundingClientRect(); return es.map(e => { const r=e.getBoundingClientRect();return {number:e.textContent,x:r.left+r.width/2,y:r.top+r.height/2}; }).filter(m => m.x>=box.left&&m.x<=box.right&&m.y>=box.top&&m.y<=box.bottom); });
+          assert.ok(markers.length > 0, `${action}: some numbers stay in view`);
           for (const m of markers) {
             await page.mouse.move(m.x,m.y);
             await page.waitForFunction(label => [...document.querySelectorAll('.route-map-tooltip')].some(e => e.style.opacity !== '0' && e.textContent === label), `Stop ${m.number}`, { timeout: 2000 });

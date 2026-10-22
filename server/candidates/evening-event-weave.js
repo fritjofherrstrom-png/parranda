@@ -24,6 +24,7 @@ const {
 } = require("../pulse-sources/source-event-time");
 const { listedOccurrenceDates } = require("../place-candidates/event-calendar-date");
 
+const { liveOccurrenceId, activeLiveChoices } = require("../planner/live-occurrence-choice");
 const EVENING_START_HOUR = 17;
 const EVENING_START_MINUTES = EVENING_START_HOUR * 60;
 
@@ -70,9 +71,18 @@ function selectedDayCandidates(liveEvents) {
   const seen = new Set();
   const candidates = [];
   for (const bucket of buckets) {
-    for (const event of Array.isArray(bucket) ? bucket : []) {
-      const key = eventKey(event);
-      if (!key || seen.has(key)) continue;
+    const occurrences = (Array.isArray(bucket) ? bucket : []).flatMap(parent =>
+      Array.isArray(parent?.occurrences) && parent.occurrences.length ? parent.occurrences : [parent]);
+    // Server-ranked evidence keeps its original route order even when Live
+    // groups booking times or reserves a highlight for another publisher.
+    // Older unranked inputs retain the existing serendipity restoration above.
+    if (occurrences.every(event => Number.isSafeInteger(event?.live_evidence_rank) && event.live_evidence_rank >= 0)) {
+      occurrences.sort((a, b) => a.live_evidence_rank - b.live_evidence_rank);
+    }
+    for (const event of occurrences) {
+      if (!eventKey(event)) continue;
+      const key = JSON.stringify([eventKey(event), event?.source_provider_id, event?.starts_at, event?.starts_on, event?.time_window?.dates]);
+      if (seen.has(key)) continue;
       seen.add(key);
       candidates.push(event);
     }
@@ -195,7 +205,7 @@ function eventOccurrenceForDate(event, selectedDate) {
   return materializeContinuousOccurrence(event, date);
 }
 
-function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null } = {}) {
+function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null, liveEventChoices = [] } = {}) {
   if (!placeStructure || typeof placeStructure !== "object" || !placeStructure.district_day) {
     return placeStructure;
   }
@@ -209,8 +219,19 @@ function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null } =
   // coordinates AND is salient enough to shape a visitor-facing day. Civic/admin
   // notices can stay in Pulse/source inspect, but must not become an evening
   // anchor just because they are timed and geocoded.
-  const event = tonight.find(isEligibleEveningAnchor);
-  if (!event) return placeStructure;
+  const choices = activeLiveChoices(liveEventChoices, requestedDate);
+  const clearEvent = () => ({ ...placeStructure, district_day: { ...placeStructure.district_day, evening_event: null } });
+  // Removal is deliberately subtractive, even if its old source disappeared.
+  // It cannot vouch for or add an event; completion must not refill the slot.
+  if (choices.some(choice => choice.action === "remove")) return clearEvent();
+  const excluded = new Set(choices.filter(x => x.action === "replace").map(x => x.occurrence_id));
+  const pins = new Set(choices.filter(x => x.action === "keep").map(x => x.occurrence_id));
+  const eligible = tonight.filter(isEligibleEveningAnchor).filter(row => !excluded.has(liveOccurrenceId(row)));
+  const event = pins.size
+    ? eligible.find(row => row.route_eligible === true && pins.has(liveOccurrenceId(row)))
+    : eligible[0];
+  if (!event) return choices.length ? clearEvent() : placeStructure;
+  const occurrenceId = liveOccurrenceId(event);
 
   const areas = Array.isArray(placeStructure.district_day.areas) ? placeStructure.district_day.areas : [];
   let nearIndex = null;
@@ -228,6 +249,9 @@ function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null } =
 
   const eveningEvent = {
     id: event.id || null,
+    live_occurrence_id: occurrenceId,
+    live_choice_eligible: Boolean(occurrenceId && event.route_eligible === true),
+    explicit_live_choice: Boolean(occurrenceId && pins.has(occurrenceId)),
     title: event.title || null,
     starts_at: event.starts_at || null,
     ends_at: event.ends_at || null,
@@ -290,5 +314,6 @@ module.exports = {
   eventOccurrenceForDate,
   eventReachesEvening,
   isEligibleEveningAnchor,
+  selectedDayCandidates,
   weaveEveningEvent,
 };

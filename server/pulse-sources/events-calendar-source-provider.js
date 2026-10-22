@@ -9,6 +9,7 @@
 
 const { GENERIC_PROVIDER_CITY } = require("./provider-registry");
 const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
+const { createAccessCheckedSourceFetch } = require("./access-checked-source-fetch");
 const {
   normalizeIanaTimezone,
   normalizeSourceEventDate,
@@ -89,9 +90,9 @@ function createEventsCalendarProvider(providerOptions = {}) {
         descriptor: boundDescriptor,
         async collect(collectionContext = {}) {
           const endpoint = providerOptions.endpoint || context.endpoint || collectionContext.endpoint || null;
-          const fetcher =
+          const fetcher = createAccessCheckedSourceFetch(
             providerOptions.fetcher ||
-            (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null);
+            (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null));
           if (!endpoint) return emptyCollection("unavailable", "source_endpoint_unavailable");
           if (typeof fetcher !== "function") return emptyCollection("unavailable", "source_fetch_unavailable");
 
@@ -115,12 +116,12 @@ function createEventsCalendarProvider(providerOptions = {}) {
             body = await readResponseBody(response);
           } catch (error) {
             const message = String(error?.message || "");
-            const reason = error?.name === "AbortError"
+            const reason = String(error?.code || "").startsWith("source_redirect_") ? error.code : error?.name === "AbortError"
               ? "source_timeout"
               : /^source_http_(?:[1-5]\d{2}|not_ok)$/.test(message)
                 ? message
                 : "source_fetch_failed";
-            throw new Error(reason);
+            throw Object.assign(new Error(reason), { code: reason });
           } finally {
             clearTimeout(timer);
           }
@@ -134,6 +135,7 @@ function createEventsCalendarProvider(providerOptions = {}) {
             .map((event) =>
               mapEventsCalendarEventToRaw(event, {
                 timezone: normalizeIanaTimezone(providerOptions.timezone),
+                fallbackTimezone: normalizeIanaTimezone(providerOptions.fallbackTimezone),
               }),
             )
             .filter(Boolean);
@@ -203,8 +205,12 @@ function mapTheEventsCalendarEventToRaw(event, options = {}) {
   const venue = extractTecVenue(event);
   const coords = extractTecCoordinates(event, venue);
   const sourceUrl = firstString(event.url, event.website, event.link, event.rest_url, event.permalink);
-  const timezone = normalizeIanaTimezone(options.timezone);
+  // The plugin's REST API publishes each event's own IANA zone; a reviewed
+  // descriptor zone still wins when one exists.
+  const timezone = normalizeIanaTimezone(options.timezone) || normalizeIanaTimezone(event.timezone) ||
+    normalizeIanaTimezone(options.fallbackTimezone);
   const utcStart = firstString(
+    event.utc_start_date,
     event.start_date_utc,
     event.startDateUtc,
     event.start_utc,
@@ -212,6 +218,7 @@ function mapTheEventsCalendarEventToRaw(event, options = {}) {
   );
   const localStart = firstString(event.starts_at, event.start_at, event.start_date, event.startDate, event.start);
   const utcEnd = firstString(
+    event.utc_end_date,
     event.end_date_utc,
     event.endDateUtc,
     event.end_utc,
@@ -223,6 +230,7 @@ function mapTheEventsCalendarEventToRaw(event, options = {}) {
   return compact({
     id: firstString(event.id, event.global_id, event.url, event.website, event.slug),
     title: htmlToText(localizedString(event.title || event.name)),
+    timezone,
     starts_at:
       normalizeUtcEventDateTime(utcStart) ||
       normalizeSourceEventDateTime(localStart, { timezone }),
@@ -236,6 +244,7 @@ function mapTheEventsCalendarEventToRaw(event, options = {}) {
       : null,
     source_url: sourceUrl,
     place_context: firstString(venue.name, venue.address),
+    address: venue.address ? [venue.address, venue.city].filter(Boolean).join(", ") : null,
     area: firstString(venue.city, venue.neighborhood),
     lat: coords.lat,
     lng: coords.lng,
@@ -322,7 +331,9 @@ function mapIcalEventToRaw(event, options = {}) {
   const categories = property("CATEGORIES");
   const status = property("STATUS");
   const language = firstString(summary?.params?.LANGUAGE, property("LANGUAGE")?.value);
-  const timezone = normalizeIanaTimezone(options.timezone);
+  const fallbackTimezone = normalizeIanaTimezone(options.fallbackTimezone);
+  const timezone = normalizeIanaTimezone(options.timezone) || (fallbackTimezone &&
+    (normalizeIanaTimezone(property("DTSTART")?.params?.TZID) || fallbackTimezone));
   const startsOn = parseIcalDateOnly(property("DTSTART"));
   const declaredEndOn = parseIcalDateOnly(property("DTEND"));
   const endsOn = startsOn && declaredEndOn
@@ -331,6 +342,7 @@ function mapIcalEventToRaw(event, options = {}) {
   return compact({
     id: firstString(property("UID")?.value, url?.value),
     title: decodeIcalText(summary?.value),
+    timezone,
     starts_at: parseIcalDate(property("DTSTART"), { timezone }),
     ends_at: parseIcalDate(property("DTEND"), { timezone }),
     starts_on: startsOn,

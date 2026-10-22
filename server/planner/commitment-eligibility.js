@@ -1,6 +1,7 @@
 "use strict";
 
 const { plannerUsableOptionsForRole } = require("./candidate-combination");
+const { normalizeSelectedDayHoursFact } = require("../place-candidates/opening-hours");
 
 /**
  * Which public candidates the routing path will accept a commitment to.
@@ -114,9 +115,10 @@ function collectCommitmentUpstreamEligibleIds({ plannerRoles = null, sourceCandi
  *
  * @param {object|null} placeStructure
  * @param {Set<string>} eligibleIds
+ * @param {Map<string, object>|null} candidateHours selected-day facts from the same composition
  * @returns {object|null} a copy carrying `commitment_eligible` per candidate
  */
-function markCommitmentEligibility(placeStructure, eligibleIds) {
+function markCommitmentEligibility(placeStructure, eligibleIds, candidateHours = null) {
   if (!placeStructure || typeof placeStructure !== "object") return placeStructure;
   const areas = placeStructure.district_day?.areas;
   if (!Array.isArray(areas)) return placeStructure;
@@ -135,11 +137,15 @@ function markCommitmentEligibility(placeStructure, eligibleIds) {
             // turned into an object that exists only to carry a verdict about
             // nothing — the sibling guard above sets the same precedent.
             if (!stop || typeof stop !== "object") return stop;
+            const hours = normalizeSelectedDayHoursFact(
+              candidateHours instanceof Map ? candidateHours.get(String(stop.id)) : null,
+            );
             return {
               ...stop,
-              // The whole contract: one boolean, per exact identity. Never a
-              // reason, never the reservoir, never why.
+              // Admission remains one boolean per exact identity. Optional
+              // source-hours facts describe the selected day, not extra trust.
               commitment_eligible: Boolean(stop.id != null && eligible.has(String(stop.id))),
+              ...(hours ? { selected_day_hours: hours } : {}),
             };
           }),
         };

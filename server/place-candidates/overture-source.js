@@ -31,7 +31,12 @@
 
 const { createBoundedOvertureQuery } = require('./bounded-overture-query');
 const { createOvertureAssetResolver } = require('./overture-stac-assets');
+const { createHash } = require('node:crypto');
+const { validSample, validAssets, digest } = require('./overture-sample-cache');
 const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
+const { mapRecordToCandidate } = require('./external-open-provider');
+const { normalizePlaceDetails, OVERTURE_KINDS } = require('./place-details');
+const { resolveCandidateIdentity, matchIdentity } = require('../candidates/entity-resolution');
 const {
   WALKING_REACH_RING_EDGES_KM,
   interleaveAcrossWalkingReach,
@@ -293,6 +298,7 @@ function mapOvertureRow(row, { minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
   if (!licenses.length) return null;
   const brand = String(row.brand || "").trim() || null;
   const website = firstHttpUrl(row.websites);
+  const details = normalizePlaceDetails({ kind: OVERTURE_KINDS[row.category] }, mapping.type);
   return {
     id: `overture-${id}`,
     name,
@@ -312,6 +318,7 @@ function mapOvertureRow(row, { minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
     operational_status: operational.status,
     operational_reasons: operational.reasons,
     ...(website ? { website } : {}),
+    ...(details ? { place_details: details } : {}),
   };
 }
 
@@ -368,7 +375,7 @@ function buildOvertureQuery({ release, lat, lng, radiusKm = DEFAULT_RADIUS_KM, r
     operating_status,
     websites,
     brand.names.primary AS brand,
-    sources,
+    list_distinct(list_transform(sources, source -> source.license)) AS licenses,
     bbox.xmin AS lng,
     bbox.ymin AS lat,
     ${distance} AS distance_km
@@ -398,7 +405,7 @@ SELECT id,
   operating_status,
   websites,
   brand,
-  list_distinct(list_transform(sources, source -> source.license)) AS licenses,
+  licenses,
   lng,
   lat
 FROM ranked
@@ -484,9 +491,10 @@ function spreadAcrossWalkingReach(entries, { band }) {
   });
 }
 
-function selectRecords(records, { anchor, requestedIntents = [], walkingTargetBand = null, limit = DEFAULT_LIMIT } = {}) {
+function selectRecords(records, { anchor, requestedIntents = [], walkingTargetBand = null, corroborationRecords = [], limit = DEFAULT_LIMIT } = {}) {
+  const { retained, ambiguous } = corroborationSelection(records, corroborationRecords);
   const intents = normalizeUserIntents(requestedIntents).intents;
-  const entries = records.map((record) => ({
+  const entries = records.filter(record => !ambiguous.has(record.id)).map((record) => ({
     record,
     ...intentMatch(record, intents),
     distance: distanceKm(anchor, record),
@@ -508,6 +516,15 @@ function selectRecords(records, { anchor, requestedIntents = [], walkingTargetBa
     taken.add(entry);
     selected.push(entry.record);
   }
+  // Already-acquired evidence for the primary cannot disappear merely because
+  // its directory twin is farther from the anchor than unrelated places. Keep
+  // the original raw row; ordinary identity/reducer/gates still decide trust.
+  for (const entry of ranked) {
+    if (selected.length >= limit) break;
+    if (taken.has(entry) || !retained.has(entry.record.id)) continue;
+    taken.add(entry);
+    selected.push(entry.record);
+  }
   // Without a walking budget the directory stays proximity-first (nearby
   // surfaces such as Blitz). With one, the fill follows the day's reach.
   const band = normalizeWalkingTargetBand(walkingTargetBand);
@@ -520,11 +537,36 @@ function selectRecords(records, { anchor, requestedIntents = [], walkingTargetBa
   return selected;
 }
 
+function corroborationSelection(records, primaryRecords) {
+  const retained = new Set(), ambiguous = new Set();
+  const ids = new Set(records.map(record => record.id));
+  const primary = (Array.isArray(primaryRecords) ? primaryRecords : [])
+    .filter(record => record && !ids.has(record.id))
+    .map((record, index) => mapRecordToCandidate({ key: 'agnostic' }, record, null, index)).filter(Boolean);
+  if (!primary.length) return { retained, ambiguous };
+  const directory = records.map((record, index) => mapRecordToCandidate({ key: 'agnostic' }, record, null, index)).filter(Boolean);
+  const primaryIds = new Set(primary.map(candidate => candidate.id));
+  const resolved = resolveCandidateIdentity([...primary, ...directory]);
+  for (const candidate of resolved.candidates) {
+    const members = [candidate.id, ...(candidate.merged_from || []).map(record => record.id)];
+    if (members.some(id => primaryIds.has(id))) for (const id of members) if (ids.has(id)) retained.add(id);
+  }
+  // Resolving only the selected prefix could manufacture corroboration when a
+  // conflicting entity/address/alias witness lives beyond the cut. Withhold
+  // potential twins which the full acquired universe could not safely merge.
+  for (const candidate of directory) {
+    if (!retained.has(candidate.id) && primary.some(p => matchIdentity(p, candidate).same)) ambiguous.add(candidate.id);
+  }
+  return { retained, ambiguous };
+}
+
 function createOvertureSource({
   queryRows = null,
   releaseResolver = resolveLatestOvertureRelease,
   assetResolver = null,
   assetFetcher = null,
+  assetVerifier = null,
+  now = Date.now,
   cacheDir = null,
   radiusKm = DEFAULT_RADIUS_KM,
   limit = DEFAULT_LIMIT,
@@ -538,31 +580,59 @@ function createOvertureSource({
   const boundedRadius = clamp(radiusKm, 0.1, MAX_RADIUS_KM, DEFAULT_RADIUS_KM);
   const boundedLimit = Math.max(1, Math.min(Math.floor(Number(limit) || DEFAULT_LIMIT), MAX_LIMIT));
   const boundedConfidence = clamp(minConfidence, 0.5, 1, DEFAULT_MIN_CONFIDENCE);
+  const sampleKey = `r${boundedRadius}:c${boundedConfidence}`;
+  const cacheKeyFor = ({ lat, lng } = {}) => `${Number(lat).toFixed(7)},${Number(lng).toFixed(7)}:${sampleKey}`;
+  const hashQuery = query => createHash('sha256').update('overture-v6:normalizer-1\0').update(query).digest('hex');
+  const sampleQuery = ({ release, parquetPaths, lat, lng }) => parquetPaths?.length === 0
+    ? JSON.stringify({ empty: true, release, lat: lat.toFixed(7), lng: lng.toFixed(7), radius: boundedRadius, confidence: boundedConfidence })
+    : buildOvertureQuery({ release, parquetPaths, lat, lng, radiusKm: boundedRadius, minConfidence: boundedConfidence });
+  const verifyAssets = typeof assetVerifier === 'function' ? assetVerifier
+    : (paths, options) => require('./overture-parquet-prefetch').inspectOvertureAssets(paths, options);
+  const withReceipt = (records, receipt) => {
+    Object.defineProperty(records, 'source_receipt', { value: receipt });
+    return records;
+  };
 
   // One bounded, stratified sample of the whole window. It depends only on the
   // anchor and the source's own caps, so it can be cached once and re-selected
   // for any preference set or walking budget without another S3 query.
-  async function acquire({ lat, lng, signal } = {}) {
+  async function acquire({ lat, lng, signal, previousSample = null } = {}) {
     if (!validCoordinate(lat, lng)) return [];
+    lat = Number(lat.toFixed(7)); lng = Number(lng.toFixed(7));
     try {
+      signal?.throwIfAborted();
       const metadataDeadlineMs = Date.now() + DEFAULT_STAC_TIMEOUT_MS;
       const release = await releaseResolver({ signal });
       if (!RELEASE_PATTERN.test(String(release || '')) || signal?.aborted || Date.now() >= metadataDeadlineMs) throw new Error('overture_release_unavailable');
       const parquetPaths = resolveAssets
-        ? await resolveAssets({ release, lat, lng, radiusKm: boundedRadius, signal, deadlineMs: metadataDeadlineMs }) : null;
+        ? await resolveAssets({ release, lat, lng, radiusKm: boundedRadius, signal, deadlineMs: metadataDeadlineMs, revalidate: Boolean(previousSample) }) : null;
       if (signal?.aborted || Date.now() >= metadataDeadlineMs) throw new Error('overture_cancelled');
       if (resolveAssets && !Array.isArray(parquetPaths)) throw new Error('overture_stac_unavailable');
-      if (Array.isArray(parquetPaths) && parquetPaths.length === 0) return [];
-      const query = buildOvertureQuery({
-        release,
-        parquetPaths,
-        lat,
-        lng,
-        radiusKm: boundedRadius,
-        minConfidence: boundedConfidence,
-      });
+      const query = sampleQuery({ release, parquetPaths, lat, lng });
       if (!query) throw new Error('overture_release_unavailable');
-      const rows = await executeQuery(query, { signal });
+      const queryHash = hashQuery(query);
+      const prior = previousSample?.receipt;
+      const sameSample = Array.isArray(parquetPaths) && validSample(previousSample?.records, prior, now())
+        && prior.release === release && prior.queryHash === queryHash
+        && JSON.stringify(prior.assets.map(asset => asset.path)) === JSON.stringify(parquetPaths);
+      // A freshly read complete manifest can itself prove the empty window.
+      // There is no object to HEAD, and a metadata failure cannot reach here.
+      if (Array.isArray(parquetPaths) && !parquetPaths.length) {
+        return withReceipt([], { version: 1, release, queryHash, assets: [],
+          acquiredAt: sameSample ? prior.acquiredAt : now(), verifiedAt: now(), recordsHash: digest([]) });
+      }
+      if (sameSample) {
+        const assets = await verifyAssets(parquetPaths, { signal, deadlineMs: metadataDeadlineMs });
+        signal?.throwIfAborted();
+        if (Date.now() >= metadataDeadlineMs || !validAssets(assets, release)) throw new Error('overture_verification_failed');
+        if (JSON.stringify(assets) === JSON.stringify(prior.assets)) {
+          return withReceipt(structuredClone(previousSample.records), { ...structuredClone(prior), verifiedAt: now() });
+        }
+      }
+      const rows = await executeQuery(query, { signal, ...(parquetPaths ? {
+        prefetch: { paths: parquetPaths, window: { lat, lng, radiusKm: boundedRadius } },
+      } : {}) });
+      signal?.throwIfAborted();
       const records = [];
       const seen = new Set();
       for (const row of Array.isArray(rows) ? rows : []) {
@@ -570,6 +640,16 @@ function createOvertureSource({
         if (!record || seen.has(record.id) || distanceKm({ lat, lng }, record) > boundedRadius + 0.05) continue;
         seen.add(record.id);
         records.push(record);
+      }
+      // Native acquisition pins every fetched range to a strong object ETag.
+      // Fixture-only row seams without that proof cannot populate v6 cache.
+      if (Array.isArray(rows?.source_assets)) {
+        const assets = rows.source_assets;
+        if (!validAssets(assets, release) || JSON.stringify(assets.map(asset => asset.path)) !== JSON.stringify(parquetPaths)) {
+          throw new Error('overture_unbound_acquisition');
+        }
+        return withReceipt(records, { version: 1, release, queryHash, assets: structuredClone(assets),
+          acquiredAt: now(), verifiedAt: now(), recordsHash: digest(records) });
       }
       return records;
     } catch (_error) {
@@ -580,13 +660,14 @@ function createOvertureSource({
   }
 
   // The bounded output for one request. A failed acquisition stays failed.
-  function select(records, { lat, lng, requestedIntents = [], walkingTargetBand = null } = {}) {
+  function select(records, { lat, lng, requestedIntents = [], walkingTargetBand = null, corroborationRecords = [] } = {}) {
     if (!Array.isArray(records) || records.source_error) return records;
     if (!validCoordinate(lat, lng)) return [];
     return selectRecords(records, {
       anchor: { lat, lng },
       requestedIntents,
       walkingTargetBand,
+      corroborationRecords,
       limit: boundedLimit,
     });
   }
@@ -598,7 +679,15 @@ function createOvertureSource({
   loadOvertureAround.select = select;
   // Everything besides the anchor that shapes the cached sample. The ring and
   // stratum layout itself is versioned by the cache namespace.
-  loadOvertureAround.sampleKey = `r${boundedRadius}:c${boundedConfidence}`;
+  loadOvertureAround.sampleKey = sampleKey;
+  loadOvertureAround.cacheKeyFor = cacheKeyFor;
+  loadOvertureAround.validateReceipt = (receipt, key) => {
+    const pair = String(key).split(':')[0].split(',').map(Number);
+    if (!validCoordinate(pair[0], pair[1]) || cacheKeyFor({ lat: pair[0], lng: pair[1] }) !== key
+      || !validAssets(receipt?.assets, receipt?.release)) return false;
+    const query = sampleQuery({ release: receipt.release, parquetPaths: receipt.assets.map(asset => asset.path), lat: pair[0], lng: pair[1] });
+    return Boolean(query && receipt.queryHash === hashQuery(query));
+  };
   return loadOvertureAround;
 }
 

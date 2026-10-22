@@ -75,20 +75,20 @@ async function planner(t, url, response, { status = 200, sessionStorage = {} } =
 test("a typed place's Blitz names the place, and promises the day only when there is one", async (t) => {
   const h = await planner(t, "http://localhost/anywhere?place=Testville&lang=en", composedDay());
   assert.ok(blitzButton(h), "Blitz is offered beside a composed day");
-  assert.match(h.text(), /One next move in Testville, right now — your day stays as it is\./);
+  assert.match(h.text(), /One idea in Testville, right now — your day stays as it is\./);
   assert.doesNotMatch(h.text(), /near you/);
 
   await click(h, blitzButton(h));
   const call = h.fetchMock.pending().find((c) => c.url.includes("/api/blitz"));
   await h.fetchMock.respond(call, { contract: "anywhere_contextual_blitz_v1", status: "blocked", reasons: ["no_candidates"] });
-  assert.match(h.text(), /No sufficiently reliable next move was found in Testville right now\. Your day is unchanged\./);
+  assert.match(h.text(), /No reliable idea in Testville right now\. Your day is unchanged\./);
 });
 
 test("a near-me day's Blitz is about the reader's position", async (t) => {
   const h = await planner(t, "http://localhost/anywhere?anchor=near&planner=open&lang=sv", composedDay(), {
     sessionStorage: { [COORDS_KEY]: { lat: 55.6, lng: 13 } },
   });
-  assert.match(h.text(), /Ett nästa drag nära dig, just nu — din dag ändras inte\./);
+  assert.match(h.text(), /Ett förslag nära dig, just nu — din dag ändras inte\./);
 });
 
 test("without a day on screen, Blitz makes no promise about one", async (t) => {
@@ -97,19 +97,19 @@ test("without a day on screen, Blitz makes no promise about one", async (t) => {
   });
   // The fixture is a place-source outage, so the no-day copy says so.
   assert.match(h.text(), /The place sources didn't answer just now, so Parranda couldn't fetch places near you/);
-  assert.match(h.text(), /One next move near you, right now\./);
+  assert.match(h.text(), /One idea near you, right now\./);
   assert.doesNotMatch(h.text(), /your day stays as it is|Your day is unchanged/);
 
   await click(h, blitzButton(h));
   const call = h.fetchMock.pending().find((c) => c.url.includes("/api/blitz"));
   await h.fetchMock.respond(call, { contract: "anywhere_contextual_blitz_v1", status: "blocked", reasons: ["no_candidates"] });
-  assert.match(h.text(), /No sufficiently reliable next move was found near you right now\./);
+  assert.match(h.text(), /No reliable idea near you right now\./);
   assert.doesNotMatch(h.text(), /Your day is unchanged/);
 });
 
 test("a typed place Parranda could not pin down says so, offers a way forward, and no Blitz", async (t) => {
   const h = await planner(t, "http://localhost/anywhere?place=Nowhereville&lang=en", unresolved);
-  assert.match(h.text(), /Parranda couldn't pin down “Nowhereville” right now\. Try another spelling or add a country or region/);
+  assert.match(h.text(), /Parranda couldn't find “Nowhereville”\. Try another spelling, or add a city or country/);
   assert.doesNotMatch(h.text(), /couldn't compose a day/);
   const another = [...h.container.querySelectorAll("a")].find((a) => a.textContent === "Choose another place");
   assert.ok(another, "the notice offers a way forward");
@@ -119,7 +119,7 @@ test("a typed place Parranda could not pin down says so, offers a way forward, a
 
 test("a capacity refusal is not followed by an offer that asks the same server", async (t) => {
   const h = await planner(t, "http://localhost/anywhere?place=Testville&lang=en", { error: "busy" }, { status: 429 });
-  assert.match(h.text(), /Parranda is composing as many days as it safely can right now/);
+  assert.match(h.text(), /Parranda is busy right now/);
   assert.equal(blitzButton(h), undefined);
 });
 
@@ -131,4 +131,22 @@ test("a stop kind this build has no words for gets no chip, never a raw token", 
   const route = h.container.querySelector('section[aria-label="Rutten"]').textContent;
   assert.match(route, /Kyrka/);
   assert.doesNotMatch(route, /some_new_engine_kind|church/);
+});
+
+test("a working Blitz button keeps keyboard focus and ignores a second press", async (t) => {
+  // A focused button that turns disabled drops focus to the top of the page.
+  // While Blitz reads the moment it stays focusable, busy and unavailable.
+  const h = await planner(t, "http://localhost/anywhere?place=Testville&lang=en", composedDay());
+  const button = blitzButton(h);
+  button.focus();
+  await click(h, button);
+  const working = button; // the same element, now working
+  assert.ok(working.isConnected);
+  assert.match(working.textContent, /Reading the moment/);
+  assert.equal(working.disabled, false, "not disabled, so focus stays");
+  assert.equal(working.getAttribute("aria-busy"), "true");
+  assert.equal(working.getAttribute("aria-disabled"), "true");
+  assert.equal(h.document.activeElement, working, "focus stays on the button");
+  await click(h, working);
+  assert.equal(h.fetchMock.calls.filter((c) => c.url.includes("/api/blitz")).length, 1, "the second press does nothing");
 });

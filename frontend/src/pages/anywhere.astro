@@ -2,7 +2,9 @@
 // The any-city planner — the new frontend's first production-capable surface.
 // The shell is intentionally BARE: all copy lives in the island. Express owns
 // the request-time <html lang> contract for /anywhere because static Astro
-// output cannot read query params directly.
+// output cannot read query params directly. The island draws its own <main>
+// after the app bar, so navigation is not part of the page's main content
+// (the same order as the landing).
 import Shell from "../layouts/Shell.astro";
 import AnywherePlanner from "../components/AnywherePlanner";
 ---
@@ -11,7 +13,7 @@ import AnywherePlanner from "../components/AnywherePlanner";
   title="Parranda — any city"
   description="Type any city. Parranda builds a day with the right rhythm, neighborhoods and timing — extra curated in Barcelona and Rome."
 >
-  <main class="mx-auto flex w-full max-w-2xl flex-col px-4 pb-16 pt-3 sm:px-6 lg:max-w-[88rem] lg:px-8">
+  <div class="mx-auto flex w-full max-w-2xl flex-col px-4 pb-16 pt-3 sm:px-6 lg:max-w-[88rem] lg:px-8">
     <AnywherePlanner client:load />
-  </main>
+  </div>
 </Shell>

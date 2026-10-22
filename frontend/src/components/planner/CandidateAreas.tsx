@@ -30,7 +30,7 @@ export default function CandidateAreas({
   lang: Lang;
   map: ReactNode;
   structureOnly: boolean;
-  areas: DistrictArea[];
+  areas: Array<DistrictArea & { partial_covers?: string[] }>;
   missingIntents: string[];
   mapsPlaceContext: string | null | undefined;
   expandedCandidateKey: string | null;
@@ -39,11 +39,12 @@ export default function CandidateAreas({
   releaseCommitment: (identity: string) => void;
   commit: (identity: string, kind: "exclude" | "pin", commitLabel: string) => void;
 }) {
+  const matchCount = areas.reduce((count, area) => count + (area.stops?.length ?? area.stop_ids?.length ?? 0), 0);
   return (
     <section className={`flex flex-col gap-4 p-4 sm:p-5 ${panelCard}`}>
       <div>
-        <Eyebrow>{t("Kandidater nära platsen", "Candidates near this place")}</Eyebrow>
-        {structureOnly && (
+        <Eyebrow>{t("Platser i närheten", "Places nearby")}</Eyebrow>
+        {structureOnly && matchCount > 0 && (
           <p className="mt-1.5 text-sm text-parranda-ink/75">
             {t(
               "Parranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.",
@@ -53,19 +54,35 @@ export default function CandidateAreas({
         )}
       </div>
 
-      {map}
+      {missingIntents.length > 0 && (
+        <p className="text-sm text-parranda-ink/72">
+          {t("Inga platser för:", "No places for:")} {missingIntents.map((k) => label(INTENT_LABELS, k, lang)).join(", ")}
+        </p>
+      )}
+      {matchCount === 0 && (
+        <p className="text-sm text-parranda-ink/75">
+          {t("0 matchningar för dina val.", "0 matches for your picks.")}
+        </p>
+      )}
+
+      {matchCount > 0 && map}
 
       <ul className="flex flex-col gap-3">
         {areas.map((area, index) => (
-          <li key={index} className="rounded-parranda border-[1.5px] border-parranda-ink/12 bg-parranda-paper p-4">
+          <li key={index} className="rounded-parranda border-line border-parranda-ink/12 bg-parranda-paper p-4">
             <div className="flex flex-wrap items-center gap-1.5">
               {(area.covers ?? []).map((axis) => (
                 <span key={axis} className="rounded-full bg-parranda-ink px-2.5 py-0.5 text-xs font-bold text-parranda-paper">
                   {label(INTENT_LABELS, axis, lang)}
                 </span>
               ))}
-              <span className="type-data ml-auto text-[11px] text-parranda-ink/68">
-                {(area.stop_ids?.length ?? area.stops?.length ?? 0)} {t("träffar", "places")}
+              {(area.partial_covers ?? []).map((axis) => (
+                <span key={`partial-${axis}`} className="rounded-full border border-parranda-ink/30 px-2.5 py-0.5 text-xs font-bold text-parranda-ink">
+                  {label(INTENT_LABELS, axis, lang)} · {t("delvis", "partial")}
+                </span>
+              ))}
+              <span className="type-data ml-auto text-11 text-parranda-ink/68">
+                {(area.stops?.length ?? area.stop_ids?.length ?? 0)} {t("träffar", "places")}
               </span>
             </div>
             {Array.isArray(area.stops) && area.stops.length > 0 ? (
@@ -80,7 +97,7 @@ export default function CandidateAreas({
                   const expanded = expandedCandidateKey === candidateKey;
                   const facts = [...new Set([stop.address, stop.area].map((value) => String(value || "").trim()).filter(Boolean))];
                   return (
-                    <li key={stop.id ?? si} className="rounded-parranda-btn border-[1.5px] border-parranda-ink/10 px-3 py-1">
+                    <li key={stop.id ?? si} className="rounded-parranda-btn border-line border-parranda-ink/10 px-3 py-1">
                       <button
                         type="button"
                         aria-expanded={expanded}
@@ -113,7 +130,7 @@ export default function CandidateAreas({
                                   ? releaseCommitment(candidateId)
                                   : commit(candidateId, "pin", name)
                               }
-                              className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border-[1.5px] px-4 text-sm font-bold transition sm:ml-2 sm:w-auto ${
+                              className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border-line px-4 text-sm font-bold transition sm:ml-2 sm:w-auto ${
                                 commitments[candidateId]?.kind === "pin"
                                   ? "border-parranda-ember/60 bg-parranda-ember/10 text-parranda-ink hover:border-parranda-ember"
                                   : "border-parranda-ink/20 text-parranda-ink hover:border-parranda-ink/50"
@@ -141,12 +158,6 @@ export default function CandidateAreas({
       {/* The evening event is NOT presented here: a woven event renders once,
           as the route extension on the line; a non-woven anchor event
           surfaces in Live's tonight bucket. */}
-
-      {missingIntents.length > 0 && (
-        <p className="text-sm text-parranda-ink/72">
-          {t("Ingen av kandidaterna täcker:", "None of these candidates cover:")} {missingIntents.map((k) => label(INTENT_LABELS, k, lang)).join(", ")}
-        </p>
-      )}
     </section>
   );
 }

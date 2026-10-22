@@ -5,6 +5,8 @@
 export interface PulseTimeWindow {
   /** "continuous" | "daily" | "all_day" | "occurrences" | "period" */
   kind?: string;
+  /** Source explicitly says whole day; kind alone may mean unknown clock. */
+  all_day_explicit?: boolean;
   starts_at?: string | null;
   ends_at?: string | null;
   starts_on?: string | null;

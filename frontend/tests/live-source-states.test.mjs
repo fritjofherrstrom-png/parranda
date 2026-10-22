@@ -74,7 +74,7 @@ for (const lang of ['en', 'sv']) test(`captured uncovered Live distinguishes mis
   t.after(() => h.unmount());
   await click(h, button(h, /Explore live|Utforska live/));
   for (const response of capturedUncovered) {
-    if (response.query.time === 'this_week') await click(h, button(h, /^(Following 7 days|Följande 7 dagar)$/));
+    if (response.query.time === 'this_week') await click(h, button(h, /^(Next 7 days|Kommande 7 dagar)$/));
     const query = h.fetchMock.pending().find(call => call.url.includes('/api/live-events'));
     if (query) await h.fetchMock.respond(query, response);
     else {
@@ -116,7 +116,7 @@ test('a failed source is reported as a failure in Live and the Live sheet — no
   await h.fetchMock.respond(query, queryBody(live(FAILED)));
   const sheet = sheetText(h);
   assert.ok(sheet.includes(SINGLE_FAILURE), sheet);
-  assert.match(sheet, /Source health: 0\/1 responded/);
+  assert.match(sheet, /Calendars: 0 of 1 responded/);
   assert.doesNotMatch(sheet, /Nothing verified|still updating/);
 });
 
@@ -313,7 +313,7 @@ test('returned rows that were all rejected are never shown as source hits', asyn
   await h.fetchMock.respond(query, queryBody(live(ROWS_REJECTED_ONE_FAILED)));
   const sheet = sheetText(h);
   assert.ok(sheet.includes('Parranda could only fetch 1 of 2 event sources just now'), sheet);
-  assert.match(sheet, /Source health: 1\/2 responded/);
+  assert.match(sheet, /Calendars: 1 of 2 responded/);
   assert.doesNotMatch(sheet, /with events/);
 });
 
@@ -332,7 +332,7 @@ test('accepted events that surfaced keep the per-source hit count', async (t) =>
   await click(h, button(h, /See all live/));
   const sheet = sheetText(h);
   assert.match(sheet, /Harbour concert/);
-  assert.match(sheet, /Source health: 1\/1 responded · 1 with events/);
+  assert.match(sheet, /Calendars: 1 of 1 responded · 1 with events/);
 });
 
 test('a route-woven event is not described as no verified events in the Live sheet', async (t) => {
@@ -363,7 +363,7 @@ test('while waiting, the Live sheet does not print responded counts that read as
   await click(h, button(h, /Explore live/));
   const sheet = sheetText(h);
   assert.match(sheet, /Refreshing verified sources for this area/);
-  assert.doesNotMatch(sheet, /Source health: 0\/1 responded/);
+  assert.doesNotMatch(sheet, /Calendars: 0 of 1 responded/);
   assert.doesNotMatch(sheet, /couldn't fetch/);
 });
 
@@ -393,7 +393,7 @@ test('reopening Live keeps the queried period and route scope instead of relabel
   await click(h, button(h, /^Near the route$/));
   await h.fetchMock.respond(h.fetchMock.pending().find((call) => call.url.includes('/api/live-events')),
     queryBody(live(HEALTHY_EMPTY, { tonight: [today] })));
-  await click(h, button(h, /^Following 7 days$/));
+  await click(h, button(h, /^Next 7 days$/));
   const weekQuery = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));
   assert.equal(weekQuery.body.scope, 'near_route');
   assert.equal(weekQuery.body.time, 'this_week');
@@ -409,7 +409,7 @@ test('reopening Live keeps the queried period and route scope instead of relabel
   await h.fetchMock.respond(reopened, queryBody(live(HEALTHY_EMPTY, { this_week: [following] })));
   const sheet = h.container.querySelector('[role="dialog"]');
   assert.match(sheetText(h), /Following-day market/);
-  assert.equal([...sheet.querySelectorAll('button')].find((b) => /^Following 7 days$/.test(b.textContent)).getAttribute('aria-pressed'), 'true');
+  assert.equal([...sheet.querySelectorAll('button')].find((b) => /^Next 7 days$/.test(b.textContent)).getAttribute('aria-pressed'), 'true');
   assert.equal([...sheet.querySelectorAll('button')].find((b) => /^Near the route$/.test(b.textContent)).getAttribute('aria-pressed'), 'true');
 });
 
@@ -421,7 +421,7 @@ test('reopening an interrupted Live refresh retries its route scope and period',
   await click(h, button(h, /^Near the route$/));
   await h.fetchMock.respond(h.fetchMock.pending().find((call) => call.url.includes('/api/live-events')),
     queryBody(live(HEALTHY_EMPTY, { tonight: [today] })));
-  await click(h, button(h, /^Following 7 days$/));
+  await click(h, button(h, /^Next 7 days$/));
   await h.fetchMock.respond(h.fetchMock.pending().find((call) => call.url.includes('/api/live-events')),
     queryBody(live(PENDING, { pending: true })));
   await click(h, h.container.querySelector('[role="dialog"] button[aria-label="Close live"]'));

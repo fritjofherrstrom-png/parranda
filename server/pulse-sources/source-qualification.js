@@ -107,6 +107,7 @@ function bindManifestCandidate(manifest, candidate, { qualifiedRuntime = false }
     !candidateId ||
     !endpoint ||
     endpoint !== candidateEndpoint ||
+    (manifest.review?.robots_checked_url != null && safeHttpsUrl(manifest.review.robots_checked_url) !== endpoint) ||
     !adapter ||
     adapter !== candidateAdapter ||
     !sourceIdentity ||
@@ -564,7 +565,9 @@ module.exports = {
   MAX_PROBES_PER_RUN,
   QUALIFICATION_SCHEMA_VERSION,
   QUALIFIED_RUNTIME_MAX_AGE_MS,
+  bindManifestCandidate,
   buildCandidateQualification,
   eventFeedsFromQualifiedSourceProfiles,
   qualifyDiscoveredSourceProfile,
+  sourceRowForBinding,
 };

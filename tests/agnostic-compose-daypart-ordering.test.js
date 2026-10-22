@@ -7,6 +7,7 @@ const {
   composeStopDaypartSlot,
   applyAgnosticDaypartOrder,
   composeRouteDaypartArc,
+  composeFinalDaypartOrdering,
 } = require("../server/route-engine");
 const { getCityConfig } = require("../server/cities");
 const { resetLiveEventsCache } = require("../server/live-events");
@@ -96,6 +97,39 @@ test("accepted daypart order still exposes its honest monotonic arc", () => {
     composeRouteDaypartArc(ordered, null, { applied: true, fallback: false, reason: "daypart_rhythm" }),
     ["morning", "midday", "afternoon"],
   );
+});
+
+test("balanced same-band permutations preserve final public daypart labels", () => {
+  assert.equal(typeof composeFinalDaypartOrdering, 'function');
+  const ordered = [stop('coffeeB', ['coffee_fika_stop']), stop('coffeeA', ['coffee_fika_stop']),
+    stop('culture', ['culture_stop']), stop('meal', ['food_anchor'])];
+  const ordering = composeFinalDaypartOrdering(ordered, null,
+    { applied: true, fallback: true, reason: 'balanced_day_rhythm' });
+  assert.equal(ordering.fallback, false, 'changed identities within one time band do not invalidate chronology');
+  assert.deepEqual(composeRouteDaypartArc(ordered, null, ordering), ['morning', 'morning', 'midday', 'afternoon']);
+});
+
+test("balanced final projection suppresses genuine backwards bands after later insertion", () => {
+  assert.equal(typeof composeFinalDaypartOrdering, 'function');
+  const ordered = [stop('coffee', ['coffee_fika_stop']), stop('meal', ['food_anchor']),
+    stop('later-inserted-culture', ['culture_stop'])];
+  const ordering = composeFinalDaypartOrdering(ordered, null,
+    { applied: true, fallback: true, reason: 'balanced_day_rhythm' });
+  assert.equal(ordering.fallback, true);
+  assert.deepEqual(composeRouteDaypartArc(ordered, null, ordering), [null, null, null]);
+});
+
+test("final balancing labels use trusted anchored bands and preserve unrelated geometry fallback", () => {
+  assert.equal(typeof composeFinalDaypartOrdering, 'function');
+  const ordered = [stop('culture', ['culture_stop']),
+    { ...stop('retained-cafe', ['coffee_fika_stop']), anchoredDaypart: 'midday' }, stop('meal', ['food_anchor'])];
+  const ordering = composeFinalDaypartOrdering(ordered, null,
+    { applied: true, fallback: true, reason: 'balanced_day_rhythm' });
+  assert.equal(ordering.fallback, false);
+  assert.deepEqual(composeRouteDaypartArc(ordered, null, ordering), ['midday', 'midday', 'afternoon']);
+  const geometryFallback = { applied: false, fallback: true, reason: 'daypart_order_exceeded_walk_budget' };
+  assert.equal(composeFinalDaypartOrdering(ordered, null, geometryFallback), geometryFallback);
+  assert.deepEqual(composeRouteDaypartArc(ordered, null, geometryFallback), [null, null, null]);
 });
 
 test("no role metadata anywhere → geometry order stands, no reorder", () => {

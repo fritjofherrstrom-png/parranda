@@ -1,0 +1,109 @@
+{
+  "attribution": "Wikidata CC0, real WDQS response recorded 2026-10-15; misleading current visit classification, official museum history checked separately",
+  "results": {
+    "bindings": [
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q14993546"
+        },
+        "itemLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Leverian collection"
+        },
+        "lat": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#double",
+          "type": "literal",
+          "value": "51.510278"
+        },
+        "lng": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#double",
+          "type": "literal",
+          "value": "-0.130278"
+        },
+        "classRoot": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q33506"
+        },
+        "website": {
+          "type": "uri",
+          "value": "http://australianmuseum.net.au/A-collection-of-drawings-by-Miss-Sarah-Stone"
+        },
+        "ceased": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#boolean",
+          "type": "literal",
+          "value": "false"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q1464767"
+        },
+        "itemLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Royal United Services Institute"
+        },
+        "lat": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#double",
+          "type": "literal",
+          "value": "51.5043"
+        },
+        "lng": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#double",
+          "type": "literal",
+          "value": "-0.1258"
+        },
+        "classRoot": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q33506"
+        },
+        "website": {
+          "type": "uri",
+          "value": "https://www.rusi.org/"
+        },
+        "ceased": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#boolean",
+          "type": "literal",
+          "value": "false"
+        }
+      },
+      {
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q1464767"
+        },
+        "itemLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Royal United Services Institute"
+        },
+        "lat": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#double",
+          "type": "literal",
+          "value": "51.5043"
+        },
+        "lng": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#double",
+          "type": "literal",
+          "value": "-0.1258"
+        },
+        "classRoot": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q33506"
+        },
+        "website": {
+          "type": "uri",
+          "value": "https://rusi.org/"
+        },
+        "ceased": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#boolean",
+          "type": "literal",
+          "value": "false"
+        }
+      }
+    ]
+  }
+}

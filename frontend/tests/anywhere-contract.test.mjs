@@ -132,7 +132,7 @@ test("classification flows through the SHARED honesty module (no duplicated rule
 
 test("public share capacity refusals render as capacity, never false place absence", () => {
   assert.match(anywherePlannerSource, /composeServiceRefusal\(response\.status, body\)/);
-  assert.match(anywherePlannerSource, /Parranda is composing as many days as it safely can right now/);
+  assert.match(anywherePlannerSource, /Parranda is busy right now/);
   assert.match(anywherePlannerSource, /try again in about/);
 });
 
@@ -171,10 +171,10 @@ test("the surface renders the engine's TRUSTWORTHY richness — and never the co
   assert.match(anywherePlannerSource, /stopTypeLabel\(stop, lang\)/);
   assert.match(anywherePlannerSource, /typeLabel\(stop\?\.type, lang\)/);
   assert.match(anywherePlannerSource, /\{stopKindLabel\}/);
-  // Unknown opening hours are visible on the stop row, not only when expanded.
-  // Said once when it holds for every stop; otherwise on exactly the stops it holds for.
-  assert.match(anywherePlannerSource, /hoursUnknown && !hoursUnknownEverywhere && \(\s*<span className="inline-flex items-center gap-1 text-xs text-parranda-ink\/68">[\s\S]{0,120}\{t\("Öppettider okända", "Hours unknown"\)\}/);
-  assert.match(anywherePlannerSource, /hoursUnknownEverywhere = split\.core\.length > 1 && split\.core\.every\(\(stop: any\) => stopHoursUnknown\(stop\)\)/);
+  // Unknown hours now belong inside the place disclosure; known closures stay
+  // visible. The mounted planner-stop-hours tests and real HTTP browser test
+  // exercise that behavior, instead of locking the old duplicated badge/banner
+  // implementation with source-text patterns here.
   assert.match(anywherePlannerSource, /DAYPART_LABELS, stop\.daypart/);
   // NEVER rendered: fields that can carry baseline-city phrasing or placeholder
   // labels on the agnostic path (verified live: date_signals said "i Rom" for a
@@ -247,7 +247,7 @@ test("route result has one authoritative route and keeps broader candidates seco
   assert.match(anywherePlannerSource, /de ingår inte i dagens stopp eller Maps-rutten/);
   assert.match(anywherePlannerSource, /destination: routeDestination/);
   assert.doesNotMatch(anywherePlannerSource, /t\("Dagens kvarter", "Today's neighborhoods"\)/);
-  assert.match(anywherePlannerSource, /Candidates near this place/);
+  assert.match(anywherePlannerSource, /Places nearby/);
   assert.match(anywherePlannerSource, /Parranda found place candidates, but not a reliable route yet\./);
   assert.match(anywherePlannerSource, /t\("träffar", "places"\)/);
   assert.doesNotMatch(
@@ -321,7 +321,7 @@ test("a tapped stop discloses route facts before an explicit Maps action", () =>
   // Do not invent a future availability payload in the view. Hours can render
   // only after the route-stop contract exposes reviewed availability facts.
   assert.doesNotMatch(anywherePlannerSource, /stop\?\.availability|closes_at_local|Open during your visit/);
-  assert.match(anywherePlannerSource, /Source hours unavailable for the selected day/);
+  assert.match(anywherePlannerSource, /Opening hours unavailable for the selected day/);
   // Raw engine reason tokens never render.
   assert.doesNotMatch(anywherePlannerSource, /fit_reasons|time_reasons|lens_reasons|route_roles/);
 });
@@ -415,37 +415,101 @@ test("a route stop's visible number is its own tap target", () => {
   // On the disc's side only the visible pin takes a tap, never the marker box.
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-marker\.route-map-marker-shell\s*\{\s*pointer-events: none;/);
   assert.match(anywhereStyles, /\.route-map-marker::before\s*\{[^}]*pointer-events: auto;/);
-  // The disc and its target open one name.
-  assert.match(routeMapSource, /target\.addEventListener\("mouseenter", open\);[\s\S]{0,200}target\.addEventListener\("click", open\);/);
-  assert.match(routeMapSource, /disc\.addEventListener\("mouseenter", open\);[\s\S]{0,200}disc\.addEventListener\("click", open\);/);
+  // Both surfaces open the same name, while distinguishing transient hover
+  // from an explicit selection. Native behavior (including expansion/leave,
+  // keyboard and touch) is exercised in tests/route-map-selection.test.js.
+  assert.match(routeMapSource, /target\.addEventListener\("mouseenter", \(event\) => open\("hover", event\)\);[\s\S]{0,200}target\.addEventListener\("click", \(event\) => open\("click", event\)\);/);
+  assert.match(routeMapSource, /disc\.addEventListener\("mouseenter", \(event\) => open\("hover", event\)\);[\s\S]{0,200}disc\.addEventListener\("click", \(event\) => open\("click", event\)\);/);
 });
 
 test("route, saved-day, Blitz, and source actions keep a 44px mobile touch target", () => {
-  assert.match(anywherePlannerSource, /onClick=\{blitz\}[\s\S]{0,180}min-h-11/);
+  assert.match(anywherePlannerSource, /busyButton\([^)]*, blitz\)\}[\s\S]{0,180}min-h-11/);
   assert.match(anywherePlannerSource, /onClick=\{\(\) => restoreEntry\(entry\)\}[\s\S]{0,180}min-h-11/);
   assert.match(anywherePlannerSource, /aria-label=\{t\("Ta bort", "Remove"\)\}[\s\S]{0,180}min-h-11 min-w-11/);
   assert.match(anywherePlannerSource, /href=\{pin\}[\s\S]{0,180}min-h-11 min-w-11/);
-  // Live source links (rows, woven stop, Blitz) name their destination.
-  assert.match(anywherePlannerSource, /href=\{link\.href\}[\s\S]{0,180}min-h-11 min-w-11/);
-  assert.match(anywherePlannerSource, /href=\{sourceLink\.href\}[\s\S]{0,180}min-h-11 min-w-11/);
+  // Live source links (rows, woven stop, Blitz) name their destination. Inline
+  // ones draw the 44px target with ::before, so wrapping never moves the text.
+  assert.match(anywherePlannerSource, /href=\{link\.href\}[\s\S]{0,120}\$\{inlineLinkTarget\}/);
+  assert.match(anywherePlannerSource, /href=\{sourceLink\.href\}[\s\S]{0,120}\$\{inlineLinkTarget\}/);
+  assert.match(componentSource("shared/ui.tsx"), /inlineLinkTarget = "relative before:absolute before:-inset-x-1 before:-inset-y-\[14px\]/);
+  assert.doesNotMatch(anywherePlannerSource, /-my-3|&nbsp;↗/);
   assert.match(anywherePlannerSource, /href=\{liveSourceLink\.href\}[\s\S]{0,180}min-h-11/);
 });
 
 test("keyboard-reachable controls have one visible focus contract", () => {
-  assert.match(anywhereStyles, /:where\([\s\S]*a\[href\][\s\S]*button[\s\S]*input[\s\S]*\):focus-visible/);
+  assert.match(anywhereStyles, /:where\([\s\S]*a\[href\][\s\S]*button[\s\S]*input[\s\S]*summary[\s\S]*\):focus-visible/);
   assert.match(anywhereStyles, /outline: 3px solid rgb\(var\(--p-color-glow\)\)/);
   assert.match(anywhereStyles, /outline-offset: 3px/);
+});
+
+test("small text keeps AA contrast on every Linje surface", () => {
+  // tokens.css: secondary text never goes below 65 % ink. ink/60 was 4.42:1
+  // on a day-theme panel (ink/4 over paper); 65 % clears 4.5:1 on panels up
+  // to ink/10. White at 85 % on terracotta was 4.18:1, and the digit on a
+  // white/22 disc 3.7:1.
+  const surface = [plannerSurfaceSource(), componentSource("PlaceSearchField.tsx"), componentSource("LandingHero.tsx")].join("\n");
+  const faint = [...surface.matchAll(/(?<![\w-])text-parranda-ink\/(\d+)/g)].map(m => Number(m[1])).filter(n => n < 65);
+  assert.deepEqual(faint, [], "no ink text below 65 %");
+  assert.doesNotMatch(surface, /text-white\/\d+/);
+  assert.doesNotMatch(componentSource("planner/DayHeader.tsx"), /bg-white\/22/);
+});
+
+test("frames, elevation, layers and small text come from Linje tokens", () => {
+  // 7fb8c10 design-system audit: 35 hand-written 1.5px borders, raw z-index
+  // numbers, black shadows in five strengths and 52 fixed px text sizes.
+  const surface = [plannerSurfaceSource(), componentSource("PlaceSearchField.tsx"), componentSource("LandingHero.tsx")].join("\n");
+  assert.doesNotMatch(surface, /border(-[trblxy])?-\[1\.5px\]/);
+  assert.doesNotMatch(surface, /(?<![\w-])z-\d+(?![\w-])/);
+  assert.doesNotMatch(surface, /(?<![\w-])shadow-(xs|sm|md|lg|xl|2xl)(?![\w-])/);
+  assert.doesNotMatch(surface, /text-\[\d+px\]/);
+  const tokens = readFileSync(new URL("../src/styles/tokens.css", import.meta.url), "utf8");
+  for (const token of ["--p-line", "--p-shadow-control", "--p-shadow-marker", "--p-shadow-pop", "--p-shadow-sheet", "--p-z-popover", "--p-z-map-control", "--p-z-map-tooltip", "--p-z-sheet"]) {
+    assert.match(tokens, new RegExp(`${token}:`), token);
+  }
+  assert.doesNotMatch(anywhereStyles, /box-shadow:[^;]*rgb\(0 0 0/);
+  assert.doesNotMatch(anywhereStyles, /font-size: \d+px/);
+  assert.match(anywhereStyles, /z-index: var\(--p-z-map-tooltip\)/);
+});
+
+test("the map's own focusable parts keep a visible ring inside its clipped frame", () => {
+  assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-canvas:focus-visible \{[^}]*outline-offset: -3px/);
+  assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-marker:focus-visible,\s*\.route-map-frame \.maplibregl-ctrl-attrib a:focus-visible \{\s*outline-offset: 0;/);
+});
+
+test("no control is disabled under the focus that pressed it", () => {
+  // A focused button that turns disabled drops keyboard focus to the top of
+  // the page. Working and finished states use busyButton or aria-disabled;
+  // \`disabled\` is only for a choice that was never available (a Live scope
+  // without a route). #611's stop edits and priority buttons came in with it.
+  const surface = [plannerSurfaceSource(), componentSource("PlaceSearchField.tsx"), componentSource("LandingHero.tsx")].join("\n");
+  const bound = [...surface.matchAll(/(?<![\w-])disabled=\{([^}]*)\}/g)].map((m) => m[1].trim());
+  assert.deepEqual(bound.filter((expression) => !/^!\w+ScopeAvailable$/.test(expression)), []);
+});
+
+test("grouped controls never clip the focus ring that sits outside them", () => {
+  // The ring is drawn 3px outside a control. A rounded group with
+  // overflow-hidden cut it to a sliver on EN/SV, Today/Tomorrow, rhythm and
+  // Live's When/Order; each segment now rounds its own ends instead.
+  const ui = componentSource("shared/ui.tsx");
+  assert.match(ui, /export const segmentGroup = "(?![^"]*overflow-hidden)[^"]*rounded-full/);
+  assert.match(ui, /first:rounded-l-full last:rounded-r-full/);
+  for (const file of ["shared/AppBar.tsx", "planner/AnchorCard.tsx", "planner/LiveSheet.tsx"]) {
+    const source = componentSource(file);
+    assert.doesNotMatch(source, /className="[^"]*overflow-hidden[^"]*"\s+role="group"/, `${file} clips a group`);
+    assert.doesNotMatch(source, /overflow-hidden[^"\n]*rounded-full[^"\n]*"\s*\n?\s*role="group"/, `${file} clips a group`);
+  }
+  assert.doesNotMatch(componentSource("planner/AnchorCard.tsx"), /className=\{`overflow-hidden \$\{panelCard\}`\}/);
 });
 
 test("adjustments collapse to a summary and re-compose themselves — no submit past the landing", () => {
   // Collapsed summary (mood · day · length) with an aria-expanded toggle...
   assert.match(anywherePlannerSource, /!adjustOpen && \(/);
-  assert.match(anywherePlannerSource, /\{moodLabel \|\| t\("Inga val", "No moods"\)\}/);
+  assert.match(anywherePlannerSource, /\{moodLabel \|\| t\("Inga intressen", "No interests"\)\}/);
   assert.match(anywherePlannerSource, /t\("Justera", "Adjust"\)/);
   assert.match(anywherePlannerSource, /aria-expanded=\{false\}/);
   assert.match(anywherePlannerSource, /aria-expanded=\{true\}/);
   // ...expanding gives the grouped panel...
-  assert.match(anywherePlannerSource, /t\("Känsla", "Mood"\)/);
+  assert.match(anywherePlannerSource, /t\("Intressen", "Interests"\)/);
   assert.match(anywherePlannerSource, /t\("När", "When"\)/);
   assert.match(anywherePlannerSource, /t\("Dagens rytm", "Day rhythm"\)/);
   // ...and a settled change re-composes on its own (debounced).
@@ -459,7 +523,7 @@ test("adjustments collapse to a summary and re-compose themselves — no submit 
 
 test("saving a live day does not freeze its adjustment controls as a restored snapshot", () => {
   const saveBlock = anywherePlannerSource.split("function saveDay() {")[1]?.split("function removeSavedDay")[0] ?? "";
-  const restoreBlock = anywherePlannerSource.split("function restoreEntry(entry: SavedEntry) {")[1]?.split("const autoPlannedRef")[0] ?? "";
+  const restoreBlock = anywherePlannerSource.split("function restoreEntry(entry: SavedEntry, restoreViewFromStorage = false) {")[1]?.split("const autoPlannedRef")[0] ?? "";
   assert.doesNotMatch(saveBlock, /setRestoredAt/);
   assert.match(restoreBlock, /setRestoredAt\(entry\.savedAt\)/);
 });
@@ -552,7 +616,7 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.match(anywherePlannerSource, /sheetSourceHealth\.responding_source_count/);
   assert.match(anywherePlannerSource, /sheetSourceHealth\.event_bearing_source_count/);
   // The card's week summary is a count, not a second list.
-  assert.match(anywherePlannerSource, /händelser listade", "more listed"/);
+  assert.match(anywherePlannerSource, /till", "more"/);
 });
 
 // --------------------------------------------------------------------------

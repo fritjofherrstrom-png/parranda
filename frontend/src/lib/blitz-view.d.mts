@@ -1,6 +1,7 @@
 export interface BlitzMoveView {
   key: string | null;
   kind: "place" | "live_event";
+  availability_status: "available_in_window" | "unknown" | null;
   title: string;
   type: string | null;
   lat: number | null;

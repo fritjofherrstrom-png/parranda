@@ -145,14 +145,17 @@ test("a landed verdict replaces the held day atomically", () => {
   }
 });
 
-test("a refusal drops the held day rather than leaving it answering", () => {
-  const refusal =
-    /if \(refusal\) \{[\s\S]{0,320}?setClassification\(null\);[\s\S]{0,200}?displayedAnchorKeyRef\.current = null;[\s\S]{0,400}?setDayIsStale\(false\);/;
-  assert.match(component, refusal, "a service refusal must clear the held day");
-  // ...and it must clear what the day answered too, or the pins from the
-  // request that never landed get judged against zero stops.
+test("an ordinary non-edit refusal still clears the held day, while manual failures retain it explicitly", () => {
   const block = component.slice(component.indexOf("if (refusal) {"), component.indexOf("if (!response.ok) throw"));
-  assert.match(block, /setAppliedPins\(\[\]\);/);
+  assert.match(block, /if \(effectiveDayEdit && retention\.keepPrevious\) \{/);
+  assert.match(block, /setDayIsStale\(true\);/);
+  // The narrow manual branch returns before the unchanged ordinary policy.
+  // Its actual behavior is also exercised by the mounted capacity regressions.
+  const ordinary = block.slice(block.indexOf("undoBaselineRef.current = null;"));
+  assert.match(ordinary, /setClassification\(null\);/);
+  assert.match(ordinary, /displayedAnchorKeyRef\.current = null;/);
+  assert.match(ordinary, /setDayIsStale\(false\);/);
+  assert.match(ordinary, /setAppliedPins\(\[\]\);/);
 });
 
 test("the full-page loader never doubles up with a held day", () => {

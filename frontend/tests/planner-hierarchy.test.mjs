@@ -100,6 +100,16 @@ test("the header says what the route did for each pick, in the pick's own words"
   assert.doesNotMatch(h.text(), /Partly covered by today's route/);
 });
 
+test("pick coverage reads as status, never as a selected chip", async (t) => {
+  // An ink-filled "✓ Food & drink" looked exactly like a chosen pill in Adjust
+  // (7fb8c10 design-system audit). Covered and partial are quiet labels.
+  const h = await plannerWith(t, composedDay());
+  const items = [...h.container.querySelector('ul[aria-label="Your picks in this day"]').children];
+  for (const li of items) {
+    assert.doesNotMatch(li.className, /(^|\s)bg-parranda-ink(\s|$)|text-parranda-paper/, li.textContent);
+  }
+});
+
 test("a pick no stop covers is named as missing, not silently dropped", async (t) => {
   const h = await plannerWith(
     t,

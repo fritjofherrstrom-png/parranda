@@ -31,6 +31,7 @@
 
 const { resolveHonestyTargetRoles } = require("./dayflow-honesty");
 const { normalizeSelectedDayHoursFact } = require("../place-candidates/opening-hours");
+const { normalizeSourceWebsite } = require("../lib/source-website");
 
 const DEFAULT_TOP_K = 3;
 // All six v0 roles × topK=3 = 729 combinations — cheap. The cap exists only
@@ -113,10 +114,9 @@ function buildCandidateCombination(plannerRoles = {}, dayflowHonesty = {}, optio
   };
 }
 
-// Shared trust-tier primitive for every consumer of the role reservoir. The
-// combination picker and the engine-depth bridge must agree: weaker admitted,
-// adjacent, or chain candidates cannot re-enter merely because a consumer asks
-// for more than one option.
+// Shared best-tier primitive for consumers of the admitted role reservoir.
+// Combination chooses from this tier. Modern requested-role rhythm depth may
+// repeat it on the remainder, preserving tier order without upgrading trust.
 function plannerUsableOptionsForRole(role = {}) {
   const usableAll = (Array.isArray(role.candidates) ? role.candidates : []).filter(
     (candidate) =>
@@ -347,6 +347,7 @@ function buildReasons({ status, usableByRole, unresolved, geometry, duplicateRol
 function formatSelected(pick) {
   const c = pick.candidate;
   const selectedDayHours = normalizeSelectedDayHoursFact(c.availability?.selected_day_hours);
+  const website = normalizeSourceWebsite(c.website);
   const reasons = Array.isArray(c.fit_reasons) ? c.fit_reasons.slice(0, 6) : [];
   // #272 honesty: with tier-restricted options, a selected chain means no
   // non-chain option could fill this role — say so on the stop itself. The
@@ -372,6 +373,7 @@ function formatSelected(pick) {
     origin: c.origin,
     confidence: c.confidence,
     coordinates: resolveCoords(c.coordinates),
+    ...(website ? { website } : {}),
     also_covers: Array.isArray(c.also_covers) ? c.also_covers : [],
     ...(selectedDayHours ? { selected_day_hours: selectedDayHours } : {}),
     reasons,

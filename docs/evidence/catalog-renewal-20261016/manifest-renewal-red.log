@@ -1,0 +1,32 @@
+✖ explicit renewal rereads the complete manifest and cannot reuse a formerly overlapping asset (26.874334ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 126.44725
+
+✖ failing tests:
+
+test at tests/overture-stac-window.test.js:41:1
+✖ explicit renewal rereads the complete manifest and cannot reuse a formerly overlapping asset (26.874334ms)
+  AssertionError [ERR_ASSERTION]: renewal must prove the current complete source basis
+  + actual - expected
+
+    [
+  +   's3://overturemaps-us-west-2/release/2026-09-23.1/theme=places/type=place/part-00000-aaaa-c000.zstd.parquet'
+  -   's3://overturemaps-us-west-2/release/2026-09-23.1/theme=places/type=place/part-00001-aaaa-c000.zstd.parquet'
+    ]
+
+      at TestContext.<anonymous> ($REPO/tests/overture-stac-window.test.js:47:9)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ 's3://overturemaps-us-west-2/release/2026-09-23.1/theme=places/type=place/part-00000-aaaa-c000.zstd.parquet' ],
+    expected: [ 's3://overturemaps-us-west-2/release/2026-09-23.1/theme=places/type=place/part-00001-aaaa-c000.zstd.parquet' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

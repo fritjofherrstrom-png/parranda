@@ -1,0 +1,84 @@
+✔ each district carries a few concrete stop NAMES (so the UI shows an itinerary, not a count) (13.749709ms)
+✔ each district carries map-drawable stops (id + name + real coords, never fabricated) (0.870583ms)
+✔ nearby same-name source features become one context suggestion (0.978458ms)
+✔ same-name context evidence remains separate when far apart or functionally different (0.2175ms)
+✔ district stops preserve explicit local-quality facts for optional route context (0.702917ms)
+✔ district context keeps a chain only as an axis-specific sparse fallback (0.223084ms)
+✔ a chain-only district remains inspectable instead of becoming a fabricated empty (0.195042ms)
+✔ composes complementary districts that cover the requested intents (0.661166ms)
+✔ orders districts by daypart: morning district before evening district (0.543083ms)
+✔ daypart coherence: the day reads as a distinct morning→evening arc (no two districts share a daypart) (0.460458ms)
+✔ a district with a few strong-evening bars amid daytime types leans later than a pure-daytime one (0.264375ms)
+✔ honestly reports an intent no district can satisfy (no fabricated district) (0.243208ms)
+✔ deterministic and order-independent (0.771875ms)
+✔ respects maxAreas (a compact day, not the whole city) (0.417292ms)
+✔ tokensToAxes maps surface tokens (tags/types/synonyms) to canonical axes (0.0505ms)
+✔ second hand never publishes eleven unrelated cultural places as matches (0.330667ms)
+✔ a rare genuine vintage stop survives dominant type and tag summaries (0.311125ms)
+✔ canonical second-hand aliases match source categories without inferring from names (0.093792ms)
+✔ weak scenic places stay partial while a genuine viewpoint covers the same intent (0.453041ms)
+✔ a legitimate multifunction place can cover several requested preferences (0.094125ms)
+✔ no preferences retains varied source-backed candidates (0.062542ms)
+✖ default district composition retains its legacy coverage and fallback contract (0.752ms)
+✖ the existing micro-base consumer keeps its legacy gallery anchor decision (3.225959ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 21
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 68.553084
+
+✖ failing tests:
+
+test at tests/district-composition.test.js:438:1
+✖ default district composition retains its legacy coverage and fallback contract (0.752ms)
+  AssertionError [ERR_ASSERTION]: default callers keep the pre-existing broad culture policy
+  + actual - expected
+
+  + []
+  - [
+  -   'culture'
+  - ]
+
+      at TestContext.<anonymous> (<worktree>/tests/district-composition.test.js:441:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ 'culture' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/district-composition.test.js:450:1
+✖ the existing micro-base consumer keeps its legacy gallery anchor decision (3.225959ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   lat: 50,
+  -   lat: 50.03001,
+      lng: 10
+    }
+
+      at TestContext.<anonymous> (<worktree>/tests/district-composition.test.js:458:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { lat: 50, lng: 10 },
+    expected: { lat: 50.03001, lng: 10 },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

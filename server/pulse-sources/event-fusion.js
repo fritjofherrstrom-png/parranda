@@ -68,6 +68,17 @@ function eventsRepresentSameOccurrence(left, right) {
 
   const samePublisher = sourceIdentity(left) === sourceIdentity(right);
   const sameStableId = nonEmpty(left.id) && nonEmpty(right.id) && nonEmpty(left.id) === nonEmpty(right.id);
+  // A publisher explicitly listed these as distinct series occurrences. The
+  // fuzzy time tolerance exists for cross-source descriptions of one slot;
+  // it cannot erase two separately identified slots from the same publisher.
+  if (samePublisher && left.source_series_id && right.source_series_id &&
+      nonEmpty(left.id) && nonEmpty(right.id) && !sameStableId) return false;
+  // Some providers attest a distinct identity for each performance. Scope it
+  // to that provider: unrelated REST/iCal row IDs are not this evidence.
+  if (samePublisher && nonEmpty(left.source_provider_id) &&
+      left.source_provider_id === right.source_provider_id &&
+      nonEmpty(left.source_occurrence_id) && nonEmpty(right.source_occurrence_id) &&
+      left.source_occurrence_id !== right.source_occurrence_id) return false;
   const leftSourceUrl = canonicalUrl(left.source_url || left.provenance?.source_url);
   const rightSourceUrl = canonicalUrl(right.source_url || right.provenance?.source_url);
   const sameSourceUrl = Boolean(leftSourceUrl && leftSourceUrl === rightSourceUrl);
@@ -103,6 +114,7 @@ function buildFusedEvent(members) {
     "address",
     "area",
     "time_window",
+    "source_series_time_window",
     "recurrence",
     "calendar_fact",
     "route_role_hint",
@@ -115,6 +127,38 @@ function buildFusedEvent(members) {
     const owner = ranked.find((event) => hasValue(event[field]));
     if (!hasValue(merged[field]) && owner) merged[field] = owner[field];
     if (owner) fieldProvenance[field] = sourceIdentity(owner);
+  }
+
+  // Date-only and explicit whole-day rows share an all_day shape. Preserve
+  // the latter's precision across duplicate representations of the SAME
+  // publisher page, but never borrow it from weaker or incompatible evidence.
+  if (merged.time_window?.kind === 'all_day' && merged.time_window.all_day_explicit !== true) {
+    const signature = allDayTemporalSignature(primary);
+    const url = canonicalUrl(primary.source_url || primary.provenance?.source_url);
+    const timezone = nonEmpty(primary.timezone || primary.time_window?.timezone);
+    const owner = signature && url && timezone && ranked.find(event =>
+      event.time_window?.kind === 'all_day' && event.time_window.all_day_explicit === true &&
+      sourceIdentity(event) === sourceIdentity(primary) &&
+      canonicalUrl(event.source_url || event.provenance?.source_url) === url &&
+      allDayTemporalSignature(event) === signature &&
+      nonEmpty(event.timezone || event.time_window?.timezone) === timezone &&
+      sourceTierRank(event.source_tier) >= sourceTierRank(primary.source_tier) &&
+      confidenceRank(event.confidence) >= confidenceRank(primary.confidence) &&
+      event.freshness !== 'stale' && event.timing_relevance !== 'stale');
+    if (owner) {
+      merged.time_window = { ...merged.time_window, all_day_explicit: true };
+      fieldProvenance.time_window = sourceIdentity(owner);
+    }
+  }
+
+  // Two publishers may describe the same session within different complete
+  // schedules. Keep the strictest real schedule as the route bound even when
+  // the primary has a shorter one; never invent a union of publisher dates.
+  const seriesOwner = ranked.filter(event => hasValue(event.source_series_time_window))
+    .sort((left, right) => seriesSpan(right) - seriesSpan(left))[0];
+  if (seriesOwner) {
+    merged.source_series_time_window = seriesOwner.source_series_time_window;
+    fieldProvenance.source_series_time_window = sourceIdentity(seriesOwner);
   }
 
   const coordinateOwner = ranked.find((event) => finiteCoordinates(event));
@@ -184,6 +228,15 @@ function buildFusedEvent(members) {
   return merged;
 }
 
+function seriesSpan(event) {
+  const dates = event.source_series_time_window?.dates;
+  const span = Array.isArray(dates) && dates.length
+    ? Date.parse(dates[dates.length - 1]) - Date.parse(dates[0]) : NaN;
+  // Normalization rejects malformed provenance. Keep a malformed bound
+  // conservative if an internal caller bypasses that boundary.
+  return Number.isFinite(span) && span >= 0 ? span : Infinity;
+}
+
 function detectConflicts(events) {
   const conflicts = [];
   if (dateSpread(events.map((event) => event.starts_at)) > START_CONFLICT_TOLERANCE_MS) {
@@ -241,6 +294,7 @@ function sourceEvidence(event) {
   return compactObject({
     identity: sourceIdentity(event),
     provider_id: nonEmpty(event.source_provider_id),
+    occurrence_id: nonEmpty(event.source_occurrence_id),
     family: nonEmpty(event.source_family || event.source_type),
     label: nonEmpty(event.source_label || event.provenance?.source_label),
     url: nonEmpty(event.source_url || event.provenance?.source_url),

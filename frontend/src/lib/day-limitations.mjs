@@ -115,8 +115,26 @@ function sentencesFor(keys, limitations, copy, t, max) {
  * @param {(sv: string, en: string) => string} t  the caller's language picker
  * @returns {string} one or two sentences, or "" when there is nothing honest to add
  */
-export function limitationNote(limitations, stopCount, t) {
-  return sentencesFor(DAY_SHAPE_LIMITATIONS, limitations, phrases(stopCount), t, MAX_SHOWN);
+export function limitationNote(limitations, stopCount, t, { sourcesIncomplete: incomplete = false } = {}) {
+  // Incomplete evidence cannot judge the place itself: "few places here" or
+  // "kinds we could not find" would describe only part of its source supply.
+  // What the published day contains is still said.
+  const keys = incomplete
+    ? DAY_SHAPE_LIMITATIONS.filter((key) => !PLACE_JUDGEMENTS.has(key))
+    : DAY_SHAPE_LIMITATIONS;
+  return sentencesFor(keys, limitations, phrases(stopCount), t, MAX_SHOWN);
+}
+
+const PLACE_JUDGEMENTS = new Set(["capped_by_below_planner_candidate_threshold", "capped_by_unresolved_roles"]);
+
+/**
+ * Whether the published answer had incomplete place evidence. This immutable
+ * snapshot says nothing about a source job still running or a future result.
+ *
+ * @param {{status?: string, failed?: number}|null|undefined} sourceCompletion
+ */
+export function sourcesIncomplete(sourceCompletion) {
+  return sourceCompletion?.status === "partial" || Number(sourceCompletion?.failed) > 0;
 }
 
 /**
@@ -124,18 +142,21 @@ export function limitationNote(limitations, stopCount, t) {
  *
  * @param {string[]} limitations  qualifying caps from the server
  * @param {(sv: string, en: string) => string} t  the caller's language picker
- * @param {{ statedElsewhere?: string[], sourceCompletion?: {status?: string}|null }} [options]  caps another line on the
+ * @param {{ statedElsewhere?: string[], sourceCompletion?: {status?: string, failed?: number}|null, sourceFailed?: boolean }} [options]  caps another line on the
  *        page already states in full; they are not repeated here
  * @returns {string} short sentences, or "" when there is nothing to add
  */
-export function contextNote(limitations, t, { statedElsewhere = [], sourceCompletion = null } = {}) {
+export function contextNote(limitations, t, { statedElsewhere = [], sourceCompletion = null, sourceFailed = false } = {}) {
   const skip = new Set(Array.isArray(statedElsewhere) ? statedElsewhere : []);
   const keys = CONTEXT_LIMITATIONS.filter((key) => !skip.has(key));
   const note = sentencesFor(keys, limitations, phrases(null), t, CONTEXT_LIMITATIONS.length);
   const partial = sourceCompletion?.status === 'partial'
-    ? sentence(t('Dagen bygger på de källor som hunnit svara; fler platser kan saknas', 'The day uses the sources that have answered; more places may be missing'))
+    ? sentence(t('Platsunderlaget var ofullständigt när svaret skapades; fler platser kan saknas', 'The place evidence was incomplete when the response was produced; more places may be missing'))
     : '';
-  return [partial, note].filter(Boolean).join(' ');
+  const failed = sourceFailed || Number(sourceCompletion?.failed) > 0
+    ? sentence(t('En eller flera platskällor misslyckades', 'One or more place sources failed'))
+    : '';
+  return [partial, failed, note].filter(Boolean).join(' ');
 }
 
 function sentence(text) {
