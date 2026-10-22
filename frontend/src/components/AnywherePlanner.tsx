@@ -90,6 +90,7 @@ import DayHeader, { DayActions, dayAssemblyNotes } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
 import DayPlaceholder, { DayMapPlaceholder } from "./planner/DayPlaceholder";
+import { WalkMark } from "./shared/WalkMark";
 import LiveSheet from "./planner/LiveSheet";
 import { selectedDayEmpty, useLiveFallback } from "./planner/useLiveFallback";
 import SavedDays from "./planner/SavedDays";
@@ -2444,6 +2445,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           languageLabel={t("Språk", "Language")}
           onNavigate={leavePlanner}
           languageHref={languageHref}
+          busy={phase === "loading"}
         />
       </div>
 
@@ -2600,10 +2602,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         <DayPlaceholder
           inlineMap={!splitLayout}
           status={
-            // Where "Your day" will stand, with its ember rule: the day lands
-            // under the line the reader is already looking at.
+            // Where "Your day" will stand, the walker on its route: the day
+            // lands under the line the reader is already looking at.
             <p className="flex items-start gap-2.5 text-sm text-parranda-ink/75" aria-live="polite">
-              <span aria-hidden="true" className="mt-2 h-1 w-5 shrink-0 rounded-full bg-parranda-ember" />
+              <WalkMark className="mt-1.5" />
               <span>
                 {supplyPending && t("Hämtar källbelagda platser för din dag. Planen fortsätter automatiskt — du behöver inte försöka igen.", "Fetching source-backed places for your day. Your plan will continue automatically — no need to try again.")}
                 {!supplyPending && loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}

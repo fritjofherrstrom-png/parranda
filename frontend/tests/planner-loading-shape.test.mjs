@@ -83,7 +83,11 @@ test("the shape is silent and moves as one slow sheen, never blinking or flashin
   const shapes = [...h.container.querySelectorAll("main [aria-hidden='true'] .skeleton")];
   assert.ok(shapes.length >= 15, `every placeholder shape carries the sheen (${shapes.length})`);
   for (const element of shapes) assert.match(element.className, /motion-safe:animate-\[parranda-sheen_2\.8s_ease-in-out_infinite\]/);
-  assert.equal(shape(h, "stations").querySelectorAll(".skeleton.rounded-full.h-full").length, 5, "five stations, the same sheen");
+  // The stations breathe instead: a soft wave down the line, a beat apart.
+  const stations = [...shape(h, "stations").querySelectorAll("[data-day-station]")];
+  assert.equal(stations.length, 5, "five stations");
+  for (const station of stations) assert.match(station.className, /motion-safe:animate-\[parranda-breathe_2\.8s_ease-in-out_infinite\]/);
+  assert.deepEqual(stations.map((station) => station.style.animationDelay), ["0ms", "300ms", "600ms", "900ms", "1200ms"]);
   // The status line is still the one thing a reader hears.
   assert.match(h.container.querySelector('main [aria-live="polite"]').textContent, /Finding the place/);
 });
@@ -110,4 +114,21 @@ test("a chosen place reads by its own name while the day composes", async (t) =>
   const pill = h.container.querySelector("main").textContent;
   assert.match(pill, /Testville/);
   assert.doesNotMatch(pill, /Testshire/);
+});
+
+test("while the day composes the wordmark draws its ring, and the status walks its route", async (t) => {
+  const { h, compose } = await composing(t);
+  const mark = () => h.container.querySelector("nav [data-brand-mark]");
+  assert.equal(mark().dataset.brandMark, "busy");
+  assert.equal(mark().getAttribute("aria-hidden"), "true");
+  assert.match(mark().querySelector("circle[pathLength]").getAttribute("class"), /parranda-mark-draw/);
+  const status = h.container.querySelector('main [aria-live="polite"]');
+  assert.ok(status.querySelector("[data-walk-mark] .walk-step"), "a walker instead of a still rule");
+
+  await h.fetchMock.respond(compose, composedDay());
+  await h.clock.advance(50);
+  assert.equal(mark().dataset.brandMark, "still", "the ring closes once the day is on screen");
+  assert.match(mark().className, /parranda-mark-land/, "with a small settle");
+  await h.clock.advance(700);
+  assert.doesNotMatch(mark().className, /parranda-mark-land/);
 });

@@ -10,8 +10,9 @@ import type { ReactNode } from "react";
  * Decorative only: it carries no place, number or claim. The status line
  * passed in sits where "Your day" will, and is the one thing a reader hears.
  *
- * Every shape carries the same slow sheen (skeleton + parranda-sheen in
- * tailwind.css), so the page reads as one calm "still coming". A block
+ * Every bar and frame carries the same slow sheen (skeleton + parranda-sheen
+ * in tailwind.css) and the stations breathe in a soft wave down the line
+ * (parranda-breathe), so the page reads as one calm "still coming". A block
  * pulsing on and off read as blinking, a still page read as broken, and
  * ember stations lighting in turn read as hectic.
  */
@@ -72,9 +73,14 @@ export default function DayPlaceholder({ status, inlineMap }: { status: ReactNod
                 </div>
               )}
               <div className="flex min-h-16 items-center gap-3.5 py-2">
-                {/* Paper under the sheen, so the line stops at the station. */}
+                {/* Paper under the disc, so the line stops at the station. Each
+                    disc breathes, a beat after the one above it. */}
                 <div className="relative z-[1] h-11 w-11 shrink-0 rounded-full bg-parranda-paper">
-                  <div className={`${bar} h-full w-full`} />
+                  <div
+                    data-day-station=""
+                    className="h-full w-full rounded-full bg-parranda-ink/10 motion-safe:animate-[parranda-breathe_2.8s_ease-in-out_infinite]"
+                    style={{ animationDelay: `${index * 300}ms` }}
+                  />
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                   <div className={`${bar} h-4`} style={{ width }} />
