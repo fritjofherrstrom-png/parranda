@@ -80,6 +80,8 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     source_provider_id: firstString(rawEvent.source_provider_id, rawEvent.sourceProviderId, rawEvent.source?.id),
     source_series_id: typeof rawEvent.source_series_id === "string" && rawEvent.source_series_id.length <= 200
       ? rawEvent.source_series_id : null,
+    source_occurrence_id: typeof rawEvent.source_occurrence_id === "string" && rawEvent.source_occurrence_id.trim() && rawEvent.source_occurrence_id.length <= 200
+      ? rawEvent.source_occurrence_id : null,
     source_identity: firstString(rawEvent.source_identity, rawEvent.publisher_id, rawEvent.publisherId),
     source_family: firstString(rawEvent.source_family, rawEvent.sourceFamily, rawEvent.source?.family),
     city: firstString(rawEvent.city, options.city),

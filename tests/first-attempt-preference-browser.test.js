@@ -223,11 +223,11 @@ test('built UI shows zero matches for terminal museum-only Second hand, then exp
     'the raw diagnostic structure contains real nonmatching museum records');
   assert.deepEqual(body.place_structure.district_day.areas, [], 'diagnostics are not published as preference matches');
   await f.page.getByText('0 matches for your picks.', { exact: true }).waitFor();
-  await f.page.getByText(/Planning finished without a route/).and(f.page.locator('div')).waitFor();
+  await f.page.getByText(/Parranda couldn't build a day here right now/).and(f.page.locator('div')).waitFor();
   await f.page.getByText(/One or more place sources failed/).and(f.page.locator('div')).waitFor();
   assert.equal(await f.page.getByRole('list', { name: 'The stops, in order', exact: true }).count(), 0);
-  const candidates = f.page.locator('section').filter({ has: f.page.getByText('Candidates near this place', { exact: true }) });
-  assert.match(await candidates.innerText(), /None of these candidates cover:\s*Second hand/);
+  const candidates = f.page.locator('section').filter({ has: f.page.getByText('Places nearby', { exact: true }) });
+  assert.match(await candidates.innerText(), /No places for:\s*Second hand/);
   assert.equal(await candidates.getByRole('button', { name: /Knowledge museum/ }).count(), 0);
   assert.equal(await f.page.getByText(pendingCopy, { exact: true }).count(), 0);
   assert.equal(await f.page.getByText(/More places are on their way|Places .* are still being fetched/).count(), 0);

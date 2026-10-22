@@ -13,6 +13,7 @@ const {
   extractSchemaOrgPlaces,
   inspectExperienceCardPlaceListDetailPayload,
   MAX_LIST_DETAIL_LINKS,
+  mapSchemaOrgPlaceToRecord,
   parseSchemaOrgPlacesFromHtml,
   probeSchemaOrgPlaceFeed,
   resolveDefaultReviewedPlaceSource,
@@ -121,6 +122,23 @@ test("HTML extraction ignores prose and survives one malformed JSON-LD block", (
   assert.equal(parsed.invalidScriptCount, 1);
   assert.equal(parsed.validScriptCount, 1);
   assert.equal(parsed.places.length, 1);
+});
+
+test("reviewed JSON-LD places preserve structured source hours without changing source trust", () => {
+  const record = mapSchemaOrgPlaceToRecord(place({ openingHours: ["Mo-Fr 09:00-17:00", "Sa-Su off"] }), feed());
+  assert.equal(record.opening_hours, "Mo-Fr 09:00-17:00; Sa-Su off");
+  assert.equal(record.operator_reviewed_source, true);
+  assert.equal(record.human_verified, undefined);
+  const structured = mapSchemaOrgPlaceToRecord(place({ openingHoursSpecification: [
+    { dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"], opens: "09:00", closes: "17:00" },
+    { dayOfWeek: ["Saturday", "Sunday"] },
+  ] }), feed());
+  const { buildSelectedDayHoursFact } = require("../server/place-candidates/opening-hours");
+  assert.deepEqual(buildSelectedDayHoursFact(structured.opening_hours, { weekday: 1 }), {
+    status: "known", all_day: false, windows: [{ opens: "09:00", closes: "17:00" }],
+  });
+  const seasonal = mapSchemaOrgPlaceToRecord(place({ openingHours: "24/7", specialOpeningHoursSpecification: [{ validFrom: "2026-12-25" }] }), feed());
+  assert.equal(seasonal.opening_hours, undefined);
 });
 
 test("list-detail inspection accepts only capped same-origin verified experience cards", () => {

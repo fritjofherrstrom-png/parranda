@@ -2582,7 +2582,7 @@ function buildApp({
       // route stays in the diagnostic experiment block.
       if (useEngineCompose) {
         // Original publication and authorized replay share the identical gates.
-        async function publishComposition({ result: experimentResult, experiment, eventWeave, pinnedRefusals, precompositionPinnedRefusals, commitmentEligibleIds }, wovenPlaceStructure, liveEventsSidecar) {
+        async function publishComposition({ result: experimentResult, experiment, eventWeave, pinnedRefusals, precompositionPinnedRefusals, commitmentEligibleIds, candidateHours }, wovenPlaceStructure, liveEventsSidecar) {
           experiment.intake = intake;
           const strongAnchor =
             intake.resolved?.confidence === "explicit" ||
@@ -2681,6 +2681,7 @@ function buildApp({
           const publishedPlaceStructure = markCommitmentEligibility(
             engineWoven.placeStructure,
             publishedEligibleIds({ promotionPromote: promotion.promote, commitmentEligibleIds }),
+            candidateHours,
           );
           if (liveEventChoices.length) {
             experiment.live_event_choices = require("./planner/live-occurrence-choice").summarizeLiveChoices(

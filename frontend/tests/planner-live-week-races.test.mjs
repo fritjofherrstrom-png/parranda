@@ -94,7 +94,7 @@ test('late automatic week query body cannot overwrite a newer explicit selected-
 // actual safeResponse replacement, distinct from completion's completedLive update.
 const wire = JSON.parse(readFileSync(new URL('./fixtures/live-wire-81d2ad7.json', import.meta.url), 'utf8')).fixtures;
 const wireBody = name => structuredClone(wire[name].body);
-for (const period of ['Sun 28 Jun', 'Following 7 days']) test(`real applied upgrade preserves the open manually chosen period (${period})`, async t => {
+for (const period of ['Sun 28 Jun', 'Next 7 days']) test(`real applied upgrade preserves the open manually chosen period (${period})`, async t => {
   const events = { ...wireBody('completion_pending').live_events, selected_date: '2026-06-28', pending: true, tonight: [], this_week: [] };
   const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' }); t.after(() => h.unmount());
   await h.clock.advance(500); const body = day(events); body.live_completion.route_upgrade = 'explicit_request';
@@ -113,7 +113,7 @@ for (const period of ['Sun 28 Jun', 'Following 7 days']) test(`real applied upgr
   assert.equal(pressed(h, period), 'true'); assert.match(h.text(), /Changed: Live: event added/); assert.equal(routes(h).length, 1);
 });
 
-for (const scope of ['Around the place', 'Near the route', 'Near me']) for (const period of ['Sun 28 Jun', 'Following 7 days']) {
+for (const scope of ['Around the place', 'Near the route', 'Near me']) for (const period of ['Sun 28 Jun', 'Next 7 days']) {
   test(`same-question upgrade retains ${scope} × ${period} through reopen and rejects the old geometry body`, async t => {
     const applied = wireBody('upgrade_applied');
     const events = { ...wireBody('completion_pending').live_events, selected_date: '2026-06-28', pending: true, tonight: [], this_week: [] };
@@ -160,7 +160,7 @@ for (const scope of ['Around the place', 'Near the route', 'Near me']) for (cons
     if (scope !== 'Around the place') assert.equal(pressed(h, scope), 'true');
     assert.equal(pressed(h, period), 'true');
     assert.equal(queries(h).at(-1).body.scope, scope === 'Near me' ? 'near_me' : scope === 'Near the route' ? 'near_route' : 'around_place');
-    assert.equal(queries(h).at(-1).body.time, period === 'Following 7 days' ? 'this_week' : 'tonight');
+    assert.equal(queries(h).at(-1).body.time, period === 'Next 7 days' ? 'this_week' : 'tonight');
     if (scope === 'Near me') {
       assert.deepEqual(queries(h).at(-1).body.anchor, { lat: 60.18, lng: 24.95 });
       assert.equal(permissions, 1, 'the same Live-only consent survives the upgrade and reopen');

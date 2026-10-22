@@ -35,7 +35,7 @@ export function liveEventSource(event: PulseEvent, lang: Lang) {
       {recurring && <> · {lang === "en"
         ? "Recurring schedule — occurrence unconfirmed"
         : "Återkommande schema — tillfället är inte bekräftat"}</>}
-      {sourceArea && <> · {lang === "en" ? "Source calendar area — exact location unverified" : "Källans kalenderområde — exakt plats ej verifierad"}</>}
+      {sourceArea && <> · {lang === "en" ? "Approximate location" : "Ungefärlig plats"}</>}
       {listedBy && <>{" · "}via&nbsp;{listedBy}</>}
       {credits.length > 0 && <>{" · "}{credits.join(" · ")}</>}
       {link && (

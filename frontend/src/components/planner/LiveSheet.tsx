@@ -128,6 +128,7 @@ export default function LiveSheet({
     ) : null;
   const sheetRow = (ev: PulseEvent, i: number, titleClassName: string, timingDate = sheetLiveEvents?.selected_date,
     navigationRow?: LiveNavigationRow<PulseEvent>) => {
+    const displayProgram = ev.display_group_kind === "source_program";
     const relevance = liveRelevanceSentence(liveEventRelevance(navigationRow?.series || ev, selected), lang, t);
     const distance = nearbyDistanceLabel(ev, lang);
     const tags = liveTagLabels(liveEventTags(ev), lang);
@@ -149,9 +150,9 @@ export default function LiveSheet({
           </span>}
           {relevance && <span className="mt-0.5 block text-xs text-parranda-ink/68">{relevance}</span>}
         </span>
-        {choice(ev, navigationRow?.series?.title || ev.title || "", navigationRow ? navigationRow.date : planningDate)}
-        {!navigationRow && <EventOccurrences event={ev} lang={lang} now={now} selectedDate={timingDate}
-          renderChoice={slot => choice(slot, ev.title || "")} />}
+        {!displayProgram && choice(ev, navigationRow?.series?.title || ev.title || "", navigationRow ? navigationRow.date : planningDate)}
+        {(!navigationRow || displayProgram) && <EventOccurrences event={ev} lang={lang} now={now} selectedDate={navigationRow?.date || timingDate}
+          renderChoice={slot => choice(slot, ev.title || "", navigationRow ? navigationRow.date : planningDate)} />}
       </li>
     );
   };
@@ -273,7 +274,7 @@ export default function LiveSheet({
                 onClick={() => setLiveSheetTime(key)}
                 className={segmentClass(liveSheetTime === key)}
               >
-                {key === "tonight" ? liveDayLabel : t("Följande 7 dagar", "Following 7 days")}
+                {key === "tonight" ? liveDayLabel : t("Kommande 7 dagar", "Next 7 days")}
               </button>
             ))}
           </div>
@@ -294,7 +295,7 @@ export default function LiveSheet({
         {/* The ACTIVE scope×time cell — heading, list or honest emptiness. */}
         <div className="mt-5 flex flex-col gap-3 border-t border-parranda-ink/10 pt-4">
           <p className="type-eyebrow text-parranda-ink/68">
-            {liveSheetTime === "tonight" ? liveDayLabel : t("Följande 7 dagar", "Following 7 days")} · {scopePhrase}
+            {liveSheetTime === "tonight" ? liveDayLabel : t("Kommande 7 dagar", "Next 7 days")} · {scopePhrase}
           </p>
           {liveSheetScope !== "near_me" && liveSheetTime === "tonight" && wovenNames.length > 0 && (
             <p className="text-xs text-parranda-ink/68">
@@ -467,7 +468,7 @@ export default function LiveSheet({
             <p className="text-xs text-parranda-ink/68">
               {sheetSourceHealth?.reasons?.includes("source_collection_truncated")
             ? t("Vissa kalendrar kunde bara läsas delvis — fler händelser kan finnas hos källan.", "Some calendars were only partly read — more events may be listed at the source.")
-            : t("Alla källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
+            : t("Några källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
             </p>
           )}
           {/* Counts describe a finished collection; while waiting, "0/1
@@ -475,7 +476,7 @@ export default function LiveSheet({
           {sheetSourceHealth && Number.isInteger(sheetSourceHealth.selected_source_count) &&
             !liveQueryPending && sheetPulseState !== "pending" && sheetPulseState !== "uncovered" && (sheetSourceHealth.selected_source_count ?? 0) > 0 && (
             <p className="text-xs text-parranda-ink/68">
-              {t("Källstatus", "Source health")}: {sheetSourceHealth.responding_source_count ?? 0}/{sheetSourceHealth.selected_source_count ?? 0} {t("svarade", "responded")}
+              {t("Kalendrar", "Calendars")}: {sheetSourceHealth.responding_source_count ?? 0} {t("av", "of")} {sheetSourceHealth.selected_source_count ?? 0} {t("svarade", "responded")}
               {/* Returned rows are not hits: every row can still be
                   rejected by date, geometry or trust gates. Name hits
                   only when accepted events actually surfaced. */}

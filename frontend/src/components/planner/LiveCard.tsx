@@ -153,10 +153,10 @@ export default function LiveCard({
           from copy. */}
       {pulseBuckets.thisWeek.length > 0 && (
         <p className="mt-4 border-t border-parranda-live/25 pt-3 text-sm text-parranda-ink/75">
-          <span className="font-bold text-parranda-ink">{t("Följande 7 dagar", "Following 7 days")}</span>
+          <span className="font-bold text-parranda-ink">{t("Kommande 7 dagar", "Next 7 days")}</span>
           {" · "}
           {pulseBuckets.thisWeek.length}{" "}
-          {pulseBuckets.thisWeek.length === 1 ? t("händelse listad", "more listed") : t("händelser listade", "more listed")}
+          {pulseBuckets.thisWeek.length === 1 ? t("till", "more") : t("till", "more")}
         </p>
       )}
       {showExplore && (
@@ -176,7 +176,7 @@ export default function LiveCard({
         <p className="mt-2 text-xs text-parranda-ink/68">
           {liveEvents?.acquisition?.source_health?.reasons?.includes("source_collection_truncated")
             ? t("Vissa kalendrar kunde bara läsas delvis — fler händelser kan finnas hos källan.", "Some calendars were only partly read — more events may be listed at the source.")
-            : t("Alla källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
+            : t("Några källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
         </p>
       )}
 

@@ -123,7 +123,7 @@ for (const [name, completion, error] of [
     const details = h.container.querySelector('header details');
     assert.match(details.textContent, name.startsWith('partial') ? /incomplete when the response was produced/ : /One or more place sources failed/);
     if (name.startsWith('partial')) assert.doesNotMatch(details.textContent, /sources failed/);
-    assert.doesNotMatch(h.text(), /Planning finished without a route|few places to choose between here/);
+    assert.doesNotMatch(h.text(), /Parranda couldn't build a day here right now|few places to choose between here/);
   });
 }
 

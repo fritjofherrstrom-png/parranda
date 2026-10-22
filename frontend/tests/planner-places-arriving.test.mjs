@@ -99,7 +99,7 @@ test("a no-route terminal snapshot states incomplete evidence without judging th
     },
   });
   await h.clock.advance(50);
-  assert.match(h.text(), /Planeringen avslutades utan rutt/);
+  assert.match(h.text(), /Parranda kunde inte bygga en dag här just nu/);
   assert.match(h.text(), /ofullständigt när svaret skapades/);
   assert.doesNotMatch(h.text(), /är på väg|hämtas fortfarande|snart.*rutt/);
   assert.doesNotMatch(h.text(), /med dina val/);

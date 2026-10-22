@@ -80,7 +80,7 @@ for (const [intent, type] of interests) {
       errors, observations,
     })));
     const counts = [];
-    for (const [rhythm, profile, label] of [['calm', 'light', 'Easy'], ['balanced', 'variation', 'Balanced'], ['full', 'peak', 'Full']]) {
+    for (const [rhythm, profile, label] of [['calm', 'light', 'Relaxed'], ['balanced', 'variation', 'Balanced'], ['full', 'peak', 'Full']]) {
       const result = page.waitForResponse(async response => {
         if (!['/api/route-recommendations', '/api/planner-status'].includes(new URL(response.url()).pathname) || response.status() !== 200) return false;
         try { return (await response.json()).days?.[0]?.primary_route?.day_profile === profile; } catch { return false; }

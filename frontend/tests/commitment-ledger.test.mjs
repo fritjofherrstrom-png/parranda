@@ -384,15 +384,15 @@ test("the verdict is read from the snapshot the rendered day answered", () => {
 });
 
 test("a click alone can never produce a verdict", () => {
-  // commit() writes the ledger and nothing else. If it also touched the applied
-  // ledger, the debounce window would paint "could not fit" over a day that had
-  // not yet been asked.
+  // A click may invalidate an older exact Live Keep acknowledgement, but must
+  // not install a day or manufacture a publication verdict. The mounted cases
+  // in planner-commitment-races.test.mjs and planner-live-keep-status.test.mjs
+  // cover the applied ledger through debounce, refusal, re-Keep and retry.
   const body = component.slice(
     component.indexOf("const commit = (identity: string"),
     component.indexOf("function changeLiveSheetSort"),
   );
-  assert.ok(!body.includes("setAppliedPins"), "commit() must not touch the applied ledger");
-  assert.ok(!body.includes("setClassification"), "nor the rendered day");
+  assert.ok(!body.includes("setClassification"), "commit() must not replace the rendered day");
 });
 
 test("a refusal does not manufacture an unhonoured pin", () => {

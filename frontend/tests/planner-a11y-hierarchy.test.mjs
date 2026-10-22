@@ -134,14 +134,14 @@ test("a place with no day says so as a status, not silently", async (t) => {
   await h.fetchMock.respond(compose, { days: [], agnostic_route_output_experiment: { promotion: { promote: false, readiness: "non_promotable" } } });
   await h.clock.advance(50);
   const statuses = [...h.container.querySelectorAll('[role="status"]')].map((s) => s.textContent.trim());
-  assert.ok(statuses.some((s) => /couldn't compose a day|couldn't pin down/.test(s)), JSON.stringify(statuses));
+  assert.ok(statuses.some((s) => /couldn't compose a day|couldn't find/.test(s)), JSON.stringify(statuses));
   assert.equal(h.container.querySelectorAll("h1").length, 1, "the page is still named");
 });
 
 test("the pre-mounted status receives final unavailable copy without another failure region", async () => {
   const resolved = { status: "resolved", resolved: { label: "Testville, Region, Country" } };
   const cases = [
-    { intake: { status: "unresolved" }, expected: "Parranda couldn't pin down “Testville” right now. Try another spelling or add a country or region — nothing is invented in its place." },
+    { intake: { status: "unresolved" }, expected: "Parranda couldn't find “Testville”. Try another spelling, or add a city or country." },
     { intake: resolved, expected: "Parranda couldn't compose a day for Testville yet — nothing is invented in its place." },
     { intake: resolved, candidate_readiness: { real_place_count: 2 }, readiness_blockers: ["insufficient_geocoded_candidates"], expected: "Parranda found 2 real places near Testville, but not enough for a reliable day yet — nothing is invented in its place." },
     { intake: resolved, candidate_readiness: { real_place_count: 8 }, readiness_blockers: ["walking_validation_failed"], expected: "Parranda couldn't compose a day for Testville yet — nothing is invented in its place." },
@@ -173,7 +173,7 @@ test("choices, service refusals and pending upgrades keep their own truthful sta
   const cases = [
     { body: { days: [], agnostic_route_output_experiment: { intake: { status: "unresolved", candidates: [{ label: "Testville, Country", selection_id: "choice-token" }] } } }, expected: "Which place do you mean?" },
     { body: { days: [], agnostic_route_output_experiment: { intake: { status: "unresolved", blockers: ["place_selection_invalid"] } } }, expected: "Your previous place choice needs confirming again." },
-    { body: { error: "busy", retry_after_seconds: 5 }, httpStatus: 429, expected: "Parranda is composing as many days as it safely can right now. Try again shortly." },
+    { body: { error: "busy", retry_after_seconds: 5 }, httpStatus: 429, expected: "Parranda is busy right now. Try again in a moment." },
     { body: { error: "rate_limited", retry_after_seconds: 12 }, httpStatus: 429, expected: "Parranda needs to pause new requests briefly — try again in about 12 seconds." },
   ];
   for (const { body, httpStatus = 200, expected } of cases) {
@@ -185,7 +185,7 @@ test("choices, service refusals and pending upgrades keep their own truthful sta
       await h.clock.advance(50);
       assert.equal(status.textContent, "", "no final failure or ready announcement replaces the real status");
       assert.ok(h.text().includes(expected), h.text());
-      assert.doesNotMatch(h.text(), /couldn't pin down|couldn't compose a day/);
+      assert.doesNotMatch(h.text(), /couldn't find|couldn't compose a day/);
       assert.ok([...h.container.querySelectorAll('[role="status"]')].some((node) => node !== status && node.textContent === expected), "the original choices/refusal surface still owns its status");
     } finally {
       await h.unmount();
@@ -316,7 +316,7 @@ test("one failed place source among answering ones is named without claiming a t
       },
     });
     await h.clock.advance(50);
-    assert.match(h.text(), /Planning finished without a route/);
+    assert.match(h.text(), /Parranda couldn't build a day here right now/);
     assert.match(h.text(), /One or more place sources failed/);
     assert.doesNotMatch(h.text(), /not enough for a reliable day|still fetching|on their way/, "failed collection does not prove sparse supply or promise completion");
     assert.doesNotMatch(h.text(), /The place sources didn't answer just now, so Parranda couldn't fetch/, "not a total outage");

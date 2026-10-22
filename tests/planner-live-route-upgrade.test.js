@@ -55,6 +55,27 @@ test('explicit upgrade replays the original engine finalization with a new verif
   assert.deepEqual((await post(h.server,upgradePath,{token})).body,upgraded.body);
 });
 
+test('completion retains the same closed-context fact without reacquiring supply', async t => {
+  const h = await setup(t);
+  const closed = h.records[0];
+  closed.opening_hours = 'Mo-Su off';
+  const initial = await post(h.server, routePath, routeBody);
+  const contextStop = body => body.place_structure.district_day.areas
+    .flatMap(area => area.stops).find(stop => stop.id === closed.id);
+  assert.equal(contextStop(initial.body)?.selected_day_hours?.status, 'closed');
+  assert.ok(initial.body.days[0].primary_route.main_stops.every(stop => stop.id !== closed.id));
+  const loaderCalls = h.loaderCalls();
+  h.work.resolve(collection());
+  await new Promise(resolve => setImmediate(resolve));
+  const upgraded = await post(h.server, upgradePath, { token: initial.body.live_completion.token });
+  assert.equal(upgraded.body.live_route_upgrade.state, 'applied');
+  assert.deepEqual(contextStop(upgraded.body.result).selected_day_hours,
+    contextStop(initial.body).selected_day_hours);
+  assert.ok(upgraded.body.result.days[0].primary_route.main_stops.every(stop => stop.id !== closed.id));
+  assert.equal(h.loaderCalls(), loaderCalls);
+  assert.equal(h.calls(), 1);
+});
+
 test('a reserved upgrade expires on the original capability deadline even when finalization never resolves',async t=>{
   t.mock.timers.enable({apis:['setTimeout']});
   let now=0,attempts=0,settled;

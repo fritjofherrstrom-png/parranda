@@ -51,7 +51,7 @@ export function freezeComposeDateIso({ dayOffset = 0, dateIsoOverride = null, no
 // fourth step: the reader leaves the choice to Parranda. Each `note` says what
 // the engine does with it — "free" adapts to eligible supply and trusted time.
 export const DAY_RHYTHMS = [
-  { key: "calm", sv: "Lugn", en: "Easy", noteSv: "Färre stopp, mer tid på varje plats.", noteEn: "Fewer stops, more time at each place." },
+  { key: "calm", sv: "Lugn", en: "Relaxed", noteSv: "Färre stopp, mer tid på varje plats.", noteEn: "Fewer stops, more time at each place." },
   { key: "balanced", sv: "Lagom", en: "Balanced", noteSv: "Några stopp med luft emellan.", noteEn: "A few stops with room in between." },
   { key: "full", sv: "Fylld", en: "Full", noteSv: "Så många stopp som dagen rymmer.", noteEn: "As many stops as the day holds." },
   { key: "free", sv: "Parranda väljer", en: "Parranda chooses", noteSv: "Anpassar rytmen efter möjliga stopp och tiden som finns.", noteEn: "Adapts the rhythm to usable stops and the time available." },

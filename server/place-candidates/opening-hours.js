@@ -3,12 +3,38 @@ const DAY_TOKEN = /^(Su|Mo|Tu|We|Th|Fr|Sa)$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const LOCAL_ISO = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::\d{2})?$/;
 const MAX_OPENING_HOURS_LENGTH = 512;
+const { normalizeSourceWebsite } = require('../lib/source-website');
+
+function normalizeOpeningHoursSource(value) {
+  const url = normalizeSourceWebsite(value?.url);
+  const observed = typeof value?.observed_at === 'string' ? value.observed_at : '';
+  if (!url || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(observed) || !Number.isFinite(Date.parse(observed))) return null;
+  return { url, observed_at: new Date(observed).toISOString() };
+}
+
+function selectedDaySourceMetadata(value) {
+  const source = normalizeOpeningHoursSource({ url: value.source_url, observed_at: value.observed_at });
+  if (!source || typeof value.date !== 'string' || !ISO_DATE.test(value.date) || !isValidIsoDate(value.date) ||
+      typeof value.timezone !== 'string' || value.timezone.length > 80) return {};
+  try { new Intl.DateTimeFormat('en', { timeZone: value.timezone }); } catch { return {}; }
+  return { date: value.date, timezone: value.timezone, source_url: source.url, observed_at: source.observed_at };
+}
 
 function normalizeOpeningHours(value) {
   if (typeof value !== "string") return null;
   const normalized = value.trim().replace(/\s+/g, " ");
   if (!normalized || normalized.length > MAX_OPENING_HOURS_LENGTH) return null;
   return normalized;
+}
+
+// A complete weekly closure is independent of timezone and requested date.
+// An omitted weekday or unsupported expression cannot establish this fact.
+function isAlwaysClosedOpeningHours(value) {
+  const hours = normalizeOpeningHours(value);
+  if (!hours) return false;
+  if (/^(?:closed|off)$/i.test(hours)) return true;
+  const schedule = parseWeeklySchedule(hours);
+  return Boolean(schedule && schedule.every(day => day.seen && day.intervals.length === 0));
 }
 
 /**
@@ -81,12 +107,14 @@ function buildSelectedDayHoursFact(value, { weekday } = {}) {
 }
 
 function normalizeSelectedDayHoursFact(value) {
+  if (value?.status === "unknown") return normalizeConditionalSelectedDayHoursFact(value);
   if (!value || typeof value !== "object" || !["known", "closed"].includes(value.status)) return null;
+  const source = selectedDaySourceMetadata(value);
   if (value.status === "closed") {
-    return { status: "closed", all_day: false, windows: [] };
+    return { status: "closed", all_day: false, windows: [], ...source };
   }
   if (value.all_day === true) {
-    return { status: "known", all_day: true, windows: [] };
+    return { status: "known", all_day: true, windows: [], ...source };
   }
   const windows = Array.isArray(value.windows)
     ? value.windows
@@ -104,7 +132,30 @@ function normalizeSelectedDayHoursFact(value) {
           closes: formatLocalMinute(endMinute),
         }))
     : [];
-  return windows.length ? { status: "known", all_day: false, windows } : null;
+  return windows.length ? { status: "known", all_day: false, windows, ...source } : null;
+}
+
+// A regular schedule is useful context, but never certifies a conditional day.
+// Unlike the legacy known/closed shapes, this fact requires complete provenance.
+function normalizeConditionalSelectedDayHoursFact(value) {
+  if (value.all_day !== false || !Array.isArray(value.windows) || value.windows.length ||
+      !["known", "closed"].includes(value.ordinary_status) || !Array.isArray(value.ordinary_windows) ||
+      !["holiday_exceptions", "unresolved_conditions"].includes(value.uncertainty)) return null;
+  const source = selectedDaySourceMetadata(value);
+  if (!source.date || /[\u0000-\u0020\u007f\\]/.test(value.source_url) ||
+      !isValidIsoDate(value.observed_at.slice(0, 10))) return null;
+  const windows = value.ordinary_windows;
+  if (value.ordinary_status === "closed" ? windows.length !== 0 :
+      !windows.length || windows.length > 4 || windows.some(window =>
+        typeof window?.opens !== "string" || typeof window?.closes !== "string" ||
+        !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(window.opens) ||
+        !/^(?:(?:[01]\d|2[0-3]):[0-5]\d|24:00)$/.test(window.closes) ||
+        window.opens >= window.closes)) return null;
+  return {
+    status: "unknown", all_day: false, windows: [], ordinary_status: value.ordinary_status,
+    ordinary_windows: windows.map(window => ({ opens: window.opens, closes: window.closes })),
+    uncertainty: value.uncertainty, ...source,
+  };
 }
 
 /**
@@ -295,6 +346,8 @@ module.exports = {
   buildSelectedDayHoursFact,
   buildLocalDayAvailabilityWindow,
   evaluateOpeningHoursForWindow,
+  isAlwaysClosedOpeningHours,
   normalizeOpeningHours,
+  normalizeOpeningHoursSource,
   normalizeSelectedDayHoursFact,
 };
