@@ -177,9 +177,11 @@ export function screenMarkerPresentation(points, { width, height, keepouts = [],
  * that cannot be shown apart within `maxShift` share one group pin at their
  * centre, at any zoom; tapping it zooms in and separates them.
  *
- * Map controls (`keepouts`) are avoided when a spot near the place allows it,
- * never by moving a pin off its place: a pin partly under a control still
- * marks the right spot. A pin's centre stays inside the view.
+ * Map controls (`keepouts`) are avoided when a spot near the place allows it.
+ * A pin is never moved into a control: a stop whose own place lies under one
+ * keeps its place (it still marks the right spot); a pin that could only make
+ * room by moving under a control shares a pin instead. A pin's centre stays
+ * inside the view.
  *
  * Presentation only: coordinates, order and the route are untouched. Points
  * well outside the view keep no pin of their own placement (they are drawn
@@ -249,10 +251,11 @@ export function screenPinPresentation(points, {
       const kept = previous instanceof Map ? previous.get(key) : null;
       if (kept && Number.isFinite(kept.dx) && Number.isFinite(kept.dy) && Math.hypot(kept.dx, kept.dy) <= shiftLimit) tries.push([kept.dx, kept.dy]);
       tries.push([0, 0], ...offsets);
-      // Clear of the map controls where that is possible near the place;
-      // otherwise on the place, partly under a control.
+      // Clear of the map controls near the place. A pin is never moved INTO a
+      // control: only a stop whose own place is under one stays there; a pin
+      // that could only make room by moving under a control shares a pin.
       const spot = tries.find(([dx, dy]) => free(c.x + dx, c.y + dy) && clearOfControls(c.x + dx, c.y + dy))
-        || tries.find(([dx, dy]) => free(c.x + dx, c.y + dy));
+        || (free(c.x, c.y) ? [0, 0] : null);
       if (!spot) { failed = k; break; }
       placed.push({ x: c.x + spot[0], y: c.y + spot[1] });
       pins.push({ members, x: c.x + spot[0], y: c.y + spot[1], shift_x_px: spot[0], shift_y_px: spot[1] });

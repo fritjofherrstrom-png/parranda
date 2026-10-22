@@ -659,6 +659,9 @@ export default function RouteMap({
       map.setPaintProperty("route-line", "line-dasharray", sketch ? [0.2, 2.2] : null);
       marksRef.current = marks;
       map.resize();
+      // A new view starts from no remembered nudges, so the same view always
+      // draws the same pins (collapse after expand returns the collapsed fit).
+      pinShiftsRef.current = new Map();
       fitToControls(map, frameRef.current, mapRef.current, marks, fittedZoomRef);
       layoutRef.current();
       setMapDrawn(true);
@@ -694,6 +697,7 @@ export default function RouteMap({
       const map = instanceRef.current?.map;
       if (!map) return;
       map.resize();
+      pinShiftsRef.current = new Map();
       fitToControls(map, frameRef.current, mapRef.current, marksRef.current, fittedZoomRef);
       layoutRef.current();
     };

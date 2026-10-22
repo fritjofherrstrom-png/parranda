@@ -31,7 +31,7 @@ for (let n=0;n<12;n++) {
 }
 for(const day of days) day.stops.at(-1).is_live_event=true;
 
-test('every number is legible and opens its own stop at 320/390/1280, collapsed/expanded', {timeout:480000}, async t => {
+test('every stop is shown once on its place: legible numbers open their stop, group pins name theirs, at 320/390/1280, collapsed/expanded', {timeout:480000}, async t => {
   await fs.mkdir(proof,{recursive:true});
   const temp=await fs.mkdtemp(path.join(frontend,'.map-browser-'));
   let browser,server;
@@ -83,9 +83,20 @@ function Harness(){const [expanded,setExpanded]=React.useState(false);const [sto
         document.addEventListener('click', () => { window.mapTapRecord.clicked = true; }, true);
         document.addEventListener('dblclick', e => e.stopPropagation(), true);
       });
+      // Visible pins: a stop's own number, or a group pin naming several stops
+      // ("1–4,6") on their shared place. Every stop is shown exactly once.
+      await page.evaluate(() => {
+        window.mapPins = () => [...document.querySelectorAll('.route-map-marker')]
+          .filter(e => getComputedStyle(e).visibility !== 'hidden')
+          .map(e => { const r = e.getBoundingClientRect(); return { number: e.textContent, group: e.classList.contains('route-map-marker--group'),
+            members: e.textContent.split(',').flatMap(part => { const [a, b] = part.split('–').map(Number); return b ? Array.from({ length: b - a + 1 }, (_, i) => a + i) : [a]; }),
+            x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 }; });
+      });
+      const covered = count => page.waitForFunction(n => { const all = window.mapPins().flatMap(p => p.members).sort((a, b) => a - b);
+        return all.length === n && all.every((v, i) => v === i + 1); }, count, { timeout: 10000 });
       for(const day of (lifecycleProbe ? [] : days)){
         await page.evaluate(stops=>window.setDay(stops),day.stops);
-        await page.locator('.route-map-marker').nth(day.stops.length-1).waitFor();
+        await covered(day.stops.length);
         for(const expanded of [false,true]) {
           const button=page.locator('button[aria-expanded]');
           if((await button.getAttribute('aria-expanded'))!==String(expanded)) await button.click();
@@ -95,22 +106,29 @@ function Harness(){const [expanded,setExpanded]=React.useState(false);const [sto
             const container=document.querySelector('.maplibregl-map');container.scrollIntoView({block:'center'});
             const map=container.getBoundingClientRect();
             const controls=[...container.parentElement.querySelectorAll('.maplibregl-ctrl,button')].map(e=>e.getBoundingClientRect());
-            const markers=[...document.querySelectorAll('.route-map-marker')].map(e=>{const r=e.getBoundingClientRect();return {number:e.textContent,x:(r.left+r.right)/2,y:(r.top+r.bottom)/2};});
+            const markers=window.mapPins();
             const issues=[];
+            const shown=markers.flatMap(m=>m.members).sort((a,b)=>a-b);
+            if(new Set(shown).size!==shown.length) issues.push(`a stop is shown twice: ${shown.join(',')}`);
             for(const m of markers){
               if(m.x-15<map.left||m.x+15>map.right||m.y-15<map.top||m.y+15>map.bottom) issues.push(`${m.number}: clipped`);
               for(const c of controls) if(m.x+15>c.left&&m.x-15<c.right&&m.y+15>c.top&&m.y-15<c.bottom) issues.push(`${m.number}: control overlap`);
               const hit=document.elementFromPoint(m.x,m.y)?.closest('.route-map-marker');
               if(hit?.textContent!==m.number) issues.push(`${m.number}: centre hits ${hit?.textContent||'no number'}`);
-              for(const n of markers) if(Number(n.number)>Number(m.number)&&Math.hypot(m.x-n.x,m.y-n.y)<31) issues.push(`${m.number}/${n.number}: overlapping discs`);
+              for(const n of markers) if(n!==m&&n.members[0]>m.members[0]&&Math.hypot(m.x-n.x,m.y-n.y)<31) issues.push(`${m.number}/${n.number}: overlapping discs`);
             }
             return {markers,issues};
           });
           results.push({where,...measured});
           await fs.writeFile(path.join(proof,'results.json'),JSON.stringify(results,null,2));
           if(measured.issues.length){await page.screenshot({path:path.join(proof,`${where}-failure.png`)});assert.deepEqual(measured.issues,[],where);}
+          // A group pin is a named control that zooms in until its stops separate.
+          for(const g of measured.markers.filter(m=>m.group)){
+            const label=await page.locator('.route-map-group').filter({has:page.locator('.route-map-marker--group',{hasText:g.number})}).first().getAttribute('aria-label');
+            for(const member of g.members) assert.match(label, new RegExp(`\\b${member}\\. Stop ${member}\\b`), `${where}: group ${g.number} names stop ${member}`);
+          }
           // Real mouse hover and emulated touch: each visible number must open only its own name.
-          for(const m of measured.markers){
+          for(const m of measured.markers.filter(m=>!m.group)){
             await page.mouse.move(1,1);await page.waitForTimeout(60);
             await page.mouse.move(m.x,m.y);
             await page.waitForFunction(label=>{const names=[...document.querySelectorAll('.route-map-tooltip')].filter(e=>e.style.opacity!=='0').map(e=>e.textContent);return names.length>0&&names.every(n=>n===label)},`Stop ${m.number}`,{timeout:2000});
@@ -139,8 +157,9 @@ function Harness(){const [expanded,setExpanded]=React.useState(false);const [sto
           await page.waitForTimeout(900);
           // Visible numbers only: a stop panned out of the view stays at its
           // coordinate, clipped by the frame, rather than pinned to the edge.
-          const markers = await page.locator('.route-map-marker').evaluateAll(es => { const box=document.querySelector('.maplibregl-map').getBoundingClientRect(); return es.map(e => { const r=e.getBoundingClientRect();return {number:e.textContent,x:r.left+r.width/2,y:r.top+r.height/2}; }).filter(m => m.x>=box.left&&m.x<=box.right&&m.y>=box.top&&m.y<=box.bottom); });
-          assert.ok(markers.length > 0, `${action}: some numbers stay in view`);
+          const inView = await page.evaluate(() => { const box=document.querySelector('.maplibregl-map').getBoundingClientRect(); return window.mapPins().filter(m => m.x>=box.left&&m.x<=box.right&&m.y>=box.top&&m.y<=box.bottom); });
+          assert.ok(inView.length > 0, `${action}: some stops stay in view`);
+          const markers = inView.filter(m => !m.group);
           for (const m of markers) {
             await page.mouse.move(m.x,m.y);
             await page.waitForFunction(label => [...document.querySelectorAll('.route-map-tooltip')].some(e => e.style.opacity !== '0' && e.textContent === label), `Stop ${m.number}`, { timeout: 2000 });
@@ -153,9 +172,10 @@ function Harness(){const [expanded,setExpanded]=React.useState(false);const [sto
           }
           results.push({where:`lifecycle-${action}-320`,markers,issues:[]});
         }
+        // A hundred stops on one spot are one group pin on that spot, naming them all.
         const many=Array.from({length:100},(_,i)=>({id:i,label:`Crowded ${i}`,lat:55.6,lng:13}));
         await page.evaluate(stops=>window.setDay(stops),many);
-        await page.waitForFunction(()=>[...document.querySelectorAll('[role=status]')].some(e=>e.textContent.includes('trång')));
+        await page.waitForFunction(()=>{ const pins=window.mapPins(); return pins.length===1&&pins[0].group&&pins[0].number==='1–100'; });
         await page.evaluate(()=>window.setDay([]));
         await page.waitForFunction(()=>!document.querySelector('.route-map-marker')&&![...document.querySelectorAll('[role=status]')].some(e=>e.textContent.includes('trång')));
         await fs.writeFile(path.join(proof,'results.json'),JSON.stringify(results,null,2));
