@@ -4,7 +4,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { validateOverturePrefetchPlan } = require('./overture-parquet-prefetch');
-const QUERY_TIMEOUT_MS = 45000;
+// Measured cold from Sweden on 2026-10-22: Stockholm 27 s, Paris 40 s at
+// 2.5–3 km and 66 s for the 5 km window. At 45 s dense centres never finished.
+// The query runs out of band (see createOvertureBackgroundSource).
+const QUERY_TIMEOUT_MS = 120000;
 const MAX_TEMP_DIRECTORY_SIZE = '64MiB';
 // One native query per web/worker process; cache coalescing handles identical
 // windows. Distinct windows are refused, never queued behind a stuck query.
