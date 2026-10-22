@@ -169,53 +169,38 @@ export function screenMarkerPresentation(points, { width, height, keepouts = [],
  * Pins for the numbered stops at the map's current zoom: one pin per stop
  * where the stops are apart, one group pin where they are not.
  *
- * screenMarkerPresentation keeps every number visible by moving it to the
- * nearest free spot, however far that is. Zoomed out, a day's stops fall
- * within a few pixels of each other and the numbers were scattered across the
- * map, each over a place its stop is not (stop 5 of a Stockholm day drawn
- * over Vaxholm), and they jumped as the zoom changed. Here a number may move
- * only a short way from its coordinate (`maxShift`). Three or more stops drawn
- * within `mergeDistance` of each other are one place at this zoom (the whole
- * day shrunk to a dot); a close pair still fans out, as two stops 90 m apart do
- * on a fitted phone map. Stops that cannot be shown apart within `maxShift`
- * join their nearest pin. A group pin sits at its members' centre and names
- * all of them; zooming in separates it again.
+ * A pin always covers its own place. It may move at most `maxShift` (half its
+ * radius by default), so the stop's coordinate stays under the disc at every
+ * zoom. Earlier layouts moved a number to the nearest free spot however far
+ * away, kept that shift while the map zoomed, and drew a separate dot for the
+ * real place: numbers floated off their stops (Stockholm, 2026-10-22). Stops
+ * that cannot be shown apart within `maxShift` share one group pin at their
+ * centre, at any zoom; tapping it zooms in and separates them.
  *
- * The caller groups only when the reader has zoomed out past the fitted view
- * (`grouping`); at the fitted zoom and closer every number stays visible.
+ * Map controls (`keepouts`) are avoided when a spot near the place allows it.
+ * A pin is never moved into a control: a stop whose own place lies under one
+ * keeps its place (it still marks the right spot); a pin that could only make
+ * room by moving under a control shares a pin instead. A pin's centre stays
+ * inside the view.
  *
  * Presentation only: coordinates, order and the route are untouched. Points
  * well outside the view keep no pin of their own placement (they are drawn
  * where they are, outside the frame). `previous` (pin key → shift) is tried
- * first, so a pin stays put while the map moves if its spot is still free.
+ * first, so a pin does not jitter while the map moves.
  * Returns null for invalid input or when even group pins cannot fit.
  */
 export function screenPinPresentation(points, {
-  width, height, keepouts = [], radius = 22, gap = 4, mergeDistance = 16, maxShift = 60, previous = null, grouping = true,
+  width, height, keepouts = [], radius = 22, gap = 4, mergeDistance = 16, maxShift = null, previous = null,
 } = {}) {
-  // Without grouping (the fitted view and closer): every stop in view keeps
-  // its own number, placed as screenMarkerPresentation always has. A stop
-  // panned out of view stays at its coordinate, outside the frame, instead of
-  // being pinned to the edge over a place it is not.
-  if (!grouping) {
-    if (!Array.isArray(points) || !points.every((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y))) return null;
-    const out = (p) => p.x < -radius || p.x > width + radius || p.y < -radius || p.y > height + radius;
-    const inView = points.map((_, i) => i).filter((i) => !out(points[i]));
-    const offsets = screenMarkerPresentation(inView.map((i) => points[i]), { width, height, keepouts, radius, gap });
-    if (!offsets) return null;
-    const pins = points.map((p, i) => ({ members: [i], x: p.x, y: p.y, shift_x_px: 0, shift_y_px: 0, offscreen: true }));
-    inView.forEach((i, k) => {
-      pins[i] = { members: [i], x: points[i].x + offsets[k].shift_x_px, y: points[i].y + offsets[k].shift_y_px,
-        shift_x_px: offsets[k].shift_x_px, shift_y_px: offsets[k].shift_y_px };
-    });
-    return pins;
-  }
   if (!Array.isArray(points) || !Array.isArray(keepouts) || points.length > 200) return null;
-  if (![width, height, radius, gap, mergeDistance, maxShift].every(Number.isFinite)) return null;
-  if (radius <= 0 || gap < 0 || width < radius * 2 || height < radius * 2) return null;
+  const shiftLimit = maxShift === null || maxShift === undefined ? Math.floor(radius / 2) : maxShift;
+  if (![width, height, radius, gap, mergeDistance, shiftLimit].every(Number.isFinite)) return null;
+  if (radius <= 0 || gap < 0 || shiftLimit < 0 || width < radius * 2 || height < radius * 2) return null;
   if (!points.every((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y))) return null;
   const boxes = keepouts.filter((b) => b && [b.left, b.top, b.right, b.bottom].every(Number.isFinite) && b.right > b.left && b.bottom > b.top);
-  const offscreen = (p) => p.x < -radius || p.x > width + radius || p.y < -radius || p.y > height + radius;
+  // A stop whose place is outside the view is drawn where it is, clipped by
+  // the frame, never pulled in over a place it is not.
+  const offscreen = (p) => p.x < 0 || p.x > width || p.y < 0 || p.y > height;
 
   // Stops drawn on (nearly) the same spot are one place at this zoom.
   const visible = points.map((p, i) => i).filter((i) => !offscreen(points[i]));
@@ -233,33 +218,29 @@ export function screenPinPresentation(points, {
     if (!byRoot.has(root)) byRoot.set(root, []);
     byRoot.get(root).push(i);
   }
-  // A close pair fans out instead; only a cluster of three or more is one place.
-  let groups = [...byRoot.values()]
-    .flatMap((members) => (members.length >= 3 ? [members] : members.map((i) => [i])))
-    .map((members) => members.sort((x, y) => x - y))
-    .sort((x, y) => x[0] - y[0]);
+  let groups = [...byRoot.values()].map((members) => members.sort((x, y) => x - y)).sort((x, y) => x[0] - y[0]);
 
   const centre = (members) => ({
     x: members.reduce((sum, i) => sum + points[i].x, 0) / members.length,
     y: members.reduce((sum, i) => sum + points[i].y, 0) / members.length,
   });
-  const lo = radius + 2;
-  const step = 6;
-  const rings = Math.ceil(maxShift / step);
+  const step = 3;
+  const rings = Math.ceil(shiftLimit / step);
   const ring = [];
   for (let r = 1; r <= rings; r++) {
     for (let k = -r; k <= r; k++) ring.push([r, k], [-r, k], [k, r], [k, -r]);
   }
   const offsets = [...new Map(ring.map(([dx, dy]) => [`${dx}:${dy}`, [dx * step, dy * step]])).values()]
-    .filter(([dx, dy]) => Math.hypot(dx, dy) <= maxShift)
+    .filter(([dx, dy]) => Math.hypot(dx, dy) <= shiftLimit)
     .sort((a, b) => a[0] ** 2 + a[1] ** 2 - (b[0] ** 2 + b[1] ** 2) || a[1] - b[1] || a[0] - b[0]);
+  const clearOfControls = (x, y) => boxes.every((b) => x + radius + gap <= b.left || x - radius - gap >= b.right || y + radius + gap <= b.top || y - radius - gap >= b.bottom);
 
   let checked = 0;
   for (let round = 0; round <= points.length; round++) {
     const placed = [];
     const pins = [];
-    const free = (x, y) => ++checked <= 40000 && x >= lo && x <= width - lo && y >= lo && y <= height - lo
-      && boxes.every((b) => x + radius + gap <= b.left || x - radius - gap >= b.right || y + radius + gap <= b.top || y - radius - gap >= b.bottom)
+    const free = (x, y) => ++checked <= 40000 && x >= 0 && x <= width && y >= 0 && y <= height
+      // Hit targets are 44px squares: their corners must not overlap either.
       && placed.every((p) => Math.abs(x - p.x) >= radius * 2 + gap || Math.abs(y - p.y) >= radius * 2 + gap);
     let failed = -1;
     for (let k = 0; k < groups.length && failed < 0; k++) {
@@ -268,9 +249,13 @@ export function screenPinPresentation(points, {
       const key = members.join(",");
       const tries = [];
       const kept = previous instanceof Map ? previous.get(key) : null;
-      if (kept && Number.isFinite(kept.dx) && Number.isFinite(kept.dy) && Math.hypot(kept.dx, kept.dy) <= maxShift) tries.push([kept.dx, kept.dy]);
+      if (kept && Number.isFinite(kept.dx) && Number.isFinite(kept.dy) && Math.hypot(kept.dx, kept.dy) <= shiftLimit) tries.push([kept.dx, kept.dy]);
       tries.push([0, 0], ...offsets);
-      const spot = tries.find(([dx, dy]) => free(c.x + dx, c.y + dy));
+      // Clear of the map controls near the place. A pin is never moved INTO a
+      // control: only a stop whose own place is under one stays there; a pin
+      // that could only make room by moving under a control shares a pin.
+      const spot = tries.find(([dx, dy]) => free(c.x + dx, c.y + dy) && clearOfControls(c.x + dx, c.y + dy))
+        || (free(c.x, c.y) ? [0, 0] : null);
       if (!spot) { failed = k; break; }
       placed.push({ x: c.x + spot[0], y: c.y + spot[1] });
       pins.push({ members, x: c.x + spot[0], y: c.y + spot[1], shift_x_px: spot[0], shift_y_px: spot[1] });
@@ -283,7 +268,7 @@ export function screenPinPresentation(points, {
       return pins.sort((a, b) => a.members[0] - b.members[0]);
     }
     if (groups.length < 2 || checked > 40000) return null;
-    // The pin that cannot be shown near its place joins the nearest pin.
+    // A pin that cannot be shown on its place shares one with its nearest pin.
     const lost = centre(groups[failed]);
     let nearest = -1;
     let best = Infinity;

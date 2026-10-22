@@ -248,12 +248,32 @@ async function openDay({ browser, origin }, { width, stops }) {
   const route = width >= 1024
     ? page.getByRole("complementary", { name: "Karta över dagen" })
     : page.getByRole("region", { name: "Rutten" });
-  await route.locator(".route-map-marker").nth(stops.length - 1).waitFor();
+  // Every stop is on the map once: its own number, or in a group pin naming it.
+  await page.waitForFunction(stopsShown, stops.length, { timeout: 15_000 });
   await route.getByText("Ritar kartan …").waitFor({ state: "detached" });
   return { context, page, route, pageErrors };
 }
 
 // --- in the page ---------------------------------------------------------
+
+// Runs in the page: the stop numbers a visible disc shows ("1–4,6" → 1,2,3,4,6).
+function discNumbers(text) {
+  return text.trim().split(",").flatMap((part) => {
+    const [a, b] = part.split("–").map(Number);
+    return b ? Array.from({ length: b - a + 1 }, (_, i) => a + i) : [a];
+  });
+}
+
+// Runs in the page: are stops 1..n each shown exactly once?
+function stopsShown(n) {
+  const discs = [...document.querySelectorAll('section[aria-label="Rutten"] .route-map-marker, aside[aria-label="Karta över dagen"] .route-map-marker')]
+    .filter((element) => getComputedStyle(element).visibility !== "hidden");
+  const numbers = discs.flatMap((element) => element.textContent.trim().split(",").flatMap((part) => {
+    const [a, b] = part.split("–").map(Number);
+    return b ? Array.from({ length: b - a + 1 }, (_, i) => a + i) : [a];
+  })).sort((a, b) => a - b);
+  return numbers.length === n && numbers.every((value, index) => value === index + 1);
+}
 
 // Runs in the page. Brings the whole map into view (elementFromPoint sees only
 // the viewport), then finds the numbers drawn under another disc, and checks
@@ -266,11 +286,14 @@ function measureMarkers() {
   const problems = [];
   if (map.top < 0 || map.bottom > innerHeight) problems.push("the map does not fit in the viewport");
 
-  const markers = [...frame.querySelectorAll(".route-map-marker")].map((element) => {
+  // Only drawn discs: a stop inside a group pin hides its own disc.
+  const markers = [...frame.querySelectorAll(".route-map-marker")].filter((element) => getComputedStyle(element).visibility !== "hidden").map((element) => {
     const rect = element.getBoundingClientRect();
     const inset = parseFloat(getComputedStyle(element, "::before").top) || 0;
     return {
       element,
+      group: element.classList.contains("route-map-marker--group"),
+      label: element.closest(".route-map-group")?.getAttribute("aria-label") || null,
       name: `marker ${element.textContent.trim()}`,
       x: (rect.left + rect.right) / 2,
       y: (rect.top + rect.bottom) / 2,
@@ -316,7 +339,7 @@ function measureMarkers() {
   const measured = markers.map((marker) => {
     const hiddenUnder = coveredBy(marker).map((other) => other.name);
     // Out of this test's scope, and reported to it: see #531.
-    if (hiddenUnder.length) return { name: marker.name, x: marker.x, y: marker.y, hiddenUnder, aside: null };
+    if (hiddenUnder.length) return { name: marker.name, group: marker.group, label: marker.label, x: marker.x, y: marker.y, hiddenUnder, aside: null };
 
     const hit = hitAt(marker.x, marker.y);
     if (hit.owner !== marker || hit.what !== "disc") problems.push(`a tap on ${marker.name}'s number hits ${describe(hit)}`);
@@ -329,7 +352,7 @@ function measureMarkers() {
       const aside = hitAt(marker.x + dx, marker.y + dy);
       if (aside.owner !== marker) problems.push(`a tap ${dx},${dy}px from ${marker.name}'s centre hits ${describe(aside)}`);
     }
-    return { name: marker.name, x: marker.x, y: marker.y, hiddenUnder, aside: around[0] ?? null };
+    return { name: marker.name, group: marker.group, label: marker.label, x: marker.x, y: marker.y, hiddenUnder, aside: around[0] ?? null };
   });
   if (!targetsChecked) problems.push("no marker's 44px target was clear of its neighbours and the controls to check");
   return { markers: measured, problems };
@@ -337,7 +360,7 @@ function measureMarkers() {
 
 // Runs in the page: where each marker's disc is now.
 function markerCentres() {
-  return [...document.querySelectorAll('section[aria-label="Rutten"] .route-map-marker, aside[aria-label="Karta över dagen"] .route-map-marker')].map((element) => {
+  return [...document.querySelectorAll('section[aria-label="Rutten"] .route-map-marker, aside[aria-label="Karta över dagen"] .route-map-marker')].filter((element) => getComputedStyle(element).visibility !== "hidden").map((element) => {
     const rect = element.getBoundingClientRect();
     return { name: `marker ${element.textContent.trim()}`, x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 };
   });
@@ -405,12 +428,22 @@ async function nameOpenedByTap(page, x, y) {
 async function checkMarkers(page, stops, where) {
   const { markers, problems } = await page.evaluate(measureMarkers);
   const found = problems.map((problem) => `${where}: ${problem}`);
-  if (markers.length !== stops.length) found.push(`${where}: ${markers.length} of ${stops.length} markers drawn`);
+  // Every stop once: its own number, or inside one group pin that names it.
+  const shown = markers.flatMap(({ name }) => discNumbers(name.replace("marker ", ""))).sort((a, b) => a - b);
+  if (shown.length !== stops.length || !shown.every((value, index) => value === index + 1)) {
+    found.push(`${where}: stops shown ${shown.join(",")} instead of each of 1–${stops.length} once`);
+  }
+  for (const group of markers.filter((marker) => marker.group)) {
+    for (const number of discNumbers(group.name.replace("marker ", ""))) {
+      if (!group.label?.includes(`${number}. ${stops[number - 1].label}`)) found.push(`${where}: ${group.name} does not name stop ${number}`);
+    }
+  }
   const labels = new Map(stops.map((stop, index) => [`marker ${index + 1}`, stop.label]));
   const expect = (name, action, opened) => {
     if (opened !== labels.get(name)) found.push(`${where}: ${action} opens ${opened}, not ${labels.get(name)}`);
   };
-  const visible = markers.filter(({ hiddenUnder }) => !hiddenUnder.length);
+  // A group pin zooms in when tapped (route-map-pins); own numbers open their stop.
+  const visible = markers.filter(({ hiddenUnder, group }) => !hiddenUnder.length && !group);
   const hidden = markers.filter(({ hiddenUnder }) => hiddenUnder.length).map(({ name, hiddenUnder }) => ({ name, hiddenUnder }));
 
   // With the mouse: every visible number, then every 44px target beside its
