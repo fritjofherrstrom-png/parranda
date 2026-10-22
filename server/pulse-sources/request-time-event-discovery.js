@@ -68,7 +68,7 @@ function createRequestTimeEventDiscovery({
   venueSeeds = null,
   scout = scoutLocalEventSources,
   fetcher,
-  cache = createSourceCache({ namespace: "request-time-event-discovery-v5", ttlMs: FOUND_TTL_MS }),
+  cache = createSourceCache({ namespace: "request-time-event-discovery-v6", ttlMs: FOUND_TTL_MS }),
   timezoneForPoint = coordinateTimezone,
   now = () => Date.now(),
   venueLookupWaitMs = VENUE_LOOKUP_WAIT_MS,
@@ -79,7 +79,7 @@ function createRequestTimeEventDiscovery({
   // Resolves to { status: "found" | "empty" | "failed", reason, feeds }.
   return async function discoverRequestTimeEventFeeds({ anchor, placeLabel = null, placeContext = null } = {}) {
     if (!validPoint(anchor)) return outcome("empty", "invalid_anchor");
-    const key = `rt-discovery:${anchorBucket(anchor)}`;
+    const key = `rt-discovery-v6:${anchorBucket(anchor)}`;
     const held = holds.get(key);
     if (held && held.until > now()) return held.outcome;
     let result;
@@ -146,6 +146,7 @@ function createRequestTimeEventDiscovery({
             /^(?:source_|robots_endpoint_budget_)/.test(String(manifest.review.robots_reason || "")))) {
         return outcome("failed", "source_scout_failed");
       }
+      if (search?.failed) return search.failed;
       if (search?.acquisitionFailed) return outcome("failed", "source_search_failed");
       if (venue && venue.status !== "ok") return outcome("failed", "venue_seed_lookup_incomplete");
       return outcome("empty", "no_structured_event_source");

@@ -61,6 +61,11 @@ function validPoint(value) {
     Math.abs(value.lat) <= 90 && Math.abs(value.lng) <= 180;
 }
 
+function coordinateNumber(value) {
+  if (typeof value !== "number" && (typeof value !== "string" || !value.trim())) return NaN;
+  return Number(value);
+}
+
 // One row per venue: its best class rank, one website, its coordinate and
 // distance, nearest first within each rank, so the limit keeps the venues most
 // likely to publish a programme rather than the nearest rows of any kind.
@@ -113,8 +118,8 @@ function venueSeedsFromBindings(bindings, { maxSeeds = MAX_SEEDS } = {}) {
       .sort((a, b) => a.rank - b.rank);
     const venueClass = classes[0];
     const url = publicWebsite(row?.website?.value);
-    const lat = Number(row?.lat?.value);
-    const lng = Number(row?.lng?.value);
+    const lat = coordinateNumber(row?.lat?.value);
+    const lng = coordinateNumber(row?.lng?.value);
     const distanceKm = Number(row?.dist?.value);
     if (!/^Q\d+$/.test(qid) || !venueClass || !url || !validPoint({ lat, lng })) continue;
     const label = typeof row?.itemLabel?.value === "string" && row.itemLabel.value.trim() && row.itemLabel.value !== qid
@@ -152,7 +157,7 @@ function venueSeedsFromBindings(bindings, { maxSeeds = MAX_SEEDS } = {}) {
 function createEventVenueSeeds({
   endpoint = DEFAULT_ENDPOINT,
   fetcher = typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
-  cache = createSourceCache({ namespace: "event-venue-seeds-v1", ttlMs: TTL_MS }),
+  cache = createSourceCache({ namespace: "event-venue-seeds-v2", ttlMs: TTL_MS }),
   timeoutMs = DEFAULT_TIMEOUT_MS,
   userAgent = DEFAULT_USER_AGENT,
 } = {}) {
@@ -164,7 +169,8 @@ function createEventVenueSeeds({
     if (!validPoint(anchor)) return { status: "failed", reason: "invalid_anchor", seeds: [] };
     const radius = clamp(radiusKm, 0.5, MAX_RADIUS_KM, DEFAULT_RADIUS_KM);
     const center = { lat: Math.round(anchor.lat * 100) / 100, lng: Math.round(anchor.lng * 100) / 100 };
-    const key = createHash("sha256").update(JSON.stringify([endpoint, center, radius])).digest("hex").slice(0, 32);
+    // Include the validation version even with an operator-supplied cache.
+    const key = createHash("sha256").update(JSON.stringify([2, endpoint, center, radius])).digest("hex").slice(0, 32);
     try {
       return await cache.get(key, () => lookup(center, radius), { shouldStore: (value) => value?.status === "ok" });
     } catch (_error) {

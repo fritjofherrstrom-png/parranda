@@ -211,6 +211,83 @@ test("a venue lookup still running is a short retryable failure, not an hour of 
   assert.equal(lookups, 2, "retried after the short failure hold");
 });
 
+for (const mode of ["returns-failed", "throws", "returns-degraded", "returns-unavailable"]) {
+  test(`${mode} search plus a healthy venue without feeds is retryable after five minutes`, async () => {
+    let clock = 0;
+    let searches = 0;
+    let pages = 0;
+    const discover = createRequestTimeEventDiscovery({
+      cache: memoryCache(), now: () => clock,
+      venueSeeds: async () => ({ status: "ok", seeds: [venueSeed("stage.example")] }),
+      sourceSearch: async () => {
+        searches += 1;
+        if (mode === "throws") throw new Error("fixture outage");
+        return { status: mode.replace("returns-", ""), retry_recommended: true, seeds: [] };
+      },
+      // Real scout, with a healthy allowed venue page but no event interface.
+      fetcher: async url => {
+        if (String(url).endsWith("/robots.txt")) return ALLOW;
+        pages += 1;
+        return text("<html>No structured events</html>");
+      },
+      timezoneForPoint: () => "Europe/Berlin",
+    });
+    const args = { anchor: ANCHOR, placeContext: { locality: "Berlin" } };
+    const first = await discover(args);
+    const pageCount = pages;
+    assert.ok(pageCount > 0, "precondition: a healthy venue site was actually scouted");
+    assert.deepEqual([first.status, first.reason, first.feeds],
+      ["failed", `source_search_${mode === "throws" ? "failed" : mode.replace("returns-", "")}`, []]);
+    clock = 4 * 60 * 1000;
+    assert.deepEqual(await discover(args), first);
+    assert.deepEqual([searches, pages], [1, pageCount], "the failure hold prevents immediate retries");
+    clock = 5 * 60 * 1000;
+    assert.deepEqual(await discover(args), first);
+    assert.equal(searches, 2, "a failed lane must not acquire the verified-empty hour hold");
+    assert.ok(pages > pageCount);
+  });
+}
+
+test("healthy venue and healthy empty search still prove absence for one hour", async () => {
+  let clock = 0;
+  let searches = 0;
+  const discover = createRequestTimeEventDiscovery({
+    cache: memoryCache(), now: () => clock,
+    venueSeeds: async () => ({ status: "ok", seeds: [venueSeed("stage.example")] }),
+    sourceSearch: async () => { searches += 1; return { status: "ok", seeds: [] }; },
+    fetcher: async url => String(url).endsWith("/robots.txt") ? ALLOW : text("<html>No structured events</html>"),
+    timezoneForPoint: () => "Europe/Berlin",
+  });
+  const args = { anchor: ANCHOR, placeContext: { locality: "Berlin" } };
+  assert.equal((await discover(args)).status, "empty");
+  clock = 6 * 60 * 1000;
+  assert.equal((await discover(args)).status, "empty");
+  assert.equal(searches, 1);
+  clock = 60 * 60 * 1000;
+  assert.equal((await discover(args)).status, "empty");
+  assert.equal(searches, 2);
+});
+
+for (const mode of ["returns-failed", "throws"]) {
+  test(`a real venue feed remains usable despite ${mode} search`, async () => {
+    const discover = createRequestTimeEventDiscovery({
+      cache: memoryCache(),
+      venueSeeds: async () => ({ status: "ok", seeds: [venueSeed("stage.example")] }),
+      sourceSearch: async () => {
+        if (mode === "throws") throw new Error("fixture outage");
+        return { status: "failed", retry_recommended: true, seeds: [] };
+      },
+      fetcher: async url => String(url).endsWith("/robots.txt") ? ALLOW : text(PROGRAMME_HTML),
+      timezoneForPoint: () => "Europe/Berlin",
+    });
+    const result = await discover({ anchor: ANCHOR, placeContext: { locality: "Berlin" } });
+    assert.equal(result.status, "found");
+    assert.equal(result.feeds.length, 1);
+    assert.equal(result.feeds[0].pulse_only, true);
+    assert.equal(result.feeds[0].confidence, "low");
+  });
+}
+
 test("one unreachable site among several does not turn a complete look into a failure", async () => {
   const outcome = async (failing) => {
     const discover = createRequestTimeEventDiscovery({

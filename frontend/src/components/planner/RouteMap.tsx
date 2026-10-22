@@ -215,6 +215,8 @@ export default function RouteMap({
   const [tilesFailed, setTilesFailed] = useState(false);
   const [layoutCrowded, setLayoutCrowded] = useState(false);
   const [tip, setTip] = useState<Tip>(null);
+  const [groupPicker, setGroupPicker] = useState<{ key: string; members: number[] } | null>(null);
+  const groupPickerRef = useRef<HTMLDivElement | null>(null);
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => {
     const track = (event: MouseEvent) => { lastPointerRef.current = { x: event.clientX, y: event.clientY }; };
@@ -224,13 +226,30 @@ export default function RouteMap({
   // A tooltip opened by hover or focus can be dismissed without moving the
   // pointer or focus (WCAG 1.4.13).
   useEffect(() => {
-    if (!tip) return;
+    if (!tip && !groupPicker) return;
     const dismiss = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { tipAnchorRef.current = null; setTip(null); }
+      if (event.key === "Escape") {
+        tipAnchorRef.current = null;
+        setTip(null);
+        setGroupPicker(null);
+        if (groupPicker) groupPinsRef.current.get(groupPicker.key)?.element.focus({ preventScroll: true });
+      }
     };
     document.addEventListener("keydown", dismiss);
     return () => document.removeEventListener("keydown", dismiss);
-  }, [tip]);
+  }, [tip, groupPicker]);
+  useEffect(() => {
+    if (!groupPicker) return;
+    groupPickerRef.current?.querySelector<HTMLButtonElement>("[data-group-stop]")?.focus({ preventScroll: true });
+    const outside = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && groupPickerRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest(".route-map-group")) return;
+      setGroupPicker(null);
+    };
+    document.addEventListener("pointerdown", outside, true);
+    return () => document.removeEventListener("pointerdown", outside, true);
+  }, [groupPicker]);
   const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; move: (x: number, y: number, direction: "left" | "right") => void; showOrigin: (visible: boolean) => void; setGrouped: (grouped: boolean) => void; focus: () => void }>>([]);
   // Group pins by member key ("0,1,4"), the last shift of every pin (so a pin
   // stays put while the map moves), and the stop to focus once a group pin
@@ -313,43 +332,61 @@ export default function RouteMap({
       const lat = badges.reduce((sum, b) => sum + b.lat, 0) / badges.length;
       const at = map.project([lng, lat]);
       const offset: [number, number] = [group.x - at.x, group.y - at.y];
+      const canSeparate = () => badges.some((badge) => badge.lat !== badges[0].lat || badge.lng !== badges[0].lng)
+        && map.getZoom() < (typeof map.getMaxZoom === "function" ? map.getMaxZoom() : Infinity) - 0.01;
+      const label = pinGroupLabel(group.members);
+      const names = group.members.map((i) => `${i + 1}. ${badgesRef.current[i].name}`).join(", ");
+      const action = canSeparate() ? t("Zooma in för att skilja dem åt.", "Zoom in to separate them.")
+        : t("Visa stoppen i gruppen.", "Inspect the stops in this group.");
+      const accessibleName = t(`Stopp ${label}: ${names}. ${action}`, `Stops ${label}: ${names}. ${action}`);
       let pin = groupPinsRef.current.get(key);
       if (!pin) {
-        const label = pinGroupLabel(group.members);
-        const names = group.members.map((i) => `${i + 1}. ${badgesRef.current[i].name}`).join(", ");
         const element = document.createElement("div");
         element.className = "route-map-marker-shell route-map-group";
         element.tabIndex = 0;
         element.setAttribute("role", "button");
-        element.setAttribute("aria-label", t(
-          `Stopp ${label}: ${names}. Zooma in för att skilja dem åt.`,
-          `Stops ${label}: ${names}. Zoom in to separate them.`,
-        ));
+        element.setAttribute("aria-label", accessibleName);
         element.title = names;
         const disc = document.createElement("span");
         disc.className = "route-map-marker route-map-marker--group";
         disc.textContent = label;
         element.append(disc);
         const open = () => {
-          if (element.contains(document.activeElement)) focusAfterSplitRef.current = group.members[0];
+          const inspect = () => {
+            tipAnchorRef.current = null;
+            setTip(null);
+            setGroupPicker({ key, members: [...group.members] });
+          };
+          // Identical coordinates and a clamped max zoom cannot yield separate
+          // pins. Offer the real members instead of an endless zoom promise.
+          if (!canSeparate()) { inspect(); return; }
           const bounds = new ml.LngLatBounds();
           group.members.forEach((i) => bounds.extend([badgesRef.current[i].lng, badgesRef.current[i].lat]));
           const still = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
           // At least the map's own fitted zoom, where every number has its own pin.
           const camera = map.cameraForBounds(bounds, { padding: 48, maxZoom: Math.max(map.getZoom() + 1, 16) });
           const zoom = Math.max(camera?.zoom ?? map.getZoom() + 2, fittedZoomRef.current);
+          if (zoom <= map.getZoom() + 0.01) { inspect(); return; }
+          setGroupPicker(null);
+          if (element.contains(document.activeElement)) focusAfterSplitRef.current = group.members[0];
           map.easeTo({ center: bounds.getCenter(), zoom, duration: still ? 0 : 450 });
         };
+        // A pin is a control, not the map's drag/double-tap gesture surface.
+        // Otherwise a quick reopen can zoom the map and dismiss its new picker.
+        for (const type of ["mousedown", "dblclick", "touchstart", "touchend"]) {
+          element.addEventListener(type, (event) => event.stopPropagation(), { passive: true });
+        }
         // The whole 44px pin takes the tap (route-map-group in tailwind.css).
-        element.addEventListener("click", open);
+        element.addEventListener("click", (event) => { event.stopPropagation(); open(); });
         element.addEventListener("keydown", (event) => {
-          if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); }
+          if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); open(); }
         });
         const marker = new ml.Marker({ element, anchor: "center", offset }).setLngLat([lng, lat]).addTo(map);
         element.style.zIndex = String(1200 + group.members[0]);
         groupPinsRef.current.set(key, { marker, element });
         continue;
       }
+      pin.element.setAttribute("aria-label", accessibleName);
       pin.marker.setLngLat([lng, lat]);
       pin.marker.setOffset(offset);
     }
@@ -397,6 +434,7 @@ export default function RouteMap({
         badgesRef.current = [];
         tipAnchorRef.current = null;
         setTip(null);
+        setGroupPicker(null);
       };
       if (!mapRef.current || (hasPrimaryRoute ? !drawableRouteStops.length : !drawableAreas.length)) {
         clearDrawn();
@@ -490,6 +528,7 @@ export default function RouteMap({
           if (!layoutFrame) layoutFrame = requestAnimationFrame(() => { layoutFrame = 0; layoutRef.current(); });
         };
         map.on("move", layoutSoon);
+        map.on("movestart", () => setGroupPicker(null));
         map.on("moveend", () => layoutRef.current());
         map.on("zoomend", () => layoutRef.current());
         map.on("resize", () => layoutRef.current());
@@ -747,6 +786,38 @@ export default function RouteMap({
     <div ref={frameRef} data-route-map="" className={`route-map-frame relative w-full overflow-hidden rounded-parranda border border-parranda-ink/10 transition-all ${heightClass}`}>
       {/* Screen layout keeps each numbered touch footprint independently visible. */}
       <div ref={mapRef} className="h-full w-full" />
+      {groupPicker && (
+        <div
+          ref={groupPickerRef}
+          role="dialog"
+          aria-label={t("Stopp i gruppen", "Stops in this group")}
+          className="route-map-group-picker absolute left-2 top-2 z-[2000] max-h-[calc(100%_-_1rem)] w-64 max-w-[calc(100%_-_1rem)] overflow-y-auto rounded-parranda border border-parranda-ink/20 bg-parranda-paper p-2 text-parranda-ink shadow-control"
+        >
+          <div className="flex items-center justify-between gap-2 pl-2">
+            <strong className="text-sm">{t("Stopp i gruppen", "Stops in this group")}</strong>
+            <button type="button" className="min-h-11 min-w-11 rounded-parranda"
+              aria-label={t("Stäng", "Close")}
+              onClick={() => {
+                setGroupPicker(null);
+                groupPinsRef.current.get(groupPicker.key)?.element.focus({ preventScroll: true });
+              }}>×</button>
+          </div>
+          {groupPicker.members.map((index) => {
+            const badge = badgesRef.current[index];
+            if (!badge) return null;
+            return <button key={index} type="button" data-group-stop=""
+              className="mb-1 min-h-11 w-full rounded-parranda border border-parranda-ink/15 px-3 py-2 text-left text-sm hover:border-parranda-ember focus-visible:outline-2 focus-visible:outline-parranda-ember"
+              onClick={() => {
+                const map = instanceRef.current?.map;
+                if (!map) return;
+                const point = map.project([badge.lng, badge.lat]);
+                tipAnchorRef.current = { index, interaction: "click" };
+                setGroupPicker(null);
+                setTip({ name: badge.name, x: point.x, y: point.y, direction: point.x < mapRef.current!.clientWidth / 2 ? "right" : "left" });
+              }}>{index + 1}. {badge.name}</button>;
+          })}
+        </div>
+      )}
       {tip && (
         <div
           role="tooltip"

@@ -47,11 +47,16 @@ function distinctiveName(text, townWords) {
 function validHostVenue(value) {
   if (!value || typeof value !== "object") return null;
   const name = typeof value.name === "string" ? value.name.trim() : "";
-  const lat = Number(value.lat);
-  const lng = Number(value.lng);
+  const lat = coordinateNumber(value.lat);
+  const lng = coordinateNumber(value.lng);
   const ref = typeof value.wikidata_ref === "string" ? value.wikidata_ref : "";
   if (!name || name.length > 160 || !/^Q\d+$/.test(ref) || !hasCoordinates({ lat, lng })) return null;
   return { name, lat, lng, wikidata_ref: ref };
+}
+
+function coordinateNumber(value) {
+  if (typeof value !== "number" && (typeof value !== "string" || !value.trim())) return NaN;
+  return Number(value);
 }
 
 function distanceKm(a, b) {
@@ -63,16 +68,15 @@ function distanceKm(a, b) {
 }
 
 // "host", "other" or "unnamed" for an event without coordinates.
-function namedPlaceVerdict(event, hostName, townWords) {
-  const texts = [event?.place_context, event?.address, event?.venue_name]
-    .filter((text) => typeof text === "string" && text.trim());
-  const named = texts
-    .map((text) => ({ full: distinctiveName(text, townWords), first: distinctiveName(text.split(",")[0], townWords) }))
-    .filter((name) => name.full.length >= MIN_NAME_LENGTH);
+function namedPlaceVerdict(event, hostNames, townWords) {
+  const named = [event?.place_context, event?.address, event?.venue_name]
+    .filter((text) => typeof text === "string" && text.trim())
+    .flatMap((text) => text.split(",").map((part) => distinctiveName(part, townWords)))
+    .filter(Boolean);
+  // A short explicit name is still a name. Unknown qualifiers/fields cannot
+  // disappear behind a matching fragment or authorize the programme fallback.
   if (!named.length) return "unnamed";
-  if (hostName.length >= MIN_NAME_LENGTH && named.some((name) => name.full.includes(hostName) ||
-      (name.first.length >= MIN_NAME_LENGTH && hostName.includes(name.first)))) return "host";
-  return "other";
+  return named.every((name) => hostNames.has(name)) ? "host" : "other";
 }
 
 function placeAtHostVenue(events, hostVenue, { placeContext = null } = {}) {
@@ -80,10 +84,17 @@ function placeAtHostVenue(events, hostVenue, { placeContext = null } = {}) {
   const host = validHostVenue(hostVenue);
   if (!host || !rows.length) return rows;
   const townWords = new Set([placeContext?.locality, placeContext?.municipality].flatMap(words));
-  const hostName = distinctiveName(host.name, townWords);
+  // Slash-separated names are explicit parts of the host's own name, not
+  // inferred substring aliases (e.g. "Sunset/Sunside" -> "Sunside").
+  const hostNames = new Set([host.name, ...host.name.split("/")]
+    .map((name) => distinctiveName(name, townWords)).filter((name) => name.length >= MIN_NAME_LENGTH));
   const verdicts = rows.map((event) => {
-    if (hasCoordinates(event)) return distanceKm(host, event) > MULTI_VENUE_DISTANCE_KM ? "elsewhere" : "located";
-    return namedPlaceVerdict(event, hostName, townWords);
+    // Even a partial, zero or out-of-range source point is an explicit fact,
+    // not permission to manufacture host geometry. Keep it for the usual gates.
+    if (event?.lat !== undefined || event?.lng !== undefined) {
+      return hasCoordinates(event) && distanceKm(host, event) <= MULTI_VENUE_DISTANCE_KM ? "located" : "elsewhere";
+    }
+    return namedPlaceVerdict(event, hostNames, townWords);
   });
   const pointsElsewhere = verdicts.some((verdict) => verdict === "other" || verdict === "elsewhere");
   return rows.map((event, index) => {

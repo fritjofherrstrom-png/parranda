@@ -13,10 +13,35 @@ const { feedsFromScout } = require("../server/pulse-sources/request-time-event-d
 const SUNSET = { name: "Sunset/Sunside", lat: 48.8597, lng: 2.3486, wikidata_ref: "Q3504218" };
 const ALCAZAR = { name: "Teatro Alcázar", lat: 40.4187, lng: -3.7004, wikidata_ref: "Q5999999" };
 const SHIP = { name: "Das Schiff", lat: 53.5459, lng: 9.9846, wikidata_ref: "Q1170000" };
+const AURORA = { name: "Aurora Theatre", lat: 53.5459, lng: 9.9846, wikidata_ref: "Q1234567" };
 const row = (fields) => ({ id: fields.title, title: fields.title, starts_at: "2026-10-20T19:30:00+02:00", ...fields });
 
+for (const place of ["Rex", "Aurora West Theatre", "Aurora Theatre, Satellite Stage"]) {
+  test(`a programme naming ${place} cannot lend the host point to that row or unnamed siblings`, () => {
+    const rows = [row({ title: "Named concert", place_context: place }), row({ title: "Unnamed concert" })];
+    const placed = placeAtHostVenue(rows, AURORA);
+    assert.equal(placed[0], rows[0], "an explicit unknown/conflicting venue is not a host match or an absent name");
+    assert.equal(placed[1], rows[1], "the conflicting venue blocks the source-wide programme assumption");
+  });
+}
+
+test("one matching venue field cannot hide a conflicting venue field", () => {
+  const event = row({ title: "Conflicting fields", place_context: AURORA.name, venue_name: "Rex" });
+  assert.equal(placeAtHostVenue([event], AURORA)[0], event);
+});
+
+test("exact host identity still works when another row names a different venue", () => {
+  const rows = [row({ title: "Host concert", place_context: "THE AURORA THEATRE" }), row({ title: "Other concert", place_context: "Rex" })];
+  const placed = placeAtHostVenue(rows, AURORA);
+  assert.equal(placed[0].venue_resolution?.basis, "host_venue_name");
+  assert.deepEqual([placed[0].lat, placed[0].lng], [AURORA.lat, AURORA.lng]);
+  assert.equal(placed[1], rows[1]);
+});
+
+
 test("an event naming the host venue gets its point, with the basis kept", () => {
-  const [placed] = placeAtHostVenue([row({ title: "Charlotte Reinhardt", lat: 0, place_context: "Sunside, 60 rue des Lombards, Paris 1er, 75001, France" })],
+  // A genuinely absent point, not the old iCal parser's spurious lone zero.
+  const [placed] = placeAtHostVenue([row({ title: "Charlotte Reinhardt", place_context: "Sunside" })],
     SUNSET, { placeContext: { locality: "Paris" } });
   assert.deepEqual([placed.lat, placed.lng], [SUNSET.lat, SUNSET.lng]);
   assert.equal(placed.venue_resolution.source, "host_venue");
@@ -62,9 +87,26 @@ test("generic words and the town do not make a match", () => {
   const placed = placeAtHostVenue([generic, row({ title: "Elsewhere", place_context: "Volksbühne" })], konzerthaus, { placeContext: { locality: "Berlin" } });
   assert.deepEqual(placed.map((event) => event.venue_resolution), [undefined, undefined], "another named venue in the source stops the programme rule");
   const opera = { name: "Komische Oper Berlin", lat: 52.5157, lng: 13.3854, wikidata_ref: "Q457541" };
-  const [named] = placeAtHostVenue([row({ title: "La Bohème", place_context: "Komische Oper, Schillertheater" })], opera, { placeContext: { locality: "Berlin" } });
+  const [named] = placeAtHostVenue([row({ title: "La Bohème", place_context: "Komische Oper" })], opera, { placeContext: { locality: "Berlin" } });
   assert.equal(named.venue_resolution.basis, "host_venue_name");
+  const qualified = row({ title: "Unverified branch", place_context: "Komische Oper, Schillertheater" });
+  assert.equal(placeAtHostVenue([qualified], opera, { placeContext: { locality: "Berlin" } })[0], qualified,
+    "a second venue qualifier is not a verified alias of the host");
 });
+
+for (const point of [
+  { lat: 91, lng: AURORA.lng }, { lat: AURORA.lat, lng: 181 },
+  { lat: 0, lng: 0 }, { lat: "0", lng: "0" }, { lat: 0 },
+  { lat: 52.52, lng: 13.39 }, { lat: 0, lng: AURORA.lng }, { lat: AURORA.lat, lng: 0 },
+]) {
+  test(`explicit event geometry ${JSON.stringify(point)} is never replaced by the host`, () => {
+    const event = row({ title: "Located by source", place_context: AURORA.name, ...point });
+    const unnamed = row({ title: "No venue" });
+    const placed = placeAtHostVenue([event, unnamed], AURORA);
+    assert.equal(placed[0], event, "presence is not validity: invalid/partial coordinates must not be repaired to a host point");
+    assert.equal(placed[1], unnamed, "an invalid or distant point does not prove a single-venue programme");
+  });
+}
 
 test("an invalid host venue changes nothing", () => {
   const rows = [row({ title: "Unnamed" })];

@@ -254,7 +254,11 @@ export function screenPinPresentation(points, {
       // Clear of the map controls near the place. A pin is never moved INTO a
       // control: only a stop whose own place is under one stays there; a pin
       // that could only make room by moving under a control shares a pin.
-      const spot = tries.find(([dx, dy]) => free(c.x + dx, c.y + dy) && clearOfControls(c.x + dx, c.y + dy))
+      // A nudge must keep the whole touch footprint visible, not merely its
+      // centre. An already clipped geographic anchor may stay at zero offset.
+      const spot = tries.find(([dx, dy]) => c.x + dx >= radius && c.x + dx <= width - radius
+        && c.y + dy >= radius && c.y + dy <= height - radius
+        && free(c.x + dx, c.y + dy) && clearOfControls(c.x + dx, c.y + dy))
         || (free(c.x, c.y) ? [0, 0] : null);
       if (!spot) { failed = k; break; }
       placed.push({ x: c.x + spot[0], y: c.y + spot[1] });

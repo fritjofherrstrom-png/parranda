@@ -118,6 +118,24 @@ test('stops outside the view are not pulled into it or into a group', () => {
   assert.deepEqual(pins.map((p) => [p.members.join(), Boolean(p.offscreen), p.shift_x_px]), [['0', true, 0], ['1', false, 0]]);
 });
 
+test('fully visible anchors are not nudged into clipped discs or touch targets', () => {
+  const points = [{ x: 258, y: 100 }, { x: 298, y: 100 }];
+  const pins = screenPinPresentation(points, { width: 320, height: 200, keepouts: [] });
+  assert.ok(pins);
+  onItsPlace(pins, points);
+  for (const pin of pins) {
+    assert.ok(pin.x >= 22 && pin.x <= 298 && pin.y >= 22 && pin.y <= 178,
+      `pin ${pin.members} at ${pin.x},${pin.y} clips its 44px touch target`);
+  }
+  assert.deepEqual(points, [{ x: 258, y: 100 }, { x: 298, y: 100 }]);
+});
+
+test('a naturally edge-clipped stop is not pulled into a distant group', () => {
+  const points = [{ x: 1, y: 100 }, { x: 200, y: 100 }];
+  assert.deepEqual(screenPinPresentation(points, { width: 320, height: 200 }).map(p => [p.members, p.x, p.y]),
+    [[[0], 1, 100], [[1], 200, 100]]);
+});
+
 test('invalid input fails closed', () => {
   assert.equal(screenPinPresentation(null, VIEW), null);
   assert.equal(screenPinPresentation([{ x: NaN, y: 1 }], VIEW), null);
@@ -134,7 +152,10 @@ test('the map uses the bounded pins, and a group pin is a named control that zoo
   const source = readFileSync(new URL('../src/components/planner/RouteMap.tsx', import.meta.url), 'utf8');
   assert.match(source, /screenPinPresentation\(points,/);
   assert.doesNotMatch(source, /screenMarkerPresentation\(/);
-  assert.match(source, /element\.setAttribute\("role", "button"\)[\s\S]{0,200}Zoom in to separate them/);
+  assert.match(source, /element\.setAttribute\("role", "button"\)/);
+  assert.match(source, /element\.setAttribute\("aria-label", accessibleName\)/);
+  assert.match(source, /Zoom in to separate them/);
+  assert.match(source, /Inspect the stops in this group/);
   assert.match(source, /map\.easeTo\(\{ center: bounds\.getCenter\(\), zoom, duration/);
   assert.match(source, /focusAfterSplitRef\.current = group\.members\[0\]/);
   const css = readFileSync(new URL('../src/styles/tailwind.css', import.meta.url), 'utf8');

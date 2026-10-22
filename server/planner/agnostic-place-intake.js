@@ -192,7 +192,7 @@ async function resolvePlaceRefIntake({ coords, explicitCoordinatesPresent, place
   const strong = (Array.isArray(resolved) ? resolved : []).filter((candidate) => candidate && isStrongConfidence(candidate.confidence));
   return blocked("place_ref_not_found", {
     candidates_considered: strong.length,
-    candidates: orderChoices(strong).slice(0, 5).map((candidate) => placeChoice(candidate, placeQuery, placeSelectionStore)),
+    candidates: placeChoices(strong, placeQuery, placeSelectionStore),
   });
 }
 
@@ -215,12 +215,13 @@ function choiceTitle(candidate) {
   return title && context.length ? { title, context: context.join(" · ") } : {};
 }
 
-// Offered order: a place mapped as an area (OSM way/relation) before one that
-// is only a point (node). Language-independent structure, recorded on staging
+// Offered order within the original first five strong candidates: OSM ways and
+// relations before nodes. A map-type heuristic, not verified area geometry.
+// Recorded on staging
 // 166609c (2026-10-18): point nodes led "Gamla stan" (Vyborg, Porvoo) and
 // "Möllevången" (an Östra Grevie hamlet) by importance, ahead of the Stockholm,
 // Kalmar, Malmö and Lund areas; "Lisbon" (all areas) keeps Lisboa first.
-// Ordering only; every strong choice is still offered, nothing is chosen.
+// Ordering only; neither bounded membership nor automatic anchors change.
 function orderChoices(candidates) {
   const pointOnly = candidate => /^node\//.test(candidate?.osm_ref || "") ? 1 : 0;
   return candidates.map((candidate, index) => ({ candidate, index }))
@@ -240,6 +241,25 @@ function placeChoice(candidate, placeQuery, placeSelectionStore) {
     ...(placeRef ? { place_ref: placeRef } : {}),
     ...(placeSelectionStore ? { selection_id: placeSelectionStore.issue(candidate, placeQuery || candidate.label) } : {}),
   };
+}
+
+function placeChoices(candidates, placeQuery, placeSelectionStore) {
+  const choices = orderChoices(candidates.slice(0, 5))
+    .map(candidate => placeChoice(candidate, placeQuery, placeSelectionStore));
+  // Shortening must not hide source-owned distinctions between offered places.
+  // Expand only colliding displays, rechecking in case a full label now collides
+  // with another short display. These are fresh projections, not receipt facts.
+  for (;;) {
+    const displays = choices.map(choice => foldName(choice.title
+      ? `${choice.title} ${choice.context || ""}` : choice.label));
+    const collisions = choices.filter((choice, index) => choice.title &&
+      displays.some((display, other) => other !== index && display === displays[index]));
+    if (!collisions.length) return choices;
+    for (const choice of collisions) {
+      delete choice.title;
+      delete choice.context;
+    }
+  }
 }
 
 /**
@@ -326,7 +346,6 @@ async function resolveAgnosticIntake({
   const selectionInvalid = hasSelection && !selected;
   const previous = placeContextSelection ? placeSelectionStore?.read(placeContextSelection) : null;
   const near = previous || (placeBias && isValidCoordinate(placeBias.lat, placeBias.lng) ? placeBias : null);
-  const candidateChoice = candidate => placeChoice(candidate, placeQuery, placeSelectionStore);
 
   // 3. Freeform place → trusted server resolver ONLY.
   if (!selected && typeof placeResolver !== "function") {
@@ -350,7 +369,7 @@ async function resolveAgnosticIntake({
   if (selectionInvalid) {
     return { anchor: null, placeContext: null, intake: intake("place", placeQuery, {
       candidates_considered: candidates.length,
-      candidates: orderChoices(strong).slice(0, 5).map(candidateChoice),
+      candidates: placeChoices(strong, placeQuery, placeSelectionStore),
       blockers: ["place_selection_invalid"],
     }) };
   }
@@ -374,7 +393,7 @@ async function resolveAgnosticIntake({
       placeContext: null,
       intake: intake("place", placeQuery, {
         candidates_considered: candidates.length,
-        candidates: orderChoices(strong).slice(0, 5).map(candidateChoice),
+        candidates: placeChoices(strong, placeQuery, placeSelectionStore),
         blockers: ["ambiguous_place"],
       }),
     };
