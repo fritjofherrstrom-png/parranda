@@ -1,0 +1,23 @@
+{
+  "main": "e504b6b26e742a6932a589886b00b69a8a32f285",
+  "run": 39803766115,
+  "conclusion": "SUCCESS",
+  "counts_and_skips": [
+    "npm test\tSetup Node\t2026-10-22T15:19:44.2253508Z node: v22.23.3",
+    "npm test\tRun tests\t2026-10-22T15:23:59.4735868Z ok 1638 - real child uses bounded temporary disk and parent removes its private directory # SKIP set PARRANDA_TEST_LIVE_NETWORK=enabled: the DuckDB child downloads the httpfs extension",
+    "npm test\tRun tests\t2026-10-22T15:23:59.4741394Z ok 1639 - an unusable extension cache falls back without disabling the bounded query # SKIP set PARRANDA_TEST_LIVE_NETWORK=enabled: the DuckDB child downloads the httpfs extension",
+    "npm test\tRun tests\t2026-10-22T15:31:04.5465364Z ok 4277 - Simpleview real PostgreSQL approval, worker persistence, restart read and fail-closed bindings # SKIP set PARRANDA_TEST_DATABASE_URL explicitly for a disposable test database",
+    "npm test\tRun tests\t2026-10-22T15:31:04.6467922Z # tests 4916",
+    "npm test\tRun tests\t2026-10-22T15:31:04.6468094Z # pass 4913",
+    "npm test\tRun tests\t2026-10-22T15:31:04.6468178Z # fail 0",
+    "npm test\tRun tests\t2026-10-22T15:31:04.6468354Z # skipped 3",
+    "npm test\tTest frontend foundation\t2026-10-22T15:33:41.1850629Z # tests 926",
+    "npm test\tTest frontend foundation\t2026-10-22T15:33:41.1851282Z # pass 926",
+    "npm test\tTest frontend foundation\t2026-10-22T15:33:41.1851594Z # fail 0",
+    "npm test\tTest frontend foundation\t2026-10-22T15:33:41.1852245Z # skipped 0",
+    "npm test\tSmoke-test Source Catalog migration\t2026-10-22T15:34:42.1988422Z # tests 1",
+    "npm test\tSmoke-test Source Catalog migration\t2026-10-22T15:34:42.2004745Z # pass 1",
+    "npm test\tSmoke-test Source Catalog migration\t2026-10-22T15:34:42.2005799Z # fail 0",
+    "npm test\tSmoke-test Source Catalog migration\t2026-10-22T15:34:42.2007879Z # skipped 0"
+  ]
+}

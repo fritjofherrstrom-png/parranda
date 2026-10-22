@@ -1,0 +1,17 @@
+{
+  "checked_at": "2026-10-22T15:19:56.381265+00:00",
+  "main": "e504b6b26e742a6932a589886b00b69a8a32f285",
+  "tree": "96b8b8b66af5528df4ea2fe52d58070be959e2cd",
+  "parents": [
+    "aebafefba182dbf3cf8cc96ac24a8db29a762858",
+    "654d979e23b05bbda15b4779f61c074bf95f04c8"
+  ],
+  "pr": {
+    "headRefOid": "654d979e23b05bbda15b4779f61c074bf95f04c8",
+    "mergeCommit": {
+      "oid": "e504b6b26e742a6932a589886b00b69a8a32f285"
+    },
+    "state": "MERGED",
+    "url": "https://github.com/fritjofherrstrom-png/parranda/pull/633"
+  }
+}
