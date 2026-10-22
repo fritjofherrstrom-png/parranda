@@ -90,7 +90,6 @@ import DayHeader, { DayActions, dayAssemblyNotes } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
 import DayPlaceholder, { DayMapPlaceholder } from "./planner/DayPlaceholder";
-import { RebuildPill } from "./planner/Rebuild";
 import LiveSheet from "./planner/LiveSheet";
 import { selectedDayEmpty, useLiveFallback } from "./planner/useLiveFallback";
 import SavedDays from "./planner/SavedDays";
@@ -2347,14 +2346,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       pickLabel: (key: string) => pickLabel(key, lang),
       dayLabel: (offset: number) => (offset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")),
     };
-    // The Adjust panel and the rebuild pill say only what the route did: the
-    // inputs are the chips the reader just set, and the change line names them.
+    // The Adjust panel says only what the route did: the inputs are the chips
+    // the reader just set, and the change line names them.
     const routeOnly = { ...dayChange.summary, cause: null, inputs: { walk: null, day: null, picksAdded: [], picksRemoved: [] } };
     return [dayChangeSegments(dayChange.summary, options), dayChangeSegments(routeOnly, options)];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayChange, lang]);
-  // Where the reader's last adjustment stands, for the Adjust panel and the
-  // slow-rebuild pill: rebuilding, rebuilt (and what changed), or failed.
+  // Where the reader's last adjustment stands, for the Adjust panel:
+  // rebuilding, rebuilt (and what the route did), or failed.
   const adjustSummary = dayChange && phase === "done" && !dayIsStale ? dayRouteChange.join(" · ") : "";
   const adjustRebuild: AdjustRebuild =
     staleNotice === "updating"
@@ -2996,15 +2995,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       ) : (
         <DayMapPlaceholder />
       ))}
-
-      {dayWithRoute && (
-        <RebuildPill
-          t={t}
-          updating={staleNotice === "updating"}
-          summary={adjustSummary}
-          onShowDay={() => document.querySelector<HTMLElement>("main header h1")?.focus()}
-        />
-      )}
 
       {/* Live navigation reads source data; explicit occurrence choice reuses
           the day's bounded commitment/recomposition path. */}

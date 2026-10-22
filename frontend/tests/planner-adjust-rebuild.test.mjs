@@ -5,8 +5,7 @@
  * heading — below the screen while Adjust is open on a phone — and the new
  * pick read "· not in this day" against the old day being replaced (staging,
  * Stockholm + Coffee, 22 Oct 2026). Now the panel says it, the tapped chip
- * carries it, the day traces its line again, the new pick is pending, and a
- * slow rebuild gets a pill wherever the reader has scrolled.
+ * carries it, the day traces its line again and the new pick is pending.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -114,40 +113,4 @@ test("once rebuilt, the panel says what changed and the new stop is marked", asy
   assert.match(rows.find((row) => row.includes("Cafe d")), /new/);
   assert.doesNotMatch(rows.find((row) => row.includes("Place a")), /\bnew\b/);
   assert.equal(button(h, /Coffee/).className.includes("parranda-ring"), false, "the ring ends with the wait");
-});
-
-test("a quick rebuild never raises the floating pill", async (t) => {
-  const { h, rebuild } = await rebuildingWithCoffee(t);
-  await h.clock.advance(2000);
-  await h.fetchMock.respond(rebuild, REBUILT_DAY);
-  await h.clock.advance(7000);
-  assert.equal(h.container.querySelector("[data-rebuild-pill]"), null);
-});
-
-test("a slow rebuild raises the pill, then says what changed and leads to the day", async (t) => {
-  const { h, rebuild } = await rebuildingWithCoffee(t);
-  await h.clock.advance(4000);
-  const working = h.container.querySelector('[data-rebuild-pill="working"]');
-  assert.ok(working, "past four seconds the wait is said wherever the reader is");
-  assert.match(working.textContent, /Updating your day/);
-  assert.ok(working.querySelector('[aria-hidden="true"]'), "the heading chip stays the one live announcement");
-
-  await h.fetchMock.respond(rebuild, REBUILT_DAY);
-  await h.clock.advance(50);
-  const settled = h.container.querySelector('[data-rebuild-pill="settled"] button');
-  assert.ok(settled);
-  assert.match(settled.textContent, /^\+1 stop.*Show the day/);
-  await click(h, settled);
-  assert.equal(h.document.activeElement, h.container.querySelector("main header h1"), "the day's heading takes focus");
-  assert.equal(h.container.querySelector("[data-rebuild-pill]"), null);
-});
-
-test("the settled pill leaves on its own", async (t) => {
-  const { h, rebuild } = await rebuildingWithCoffee(t);
-  await h.clock.advance(4000);
-  await h.fetchMock.respond(rebuild, REBUILT_DAY);
-  await h.clock.advance(50);
-  assert.ok(h.container.querySelector('[data-rebuild-pill="settled"]'));
-  await h.clock.advance(6000);
-  assert.equal(h.container.querySelector("[data-rebuild-pill]"), null);
 });

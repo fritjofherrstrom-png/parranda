@@ -134,16 +134,15 @@
 }
 
 /* The small status dots that say "rebuilding": the same trace as the loading
-   day's stations, on a fill instead of a border. A dark pill sets
-   --trace-base to a paper tone so the resting dots still show. */
+   day's stations, on a fill instead of a border. */
 @utility trace-dot {
-  background-color: var(--trace-base, rgb(var(--p-color-ink) / 0.18));
+  background-color: rgb(var(--p-color-ink) / 0.18);
 }
 @keyframes parranda-trace-dot {
   0%,
   45%,
   100% {
-    background-color: var(--trace-base, rgb(var(--p-color-ink) / 0.18));
+    background-color: rgb(var(--p-color-ink) / 0.18);
   }
   12%,
   28% {
