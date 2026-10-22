@@ -32,7 +32,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { pinGroupLabel, routeMarkerPresentation, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
+import { pinGroupLabel, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
 import { controlAwareView, type FitMark, type MapBox } from "../../lib/route-map-fit.mjs";
 import { BASEMAP_PROVIDER, basemapPaint, basemapStyle, type BasemapTheme } from "../../lib/route-map-style.mjs";
 import type { RouteContextSuggestion } from "../../lib/route-context-view.mjs";
@@ -250,14 +250,11 @@ export default function RouteMap({
     const width = mapRef.current.clientWidth;
     const height = mapRef.current.clientHeight;
     const points = badgesRef.current.map((b) => map.project([b.lng, b.lat]));
-    // A number moves only a short way from its stop; stops that cannot be
-    // shown apart at this zoom share one group pin (route-map-presentation).
+    // Every pin covers its own stop at every zoom; stops that cannot be shown
+    // apart share one group pin (route-map-presentation).
     // Plain JS on purpose: tests/route-map-origin-fallback.test.js runs it.
-    // Group pins only once the reader has zoomed out past the fitted view.
-    const fitted = fittedZoomRef ? fittedZoomRef.current : -Infinity;
-    const grouping = typeof map.getZoom === "function" && map.getZoom() < fitted - 0.05;
     const pins = screenPinPresentation(points, {
-      width, height, keepouts: controlBoxes(frameRef.current, mapRef.current), previous: pinShiftsRef.current, grouping,
+      width, height, keepouts: controlBoxes(frameRef.current, mapRef.current), previous: pinShiftsRef.current,
     });
     setLayoutCrowded(pins === null);
     const groups = new Map();
@@ -530,15 +527,14 @@ export default function RouteMap({
           routePath.forEach(([lat, lng]: [number, number]) => marks.push({ lat, lng, avoidControls: false }));
         }
 
-        const markerPresentation = routeMarkerPresentation(routeStops);
         routeStops.forEach((stop: any, index: number) => {
           if (!Number.isFinite(stop?.lat) || !Number.isFinite(stop?.lng)) return;
-          const presentation = markerPresentation[index];
           const eventClass = stop.is_live_event === true ? " route-map-marker--event" : "";
-          const shiftX = Number(presentation?.shift_x_px) || 0;
-          const shiftY = Number(presentation?.shift_y_px) || 0;
-          // Fitted where it is drawn: a clustered marker sits beside its coordinate.
-          marks.push({ lat: stop.lat, lng: stop.lng, radius: MARKER_RADIUS, offsetX: shiftX, offsetY: shiftY });
+          // Every pin starts on its own stop; the layout may nudge it by less
+          // than its radius or share it with neighbours, never move it away.
+          const shiftX = 0;
+          const shiftY = 0;
+          marks.push({ lat: stop.lat, lng: stop.lng, radius: MARKER_RADIUS });
           const markerName = String(stop.label || stop.name || "").trim();
           const badgeIndex = badgesRef.current.length;
           const open = (interaction: "hover" | "focus" | "click", event?: MouseEvent) => {
@@ -581,7 +577,7 @@ export default function RouteMap({
           disc.textContent = String(index + 1);
           const origin = document.createElement("span");
           origin.className = "route-map-marker-origin";
-          origin.hidden = !presentation?.clustered;
+          origin.hidden = true;
           origin.style.setProperty("--route-marker-x", `${shiftX}px`);
           origin.style.setProperty("--route-marker-y", `${shiftY}px`);
           shell.append(disc, origin);
