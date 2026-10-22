@@ -9,7 +9,7 @@ import { normalizePreferencePriority } from "../../../../shared/planner-intent.m
 import { CheckIcon, ChevronDownIcon, LocationIcon } from "../shared/icons";
 import { compactPillTarget, Eyebrow, panelCard, segmentClass, segmentGroup } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
-import { TraceDots } from "./Rebuild";
+import { WalkMark } from "../shared/WalkMark";
 
 type Option = { key: string; sv: string; en: string };
 type RhythmOption = Option & { noteSv: string; noteEn: string };
@@ -155,7 +155,7 @@ export default function AnchorCard({
                   then what the rebuild changed. */}
               {rebuild?.state === "updating" ? (
                 <p data-adjust-rebuild="updating" className="flex items-center gap-2 text-xs font-bold text-parranda-clay">
-                  <TraceDots />
+                  <WalkMark />
                   {t("Uppdaterar dagen …", "Updating your day …")}
                 </p>
               ) : rebuild?.state === "updated" ? (

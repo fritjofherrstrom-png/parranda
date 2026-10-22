@@ -13,7 +13,7 @@ import { walkingDistanceLabel } from "../../lib/route-context-view.mjs";
 import { CheckIcon, ExternalIcon, HalfCircleIcon, MinusIcon, ShareIcon, StarIcon, SunIcon, WalkIcon } from "../shared/icons";
 import { busyButton, buttonClass, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
-import { TraceDots } from "./Rebuild";
+import { WalkMark } from "../shared/WalkMark";
 
 type RoutePart = WalkingRoutePart;
 // "pending": a pick the day on screen never answered — just added, its rebuild
@@ -236,7 +236,7 @@ export default function DayHeader({
             aria-live="polite"
             className="inline-flex min-h-7 items-center gap-2 rounded-full border-line border-parranda-ember/60 px-2.5 text-xs font-bold text-parranda-clay"
           >
-            <TraceDots count={3} />
+            <WalkMark />
             {t("Uppdaterar dagen …", "Updating your day …")}
           </span>
         )}
@@ -315,7 +315,7 @@ export default function DayHeader({
               {state === "covered" && <CheckIcon className="h-3 w-3 text-parranda-ember" />}
               {state === "partial" && <HalfCircleIcon className="h-3 w-3 text-parranda-glow" />}
               {state === "missing" && <MinusIcon className="h-3 w-3" />}
-              {state === "pending" && <TraceDots count={3} />}
+              {state === "pending" && <WalkMark />}
               <span>{pickLabel(key, lang)}</span>
               {state === "covered" && <span className="sr-only">{t(" — med i dagen", " — in this day")}</span>}
               {state === "partial" && <span className="text-parranda-ink/68">{t(" · delvis", " · partly")}</span>}
