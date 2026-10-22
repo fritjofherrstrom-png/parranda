@@ -141,7 +141,7 @@ test('server also enforces the poll ceiling; a client cannot extend the lifecycl
   const jobs = createPlannerLifecycle(); const work = deferred();
   const first = await jobs.start(async context => { context.warming(); await work.promise; return { status: 200, body: {} }; });
   const token = first.body.planner_lifecycle.token;
-  for (let i = 0; i < 20; i++) assert.equal(jobs.read(token).status, 202);
+  for (let i = 0; i < first.body.planner_lifecycle.max_polls; i++) assert.equal(jobs.read(token).status, 202);
   assert.equal(jobs.read(token).body.error, 'supply_wait_expired');
   work.resolve();
 });
@@ -286,7 +286,7 @@ async function pendingSupplyReplay({ primaryRows = [] } = {}) {
   };
   // Include the reviewed-source wrapper used in the deployed app.
   const loader = composeOpenDataLoaders(composeOpenDataLoaders(primary, null, source), { load: async () => [] });
-  const jobs = createPlannerLifecycle();
+  const jobs = createPlannerLifecycle({deadlineMs:60000});
   const first = await jobs.start(async context => {
     const load = lifecycleLoader(loader, context);
     const rows = await load({ lat: 1, lng: 2, requestedIntents: ['second_hand'] });
@@ -366,4 +366,22 @@ test('independent server catalog supply can finish the bounded wait without conv
   assert.equal(result.loader_status, 'error_failed_closed');
   assert.equal(result.loader_metadata.source_completion.status, 'partial');
   work.resolve([]);
+});
+
+test('default lifecycle retains its original producer past60s and finishes inside90s', async t => {
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:0});
+  const work=deferred(),jobs=createPlannerLifecycle();let cancelled=false;
+  const first=await jobs.start(async context=>{context.signal.addEventListener('abort',()=>{cancelled=true});context.warming();await work.promise;return{status:200,body:{days:['same-producer']}}});
+  const token=first.body.planner_lifecycle.token;
+  t.mock.timers.tick(65000);await flushCompletion();assert.equal(jobs.read(token).status,202);
+  work.resolve();await flushCompletion();assert.equal(jobs.read(token).status,200);assert.equal(cancelled,false);
+});
+
+test('default90s budget remains terminal and late source work cannot publish',async t=>{
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:0});
+  const work=deferred(),jobs=createPlannerLifecycle();let aborted=false;
+  const first=await jobs.start(async context=>{context.signal.addEventListener('abort',()=>{aborted=true});context.warming();await work.promise;return{status:200,body:{days:['too late']}}});
+  const token=first.body.planner_lifecycle.token;t.mock.timers.tick(90000);await flushCompletion();
+  assert.equal(jobs.read(token).status,503);assert.equal(aborted,true);
+  work.resolve();await flushCompletion();assert.equal(jobs.read(token).body.error,'supply_wait_expired');
 });

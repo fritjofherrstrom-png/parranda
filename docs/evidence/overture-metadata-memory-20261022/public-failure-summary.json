@@ -1,0 +1,142 @@
+{
+  "place": "stockholm",
+  "place_ref": "n25929985",
+  "source_status": {
+    "status": "loaded:23",
+    "external_candidates_requested": true,
+    "anchor": {
+      "lat": 59.3251172,
+      "lng": 18.0710935
+    },
+    "error": "timeout_or_abort",
+    "collection": {
+      "base_radius_km": 3,
+      "selected_radius_km": 3,
+      "attempted_radius_km": null,
+      "expansion_applied": false,
+      "expansion_trigger": null,
+      "selection_reason": "loader_error",
+      "anchor_mode": "place",
+      "requested_intents": [
+        "food",
+        "museums",
+        "scenic"
+      ],
+      "expansion_query_intents": [],
+      "initial_profile": {
+        "record_count": 0,
+        "category_count": 0,
+        "requested_intent_count": 3,
+        "requested_intents_covered": [],
+        "requested_intents_partial": [],
+        "requested_intents_missing": [
+          "food",
+          "museums",
+          "scenic"
+        ]
+      },
+      "selected_profile": {
+        "record_count": 23,
+        "category_count": 3,
+        "requested_intent_count": 3,
+        "requested_intents_covered": [
+          "museums"
+        ],
+        "requested_intents_partial": [
+          "scenic"
+        ],
+        "requested_intents_missing": [
+          "food"
+        ]
+      },
+      "initial_day_capacity": {
+        "target_km": null,
+        "target_floor_km": null,
+        "independent_candidate_count": 0,
+        "category_count": 0,
+        "candidate_span_km": 0,
+        "anchor_reach_km": 0,
+        "can_support_target": null
+      },
+      "selected_day_capacity": {
+        "target_km": null,
+        "target_floor_km": null,
+        "independent_candidate_count": 21,
+        "category_count": 3,
+        "candidate_span_km": 0.79,
+        "anchor_reach_km": 0.43,
+        "can_support_target": null
+      },
+      "cache": null,
+      "primary_collection": null,
+      "primary_collection_reason": null,
+      "primary_collection_target_km": null,
+      "spatial_scope": {
+        "source": "nominatim_bounds",
+        "kind": "settlement",
+        "collection_mode": "regional_bounded",
+        "diagonal_km": 39.95
+      },
+      "source_completion": null,
+      "operator_evidence": {
+        "attempted": 0,
+        "confirmed": 0,
+        "excluded": 0,
+        "candidates": []
+      },
+      "regional_scout": {
+        "attempted": false,
+        "status": null,
+        "reason": "primary_zone_preserved",
+        "selected_anchor": "primary",
+        "cluster_count": 1,
+        "clusters": []
+      }
+    }
+  },
+  "eligibility": {
+    "eligible": false,
+    "blockers": [
+      "insufficient_geocoded_candidates",
+      "incomplete_geometry"
+    ],
+    "caveats": [
+      "below_planner_candidate_threshold"
+    ],
+    "checks": {
+      "external_candidates_requested": true,
+      "trusted_loader_status": "loaded:23",
+      "geocoded_stop_count": 0,
+      "combination_geocoded_stop_count": 0,
+      "geometry_coherence": "incomplete",
+      "can_support_planner": false,
+      "real_place_count": 23,
+      "coordinate_coverage": 1,
+      "candidate_pipeline": {
+        "coordinate_ready_real_place_count": 23,
+        "identity_resolved_candidate_count": 23,
+        "eligible_pool_candidate_count": 0,
+        "rejected_candidate_count": 23,
+        "availability_evaluated_candidate_count": 0,
+        "availability_excluded_candidate_count": 0,
+        "availability_unresolved_candidate_count": 0,
+        "role_relevant_candidate_count": 0,
+        "role_surface_candidate_count": 0,
+        "reach_eligible_candidate_count": 0,
+        "reach_excluded_candidate_count": 0,
+        "combination_selected_candidate_count": 0,
+        "combination_geocoded_stop_count": 0,
+        "engine_reservoir_geocoded_stop_count": 0
+      },
+      "candidate_reach_policy": {
+        "policy": "local_place_anchor",
+        "max_origin_distance_km": 3,
+        "scope_kind": "settlement"
+      }
+    }
+  },
+  "readiness_blockers": [
+    "insufficient_geocoded_candidates",
+    "incomplete_geometry"
+  ]
+}

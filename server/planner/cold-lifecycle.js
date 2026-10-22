@@ -4,11 +4,11 @@ const { randomBytes } = require('node:crypto');
 const { SOURCE_COMPLETION, SOURCE_SNAPSHOT, SOURCE_PENDING } = require('../place-candidates/background-source');
 const { normalizeUserIntents, matchCandidateToIntent } = require('../candidates/intent-vocabulary');
 
-const DEADLINE_MS = 60000;
+const DEADLINE_MS = 90000;
 const POLL_MS = 3000;
 const PARTIAL_WAIT_MS = 8000;
 const COMPOSITION_RESERVE_MS = 15000;
-const MAX_POLLS = 20;
+const MAX_POLLS = 30;
 const MAX_ACTIVE = 2;
 const MAX_RETAINED = 32;
 const MAX_RESULT_BYTES = 2 * 1024 * 1024;

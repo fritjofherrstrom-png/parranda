@@ -1,0 +1,11 @@
+{
+  "path": "s3://overturemaps-us-west-2/release/2026-10-21.0/theme=places/type=place/part-00007-a2c7689b-daa2-5233-9780-d37ccfc3ea74-c000.zstd.parquet",
+  "length": 725017426,
+  "etag": "\"e92948dbce4b18503f5633f019a52b20-11\"",
+  "footer_sha256": "039b93333f4aa747bb5924e75d15d2dff49e4d7858812eb298ada3b5fa40ff17",
+  "window": {
+    "lat": 48.8588897,
+    "lng": 2.320041,
+    "radiusKm": 5
+  }
+}

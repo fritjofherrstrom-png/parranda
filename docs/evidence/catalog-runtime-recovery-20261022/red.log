@@ -1,0 +1,38 @@
+✔ official 512-row-group footer can prefetch inside the existing 64MiB child heap (537.7055ms)
+✖ dense official footer uses bounded bodies and fewer requests inside unchanged disk/heap caps (136.991417ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 1
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 748.989833
+
+✖ failing tests:
+
+test at tests/overture-large-metadata.test.js:26:1
+✖ dense official footer uses bounded bodies and fewer requests inside unchanged disk/heap caps (136.991417ms)
+  AssertionError [ERR_ASSERTION]: bounded dense replay failed: Error: controlled_range_body_exceeds_operation_budget
+      at fetcher (<repo>/tests/helpers/overture-large-footer-replay.js:30:72)
+      at fetchRange (<repo>/server/place-candidates/overture-parquet-prefetch.js:207:28)
+      at prefetchOvertureParquet (<repo>/server/place-candidates/overture-parquet-prefetch.js:260:107)
+      at async run (<repo>/tests/helpers/overture-large-footer-replay.js:40:20)
+  
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (<repo>/tests/overture-large-metadata.test.js:28:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
