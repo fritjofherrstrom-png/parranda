@@ -1,0 +1,79 @@
+[
+  {
+    "probe": "native-paris.log",
+    "diagnostic": "result",
+    "count": 0,
+    "source_error": "fetch_error",
+    "elapsed_ms": 15747
+  },
+  {
+    "probe": "native-paris.log",
+    "diagnostic": "native_error",
+    "name": "Error",
+    "message": "overture_cancelled",
+    "stack": "Error: overture_cancelled\n    at abortCheck (/app/server/place-candidates/overture-parquet-prefetch.js:36:58)\n    at fetchRange (/app/server/place-candidates/overture-parquet-prefetch.js:216:9)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Promise.all (index 1)\n    at async prefetchOvertureParquet (/app/server/place-candidates/overture-parquet-prefetch.js:260:32)\n    at async process.<anonymous> (/app/server/place-candidates/overture-query-process.js:28:28)"
+  },
+  {
+    "probe": "native-london.log",
+    "diagnostic": "native_error",
+    "name": "Error",
+    "message": "overture_cancelled",
+    "stack": "Error: overture_cancelled\n    at abortCheck (/app/server/place-candidates/overture-parquet-prefetch.js:36:58)\n    at fetchRange (/app/server/place-candidates/overture-parquet-prefetch.js:216:9)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Promise.all (index 1)\n    at async prefetchOvertureParquet (/app/server/place-candidates/overture-parquet-prefetch.js:260:32)\n    at async process.<anonymous> (/app/server/place-candidates/overture-query-process.js:28:28)"
+  },
+  {
+    "probe": "native-london.log",
+    "diagnostic": "result",
+    "count": 0,
+    "source_error": "fetch_error",
+    "elapsed_ms": 17581
+  },
+  {
+    "probe": "native-paris-measure.log",
+    "diagnostic": "result",
+    "count": 0,
+    "source_error": "fetch_error",
+    "elapsed_ms": 46994
+  },
+  {
+    "probe": "native-fixed-london.log",
+    "diagnostic": "result",
+    "count": 0,
+    "source_error": "fetch_error",
+    "elapsed_ms": 45527
+  },
+  {
+    "probe": "eight-london.log",
+    "diagnostic": "result",
+    "count": 0,
+    "source_error": "fetch_error",
+    "elapsed_ms": 19834
+  },
+  {
+    "probe": "eight-london.log",
+    "diagnostic": "native_error",
+    "name": "AbortError",
+    "message": "This operation was aborted",
+    "stack": "AbortError: This operation was aborted\n    at node:internal/deps/undici/undici:15456:13\n    at async global.fetch (/tmp/codex-pr631-native-error-preload.cjs:1:79)\n    at async fetchRange (/app/server/place-candidates/overture-parquet-prefetch.js:217:22)\n    at async /app/server/place-candidates/overture-parquet-prefetch.js:344:23\n    at async /app/server/place-candidates/overture-parquet-prefetch.js:72:30\n    at async Promise.allSettled (index 2)\n    at async parallel (/app/server/place-candidates/overture-parquet-prefetch.js:69:3)\n    at async prefetchOvertureParquet (/app/server/place-candidates/overture-parquet-prefetch.js:342:5)\n    at async process.<anonymous> (/app/server/place-candidates/overture-query-process.js:28:28)"
+  },
+  {
+    "probe": "diagnostic-ninety-london.log",
+    "diagnostic": "result",
+    "count": 600,
+    "receipt": {
+      "version": 1,
+      "release": "2026-10-21.0",
+      "queryHash": "93efa9defadc62b1ab48378073ccc5480ebc6b22738e513c3f1fc51233db096d",
+      "assets": [
+        {
+          "path": "s3://overturemaps-us-west-2/release/2026-10-21.0/theme=places/type=place/part-00007-a2c7689b-daa2-5233-9780-d37ccfc3ea74-c000.zstd.parquet",
+          "etag": "\"e92948dbce4b18503f5633f019a52b20-11\"",
+          "length": 725017426
+        }
+      ],
+      "acquiredAt": 1792687375384,
+      "verifiedAt": 1792687375384,
+      "recordsHash": "272ab7f3c5df707cddfa36ceede8c455bae7745e3345211c799af785b639844c"
+    },
+    "elapsed_ms": 55473
+  }
+]

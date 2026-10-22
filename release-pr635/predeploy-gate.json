@@ -1,0 +1,261 @@
+{
+  "checked_at": "2026-10-22T18:44:42.600580+00:00",
+  "pr": {
+    "headRefOid": "bf016f310522aaa0751cf77d840466859180f122",
+    "mergeCommit": {
+      "oid": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582"
+    },
+    "state": "MERGED",
+    "url": "https://github.com/fritjofherrstrom-png/parranda/pull/635"
+  },
+  "main": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582",
+  "candidate": "bf016f310522aaa0751cf77d840466859180f122",
+  "tree": "bd20eef1724b546841f97db403268d5ac69358e0",
+  "main_ci": {
+    "conclusion": "success",
+    "headSha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582",
+    "jobs": [
+      {
+        "completedAt": "2026-10-22T18:43:09Z",
+        "conclusion": "success",
+        "databaseId": 120005814205,
+        "name": "npm test",
+        "startedAt": "2026-10-22T18:22:13Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-10-22T18:22:14Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-10-22T18:22:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:22:17Z",
+            "conclusion": "success",
+            "name": "Checkout",
+            "number": 2,
+            "startedAt": "2026-10-22T18:22:14Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:22:21Z",
+            "conclusion": "success",
+            "name": "Setup Node",
+            "number": 3,
+            "startedAt": "2026-10-22T18:22:17Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:22:25Z",
+            "conclusion": "success",
+            "name": "Install dependencies",
+            "number": 4,
+            "startedAt": "2026-10-22T18:22:21Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:22:29Z",
+            "conclusion": "success",
+            "name": "Install frontend dependencies",
+            "number": 5,
+            "startedAt": "2026-10-22T18:22:25Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:30:43Z",
+            "conclusion": "success",
+            "name": "Install Chromium for map acceptance",
+            "number": 6,
+            "startedAt": "2026-10-22T18:22:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:39:41Z",
+            "conclusion": "success",
+            "name": "Run tests",
+            "number": 7,
+            "startedAt": "2026-10-22T18:30:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:39:44Z",
+            "conclusion": "success",
+            "name": "Typecheck frontend foundation",
+            "number": 8,
+            "startedAt": "2026-10-22T18:39:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:42:08Z",
+            "conclusion": "success",
+            "name": "Test frontend foundation",
+            "number": 9,
+            "startedAt": "2026-10-22T18:39:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:42:09Z",
+            "conclusion": "success",
+            "name": "Build frontend foundation",
+            "number": 10,
+            "startedAt": "2026-10-22T18:42:08Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:42:09Z",
+            "conclusion": "success",
+            "name": "Check committed frontend/dist matches the build",
+            "number": 11,
+            "startedAt": "2026-10-22T18:42:09Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:42:17Z",
+            "conclusion": "success",
+            "name": "Prepare digest-pinned CI image mirrors",
+            "number": 12,
+            "startedAt": "2026-10-22T18:42:09Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:42:17Z",
+            "conclusion": "success",
+            "name": "Validate self-hosted production contract",
+            "number": 13,
+            "startedAt": "2026-10-22T18:42:17Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:42:17Z",
+            "conclusion": "success",
+            "name": "Validate self-hosted Compose configuration",
+            "number": 14,
+            "startedAt": "2026-10-22T18:42:17Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:42:18Z",
+            "conclusion": "success",
+            "name": "Validate self-hosted Source Catalog profile",
+            "number": 15,
+            "startedAt": "2026-10-22T18:42:17Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:42:50Z",
+            "conclusion": "success",
+            "name": "Build self-hosted image",
+            "number": 16,
+            "startedAt": "2026-10-22T18:42:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:43:06Z",
+            "conclusion": "success",
+            "name": "Smoke-test Source Catalog migration",
+            "number": 17,
+            "startedAt": "2026-10-22T18:42:50Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:43:06Z",
+            "conclusion": "success",
+            "name": "Post Setup Node",
+            "number": 33,
+            "startedAt": "2026-10-22T18:43:06Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:43:06Z",
+            "conclusion": "success",
+            "name": "Post Checkout",
+            "number": 34,
+            "startedAt": "2026-10-22T18:43:06Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-10-22T18:43:06Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 35,
+            "startedAt": "2026-10-22T18:43:06Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/fritjofherrstrom-png/parranda/actions/runs/39828752687/job/120005814205"
+      }
+    ],
+    "status": "completed",
+    "url": "https://github.com/fritjofherrstrom-png/parranda/actions/runs/39828752687"
+  },
+  "automatic_deploy_effective": false,
+  "deploy_runs": [
+    {
+      "conclusion": "skipped",
+      "databaseId": 39833817846,
+      "headSha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582",
+      "status": "completed"
+    },
+    {
+      "conclusion": "skipped",
+      "databaseId": 39832463922,
+      "headSha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582",
+      "status": "completed"
+    },
+    {
+      "conclusion": "skipped",
+      "databaseId": 39832366365,
+      "headSha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582",
+      "status": "completed"
+    },
+    {
+      "conclusion": "skipped",
+      "databaseId": 39831525590,
+      "headSha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582",
+      "status": "completed"
+    },
+    {
+      "conclusion": "skipped",
+      "databaseId": 39830485585,
+      "headSha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582",
+      "status": "completed"
+    },
+    {
+      "conclusion": "skipped",
+      "databaseId": 39828546270,
+      "headSha": "e504b6b26e742a6932a589886b00b69a8a32f285",
+      "status": "completed"
+    },
+    {
+      "conclusion": "skipped",
+      "databaseId": 39826538374,
+      "headSha": "e504b6b26e742a6932a589886b00b69a8a32f285",
+      "status": "completed"
+    },
+    {
+      "conclusion": "skipped",
+      "databaseId": 39823299042,
+      "headSha": "e504b6b26e742a6932a589886b00b69a8a32f285",
+      "status": "completed"
+    }
+  ],
+  "image": {
+    "id": "sha256:3ac1fc011326d4c96843b3f278bbad18001c41971bf61743e8371ceb80fed753",
+    "sha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582",
+    "tree": "bd20eef1724b546841f97db403268d5ac69358e0",
+    "candidate": "bf016f310522aaa0751cf77d840466859180f122",
+    "architecture": "arm64",
+    "repo_digests": [
+      "parranda-pr635@sha256:3ac1fc011326d4c96843b3f278bbad18001c41971bf61743e8371ceb80fed753"
+    ],
+    "node_runtime": {
+      "node": "v22.23.4",
+      "architecture": "arm64",
+      "platform": "linux",
+      "sha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582"
+    }
+  },
+  "shared_targets_unchanged": true
+}

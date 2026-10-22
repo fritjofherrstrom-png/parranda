@@ -1,0 +1,277 @@
+{
+  "expected_sha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582",
+  "url": "https://tions-dry-tells-chef.trycloudflare.com/anywhere?place=berlin&planner=open&prefs=food%2Cculture%2Cviews&rhythm=balanced&day=0&lang=en",
+  "stages": [
+    {
+      "name": "exact-user-url",
+      "http": 200,
+      "source_status": {
+        "status": "loaded:100",
+        "external_candidates_requested": true,
+        "anchor": {
+          "lat": 52.5173885,
+          "lng": 13.3951309
+        },
+        "error": null,
+        "collection": {
+          "base_radius_km": null,
+          "selected_radius_km": null,
+          "attempted_radius_km": null,
+          "expansion_applied": false,
+          "expansion_trigger": null,
+          "selection_reason": null,
+          "anchor_mode": "unknown",
+          "requested_intents": [
+            "food",
+            "museums",
+            "scenic"
+          ],
+          "expansion_query_intents": [],
+          "initial_profile": null,
+          "selected_profile": {
+            "record_count": 100,
+            "category_count": 8,
+            "requested_intent_count": 3,
+            "requested_intents_covered": [
+              "food",
+              "museums"
+            ],
+            "requested_intents_partial": [
+              "scenic"
+            ],
+            "requested_intents_missing": []
+          },
+          "initial_day_capacity": null,
+          "selected_day_capacity": {
+            "target_km": null,
+            "target_floor_km": null,
+            "independent_candidate_count": 95,
+            "category_count": 7,
+            "candidate_span_km": 4.03,
+            "anchor_reach_km": 2.25,
+            "can_support_target": null
+          },
+          "cache": null,
+          "primary_collection": "background_refresh",
+          "primary_collection_reason": "no_answered_map_evidence",
+          "primary_collection_target_km": null,
+          "spatial_scope": null,
+          "source_completion": null,
+          "operator_evidence": {
+            "attempted": 1,
+            "confirmed": 0,
+            "excluded": 0,
+            "candidates": [
+              {
+                "id": "overture-5f4d8350-5a45-4b7a-8873-c0a9363f8a31",
+                "status": "unresolved"
+              }
+            ]
+          },
+          "regional_scout": null
+        }
+      },
+      "walking_validation": {
+        "valid": true,
+        "blockers": [],
+        "checks": {
+          "walking_source": "agnostic_compose"
+        }
+      },
+      "stops": [
+        {
+          "id": "overture-2419f384-0e76-4f49-9a12-62616636f2f2",
+          "name": "Palazzo Italia",
+          "type": "restaurant",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-4ef2cee9-4f39-4ba5-ae51-2a2da5756b7c",
+          "name": "Deutsches Historisches Museum",
+          "type": "museum",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-4b913cb5-725f-4463-be1b-cc40d9f08dd7",
+          "name": "Neue Wache",
+          "type": "monument",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-a32de0f1-3b49-49d9-b21a-b16cd702ec9d",
+          "name": "PalaisPopulaire",
+          "type": "museum",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-1012ab9b-2ee2-49b4-b90e-d1e96096cf7e",
+          "name": "ERDINGER am Gendarmenmarkt",
+          "type": "restaurant",
+          "is_live_event": false
+        }
+      ],
+      "estimated_km": 1.1
+    },
+    {
+      "name": "ordinary-reload",
+      "http": 200,
+      "source_status": {
+        "status": "loaded:100",
+        "external_candidates_requested": true,
+        "anchor": {
+          "lat": 52.5173885,
+          "lng": 13.3951309
+        },
+        "error": null,
+        "collection": {
+          "base_radius_km": null,
+          "selected_radius_km": null,
+          "attempted_radius_km": null,
+          "expansion_applied": false,
+          "expansion_trigger": null,
+          "selection_reason": null,
+          "anchor_mode": "unknown",
+          "requested_intents": [
+            "food",
+            "museums",
+            "scenic"
+          ],
+          "expansion_query_intents": [],
+          "initial_profile": null,
+          "selected_profile": {
+            "record_count": 100,
+            "category_count": 8,
+            "requested_intent_count": 3,
+            "requested_intents_covered": [
+              "food",
+              "museums"
+            ],
+            "requested_intents_partial": [
+              "scenic"
+            ],
+            "requested_intents_missing": []
+          },
+          "initial_day_capacity": null,
+          "selected_day_capacity": {
+            "target_km": null,
+            "target_floor_km": null,
+            "independent_candidate_count": 95,
+            "category_count": 7,
+            "candidate_span_km": 4.03,
+            "anchor_reach_km": 2.25,
+            "can_support_target": null
+          },
+          "cache": null,
+          "primary_collection": "background_refresh",
+          "primary_collection_reason": "no_answered_map_evidence",
+          "primary_collection_target_km": null,
+          "spatial_scope": null,
+          "source_completion": null,
+          "operator_evidence": {
+            "attempted": 1,
+            "confirmed": 0,
+            "excluded": 0,
+            "candidates": [
+              {
+                "id": "overture-5f4d8350-5a45-4b7a-8873-c0a9363f8a31",
+                "status": "unresolved"
+              }
+            ]
+          },
+          "regional_scout": null
+        }
+      },
+      "walking_validation": {
+        "valid": true,
+        "blockers": [],
+        "checks": {
+          "walking_source": "agnostic_compose"
+        }
+      },
+      "stops": [
+        {
+          "id": "overture-2419f384-0e76-4f49-9a12-62616636f2f2",
+          "name": "Palazzo Italia",
+          "type": "restaurant",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-4ef2cee9-4f39-4ba5-ae51-2a2da5756b7c",
+          "name": "Deutsches Historisches Museum",
+          "type": "museum",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-4b913cb5-725f-4463-be1b-cc40d9f08dd7",
+          "name": "Neue Wache",
+          "type": "monument",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-a32de0f1-3b49-49d9-b21a-b16cd702ec9d",
+          "name": "PalaisPopulaire",
+          "type": "museum",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-1012ab9b-2ee2-49b4-b90e-d1e96096cf7e",
+          "name": "ERDINGER am Gendarmenmarkt",
+          "type": "restaurant",
+          "is_live_event": false
+        }
+      ],
+      "estimated_km": 1.1
+    }
+  ],
+  "requests": [
+    {
+      "stage": "exact-user-url",
+      "place": "berlin",
+      "dates": [
+        "2026-10-22"
+      ],
+      "rhythm": "balanced",
+      "preferences": [
+        "food",
+        "culture",
+        "views"
+      ]
+    },
+    {
+      "stage": "ordinary-reload",
+      "place": "berlin",
+      "place_ref": "r62422",
+      "dates": [
+        "2026-10-22"
+      ],
+      "rhythm": "balanced",
+      "preferences": [
+        "food",
+        "culture",
+        "views"
+      ]
+    }
+  ],
+  "page_errors": [],
+  "asset_errors": [],
+  "http_errors": [],
+  "outcome": "PASS_PUBLIC_DAY_RENDER_CARD_RELOAD",
+  "boundary": "fresh browser, plain-text city URL entry and correct day selection, real sources/clock, no routes intercepted or coordinates injected; one ordinary reload after successful publication; no retry-to-green/provider loop; physical venue hours and full provider coverage are not claimed",
+  "health_before": {
+    "ok": true,
+    "runtime_profile": "staging-563-564",
+    "build_sha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582"
+  },
+  "browser": "153.0.8010.12",
+  "compact_card": {
+    "collapsed_unknown_hours": 0,
+    "expanded_unknown_hours": 1
+  },
+  "live_navigation": "PASS_OPEN_SORT_WEEK_REOPEN_WITHOUT_ROUTE_RECOMPOSE",
+  "health_after": {
+    "ok": true,
+    "runtime_profile": "staging-563-564",
+    "build_sha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582"
+  },
+  "elapsed_ms": 31961
+}

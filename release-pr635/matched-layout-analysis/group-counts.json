@@ -1,0 +1,38 @@
+[
+  {
+    "release": "september",
+    "city": "london",
+    "total_groups": 256,
+    "selected_groups": 12,
+    "selected_source_rows": 244774,
+    "minimum_projected_ranges": 132,
+    "minimum_projected_data_bytes": 15904687
+  },
+  {
+    "release": "september",
+    "city": "paris",
+    "total_groups": 256,
+    "selected_groups": 9,
+    "selected_source_rows": 178473,
+    "minimum_projected_ranges": 99,
+    "minimum_projected_data_bytes": 11821190
+  },
+  {
+    "release": "october",
+    "city": "london",
+    "total_groups": 512,
+    "selected_groups": 31,
+    "selected_source_rows": 345945,
+    "minimum_projected_ranges": 341,
+    "minimum_projected_data_bytes": 21102873
+  },
+  {
+    "release": "october",
+    "city": "paris",
+    "total_groups": 512,
+    "selected_groups": 34,
+    "selected_source_rows": 343303,
+    "minimum_projected_ranges": 374,
+    "minimum_projected_data_bytes": 21100299
+  }
+]

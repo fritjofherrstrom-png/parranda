@@ -1,0 +1,355 @@
+{
+  "expected_sha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582",
+  "url": "https://tions-dry-tells-chef.trycloudflare.com/anywhere?place=paris&planner=open&prefs=food%2Cculture%2Cviews&rhythm=balanced&day=1&lang=en",
+  "stages": [
+    {
+      "name": "exact-user-url",
+      "http": 200,
+      "source_status": {
+        "status": "loaded:98",
+        "external_candidates_requested": true,
+        "anchor": {
+          "lat": 48.8588897,
+          "lng": 2.320041
+        },
+        "error": "timeout_or_abort",
+        "collection": {
+          "base_radius_km": 3,
+          "selected_radius_km": 3,
+          "attempted_radius_km": null,
+          "expansion_applied": false,
+          "expansion_trigger": null,
+          "selection_reason": "loader_error",
+          "anchor_mode": "place",
+          "requested_intents": [
+            "food",
+            "museums",
+            "scenic"
+          ],
+          "expansion_query_intents": [],
+          "initial_profile": {
+            "record_count": 0,
+            "category_count": 0,
+            "requested_intent_count": 3,
+            "requested_intents_covered": [],
+            "requested_intents_partial": [],
+            "requested_intents_missing": [
+              "food",
+              "museums",
+              "scenic"
+            ]
+          },
+          "selected_profile": {
+            "record_count": 98,
+            "category_count": 7,
+            "requested_intent_count": 3,
+            "requested_intents_covered": [
+              "food",
+              "museums"
+            ],
+            "requested_intents_partial": [
+              "scenic"
+            ],
+            "requested_intents_missing": []
+          },
+          "initial_day_capacity": {
+            "target_km": null,
+            "target_floor_km": null,
+            "independent_candidate_count": 0,
+            "category_count": 0,
+            "candidate_span_km": 0,
+            "anchor_reach_km": 0,
+            "can_support_target": null
+          },
+          "selected_day_capacity": {
+            "target_km": null,
+            "target_floor_km": null,
+            "independent_candidate_count": 92,
+            "category_count": 7,
+            "candidate_span_km": 4.43,
+            "anchor_reach_km": 3.72,
+            "can_support_target": null
+          },
+          "cache": {
+            "served_stale": true,
+            "stale_age_seconds": 177460,
+            "refresh_reason": "stale_cache_refresh_failed"
+          },
+          "primary_collection": null,
+          "primary_collection_reason": null,
+          "primary_collection_target_km": null,
+          "spatial_scope": {
+            "source": "nominatim_bounds",
+            "kind": "district",
+            "collection_mode": "regional_bounded",
+            "diagonal_km": 20.39
+          },
+          "source_completion": {
+            "status": "complete",
+            "reason": null,
+            "pending": 0,
+            "completed": 1,
+            "failed": 1
+          },
+          "operator_evidence": {
+            "attempted": 1,
+            "confirmed": 0,
+            "excluded": 0,
+            "candidates": [
+              {
+                "id": "overture-6d815297-e006-4d8d-be63-f819637adbd4",
+                "status": "not_observed"
+              }
+            ]
+          },
+          "regional_scout": {
+            "attempted": false,
+            "status": null,
+            "reason": "primary_zone_preserved",
+            "selected_anchor": "primary",
+            "cluster_count": 1,
+            "clusters": []
+          }
+        }
+      },
+      "walking_validation": {
+        "valid": true,
+        "blockers": [],
+        "checks": {
+          "walking_source": "agnostic_compose"
+        }
+      },
+      "stops": [
+        {
+          "id": "overture-c0b80eb6-357c-4930-a8b4-b16bc69fd607",
+          "name": "Musée Rodin",
+          "type": "museum",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-0a27dbbb-4f9d-4e11-851b-f425bd642438",
+          "name": "La Dauphine",
+          "type": "restaurant",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-0d1b6f2c-42a9-4bd6-8809-73dd26d56d80",
+          "name": "Hôtel de Brienne",
+          "type": "historic-site",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-0a19d800-17e8-4673-9914-85b98b1d9cf0",
+          "name": "Costa d'Amalfi",
+          "type": "restaurant",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-c5329ff6-a68b-4323-acf2-a4ba7865d615",
+          "name": "Galerie Maeght",
+          "type": "gallery",
+          "is_live_event": false
+        }
+      ],
+      "estimated_km": 2
+    },
+    {
+      "name": "ordinary-reload",
+      "http": 200,
+      "source_status": {
+        "status": "loaded:98",
+        "external_candidates_requested": true,
+        "anchor": {
+          "lat": 48.8588897,
+          "lng": 2.320041
+        },
+        "error": "provider_timed_out",
+        "collection": {
+          "base_radius_km": 3,
+          "selected_radius_km": 3,
+          "attempted_radius_km": null,
+          "expansion_applied": false,
+          "expansion_trigger": null,
+          "selection_reason": "loader_error",
+          "anchor_mode": "place",
+          "requested_intents": [
+            "food",
+            "museums",
+            "scenic"
+          ],
+          "expansion_query_intents": [],
+          "initial_profile": {
+            "record_count": 0,
+            "category_count": 0,
+            "requested_intent_count": 3,
+            "requested_intents_covered": [],
+            "requested_intents_partial": [],
+            "requested_intents_missing": [
+              "food",
+              "museums",
+              "scenic"
+            ]
+          },
+          "selected_profile": {
+            "record_count": 98,
+            "category_count": 7,
+            "requested_intent_count": 3,
+            "requested_intents_covered": [
+              "food",
+              "museums"
+            ],
+            "requested_intents_partial": [
+              "scenic"
+            ],
+            "requested_intents_missing": []
+          },
+          "initial_day_capacity": {
+            "target_km": null,
+            "target_floor_km": null,
+            "independent_candidate_count": 0,
+            "category_count": 0,
+            "candidate_span_km": 0,
+            "anchor_reach_km": 0,
+            "can_support_target": null
+          },
+          "selected_day_capacity": {
+            "target_km": null,
+            "target_floor_km": null,
+            "independent_candidate_count": 91,
+            "category_count": 7,
+            "candidate_span_km": 4.59,
+            "anchor_reach_km": 3.72,
+            "can_support_target": null
+          },
+          "cache": null,
+          "primary_collection": null,
+          "primary_collection_reason": null,
+          "primary_collection_target_km": null,
+          "spatial_scope": {
+            "source": "nominatim_bounds",
+            "kind": "district",
+            "collection_mode": "regional_bounded",
+            "diagonal_km": 20.39
+          },
+          "source_completion": {
+            "status": "complete",
+            "reason": null,
+            "pending": 0,
+            "completed": 1,
+            "failed": 1
+          },
+          "operator_evidence": {
+            "attempted": 1,
+            "confirmed": 0,
+            "excluded": 0,
+            "candidates": [
+              {
+                "id": "overture-6d815297-e006-4d8d-be63-f819637adbd4",
+                "status": "unresolved"
+              }
+            ]
+          },
+          "regional_scout": {
+            "attempted": false,
+            "status": null,
+            "reason": "primary_zone_preserved",
+            "selected_anchor": "primary",
+            "cluster_count": 1,
+            "clusters": []
+          }
+        }
+      },
+      "walking_validation": {
+        "valid": true,
+        "blockers": [],
+        "checks": {
+          "walking_source": "agnostic_compose"
+        }
+      },
+      "stops": [
+        {
+          "id": "overture-37aed865-77b1-47dc-a829-9fefa7c8c40a",
+          "name": "Musée de l'Orangerie",
+          "type": "museum",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-0a27dbbb-4f9d-4e11-851b-f425bd642438",
+          "name": "La Dauphine",
+          "type": "restaurant",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-0a137476-7ede-4571-a639-26967c89790f",
+          "name": "Le Florès",
+          "type": "restaurant",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-c0b80eb6-357c-4930-a8b4-b16bc69fd607",
+          "name": "Musée Rodin",
+          "type": "museum",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-d0a97744-6df8-4772-a603-8e553649acc9",
+          "name": "Napoleon's Tomb",
+          "type": "monument",
+          "is_live_event": false
+        }
+      ],
+      "estimated_km": 2.4
+    }
+  ],
+  "requests": [
+    {
+      "stage": "exact-user-url",
+      "place": "paris",
+      "dates": [
+        "2026-10-23"
+      ],
+      "rhythm": "balanced",
+      "preferences": [
+        "food",
+        "culture",
+        "views"
+      ]
+    },
+    {
+      "stage": "ordinary-reload",
+      "place": "paris",
+      "place_ref": "r7444",
+      "dates": [
+        "2026-10-23"
+      ],
+      "rhythm": "balanced",
+      "preferences": [
+        "food",
+        "culture",
+        "views"
+      ]
+    }
+  ],
+  "page_errors": [],
+  "asset_errors": [],
+  "http_errors": [],
+  "outcome": "PASS_PUBLIC_DAY_RENDER_CARD_RELOAD",
+  "boundary": "fresh browser, plain-text city URL entry and correct day selection, real sources/clock, no routes intercepted or coordinates injected; one ordinary reload after successful publication; no retry-to-green/provider loop; physical venue hours and full provider coverage are not claimed",
+  "health_before": {
+    "ok": true,
+    "runtime_profile": "staging-563-564",
+    "build_sha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582"
+  },
+  "browser": "153.0.8010.12",
+  "compact_card": {
+    "collapsed_unknown_hours": 0,
+    "expanded_unknown_hours": 1
+  },
+  "live_navigation": "PASS_OPEN_SORT_WEEK_REOPEN_WITHOUT_ROUTE_RECOMPOSE",
+  "health_after": {
+    "ok": true,
+    "runtime_profile": "staging-563-564",
+    "build_sha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582"
+  },
+  "elapsed_ms": 133758
+}

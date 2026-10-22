@@ -1,0 +1,9 @@
+{
+  "http": 200,
+  "checked_at": "2026-10-22T18:54:27.494659+00:00",
+  "health": {
+    "ok": true,
+    "runtime_profile": "staging-563-564",
+    "build_sha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582"
+  }
+}

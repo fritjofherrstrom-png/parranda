@@ -1,0 +1,12 @@
+{
+  "sha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582",
+  "run": 39828752687,
+  "attempt": 1,
+  "pass": 4922,
+  "fail": 1,
+  "cancelled": 0,
+  "skip": 3,
+  "failure": "tests/live-program-http-browser.test.js:43, immediate card count 0 expected 1 after visibility wait",
+  "diagnostic": "Instrumented copy with original assertions outside product tree passed; observed card 1 -> 0 -> 1 across 36-38 ms. This establishes a transient render window, not the cause of the CI observation itself. No product changes/test weakening; one failed-job rerun on unchanged SHA.",
+  "comparison": "Exact candidate CI and final local whole suite pass all 4923 tests."
+}

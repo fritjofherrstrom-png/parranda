@@ -1,0 +1,52 @@
+[
+  {
+    "key": "48.8534951_2.3483915_r5_c0.95.json",
+    "before_release": "2026-09-23.1",
+    "after_release": "2026-09-23.1",
+    "before_verifiedAt": 1792518411075,
+    "after_verifiedAt": 1792518411075,
+    "records": 600,
+    "reacquired": false,
+    "verifiedAt_advanced": false
+  },
+  {
+    "key": "48.8582599_2.2945006_r5_c0.95.json",
+    "before_release": "2026-09-23.1",
+    "after_release": "2026-09-23.1",
+    "before_verifiedAt": 1792238355818,
+    "after_verifiedAt": 1792238355818,
+    "records": 600,
+    "reacquired": false,
+    "verifiedAt_advanced": false
+  },
+  {
+    "key": "48.8588897_2.3200410_r5_c0.95.json",
+    "before_release": "2026-09-23.1",
+    "after_release": "2026-10-21.0",
+    "before_verifiedAt": 1792517342489,
+    "after_verifiedAt": 1792694889744,
+    "records": 600,
+    "reacquired": true,
+    "verifiedAt_advanced": true
+  },
+  {
+    "key": "51.5074456_-0.1277653_r5_c0.95.json",
+    "before_release": "2026-09-23.1",
+    "after_release": "2026-10-21.0",
+    "before_verifiedAt": 1792580297930,
+    "after_verifiedAt": 1792695101152,
+    "records": 600,
+    "reacquired": true,
+    "verifiedAt_advanced": true
+  },
+  {
+    "key": "52.5173885_13.3951309_r5_c0.95.json",
+    "before_release": "2026-10-21.0",
+    "after_release": "2026-10-21.0",
+    "before_verifiedAt": 1792684407435,
+    "after_verifiedAt": 1792684407435,
+    "records": 600,
+    "reacquired": false,
+    "verifiedAt_advanced": false
+  }
+]

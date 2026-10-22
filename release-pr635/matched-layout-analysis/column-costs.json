@@ -1,0 +1,90 @@
+[
+  {
+    "release": "september",
+    "city": "london",
+    "total_groups": 256,
+    "selected_groups": 12,
+    "selected_source_rows": 244774,
+    "minimum_projected_ranges": 132,
+    "minimum_projected_data_bytes": 15904687,
+    "projected_columns": {
+      "id": 5281254,
+      "confidence": 1224431,
+      "websites, list, element": 3057936,
+      "brand, names, primary": 176668,
+      "names, primary": 3050640,
+      "sources, list, element, license": 47334,
+      "operating_status": 2089,
+      "taxonomy, primary": 407936,
+      "taxonomy, hierarchy, list, element": 1017059,
+      "bbox, xmin": 1113271,
+      "bbox, ymin": 526069
+    }
+  },
+  {
+    "release": "september",
+    "city": "paris",
+    "total_groups": 256,
+    "selected_groups": 9,
+    "selected_source_rows": 178473,
+    "minimum_projected_ranges": 99,
+    "minimum_projected_data_bytes": 11821190,
+    "projected_columns": {
+      "id": 3860258,
+      "confidence": 1056182,
+      "websites, list, element": 2282352,
+      "brand, names, primary": 172260,
+      "names, primary": 2290315,
+      "sources, list, element, license": 35310,
+      "operating_status": 3784,
+      "taxonomy, primary": 274926,
+      "taxonomy, hierarchy, list, element": 673038,
+      "bbox, xmin": 738925,
+      "bbox, ymin": 433840
+    }
+  },
+  {
+    "release": "october",
+    "city": "london",
+    "total_groups": 512,
+    "selected_groups": 31,
+    "selected_source_rows": 345945,
+    "minimum_projected_ranges": 341,
+    "minimum_projected_data_bytes": 21102873,
+    "projected_columns": {
+      "id": 7464756,
+      "confidence": 1318774,
+      "websites, list, element": 3708461,
+      "brand, names, primary": 172759,
+      "names, primary": 4385381,
+      "sources, list, element, license": 110545,
+      "operating_status": 67895,
+      "taxonomy, primary": 662717,
+      "taxonomy, hierarchy, list, element": 1485983,
+      "bbox, xmin": 1115406,
+      "bbox, ymin": 610196
+    }
+  },
+  {
+    "release": "october",
+    "city": "paris",
+    "total_groups": 512,
+    "selected_groups": 34,
+    "selected_source_rows": 343303,
+    "minimum_projected_ranges": 374,
+    "minimum_projected_data_bytes": 21100299,
+    "projected_columns": {
+      "id": 7403006,
+      "confidence": 1373303,
+      "websites, list, element": 3347545,
+      "brand, names, primary": 220455,
+      "names, primary": 4684598,
+      "sources, list, element, license": 107325,
+      "operating_status": 79806,
+      "taxonomy, primary": 648486,
+      "taxonomy, hierarchy, list, element": 1488506,
+      "bbox, xmin": 1055100,
+      "bbox, ymin": 692169
+    }
+  }
+]

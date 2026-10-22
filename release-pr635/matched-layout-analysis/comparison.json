@@ -1,0 +1,42 @@
+[
+  {
+    "release": "september",
+    "city": "london",
+    "asset_bytes": 728373349,
+    "footer_bytes": 1584257,
+    "range_gets": 75,
+    "transfer_bytes": 18274632,
+    "allocated_bytes": 18558976,
+    "scope": "actual current planner, immutable real metadata, zero controlled data bodies; not live latency or valid venue rows"
+  },
+  {
+    "release": "september",
+    "city": "paris",
+    "asset_bytes": 728373349,
+    "footer_bytes": 1584257,
+    "range_gets": 57,
+    "transfer_bytes": 13982319,
+    "allocated_bytes": 14196736,
+    "scope": "actual current planner, immutable real metadata, zero controlled data bodies; not live latency or valid venue rows"
+  },
+  {
+    "release": "october",
+    "city": "london",
+    "asset_bytes": 725017426,
+    "footer_bytes": 3154769,
+    "range_gets": 138,
+    "transfer_bytes": 27172039,
+    "allocated_bytes": 27701248,
+    "scope": "actual current planner, immutable real metadata, zero controlled data bodies; not live latency or valid venue rows"
+  },
+  {
+    "release": "october",
+    "city": "paris",
+    "asset_bytes": 725017426,
+    "footer_bytes": 3154769,
+    "range_gets": 141,
+    "transfer_bytes": 27609163,
+    "allocated_bytes": 28155904,
+    "scope": "actual current planner, immutable real metadata, zero controlled data bodies; not live latency or valid venue rows"
+  }
+]

@@ -1,0 +1,29 @@
+{
+  "scope": "single isolated immutable image native probe, no persistent cache; original45s deadline and actual product query; module hashes identify tested code",
+  "node": "v22.23.3",
+  "architecture": "arm64",
+  "base_git_sha": "2c3d71fff24b477507bb0458bb2222824d125176",
+  "plan": {
+    "release": "2026-09-23.1",
+    "identity": {
+      "path": "s3://overturemaps-us-west-2/release/2026-09-23.1/theme=places/type=place/part-00007-61ac23fc-0af6-5d61-8c46-5776ba7e6bf0-c000.zstd.parquet",
+      "etag": "\"e835a9408433ecacea56e8af095b7612-11\"",
+      "length": 728373349
+    },
+    "window": {
+      "lat": 51.5074456,
+      "lng": -0.1277653,
+      "radiusKm": 5
+    }
+  },
+  "rows": 600,
+  "elapsed_ms": 44724,
+  "private_temp_empty": true,
+  "network": {
+    "started": 136,
+    "finished": 136,
+    "failed": 0,
+    "bytes": 17488956
+  },
+  "boundary": "Historical Pi measurement on September source, not a matched live network A/B with October. Source-only metadata replay is separately matched."
+}

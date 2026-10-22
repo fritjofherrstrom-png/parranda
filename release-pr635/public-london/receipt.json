@@ -1,0 +1,363 @@
+{
+  "expected_sha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582",
+  "url": "https://tions-dry-tells-chef.trycloudflare.com/anywhere?place=london&planner=open&prefs=food%2Cculture%2Cviews&rhythm=balanced&day=0&lang=en",
+  "stages": [
+    {
+      "name": "exact-user-url",
+      "http": 200,
+      "source_status": {
+        "status": "loaded:100",
+        "external_candidates_requested": true,
+        "anchor": {
+          "lat": 51.5074456,
+          "lng": -0.1277653
+        },
+        "error": "timeout_or_abort",
+        "collection": {
+          "base_radius_km": 3,
+          "selected_radius_km": 3,
+          "attempted_radius_km": null,
+          "expansion_applied": false,
+          "expansion_trigger": null,
+          "selection_reason": "loader_error",
+          "anchor_mode": "place",
+          "requested_intents": [
+            "food",
+            "museums",
+            "scenic"
+          ],
+          "expansion_query_intents": [],
+          "initial_profile": {
+            "record_count": 0,
+            "category_count": 0,
+            "requested_intent_count": 3,
+            "requested_intents_covered": [],
+            "requested_intents_partial": [],
+            "requested_intents_missing": [
+              "food",
+              "museums",
+              "scenic"
+            ]
+          },
+          "selected_profile": {
+            "record_count": 100,
+            "category_count": 8,
+            "requested_intent_count": 3,
+            "requested_intents_covered": [
+              "food",
+              "museums"
+            ],
+            "requested_intents_partial": [
+              "scenic"
+            ],
+            "requested_intents_missing": []
+          },
+          "initial_day_capacity": {
+            "target_km": null,
+            "target_floor_km": null,
+            "independent_candidate_count": 0,
+            "category_count": 0,
+            "candidate_span_km": 0,
+            "anchor_reach_km": 0,
+            "can_support_target": null
+          },
+          "selected_day_capacity": {
+            "target_km": null,
+            "target_floor_km": null,
+            "independent_candidate_count": 87,
+            "category_count": 8,
+            "candidate_span_km": 4.66,
+            "anchor_reach_km": 3.66,
+            "can_support_target": null
+          },
+          "cache": null,
+          "primary_collection": null,
+          "primary_collection_reason": null,
+          "primary_collection_target_km": null,
+          "spatial_scope": {
+            "source": "nominatim_bounds",
+            "kind": "settlement",
+            "collection_mode": "regional_bounded",
+            "diagonal_km": 73.8
+          },
+          "source_completion": {
+            "status": "complete",
+            "reason": null,
+            "pending": 0,
+            "completed": 1,
+            "failed": 1
+          },
+          "operator_evidence": {
+            "attempted": 1,
+            "confirmed": 0,
+            "excluded": 0,
+            "candidates": [
+              {
+                "id": "overture-974925d5-66f4-4cd7-b4ef-fe7ea0b04541",
+                "status": "not_observed"
+              }
+            ]
+          },
+          "regional_scout": {
+            "attempted": false,
+            "status": null,
+            "reason": "primary_zone_preserved",
+            "selected_anchor": "primary",
+            "cluster_count": 1,
+            "clusters": []
+          }
+        }
+      },
+      "walking_validation": {
+        "valid": true,
+        "blockers": [],
+        "checks": {
+          "walking_source": "agnostic_compose"
+        }
+      },
+      "stops": [
+        {
+          "id": "overture-151de38a-2158-4b22-85f2-1f6a0cf8e393",
+          "name": "SKVP Reading",
+          "type": "restaurant",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-011783b7-1962-49ca-a8ea-4542d15b81a5",
+          "name": "攝政公園",
+          "type": "park",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-04dd2151-3582-405e-953a-dd4d9e069c6a",
+          "name": "50 Kalo",
+          "type": "restaurant",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-1480bd9d-06b7-4694-9bfe-18bff9c3ecab",
+          "name": "British Optical Association Museum",
+          "type": "museum",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-0914a638-05ca-4e6b-85c4-b558674372d5",
+          "name": "National Portrait Gallery",
+          "type": "gallery",
+          "is_live_event": false
+        }
+      ],
+      "estimated_km": 0.6
+    },
+    {
+      "name": "ordinary-reload",
+      "http": 200,
+      "source_status": {
+        "status": "loaded:100",
+        "external_candidates_requested": true,
+        "anchor": {
+          "lat": 51.5074456,
+          "lng": -0.1277653
+        },
+        "error": "provider_timed_out",
+        "collection": {
+          "base_radius_km": 3,
+          "selected_radius_km": 3,
+          "attempted_radius_km": null,
+          "expansion_applied": false,
+          "expansion_trigger": null,
+          "selection_reason": "loader_error",
+          "anchor_mode": "place",
+          "requested_intents": [
+            "food",
+            "museums",
+            "scenic"
+          ],
+          "expansion_query_intents": [],
+          "initial_profile": {
+            "record_count": 0,
+            "category_count": 0,
+            "requested_intent_count": 3,
+            "requested_intents_covered": [],
+            "requested_intents_partial": [],
+            "requested_intents_missing": [
+              "food",
+              "museums",
+              "scenic"
+            ]
+          },
+          "selected_profile": {
+            "record_count": 100,
+            "category_count": 8,
+            "requested_intent_count": 3,
+            "requested_intents_covered": [
+              "food",
+              "museums"
+            ],
+            "requested_intents_partial": [
+              "scenic"
+            ],
+            "requested_intents_missing": []
+          },
+          "initial_day_capacity": {
+            "target_km": null,
+            "target_floor_km": null,
+            "independent_candidate_count": 0,
+            "category_count": 0,
+            "candidate_span_km": 0,
+            "anchor_reach_km": 0,
+            "can_support_target": null
+          },
+          "selected_day_capacity": {
+            "target_km": null,
+            "target_floor_km": null,
+            "independent_candidate_count": 87,
+            "category_count": 8,
+            "candidate_span_km": 4.66,
+            "anchor_reach_km": 3.66,
+            "can_support_target": null
+          },
+          "cache": null,
+          "primary_collection": null,
+          "primary_collection_reason": null,
+          "primary_collection_target_km": null,
+          "spatial_scope": {
+            "source": "nominatim_bounds",
+            "kind": "settlement",
+            "collection_mode": "regional_bounded",
+            "diagonal_km": 73.8
+          },
+          "source_completion": null,
+          "operator_evidence": {
+            "attempted": 1,
+            "confirmed": 0,
+            "excluded": 0,
+            "candidates": [
+              {
+                "id": "overture-974925d5-66f4-4cd7-b4ef-fe7ea0b04541",
+                "status": "not_observed"
+              }
+            ]
+          },
+          "regional_scout": {
+            "attempted": false,
+            "status": null,
+            "reason": "primary_zone_preserved",
+            "selected_anchor": "primary",
+            "cluster_count": 1,
+            "clusters": []
+          }
+        }
+      },
+      "walking_validation": {
+        "valid": true,
+        "blockers": [],
+        "checks": {
+          "walking_source": "agnostic_compose"
+        }
+      },
+      "stops": [
+        {
+          "id": "overture-151de38a-2158-4b22-85f2-1f6a0cf8e393",
+          "name": "SKVP Reading",
+          "type": "restaurant",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-011783b7-1962-49ca-a8ea-4542d15b81a5",
+          "name": "攝政公園",
+          "type": "park",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-04dd2151-3582-405e-953a-dd4d9e069c6a",
+          "name": "50 Kalo",
+          "type": "restaurant",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-1480bd9d-06b7-4694-9bfe-18bff9c3ecab",
+          "name": "British Optical Association Museum",
+          "type": "museum",
+          "is_live_event": false
+        },
+        {
+          "id": "overture-0914a638-05ca-4e6b-85c4-b558674372d5",
+          "name": "National Portrait Gallery",
+          "type": "gallery",
+          "is_live_event": false
+        }
+      ],
+      "estimated_km": 0.6
+    }
+  ],
+  "requests": [
+    {
+      "stage": "exact-user-url",
+      "place": "london",
+      "dates": [
+        "2026-10-22"
+      ],
+      "rhythm": "balanced",
+      "preferences": [
+        "food",
+        "culture",
+        "views"
+      ]
+    },
+    {
+      "stage": "exact-user-url",
+      "place": "london",
+      "place_ref": "r175342",
+      "dates": [
+        "2026-10-22"
+      ],
+      "rhythm": "balanced",
+      "preferences": [
+        "food",
+        "culture",
+        "views"
+      ]
+    },
+    {
+      "stage": "ordinary-reload",
+      "place": "london",
+      "place_ref": "r175342",
+      "dates": [
+        "2026-10-22"
+      ],
+      "rhythm": "balanced",
+      "preferences": [
+        "food",
+        "culture",
+        "views"
+      ]
+    }
+  ],
+  "page_errors": [],
+  "asset_errors": [],
+  "http_errors": [],
+  "outcome": "PASS_PUBLIC_DAY_RENDER_CARD_RELOAD",
+  "boundary": "fresh browser, plain-text city URL entry and correct day selection, real sources/clock, no routes intercepted or coordinates injected; one ordinary reload after successful publication; no retry-to-green/provider loop; physical venue hours and full provider coverage are not claimed",
+  "health_before": {
+    "ok": true,
+    "runtime_profile": "staging-563-564",
+    "build_sha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582"
+  },
+  "browser": "153.0.8010.12",
+  "disambiguation": {
+    "label": "Greater London, England, United Kingdom",
+    "method": "ordinary visible UI button; no coordinates or provider response injection"
+  },
+  "compact_card": {
+    "collapsed_unknown_hours": 0,
+    "expanded_unknown_hours": 1
+  },
+  "live_navigation": "PASS_OPEN_SORT_WEEK_REOPEN_WITHOUT_ROUTE_RECOMPOSE",
+  "health_after": {
+    "ok": true,
+    "runtime_profile": "staging-563-564",
+    "build_sha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582"
+  },
+  "elapsed_ms": 70591
+}

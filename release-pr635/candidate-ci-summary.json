@@ -1,0 +1,122 @@
+{
+  "head": "bf016f310522aaa0751cf77d840466859180f122",
+  "ci": {
+    "conclusion": "success",
+    "databaseId": 39826643814,
+    "headSha": "bf016f310522aaa0751cf77d840466859180f122",
+    "status": "completed",
+    "url": "https://github.com/fritjofherrstrom-png/parranda/actions/runs/39826643814"
+  },
+  "counts_by_step": {
+    "Run tests": {
+      "tests": 4926,
+      "pass": 4923,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 3,
+      "todo": 0,
+      "duration_ms": 548441.348114
+    },
+    "Test frontend foundation": {
+      "tests": 927,
+      "pass": 927,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "duration_ms": 148449.761923
+    },
+    "Smoke-test Source Catalog migration": {
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "duration_ms": 262.353995
+    }
+  },
+  "steps": [
+    {
+      "name": "Set up job",
+      "conclusion": "success"
+    },
+    {
+      "name": "Checkout",
+      "conclusion": "success"
+    },
+    {
+      "name": "Setup Node",
+      "conclusion": "success"
+    },
+    {
+      "name": "Install dependencies",
+      "conclusion": "success"
+    },
+    {
+      "name": "Install frontend dependencies",
+      "conclusion": "success"
+    },
+    {
+      "name": "Install Chromium for map acceptance",
+      "conclusion": "success"
+    },
+    {
+      "name": "Run tests",
+      "conclusion": "success"
+    },
+    {
+      "name": "Typecheck frontend foundation",
+      "conclusion": "success"
+    },
+    {
+      "name": "Test frontend foundation",
+      "conclusion": "success"
+    },
+    {
+      "name": "Build frontend foundation",
+      "conclusion": "success"
+    },
+    {
+      "name": "Check committed frontend/dist matches the build",
+      "conclusion": "success"
+    },
+    {
+      "name": "Prepare digest-pinned CI image mirrors",
+      "conclusion": "success"
+    },
+    {
+      "name": "Validate self-hosted production contract",
+      "conclusion": "success"
+    },
+    {
+      "name": "Validate self-hosted Compose configuration",
+      "conclusion": "success"
+    },
+    {
+      "name": "Validate self-hosted Source Catalog profile",
+      "conclusion": "success"
+    },
+    {
+      "name": "Build self-hosted image",
+      "conclusion": "success"
+    },
+    {
+      "name": "Smoke-test Source Catalog migration",
+      "conclusion": "success"
+    },
+    {
+      "name": "Post Setup Node",
+      "conclusion": "success"
+    },
+    {
+      "name": "Post Checkout",
+      "conclusion": "success"
+    },
+    {
+      "name": "Complete job",
+      "conclusion": "success"
+    }
+  ],
+  "boundary": "Root recursively includes frontend tests; frontend rerun is separate, do not add counts. SQL smoke is independent of root opt-in skip."
+}

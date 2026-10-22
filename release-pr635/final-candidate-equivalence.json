@@ -1,0 +1,7 @@
+{
+  "prior_image": "sha256:f24252c76bb4220ef3aa92b08b212e80a4335eed4ca9851b672660712789666e",
+  "final_candidate_image": "sha256:70cd688b70b9168cceae90be220cb63facad235093df84c1c471753cd51b4099",
+  "identical_product_rootfs": true,
+  "all_other_config_except_build_sha_labels_preserved": true,
+  "checked_at": "2026-10-22T18:04:39.825004+00:00"
+}

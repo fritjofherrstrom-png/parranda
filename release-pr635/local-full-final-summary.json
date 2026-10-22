@@ -1,0 +1,15 @@
+{
+  "head": "bf016f310522aaa0751cf77d840466859180f122",
+  "runtime": "Node24.15.0/macOS/arm64",
+  "command": "npm test -- --test-concurrency=2",
+  "counts": {
+    "tests": 4926,
+    "pass": 4923,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 3,
+    "todo": 0,
+    "duration_ms": 1482723.974542
+  },
+  "browser_test_timeouts_unchanged": true
+}

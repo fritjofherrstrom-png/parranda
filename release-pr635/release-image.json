@@ -1,0 +1,16 @@
+{
+  "id": "sha256:3ac1fc011326d4c96843b3f278bbad18001c41971bf61743e8371ceb80fed753",
+  "sha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582",
+  "tree": "bd20eef1724b546841f97db403268d5ac69358e0",
+  "candidate": "bf016f310522aaa0751cf77d840466859180f122",
+  "architecture": "arm64",
+  "repo_digests": [
+    "parranda-pr635@sha256:3ac1fc011326d4c96843b3f278bbad18001c41971bf61743e8371ceb80fed753"
+  ],
+  "node_runtime": {
+    "node": "v22.23.4",
+    "architecture": "arm64",
+    "platform": "linux",
+    "sha": "a3e4edaabc7f3834e71451cb9a1b2fcabe76b582"
+  }
+}
