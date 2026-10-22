@@ -70,16 +70,20 @@ test("on a phone the shape is the day's order: heading, stops, then the map", as
   assert.equal(shape(h, "map-column"), null, "no wide-screen column on a phone");
 });
 
-test("the shape is silent and holds still; only the stations trace the line", async (t) => {
+test("the shape is silent and moves as one slow sheen, never blinking or flashing ember", async (t) => {
   const { h } = await composing(t);
   for (const part of ["heading", "stations", "map"]) {
     assert.ok(shape(h, part).closest('[aria-hidden="true"]'), `${part} is decorative`);
     assert.equal(shape(h, part).textContent.trim(), "", `${part} carries no text, number or place`);
   }
-  // A whole block pulsing on and off read as blinking.
+  // A whole block pulsing on and off read as blinking; a still grey page read
+  // as broken; ember stations lighting in turn read as hectic.
   assert.equal(h.container.querySelector("main .animate-pulse, main [class*='motion-safe:animate-pulse']"), null);
-  const tracing = shape(h, "stations").querySelectorAll("[class*='parranda-trace']");
-  assert.ok(tracing.length >= 3, "each station takes its turn on the line");
+  assert.equal(h.container.querySelector("main [class*='parranda-trace'], main [data-day-shape] [class*='ember']"), null);
+  const shapes = [...h.container.querySelectorAll("main [aria-hidden='true'] .skeleton")];
+  assert.ok(shapes.length >= 15, `every placeholder shape carries the sheen (${shapes.length})`);
+  for (const element of shapes) assert.match(element.className, /motion-safe:animate-\[parranda-sheen_2\.8s_ease-in-out_infinite\]/);
+  assert.equal(shape(h, "stations").querySelectorAll(".skeleton.rounded-full.h-full").length, 5, "five stations, the same sheen");
   // The status line is still the one thing a reader hears.
   assert.match(h.container.querySelector('main [aria-live="polite"]').textContent, /Finding the place/);
 });

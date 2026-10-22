@@ -106,18 +106,30 @@
   text-transform: uppercase;
 }
 
-/* A day that is still composing traces its line: each empty station takes the
-   ember in turn, top to bottom, then rests (DayPlaceholder staggers the
-   delays). Used only under motion-safe. */
-@keyframes parranda-trace {
-  0%,
-  40%,
-  100% {
-    border-color: rgb(var(--p-color-ink) / 0.12);
+/* A day that is still composing: every placeholder shape carries one slow,
+   soft sheen that sweeps across it, in step with the others, then rests.
+   Nothing blinks and nothing flashes ember. A still grey page read as
+   broken, and stations lighting ember in turn read as hectic (iPhone,
+   23 Oct 2026). Reduced motion keeps the flat shape. */
+@utility skeleton {
+  background-color: rgb(var(--p-color-ink) / 0.08);
+  background-image: linear-gradient(
+    100deg,
+    transparent 35%,
+    rgb(var(--p-color-ink) / 0.07) 50%,
+    transparent 65%
+  );
+  background-position: 100% 0;
+  background-repeat: no-repeat;
+  background-size: 250% 100%;
+}
+@keyframes parranda-sheen {
+  0% {
+    background-position: 100% 0;
   }
-  12%,
-  24% {
-    border-color: rgb(var(--p-color-ember));
+  75%,
+  100% {
+    background-position: 0 0;
   }
 }
 
