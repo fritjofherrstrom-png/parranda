@@ -121,6 +121,36 @@
   }
 }
 
+/* The choice just made, while the day rebuilds around it: an ember ring that
+   widens and fades from the chip that was tapped. Used only under
+   motion-safe. */
+@keyframes parranda-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgb(var(--p-color-ember) / 0.7);
+  }
+  100% {
+    box-shadow: 0 0 0 7px rgb(var(--p-color-ember) / 0);
+  }
+}
+
+/* The small status dots that say "rebuilding": the same trace as the loading
+   day's stations, on a fill instead of a border. A dark pill sets
+   --trace-base to a paper tone so the resting dots still show. */
+@utility trace-dot {
+  background-color: var(--trace-base, rgb(var(--p-color-ink) / 0.18));
+}
+@keyframes parranda-trace-dot {
+  0%,
+  45%,
+  100% {
+    background-color: var(--trace-base, rgb(var(--p-color-ink) / 0.18));
+  }
+  12%,
+  28% {
+    background-color: rgb(var(--p-color-ember));
+  }
+}
+
 /* MapLibre's own stylesheet is lazy-loaded with the map, so it can arrive after
    this one. Every override below is one class more specific than the MapLibre
    rule it replaces (`.route-map-frame …`), so it wins whichever loads last.

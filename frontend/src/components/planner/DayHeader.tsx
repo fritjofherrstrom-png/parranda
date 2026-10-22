@@ -13,9 +13,12 @@ import { walkingDistanceLabel } from "../../lib/route-context-view.mjs";
 import { CheckIcon, ExternalIcon, HalfCircleIcon, MinusIcon, ShareIcon, StarIcon, SunIcon, WalkIcon } from "../shared/icons";
 import { busyButton, buttonClass, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
+import { TraceDots } from "./Rebuild";
 
 type RoutePart = WalkingRoutePart;
-type PickCoverage = { key: string; state: "covered" | "partial" | "missing" };
+// "pending": a pick the day on screen never answered — just added, its rebuild
+// still coming. That day says nothing about it yet, so neither does the chip.
+type PickCoverage = { key: string; state: "covered" | "partial" | "missing" | "pending" };
 
 /** A quiet fact about the day, not a control. */
 // The day's facts are labels, not choices (ui.tsx labelChip).
@@ -231,9 +234,9 @@ export default function DayHeader({
         {staleNotice === "updating" && (
           <span
             aria-live="polite"
-            className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ink/10 px-2.5 py-0.5 text-11 font-bold text-parranda-ink/75"
+            className="inline-flex min-h-7 items-center gap-2 rounded-full border-line border-parranda-ember/60 px-2.5 text-xs font-bold text-parranda-clay"
           >
-            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-parranda-glow motion-safe:animate-pulse" />
+            <TraceDots count={3} />
             {t("Uppdaterar dagen …", "Updating your day …")}
           </span>
         )}
@@ -312,10 +315,12 @@ export default function DayHeader({
               {state === "covered" && <CheckIcon className="h-3 w-3 text-parranda-ember" />}
               {state === "partial" && <HalfCircleIcon className="h-3 w-3 text-parranda-glow" />}
               {state === "missing" && <MinusIcon className="h-3 w-3" />}
+              {state === "pending" && <TraceDots count={3} />}
               <span>{pickLabel(key, lang)}</span>
               {state === "covered" && <span className="sr-only">{t(" — med i dagen", " — in this day")}</span>}
               {state === "partial" && <span className="text-parranda-ink/68">{t(" · delvis", " · partly")}</span>}
               {state === "missing" && <span>{t(" · inte med", " · not in this day")}</span>}
+              {state === "pending" && <span className="text-parranda-ink/68">{t(" · letar platser …", " · finding places …")}</span>}
             </li>
           ))}
         </ul>

@@ -79,11 +79,14 @@ function StopCategory({ type, label, muted }: { type: unknown; label: string; mu
   );
 }
 
+const NO_NEW_STOPS: ReadonlySet<string> = new Set();
+
 export default function StopLine({
   t,
   lang,
   map,
   stale,
+  newStopNames = NO_NEW_STOPS,
   routeLineIsSketch,
   dayContextNote,
   assemblyNotes = [],
@@ -119,6 +122,8 @@ export default function StopLine({
   /** The map, when it is drawn inline (phones). On wide screens it sits beside the day instead. */
   map: ReactNode;
   stale: boolean;
+  /** Stops the last adjustment brought into the day, by name (describeDayChange's `added`). */
+  newStopNames?: ReadonlySet<string>;
   routeLineIsSketch: boolean;
   dayContextNote: string | null | undefined;
   /** Where the places came from and how the day sits on the clock. */
@@ -216,7 +221,11 @@ export default function StopLine({
       aria-label={t("Rutten", "The route")}
       // On a phone the stops continue the day header directly above them,
       // so they sit closer than the page's section rhythm.
-      className={`${stale ? "opacity-60 motion-safe:transition-opacity" : ""} ${map ? "-mt-6" : ""} flex flex-col`}
+      // While an adjustment rebuilds the day, the day on screen stays — never
+      // a silent swap — but reads as the one being replaced: its names fade,
+      // the ember line goes quiet and the empty stations trace it again.
+      data-rebuilding={stale || undefined}
+      className={`${map ? "-mt-6" : ""} flex flex-col`}
     >
       {!map && about}
 
@@ -258,7 +267,7 @@ export default function StopLine({
         </p>
       )}
       <ol
-        className="relative flex flex-col before:pointer-events-none before:absolute before:bottom-7 before:left-[19px] before:top-7 before:w-1.5 before:rounded-full before:bg-parranda-ember before:content-['']"
+        className={"relative flex flex-col before:pointer-events-none before:absolute before:bottom-7 before:left-[19px] before:top-7 before:w-1.5 before:rounded-full before:transition-colors before:content-[''] " + (stale ? "before:bg-parranda-ink/12" : "before:bg-parranda-ember")}
         aria-label={t("Stoppen i ordning", "The stops, in order")}
       >
         {split.core.map((stop: any, i: number) => {
@@ -291,7 +300,9 @@ export default function StopLine({
           const sourceLabel = String(stop?.source?.label || "").trim();
           const behind = currentIndex != null && i < currentIndex;
           const isCurrent = currentIndex === i;
-          const station = expanded
+          const station = stale
+            ? "border-parranda-ink/12 bg-parranda-paper text-parranda-ink/68 motion-safe:animate-[parranda-trace_3.2s_ease-in-out_infinite]"
+            : expanded
             ? "border-parranda-ink bg-parranda-terracotta text-white"
             : isCurrent
               ? "border-parranda-ember bg-parranda-paper text-parranda-ink"
@@ -303,7 +314,7 @@ export default function StopLine({
           return (
             <li key={stopKey} className="flex flex-col">
               {leg && (leg.minutes != null || leg.km != null) && (
-                <span className={`${dataLine} flex min-h-10 items-center gap-2 pl-14`}>
+                <span className={`${dataLine} flex min-h-10 items-center gap-2 pl-14 transition-opacity${stale ? " opacity-45" : ""}`}>
                   <WalkIcon className="h-3.5 w-3.5" />
                   {leg.minutes != null ? `${leg.minutes} min` : ""}
                   {leg.minutes != null && leg.km != null ? " · " : ""}
@@ -326,16 +337,24 @@ export default function StopLine({
                 onClick={() => setExpandedStopKey(expanded ? null : stopKey)}
                 className="group flex min-h-16 w-full items-center gap-3.5 rounded-parranda-btn py-2 pr-1 text-left transition hover:bg-parranda-ink/5"
               >
-                <span className={`type-data relative z-[1] flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-4 text-sm font-semibold transition ${station}`}>
+                <span
+                  className={`type-data relative z-[1] flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-4 text-sm font-semibold transition ${station}`}
+                  style={stale ? { animationDelay: `${(i % 7) * 0.45}s` } : undefined}
+                >
                   {isCurrent && (
                     <span aria-hidden="true" className="absolute -inset-2 rounded-full border-2 border-parranda-ember motion-safe:animate-ping" />
                   )}
                   {behind ? <CheckIcon className="h-4 w-4" /> : routeNumber}
                   {behind && <span className="sr-only">{routeNumber}</span>}
                 </span>
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className={"flex min-w-0 flex-1 flex-col gap-0.5 transition-opacity" + (stale ? " opacity-45" : "")}>
                   <span className={"flex flex-wrap items-center gap-x-2 text-17 font-extrabold leading-tight " + (behind ? "text-parranda-ink/68" : "text-parranda-ink")}>
                     {name}
+                    {/* Named by the change line above ("4 stops swapped"):
+                        which ones are new, for as long as that line stands. */}
+                    {!stale && newStopNames.has(name) && (
+                      <span className="type-eyebrow text-10 text-parranda-glow">{t("ny", "new")}</span>
+                    )}
                     {isCurrent && (
                       <span className="type-eyebrow rounded-full bg-parranda-terracotta px-2 py-0.5 text-10 text-white">
                         {progress?.state === "at" ? t("Du är här", "You're here") : t("Nästa", "Next")}
@@ -507,7 +526,9 @@ export default function StopLine({
           : eventSourceLink(eveningEvent, lang);
         const routeNumber = routeStops.indexOf(stop) + 1;
         return (
-          <div key={stop?.id} className="flex flex-col">
+          // The woven event belongs to the day being replaced as much as the
+          // stops above it, so it fades with them while the rebuild runs.
+          <div key={stop?.id} className={"flex flex-col transition-opacity" + (stale ? " opacity-45" : "")}>
             {legShown && leg && (
               <span className={`${dataLine} relative flex min-h-10 items-center gap-2 pl-14`}>
                 <span
@@ -597,7 +618,7 @@ export default function StopLine({
           the disclosure at the top. */}
       {map && (
         <>
-          <div role="region" aria-label={t("Karta över dagen", "Map of the day")} className="mt-8">
+          <div role="region" aria-label={t("Karta över dagen", "Map of the day")} className={"mt-8 transition-opacity" + (stale ? " opacity-60" : "")}>
             {map}
           </div>
           {about}

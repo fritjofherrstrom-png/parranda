@@ -4,14 +4,21 @@
  * second form here. Adjusting is collapsed to one line by default; every change
  * recomposes on its own (no submit) — the orchestrator's handlers own that.
  */
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { normalizePreferencePriority } from "../../../../shared/planner-intent.mjs";
 import { CheckIcon, ChevronDownIcon, LocationIcon } from "../shared/icons";
 import { compactPillTarget, Eyebrow, panelCard, segmentClass, segmentGroup } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
+import { TraceDots } from "./Rebuild";
 
 type Option = { key: string; sv: string; en: string };
 type RhythmOption = Option & { noteSv: string; noteEn: string };
+/** Where the day stands after the reader's last adjustment, said where they made it. */
+export type AdjustRebuild =
+  | { state: "updating" }
+  | { state: "updated"; summary: string }
+  | { state: "failed" }
+  | null;
 
 
 export default function AnchorCard({
@@ -33,6 +40,7 @@ export default function AnchorCard({
   walkKey,
   onSetRhythm,
   onChangePlace,
+  rebuild = null,
 }: {
   t: Translate;
   lang: Lang;
@@ -54,6 +62,7 @@ export default function AnchorCard({
   onSetRhythm: (key: string) => void;
   /** A plain left-click on "Change": the planner cancels work it no longer needs. */
   onChangePlace: () => void;
+  rebuild?: AdjustRebuild;
 }) {
   // Opening swaps "Adjust" for "Done" (and closing swaps back), so the button
   // that had keyboard focus leaves the DOM. Move focus to its counterpart, but
@@ -72,6 +81,14 @@ export default function AnchorCard({
     toggledHere.current = true;
     setAdjustOpen(open);
   };
+  // The control the reader just tapped carries the rebuild's ring until the
+  // new day is on screen, so the wait is tied to the choice that caused it.
+  const [touched, setTouched] = useState<string | null>(null);
+  const rebuilding = rebuild?.state === "updating";
+  useEffect(() => {
+    if (rebuild?.state !== "updating") setTouched(null);
+  }, [rebuild?.state]);
+  const ring = (key: string) => (rebuilding && touched === key ? " motion-safe:animate-[parranda-ring_1.2s_ease-out_infinite]" : "");
   const scale = rhythms.filter((preset) => preset.key !== "free");
   const priority = normalizePreferencePriority(preferencePriority, selected);
   const priorityRanks = new Map<string, number>(priority.map((key, index) => [key, index + 1]));
@@ -133,9 +150,31 @@ export default function AnchorCard({
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 flex-col gap-1">
               <Eyebrow>{t("Justera dagen", "Adjust the day")}</Eyebrow>
-              <p className="text-xs text-parranda-ink/68">
-                {t("Dagen byggs om direkt när du ändrar.", "The day rebuilds as you change it.")}
-              </p>
+              {/* With the panel open on a phone, the day is below the screen:
+                  this line is where the reader learns the day is rebuilding,
+                  then what the rebuild changed. */}
+              {rebuild?.state === "updating" ? (
+                <p data-adjust-rebuild="updating" className="flex items-center gap-2 text-xs font-bold text-parranda-clay">
+                  <TraceDots />
+                  {t("Uppdaterar dagen …", "Updating your day …")}
+                </p>
+              ) : rebuild?.state === "updated" ? (
+                <p data-adjust-rebuild="updated" className="flex items-start gap-1.5 text-xs leading-snug text-parranda-ink/72">
+                  <CheckIcon className="mt-px h-3 w-3 shrink-0 text-parranda-ember" />
+                  <span>
+                    <span className="font-bold text-parranda-ink">{t("Uppdaterad", "Updated")}: </span>
+                    {rebuild.summary}
+                  </span>
+                </p>
+              ) : rebuild?.state === "failed" ? (
+                <p data-adjust-rebuild="failed" className="text-xs font-semibold text-parranda-clay">
+                  {t("Kunde inte uppdatera — din förra dag visas.", "Couldn't update — your previous day is shown.")}
+                </p>
+              ) : (
+                <p className="text-xs text-parranda-ink/68">
+                  {t("Dagen byggs om direkt när du ändrar.", "The day rebuilds as you change it.")}
+                </p>
+              )}
             </div>
             <button
               type="button"
@@ -167,9 +206,12 @@ export default function AnchorCard({
                     <button
                       type="button"
                       aria-pressed={active}
-                      onClick={() => onToggleMood(pref.key)}
+                      onClick={() => {
+                        setTouched(`pick:${pref.key}`);
+                        onToggleMood(pref.key);
+                      }}
                       className={
-                        `${compactPillTarget} gap-1.5 px-3.5 ` +
+                        `${compactPillTarget} gap-1.5 px-3.5${ring(`pick:${pref.key}`)} ` +
                         (active
                           ? "bg-parranda-ink font-bold text-parranda-paper"
                           : "border-line border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45 hover:text-parranda-ink")
@@ -199,7 +241,7 @@ export default function AnchorCard({
             <Eyebrow tone="glow">{t("När", "When")}</Eyebrow>
             <div className={segmentGroup} role="group" aria-label={t("Vilken dag", "Which day")}>
               {([0, 1] as const).map((offset) => (
-                <button type="button" key={offset} aria-pressed={dayOffset === offset} onClick={() => onSetDay(offset)} className={segmentClass(dayOffset === offset)}>
+                <button type="button" key={offset} aria-pressed={dayOffset === offset} onClick={() => { setTouched(`day:${offset}`); onSetDay(offset); }} className={segmentClass(dayOffset === offset) + ring(`day:${offset}`)}>
                   {offset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")}
                 </button>
               ))}
@@ -218,9 +260,12 @@ export default function AnchorCard({
                 <button
                   type="button"
                   aria-pressed={walkKey === free.key}
-                  onClick={() => onSetRhythm(free.key)}
+                  onClick={() => {
+                    setTouched(`rhythm:${free.key}`);
+                    onSetRhythm(free.key);
+                  }}
                   className={
-                    `${compactPillTarget} shrink-0 gap-1.5 px-3 ` +
+                    `${compactPillTarget} shrink-0 gap-1.5 px-3${ring(`rhythm:${free.key}`)} ` +
                     // A choice like the moods above. The dashed tone means
                     // "optional, not part of the day" (ui.tsx), which a rhythm is not.
                     (walkKey === free.key
@@ -245,9 +290,12 @@ export default function AnchorCard({
                     type="button"
                     key={preset.key}
                     aria-pressed={active}
-                    onClick={() => onSetRhythm(preset.key)}
+                    onClick={() => {
+                      setTouched(`rhythm:${preset.key}`);
+                      onSetRhythm(preset.key);
+                    }}
                     className={
-                      "min-h-11 px-2 text-13 leading-tight transition first:rounded-l-full last:rounded-r-full " +
+                      "min-h-11 px-2 text-13 leading-tight transition first:rounded-l-full last:rounded-r-full" + ring(`rhythm:${preset.key}`) + " " +
                       (index > 0 ? "border-l-line border-parranda-ink/18 " : "") +
                       (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink/72 hover:text-parranda-ink")
                     }

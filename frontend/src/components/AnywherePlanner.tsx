@@ -83,13 +83,14 @@ import AppBar from "./shared/AppBar";
 import { KeepIcon, LocationIcon, MinusIcon, UndoIcon } from "./shared/icons";
 import { busyButton, buttonClass, noticeCard } from "./shared/ui";
 import { useMediaQuery } from "./shared/useMediaQuery";
-import AnchorCard from "./planner/AnchorCard";
+import AnchorCard, { type AdjustRebuild } from "./planner/AnchorCard";
 import BlitzCard from "./planner/BlitzCard";
 import CandidateAreas from "./planner/CandidateAreas";
 import DayHeader, { DayActions, dayAssemblyNotes } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
 import DayPlaceholder, { DayMapPlaceholder } from "./planner/DayPlaceholder";
+import { RebuildPill } from "./planner/Rebuild";
 import LiveSheet from "./planner/LiveSheet";
 import { selectedDayEmpty, useLiveFallback } from "./planner/useLiveFallback";
 import SavedDays from "./planner/SavedDays";
@@ -2290,7 +2291,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // The user's own picks, each with what the published route did for it —
   // read from stop-level coverage evidence only. Without that evidence the
   // header claims nothing about the picks at all.
-  type PickCoverage = { key: string; state: "covered" | "partial" | "missing" };
+  type PickCoverage = { key: string; state: "covered" | "partial" | "missing" | "pending" };
   const pickCoverage: PickCoverage[] = routeCoverage.has_coverage_evidence
     ? selected.flatMap((key): PickCoverage[] => {
         if (routeCoverage.covered_preferences.includes(key)) return [{ key, state: "covered" }];
@@ -2313,6 +2314,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         feedbackInputs.walkKey ?? "", feedbackLedger.applies ? feedbackLedger.entries : {},
         feedbackInputs.preferencePriority ?? [], feedbackInputs.dayEdit);
   const publishedFirstChoice = normalizePreferencePriority(feedbackInputs?.preferencePriority, feedbackInputs?.selected)[0];
+  // A pick the day on screen never answered (just added; its rebuild still
+  // coming) is not "missing" from that day. Said as pending until the day
+  // that answers it is on screen.
+  const answeredPicks: string[] | null = Array.isArray(feedbackInputs?.selected) ? feedbackInputs.selected : null;
+  const shownPickCoverage: PickCoverage[] = answeredPicks
+    ? pickCoverage.map((pick) => (answeredPicks.includes(pick.key) ? pick : { key: pick.key, state: "pending" }))
+    : pickCoverage;
   const priorityShortfall = phase === "done" && !dayIsStale && feedbackMatchesIntent && publishedFirstChoice
     ? pickCoverage.find(({ key, state }) => key === publishedFirstChoice && state !== "covered") ?? null
     : null;
@@ -2327,22 +2335,38 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     : stopEditError === "rebuild_required"
     ? t("Uppdatera den sparade dagen eller välj en ny startpunkt innan du ändrar stopp.", "Rebuild this saved day or choose a new starting point before editing stops.")
     : stopEditError ? t("Ändringen kunde inte bekräftas.", "The change could not be confirmed.") : "";
-  const dayChangeLine = useMemo(
-    () =>
-      dayChange
-        ? dayChangeSegments(dayChange.summary, {
-            lang,
-            // Name the rhythm input; measured distance describes the resulting day.
-            walkLabel: (key) => {
-              const preset = DAY_RHYTHMS.find((p: { key: string }) => p.key === key);
-              return preset ? String(lang === "en" ? preset.en : preset.sv).split(" · ")[0] : key;
-            },
-            pickLabel: (key) => pickLabel(key, lang),
-            dayLabel: (offset) => (offset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")),
-          })
-        : [],
+  const [dayChangeLine, dayRouteChange] = useMemo(() => {
+    if (!dayChange) return [[], []];
+    const options = {
+      lang,
+      // Name the rhythm input; measured distance describes the resulting day.
+      walkLabel: (key: string) => {
+        const preset = DAY_RHYTHMS.find((p: { key: string }) => p.key === key);
+        return preset ? String(lang === "en" ? preset.en : preset.sv).split(" · ")[0] : key;
+      },
+      pickLabel: (key: string) => pickLabel(key, lang),
+      dayLabel: (offset: number) => (offset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")),
+    };
+    // The Adjust panel and the rebuild pill say only what the route did: the
+    // inputs are the chips the reader just set, and the change line names them.
+    const routeOnly = { ...dayChange.summary, cause: null, inputs: { walk: null, day: null, picksAdded: [], picksRemoved: [] } };
+    return [dayChangeSegments(dayChange.summary, options), dayChangeSegments(routeOnly, options)];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dayChange, lang],
+  }, [dayChange, lang]);
+  // Where the reader's last adjustment stands, for the Adjust panel and the
+  // slow-rebuild pill: rebuilding, rebuilt (and what changed), or failed.
+  const adjustSummary = dayChange && phase === "done" && !dayIsStale ? dayRouteChange.join(" · ") : "";
+  const adjustRebuild: AdjustRebuild =
+    staleNotice === "updating"
+      ? { state: "updating" }
+      : staleNotice === "update_failed"
+        ? { state: "failed" }
+        : adjustSummary
+          ? { state: "updated", summary: adjustSummary }
+          : null;
+  const newStopNames = useMemo(
+    () => new Set<string>(dayChange && dayChange.summary.stops.before > 0 ? dayChange.summary.stops.added : []),
+    [dayChange],
   );
   // A woven live event belongs to the day on screen, which may be tomorrow's.
   const includedInRoute = dayOffset === 0
@@ -2468,6 +2492,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           walkKey={walkKey}
           onSetRhythm={chooseRhythm}
           onChangePlace={cancelActivePlannerForNavigation}
+          rebuild={adjustRebuild}
         />
       )}
 
@@ -2768,7 +2793,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           weather={dayflow?.weather ?? null}
           coreCount={split.core.length}
           wovenCount={split.woven.length}
-          pickCoverage={pickCoverage}
+          pickCoverage={shownPickCoverage}
           priorityShortfall={priorityShortfall}
           dayLimitationNote={dayLimitationNote}
           sourceEvidenceNote={sourceEvidenceNote}
@@ -2828,6 +2853,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           lang={lang}
           map={splitLayout ? null : routeMap}
           stale={staleNotice === "updating"}
+          newStopNames={newStopNames}
           routeLineIsSketch={routeLineIsSketch}
           dayContextNote={dayContextNote}
           assemblyNotes={dayAssemblyNotes(t, { sourceBackedDay, timeAnchoring })}
@@ -2970,6 +2996,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       ) : (
         <DayMapPlaceholder />
       ))}
+
+      {dayWithRoute && (
+        <RebuildPill
+          t={t}
+          updating={staleNotice === "updating"}
+          summary={adjustSummary}
+          onShowDay={() => document.querySelector<HTMLElement>("main header h1")?.focus()}
+        />
+      )}
 
       {/* Live navigation reads source data; explicit occurrence choice reuses
           the day's bounded commitment/recomposition path. */}

@@ -42,10 +42,12 @@
   --p-shadow-pop: 0 6px 20px rgb(0 0 0 / 0.25);
   --p-shadow-sheet: 0 25px 50px -12px rgb(0 0 0 / 0.25);
   /* Stacking order, low to high. MapLibre's own controls sit at 2 inside the
-     map; the map's tooltip stays under the Live sheet. */
+     map; the map's tooltip stays under the Live sheet. The rebuild pill
+     floats over the inline map but never over the Live sheet. */
   --p-z-popover: 40;
   --p-z-map-control: 1001;
   --p-z-map-tooltip: 1002;
+  --p-z-toast: 1050;
   --p-z-sheet: 1100;
   --p-font-display: "Archivo";
   --p-font-body: "Archivo";
