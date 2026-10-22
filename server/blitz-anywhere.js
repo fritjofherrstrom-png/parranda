@@ -15,6 +15,7 @@
 const { buildBlitzDecision } = require("./blitz-engine");
 const { buildAgnosticCityContext } = require("./candidates/agnostic-context");
 const { haversineKm } = require("./candidates/area-intelligence");
+const { serverInstant } = require("./lib/clock");
 const { getIsoWeekday } = require("./lib/iso-date");
 const { buildLocalDayAvailabilityWindow, evaluateOpeningHoursForWindow } = require("./place-candidates/opening-hours");
 const { resolveAgnosticIntake } = require("./planner/agnostic-place-intake");
@@ -30,21 +31,6 @@ const MAX_IMMEDIATE_EVENT_KM = 2;
 const MAX_EVENT_START_MINUTES = 90;
 const MIN_EVENT_SALIENCE = 6;
 const NO_PREFERENCE_MATCH = "no_preference_match_offering_general";
-
-function serverInstant(clock) {
-  let raw = null;
-  try {
-    raw = typeof clock === "function"
-      ? clock()
-      : clock && typeof clock.now === "function"
-        ? clock.now()
-        : new Date();
-  } catch (_error) {
-    raw = new Date();
-  }
-  const date = raw instanceof Date ? new Date(raw.getTime()) : new Date(raw);
-  return Number.isNaN(date.getTime()) ? new Date() : date;
-}
 
 function uniqueTokens(values) {
   return [...new Set(

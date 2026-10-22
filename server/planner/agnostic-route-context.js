@@ -32,6 +32,7 @@ const goldenHourGenerator = require("../pulse-engine/generators/golden-hour");
 const cityRhythmGenerator = require("../pulse-engine/generators/city-rhythm");
 const { interpretWeatherForDayflow } = require("../pulse-sources/weather-context-provider");
 const { resolveTimeBandFromHour } = require("../candidates/candidate-pool");
+const { readClockInstant } = require("../lib/clock");
 
 const { fetchWeatherForDates } = require("../weather");
 
@@ -210,14 +211,16 @@ async function resolveAgnosticContext({
   let nowIso = null;
   let requestedDateIsToday = null;
   let computedSignals = [];
-  if (timezoneKnown && date) {
+  // An injected clock that cannot be read leaves the local time unknown; it
+  // never falls back to the wall clock.
+  const instant = timezoneKnown && date ? readClockInstant(clock) : null;
+  if (instant) {
     try {
-      const instant = typeof clock === "function" ? clock() : new Date();
       const tzCityConfig = { key: "agnostic-area", label: cityLabel, timezone, center: { lat, lng } };
       const engineContext = buildEngineContext({
         cityConfig: tzCityConfig,
         date,
-        now: instant instanceof Date ? instant : new Date(),
+        now: instant,
         weather: null,
         events: [],
         lang,
