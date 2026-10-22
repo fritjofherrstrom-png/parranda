@@ -10,6 +10,13 @@ const { projectSourcesLicense } = require('./overture-license-footer');
 const ASSET = /^s3:\/\/overturemaps-us-west-2\/release\/\d{4}-\d{2}-\d{2}\.\d+\/theme=places\/type=place\/part-[A-Za-z0-9_-]+\.zstd\.parquet$/;
 const MAX_PHYSICAL_BYTES = 32 * 1024 * 1024;
 const MAX_FOOTER_BYTES = 8 * 1024 * 1024;
+// Bound each10s transfer, rather than spending it on a multi-MiB footer.
+const MAX_RANGE_BYTES = 512 * 1024;
+const MAX_RANGE_CONCURRENCY = 4;
+// Bridge at most a small fraction of one bounded body. Dense release files
+// otherwise spend their45s child budget on hundreds of ~0.65s round trips.
+// Every bridged page is still charged to the same32MiB aggregate allowance.
+const MAX_RANGE_GAP_BYTES = 64 * 1024;
 const PROJECTED = new Set(['id', 'confidence', 'operating_status', 'websites', 'sources']);
 const LEAVES = new Set(['names.primary', 'taxonomy.primary', 'taxonomy.hierarchy', 'brand.names.primary', 'bbox.xmin', 'bbox.ymin']);
 // Materialize only range-planning fields in the bounded JS child. A release
@@ -58,12 +65,15 @@ async function readOvertureAssetIdentity(assetPath, { fetcher = globalThis.fetch
   } finally { operation.close(); }
 }
 async function parallel(items, concurrency, action) {
-  const results = new Array(items.length); let cursor = 0;
-  const settled = await Promise.allSettled(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    for (;;) { const index = cursor++; if (index >= items.length) return; results[index] = await action(items[index], index); }
+  const results = new Array(items.length); let cursor = 0, failed = false, failure;
+  await Promise.allSettled(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    for (;;) {
+      const index = cursor++; if (index >= items.length) return;
+      try { results[index] = await action(items[index], index); }
+      catch (error) { if (!failed) { failed = true; failure = error; } throw error; }
+    }
   }));
-  const failure = settled.find(result => result.status === 'rejected');
-  if (failure) throw failure.reason;
+  if (failed) throw failure;
   return results;
 }
 async function inspectOvertureAssets(paths, options = {}) {
@@ -231,12 +241,31 @@ function allocationBytes(ranges) {
   for (const block of blocks) { if (block.end > lastEnd) total += block.end - Math.max(block.start - 1, lastEnd); lastEnd = Math.max(lastEnd, block.end); }
   return total * 4096;
 }
+function splitRanges(ranges) {
+  return ranges.flatMap(({ start, end }) => {
+    const pieces = [];
+    for (let offset = start; offset <= end; offset += MAX_RANGE_BYTES) {
+      pieces.push({ start: offset, end: Math.min(end, offset + MAX_RANGE_BYTES - 1) });
+    }
+    return pieces;
+  });
+}
+function coalesceRanges(ranges) {
+  const merged = [];
+  for (const range of ranges) {
+    const last = merged[merged.length - 1];
+    if (last && range.start - last.end - 1 <= MAX_RANGE_GAP_BYTES
+      && range.end - last.start + 1 <= MAX_RANGE_BYTES) last.end = range.end;
+    else merged.push({ ...range });
+  }
+  return merged;
+}
 function localizeOvertureSql(sql, paths) {
   let localized = sql;
   for (const [assetPath, localPath] of paths) localized = localized.replaceAll(`'${assetPath}'`, `'${localPath.replace(/'/g, "''")}'`);
   return localized;
 }
-async function prefetchOvertureParquet({ conn, paths, window, tempDir, fetcher = globalThis.fetch, signal, maxPhysicalBytes = MAX_PHYSICAL_BYTES, concurrency = 4 }) {
+async function prefetchOvertureParquet({ conn, paths, window, tempDir, fetcher = globalThis.fetch, signal, maxPhysicalBytes = MAX_PHYSICAL_BYTES, concurrency = MAX_RANGE_CONCURRENCY }) {
   windowBboxes(window);
   const budget = Math.min(MAX_PHYSICAL_BYTES, integer(maxPhysicalBytes, 1));
   const controller = new AbortController(), abort = () => controller.abort();
@@ -245,7 +274,7 @@ async function prefetchOvertureParquet({ conn, paths, window, tempDir, fetcher =
   const checkBudget = () => { if (allocatedBytes(files) > budget) throw new Error('overture_prefetch_budget'); };
   try {
     const sourceAssets = await inspectOvertureAssets(paths, { fetcher, signal: controller.signal });
-    const tasks = []; let plannedBytes = 0;
+    const tasks = [], plans = []; let plannedBytes = 0;
     for (const [index, identity] of sourceAssets.entries()) {
       abortCheck(controller.signal);
       const file = path.join(tempDir, `overture-${index}-metadata.parquet`), fd = fs.openSync(file, 'wx');
@@ -257,7 +286,12 @@ async function prefetchOvertureParquet({ conn, paths, window, tempDir, fetcher =
       const footerStart = identity.length - 8 - footerLength;
       const metadataRanges = [{ start: 0, end: 3 }, { start: footerStart, end: identity.length - 1 }];
       if (plannedBytes + allocationBytes(metadataRanges) > budget) throw new Error('overture_prefetch_budget');
-      const [header, footer] = await Promise.all([fetchRange(identity, 0, 3, fetcher, controller.signal), fetchRange(identity, footerStart, identity.length - 9, fetcher, controller.signal)]);
+      const metadataPieces = await parallel([{ start: 0, end: 3 }, ...splitRanges([{ start: footerStart, end: identity.length - 9 }])],
+        Math.min(MAX_RANGE_CONCURRENCY, integer(concurrency, 1)), async range => {
+          try { return await fetchRange(identity, range.start, range.end, fetcher, controller.signal); }
+          catch (error) { controller.abort(); throw error; }
+        });
+      const header = metadataPieces.shift(), footer = Buffer.concat(metadataPieces, footerLength);
       if (header.toString('ascii') !== 'PAR1') throw new Error('invalid_overture_parquet');
       fs.writeSync(fd, header, 0, header.length, 0); fs.writeSync(fd, footer, 0, footer.length, footerStart); fs.writeSync(fd, tail, 0, tail.length, identity.length - 8); checkBudget();
       const escaped = file.replace(/'/g, "''");
@@ -287,14 +321,25 @@ async function prefetchOvertureParquet({ conn, paths, window, tempDir, fetcher =
       // Page allocation rather than transfer length is the shared disk budget.
       plannedBytes += allocationBytes([...metadataRanges, ...ranges]);
       if (plannedBytes > budget) throw new Error('overture_prefetch_budget');
-      for (const range of ranges) tasks.push({ identity, range, fd });
+      plans.push({ identity, ranges, metadataRanges, fd });
       // DuckDB's external-file cache may retain the original footer. Publish
       // the derived file under a new private name that it has never inspected.
       const finalFile = path.join(tempDir, `overture-${index}.parquet`);
       fs.renameSync(file, finalFile); files[files.indexOf(file)] = finalFile;
       sqlPaths.set(identity.path, finalFile);
     }
-    await parallel(tasks, Math.min(4, integer(concurrency, 1)), async ({ identity, range, fd }) => {
+    // Reserve the exact original plan for EVERY asset before spending spare
+    // allocation on short gaps. Optimization cannot starve a later asset or
+    // turn an otherwise admissible query into a disk-budget failure.
+    for (const plan of plans) {
+      const merged = coalesceRanges(plan.ranges);
+      const extra = allocationBytes([...plan.metadataRanges, ...merged])
+        - allocationBytes([...plan.metadataRanges, ...plan.ranges]);
+      const ranges = extra <= budget - plannedBytes ? merged : plan.ranges;
+      if (ranges === merged) plannedBytes += extra;
+      for (const range of splitRanges(ranges)) tasks.push({ identity: plan.identity, range, fd: plan.fd });
+    }
+    await parallel(tasks, Math.min(MAX_RANGE_CONCURRENCY, integer(concurrency, 1)), async ({ identity, range, fd }) => {
       try {
         const bytes = await fetchRange(identity, range.start, range.end, fetcher, controller.signal);
         abortCheck(controller.signal); fs.writeSync(fd, bytes, 0, bytes.length, range.start); checkBudget();

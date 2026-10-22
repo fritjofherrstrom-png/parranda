@@ -1,0 +1,1 @@
+Actual official immutable release2026-10-21.0 footer, captured22Oct2026. Identity and SHA256 in identity.json. Contains metadata, not venue acceptance. Replay uses controlled zero data pages and cannot prove final SQL rows or provider health. Paris/London are test windows, not product branches.

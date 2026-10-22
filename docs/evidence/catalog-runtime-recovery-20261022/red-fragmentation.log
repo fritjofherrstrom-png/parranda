@@ -1,0 +1,27 @@
+✖ dense official footer uses bounded bodies and fewer requests inside unchanged disk/heap caps (546.59675ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 608.771458
+
+✖ failing tests:
+
+test at tests/overture-large-metadata.test.js:34:1
+✖ dense official footer uses bounded bodies and fewer requests inside unchanged disk/heap caps (546.59675ms)
+  AssertionError [ERR_ASSERTION]: avoid hundreds of fragmented round trips in one bounded acquisition
+      at TestContext.<anonymous> (<repo>/tests/overture-large-metadata.test.js:39:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.start (node:internal/test_runner/test:1096:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

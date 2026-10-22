@@ -112,12 +112,24 @@ test('cold UI publishes actual catalog stops; expired unchanged, changed and fai
   const beforeFailure = raw.inspect(source.cacheKeyFor(anchor));
   clock = 1600; metadataFailure = true;
   const failed = await request();
-  assert.ok(!failed.days?.some(day => day.primary_route), 'expired old rows cannot become a fresh route after a failed verifier');
+  assert.deepEqual(failed.days?.[0]?.primary_route?.main_stops?.map(stop=>stop.id),changed.days[0].primary_route.main_stops.map(stop=>stop.id),'approved bounded fallback preserves the original selected source identities');
+  assert.equal(failed.agnostic_route_output_experiment.source_status.collection.cache.served_stale,true);
+  assert.equal(failed.agnostic_route_output_experiment.source_status.collection.cache.refresh_reason,'stale_cache_refresh_failed');
+  assert.equal(raw.inspect(source.cacheKeyFor(anchor)).value.receipt.verifiedAt,beforeFailure.value.receipt.verifiedAt);
   assert.equal(queryCalls, 2); assert.equal(verifications, 2);
   assert.equal(cache.peek(source.cacheKeyFor(anchor)), null);
   assert.equal(raw.inspect(source.cacheKeyFor(anchor)).expiresAt, beforeFailure.expiresAt);
   assert.equal(failed.agnostic_route_output_experiment.source_status.error, 'controlled_map_unavailable');
+  await page.reload({waitUntil:'domcontentloaded'});
+  await page.getByRole('list',{name:'The stops, in order',exact:true}).waitFor({timeout:10000});
+  const renderedFallback=await page.getByRole('list',{name:'The stops, in order',exact:true}).locator(':scope > li > button').allTextContents();
+  assert.equal(renderedFallback.length,5,'actual built UI renders the bounded fallback from real HTTP');
+  assert.equal(raw.inspect(source.cacheKeyFor(anchor)).expiresAt,beforeFailure.expiresAt);
+  clock=beforeFailure.value.receipt.verifiedAt+7*24*60*60*1000+1;
+  const tooOld=await request();
+  assert.ok(!tooOld.days?.some(day=>day.primary_route),'expired fallback is not a newly composed route');
+  assert.equal(raw.inspect(source.cacheKeyFor(anchor)).expiresAt,beforeFailure.expiresAt);
   assert.deepEqual(errors, []);
   t.diagnostic(JSON.stringify({ controlled: true, coldStops: ids.length, unchangedBulkQueries: 0,
-    changedReleaseStops: changed.days[0].primary_route.main_stops.length, failedRefreshRoute: false, queryCalls, verifications }));
+    changedReleaseStops: changed.days[0].primary_route.main_stops.length, failedRefreshRoute: true, fallbackIsNotFresh: cache.peek(source.cacheKeyFor(anchor))===null, queryCalls, verifications }));
 });
