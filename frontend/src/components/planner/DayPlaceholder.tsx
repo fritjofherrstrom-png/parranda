@@ -10,12 +10,14 @@ import type { ReactNode } from "react";
  * Decorative only: it carries no place, number or claim. The status line
  * passed in sits where "Your day" will, and is the one thing a reader hears.
  *
- * The shape holds still. Only the empty stations move, each taking the ember
- * in turn down the line (parranda-trace in tailwind.css) — a whole block
- * pulsing on and off read as blinking. Reduced motion keeps them quiet.
+ * Every shape carries the same slow sheen (skeleton + parranda-sheen in
+ * tailwind.css), so the page reads as one calm "still coming". A block
+ * pulsing on and off read as blinking, a still page read as broken, and
+ * ember stations lighting in turn read as hectic.
  */
 
-const bar = "rounded-full bg-parranda-ink/10";
+const shape = "skeleton motion-safe:animate-[parranda-sheen_2.8s_ease-in-out_infinite]";
+const bar = `${shape} rounded-full`;
 // Five stations, as in a balanced day; uneven like real place names, so the
 // line does not read as a table.
 const NAME_WIDTHS = ["62%", "46%", "70%", "54%", "40%"];
@@ -56,7 +58,7 @@ export default function DayPlaceholder({ status, inlineMap }: { status: ReactNod
         )}
         <div className={(inlineMap ? "" : "mt-8 ") + "mb-3 flex min-h-9 items-center justify-between gap-3"}>
           <div className={`${bar} h-3 w-36`} />
-          <div className="h-9 w-32 rounded-full border-line border-parranda-ink/12" />
+          <div className={`${bar} h-9 w-32`} />
         </div>
         <div
           data-day-shape="stations"
@@ -70,10 +72,10 @@ export default function DayPlaceholder({ status, inlineMap }: { status: ReactNod
                 </div>
               )}
               <div className="flex min-h-16 items-center gap-3.5 py-2">
-                <div
-                  className="relative z-[1] h-11 w-11 shrink-0 rounded-full border-4 border-parranda-ink/12 bg-parranda-paper motion-safe:animate-[parranda-trace_3.2s_ease-in-out_infinite]"
-                  style={{ animationDelay: `${index * 0.45}s` }}
-                />
+                {/* Paper under the sheen, so the line stops at the station. */}
+                <div className="relative z-[1] h-11 w-11 shrink-0 rounded-full bg-parranda-paper">
+                  <div className={`${bar} h-full w-full`} />
+                </div>
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                   <div className={`${bar} h-4`} style={{ width }} />
                   <div className={`${bar} h-5 w-20`} />
@@ -84,7 +86,7 @@ export default function DayPlaceholder({ status, inlineMap }: { status: ReactNod
         </div>
         {inlineMap && (
           <>
-            <div data-day-shape="map" className="mt-8 h-48 rounded-parranda bg-parranda-ink/8 sm:h-60" />
+            <div data-day-shape="map" className={`${shape} mt-8 h-48 rounded-parranda sm:h-60`} />
             <div className="flex min-h-11 items-center">
               <div className={`${bar} h-3 w-40`} />
             </div>
@@ -101,7 +103,7 @@ export function DayMapPlaceholder() {
     <div
       aria-hidden="true"
       data-day-shape="map-column"
-      className="sticky top-4 h-[calc(100dvh-2rem)] min-h-[30rem] rounded-parranda bg-parranda-ink/8"
+      className={`${shape} sticky top-4 h-[calc(100dvh-2rem)] min-h-[30rem] rounded-parranda`}
     />
   );
 }
