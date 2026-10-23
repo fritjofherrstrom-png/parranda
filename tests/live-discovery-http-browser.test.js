@@ -100,7 +100,10 @@ test('ordinary HTTP browser day preserves the second source occurrence through s
       assert.equal(query, 'Helsinki', 'free text must reach the trusted resolver without adopting an autocomplete receipt');
       return [{ ...ANCHOR, label: 'Helsinki', confidence: 'high', provenance: { provider: 'controlled-resolver' } }];
     },
-    reviewedPlaceSource: null, sourceCatalog: null, clock: { now: () => NOW },
+    reviewedPlaceSource: null, sourceCatalog: null,
+    // The composer reads the clock as a function; an object with only now()
+    // let the composition fall back to the wall clock (same fix as #623).
+    clock: Object.assign(() => new Date(NOW), { now: () => NOW }),
     weatherProvider: async () => ({ condition: 'sun', timezone_resolution: {
       timezone: 'Europe/Helsinki', timezone_source: 'weather_provider_auto', utc_offset_seconds: 10800 } }),
   }).listen(0, '127.0.0.1');
@@ -213,6 +216,8 @@ test('ordinary HTTP browser day preserves the second source occurrence through s
   await anchor.getByRole('button', { name: 'Full', exact: true }).click();
   const full = await fullResponse;
   assert.equal(full.days[0].date, DATE);
+  assert.equal(full.agnostic_route_output_experiment.context?.time?.now?.slice(0, 10), NOW.slice(0, 10),
+    'the published composition must use the controlled clock, not the wall date');
   assert.deepEqual(requests.at(-1).preferences, ['culture']);
   assert.deepEqual(requests.at(-1).preference_priority, ['culture']);
   assert.equal(requests.at(-1).day_rhythm, 'full');
