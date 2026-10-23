@@ -56,7 +56,7 @@ test("changing the ledger recomposes the day", () => {
   const effect = component.slice(component.indexOf("// AUTO-RECOMPOSE:"), component.indexOf("// The Live sheet behaves"));
   const dependencies = effect.match(/\}, \[([^\]]*)\]\);/)?.[1].split(",").map(value => value.trim());
   assert.ok(dependencies, "the automatic adjustment effect has explicit dependencies");
-  for (const required of ["selected", "dayOffset", "walkKey", "commitments", "preferencePriority", "dayEdit"]) {
+  for (const required of ["selected", "dayOffset", "walkKey", "commitments", "preferencePriority", "dayEdit", "intentMode"]) {
     assert.ok(dependencies.includes(required), `${required} changes must recompose the day`);
   }
 });
