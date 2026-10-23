@@ -51,7 +51,7 @@ for (const [name, mutate] of [
     mutate(entry);
     const h = await restored(entry);
     try {
-      assert.ok(!button(h, "Update the day"), "do not advertise an unsafe retry");
+      assert.ok(!button(h, "Look for more places"), "do not advertise an unsafe retry");
       assert.ok(!button(h, "rebuild for fresh events"), "do not silently use today's date or GPS");
       const replan = [...h.container.querySelectorAll("a")].find(a => a.textContent.trim() === "Choose a starting point and date");
       assert.ok(replan, "give the reader a real replanning path");
@@ -66,7 +66,7 @@ test("restored typed snapshot updates its saved date, preferences, rhythm and sc
   const entry = saved({ placeSelection: "selected-testville" });
   const h = await restored(entry);
   try {
-    const update = button(h, "Update the day");
+    const update = button(h, "Look for more places");
     assert.ok(update);
     await h.act(() => update.dispatchEvent(new h.window.Event("click", { bubbles: true })));
     await h.clock.advance(500);
@@ -96,10 +96,10 @@ test("unsafe restored snapshot without a route still provides historical source 
 test("restored source completion describes the saved snapshot, not a still-running source", async () => {
   const h = await restored(saved());
   try {
-    assert.match(h.text(), /incomplete when the response was produced/i);
+    assert.match(h.text(), /Not every place could be loaded/i);
     assert.doesNotMatch(h.text(), /More places are on their way|still fetching|update in a moment/i);
     await h.clock.advance(8000);
     assert.equal(calls(h).length, 0, "a frozen source completion never schedules a compose");
-    assert.ok(button(h, "Update the day"), "a genuine saved request can be explicitly updated");
+    assert.ok(button(h, "Look for more places"), "a genuine saved request can be explicitly looked at again");
   } finally { await h.unmount(); }
 });
