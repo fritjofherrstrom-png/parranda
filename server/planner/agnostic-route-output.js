@@ -40,10 +40,12 @@ const { readClockInstant } = require("../lib/clock");
 const {
   buildSelectedDayHoursFact,
   buildLocalDayAvailabilityWindow,
+  evaluateOpeningHoursForRole,
   evaluateOpeningHoursForWindow,
   normalizeOpeningHours,
   isAlwaysClosedOpeningHours,
   normalizeSelectedDayHoursFact,
+  ROLE_VISIT_WINDOWS,
 } = require("../place-candidates/opening-hours");
 const { normalizeSelectedHoursCalendar, resolveCandidateDayHours } = require('../place-candidates/opening-hours-calendar');
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
@@ -1245,7 +1247,7 @@ async function composeAgnosticRouteOutputOnce({
   const trustedTimezoneKnown = Boolean(ctx && ctx.timezoneKnown);
   const trustedTimeAppliesToRequestedDate = Boolean(ctx && ctx.timeAppliesToRequestedDate);
   const availabilityWindow = trustedTimezoneKnown
-    ? buildLocalDayAvailabilityWindow({ requestedDate: effectiveDate, nowLocalIso: ctx.now })
+    ? buildLocalDayAvailabilityWindow({ requestedDate: effectiveDate, nowLocalIso: ctx.now, timezone: ctx.contextBlock.time.timezone })
     : null;
   const availabilityHelpers = {
         evaluateCandidateAvailability: ({ candidate }) => {
@@ -1264,13 +1266,21 @@ async function composeAgnosticRouteOutputOnce({
           const availability = evaluateOpeningHoursForWindow(candidate.opening_hours, availabilityWindow);
           const selectedDayHours = buildSelectedDayHoursFact(candidate.opening_hours, availabilityWindow);
           const source = candidate.opening_hours_source;
-          return selectedDayHours
-            ? { ...availability, selected_day_hours: {
-                ...selectedDayHours,
-                ...(source ? { date: effectiveDate, timezone: ctx.contextBlock.time.timezone,
-                  source_url: source.url, observed_at: source.observed_at } : {}),
-              } }
-            : availability;
+          // Source-day facts and role eligibility are separate. Generic role
+          // windows rule out impossible potential visits, not actual arrival:
+          // final route order, walking legs and prior dwell are not checked.
+          const closedForRoles = Object.keys(ROLE_VISIT_WINDOWS).filter(
+            (role) => evaluateOpeningHoursForRole(candidate.opening_hours, role, availabilityWindow).status === "closed_for_role_window",
+          );
+          return {
+            ...availability,
+            ...(selectedDayHours ? { selected_day_hours: {
+              ...selectedDayHours,
+              ...(source ? { date: effectiveDate, timezone: ctx.contextBlock.time.timezone,
+                source_url: source.url, observed_at: source.observed_at } : {}),
+            } } : {}),
+            ...(closedForRoles.length ? { closed_for_roles: closedForRoles } : {}),
+          };
         },
       };
   const candidateReachPolicy = resolveAgnosticCandidateReachPolicy({ anchorMode, spatialScope, dayRhythm, preferences, availabilityWindow });
