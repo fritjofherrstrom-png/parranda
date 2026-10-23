@@ -28,24 +28,22 @@ for (const lang of ['en', 'sv']) {
     t.after(() => h.unmount());
     await h.fetchMock.respond(calls(h)[0], day());
     const header = h.container.querySelector('header');
-    const summaryText = lang === 'en' ? 'Some place information is missing' : 'Viss platsinformation saknas';
-    const status = [...header.querySelectorAll('[role="status"]')].find(node => node.textContent.includes(summaryText));
+    // One plain sentence, the failure said in it: no bold "missing" headline,
+    // no hidden "About the place sources" (iPhone, 23 Oct 2026).
+    const sentence = lang === 'en'
+      ? 'Not every place could be loaded, so there may be more than the ones shown.'
+      : 'Inte alla platser kunde läsas in, så det kan finnas fler än de som visas.';
+    const status = [...header.querySelectorAll('[role="status"]')].find(node => node.textContent.trim() === sentence);
     assert.ok(status, 'a usable day explains incomplete source information in ordinary words');
     assert.doesNotMatch(status.closest('section')?.className || status.parentElement.className, /bg-parranda-(?:ember|glow)|border-parranda-(?:ember|glow)/, 'the successful day is not styled as a warning');
     assert.equal(header.querySelector('[role="alert"]'), null);
     assert.match(h.text(), /Museum 6/);
     assert.match(header.textContent, lang === 'en' ? /6 stops/ : /6 stopp/);
-    assert.match(header.textContent, lang === 'en' ? /There may be more places than those shown/ : /Det kan finnas fler platser än de som visas/);
     assert.doesNotMatch(header.textContent, /You can use this day|Du kan använda dagen/);
-    const details = header.querySelector('details');
-    assert.ok(details, 'the historical source limitation remains reachable through a native disclosure');
-    assert.equal(details.open, false);
-    assert.match(details.querySelector('summary').textContent, lang === 'en' ? /About the place sources/ : /Om platskällorna/);
-    assert.match(details.textContent, lang === 'en' ? /One or more place sources failed/ : /En eller flera platskällor misslyckades/);
-    assert.equal(details.closest('[role="status"], [aria-live]'), null, 'opening details must not reannounce the complete panel');
-    const update = button(h, lang === 'en' ? 'Update the day' : 'Uppdatera dagen');
+    assert.equal(header.querySelector('details'), null, 'the limitation is said in the sentence, not hidden behind a disclosure');
+    const update = button(h, lang === 'en' ? 'Look for more places' : 'Leta efter fler platser');
     assert.ok(update);
-    assert.doesNotMatch(update.className, /bg-parranda-ember/, 'recovery is a secondary action beside a valid day');
+    assert.doesNotMatch(update.className, /bg-parranda-ember/, 'looking again is a secondary action beside a valid day');
     assert.equal(update.closest('[role="status"], [aria-live]'), null);
     await h.clock.advance(120000);
     assert.equal(calls(h).length, 1, 'source information does not schedule another acquisition');
@@ -53,11 +51,11 @@ for (const lang of ['en', 'sv']) {
   });
 }
 
-test('explicit source update retains its focused action while the published day is held', async t => {
+test('looking for more places keeps its focused action while the published day is held, then says what it found', async t => {
   const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&prefs=culture&lang=en' });
   t.after(() => h.unmount());
   await h.fetchMock.respond(calls(h)[0], day());
-  const update = button(h, 'Update the day');
+  const update = button(h, 'Look for more places');
   update.focus();
   await h.act(() => update.dispatchEvent(new h.window.Event('click', { bubbles: true })));
   assert.equal(calls(h).length, 2);
@@ -66,20 +64,25 @@ test('explicit source update retains its focused action while the published day 
   assert.equal(h.document.activeElement, update);
   assert.equal(update.getAttribute('aria-busy'), 'true');
   assert.equal(update.getAttribute('aria-disabled'), 'true');
+  assert.equal(update.textContent.trim(), 'Looking for more places …', 'the action says what it is doing');
+  assert.ok(update.querySelector('svg[data-ring-mark]'), 'with the one working sign');
   assert.match(h.text(), /Museum 6/);
   await h.act(() => update.dispatchEvent(new h.window.Event('click', { bubbles: true })));
   assert.equal(calls(h).length, 2, 'a busy action cannot duplicate the update');
   await h.fetchMock.respond(calls(h)[1], day(complete, null));
-  assert.equal(button(h, 'Update the day'), undefined);
-  assert.doesNotMatch(h.text(), /Some place information is missing|One or more place sources failed/);
+  assert.equal(button(h, 'Look for more places'), undefined);
+  assert.doesNotMatch(h.text(), /Not every place/);
+  // The result is said, never a silent swap: here nothing new turned up.
+  assert.match(h.text(), /Looked for more places: same stops and distance/);
+  assert.ok([...h.container.querySelectorAll('button')].some(node => node.getAttribute('aria-label') === 'Undo this change'));
   assert.equal(h.document.activeElement, h.container.querySelector('header h1'), 'removing the completed action leaves focus on the day');
 });
 
-test('failed explicit update keeps source details and enables deliberate recovery', async t => {
+test('a failed look keeps the source sentence and enables deliberate recovery', async t => {
   const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&prefs=culture&lang=en' });
   t.after(() => h.unmount());
   await h.fetchMock.respond(calls(h)[0], day());
-  const update = button(h, 'Update the day');
+  const update = button(h, 'Look for more places');
   update.focus();
   await h.act(() => update.dispatchEvent(new h.window.Event('click', { bubbles: true })));
   await h.fetchMock.respond(calls(h)[1], {}, 500);
@@ -88,7 +91,8 @@ test('failed explicit update keeps source details and enables deliberate recover
   assert.equal(update.getAttribute('aria-busy'), null);
   assert.equal(update.getAttribute('aria-disabled'), null);
   assert.match(h.text(), /Couldn't update — showing your previous day/);
-  assert.match(h.container.querySelector('header details').textContent, /One or more place sources failed/);
+  assert.match(h.container.querySelector('header').textContent, /Not every place could be loaded/);
+  assert.equal(update.textContent.trim(), 'Look for more places');
   assert.match(h.text(), /Museum 6/);
   await h.clock.advance(120000);
   assert.equal(calls(h).length, 2, 'failed recovery does not schedule a retry');
@@ -101,7 +105,7 @@ test('healthy source update does not take focus from a reader who moved on', asy
   const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
   t.after(() => h.unmount());
   await h.fetchMock.respond(calls(h)[0], day());
-  const update = button(h, 'Update the day');
+  const update = button(h, 'Look for more places');
   update.focus();
   await h.act(() => update.dispatchEvent(new h.window.Event('click', { bubbles: true })));
   const adjust = button(h, 'Adjust');
@@ -119,10 +123,9 @@ for (const [name, completion, error] of [
     const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
     t.after(() => h.unmount());
     await h.fetchMock.respond(calls(h)[0], day(completion, error));
-    assert.match(h.text(), /Some place information is missing/);
-    const details = h.container.querySelector('header details');
-    assert.match(details.textContent, name.startsWith('partial') ? /incomplete when the response was produced/ : /One or more place sources failed/);
-    if (name.startsWith('partial')) assert.doesNotMatch(details.textContent, /sources failed/);
+    const header = h.container.querySelector('header').textContent;
+    assert.match(header, name.startsWith('partial') ? /Not every place loaded in time/ : /Not every place could be loaded/);
+    if (name.startsWith('partial')) assert.doesNotMatch(header, /could be loaded/, 'an unfinished snapshot is not called a failure');
     assert.doesNotMatch(h.text(), /Parranda couldn't build a day here right now|few places to choose between here/);
   });
 }
@@ -131,6 +134,6 @@ test('healthy complete day has no source recovery action', async t => {
   const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
   t.after(() => h.unmount());
   await h.fetchMock.respond(calls(h)[0], day(complete, null));
-  assert.doesNotMatch(h.text(), /Some place information is missing/);
-  assert.equal(button(h, 'Update the day'), undefined);
+  assert.doesNotMatch(h.text(), /Not every place/);
+  assert.equal(button(h, 'Look for more places'), undefined);
 });
