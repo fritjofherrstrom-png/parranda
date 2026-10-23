@@ -23,7 +23,7 @@ import {
 import { anywhereBlitzView, type AnywhereBlitzView } from "../lib/blitz-view.mjs";
 import { inertOutside, tabbableWithin } from "../lib/modal-focus.mjs";
 import { contextNote, limitationNote, sourcesIncomplete } from "../lib/day-limitations.mjs";
-import { dayChangeSegments, describeDayChange, type DayChange } from "../lib/day-change.mjs";
+import { dayChangeSegments, describeDayChange, stopIdentity, type DayChange } from "../lib/day-change.mjs";
 import {
   anchorKey,
   planRecomposeRetention,
@@ -83,12 +83,14 @@ import AppBar from "./shared/AppBar";
 import { KeepIcon, LocationIcon, MinusIcon, UndoIcon } from "./shared/icons";
 import { busyButton, buttonClass, noticeCard } from "./shared/ui";
 import { useMediaQuery } from "./shared/useMediaQuery";
-import AnchorCard from "./planner/AnchorCard";
+import AnchorCard, { type AdjustRebuild } from "./planner/AnchorCard";
 import BlitzCard from "./planner/BlitzCard";
 import CandidateAreas from "./planner/CandidateAreas";
 import DayHeader, { DayActions, dayAssemblyNotes } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
+import DayPlaceholder, { DayMapPlaceholder } from "./planner/DayPlaceholder";
+import { RingMark } from "./shared/RingMark";
 import LiveSheet from "./planner/LiveSheet";
 import { selectedDayEmpty, useLiveFallback } from "./planner/useLiveFallback";
 import SavedDays from "./planner/SavedDays";
@@ -302,7 +304,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // The day on screen when an adjustment left for the server — the one "Undo"
   // returns to. Taken from the live day, never from a request still in flight,
   // and only while the anchor it belongs to is the one being recomposed.
-  const undoBaselineRef = useRef<{ entry: SavedEntry; anchorKey: string | null } | null>(null);
+  const undoBaselineRef = useRef<{ entry: SavedEntry; anchorKey: string | null; trigger?: "recheck" } | null>(null);
+  // The reader asked to look for more places; cleared when that answer lands.
+  const [recheckPending, setRecheckPending] = useState(false);
   // Undo installs the previous inputs without composing. This is the input
   // signature it installed, so the auto-recompose effect recognises its own
   // echo instead of composing the day it just put back.
@@ -841,7 +845,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           undoBaselineRef.current = null;
           setDayChange(
             baseline && baseline.anchorKey !== null && baseline.anchorKey === anchorKey(anchor)
-              ? { previous: baseline.entry, summary: describeDayChange(baseline.entry, entry) }
+              ? { previous: baseline.entry, summary: describeDayChange(baseline.entry, entry, { trigger: baseline.trigger ?? null }) }
               : null,
           );
         } else {
@@ -1739,10 +1743,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // A reverse city label does not attest a precise neighborhood. Keep the
   // authoritative label in the response; only project near-me UI as Near you.
   const primaryLocality = (value?: string | null) => String(value || "").split(",")[0].trim();
+  // A chosen suggestion ("Stockholm, Stockholms län, Sverige", with its
+  // place_ref) already names its place first, so the pill reads that name
+  // while the day composes instead of wrapping and then shrinking when the
+  // resolver's label arrives. Free text stays as typed until it resolves.
   const anchorLabel =
     mode === "near_me"
       ? t("Nära dig", "Near you")
-      : primaryLocality(classification?.placeLabel) || typedPlaceLabel;
+      : primaryLocality(classification?.placeLabel) || (placeRef ? primaryLocality(typedPlaceLabel) : typedPlaceLabel);
   const anchorIsPosition = mode === "near_me";
   const placeName = primaryLocality(classification?.placeLabel) || typedPlaceLabel || t("den här platsen", "this place");
   // A typed place with no trusted anchor (unresolved, ambiguous, or a resolver
@@ -2091,6 +2099,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       if (retryGenerationRef.current === retryGeneration) retryInFlightRef.current = false;
     });
   };
+  // "Look for more places": the same frozen question again, after a day whose
+  // place sources fell short. Whatever it brings is said like an adjustment's
+  // result ("Looked for more places: 2 stops swapped …", with Undo) and its
+  // new stops are marked, never a silent swap of the day being read.
+  const lookForMorePlaces = () => {
+    if (retryInFlightRef.current || !lastRequestedAnchorRef.current) return;
+    const onScreen = lastEntryRef.current;
+    undoBaselineRef.current = isUndoableDay(onScreen)
+      ? { entry: onScreen, anchorKey: displayedAnchorKeyRef.current, trigger: "recheck" }
+      : null;
+    setRecheckPending(true);
+    retryPlan({ sameDate: true });
+  };
+  useEffect(() => {
+    if (phase !== "loading") setRecheckPending(false);
+  }, [phase]);
   const commit = (identity: string, kind: "exclude" | "pin", commitLabel: string, liveAction?: "remove" | "replace") => {
     if (!identity || (commitments[identity]?.kind === kind && commitments[identity]?.liveAction === liveAction)) return;
     setExpandedStopKey(null);
@@ -2236,6 +2260,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const primarySourceFailed = typeof sourceError === "string" && sourceError.trim() !== "";
   const incompletePlaceSources = phase === "done" && (sourcesIncomplete(sourceCompletion) || primarySourceFailed);
   const sourceEvidenceNote = incompletePlaceSources ? contextNote([], t, { sourceCompletion, sourceFailed: primarySourceFailed }) : "";
+  // The same evidence for the day's header, as the one plain distinction a
+  // reader needs: a source failed, or the places were not all in yet.
+  const sourceShortfall: "failed" | "partial" | null = incompletePlaceSources
+    ? (primarySourceFailed || Number(sourceCompletion?.failed) > 0 ? "failed" : "partial")
+    : null;
   const terminalSourceIssue = incompletePlaceSources && !hasPrimaryRoute && !anchorUnresolved && !upgradePending && !serviceRefusal;
   const canUpdateSaved = !restoredAt || Boolean(lastRequestedAnchorRef.current && lastComposeDateIsoRef.current);
   const dayLimitationNote = limitationNote(dayLimitations, split.core.length, t, { sourcesIncomplete: incompletePlaceSources });
@@ -2310,7 +2339,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // The user's own picks, each with what the published route did for it —
   // read from stop-level coverage evidence only. Without that evidence the
   // header claims nothing about the picks at all.
-  type PickCoverage = { key: string; state: "covered" | "partial" | "missing" };
+  type PickCoverage = { key: string; state: "covered" | "partial" | "missing" | "pending" | "unanswered" };
   const pickCoverage: PickCoverage[] = routeCoverage.has_coverage_evidence
     ? selected.flatMap((key): PickCoverage[] => {
         if (routeCoverage.covered_preferences.includes(key)) return [{ key, state: "covered" }];
@@ -2333,6 +2362,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         feedbackInputs.walkKey ?? "", feedbackLedger.applies ? feedbackLedger.entries : {},
         feedbackInputs.preferencePriority ?? [], feedbackInputs.dayEdit);
   const publishedFirstChoice = normalizePreferencePriority(feedbackInputs?.preferencePriority, feedbackInputs?.selected)[0];
+  // A pick the day on screen never answered (just added; its rebuild still
+  // coming) is not "missing" from that day. Only active work is pending;
+  // after a failed or interrupted rebuild the old day still cannot assess it.
+  const answeredPicks: string[] | null = Array.isArray(feedbackInputs?.selected) ? feedbackInputs.selected : null;
+  const unansweredPickState = phase === "loading" ? "pending" : "unanswered";
+  const shownPickCoverage: PickCoverage[] = answeredPicks
+    ? pickCoverage.map((pick) => (answeredPicks.includes(pick.key) ? pick : { key: pick.key, state: unansweredPickState }))
+    : pickCoverage;
   const priorityShortfall = phase === "done" && !dayIsStale && feedbackMatchesIntent && publishedFirstChoice
     ? pickCoverage.find(({ key, state }) => key === publishedFirstChoice && state !== "covered") ?? null
     : null;
@@ -2347,23 +2384,45 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     : stopEditError === "rebuild_required"
     ? t("Uppdatera den sparade dagen eller välj en ny startpunkt innan du ändrar stopp.", "Rebuild this saved day or choose a new starting point before editing stops.")
     : stopEditError ? t("Ändringen kunde inte bekräftas.", "The change could not be confirmed.") : "";
-  const dayChangeLine = useMemo(
-    () =>
-      dayChange
-        ? dayChangeSegments(dayChange.summary, {
-            lang,
-            // Name the rhythm input; measured distance describes the resulting day.
-            walkLabel: (key) => {
-              const preset = DAY_RHYTHMS.find((p: { key: string }) => p.key === key);
-              return preset ? String(lang === "en" ? preset.en : preset.sv).split(" · ")[0] : key;
-            },
-            pickLabel: (key) => pickLabel(key, lang),
-            dayLabel: (offset) => (offset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")),
-          })
-        : [],
+  const [dayChangeLine, dayRouteChange] = useMemo(() => {
+    if (!dayChange) return [[], []];
+    const options = {
+      lang,
+      // Name the rhythm input; measured distance describes the resulting day.
+      walkLabel: (key: string) => {
+        const preset = DAY_RHYTHMS.find((p: { key: string }) => p.key === key);
+        return preset ? String(lang === "en" ? preset.en : preset.sv).split(" · ")[0] : key;
+      },
+      pickLabel: (key: string) => pickLabel(key, lang),
+      dayLabel: (offset: number) => (offset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")),
+    };
+    // The Adjust panel says only what the route did: the inputs are the chips
+    // the reader just set, and the change line names them.
+    const routeOnly = { ...dayChange.summary, cause: null, inputs: { walk: null, day: null, picksAdded: [], picksRemoved: [] } };
+    return [dayChangeSegments(dayChange.summary, options), dayChangeSegments(routeOnly, options)];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dayChange, lang],
-  );
+  }, [dayChange, lang]);
+  // Where the reader's last adjustment stands, for the Adjust panel:
+  // rebuilding, rebuilt (and what the route did), or failed.
+  const adjustSummary = dayChange && phase === "done" && !dayIsStale ? dayRouteChange.join(" · ") : "";
+  const adjustRebuild: AdjustRebuild =
+    staleNotice === "updating"
+      ? { state: "updating" }
+      : staleNotice === "update_failed"
+        ? { state: "failed" }
+        : adjustSummary
+          ? { state: "updated", summary: adjustSummary }
+          : null;
+  const newStopIdentities = useMemo(() => {
+    const added = new Set<string>();
+    if (!dayChange || dayChange.summary.stops.before === 0) return added;
+    const previous = new Set(primaryRouteStops(dayChange.previous.safeResponse).map(stopIdentity));
+    for (const stop of routeStops) {
+      const identity = stopIdentity(stop);
+      if (identity && !previous.has(identity)) added.add(identity);
+    }
+    return added;
+  }, [dayChange, routeStops]);
   // A woven live event belongs to the day on screen, which may be tomorrow's.
   const includedInRoute = dayOffset === 0
     ? t("Ingår i dagens rutt", "Included in today's route")
@@ -2447,7 +2506,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // shown (the static build and the first client render are the phone layout).
   const wideScreen = useMediaQuery("(min-width: 64rem)");
   const dayWithRoute = showDay && routeStops.length > 0;
-  const splitLayout = wideScreen && dayWithRoute;
+  // While a day composes, wide screens already hold both columns — the day's
+  // shape on the left, the map's frame on the right — so the day lands where
+  // its shape stood instead of jumping sideways when it arrives.
+  const dayIsComing = phase === "loading" && !staleNotice;
+  const splitLayout = wideScreen && (dayWithRoute || dayIsComing);
   const routeMap = dayWithRoute ? (
     <RouteMap
       hasPrimaryRoute={hasPrimaryRoute}
@@ -2504,6 +2567,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           walkKey={walkKey}
           onSetRhythm={chooseRhythm}
           onChangePlace={cancelActivePlannerForNavigation}
+          rebuild={adjustRebuild}
         />
       )}
       {hasAnchor && choosesEnabled && (
@@ -2643,39 +2707,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       )}
 
       {phase === "loading" && !staleNotice && (
-        <div className="flex flex-col gap-5">
-          <p className="flex items-center gap-2.5 text-sm text-parranda-ink/75" aria-live="polite">
-            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-parranda-ember motion-safe:animate-pulse" />
-            <span>
-              {supplyPending && t("Hämtar källbelagda platser för din dag. Planen fortsätter automatiskt — du behöver inte försöka igen.", "Fetching source-backed places for your day. Your plan will continue automatically — no need to try again.")}
-              {!supplyPending && loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
-              {!supplyPending && loadingStage === 1 && t("Läser kartan och letar efter riktiga platser …", "Reading the map and looking for real places …")}
-              {!supplyPending && loadingStage === 2 &&
-                t(
-                  "Komponerar dagen genom områdena — platser utan full kurering kan ta lite längre …",
-                  "Composing the day across the areas — places without full curation can take a little longer …",
-                )}
-            </span>
-          </p>
-          {/* The shape of the day that is coming — a line with empty
-              stations — so it lands without a jump. Decorative only: it
-              carries no place, number or claim. */}
-          <div aria-hidden="true" className="flex flex-col gap-3 motion-safe:animate-pulse">
-            <span className="h-3 w-20 rounded-full bg-parranda-ink/10" />
-            <span className="h-10 w-3/4 rounded-parranda-btn bg-parranda-ink/10" />
-            <span className="h-14 w-2/3 rounded-parranda-btn bg-parranda-ink/10" />
-            <span className="h-3 w-1/2 rounded-full bg-parranda-ink/10" />
-            <span className="mt-2 h-56 rounded-parranda bg-parranda-ink/8" />
-            <div className="relative mt-2 flex flex-col gap-5 before:absolute before:bottom-5 before:left-[19px] before:top-5 before:w-1.5 before:rounded-full before:bg-parranda-ink/10 before:content-['']">
-              {[0, 1, 2].map((row) => (
-                <span key={row} className="flex items-center gap-3">
-                  <span className="relative h-11 w-11 rounded-full border-4 border-parranda-ink/12 bg-parranda-paper" />
-                  <span className="h-4 flex-1 rounded-full bg-parranda-ink/10" />
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
+        <DayPlaceholder
+          inlineMap={!splitLayout}
+          status={
+            // Where "Your day" will stand, with the drawing ring: the day
+            // lands under the line the reader is already looking at.
+            <p className="flex items-start gap-2.5 text-sm text-parranda-ink/75" aria-live="polite">
+              <RingMark className="mt-[3px] h-3.5 w-3.5" />
+              <span>
+                {supplyPending && t("Hämtar källbelagda platser för din dag. Planen fortsätter automatiskt — du behöver inte försöka igen.", "Fetching source-backed places for your day. Your plan will continue automatically — no need to try again.")}
+                {!supplyPending && loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
+                {!supplyPending && loadingStage === 1 && t("Läser kartan och letar efter riktiga platser …", "Reading the map and looking for real places …")}
+                {!supplyPending && loadingStage === 2 &&
+                  t(
+                    "Komponerar dagen genom områdena — platser utan full kurering kan ta lite längre …",
+                    "Composing the day across the areas — places without full curation can take a little longer …",
+                  )}
+              </span>
+            </p>
+          }
+        />
       )}
 
       {phase === "error" && staleNotice !== "update_failed" && (
@@ -2787,7 +2838,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         >
           <p className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink/75">
             {stopEditError ? stopEditErrorMessage : stopEditFeedback ? t(stopEditFeedback === "remove" ? "Borttaget" : "Bytt", stopEditFeedback === "remove" ? "Removed" : "Replaced") : <>
-              <span className="font-bold text-parranda-ink">{t("Ändrat", "Changed")}: </span>
+              <span className="font-bold text-parranda-ink">
+                {dayChange.summary.trigger === "recheck" ? t("Letade efter fler platser", "Looked for more places") : t("Ändrat", "Changed")}:{" "}
+              </span>
               {dayChangeLine.join(" · ")}
             </>}
           </p>
@@ -2827,11 +2880,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           weather={dayflow?.weather ?? null}
           coreCount={split.core.length}
           wovenCount={split.woven.length}
-          pickCoverage={pickCoverage}
+          pickCoverage={shownPickCoverage}
           priorityShortfall={priorityShortfall}
           dayLimitationNote={dayLimitationNote}
-          sourceEvidenceNote={sourceEvidenceNote}
-          onUpdateDay={() => retryPlan({ sameDate: true })}
+          sourceShortfall={sourceShortfall}
+          onLookForMorePlaces={lookForMorePlaces}
+          rechecking={recheckPending && staleNotice === "updating"}
           restoredAt={restoredAt}
           canUpdateSaved={canUpdateSaved}
           resolveAndRun={() => retryPlan({ sameDate: true })}
@@ -2887,6 +2941,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           lang={lang}
           map={splitLayout ? null : routeMap}
           stale={staleNotice === "updating"}
+          newStopIdentities={newStopIdentities}
           routeLineIsSketch={routeLineIsSketch}
           dayContextNote={dayContextNote}
           assemblyNotes={dayAssemblyNotes(t, { sourceBackedDay, timeAnchoring })}
@@ -3022,11 +3077,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {/* The wide-screen map column is the "Map of the day" landmark; the
           map's own canvas region inside it is named "Interactive map", so
           the two are not one name twice. */}
-      {splitLayout && (
+      {splitLayout && (dayWithRoute ? (
         <aside aria-label={t("Karta över dagen", "Map of the day")} className="sticky top-4 h-[calc(100dvh-2rem)] min-h-[30rem]">
           {routeMap}
         </aside>
-      )}
+      ) : (
+        <DayMapPlaceholder />
+      ))}
 
       {/* Live navigation reads source data; explicit occurrence choice reuses
           the day's bounded commitment/recomposition path. */}

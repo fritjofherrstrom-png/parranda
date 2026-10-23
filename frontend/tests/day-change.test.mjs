@@ -210,3 +210,18 @@ test("a server-applied Live upgrade says Live moved the day, with the same input
   assert.equal(dayChangeSegments(change, labels("en")).join(" · "), "Live: event added · +1 stop · 1.2 → 1.9 km");
   assert.equal(describeDayChange(before, after).cause, null, "a legacy stop id alone cannot prove a Live occurrence");
 });
+
+test("looking for more places is said as the reader's own act, and what it brought is still said", () => {
+  // On an iPhone (23 Oct 2026) a look that also brought a Live occurrence read
+  // "Changed: Live: event added …", with no tie to the button just pressed.
+  const before = entry({ stops: [stop("a", "Place a")], km: 1.4 });
+  const after = entry({ stops: [stop("a", "Place a"), liveStop("17")], km: 3.3 });
+  const change = describeDayChange(before, after, { trigger: "recheck" });
+  assert.equal(change.trigger, "recheck");
+  assert.equal(change.cause, "live", "the Live addition is not hidden by the trigger");
+  assert.equal(dayChangeSegments(change, labels("en")).join(" · "), "Live: event added · +1 stop · 1.4 → 3.3 km");
+  const unchanged = describeDayChange(before, before, { trigger: "recheck" });
+  assert.equal(unchanged.trigger, "recheck");
+  assert.deepEqual(dayChangeSegments(unchanged, labels("en")), ["same stops and distance"], "finding nothing is an answer too");
+  assert.equal(describeDayChange(before, after).trigger, null, "an ordinary change has no trigger");
+});

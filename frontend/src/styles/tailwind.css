@@ -106,6 +106,116 @@
   text-transform: uppercase;
 }
 
+/* A day that is still composing: every placeholder shape carries one slow,
+   soft sheen that sweeps across it, in step with the others, then rests.
+   Nothing blinks and nothing flashes ember. A still grey page read as
+   broken, and stations lighting ember in turn read as hectic (iPhone,
+   23 Oct 2026). Reduced motion keeps the flat shape. */
+@utility skeleton {
+  background-color: rgb(var(--p-color-ink) / 0.08);
+  background-image: linear-gradient(
+    100deg,
+    transparent 35%,
+    rgb(var(--p-color-ink) / 0.07) 50%,
+    transparent 65%
+  );
+  background-position: 100% 0;
+  background-repeat: no-repeat;
+  background-size: 250% 100%;
+}
+@keyframes parranda-sheen {
+  0% {
+    background-position: 100% 0;
+  }
+  75%,
+  100% {
+    background-position: 0 0;
+  }
+}
+
+/* The loading day's stations breathe: each disc swells a little and lightens,
+   then settles, a soft wave rolling down the line (DayPlaceholder staggers
+   them). Used only under motion-safe. */
+@keyframes parranda-breathe {
+  0%,
+  100% {
+    background-color: rgb(var(--p-color-ink) / 0.07);
+    transform: scale(0.9);
+  }
+  50% {
+    background-color: rgb(var(--p-color-ink) / 0.17);
+    transform: scale(1);
+  }
+}
+
+/* "Working on it" (RingMark): the wordmark's ring, small, draws itself as a
+   loop over a faint track and lets it go again, turning slowly. The
+   wordmark itself stays still: a drawing wordmark, a walker and the
+   skeleton all moving at once read as too busy (Fritjof, 23 Oct 2026). */
+@keyframes parranda-mark-draw {
+  0% {
+    stroke-dasharray: 0 100;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 100 100;
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dasharray: 100 100;
+    stroke-dashoffset: -100;
+  }
+}
+@keyframes parranda-mark-turn {
+  from {
+    transform: rotate(-90deg);
+  }
+  to {
+    transform: rotate(270deg);
+  }
+}
+
+/* The choice just made, while the day rebuilds around it: a soft ember ring
+   that slowly widens and fades from the chip that was tapped. Used only
+   under motion-safe. */
+@keyframes parranda-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgb(var(--p-color-ember) / 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 7px rgb(var(--p-color-ember) / 0);
+  }
+}
+
+/* While an adjustment rebuilds the day, its line goes quiet and one soft
+   ember wash slides slowly down it, then rests: the route drawn again, in
+   the loading day's calm tempo rather than stations flashing in turn. */
+.route-redraw::before {
+  background-image: linear-gradient(
+    to bottom,
+    transparent,
+    rgb(var(--p-color-ember) / 0.55),
+    transparent
+  );
+  background-position: 0 -67%;
+  background-repeat: no-repeat;
+  background-size: 100% 40%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .route-redraw::before {
+    animation: parranda-redraw 3.2s ease-in-out infinite;
+  }
+}
+@keyframes parranda-redraw {
+  0% {
+    background-position: 0 -67%;
+  }
+  75%,
+  100% {
+    background-position: 0 167%;
+  }
+}
+
 /* MapLibre's own stylesheet is lazy-loaded with the map, so it can arrive after
    this one. Every override below is one class more specific than the MapLibre
    rule it replaces (`.route-map-frame …`), so it wins whichever loads last.

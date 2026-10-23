@@ -361,15 +361,15 @@ test('ordinary HTTP browser day preserves the second source occurrence through s
   assert.equal(routeStops(partial).length, 6);
   assert.equal(occurrence(routeStops(partial).at(-1)), chosenId);
   await assertRenderedDay(page, routeStops(partial));
-  const quiet = page.getByText('Some place information is missing.', { exact: true });
+  // One plain sentence and one action (iPhone, 23 Oct 2026): no hidden
+  // "About the place sources", no "Update the day" that could swap stops silently.
+  const quiet = page.getByText('Not every place could be loaded, so there may be more than the ones shown.', { exact: true });
   await quiet.waitFor();
-  assert.equal(await quiet.locator('xpath=..').getAttribute('role'), 'status');
-  assert.equal(await quiet.locator('xpath=../..').getAttribute('role'), null);
-  await page.getByText('About the place sources', { exact: true }).click();
-  await page.getByText(/The place evidence was incomplete when the response was produced/).waitFor();
-  const update = page.getByRole('button', { name: 'Update the day', exact: true });
+  assert.equal(await quiet.getAttribute('role'), 'status');
+  assert.equal(await quiet.locator('xpath=..').getAttribute('role'), null);
+  const update = page.getByRole('button', { name: 'Look for more places', exact: true });
   assert.equal(await update.isVisible(), true);
-  assert.ok(!(await update.getAttribute('class')).includes('bg-parranda-ember'), 'source update is a secondary text action');
+  assert.ok(!(await update.getAttribute('class')).includes('bg-parranda-ember'), 'looking again is a secondary action');
   assert.equal(await page.getByRole('button', { name: 'Try again', exact: true }).count(), 0);
   await capture('partial-source-quiet-info');
   assert.ok(sourceRequests.length > 0, 'the raw source transport was actually consumed');
