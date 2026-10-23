@@ -42,12 +42,54 @@ adapter or a discoverable structured interface; a paid reader is not assumed.
 
 A place with no approved or machine-qualified local event source looks for one
 during its own Live collection, which already runs out of band while the day is
-built; the day never waits for it and Live may arrive later. The lane uses the
-same bounded source search as the discovery worker (at most two
-locality-scoped queries, at most six seeds), the ordinary source scout and the
-same manifest binding as qualification. Only structured event interfaces the
-scout recognises become feeds; prose and the model reader are not used here.
+built; the day never waits for it and Live may arrive later. The lane has two
+seed sources, used together: the venues around the anchor and the same bounded
+source search as the discovery worker (at most two locality-scoped queries, at
+most six seeds). Both feed the ordinary source scout and the same manifest
+binding as qualification. Only structured event interfaces the scout
+recognises become feeds; prose and the model reader are not used here.
 Robots exclusions and restricted or permission-required terms remain blockers.
+
+**Venue lane.** Events happen at venues, and venues publish their own
+programmes. One bounded Wikidata (CC0) `wikibase:around` query per ~1 km cell
+(3 km radius, kept seven days) lists event venues with an official website
+(P856): stages, concert halls, clubs, cabarets and arts centres first, then
+cultural centres, cinemas and arenas, then libraries, museums, galleries and
+generic venues; dissolved or closed items are excluded. Up to nine venue
+sites lead the seeds, then the search seeds, one seed per site, read in three
+groups side by side within the same budget. A seed is only a place to look:
+it raises no confidence and carries no event fact. A cold area query can take
+longer than the wait (12 s); it keeps running and warms its cache, and that
+round is a short failed answer (`venue_seed_lookup_incomplete`), never the
+hour-long verified empty. The lane is on wherever the source search is
+configured; `PARRANDA_EVENT_VENUE_SEEDS=enabled` turns it on without a
+search, `disabled` turns it off.
+
+**Host venue.** An interface found on the venue's own site (same host as the
+venue seed) carries that venue (Wikidata name, coordinate and item) as its
+`host_venue`. An event from it without coordinates gets the host venue's point
+only on evidence: the place it names is the host venue (its distinctive name,
+without articles, bare kinds of place or the town), or it names no place and
+nothing else in the same source points elsewhere (no event names another
+place and no located event lies more than 300 m from the host). A site that
+lists several venues therefore proves nothing for its unnamed rows, which
+keep the ordinary venue resolution. Existing coordinates are never replaced.
+The event keeps `venue_resolution: { source: "host_venue", basis:
+"host_venue_name" | "host_venue_programme", provider: "wikidata", ref }` with
+CC0 attribution, and the ordinary radius gate still applies.
+
+**Canonical websites.** A listed website often names an older origin
+(`http://`, with or without `www.`) that redirects to the canonical one. The
+scout follows only that: up to three redirects of `/robots.txt` that stay on
+the same host (with or without `www.`), never downgrade from https and keep
+the `/robots.txt` path. The canonical origin's own robots verdict comes before
+any page. A redirect to another domain is still not followed.
+
+**schema.org pages.** The scout evaluates JSON-LD found inside an HTML page as
+a `schema_org_event` candidate whose manifest names the `schema_org_html`
+reader. Binding treats that pair as one interface; before 2026-10-18 the
+names were compared directly and every such page was dropped, in the request
+lane and in qualification alike.
 
 A feed found this way is a single observation: `status: probationary`,
 `runtime_trust: request_time_single_observation`, Pulse-only, low confidence,
@@ -59,13 +101,15 @@ invented. Venue resolution tries the source's address, then its venue name with
 the town; a geocoder hit the geocoder itself rates "low" (little-known venues)
 counts only when it is the one place in the trusted area and its own name is
 the source's venue name, never a bare kind of place such as "teatro". One discovery per ~1 km cell is reused for six hours. Its answer is
-typed: found, verified empty (a working search with no usable source, held for
-an hour) or failed (search or scout failed, held five minutes to spare the
-search service). A failed discovery never becomes a cached healthy-empty Live
+typed: found, verified empty (a working look with no usable source, held for
+an hour) or failed (search failed, more than half of the sites could not be
+read, an interface's robots policy could not be read, or the venue lookup is
+still running; held five minutes to spare the search service and the sites). A failed discovery never becomes a cached healthy-empty Live
 pool; the collection is held briefly as a failed refresh and retried. The
 existing scout demand still asks the worker
 to qualify the source over two UTC days. `PARRANDA_REQUEST_TIME_EVENT_DISCOVERY=disabled`
-is an operator opt-out; without a configured source search the lane is off.
+is an operator opt-out; without a configured source search the lane is off
+unless the venue lane is explicitly enabled.
 
 The production web service forwards the same operator search endpoint,
 timeout, pacing and identifying user agent as the scout worker. Search stays

@@ -122,7 +122,9 @@ export function controlAwareView({
   const onMap = { top: edge, right: edge, bottom: edge, left: edge };
   const options = paddingOptions({ width, height, keepouts, edge, gap });
 
-  for (let zoom = Math.floor(maxZoom); zoom >= Math.ceil(minZoom); zoom -= 1) {
+  // Quarter steps: whole zoom steps could leave a day using half the room it
+  // has, so close stops that would show apart shared a pin at the first view.
+  for (let zoom = Math.floor(maxZoom * 4) / 4; zoom >= Math.ceil(minZoom); zoom -= 0.25) {
     // Each mark's footprint in world pixels at this zoom, as the extremes of
     // the two kinds: marks that avoid the controls, and marks that only stay on
     // the map. The origin (the world pixel at the container's top-left) must

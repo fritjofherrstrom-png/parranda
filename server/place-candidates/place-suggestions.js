@@ -28,8 +28,15 @@ function matchTier(title,query) {
  return q&&t===q?0:q&&t.startsWith(q)?1:2;
 }
 const compact=value=>typeof value==='string' ? value.trim().replace(/\s+/g,' ').slice(0,160) : '';
+// Place names stay source-owned (see the request below), but the country in the
+// visible context is the reader's: derived from the ISO code, offline, so the
+// same answer every time. The query and admin context keep the source's name.
+function countryName(code,language,fallback) {
+ if(!/^[a-z]{2}$/i.test(code||'')||!/^[a-z]{2}$/.test(language||''))return fallback;
+ try{const name=new Intl.DisplayNames([language],{type:'region'}).of(code.toUpperCase());return name&&name!==code.toUpperCase()?name:fallback;}catch{return fallback;}
+}
 
-function mapFeature(feature) {
+function mapFeature(feature,language=null) {
  const p=feature?.properties;
  const coordinates=feature?.geometry?.coordinates;
  if(feature?.geometry?.type!=='Point'||!Array.isArray(coordinates)||coordinates.length!==2||!isValidCoordinate(coordinates[1],coordinates[0]))return null;
@@ -40,7 +47,7 @@ function mapFeature(feature) {
  const local=compact(p.city)||compact(p.county)||compact(p.state);
  const country=compact(p.country);
  const distinct=values=>[...new Map(values.filter(x=>x&&x.toLowerCase()!==title.toLowerCase()).map(x=>[x.toLowerCase(),x])).values()];
- const qualifiers=distinct([local,compact(p.state),country]);
+ const qualifiers=distinct([local,compact(p.state),countryName(compact(p.countrycode),language,country)]);
  const hierarchy=distinct([compact(p.city),compact(p.county),compact(p.state),country]);
  const query=[title,...hierarchy].join(', ');
  if(query.length>200)return null;
@@ -71,7 +78,7 @@ function untilAbort(work,signal) {
 }
 
 function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fetch,now=()=>Date.now(),sleep=ms=>new Promise(r=>setTimeout(r,ms)),minIntervalMs=750,timeoutMs=5000}={}) {
- const cache=createSourceCache({namespace:'place-suggestions-v2',ttlMs:60*60*1000,maxEntries:256,now});
+ const cache=createSourceCache({namespace:'place-suggestions-v3',ttlMs:60*60*1000,maxEntries:256,now});
  const jobs=new Map();
  const budgetMs=Math.max(1,Math.min(5000,Number(timeoutMs)||5000));
  let pending=0,lastStarted=-Infinity,tail=Promise.resolve();
@@ -106,7 +113,7 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
     if(ownerSignal.aborted || performance.now()>=deadline || !Array.isArray(data?.features))return {status:'unavailable',choices:[]};
     const seen=new Set();const choices=[];
     for(const feature of data.features.slice(0,30)) {
-     const choice=mapFeature(feature);if(!choice||seen.has(choice.candidate.osm_ref))continue;
+     const choice=mapFeature(feature,context.language);if(!choice||seen.has(choice.candidate.osm_ref))continue;
      seen.add(choice.candidate.osm_ref);choices.push(choice);
     }
     return {status:'ready',choices:rankChoices(choices,query)};

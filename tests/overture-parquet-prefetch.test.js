@@ -50,7 +50,7 @@ async function fixture(t, { x = 'CASE WHEN i<2048 OR (i>=4096 AND i<6144) THEN 1
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
   const fetcher = (url, options) => { assert.match(url, /^https:\/\/overturemaps-us-west-2\.s3\.us-west-2\.amazonaws\.com\/release\//); return fetch(`http://127.0.0.1:${server.address().port}/fixture`, options); };
-  return { dir, conn, file, bytes, fetcher, requests, maxActive: () => maximum };
+  return { dir, conn, file, bytes, fetcher, requests, url: `http://127.0.0.1:${server.address().port}/fixture`, maxActive: () => maximum };
 }
 
 test('pinned sparse prefetch preserves actual stratified SQL output and overlaps range requests', async t => {
@@ -72,6 +72,145 @@ test('pinned sparse prefetch preserves actual stratified SQL output and overlaps
   const far=meta.find(r=>r.row_group_id==='1'&&r.path_in_schema==='id');
   const offset=Number(far.dictionary_page_offset||far.data_page_offset);
   assert.ok(!f.requests.some(r=>r.start<=offset&&r.end>=offset),'irrelevant group chunks must remain holes');
+});
+
+// Break caught: rectangle-only acquisition reads a whole corner group even
+// though the unchanged sample SQL rejects every one of its rows by distance.
+test('sample-radius acquisition skips a proven outside corner through real HTTP without changing the ordered SQL result', async t => {
+  const f = await fixture(t, {
+    x: '(CASE WHEN i<2048 OR (i>=4096 AND i<6144) THEN 12.001 ELSE 12.049 END)::FLOAT',
+    y: '(CASE WHEN i<2048 OR (i>=4096 AND i<6144) THEN 40.001 ELSE 40.038 END)::FLOAT',
+  });
+  // The corner is inside both 5km rectangular bounds, but >5.9km away.
+  const sql = buildOvertureQuery({ release: '2026-09-23.1', lat: 40, lng: 12, parquetPaths: [asset] });
+  const expected = (await f.conn.runAndReadAll(sql.replaceAll(`'${asset}'`, `'${f.file}'`))).getRowObjectsJson();
+  assert.equal(expected.length, 600);
+  const metadata = (await f.conn.runAndReadAll(`SELECT * FROM parquet_metadata('${f.file}')`)).getRowObjectsJson();
+  const corner = metadata.find(row => row.row_group_id === '1' && row.path_in_schema === 'id');
+  const start = Number(corner.dictionary_page_offset || corner.data_page_offset);
+  const coversCorner = ranges => ranges.some(range => range.start <= start && range.end >= start);
+  const results = [];
+  for (const distanceFilter of [undefined, 'sample-radius-v1']) {
+    const tempDir = path.join(f.dir, distanceFilter || 'rectangle'); fs.mkdirSync(tempDir);
+    const from = f.requests.length;
+    const result = await native.prefetchOvertureParquet({ conn: f.conn, paths: [asset],
+      window: { lat: 40, lng: 12, radiusKm: 5 }, distanceFilter, tempDir, fetcher: f.fetcher });
+    const actual = (await f.conn.runAndReadAll(native.localizeOvertureSql(sql, result.sqlPaths))).getRowObjectsJson();
+    assert.deepEqual(actual, expected, 'all fields and the complete stratified order must remain identical');
+    results.push({ ...result, ranges: f.requests.slice(from) });
+  }
+  assert.ok(coversCorner(results[0].ranges), 'generic rectangle acquisition must retain its existing contract');
+  assert.ok(!coversCorner(results[1].ranges), 'a provably outside group must never be acquired');
+  assert.deepEqual(results[1].sourceAssets, results[0].sourceAssets, 'same strong source identity');
+  assert.ok(results[1].physicalBytes < results[0].physicalBytes);
+  assert.ok(results[1].ranges.reduce((n,r) => n+r.end-r.start+1,0)
+    < results[0].ranges.reduce((n,r) => n+r.end-r.start+1,0));
+});
+
+test('source-owned radius pruning survives real parent/child IPC and returns the same verified sample', async t => {
+  const { createOvertureSource, mapOvertureRow } = require('../server/place-candidates/overture-source');
+  const { createBoundedOvertureQuery } = require('../server/place-candidates/bounded-overture-query');
+  const { fork } = require('node:child_process');
+  const f = await fixture(t, {
+    x: '(CASE WHEN i<2048 OR (i>=4096 AND i<6144) THEN 12.001 ELSE 12.049 END)::FLOAT',
+    y: '(CASE WHEN i<2048 OR (i>=4096 AND i<6144) THEN 40.001 ELSE 40.038 END)::FLOAT',
+  });
+  // Only the external asset boundary is redirected; the source, validation,
+  // IPC child, sparse reader, SQL, normalization and receipt are production.
+  const preload = path.join(f.dir, 'controlled-fetch.cjs');
+  fs.writeFileSync(preload, `const fetchAsset = globalThis.fetch;
+globalThis.fetch = (url, options) => {
+  if (!String(url).startsWith('https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com/release/')) throw Error('unexpected_external_request');
+  return fetchAsset(${JSON.stringify(f.url)}, options);
+};\n`);
+  let closed;
+  const execute = createBoundedOvertureQuery({ timeoutMs: 20000, tempRoot: f.dir, spawn: (file, args, options) => {
+    const child = fork(file, args, { ...options, execArgv: [...options.execArgv, '--require', preload] });
+    closed = new Promise(resolve => child.once('close', resolve));
+    t.after(async () => { child.kill('SIGKILL'); await closed; });
+    return child;
+  } });
+  const source = createOvertureSource({ releaseResolver: async () => '2026-09-23.1',
+    assetResolver: async () => [asset], queryRows: execute, now: () => 1792713600000 });
+  const sql = buildOvertureQuery({ release: '2026-09-23.1', lat: 40, lng: 12, parquetPaths: [asset] });
+  const expected = (await f.conn.runAndReadAll(sql.replaceAll(`'${asset}'`, `'${f.file}'`))).getRowObjectsJson().map(row => mapOvertureRow(row));
+  const actual = await source.acquire({ lat: 40, lng: 12 });
+  await closed;
+  assert.equal(actual.source_error, undefined);
+  assert.equal(actual.length, 600);
+  assert.deepEqual(actual, expected);
+  assert.deepEqual(actual.source_receipt.assets, [{ path: asset, etag: '"fixture-v1"', length: f.bytes.length }]);
+  assert.equal(source.validateReceipt(actual.source_receipt, source.cacheKeyFor({ lat: 40, lng: 12 })), true);
+  const metadata = (await f.conn.runAndReadAll(`SELECT * FROM parquet_metadata('${f.file}')`)).getRowObjectsJson();
+  const corner = metadata.find(row => row.row_group_id === '1' && row.path_in_schema === 'id');
+  const start = Number(corner.dictionary_page_offset || corner.data_page_offset);
+  assert.ok(!f.requests.some(range => range.start <= start && range.end >= start), 'the source opt-in must reach both native validation boundaries');
+});
+
+test('sample-radius metadata pruning retains uncertain statistics, world edges and every radius boundary', () => {
+  const keep = (window, { x = [12, 12], y = [40, 40], type = 'DOUBLE' } = {}) => {
+    const rows = [['bbox, xmin', x], ['bbox, ymin', y], ['id', [0, 0]]].map(([name, [min, max]], i) => ({
+      row_group_id: '0', type, path_in_schema: name, stats_min_value: min, stats_max_value: max,
+      data_page_offset: 20 + 20*i, total_compressed_size: 10,
+    }));
+    return native.selectOvertureChunkRanges(rows, window, 1000, { distanceFilter: 'sample-radius-v1' }).length > 0;
+  };
+  const window = { lat: 40, lng: 12, radiusKm: 5 };
+  assert.equal(keep(window, { x: [12.049, 12.049], y: [40.038, 40.038], type: 'FLOAT' }), false);
+  for (const x of [[null, null], ['', ''], ['NaN', 'NaN'], [12.05, 12.04], [-181, 181]]) {
+    assert.equal(keep(window, { x }), true, 'unusable bounds cannot prove exclusion');
+  }
+  assert.equal(keep(window, { x: [12.049, 12.049], y: [40.038, 40.038], type: null }), true);
+  assert.equal(keep(window, { x: [12.049, 12.049], y: [40.038, 40.038], type: 'BYTE_ARRAY' }), true);
+  assert.equal(keep(window, { y: [40.045218222005174, 40.045218222005174] }), true, 'exact 5km latitude boundary');
+  assert.equal(keep({ lat: 0, lng: 179.99, radiusKm: 5 }, { x: [-179.99, -179.99], y: [0, 0], type: 'FLOAT' }), true);
+  assert.equal(keep({ lat: 0, lng: -179.99, radiusKm: 5 }, { x: [179.99, 179.99], y: [0, 0], type: 'FLOAT' }), true);
+  assert.equal(keep({ lat: 90, lng: 180, radiusKm: 5 }, { x: [-180, -180], y: [90, 90], type: 'FLOAT' }), true);
+  assert.equal(keep({ lat: -90, lng: -180, radiusKm: 5 }, { x: [180, 180], y: [-90, -90], type: 'FLOAT' }), true);
+});
+
+test('FLOAT radius boundary accepted by the real SQL is never excluded by an ideal DOUBLE distance', async t => {
+  // Literal counterexample: ideal planar distance is1.000325km, but FLOAT
+  // longitude arithmetic in the source SQL gives0.999738km, within1km.
+  const f = await fixture(t, { x: '0.0017966222949326038::FLOAT', y: '0.008864::FLOAT' });
+  const sql = buildOvertureQuery({ release: '2026-09-23.1', lat: 0, lng: 0, radiusKm: 1, parquetPaths: [asset] });
+  const expected = (await f.conn.runAndReadAll(sql.replaceAll(`'${asset}'`, `'${f.file}'`))).getRowObjectsJson();
+  assert.equal(expected.length, 600, 'the actual product SQL accepts this boundary');
+  const tempDir = path.join(f.dir, 'float-boundary'); fs.mkdirSync(tempDir);
+  const result = await native.prefetchOvertureParquet({ conn: f.conn, paths: [asset],
+    window: { lat: 0, lng: 0, radiusKm: 1 }, distanceFilter: 'sample-radius-v1', tempDir, fetcher: f.fetcher });
+  const actual = (await f.conn.runAndReadAll(native.localizeOvertureSql(sql, result.sqlPaths))).getRowObjectsJson();
+  assert.deepEqual(actual, expected);
+});
+
+test('cancelling radius-filtered acquisition after a real HTTP chunk removes the partial materialization', async t => {
+  const f = await fixture(t, { x: '(12.001)::FLOAT', y: '(40.001)::FLOAT' });
+  const metadata = (await f.conn.runAndReadAll(`SELECT * FROM parquet_metadata('${f.file}')`)).getRowObjectsJson();
+  const id = metadata.find(row => row.row_group_id === '0' && row.path_in_schema === 'id');
+  const offset = Number(id.dictionary_page_offset || id.data_page_offset);
+  const controller = new AbortController(); let readChunk = false;
+  const tempDir = path.join(f.dir, 'cancel-radius'); fs.mkdirSync(tempDir);
+  await assert.rejects(native.prefetchOvertureParquet({ conn: f.conn, paths: [asset], window: { lat: 40, lng: 12, radiusKm: 5 },
+    distanceFilter: 'sample-radius-v1', tempDir, signal: controller.signal, fetcher: async (url, options) => {
+      const response = await f.fetcher(url, options);
+      const range = options.headers?.Range?.match(/^bytes=(\d+)-(\d+)$/);
+      if (range && Number(range[1]) <= offset && Number(range[2]) >= offset) { readChunk = true; controller.abort(); }
+      return response;
+    } }), /cancelled|abort/i);
+  assert.equal(readChunk, true, 'abort must occur after real data acquisition starts');
+  assert.deepEqual(fs.readdirSync(tempDir), []);
+});
+
+test('invalid sample-radius contracts fail before any source traffic', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'parranda-radius-validation-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  let calls = 0;
+  const plan = { paths: [asset], window: { lat: 40, lng: 12, radiusKm: 5 }, distanceFilter: 'unknown-metric' };
+  assert.throws(() => native.validateOverturePrefetchPlan(plan), /invalid_overture/);
+  await assert.rejects(native.prefetchOvertureParquet({ ...plan, conn: {}, tempDir: dir,
+    fetcher: async () => { calls++; throw Error('unexpected_traffic'); } }), /invalid_overture/);
+  assert.equal(calls, 0);
+  assert.deepEqual(fs.readdirSync(dir), []);
 });
 
 test('native license projection preserves the complete ordered SQL result without transferring unused source fields', async t => {
@@ -96,7 +235,7 @@ test('DOUBLE and dateline windows retain the exact ordered sample, including gro
     const f = await fixture(t, { x, y: dateline ? '0.0::DOUBLE' : '(40.0+(i%10)*0.0001)::DOUBLE' });
     const tempDir = path.join(f.dir, 'sparse'); fs.mkdirSync(tempDir);
     const window = { lat: dateline ? 0 : 40, lng: dateline ? 179.99 : 12, radiusKm: 5 };
-    const result = await native.prefetchOvertureParquet({ conn: f.conn, paths: [asset], window, tempDir, fetcher: f.fetcher });
+    const result = await native.prefetchOvertureParquet({ conn: f.conn, paths: [asset], window, distanceFilter: 'sample-radius-v1', tempDir, fetcher: f.fetcher });
     const sql = buildOvertureQuery({ release: '2026-09-23.1', ...window, parquetPaths: [asset] });
     const expected = (await f.conn.runAndReadAll(sql.replaceAll(`'${asset}'`, `'${f.file}'`))).getRowObjectsJson();
     const actual = (await f.conn.runAndReadAll(native.localizeOvertureSql(sql, result.sqlPaths))).getRowObjectsJson();

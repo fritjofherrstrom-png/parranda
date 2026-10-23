@@ -46,7 +46,9 @@ async function run() {
   };
   try {
     let settled=false,result,error;
-    const operation=prefetchOvertureParquet({conn,paths:[identity.path],window:identity.window,tempDir,fetcher,signal:controller.signal,...(process.env.PARRANDA_REPLAY_CONCURRENCY?{concurrency:Number(process.env.PARRANDA_REPLAY_CONCURRENCY)}:{})}).then(value=>{result=value;settled=true},reason=>{error=reason;settled=true});
+    const operation=prefetchOvertureParquet({conn,paths:[identity.path],window:identity.window,tempDir,fetcher,signal:controller.signal,
+      ...(process.env.PARRANDA_REPLAY_SAMPLE_RADIUS==='1'?{distanceFilter:'sample-radius-v1'}:{}),
+      ...(process.env.PARRANDA_REPLAY_CONCURRENCY?{concurrency:Number(process.env.PARRANDA_REPLAY_CONCURRENCY)}:{})}).then(value=>{result=value;settled=true},reason=>{error=reason;settled=true});
     if(model){
       const wallStart=Date.now();
       while(!settled){
