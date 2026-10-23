@@ -55,7 +55,7 @@ test('new acquisition binds normalized facts to the exact release, query and pin
   assert.equal(records.source_receipt.acquiredAt, 1000);
   assert.equal(records.source_receipt.verifiedAt, 1000);
   assert.equal(Object.keys(records).includes('source_receipt'), false);
-  assert.deepEqual(f.calls.plans, [{ paths: [asset(RELEASE)], window: { ...ANCHOR, radiusKm: 5 } }]);
+  assert.deepEqual(f.calls.plans, [{ paths: [asset(RELEASE)], window: { ...ANCHOR, radiusKm: 5 }, distanceFilter: 'sample-radius-v1' }]);
   assert.equal(records[0].sources[0].tier, 'inferred', 'receipt must not promote source trust');
 });
 
