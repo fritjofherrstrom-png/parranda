@@ -630,7 +630,7 @@ function createOvertureSource({
         }
       }
       const rows = await executeQuery(query, { signal, ...(parquetPaths ? {
-        prefetch: { paths: parquetPaths, window: { lat, lng, radiusKm: boundedRadius } },
+        prefetch: { paths: parquetPaths, window: { lat, lng, radiusKm: boundedRadius }, distanceFilter: 'sample-radius-v1' },
       } : {}) });
       signal?.throwIfAborted();
       const records = [];

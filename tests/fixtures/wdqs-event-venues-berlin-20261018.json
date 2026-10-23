@@ -1,0 +1,2360 @@
+{
+ "recorded_at": "2026-10-18T01:10:10.742Z",
+ "source": "query.wikidata.org (CC0), human-paced single request",
+ "query": {
+  "lat": 52.52,
+  "lng": 13.39,
+  "radiusKm": 3
+ },
+ "head": {
+  "vars": [
+   "item",
+   "itemLabel",
+   "bestRank",
+   "classes",
+   "website",
+   "lat",
+   "lng",
+   "dist"
+  ]
+ },
+ "results": {
+  "bindings": [
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q359242"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Admiralspalast"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253 http://www.wikidata.org/entity/Q24354"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://www.admiralspalast.de"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5208"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3886"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.13"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q565670"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Friedrichstadt-Palast"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q24354"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.palast.berlin/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.52393"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3881"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.455"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q312576"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Berlin State Opera"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q8719053 http://www.wikidata.org/entity/Q24354 http://www.wikidata.org/entity/Q153562"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.staatsoper-berlin.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.516666666"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.394722222"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.489"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q687694"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Komische Oper Berlin"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q8719053 http://www.wikidata.org/entity/Q24354 http://www.wikidata.org/entity/Q153562"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.komische-oper-berlin.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.515833333"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.386944444"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.507"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q28870831"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Pierre Boulez Saal"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q8719053 http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q1060829"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.boulezsaal.de"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.515427"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.396511"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.673"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q702548"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Konzerthaus Berlin"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q8719053 http://www.wikidata.org/entity/Q1060829"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://www.konzerthaus.de"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.513611"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.392222"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.726"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q2415687"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Theater 89"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q24354"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.theater89.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.52751"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.39039"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.835"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q105762302"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Schokoladen"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q8719053"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://schokoladen-mitte.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.529742"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.397171"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "1.187"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q1254654"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Kunstfabrik Schlot"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q8719053 http://www.wikidata.org/entity/Q622425"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://kunstfabrik-schlot.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5304"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3852"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "1.201"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q678186"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Tresor"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q8719053 http://www.wikidata.org/entity/Q622425"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://www.tresorberlin.com"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.51"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.382777777"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "1.215"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q15132360"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Tipi am Kanzleramt"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q24354"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.tipi-am-kanzleramt.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.518362"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.367084"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "1.561"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q567069"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Berlin Musical Instrument Museum"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q8719053"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.simpk.de/museum/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5103"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3709"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "1.683"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q704933"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Haus der Kulturen der Welt"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q1329623 http://www.wikidata.org/entity/Q2190251 http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253 http://www.wikidata.org/entity/Q33506 http://www.wikidata.org/entity/Q24354"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.hkw.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5188"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3648"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "1.71"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q32653910"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Berliner Philharmonie"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q8719053 http://www.wikidata.org/entity/Q1060829"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.berliner-philharmoniker.de/philharmonie/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.51"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.37"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "1.751"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q23767066"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Kammermusiksaal"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q8719053 http://www.wikidata.org/entity/Q1060829"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.berliner-philharmoniker.de/kammermusiksaal/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.509419444"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.369052777"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "1.842"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q1592692"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Hebbel Theater"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q24354"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://www.hebbel-am-ufer.de"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3873"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "2.231"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q116318835"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Wintergarten"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q24354"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://wintergarten-berlin.de"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.50219"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.36451"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "2.626"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q57908931"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Wintergarten"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q24354"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.wintergarten-berlin.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.502194444"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.364388888"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "2.631"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q47459972"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Bolle Festsäle"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253 http://www.wikidata.org/entity/Q24354"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://www.bolle-meierei.com/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.524625"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.347904"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "2.894"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q821575"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Berliner Kabarett Anstalt"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q131183 http://www.wikidata.org/entity/Q24354"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.bka-theater.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.49375"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.38765"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "2.923"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q831173"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Bethanien"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q2190251 http://www.wikidata.org/entity/Q1329623"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.bethanien.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5039"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.4244"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "2.937"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q414078"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Academy of Arts (Hanseatenweg)"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "0"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q57660343 http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253 http://www.wikidata.org/entity/Q24354"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.adk.de/de/besucherinformation/hanseatenweg/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5179"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3461"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "2.979"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q314446"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Tränenpalast"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253 http://www.wikidata.org/entity/Q33506"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.hdg.de/traenenpalast"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5208"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3869"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.228"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q196969"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Zeughauskino"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.dhm.de/zeughauskino/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5181"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3978"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.568"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q28778219"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Polnisches Institut Berlin"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q1329623"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://www.polnischekultur.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.52156"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.40081"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.752"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q47164843"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Hackesche Höfe Kino"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.hoefekino.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.524096"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.401836"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.921"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q52598236"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Haus Schwarzenberg"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://www.kino-central.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.524312"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.402203"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.955"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q47165287"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Z-inema"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://www.z-bar.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.529467"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.395719"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "1.121"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q47192501"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Haus Ungarn"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q1329623 http://www.wikidata.org/entity/Q41253"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://hausungarn.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.521446"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.406493"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "1.127"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q47164876"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "CineStar Berlin Cubix am Alexanderplatz"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.cinestar.de/kino-berlin-cubix-am-alexanderplatz/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.52018"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.41208"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "1.494"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q47164545"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "CineStar IMAX Sony Center"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.cinestar.de/kino-berlin-imax-im-sony-center/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.51008"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.37268"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "1.609"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q1742238"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Kino Babylon"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://babylonberlin.eu/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5258"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.4119"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "1.616"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q47459889"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "CinemaxX Berlin Potsdamer Platz"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.cinemaxx.de/berlin"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.508773"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.373789"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "1.662"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q1670774"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Kino International"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.yorck.de/kinos/kino-international"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5203"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.4228"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "2.219"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q43735064"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "WikiBär"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q1329623"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://de.wikipedia.org/wiki/Wikipedia:WikiB%C3%A4r"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5090676"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.4243386"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "2.622"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q47126528"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "fsk - Kino am Oranienplatz"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://fsk-kino.peripherfilm.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5017414"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.4145736"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "2.624"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q467867"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Kulturbrauerei"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q1329623 http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q41253"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://kulturbrauerei.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5389"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.4136"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "2.639"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q881710"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Köpi"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "1"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q1329623"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.koepi137.net/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5078"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.4261"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "2.794"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q117822507"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Stabi Kulturwerk"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q33506"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://stabi-kulturwerk.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5182229"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.391516595"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.223"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q2324837"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "State Library of Berlin (Haus Unter den Linden)"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q7075"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://staatsbibliothek-berlin.de"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5178"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3917"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.27"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q1501334"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Gender library"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q7075"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://www2.gender.hu-berlin.de/genderbib/genderbibliothek/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5203"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.39406"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.277"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q28738864"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Library of the Berlin-Brandenburg Academy of Sciences"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q7075"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://bibliothek.bbaw.de"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.51779"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.39221"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.288"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q1407819"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "University Library of Humboldt-Universität zu Berlin"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q7075"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.ub.hu-berlin.de/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5183"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3867"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.293"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q323169"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Münzkabinett Berlin"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q33506"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.smb.museum/en/museums-institutions/muenzkabinett/home.html"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.52203"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.39399"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.352"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q117323106"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Microsoft Berlin"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.microsoft.com/de-de/berlin/digital-eatery.aspx"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.51681"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3905"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.356"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q28733856"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q7075"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://www.helios-kliniken.de/wissen/wissensstrukturen/helios-zentralbibliothek.html"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.52282"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.38752"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.356"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q157825"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Bode Museum"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q33506"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.smb.museum/museen-und-einrichtungen/bode-museum/home.html"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.521944444"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.394722222"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.386"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q59350030"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "DRIVE. Volkswagen Group Forum"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://drive-volkswagen-group.com"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5165"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3897"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.39"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q162610"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "National Gallery Berlin"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q33506"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.smb.museum/museen-einrichtungen/nationalgalerie/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.52138889"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.39555556"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.406"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q157298"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Pergamon Museum"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q33506 http://www.wikidata.org/entity/Q17350442"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.smb.museum/museen-einrichtungen/pergamonmuseum/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.521"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.396"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.421"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q1954632"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Museum of Islamic Art"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q33506"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.smb.museum/en/museums-institutions/museum-fuer-islamische-kunst/home.html"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5208"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3964"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.442"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q435399"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Alte Bibliothek"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q7075"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://www.nplu.org/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5164"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3933"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.458"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q76632415"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Celine and Heiner Bastian exhibition room"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q1007870 http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q33506"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://www.galeriebastian.com/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.519166666"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.396666666"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.46"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q28739485"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "German Historical Museum Foundation, Library"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q7075"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.dhm.de/sammlung-forschung/sammlungen0/bibliothek/literatursuche.html"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.51888"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.39666"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.467"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q542084"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Vorderasiatisches Museum Berlin"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q33506"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.smb.museum/museen-einrichtungen/vorderasiatisches-museum/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.52069444"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.39680556"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.467"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q664484"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "James Simon Gallery"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q33506"
+    },
+    "website": {
+     "type": "uri",
+     "value": "http://www.museumsinsel-berlin.de/index.php?lang=en&page=2_7_1"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.52"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.39701"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.474"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q157316"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Neues Museum"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q17350442 http://www.wikidata.org/entity/Q33506"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.smb.museum/museen-einrichtungen/neues-museum/home/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5202"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3976"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.515"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q688335"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Deutsches Historisches Museum"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q33506 http://www.wikidata.org/entity/Q17350442"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://www.dhm.de"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.518055555"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.396944444"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.517"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q56765306"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "PalaisPopulaire"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q1007870"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://palaispopulaire.db.com/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.5171465"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.3961451"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.523"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q15126890"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Sammlung Boros"
+    },
+    "bestRank": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+     "type": "literal",
+     "value": "2"
+    },
+    "classes": {
+     "type": "literal",
+     "value": "http://www.wikidata.org/entity/Q33506"
+    },
+    "website": {
+     "type": "uri",
+     "value": "https://boros-collection.com/en/"
+    },
+    "lat": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "52.52351667"
+    },
+    "lng": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "13.38396944"
+    },
+    "dist": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#double",
+     "type": "literal",
+     "value": "0.565"
+    }
+   }
+  ]
+ }
+}

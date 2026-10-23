@@ -41,6 +41,23 @@ test('dense official footer uses bounded bodies and fewer requests inside unchan
   assert.equal(actual.sourceAssets[0].etag,'"e92948dbce4b18503f5633f019a52b20-11"');
 });
 
+test('sample-radius filtering reduces the official dense plan without broadening sparse allocation', () => {
+  const fixture = path.join(__dirname, 'fixtures/overture-dense-footer-20261021');
+  const run = enabled => {
+    const child = spawnSync(process.execPath, ['--max-old-space-size=64', path.join(__dirname, 'helpers/overture-large-footer-replay.js')], {
+      encoding: 'utf8', timeout: 20000, env: { ...process.env, PARRANDA_METADATA_REPLAY_FIXTURE: fixture, PARRANDA_REPLAY_SAMPLE_RADIUS: enabled ? '1' : '0' },
+    });
+    assert.equal(child.status, 0, child.stderr.slice(0, 1500));
+    return JSON.parse(child.stdout);
+  };
+  const rectangle = run(false), circle = run(true);
+  assert.deepEqual(circle.sourceAssets, rectangle.sourceAssets);
+  assert.ok(circle.physicalBytes <= rectangle.physicalBytes, 'optional pruning must not broaden the physical footprint');
+  assert.ok(circle.transferredBytes < rectangle.transferredBytes);
+  assert.ok(circle.rangeCount < rectangle.rangeCount);
+  assert.ok(circle.maxRangeBytes <= 512*1024);
+});
+
 // Controlled network model from the measured failure envelope:650ms response
 // overhead and300KiB/s per read, advanced by a virtual clock. This proves the
 // bounded acquisition architecture, not a future provider SLA. Real DuckDB
