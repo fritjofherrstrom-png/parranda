@@ -61,7 +61,7 @@ function isDayOffset(value) {
  * @param {object|null} previous  the saved entry of the day that was on screen
  * @param {object|null} next      the saved entry of the day that replaced it
  */
-export function describeDayChange(previous, next, { cause = null } = {}) {
+export function describeDayChange(previous, next, { cause = null, trigger = null } = {}) {
   const beforeStops = routeStops(previous);
   const afterStops = routeStops(next);
   const before = byIdentity(beforeStops);
@@ -113,6 +113,10 @@ export function describeDayChange(previous, next, { cause = null } = {}) {
     // A real Live occurrence may arrive in an ordinary adjustment or a separate
     // completion. Compare the published identities, not the response lane.
     cause: cause === "live" || addedStops.some((stop) => stop.is_live_event === true && liveStopChoiceId(stop)) ? "live" : null,
+    // What the reader did to get here, when it was not an input change:
+    // "recheck" is looking for more places with the same inputs. The line
+    // is said under that name; what changed (Live included) is still said.
+    trigger: trigger === "recheck" ? "recheck" : null,
   };
 }
 

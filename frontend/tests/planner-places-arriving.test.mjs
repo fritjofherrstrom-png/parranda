@@ -53,10 +53,10 @@ test("a published partial day states historical incompleteness and offers an exp
   await h.clock.advance(500);
   await h.fetchMock.respond(composeCalls(h)[0], thinDay(pending));
   await h.clock.advance(50);
-  assert.match(h.text(), /incomplete when the response was produced/);
+  assert.match(h.text(), /Not every place could be loaded, so there may be more than the ones shown/);
   assert.doesNotMatch(h.text(), /More places are on their way|still fetching|update in a moment/i);
   assert.doesNotMatch(h.text(), /few places to choose between here/i);
-  const update = buttonNamed(h, "Update the day");
+  const update = buttonNamed(h, "Look for more places");
   assert.ok(update, h.text());
 
   await h.clock.advance(120000);
@@ -71,7 +71,8 @@ test("a published partial day states historical incompleteness and offers an exp
   await h.fetchMock.respond(composeCalls(h)[1], fullerDay());
   await h.clock.advance(50);
   assert.match(h.text(), /Le Ceni/);
-  assert.doesNotMatch(h.text(), /incomplete when the response was produced|More places are on their way/);
+  assert.doesNotMatch(h.text(), /Not every place|More places are on their way/);
+  assert.match(h.text(), /Looked for more places: /, "what the look found is said, not swapped in silently");
 });
 
 test("a day whose sources have all answered keeps its honest thin-day note and no update offer", async (t) => {
@@ -82,7 +83,7 @@ test("a day whose sources have all answered keeps its honest thin-day note and n
   await h.clock.advance(50);
   assert.match(h.text(), /few places to choose between here/i);
   assert.doesNotMatch(h.text(), /More places are on their way/);
-  assert.equal(buttonNamed(h, "Update the day"), undefined);
+  assert.equal(buttonNamed(h, "Look for more places"), undefined);
 });
 
 test("a no-route terminal snapshot states incomplete evidence without judging the place or promising a route", async (t) => {
@@ -116,9 +117,9 @@ test("a partial published day with no pending count still suppresses thin-place 
   const h = await mountPlanner({ url: PLACE_URL });
   t.after(() => h.unmount());
   await h.fetchMock.respond(composeCalls(h)[0], thinDay({ status: "partial", pending: 0, failed: 0 }));
-  assert.match(h.text(), /incomplete when the response was produced/);
+  assert.match(h.text(), /Not every place could be loaded/);
   assert.doesNotMatch(h.text(), /few places to choose between here|on their way|still fetching/i);
-  assert.ok(buttonNamed(h, "Update the day"));
+  assert.ok(buttonNamed(h, "Look for more places"));
   await h.clock.advance(120000);
   assert.equal(composeCalls(h).length, 1);
 });
@@ -128,10 +129,10 @@ test("a published day preserves the primary-source failure even when all backgro
   const response=thinDay(complete);
   response.agnostic_route_output_experiment.source_status.error='provider_unavailable';
   await h.fetchMock.respond(composeCalls(h)[0],response);
-  assert.match(h.text(),/One or more place sources failed/);
+  assert.match(h.text(),/Not every place could be loaded/);
   assert.match(h.text(),/Halle/);
   assert.doesNotMatch(h.text(),/few places to choose between here|on their way|still fetching/i);
-  assert.ok(buttonNamed(h,'Update the day'));
+  assert.ok(buttonNamed(h,'Look for more places'));
   await h.clock.advance(120000);
   assert.equal(composeCalls(h).length,1,'a failed primary does not start another acquisition automatically');
 });

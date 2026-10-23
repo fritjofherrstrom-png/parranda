@@ -396,7 +396,7 @@ test('Undo rejects a late completion from the removed day without recomposing', 
   assert.equal(routeCalls(h).length, 2, 'Undo restores the actual prior answer rather than composing again');
 });
 
-test('Update the day after date-change Undo retains the restored frozen date and one-stop cap', async t => {
+test('Looking for more places after date-change Undo retains the restored frozen date and one-stop cap', async t => {
   const withPendingSource = (stops, edit = null) => {
     const body = response(stops, edit);
     body.agnostic_route_output_experiment.source_status.collection = {
@@ -420,7 +420,7 @@ test('Update the day after date-change Undo retains the restored frozen date and
   await click(h, 'Undo'); await h.clock.advance(500);
   assert.equal(routeCalls(h).length, 3, 'Undo itself emits no request');
   assert.deepEqual(h.readStorage(LAST), previous);
-  await click(h, 'Update the day');
+  await click(h, 'Look for more places');
   const retry = routeCalls(h).at(-1);
   assert.equal(routeCalls(h).length, 4);
   assert.deepEqual(retry.body.dates, [DATE], 'retry answers the restored day, not the undone request');

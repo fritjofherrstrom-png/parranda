@@ -288,7 +288,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // The day on screen when an adjustment left for the server — the one "Undo"
   // returns to. Taken from the live day, never from a request still in flight,
   // and only while the anchor it belongs to is the one being recomposed.
-  const undoBaselineRef = useRef<{ entry: SavedEntry; anchorKey: string | null } | null>(null);
+  const undoBaselineRef = useRef<{ entry: SavedEntry; anchorKey: string | null; trigger?: "recheck" } | null>(null);
+  // The reader asked to look for more places; cleared when that answer lands.
+  const [recheckPending, setRecheckPending] = useState(false);
   // Undo installs the previous inputs without composing. This is the input
   // signature it installed, so the auto-recompose effect recognises its own
   // echo instead of composing the day it just put back.
@@ -825,7 +827,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           undoBaselineRef.current = null;
           setDayChange(
             baseline && baseline.anchorKey !== null && baseline.anchorKey === anchorKey(anchor)
-              ? { previous: baseline.entry, summary: describeDayChange(baseline.entry, entry) }
+              ? { previous: baseline.entry, summary: describeDayChange(baseline.entry, entry, { trigger: baseline.trigger ?? null }) }
               : null,
           );
         } else {
@@ -2072,6 +2074,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       if (retryGenerationRef.current === retryGeneration) retryInFlightRef.current = false;
     });
   };
+  // "Look for more places": the same frozen question again, after a day whose
+  // place sources fell short. Whatever it brings is said like an adjustment's
+  // result ("Looked for more places: 2 stops swapped …", with Undo) and its
+  // new stops are marked, never a silent swap of the day being read.
+  const lookForMorePlaces = () => {
+    if (retryInFlightRef.current || !lastRequestedAnchorRef.current) return;
+    const onScreen = lastEntryRef.current;
+    undoBaselineRef.current = isUndoableDay(onScreen)
+      ? { entry: onScreen, anchorKey: displayedAnchorKeyRef.current, trigger: "recheck" }
+      : null;
+    setRecheckPending(true);
+    retryPlan({ sameDate: true });
+  };
+  useEffect(() => {
+    if (phase !== "loading") setRecheckPending(false);
+  }, [phase]);
   const commit = (identity: string, kind: "exclude" | "pin", commitLabel: string, liveAction?: "remove" | "replace") => {
     if (!identity || (commitments[identity]?.kind === kind && commitments[identity]?.liveAction === liveAction)) return;
     setExpandedStopKey(null);
@@ -2217,6 +2235,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const primarySourceFailed = typeof sourceError === "string" && sourceError.trim() !== "";
   const incompletePlaceSources = phase === "done" && (sourcesIncomplete(sourceCompletion) || primarySourceFailed);
   const sourceEvidenceNote = incompletePlaceSources ? contextNote([], t, { sourceCompletion, sourceFailed: primarySourceFailed }) : "";
+  // The same evidence for the day's header, as the one plain distinction a
+  // reader needs: a source failed, or the places were not all in yet.
+  const sourceShortfall: "failed" | "partial" | null = incompletePlaceSources
+    ? (primarySourceFailed || Number(sourceCompletion?.failed) > 0 ? "failed" : "partial")
+    : null;
   const terminalSourceIssue = incompletePlaceSources && !hasPrimaryRoute && !anchorUnresolved && !upgradePending && !serviceRefusal;
   const canUpdateSaved = !restoredAt || Boolean(lastRequestedAnchorRef.current && lastComposeDateIsoRef.current);
   const dayLimitationNote = limitationNote(dayLimitations, split.core.length, t, { sourcesIncomplete: incompletePlaceSources });
@@ -2753,7 +2776,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         >
           <p className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink/75">
             {stopEditError ? stopEditErrorMessage : stopEditFeedback ? t(stopEditFeedback === "remove" ? "Borttaget" : "Bytt", stopEditFeedback === "remove" ? "Removed" : "Replaced") : <>
-              <span className="font-bold text-parranda-ink">{t("Ändrat", "Changed")}: </span>
+              <span className="font-bold text-parranda-ink">
+                {dayChange.summary.trigger === "recheck" ? t("Letade efter fler platser", "Looked for more places") : t("Ändrat", "Changed")}:{" "}
+              </span>
               {dayChangeLine.join(" · ")}
             </>}
           </p>
@@ -2796,8 +2821,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           pickCoverage={shownPickCoverage}
           priorityShortfall={priorityShortfall}
           dayLimitationNote={dayLimitationNote}
-          sourceEvidenceNote={sourceEvidenceNote}
-          onUpdateDay={() => retryPlan({ sameDate: true })}
+          sourceShortfall={sourceShortfall}
+          onLookForMorePlaces={lookForMorePlaces}
+          rechecking={recheckPending && staleNotice === "updating"}
           restoredAt={restoredAt}
           canUpdateSaved={canUpdateSaved}
           resolveAndRun={() => retryPlan({ sameDate: true })}

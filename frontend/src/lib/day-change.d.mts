@@ -17,9 +17,10 @@ export interface DayChange {
   hasRoute: boolean;
   routeChanged: boolean;
   cause: "live" | null;
+  trigger: "recheck" | null;
 }
 
-export function describeDayChange(previous: unknown, next: unknown, options?: { cause?: "live" | null }): DayChange;
+export function describeDayChange(previous: unknown, next: unknown, options?: { cause?: "live" | null; trigger?: "recheck" | null }): DayChange;
 
 export function dayChangeSegments(
   change: DayChange | null | undefined,
