@@ -29,12 +29,22 @@ test('stops apart keep their own pins at their own coordinates', () => {
   assert.deepEqual(drawn(pins), [{ members: '0', d: 0 }, { members: '1', d: 0 }, { members: '2', d: 0 }]);
 });
 
-test('close stops spread a short way and never overlap; far shifts are not allowed', () => {
+// A pin covers its own place: it may move at most half its 22px radius, and a
+// group pin sits on the centre of the stops it names (Stockholm, 2026-10-22:
+// numbers had floated off their stops and stayed off them while zooming).
+const onItsPlace = (pins, points) => pins.forEach((pin) => {
+  const cx = pin.members.reduce((s, i) => s + points[i].x, 0) / pin.members.length;
+  const cy = pin.members.reduce((s, i) => s + points[i].y, 0) / pin.members.length;
+  assert.ok(Math.hypot(pin.x - cx, pin.y - cy) <= 11, `pin ${pin.members} is on its place`);
+});
+
+test('close stops share pins on their places instead of numbers spread away from them', () => {
   // The 320px fixture day: five stops about 20px apart on a diagonal.
   const points = [0, 1, 2, 3, 4].map((k) => ({ x: 120 + k * 20, y: 140 - k * 14 }));
   const pins = screenPinPresentation(points, VIEW);
-  assert.equal(pins.length, 5, 'every stop keeps its own number');
-  for (const pin of pins) assert.ok(Math.hypot(pin.shift_x_px, pin.shift_y_px) <= 72, `${pin.members} moved too far`);
+  onItsPlace(pins, points);
+  assert.equal(pins.flatMap((p) => p.members).sort().join(), '0,1,2,3,4', 'every stop is in exactly one pin');
+  assert.ok(pins.length < 5, 'stops that cannot be shown apart share a pin');
   for (let i = 0; i < pins.length; i++) for (let j = 0; j < i; j++) {
     assert.ok(Math.abs(pins[i].x - pins[j].x) >= 48 || Math.abs(pins[i].y - pins[j].y) >= 48, 'targets do not overlap');
   }
@@ -50,11 +60,21 @@ test('stops on one spot at this zoom share one pin at their centre', () => {
   assert.equal(pinGroupLabel(pins[0].members), '1–5');
 });
 
-test('a close pair fans out with its own numbers, as on a fitted phone map', () => {
+test('a close pair shares one pin; stops far enough apart keep their own numbers', () => {
   // Two stops 89 m apart are about 11px apart on the 320px collapsed map.
-  const pins = screenPinPresentation([{ x: 90, y: 120 }, { x: 170, y: 100 }, { x: 175, y: 111 }, { x: 260, y: 120 }], VIEW);
-  assert.deepEqual(pins.map((p) => p.members.join()), ['0', '1', '2', '3']);
-  assert.ok(pins.every((p) => Math.hypot(p.shift_x_px, p.shift_y_px) <= 60));
+  const close = [{ x: 90, y: 120 }, { x: 170, y: 100 }, { x: 175, y: 111 }, { x: 260, y: 120 }];
+  const pins = screenPinPresentation(close, VIEW);
+  assert.deepEqual(pins.map((p) => p.members.join()), ['0', '1,2', '3']);
+  onItsPlace(pins, close);
+  const apart = [{ x: 90, y: 120 }, { x: 170, y: 100 }, { x: 225, y: 100 }, { x: 290, y: 120 }];
+  assert.deepEqual(screenPinPresentation(apart, VIEW).map((p) => [p.members.join(), p.shift_x_px, p.shift_y_px]),
+    [['0', 0, 0], ['1', 0, 0], ['2', 0, 0], ['3', 0, 0]]);
+});
+
+test('a stop under a map control keeps its place rather than being pushed away', () => {
+  const points = [{ x: 30, y: 50 }, { x: 200, y: 100 }];
+  const pins = screenPinPresentation(points, VIEW);
+  assert.deepEqual(pins.map((p) => [p.members.join(), p.x, p.y]), [['0', 30, 50], ['1', 200, 100]]);
 });
 
 test('a stop that cannot be shown near its place joins its nearest pin, not a far corner', () => {
@@ -68,24 +88,20 @@ test('a stop that cannot be shown near its place joins its nearest pin, not a fa
   assert.equal(pins.flatMap((p) => p.members).sort().join(), '0,1,2,3,4', 'every stop is in exactly one pin');
 });
 
-test('at the fitted zoom and closer every stop keeps its own number', () => {
-  // The map groups only once the reader zooms out past its own fit.
-  const blob = [{ x: 186, y: 92 }, { x: 183, y: 90 }, { x: 187, y: 86 }, { x: 192, y: 89 }, { x: 190, y: 97 }];
-  const pins = screenPinPresentation(blob, { ...VIEW, grouping: false });
-  assert.deepEqual(pins.map((p) => p.members.join()), ['0', '1', '2', '3', '4']);
+test('the map groups at every zoom and creates every pin on its own stop', () => {
   const source = readFileSync(new URL('../src/components/planner/RouteMap.tsx', import.meta.url), 'utf8');
-  assert.match(source, /const grouping = typeof map\.getZoom === "function" && map\.getZoom\(\) < fitted - 0\.05;/);
-  assert.match(source, /if \(fitted\) fitted\.current = view\.zoom;\s*map\.jumpTo/);
+  assert.doesNotMatch(source, /grouping/, 'no zoom-dependent switch back to unbounded spreading');
+  assert.doesNotMatch(source, /routeMarkerPresentation/, 'pins are not fanned out on creation');
+  assert.match(source, /const shiftX = 0;\s*const shiftY = 0;/);
+  assert.match(source, /marks\.push\(\{ lat: stop\.lat, lng: stop\.lng, radius: MARKER_RADIUS \}\)/, 'the view is fitted to the stops themselves');
 });
 
 test('a stop panned out of view is not pinned to the edge, at any zoom', () => {
   // Seen in the Simulator: dragging the map moved the stops north of the view,
   // and their numbers stayed along the top edge over Årsta.
   const points = [{ x: 150, y: -300 }, { x: 200, y: -280 }, { x: 180, y: 100 }];
-  for (const grouping of [false, true]) {
-    const pins = screenPinPresentation(points, { ...VIEW, grouping });
-    assert.deepEqual(pins.map((p) => [p.members.join(), Boolean(p.offscreen), p.y]), [['0', true, -300], ['1', true, -280], ['2', false, 100]], `grouping ${grouping}`);
-  }
+  const pins = screenPinPresentation(points, VIEW);
+  assert.deepEqual(pins.map((p) => [p.members.join(), Boolean(p.offscreen), p.y]), [['0', true, -300], ['1', true, -280], ['2', false, 100]]);
 });
 
 test('a pin keeps its last spot while it is still free, so it does not jump as the map moves', () => {
@@ -100,6 +116,24 @@ test('a pin keeps its last spot while it is still free, so it does not jump as t
 test('stops outside the view are not pulled into it or into a group', () => {
   const pins = screenPinPresentation([{ x: -80, y: 50 }, { x: 150, y: 100 }], VIEW);
   assert.deepEqual(pins.map((p) => [p.members.join(), Boolean(p.offscreen), p.shift_x_px]), [['0', true, 0], ['1', false, 0]]);
+});
+
+test('fully visible anchors are not nudged into clipped discs or touch targets', () => {
+  const points = [{ x: 258, y: 100 }, { x: 298, y: 100 }];
+  const pins = screenPinPresentation(points, { width: 320, height: 200, keepouts: [] });
+  assert.ok(pins);
+  onItsPlace(pins, points);
+  for (const pin of pins) {
+    assert.ok(pin.x >= 22 && pin.x <= 298 && pin.y >= 22 && pin.y <= 178,
+      `pin ${pin.members} at ${pin.x},${pin.y} clips its 44px touch target`);
+  }
+  assert.deepEqual(points, [{ x: 258, y: 100 }, { x: 298, y: 100 }]);
+});
+
+test('a naturally edge-clipped stop is not pulled into a distant group', () => {
+  const points = [{ x: 1, y: 100 }, { x: 200, y: 100 }];
+  assert.deepEqual(screenPinPresentation(points, { width: 320, height: 200 }).map(p => [p.members, p.x, p.y]),
+    [[[0], 1, 100], [[1], 200, 100]]);
 });
 
 test('invalid input fails closed', () => {
@@ -118,7 +152,10 @@ test('the map uses the bounded pins, and a group pin is a named control that zoo
   const source = readFileSync(new URL('../src/components/planner/RouteMap.tsx', import.meta.url), 'utf8');
   assert.match(source, /screenPinPresentation\(points,/);
   assert.doesNotMatch(source, /screenMarkerPresentation\(/);
-  assert.match(source, /element\.setAttribute\("role", "button"\)[\s\S]{0,200}Zoom in to separate them/);
+  assert.match(source, /element\.setAttribute\("role", "button"\)/);
+  assert.match(source, /element\.setAttribute\("aria-label", accessibleName\)/);
+  assert.match(source, /Zoom in to separate them/);
+  assert.match(source, /Inspect the stops in this group/);
   assert.match(source, /map\.easeTo\(\{ center: bounds\.getCenter\(\), zoom, duration/);
   assert.match(source, /focusAfterSplitRef\.current = group\.members\[0\]/);
   const css = readFileSync(new URL('../src/styles/tailwind.css', import.meta.url), 'utf8');

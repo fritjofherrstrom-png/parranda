@@ -192,14 +192,48 @@ async function resolvePlaceRefIntake({ coords, explicitCoordinatesPresent, place
   const strong = (Array.isArray(resolved) ? resolved : []).filter((candidate) => candidate && isStrongConfidence(candidate.confidence));
   return blocked("place_ref_not_found", {
     candidates_considered: strong.length,
-    candidates: strong.slice(0, 5).map((candidate) => placeChoice(candidate, placeQuery, placeSelectionStore)),
+    candidates: placeChoices(strong, placeQuery, placeSelectionStore),
   });
+}
+
+const foldName = value => typeof value === "string"
+  ? value.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+  : "";
+
+// A short visible title and context for an offered place, when the resolver
+// supplied structured admin context. `label` keeps the provider's full name
+// because it carries the choice's identity downstream.
+function choiceTitle(candidate) {
+  const title = typeof candidate.name === "string" && candidate.name.trim()
+    ? candidate.name.trim()
+    : String(candidate.label || "").split(",")[0].trim();
+  const admin = candidate.admin_context || {};
+  const seen = new Set([foldName(title)]);
+  const context = [admin.locality || admin.municipality, admin.region, admin.country]
+    .filter(value => typeof value === "string" && value.trim() && !seen.has(foldName(value)) && seen.add(foldName(value)));
+  // Without structured context the full label is the only honest qualifier.
+  return title && context.length ? { title, context: context.join(" · ") } : {};
+}
+
+// Offered order within the original first five strong candidates: OSM ways and
+// relations before nodes. A map-type heuristic, not verified area geometry.
+// Recorded on staging
+// 166609c (2026-10-18): point nodes led "Gamla stan" (Vyborg, Porvoo) and
+// "Möllevången" (an Östra Grevie hamlet) by importance, ahead of the Stockholm,
+// Kalmar, Malmö and Lund areas; "Lisbon" (all areas) keeps Lisboa first.
+// Ordering only; neither bounded membership nor automatic anchors change.
+function orderChoices(candidates) {
+  const pointOnly = candidate => /^node\//.test(candidate?.osm_ref || "") ? 1 : 0;
+  return candidates.map((candidate, index) => ({ candidate, index }))
+    .sort((a, b) => pointOnly(a.candidate) - pointOnly(b.candidate) || a.index - b.index)
+    .map(entry => entry.candidate);
 }
 
 function placeChoice(candidate, placeQuery, placeSelectionStore) {
   const placeRef = linkRefFor(candidate);
   return {
     label: candidate.label || null,
+    ...choiceTitle(candidate),
     confidence: candidate.confidence ?? null,
     provenance: candidate.provenance || null,
     attribution: typeof candidate.attribution === "string" ? candidate.attribution : null,
@@ -207,6 +241,25 @@ function placeChoice(candidate, placeQuery, placeSelectionStore) {
     ...(placeRef ? { place_ref: placeRef } : {}),
     ...(placeSelectionStore ? { selection_id: placeSelectionStore.issue(candidate, placeQuery || candidate.label) } : {}),
   };
+}
+
+function placeChoices(candidates, placeQuery, placeSelectionStore) {
+  const choices = orderChoices(candidates.slice(0, 5))
+    .map(candidate => placeChoice(candidate, placeQuery, placeSelectionStore));
+  // Shortening must not hide source-owned distinctions between offered places.
+  // Expand only colliding displays, rechecking in case a full label now collides
+  // with another short display. These are fresh projections, not receipt facts.
+  for (;;) {
+    const displays = choices.map(choice => foldName(choice.title
+      ? `${choice.title} ${choice.context || ""}` : choice.label));
+    const collisions = choices.filter((choice, index) => choice.title &&
+      displays.some((display, other) => other !== index && display === displays[index]));
+    if (!collisions.length) return choices;
+    for (const choice of collisions) {
+      delete choice.title;
+      delete choice.context;
+    }
+  }
 }
 
 /**
@@ -293,7 +346,6 @@ async function resolveAgnosticIntake({
   const selectionInvalid = hasSelection && !selected;
   const previous = placeContextSelection ? placeSelectionStore?.read(placeContextSelection) : null;
   const near = previous || (placeBias && isValidCoordinate(placeBias.lat, placeBias.lng) ? placeBias : null);
-  const candidateChoice = candidate => placeChoice(candidate, placeQuery, placeSelectionStore);
 
   // 3. Freeform place → trusted server resolver ONLY.
   if (!selected && typeof placeResolver !== "function") {
@@ -317,7 +369,7 @@ async function resolveAgnosticIntake({
   if (selectionInvalid) {
     return { anchor: null, placeContext: null, intake: intake("place", placeQuery, {
       candidates_considered: candidates.length,
-      candidates: strong.slice(0, 5).map(candidateChoice),
+      candidates: placeChoices(strong, placeQuery, placeSelectionStore),
       blockers: ["place_selection_invalid"],
     }) };
   }
@@ -341,7 +393,7 @@ async function resolveAgnosticIntake({
       placeContext: null,
       intake: intake("place", placeQuery, {
         candidates_considered: candidates.length,
-        candidates: strong.slice(0, 5).map(candidateChoice),
+        candidates: placeChoices(strong, placeQuery, placeSelectionStore),
         blockers: ["ambiguous_place"],
       }),
     };

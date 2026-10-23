@@ -216,7 +216,16 @@ async function openDay({ browser, origin }, { width, stops }) {
   const route = width >= 1024
     ? page.getByRole("complementary", { name: "Karta över dagen" })
     : page.getByRole("region", { name: "Rutten" });
-  await route.locator(".route-map-marker").nth(stops.length - 1).waitFor();
+  // Every stop is on the map once: its own number, or in a group pin naming it.
+  await page.waitForFunction((n) => {
+    const numbers = [...document.querySelectorAll('section[aria-label="Rutten"] .route-map-marker, aside[aria-label="Karta över dagen"] .route-map-marker')]
+      .filter((element) => getComputedStyle(element).visibility !== "hidden")
+      .flatMap((element) => element.textContent.trim().split(",").flatMap((part) => {
+        const [a, b] = part.split("–").map(Number);
+        return b ? Array.from({ length: b - a + 1 }, (_, i) => a + i) : [a];
+      })).sort((a, b) => a - b);
+    return numbers.length === n && numbers.every((value, index) => value === index + 1);
+  }, stops.length, { timeout: 15_000 });
   await route.getByText("Ritar kartan …").waitFor({ state: "detached" });
   return { context, page, route, pageErrors };
 }
@@ -246,7 +255,8 @@ function measureMap({ expandNames, sideMap = false }) {
   const problems = Object.entries(controls)
     .filter(([, element]) => !element || !(element.getBoundingClientRect().width > 0))
     .map(([name]) => `${name} is not on the map`);
-  const discs = [...frame.querySelectorAll(".route-map-marker")].map((marker) => {
+  // Drawn discs only: a stop inside a group pin hides its own disc.
+  const discs = [...frame.querySelectorAll(".route-map-marker")].filter((marker) => getComputedStyle(marker).visibility !== "hidden").map((marker) => {
     const rect = box(marker);
     const inset = parseFloat(getComputedStyle(marker, "::before").top) || 0;
     const disc = { left: rect.left + inset, top: rect.top + inset, right: rect.right - inset, bottom: rect.bottom - inset };
@@ -304,7 +314,11 @@ function measureMap({ expandNames, sideMap = false }) {
   const xs = discs.map(({ disc }) => (disc.left + disc.right) / 2);
   const ys = discs.map(({ disc }) => (disc.top + disc.bottom) / 2);
   return {
-    markers: discs.length,
+    // Stops shown: one per own disc, every named stop per group disc.
+    markers: discs.reduce((sum, { marker }) => sum + marker.textContent.trim().split(",").reduce((count, part) => {
+      const [a, b] = part.split("–").map(Number);
+      return count + (b ? b - a + 1 : 1);
+    }, 0), 0),
     height: Math.round(map.bottom - map.top),
     // How large the day is drawn: the diagonal of the markers' extent.
     spread: Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)),
@@ -324,7 +338,7 @@ test("a marker centred in the viewport's last fractional pixel row is still hit-
   const { context, page } = await openDay(current, { width: 390, stops: DAYS["diagonal, Live stop north-east"] });
   try {
     const centreY = () => page.evaluate(() => {
-      const rect = document.querySelector('section[aria-label="Rutten"] .route-map-marker').getBoundingClientRect();
+      const rect = [...document.querySelectorAll('section[aria-label="Rutten"] .route-map-marker')].find((element) => getComputedStyle(element).visibility !== "hidden").getBoundingClientRect();
       return { y: (rect.top + rect.bottom) / 2, innerHeight, scrollY };
     });
     const start = await centreY();
@@ -376,7 +390,10 @@ for (const width of WIDTHS) {
             `${dayName} at ${width}px: expanding drew the day smaller (${Math.round(collapsed.spread)}px → ${Math.round(expanded.spread)}px)`,
           );
         }
-        if (Math.abs(collapsedAgain.spread - collapsed.spread) > 1) {
+        // The fit itself is restored: a wrong fit is a quarter zoom step, about
+        // 19% of the spread. Pins near a control may nudge by up to half their
+        // radius (11px) differently as the controls settle; the places do not.
+        if (Math.abs(collapsedAgain.spread - collapsed.spread) > 12) {
           problems.push(
             `${dayName} at ${width}px: collapsing again did not return to the collapsed fit ` +
               `(${Math.round(collapsed.spread)}px → ${Math.round(collapsedAgain.spread)}px)`,

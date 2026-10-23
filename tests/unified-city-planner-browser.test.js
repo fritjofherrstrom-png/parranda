@@ -135,7 +135,13 @@ for (const [label, path, anchor] of [
   assert.equal(new URL(page.url()).pathname, '/anywhere');
   assert.equal(new URL(page.url()).searchParams.has('city'), false);
   const region = page.getByRole('region', { name: 'The route', exact: true });
-  await region.locator('.route-map-marker').nth(2).waitFor();
+  // Every stop is on the map once: its own number, or in a group pin naming it.
+  await page.waitForFunction(() => {
+    const numbers = [...document.querySelectorAll('.route-map-marker')].filter(e => getComputedStyle(e).visibility !== 'hidden')
+      .flatMap(e => e.textContent.trim().split(',').flatMap(part => { const [a, b] = part.split('–').map(Number); return b ? Array.from({ length: b - a + 1 }, (_, i) => a + i) : [a]; }))
+      .sort((a, b) => a - b);
+    return JSON.stringify(numbers) === '[1,2,3]';
+  });
   assert.equal(composes[0].place, label);
   for (const payload of composes) {
     assert.ok(!('city' in payload));
@@ -143,7 +149,14 @@ for (const [label, path, anchor] of [
   }
   await page.getByRole('button', { name: 'Expand map', exact: true }).click();
   await page.getByRole('button', { name: 'Shrink map', exact: true }).waitFor();
-  await region.locator('.route-map-marker').first().click();
+  // Stops a few metres apart share a group pin; tapping it zooms in until
+  // stop 1 has its own number, as a person would.
+  const stopOne = region.locator('.route-map-marker:not(.route-map-marker--group)').filter({ hasText: /^1$/ });
+  for (let tap = 0; tap < 6 && !(await stopOne.isVisible()); tap++) {
+    await region.locator('.route-map-group').first().click();
+    await page.waitForTimeout(700);
+  }
+  await stopOne.click();
   await region.locator('[data-route-map]').getByText(`${label} a`, { exact: true }).waitFor();
   await region.locator('button[aria-controls="route-stop-panel-0"]').click();
   await page.getByRole('button', { name: 'Keep this one', exact: true }).waitFor();
@@ -164,7 +177,7 @@ for (const [label, path, anchor] of [
   assert.deepEqual(composes.at(-1).pinned_candidate_ids, ['a']);
   // The map must follow the new route, not merely the request ledger.
   await page.waitForFunction(label => {
-    const labels = Array.from(document.querySelectorAll('.route-map-marker-shell')).map(e => e.getAttribute('aria-label'));
+    const labels = Array.from(document.querySelectorAll('.route-map-marker-shell:not(.route-map-group)')).map(e => e.getAttribute('aria-label'));
     return JSON.stringify(labels) === JSON.stringify([`1. ${label} a`, `2. ${label} c`]);
   }, label);
   await page.getByRole('button', { name: /detour idea.*near your route/ }).click();
@@ -176,7 +189,7 @@ for (const [label, path, anchor] of [
   assert.equal(composes.at(-1).day_edit.target_stop_count, 2);
   assert.equal(composes.at(-1).day_edit.preserve_retained, false);
   await page.waitForFunction(label => {
-    const labels = Array.from(document.querySelectorAll('.route-map-marker-shell')).map(e => e.getAttribute('aria-label'));
+    const labels = Array.from(document.querySelectorAll('.route-map-marker-shell:not(.route-map-group)')).map(e => e.getAttribute('aria-label'));
     return JSON.stringify(labels) === JSON.stringify([`1. ${label} a`, `2. ${label} extra`]);
   }, label);
   const beforeLive = composes.length;
