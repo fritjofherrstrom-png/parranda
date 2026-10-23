@@ -521,10 +521,22 @@ async function scoutLocalEventSources({
   );
   let linkedPageAttempts = 0;
   const results = [];
-  for (const seed of normalizedSeeds) {
-    const url = normalizeHttpUrl(seed.url);
+  for (const listedSeed of normalizedSeeds) {
+    let url = normalizeHttpUrl(listedSeed.url);
+    let robots = await robotsForUrl(url);
+    // A listed website often names an older origin (http://, with or without
+    // www.) that redirects to the site's canonical one. Follow only that, on
+    // /robots.txt, so no page is read before the canonical origin's own verdict.
+    if (robots.status === "unknown" && robots.reason === "cross_origin_source_redirect") {
+      const canonical = await canonicalSiteUrl(url, { fetcher, timeoutMs, userAgent });
+      if (canonical && !visitedPages.has(canonical)) {
+        url = canonical;
+        visitedPages.add(url);
+        robots = await robotsForUrl(url);
+      }
+    }
+    const seed = url === normalizeHttpUrl(listedSeed.url) ? listedSeed : { ...listedSeed, url, listed_url: listedSeed.url };
     const parsed = new URL(url);
-    const robots = await robotsForUrl(url);
 
     if (robots.status === "disallowed") {
       results.push({
@@ -949,6 +961,7 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
     id: candidate.id,
     label: candidate.source_label,
     endpoint: candidate.url,
+    host_venue: hostVenueForInterface(seed, candidate.url),
     adapter,
     format:
       adapter === "schema_org_html"
@@ -1825,6 +1838,59 @@ function safeHttpStatus(value) {
   return Number.isInteger(status) && status >= 100 && status <= 599
     ? String(status)
     : "not_ok";
+}
+
+const siteHost = hostname => String(hostname || "").toLowerCase().replace(/^www\./, "");
+
+// The venue whose own website an interface belongs to: a Wikidata venue seed
+// with a name and a coordinate, on the same site. Its events may later be
+// placed there on evidence (host-venue-geometry.js); it is no event fact.
+function hostVenueForInterface(seed, endpoint) {
+  const lat = Number(seed?.lat);
+  const lng = Number(seed?.lng);
+  const name = firstString(seed?.label);
+  if (!/^Q\d+$/.test(String(seed?.wikidata_ref || "")) || !name || !Number.isFinite(lat) || !Number.isFinite(lng)) return undefined;
+  try {
+    if (siteHost(new URL(endpoint).hostname) !== siteHost(new URL(seed.listed_url || seed.url).hostname) &&
+        siteHost(new URL(endpoint).hostname) !== siteHost(new URL(seed.url).hostname)) return undefined;
+  } catch (_error) {
+    return undefined;
+  }
+  return { name: name.slice(0, 160), lat, lng, wikidata_ref: seed.wikidata_ref };
+}
+
+// The canonical origin of a listed website: up to three redirects of its
+// /robots.txt that stay on the same site (the host, with or without "www."),
+// never downgrade from https, and keep the /robots.txt path. Anything else,
+// including a move to another domain, keeps the listed origin as before.
+async function canonicalSiteUrl(url, { fetcher, timeoutMs = DEFAULT_TIMEOUT_MS, userAgent = DEFAULT_USER_AGENT } = {}) {
+  if (typeof fetcher !== "function" || !isScoutablePublicUrl(url)) return null;
+  const listed = new URL(url);
+  let current = new URL("/robots.txt", listed.origin);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), clampInteger(timeoutMs, 50, 30000));
+  try {
+    for (let hop = 0; ; hop += 1) {
+      const response = await fetcher(current.href, {
+        headers: { "User-Agent": userAgent, Accept: "text/plain" },
+        redirect: "manual",
+        signal: controller.signal,
+      });
+      try { await response?.body?.cancel?.(); } catch (_error) { /* nothing to release */ }
+      if (!isRedirectResponse(response)) break;
+      if (hop >= 3) return null;
+      const next = new URL(response.headers?.get?.("location") || "", current);
+      if (!isScoutablePublicUrl(next.href) || siteHost(next.hostname) !== siteHost(listed.hostname) ||
+          next.pathname !== "/robots.txt" || (current.protocol === "https:" && next.protocol !== "https:")) return null;
+      current = next;
+    }
+  } catch (_error) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+  if (current.origin === listed.origin) return null;
+  return normalizeHttpUrl(new URL(listed.pathname + listed.search, current.origin).href);
 }
 
 function isRedirectResponse(response) {

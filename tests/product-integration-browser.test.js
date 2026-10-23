@@ -50,10 +50,9 @@ for (const [intent, type] of interests) {
       eventSupply: null, sourceCatalog: null, reviewedPlaceSource: null,
       weatherProvider: async () => ({ condition: 'sun', source: 'controlled', stale: false,
         timezone_resolution: { timezone: 'Europe/Stockholm', timezone_source: 'weather_provider_auto', utc_offset_seconds: 7200 } }),
-      // The composer reads the clock as a function; an object with only now()
-      // fell back to the wall clock, and after 22:00 Stockholm on 22 Oct every
-      // fixture place (09:00-22:00) had closed (same fix as #623).
-      clock: Object.assign(() => new Date(NOW), { now: () => NOW }),
+      // Keep the fixture instant explicit as a callable Date clock. The shared
+      // server normalizer also accepts object clocks; both forms are covered.
+      clock: () => new Date(NOW),
     });
     const server = app.listen(0, '127.0.0.1'); await once(server, 'listening');
     t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });

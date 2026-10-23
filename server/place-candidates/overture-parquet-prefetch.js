@@ -22,7 +22,7 @@ const LEAVES = new Set(['names.primary', 'taxonomy.primary', 'taxonomy.hierarchy
 // Materialize only range-planning fields in the bounded JS child. A release
 // can have tens of thousands of metadata rows: SELECT * duplicates unrelated
 // statistics/schema fields into JS and exhausts the child's 64MiB heap.
-const METADATA_COLUMNS = `row_group_id, row_group_num_rows, column_id, path_in_schema,
+const METADATA_COLUMNS = `row_group_id, row_group_num_rows, column_id, path_in_schema, type,
   CASE WHEN path_in_schema IN ('bbox, xmin', 'bbox, ymin') THEN stats_min_value END AS stats_min_value,
   CASE WHEN path_in_schema IN ('bbox, xmin', 'bbox, ymin') THEN stats_max_value END AS stats_max_value,
   dictionary_page_offset, index_page_offset, data_page_offset, total_compressed_size,
@@ -85,7 +85,14 @@ function validateOverturePrefetchPlan(plan) {
   if (!plan || !Array.isArray(plan.paths) || !plan.paths.length || plan.paths.length > 64 || new Set(plan.paths).size !== plan.paths.length) throw new Error('invalid_overture_assets');
   plan.paths.forEach(assetUrl); windowBboxes(plan.window);
   if (new Set(plan.paths.map(value => value.split('/')[4])).size !== 1) throw new Error('invalid_overture_release');
-  return { paths: [...plan.paths], window: { lat: plan.window.lat, lng: plan.window.lng, radiusKm: plan.window.radiusKm } };
+  validateDistanceFilter(plan.distanceFilter);
+  return { paths: [...plan.paths], window: { lat: plan.window.lat, lng: plan.window.lng, radiusKm: plan.window.radiusKm },
+    ...(plan.distanceFilter ? { distanceFilter: plan.distanceFilter } : {}) };
+}
+// Private opt-in from buildOvertureQuery's owner, never an assumption about
+// arbitrary SQL passed to the generic rectangular sparse reader.
+function validateDistanceFilter(value) {
+  if (value !== undefined && value !== 'sample-radius-v1') throw new Error('invalid_overture_distance_filter');
 }
 function projected(name) {
   const parts = name.split(',').map(part => part.trim());
@@ -97,7 +104,41 @@ function numericStat(row, field) {
   const raw = row?.[field];
   return raw === null || raw === undefined || raw === '' || !Number.isFinite(Number(raw)) ? null : Number(raw);
 }
-function overlappingGroups(metadata, window) {
+// Lower bound for the sample SQL's actual arithmetic, including FLOAT
+// subtraction/modulo before DOUBLE pow/sqrt. A DOUBLE-only geometric bound
+// can wrongly exclude a FLOAT row accepted by that unchanged SQL.
+function sampleAxisMinimum(row, min, max, anchor, scale, wrap) {
+  if (min === null || max === null || min > max || min < (wrap ? -180 : -90) || max > (wrap ? 180 : 90)
+    || !['FLOAT', 'DOUBLE'].includes(row?.type)) return null;
+  const round = row.type === 'FLOAT' ? Math.fround : value => value;
+  const epsilon = row.type === 'FLOAT' ? 2 ** -23 : Number.EPSILON;
+  // DuckDB exposes shortest round-trip numeric statistics. Expand outwards
+  // by at least one physical ULP so conversion cannot tighten their bounds.
+  const lo = round(min - epsilon * Math.max(1, Math.abs(min)));
+  const hi = round(max + epsilon * Math.max(1, Math.abs(max)));
+  const a = round(Number(anchor.toFixed(7))), k = round(scale);
+  let low = round(lo - a), high = round(hi - a);
+  if (wrap) {
+    low = round(low + 540); high = round(high + 540);
+    // The interval is within [180,900] (plus outward ULPs). Modulo seams
+    // at360k maximize |delta|; only180+360k can introduce a new minimum.
+    if ([180, 540, 900].some(zero => low <= zero && high >= zero)) return 0;
+    const delta = value => round(round(value % 360) - 180);
+    return round(Math.min(Math.abs(delta(low)), Math.abs(delta(high))) * k);
+  }
+  if (low <= 0 && high >= 0) return 0;
+  return Math.min(Math.abs(round(low * k)), Math.abs(round(high * k)));
+}
+function outsideSampleRadius(x, y, xmin, xmax, ymin, ymax, window) {
+  const lngScale = Number((111.32 * Math.max(0.01, Math.abs(Math.cos(window.lat * Math.PI / 180)))).toFixed(7));
+  const dx = sampleAxisMinimum(x, xmin, xmax, window.lng, lngScale, true);
+  const dy = sampleAxisMinimum(y, ymin, ymax, window.lat, 110.574, false);
+  // Missing/invalid/unsupported statistics cannot prove exclusion. Numeric
+  // min/max need only enclose values; optional exactness flags are not needed.
+  return dx !== null && dy !== null
+    && Math.hypot(dx, dy) > Number(window.radiusKm.toFixed(3)) + 1e-7;
+}
+function overlappingGroups(metadata, window, distanceFilter) {
   const windows = windowBboxes(window), groups = new Map();
   for (const row of metadata) {
     const group = String(row.row_group_id);
@@ -112,13 +153,15 @@ function overlappingGroups(metadata, window) {
     const ymin = numericStat(y, 'stats_min_value'), ymax = numericStat(y, 'stats_max_value');
     if (windows.some(([west, south, east, north]) =>
       (xmin === null || xmax === null || (xmin <= east && xmax >= west))
-      && (ymin === null || ymax === null || (ymin <= north && ymax >= south)))) selected.add(group);
+      && (ymin === null || ymax === null || (ymin <= north && ymax >= south)))
+      && (!distanceFilter || !outsideSampleRadius(x, y, xmin, xmax, ymin, ymax, window))) selected.add(group);
   }
   return { groups, selected };
 }
-function selectOvertureChunkRanges(metadata, window, fileLength) {
+function selectOvertureChunkRanges(metadata, window, fileLength, { distanceFilter } = {}) {
   integer(fileLength, 12);
-  const { groups, selected } = overlappingGroups(metadata, window);
+  validateDistanceFilter(distanceFilter);
+  const { groups, selected } = overlappingGroups(metadata, window, distanceFilter);
   const ranges = [];
   const add = (offset, length) => {
     const start = integer(offset), size = integer(length, 1), end = start + size - 1;
@@ -265,7 +308,8 @@ function localizeOvertureSql(sql, paths) {
   for (const [assetPath, localPath] of paths) localized = localized.replaceAll(`'${assetPath}'`, `'${localPath.replace(/'/g, "''")}'`);
   return localized;
 }
-async function prefetchOvertureParquet({ conn, paths, window, tempDir, fetcher = globalThis.fetch, signal, maxPhysicalBytes = MAX_PHYSICAL_BYTES, concurrency = MAX_RANGE_CONCURRENCY }) {
+async function prefetchOvertureParquet({ conn, paths, window, distanceFilter, tempDir, fetcher = globalThis.fetch, signal, maxPhysicalBytes = MAX_PHYSICAL_BYTES, concurrency = MAX_RANGE_CONCURRENCY }) {
+  validateDistanceFilter(distanceFilter);
   windowBboxes(window);
   const budget = Math.min(MAX_PHYSICAL_BYTES, integer(maxPhysicalBytes, 1));
   const controller = new AbortController(), abort = () => controller.abort();
@@ -296,7 +340,7 @@ async function prefetchOvertureParquet({ conn, paths, window, tempDir, fetcher =
       fs.writeSync(fd, header, 0, header.length, 0); fs.writeSync(fd, footer, 0, footer.length, footerStart); fs.writeSync(fd, tail, 0, tail.length, identity.length - 8); checkBudget();
       const escaped = file.replace(/'/g, "''");
       const metadata = (await conn.runAndReadAll(`SELECT ${METADATA_COLUMNS} FROM parquet_metadata('${escaped}') WHERE ${METADATA_FILTER}`)).getRowObjectsJson();
-      const { groups, selected } = overlappingGroups(metadata, window);
+      const { groups, selected } = overlappingGroups(metadata, window, distanceFilter);
       let localFooter = footer, projectedMetadata = metadata;
       if (selected.size !== groups.size) {
         const rowCount = integer([...selected].reduce((sum, group) => sum + integer(groups.get(group)[0].row_group_num_rows), 0));
@@ -317,7 +361,7 @@ async function prefetchOvertureParquet({ conn, paths, window, tempDir, fetcher =
         fs.writeSync(fd, localFooter, 0, localFooter.length, identity.length - 8 - localFooter.length);
         fs.writeSync(fd, localTail, 0, localTail.length, identity.length - 8);
       }
-      const ranges = selectOvertureChunkRanges(projectedMetadata, window, identity.length);
+      const ranges = selectOvertureChunkRanges(projectedMetadata, window, identity.length, { distanceFilter });
       // Page allocation rather than transfer length is the shared disk budget.
       plannedBytes += allocationBytes([...metadataRanges, ...ranges]);
       if (plannedBytes > budget) throw new Error('overture_prefetch_budget');

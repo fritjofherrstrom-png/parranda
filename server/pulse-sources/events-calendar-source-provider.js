@@ -455,7 +455,10 @@ function inclusiveIcalEndDate(startsOn, declaredEndOn) {
 }
 
 function parseIcalGeo(value) {
-  const [lat, lng] = String(value || "").split(/[;,]/).map(toFinite);
+  // Missing GEO is no coordinate fact; Number("") used to invent lat: 0 here.
+  // Explicit GEO (including 0;0 or an invalid range) still reaches geo gates.
+  if (value == null) return { lat: null, lng: null };
+  const [lat, lng] = String(value).split(/[;,]/).map(toFinite);
   return { lat, lng };
 }
 
