@@ -6,7 +6,7 @@ const SOURCE_SNAPSHOT = Symbol('trustedSourceSnapshot');
 const SOURCE_PENDING = Symbol('trustedSourcePending');
 
 function createBackgroundSource({
-  cache, keyFor, load, eager = true, waitForCompletion = true,
+  cache, keyFor, load, eager = true, waitForCompletion = true, keepWarming = false,
   shouldStore = value => Array.isArray(value) && !value.source_error,
 }) {
   const operations = new Map();
@@ -16,7 +16,10 @@ function createBackgroundSource({
     return failed;
   };
   const attachConsumer = (operation, signal) => {
-    if (!signal) {
+    // A slow source that keeps warming outlives the request that started it:
+    // the next request reads its cached answer instead of starting over.
+    // Its producer's own timeout still bounds the work.
+    if (!signal || keepWarming) {
       operation.hasUnscopedConsumer = true;
       return;
     }
