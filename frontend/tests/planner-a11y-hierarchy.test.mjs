@@ -386,4 +386,3 @@ test("every station is a numbered ring, as on the map; a fill marks only the ope
   await h.act(() => rows.at(-1).dispatchEvent(new h.window.Event("click", { bubbles: true })));
   assert.match(stations().at(-1).className, /bg-parranda-terracotta/, "the opened stop is the one filled station");
 });
-

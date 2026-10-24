@@ -98,6 +98,9 @@ export declare function liveTimeState(
   selectedDate?: string | null,
 ): LiveTimeState;
 
+/** The slot a source programme row is read by at `now`; any other row comes back as it is. */
+export declare function liveTimeRepresentative<T extends object>(ev: T, now?: Date, date?: string | null): T;
+
 export declare function liveTimeGroups<T>(
   items: readonly T[] | null | undefined,
   options?: {

@@ -12,7 +12,7 @@ import { useLiveClock } from "./useLiveClock";
  * data and one callback that opens the sheet.
  */
 import type { Ref } from "react";
-import { eventTiming, liveTimeGroups } from "../../lib/pulse-view.mjs";
+import { eventTiming, liveTimeGroups, liveTimeRepresentative } from "../../lib/pulse-view.mjs";
 import { ChevronRightIcon } from "../shared/icons";
 import { buttonClass, Eyebrow } from "../shared/ui";
 import { liveTimeGroupLabel, type Lang, type Translate } from "./copy";
@@ -66,7 +66,8 @@ export default function LiveCard({
   // The same four highlights as before, read by where they stand in the day:
   // on now, later, during the day, started earlier. The day itself is named
   // once, in the heading above, so a row says only its clock. Rows the
-  // sources give no place in time keep the plain list.
+  // sources give no place in time keep the plain list. A programme row's time
+  // line is read from the same slot that places it in a group.
   const selectedDate = liveEvents?.selected_date ?? null;
   const shown = pulseBuckets.tonight.slice(0, 4);
   const timeGroups = liveTimeGroups(shown, { now, selectedDate });
@@ -146,7 +147,8 @@ export default function LiveCard({
                 {group.events.map((ev: PulseEvent, i: number) => (
                   <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-parranda-ink/85">
                     <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">
-                      {eventTiming(ev, lang, now, selectedDate, { omitDate: grouped ? selectedDate : null, underOnNow: group.state === "now" })}
+                      {eventTiming(liveTimeRepresentative(ev, now, selectedDate), lang, now, selectedDate,
+                        { omitDate: grouped ? selectedDate : null, underOnNow: group.state === "now" })}
                     </span>
                     <span className="min-w-0 max-w-full break-words">
                       <span className="font-bold text-parranda-ink">{ev.title}</span>

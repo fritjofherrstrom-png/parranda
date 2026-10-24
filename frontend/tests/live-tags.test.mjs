@@ -46,4 +46,3 @@ test('catch-all placeholders name no category and are not shown; real tags stay'
   assert.equal(liveTagLabel('undefined', 'en'), '');
   assert.deepEqual(liveTagLabels(['Miscellaneous', 'Music', 'Undefined', 'Arts & Theatre'], 'sv'), ['Musik', 'Arts & Theatre']);
 });
-

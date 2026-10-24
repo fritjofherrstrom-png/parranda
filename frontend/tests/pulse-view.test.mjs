@@ -559,21 +559,37 @@ const STOCKHOLM = "Europe/Stockholm";
 
 test("a passed start with no stated end is neither on now nor over", () => {
   const lunch = { timezone: STOCKHOLM, starts_at: "2026-10-23T10:00:00Z" };
-  assert.equal(eventTiming(lunch, "sv", QA_NOW, QA_DAY), "började 12:00 · sluttid okänd");
-  assert.equal(eventTiming(lunch, "en", QA_NOW, QA_DAY), "started 12:00 · end time unknown");
+  // The start keeps its date unless the group around the row names that date
+  // (review of #643, F2: "started 12:00" had dropped the date base printed).
+  assert.equal(eventTiming(lunch, "sv", QA_NOW, QA_DAY), "började fre 23 okt. 12:00 · sluttid okänd");
+  assert.equal(eventTiming(lunch, "en", QA_NOW, QA_DAY), "started Fri 23 Oct 12:00 · end time unknown");
+  assert.equal(eventTiming(lunch, "en", QA_NOW, QA_DAY, { omitDate: QA_DAY }), "started 12:00 · end time unknown");
+  assert.equal(eventTiming(lunch, "en", QA_NOW, QA_DAY, { omitDate: "2026-10-22" }), "started Fri 23 Oct 12:00 · end time unknown",
+    "only the date the group names is left out");
   assert.equal(liveTimeState(lunch, QA_NOW, QA_DAY), "started");
-  // Started on an earlier day: the start keeps its date.
+  // Started on an earlier day: the start keeps its date under any group.
   const older = { timezone: STOCKHOLM, starts_at: "2026-10-20T16:00:00Z" };
   assert.equal(eventTiming(older, "en", QA_NOW, QA_DAY), "started Tue 20 Oct 18:00 · end time unknown");
+  assert.equal(eventTiming(older, "en", QA_NOW, QA_DAY, { omitDate: QA_DAY }), "started Tue 20 Oct 18:00 · end time unknown");
   assert.equal(liveTimeState(older, QA_NOW, QA_DAY), "started");
   // A listed session with only a start, already passed today.
   const listed = { timezone: STOCKHOLM, time_window: { kind: "occurrences", dates: [QA_DAY], local_start: "12:00" } };
-  assert.equal(eventTiming(listed, "sv", QA_NOW, QA_DAY), "började 12:00 · sluttid okänd");
+  assert.equal(eventTiming(listed, "sv", QA_NOW, QA_DAY), "började fre 23 okt. 12:00 · sluttid okänd");
+  assert.equal(eventTiming(listed, "sv", QA_NOW, QA_DAY, { omitDate: QA_DAY }), "började 12:00 · sluttid okänd");
   assert.equal(liveTimeState(listed, QA_NOW, QA_DAY), "started");
   // Before the start nothing changes.
   const early = new Date("2026-10-23T09:00:00Z");
   assert.equal(eventTiming(lunch, "sv", early, QA_DAY), "fre 23 okt. 12:00");
   assert.equal(liveTimeState(lunch, early, QA_DAY), "later");
+});
+
+test("the reviewer's start-only case keeps its date without a date-naming group (review of #643, F2)", () => {
+  const event = { timezone: STOCKHOLM, starts_at: "2026-10-24T08:00:00Z" };
+  const now = new Date("2026-10-24T09:45:00Z");
+  assert.equal(eventTiming(event, "en", now, "2026-10-24"), "started Sat 24 Oct 10:00 · end time unknown");
+  assert.equal(eventTiming(event, "en", now, "2026-10-24", { omitDate: "2026-10-24" }), "started 10:00 · end time unknown");
+  // A future selected day keeps the plain start, as before.
+  assert.equal(eventTiming(event, "en", now, "2026-10-25"), "Sat 24 Oct 10:00");
 });
 
 test("on now needs a stated start and end around now; an unconfirmed schedule is not on now", () => {
@@ -663,4 +679,3 @@ test("under an On now heading a row says only when it ends", () => {
   const scheduled = { ...session, recurrence: { occurrence_status: "unconfirmed" } };
   assert.equal(eventTiming(scheduled, "sv", QA_NOW, QA_DAY, opts), "enligt schema nu · till 15:00", "an unconfirmed schedule keeps saying so");
 });
-

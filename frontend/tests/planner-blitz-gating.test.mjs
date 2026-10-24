@@ -162,4 +162,3 @@ for (const [lang, heading, label] of [["en", "Right now", "Show an idea"], ["sv"
     assert.doesNotMatch(h.text(), /Blitz/, "the internal name is not shown");
   });
 }
-

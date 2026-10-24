@@ -215,8 +215,9 @@ export function clothingAdvice(observed, lang) {
  *                UTC so a date-only value never shifts across midnight
  *   unresolved → "" (timing copy is omitted, never invented)
  *
- * A stated start that has passed with no stated end reads "started 12:00 ·
- * end time unknown": it is neither proven on now nor proven over.
+ * A stated start that has passed with no stated end reads "started Fri 23 Oct
+ * 12:00 · end time unknown": it is neither proven on now nor proven over. Its
+ * date is left out only under `omitDate`, like any other row.
  *
  * `omitDate` is a venue-local date the surrounding group already states (the
  * Live card's day, a "by time" date heading). A row about that date then
@@ -265,10 +266,11 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null, { o
       return `${onNow} · ${en ? "until" : "till"} ${win.local_end}`;
     }
     // Only a start is listed and it has passed today: whether the session is
-    // still on is not stated, so it is called neither on now nor over.
+    // still on is not stated, so it is called neither on now nor over. The
+    // date goes only where the surrounding group already names it.
     if (next === venueNow?.date && (!selectedDate || selectedDate === venueNow.date) &&
         win.local_start && !win.local_end && venueNow.clock >= withSeconds(win.local_start)) {
-      return startedWithoutEnd(win.local_start, en);
+      return startedWithoutEnd(omitDate && next === omitDate ? win.local_start : `${label} ${win.local_start}`, en);
     }
     if (omitDate && next === omitDate) return clockRange || timeNotStated(en);
     return clockRange ? `${label} ${clockRange}` : label;
@@ -364,11 +366,11 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null, { o
     }
   }
 
-  // A start with no stated end, already passed: neither on now nor over.
+  // A start with no stated end, already passed: neither on now nor over. The
+  // date goes only where the surrounding group already names it.
   if (nowValid && !endValid && date.getTime() <= nowDate.getTime()) {
     try {
-      const sameDay = dateOf(date) === dateOf(nowDate);
-      return startedWithoutEnd(sameDay ? clockOf(date) : `${dateOf(date)} ${clockOf(date)}`, en);
+      return startedWithoutEnd(omitted(date) ? clockOf(date) : `${dateOf(date)} ${clockOf(date)}`, en);
     } catch {
       return "";
     }
@@ -468,21 +470,60 @@ export function liveTimeState(ev, now = new Date(), selectedDate = null) {
 const TIME_STATE_ORDER = ["now", "later", "timed", "day", "started", "ended", "unknown"];
 
 /**
+ * The slot a source programme row is read by at `now`. A display programme
+ * (`display_group_kind: "source_program"`) carries its first slot's fields at
+ * the top, but its time is its slots': it is on now while a slot on its date
+ * is, later while one is still to come, and so on in the groups' reading
+ * order. Of slots to come the soonest leads; of slots begun or over, the
+ * latest. The row keeps its own id, title, source and every slot; only its
+ * time is read from the slot returned. Any other row comes back as it is.
+ */
+export function liveTimeRepresentative(ev, now = new Date(), date = null) {
+  if (ev?.display_group_kind !== "source_program" || !Array.isArray(ev.occurrences)) return ev;
+  const slots = ev.occurrences.filter((slot) => slot && typeof slot === "object");
+  const onDate = date ? slots.filter((slot) => slotListedOn(slot, date)) : [];
+  const pool = (onDate.length ? onDate : slots)
+    .map((slot, index) => ({ slot, index, start: Date.parse(slot.time_window?.starts_at || slot.starts_at || "") }))
+    .sort((a, b) => (Number.isFinite(a.start) && Number.isFinite(b.start) ? a.start - b.start : 0) || a.index - b.index)
+    .map(({ slot }) => ({ slot, state: liveTimeState(slot, now, date) }));
+  for (const state of TIME_STATE_ORDER) {
+    const matching = pool.filter((entry) => entry.state === state);
+    if (matching.length) return (state === "started" || state === "ended" ? matching[matching.length - 1] : matching[0]).slot;
+  }
+  return ev;
+}
+
+// Whether a programme slot is listed on a venue-local date. A slot whose date
+// cannot be read stays a candidate.
+function slotListedOn(slot, date) {
+  const win = slot.time_window && typeof slot.time_window === "object" ? slot.time_window : null;
+  if (win?.kind === "occurrences") return listedDates(win.dates).includes(date);
+  const startsAt = win?.starts_at || slot.starts_at || null;
+  const timezone = slot.timezone || win?.timezone || null;
+  if (!startsAt || !timezone) return true;
+  const start = new Date(startsAt);
+  return Number.isNaN(start.getTime()) || venueLocalDate(start, timezone) === date;
+}
+
+/**
  * Live rows grouped by time state, in reading order: on now, later today (or
  * at set times on another day), during the day, started earlier, earlier
  * today, time not stated. The same rows come back; nothing is dropped,
  * added or re-ranked inside a group except that a group of clock times is
- * read in clock order. `eventOf`/`dateOf` read a navigation row's event and
- * the date it is listed under.
+ * read in clock order. A source programme row is placed by the slot
+ * `liveTimeRepresentative` reads it by. `eventOf`/`dateOf` read a navigation
+ * row's event and the date it is listed under.
  */
 export function liveTimeGroups(items, { now = new Date(), selectedDate = null, eventOf = (item) => item, dateOf = () => selectedDate } = {}) {
   const groups = new Map();
   (Array.isArray(items) ? items : []).forEach((item, index) => {
     const ev = item && eventOf(item);
     if (!ev || typeof ev !== "object") return;
-    const state = liveTimeState(ev, now, dateOf(item) || selectedDate);
+    const date = dateOf(item) || selectedDate;
+    const shown = liveTimeRepresentative(ev, now, date);
+    const state = liveTimeState(shown, now, date);
     if (!groups.has(state)) groups.set(state, []);
-    groups.get(state).push({ item, ev, index });
+    groups.get(state).push({ item, ev: shown, index });
   });
   return TIME_STATE_ORDER.filter((state) => groups.has(state)).map((state) => {
     const rows = groups.get(state);

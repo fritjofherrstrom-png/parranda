@@ -12,7 +12,7 @@ import { useLiveClock } from "./useLiveClock";
 import type { RefObject } from "react";
 import { nextSourceDate, type LiveFallback } from "./useLiveFallback";
 import { liveDateLabel } from "../../lib/live-event-query.mjs";
-import { eventTiming, liveEventRelevance, liveTimeGroups } from "../../lib/pulse-view.mjs";
+import { eventTiming, liveEventRelevance, liveTimeGroups, liveTimeRepresentative } from "../../lib/pulse-view.mjs";
 import { liveEventTags, liveNavigationGroups, type LiveNavigationRow, type LiveSheetSort } from "../../lib/live-navigation.mjs";
 import type { LiveEventScope } from "../../lib/live-event-query.mjs";
 import { CloseIcon, LocationIcon } from "../shared/icons";
@@ -135,8 +135,10 @@ export default function LiveSheet({
     const relevance = liveRelevanceSentence(liveEventRelevance(navigationRow?.series || ev, selected), lang, t);
     const distance = nearbyDistanceLabel(ev, lang);
     const tags = liveTagLabels(liveEventTags(ev), lang);
+    // A programme row's time line is read from the slot that places it.
+    const timingDay = navigationRow?.date || timingDate;
     const timing = navigationRow?.kind === "undated" ? ""
-      : eventTiming(ev, lang, now, navigationRow?.date || timingDate, { omitDate, underOnNow });
+      : eventTiming(liveTimeRepresentative(ev, now, timingDay), lang, now, timingDay, { omitDate, underOnNow });
     return (
       <li key={`${ev.id || "event"}:${i}`} className="flex min-w-0 flex-col gap-1 sm:gap-2">
         <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">{timing}</span>
