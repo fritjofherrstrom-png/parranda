@@ -81,7 +81,7 @@ export default function CandidateAreas({
                   {label(INTENT_LABELS, axis, lang)} · {t("delvis", "partial")}
                 </span>
               ))}
-              <span className="type-data ml-auto text-11 text-parranda-ink/68">
+              <span className="type-data ml-auto text-xs text-parranda-ink/68">
                 {(area.stops?.length ?? area.stop_ids?.length ?? 0)} {t("träffar", "places")}
               </span>
             </div>

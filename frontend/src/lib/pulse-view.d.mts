@@ -84,7 +84,29 @@ export declare function eventTiming(
   lang: "sv" | "en",
   now?: Date,
   selectedDate?: string | null,
+  options?: { omitDate?: string | null; underOnNow?: boolean },
 ): string;
+
+export type LiveTimeState = "now" | "later" | "started" | "ended" | "day" | "timed" | "unknown";
+
+export declare function liveTimeState(
+  ev: Parameters<typeof eventTiming>[0] & {
+    calendar_fact?: { kind?: string } | null;
+    recurrence?: { occurrence_status?: string } | null;
+  },
+  now?: Date,
+  selectedDate?: string | null,
+): LiveTimeState;
+
+export declare function liveTimeGroups<T>(
+  items: readonly T[] | null | undefined,
+  options?: {
+    now?: Date;
+    selectedDate?: string | null;
+    eventOf?: (item: T) => Parameters<typeof liveTimeState>[0];
+    dateOf?: (item: T) => string | null | undefined;
+  },
+): { state: LiveTimeState; events: T[] }[];
 
 export declare function pulseHealthState(
   liveEvents:

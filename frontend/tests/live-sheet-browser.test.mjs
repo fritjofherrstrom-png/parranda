@@ -223,14 +223,23 @@ test('native LiveSheet clock updates exact and listed time status without parent
   await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
   await render(events,'en','tonight',{liveSheetSort:sort});
   const row=title=>page.getByRole('listitem').filter({has:page.getByText(title,{exact:true})}).first();
-  assert.match(await row('Exact workshop').innerText(),/on now · until 21:00/);
-  assert.match(await row('Listed workshop').innerText(),/on now · until 21:00:15/);
+  const group=title=>row(title).evaluate(li=>li.closest('[data-live-time-group]')?.getAttribute('data-live-time-group')??null);
+  // For you keeps "on now" on the row. By time says it once, as the group's
+  // "On now" heading, and the row keeps only its end.
+  const onNow=async title=>sort==='by_time'?(await group(title))==='now':/on now/.test(await row(title).innerText());
+  const lead=sort==='by_time'?'':'on now · ';
+  assert.ok(await onNow('Exact workshop'));
+  assert.ok((await row('Exact workshop').innerText()).includes(`${lead}until 21:00`));
+  assert.ok(await onNow('Listed workshop'));
+  assert.ok((await row('Listed workshop').innerText()).includes(`${lead}until 21:00:15`));
+  if(sort==='by_time')assert.doesNotMatch(await row('Exact workshop').innerText(),/on now/);
   await page.clock.runFor(10100);
-  assert.doesNotMatch(await row('Exact workshop').innerText(),/on now/,'exact end boundary refreshes without any user input');
+  assert.equal(await onNow('Exact workshop'),false,'exact end boundary refreshes without any user input');
+  if(sort==='by_time')assert.equal(await group('Exact workshop'),'ended');
   assert.match(await row('Exact workshop').innerText(),/20:00–21:00/,'known end remains visible after expiry');
-  assert.match(await row('Listed workshop').innerText(),/on now/);
+  assert.ok(await onNow('Listed workshop'));
   await page.clock.runFor(15000);
-  assert.doesNotMatch(await row('Listed workshop').innerText(),/on now/,'source second precision is honored too');
+  assert.equal(await onNow('Listed workshop'),false,'source second precision is honored too');
  }
  const allDay={id:'all-day',title:'Source whole day',time_window:{kind:'all_day',all_day_explicit:true,starts_on:'2026-10-22',ends_on:'2026-10-22'}};
  await render({coverage:'covered',selected_date:'2026-10-22',tonight:[allDay]},'en','tonight',{liveSheetSort:'by_time'});
@@ -248,18 +257,22 @@ test('native LiveCard and expanded source occurrences expire together and resync
  await page.getByText('Exact workshop',{exact:true}).waitFor();
  await page.getByText('2 occurrences',{exact:true}).click();
  const row=title=>page.getByRole('listitem').filter({has:page.getByText(title,{exact:true})}).first();
- assert.match(await row('Exact workshop').innerText(),/on now/);
+ const group=title=>row(title).evaluate(li=>li.closest('[data-live-time-group]')?.getAttribute('data-live-time-group')??null);
+ // The card says "On now" once, as the group heading; the row keeps its end.
+ assert.equal(await group('Exact workshop'),'now');
+ assert.match(await row('Exact workshop').innerText(),/until 21:00/);
  assert.match(await page.locator('details').innerText(),/on now · until 21:00:15/);
  await page.clock.runFor(10100);
- assert.doesNotMatch(await row('Exact workshop').innerText(),/on now/);
+ assert.equal(await group('Exact workshop'),'ended');
+ assert.match(await row('Exact workshop').innerText(),/20:00–21:00/);
  assert.match(await page.locator('details').innerText(),/on now/);
  await page.clock.runFor(15000);
  assert.doesNotMatch(await page.locator('details').innerText(),/on now/);
  // Simulate a tab waking after a system-clock adjustment, without a parent render.
  await page.clock.setSystemTime(new Date('2026-10-15T18:59:30Z'));
  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
- await page.waitForFunction(()=>document.querySelector('section').textContent.includes('on now'));
- assert.match(await row('Exact workshop').innerText(),/on now/);
+ await page.waitForFunction(()=>document.querySelector('[data-live-time-group="now"]')?.textContent.includes('Exact workshop'));
+ assert.equal(await group('Exact workshop'),'now');
  await page.evaluate(()=>window.unmountView());
  await page.clock.runFor(60000);
  assert.equal(await page.locator('section').count(),0,'unmounted views stay unmounted after clock boundaries');

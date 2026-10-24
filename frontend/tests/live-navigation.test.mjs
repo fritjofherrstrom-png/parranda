@@ -102,7 +102,7 @@ test('source programmes retain one For you card and disclose same-day slots in o
   assert.equal(h.container.querySelector('summary')?.textContent.trim(), '3 occurrences');
   assert.equal(h.container.querySelector('details ul')?.children.length, 3, 'For you preserves every original booking slot');
   await h.click('By time');
-  assert.deepEqual([...h.container.querySelectorAll('section h4')].map(node => node.textContent), ['Thu 15 Oct', 'Fri 16 Oct']);
+  assert.deepEqual([...h.container.querySelectorAll('section > h3')].map(node => node.textContent), ['Thu 15 Oct', 'Fri 16 Oct']);
   const firstDay = section(h, 'Thu 15 Oct');
   assert.deepEqual(cardTitles(firstDay), ['Source earlier', 'Source programme', 'Source middle'], 'the programme sorts by its first local slot');
   assert.equal(firstDay.querySelector('summary')?.textContent.trim(), '2 occurrences');
@@ -194,7 +194,7 @@ test('manual By time remains selected after supplied events complete and the she
   await h.click('By time');
   await h.update([event('later', '2026-10-16'), event('earlier', '2026-10-15')]);
   assert.equal([...h.container.querySelectorAll('button')].find(node => node.textContent === 'By time').getAttribute('aria-pressed'), 'true');
-  assert.deepEqual([...h.container.querySelectorAll('section h4')].map(node => node.textContent), ['Thu 15 Oct', 'Fri 16 Oct']);
+  assert.deepEqual([...h.container.querySelectorAll('section > h3')].map(node => node.textContent), ['Thu 15 Oct', 'Fri 16 Oct']);
   await h.click('Close live');
   await h.click('Open fixture sheet');
   assert.equal([...h.container.querySelectorAll('button')].find(node => node.textContent === 'By time').getAttribute('aria-pressed'), 'true');
@@ -210,7 +210,7 @@ test('By time places every supplied series slot and browse row in its actual dat
     timezone: 'Europe/Stockholm', route_eligible: false });
   const early = event('early-browse', '2026-10-15', { time_window: { kind: 'occurrences', dates: ['2026-10-15'], local_start: '09:00' } });
   const h = await mountSheet(t, { events: [series, midnight], more: [early], sort: 'by_time' });
-  assert.deepEqual([...h.container.querySelectorAll('section h4')].map(node => node.textContent), ['Thu 15 Oct', 'Sat 17 Oct']);
+  assert.deepEqual([...h.container.querySelectorAll('section > h3')].map(node => node.textContent), ['Thu 15 Oct', 'Sat 17 Oct']);
   const firstDate = section(h, 'Thu 15 Oct');
   assert.ok(firstDate, 'event timestamp uses the venue date, including across UTC midnight');
   assert.deepEqual([...firstDate.querySelectorAll('li > span:nth-child(2) > span:first-child')].map(node => node.textContent),
@@ -228,7 +228,7 @@ test('source ranges and missing date evidence stay separate from actual dates', 
   const invalid = event('invalid', null, { time_window: { kind: 'occurrences', dates: ['2026-02-30'] } });
   const long = event('long-continuous', null, { time_window: { kind: 'continuous', starts_at: '2026-10-15T08:00:00Z', ends_at: '2026-10-17T19:00:00Z' } });
   const h = await mountSheet(t, { events: [range, daily, noZone, invalid, long], sort: 'by_time' });
-  assert.deepEqual([...h.container.querySelectorAll('section h4')].map(node => node.textContent), ['Source date ranges', 'Date not specified']);
+  assert.deepEqual([...h.container.querySelectorAll('section > h3')].map(node => node.textContent), ['Source date ranges', 'Date not specified']);
   assert.match(section(h, 'Source date ranges').textContent, /Source range/);
   assert.match(section(h, 'Source date ranges').textContent, /Source daily/);
   assert.match(section(h, 'Source date ranges').textContent, /Source long-continuous/);
@@ -258,7 +258,7 @@ test('For you preserves relevance groups, ranked order, browse and source occurr
   const slots = [event('s1', '2026-10-15'), event('s2', '2026-10-17')];
   const h = await mountSheet(t, { events: [partial, match, { ...slots[0], title: 'Source series', occurrences: slots }],
     more: [event('browse', '2026-10-16')], selected: ['culture'] });
-  const heading = [...h.container.querySelectorAll('p')].find(node => node.textContent === 'Highlights for your picks');
+  const heading = [...h.container.querySelectorAll('h3')].find(node => node.textContent === 'Highlights for your picks');
   assert.match(heading.nextElementSibling.textContent, /Source match/);
   assert.doesNotMatch(heading.nextElementSibling.textContent, /Source partial/);
   assert.ok([...h.container.querySelectorAll('summary')].some(node => node.textContent === '2 occurrences'));
