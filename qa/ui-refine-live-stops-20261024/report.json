@@ -1,0 +1,4687 @@
+{
+  "started": "2026-10-24T13:00:51.139Z",
+  "note": "staging via local proxy; headless Chromium",
+  "runs": [
+    {
+      "lang": "sv",
+      "device": "mobile",
+      "loadMs": 34058,
+      "errors": [],
+      "themes": {
+        "day": {
+          "theme": "day",
+          "liveCard": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Live i Göteborg · lör 24 okt.",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 5.87
+            },
+            "groups": [
+              {
+                "state": "now",
+                "heading": {
+                  "tag": "h3",
+                  "text": "Pågår nu",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 6.98
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "till 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  },
+                  {
+                    "tag": "span",
+                    "text": "till 18:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  },
+                  {
+                    "tag": "span",
+                    "text": "till 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  }
+                ]
+              },
+              {
+                "state": "day",
+                "heading": {
+                  "tag": "h3",
+                  "text": "Under dagen",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 6.98
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "Hela dagen",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  }
+                ]
+              }
+            ],
+            "seeAll": {
+              "text": "Se allt live",
+              "borderColor": "oklab(0.453642 -0.0118384 -0.20908 / 0.6)",
+              "borderWidth": "1px",
+              "color": "rgb(35, 66, 200)",
+              "background": "rgba(0, 0, 0, 0)",
+              "fontWeight": "700",
+              "height": 48,
+              "contrast": 5.87
+            },
+            "targets": [
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "Se allt live",
+                "w": 301,
+                "h": 48,
+                "effW": 301,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "justNu": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Just nu",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 5.21
+            },
+            "button": {
+              "tag": "button",
+              "text": "Visa ett förslag",
+              "fontSize": "14px",
+              "fontWeight": "700",
+              "contrast": 15.57
+            },
+            "caption": {
+              "tag": "p",
+              "text": "Ett förslag i Göteborg, just nu — din dag ändras inte.",
+              "fontSize": "12px",
+              "fontWeight": "400",
+              "contrast": 5.83
+            },
+            "targets": [
+              {
+                "tag": "button",
+                "text": "Visa ett förslag",
+                "w": 343,
+                "h": 44,
+                "effW": 343,
+                "effH": 44,
+                "extended": false
+              }
+            ]
+          },
+          "route": {
+            "dataLines": [
+              {
+                "tag": "span",
+                "text": "1",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 15.57
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0,4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 5.83
+              },
+              {
+                "tag": "span",
+                "text": "2",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 15.57
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0,4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 5.83
+              },
+              {
+                "tag": "span",
+                "text": "3",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 15.57
+              },
+              {
+                "tag": "span",
+                "text": "4 min · 0,3 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 5.83
+              }
+            ],
+            "eyebrows": [
+              {
+                "tag": "h2",
+                "text": "Stoppen i ordning",
+                "fontSize": "12px",
+                "fontWeight": "600",
+                "contrast": 5.83
+              }
+            ],
+            "stations": [
+              {
+                "n": "1",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "2",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "3",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "4",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "5",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              }
+            ],
+            "targets": [
+              {
+                "tag": "button",
+                "text": "Följ dagen",
+                "w": 114,
+                "h": 36,
+                "effW": 114,
+                "effH": 44,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "1BältespännarparkenPark",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "2NK Sushi TakameRestaurang",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3LerverkGalleri",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "4MaritimanMuseum",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "5ZócaloRestaurang",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "1. Bältespännarparken",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "2. NK Sushi Takame",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "3. Lerverk",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "4. Maritiman",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "5. Zócalo",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "Stopp 3,4: 3. Lerverk, 4. Maritiman. Zooma in fö",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Zoom in",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Zoom out",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "a",
+                "text": "OpenFreeMap",
+                "w": 65,
+                "h": 11,
+                "effW": 65,
+                "effH": 11,
+                "extended": false
+              },
+              {
+                "tag": "a",
+                "text": "© OpenMapTiles",
+                "w": 75,
+                "h": 11,
+                "effW": 75,
+                "effH": 11,
+                "extended": false
+              },
+              {
+                "tag": "a",
+                "text": "OpenStreetMap",
+                "w": 71,
+                "h": 11,
+                "effW": 71,
+                "effH": 11,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Förstora kartan",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "summary",
+                "text": "Om dagen och kartan",
+                "w": 147,
+                "h": 44,
+                "effW": 147,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3 idéer nära din rutt",
+                "w": 343,
+                "h": 48,
+                "effW": 343,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "eyebrowSizes": [
+            "12px"
+          ]
+        },
+        "night": {
+          "theme": "night",
+          "liveCard": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Live i Göteborg · lör 24 okt.",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 7.5
+            },
+            "groups": [
+              {
+                "state": "now",
+                "heading": {
+                  "tag": "h3",
+                  "text": "Pågår nu",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 8.84
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "till 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  },
+                  {
+                    "tag": "span",
+                    "text": "till 18:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  },
+                  {
+                    "tag": "span",
+                    "text": "till 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  }
+                ]
+              },
+              {
+                "state": "day",
+                "heading": {
+                  "tag": "h3",
+                  "text": "Under dagen",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 8.84
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "Hela dagen",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  }
+                ]
+              }
+            ],
+            "seeAll": {
+              "text": "Se allt live",
+              "borderColor": "oklab(0.750605 0.00597283 -0.127675 / 0.6)",
+              "borderWidth": "1px",
+              "color": "rgb(147, 168, 255)",
+              "background": "rgba(0, 0, 0, 0)",
+              "fontWeight": "700",
+              "height": 48,
+              "contrast": 7.5
+            },
+            "targets": [
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "Se allt live",
+                "w": 301,
+                "h": 48,
+                "effW": 301,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "justNu": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Just nu",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 11.89
+            },
+            "button": {
+              "tag": "button",
+              "text": "Visa ett förslag",
+              "fontSize": "14px",
+              "fontWeight": "700",
+              "contrast": 16.68
+            },
+            "caption": {
+              "tag": "p",
+              "text": "Ett förslag i Göteborg, just nu — din dag ändras inte.",
+              "fontSize": "12px",
+              "fontWeight": "400",
+              "contrast": 8
+            },
+            "targets": [
+              {
+                "tag": "button",
+                "text": "Visa ett förslag",
+                "w": 343,
+                "h": 44,
+                "effW": 343,
+                "effH": 44,
+                "extended": false
+              }
+            ]
+          },
+          "route": {
+            "dataLines": [
+              {
+                "tag": "span",
+                "text": "1",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 16.68
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0,4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 8
+              },
+              {
+                "tag": "span",
+                "text": "2",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 16.68
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0,4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 8
+              },
+              {
+                "tag": "span",
+                "text": "3",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 16.68
+              },
+              {
+                "tag": "span",
+                "text": "4 min · 0,3 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 8
+              }
+            ],
+            "eyebrows": [
+              {
+                "tag": "h2",
+                "text": "Stoppen i ordning",
+                "fontSize": "12px",
+                "fontWeight": "600",
+                "contrast": 8
+              }
+            ],
+            "stations": [
+              {
+                "n": "1",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "2",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "3",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "4",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "5",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              }
+            ],
+            "targets": [
+              {
+                "tag": "button",
+                "text": "Följ dagen",
+                "w": 114,
+                "h": 36,
+                "effW": 114,
+                "effH": 44,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "1BältespännarparkenPark",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "2NK Sushi TakameRestaurang",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3LerverkGalleri",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "4MaritimanMuseum",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "5ZócaloRestaurang",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "1. Bältespännarparken",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "2. NK Sushi Takame",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "3. Lerverk",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "4. Maritiman",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "5. Zócalo",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "Stopp 3,4: 3. Lerverk, 4. Maritiman. Zooma in fö",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Zoom in",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Zoom out",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "a",
+                "text": "OpenFreeMap",
+                "w": 65,
+                "h": 11,
+                "effW": 65,
+                "effH": 11,
+                "extended": false
+              },
+              {
+                "tag": "a",
+                "text": "© OpenMapTiles",
+                "w": 75,
+                "h": 11,
+                "effW": 75,
+                "effH": 11,
+                "extended": false
+              },
+              {
+                "tag": "a",
+                "text": "OpenStreetMap",
+                "w": 71,
+                "h": 11,
+                "effW": 71,
+                "effH": 11,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Förstora kartan",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "summary",
+                "text": "Om dagen och kartan",
+                "w": 147,
+                "h": 44,
+                "effW": 147,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3 idéer nära din rutt",
+                "w": 343,
+                "h": 48,
+                "effW": 343,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "eyebrowSizes": [
+            "12px"
+          ]
+        }
+      },
+      "sheet": {
+        "h2": [
+          "Live i Göteborg"
+        ],
+        "h3": [
+          "Pågår nu",
+          "Under dagen",
+          "Började tidigare"
+        ],
+        "h4": [],
+        "groups": [
+          {
+            "state": "now",
+            "heading": {
+              "tag": "h3",
+              "text": "Pågår nu",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 6.63
+            },
+            "rows": [
+              "till 19:00",
+              "till 17:00",
+              "till 18:00",
+              "till 17:00",
+              "till 16:00",
+              "till 17:00",
+              "till 17:00",
+              "till 17:00",
+              "till 23:55",
+              "till 18:00",
+              "till 23:00",
+              "till 16:00",
+              "till 17:00",
+              "till 17:00",
+              "till 17:00",
+              "till 16:00",
+              "till 17:00",
+              "till 16:00",
+              "till 17:00",
+              "till 17:00"
+            ]
+          },
+          {
+            "state": "day",
+            "heading": {
+              "tag": "h3",
+              "text": "Under dagen",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 6.63
+            },
+            "rows": [
+              "Hela dagen"
+            ]
+          },
+          {
+            "state": "started",
+            "heading": {
+              "tag": "h3",
+              "text": "Började tidigare",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 6.63
+            },
+            "rows": [
+              "började 10:00 · sluttid okänd",
+              "började 10:00 · sluttid okänd",
+              "började 10:00 · sluttid okänd"
+            ]
+          }
+        ],
+        "targets": [
+          {
+            "tag": "button",
+            "text": "Stäng live",
+            "w": 44,
+            "h": 44,
+            "effW": 44,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Runt Göteborg",
+            "w": 123,
+            "h": 44,
+            "effW": 123,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Hela området",
+            "w": 114,
+            "h": 44,
+            "effW": 114,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Nära rutten",
+            "w": 100,
+            "h": 44,
+            "effW": 100,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Nära mig",
+            "w": 109,
+            "h": 44,
+            "effW": 109,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "lör 24 okt.",
+            "w": 97,
+            "h": 44,
+            "effW": 97,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Kommande 7 dagar",
+            "w": 152,
+            "h": 44,
+            "effW": 152,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "För dig",
+            "w": 77,
+            "h": 44,
+            "effW": 77,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Efter tid",
+            "w": 84,
+            "h": 44,
+            "effW": 84,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          }
+        ]
+      },
+      "sheetNight": [
+        {
+          "tag": "h3",
+          "text": "Pågår nu",
+          "fontSize": "12px",
+          "fontWeight": "600",
+          "contrast": 8.39
+        },
+        {
+          "tag": "h3",
+          "text": "Under dagen",
+          "fontSize": "12px",
+          "fontWeight": "600",
+          "contrast": 8.39
+        },
+        {
+          "tag": "h3",
+          "text": "Började tidigare",
+          "fontSize": "12px",
+          "fontWeight": "600",
+          "contrast": 8.39
+        }
+      ],
+      "interests": {
+        "url": "?place=G%C3%B6teborg%2C+V%C3%A4stra+G%C3%B6talands+l%C3%A4n%2C+Sverige&place_ref=n25930131&planner=open&prefs=food%2Cculture%2Cviews&lang=sv",
+        "chips": [
+          {
+            "key": "food",
+            "label": "Mat & dryck",
+            "pressed": "true",
+            "text": "Mat & dryck"
+          },
+          {
+            "key": "culture",
+            "label": "Kultur",
+            "pressed": "true",
+            "text": "Kultur"
+          },
+          {
+            "key": "views",
+            "label": "Utsikt",
+            "pressed": "true",
+            "text": "Utsikt"
+          },
+          {
+            "key": "fika",
+            "label": "Fika",
+            "pressed": "false",
+            "text": "Fika"
+          },
+          {
+            "key": "nightlife",
+            "label": "Kvällsliv",
+            "pressed": "false",
+            "text": "Kvällsliv"
+          },
+          {
+            "key": "green",
+            "label": "Grönt & promenad",
+            "pressed": "false",
+            "text": "Grönt & promenad"
+          },
+          {
+            "key": "second_hand",
+            "label": "Second hand",
+            "pressed": "false",
+            "text": "Second hand"
+          }
+        ],
+        "free": [
+          {
+            "text": "Låt Parranda välja",
+            "pressed": "false"
+          }
+        ],
+        "autoButtons": 0
+      }
+    },
+    {
+      "lang": "sv",
+      "device": "desktop",
+      "loadMs": 4056,
+      "errors": [],
+      "themes": {
+        "day": {
+          "theme": "day",
+          "liveCard": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Live i Göteborg · lör 24 okt.",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 5.87
+            },
+            "groups": [
+              {
+                "state": "now",
+                "heading": {
+                  "tag": "h3",
+                  "text": "Pågår nu",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 6.98
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "till 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  },
+                  {
+                    "tag": "span",
+                    "text": "till 18:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  },
+                  {
+                    "tag": "span",
+                    "text": "till 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  }
+                ]
+              },
+              {
+                "state": "day",
+                "heading": {
+                  "tag": "h3",
+                  "text": "Under dagen",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 6.98
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "Hela dagen",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  }
+                ]
+              }
+            ],
+            "seeAll": {
+              "text": "Se allt live",
+              "borderColor": "oklab(0.453642 -0.0118384 -0.20908 / 0.6)",
+              "borderWidth": "1px",
+              "color": "rgb(35, 66, 200)",
+              "background": "rgba(0, 0, 0, 0)",
+              "fontWeight": "700",
+              "height": 48,
+              "contrast": 5.87
+            },
+            "targets": [
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "Se allt live",
+                "w": 526,
+                "h": 48,
+                "effW": 526,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "justNu": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Just nu",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 5.21
+            },
+            "button": {
+              "tag": "button",
+              "text": "Visa ett förslag",
+              "fontSize": "14px",
+              "fontWeight": "700",
+              "contrast": 15.57
+            },
+            "caption": {
+              "tag": "p",
+              "text": "Ett förslag i Göteborg, just nu — din dag ändras inte.",
+              "fontSize": "12px",
+              "fontWeight": "400",
+              "contrast": 5.83
+            },
+            "targets": [
+              {
+                "tag": "button",
+                "text": "Visa ett förslag",
+                "w": 576,
+                "h": 44,
+                "effW": 576,
+                "effH": 44,
+                "extended": false
+              }
+            ]
+          },
+          "route": {
+            "dataLines": [
+              {
+                "tag": "span",
+                "text": "1",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 15.57
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0,4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 5.83
+              },
+              {
+                "tag": "span",
+                "text": "2",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 15.57
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0,4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 5.83
+              },
+              {
+                "tag": "span",
+                "text": "3",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 15.57
+              },
+              {
+                "tag": "span",
+                "text": "4 min · 0,3 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 5.83
+              }
+            ],
+            "eyebrows": [
+              {
+                "tag": "h2",
+                "text": "Stoppen i ordning",
+                "fontSize": "12px",
+                "fontWeight": "600",
+                "contrast": 5.83
+              }
+            ],
+            "stations": [
+              {
+                "n": "1",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "2",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "3",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "4",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "5",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              }
+            ],
+            "targets": [
+              {
+                "tag": "summary",
+                "text": "Om dagen och kartan",
+                "w": 147,
+                "h": 44,
+                "effW": 147,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Följ dagen",
+                "w": 114,
+                "h": 36,
+                "effW": 114,
+                "effH": 44,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "1BältespännarparkenPark",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "2NK Sushi TakameRestaurang",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3LerverkGalleri",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "4MaritimanMuseum",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "5ZócaloRestaurang",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3 idéer nära din rutt",
+                "w": 576,
+                "h": 48,
+                "effW": 576,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "eyebrowSizes": [
+            "12px"
+          ]
+        },
+        "night": {
+          "theme": "night",
+          "liveCard": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Live i Göteborg · lör 24 okt.",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 7.5
+            },
+            "groups": [
+              {
+                "state": "now",
+                "heading": {
+                  "tag": "h3",
+                  "text": "Pågår nu",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 8.84
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "till 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  },
+                  {
+                    "tag": "span",
+                    "text": "till 18:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  },
+                  {
+                    "tag": "span",
+                    "text": "till 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  }
+                ]
+              },
+              {
+                "state": "day",
+                "heading": {
+                  "tag": "h3",
+                  "text": "Under dagen",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 8.84
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "Hela dagen",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  }
+                ]
+              }
+            ],
+            "seeAll": {
+              "text": "Se allt live",
+              "borderColor": "oklab(0.750605 0.00597283 -0.127675 / 0.6)",
+              "borderWidth": "1px",
+              "color": "rgb(147, 168, 255)",
+              "background": "rgba(0, 0, 0, 0)",
+              "fontWeight": "700",
+              "height": 48,
+              "contrast": 7.5
+            },
+            "targets": [
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "Se allt live",
+                "w": 526,
+                "h": 48,
+                "effW": 526,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "justNu": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Just nu",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 11.89
+            },
+            "button": {
+              "tag": "button",
+              "text": "Visa ett förslag",
+              "fontSize": "14px",
+              "fontWeight": "700",
+              "contrast": 16.68
+            },
+            "caption": {
+              "tag": "p",
+              "text": "Ett förslag i Göteborg, just nu — din dag ändras inte.",
+              "fontSize": "12px",
+              "fontWeight": "400",
+              "contrast": 8
+            },
+            "targets": [
+              {
+                "tag": "button",
+                "text": "Visa ett förslag",
+                "w": 576,
+                "h": 44,
+                "effW": 576,
+                "effH": 44,
+                "extended": false
+              }
+            ]
+          },
+          "route": {
+            "dataLines": [
+              {
+                "tag": "span",
+                "text": "1",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 16.68
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0,4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 8
+              },
+              {
+                "tag": "span",
+                "text": "2",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 16.68
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0,4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 8
+              },
+              {
+                "tag": "span",
+                "text": "3",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 16.68
+              },
+              {
+                "tag": "span",
+                "text": "4 min · 0,3 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 8
+              }
+            ],
+            "eyebrows": [
+              {
+                "tag": "h2",
+                "text": "Stoppen i ordning",
+                "fontSize": "12px",
+                "fontWeight": "600",
+                "contrast": 8
+              }
+            ],
+            "stations": [
+              {
+                "n": "1",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "2",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "3",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "4",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "5",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              }
+            ],
+            "targets": [
+              {
+                "tag": "summary",
+                "text": "Om dagen och kartan",
+                "w": 147,
+                "h": 44,
+                "effW": 147,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Följ dagen",
+                "w": 114,
+                "h": 36,
+                "effW": 114,
+                "effH": 44,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "1BältespännarparkenPark",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "2NK Sushi TakameRestaurang",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3LerverkGalleri",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "4MaritimanMuseum",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "5ZócaloRestaurang",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3 idéer nära din rutt",
+                "w": 576,
+                "h": 48,
+                "effW": 576,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "eyebrowSizes": [
+            "12px"
+          ]
+        }
+      },
+      "sheet": {
+        "h2": [
+          "Live i Göteborg"
+        ],
+        "h3": [
+          "Pågår nu",
+          "Under dagen",
+          "Började tidigare"
+        ],
+        "h4": [],
+        "groups": [
+          {
+            "state": "now",
+            "heading": {
+              "tag": "h3",
+              "text": "Pågår nu",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 6.63
+            },
+            "rows": [
+              "till 19:00",
+              "till 17:00",
+              "till 18:00",
+              "till 17:00",
+              "till 16:00",
+              "till 17:00",
+              "till 17:00",
+              "till 17:00",
+              "till 23:55",
+              "till 18:00",
+              "till 23:00",
+              "till 16:00",
+              "till 17:00",
+              "till 17:00",
+              "till 17:00",
+              "till 16:00",
+              "till 17:00",
+              "till 16:00",
+              "till 17:00",
+              "till 17:00"
+            ]
+          },
+          {
+            "state": "day",
+            "heading": {
+              "tag": "h3",
+              "text": "Under dagen",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 6.63
+            },
+            "rows": [
+              "Hela dagen"
+            ]
+          },
+          {
+            "state": "started",
+            "heading": {
+              "tag": "h3",
+              "text": "Började tidigare",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 6.63
+            },
+            "rows": [
+              "började 10:00 · sluttid okänd",
+              "började 10:00 · sluttid okänd",
+              "började 10:00 · sluttid okänd"
+            ]
+          }
+        ],
+        "targets": [
+          {
+            "tag": "button",
+            "text": "Stäng live",
+            "w": 44,
+            "h": 44,
+            "effW": 44,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Runt Göteborg",
+            "w": 123,
+            "h": 44,
+            "effW": 123,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Hela området",
+            "w": 114,
+            "h": 44,
+            "effW": 114,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Nära rutten",
+            "w": 100,
+            "h": 44,
+            "effW": 100,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Nära mig",
+            "w": 109,
+            "h": 44,
+            "effW": 109,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "lör 24 okt.",
+            "w": 97,
+            "h": 44,
+            "effW": 97,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Kommande 7 dagar",
+            "w": 152,
+            "h": 44,
+            "effW": 152,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "För dig",
+            "w": 77,
+            "h": 44,
+            "effW": 77,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Efter tid",
+            "w": 84,
+            "h": 44,
+            "effW": 84,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          }
+        ]
+      },
+      "sheetNight": [
+        {
+          "tag": "h3",
+          "text": "Pågår nu",
+          "fontSize": "12px",
+          "fontWeight": "600",
+          "contrast": 8.39
+        },
+        {
+          "tag": "h3",
+          "text": "Under dagen",
+          "fontSize": "12px",
+          "fontWeight": "600",
+          "contrast": 8.39
+        },
+        {
+          "tag": "h3",
+          "text": "Började tidigare",
+          "fontSize": "12px",
+          "fontWeight": "600",
+          "contrast": 8.39
+        }
+      ]
+    },
+    {
+      "lang": "en",
+      "device": "mobile",
+      "loadMs": 7154,
+      "errors": [],
+      "themes": {
+        "day": {
+          "theme": "day",
+          "liveCard": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Live in Gothenburg · Sat 24 Oct",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 5.87
+            },
+            "groups": [
+              {
+                "state": "now",
+                "heading": {
+                  "tag": "h3",
+                  "text": "On now",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 6.98
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "until 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  },
+                  {
+                    "tag": "span",
+                    "text": "until 18:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  },
+                  {
+                    "tag": "span",
+                    "text": "until 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  }
+                ]
+              },
+              {
+                "state": "day",
+                "heading": {
+                  "tag": "h3",
+                  "text": "During the day",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 6.98
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "All day",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  }
+                ]
+              }
+            ],
+            "seeAll": {
+              "text": "See all live",
+              "borderColor": "oklab(0.453642 -0.0118384 -0.20908 / 0.6)",
+              "borderWidth": "1px",
+              "color": "rgb(35, 66, 200)",
+              "background": "rgba(0, 0, 0, 0)",
+              "fontWeight": "700",
+              "height": 48,
+              "contrast": 5.87
+            },
+            "targets": [
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "See all live",
+                "w": 301,
+                "h": 48,
+                "effW": 301,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "justNu": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Right now",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 5.21
+            },
+            "button": {
+              "tag": "button",
+              "text": "Show an idea",
+              "fontSize": "14px",
+              "fontWeight": "700",
+              "contrast": 15.57
+            },
+            "caption": {
+              "tag": "p",
+              "text": "One idea in Gothenburg, right now — your day stays as it is.",
+              "fontSize": "12px",
+              "fontWeight": "400",
+              "contrast": 5.83
+            },
+            "targets": [
+              {
+                "tag": "button",
+                "text": "Show an idea",
+                "w": 343,
+                "h": 44,
+                "effW": 343,
+                "effH": 44,
+                "extended": false
+              }
+            ]
+          },
+          "route": {
+            "dataLines": [
+              {
+                "tag": "span",
+                "text": "1",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 15.57
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0.4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 5.83
+              },
+              {
+                "tag": "span",
+                "text": "2",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 15.57
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0.4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 5.83
+              },
+              {
+                "tag": "span",
+                "text": "3",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 15.57
+              },
+              {
+                "tag": "span",
+                "text": "4 min · 0.3 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 5.83
+              }
+            ],
+            "eyebrows": [
+              {
+                "tag": "h2",
+                "text": "The stops, in order",
+                "fontSize": "12px",
+                "fontWeight": "600",
+                "contrast": 5.83
+              }
+            ],
+            "stations": [
+              {
+                "n": "1",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "2",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "3",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "4",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "5",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              }
+            ],
+            "targets": [
+              {
+                "tag": "button",
+                "text": "Follow the day",
+                "w": 138,
+                "h": 36,
+                "effW": 138,
+                "effH": 44,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "1BältespännarparkenPark",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "2NK Sushi TakameRestaurant",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3LerverkGallery",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "4MaritimanMuseum",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "5ZócaloRestaurant",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "1. Bältespännarparken",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "2. NK Sushi Takame",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "3. Lerverk",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "4. Maritiman",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "5. Zócalo",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "Stops 3,4: 3. Lerverk, 4. Maritiman. Zoom in to ",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Zoom in",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Zoom out",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "a",
+                "text": "OpenFreeMap",
+                "w": 65,
+                "h": 11,
+                "effW": 65,
+                "effH": 11,
+                "extended": false
+              },
+              {
+                "tag": "a",
+                "text": "© OpenMapTiles",
+                "w": 75,
+                "h": 11,
+                "effW": 75,
+                "effH": 11,
+                "extended": false
+              },
+              {
+                "tag": "a",
+                "text": "OpenStreetMap",
+                "w": 71,
+                "h": 11,
+                "effW": 71,
+                "effH": 11,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Expand map",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "summary",
+                "text": "About this day and map",
+                "w": 159,
+                "h": 44,
+                "effW": 159,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3 detour ideas near your route",
+                "w": 343,
+                "h": 48,
+                "effW": 343,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "eyebrowSizes": [
+            "12px"
+          ]
+        },
+        "night": {
+          "theme": "night",
+          "liveCard": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Live in Gothenburg · Sat 24 Oct",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 7.5
+            },
+            "groups": [
+              {
+                "state": "now",
+                "heading": {
+                  "tag": "h3",
+                  "text": "On now",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 8.84
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "until 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  },
+                  {
+                    "tag": "span",
+                    "text": "until 18:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  },
+                  {
+                    "tag": "span",
+                    "text": "until 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  }
+                ]
+              },
+              {
+                "state": "day",
+                "heading": {
+                  "tag": "h3",
+                  "text": "During the day",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 8.84
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "All day",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  }
+                ]
+              }
+            ],
+            "seeAll": {
+              "text": "See all live",
+              "borderColor": "oklab(0.750605 0.00597283 -0.127675 / 0.6)",
+              "borderWidth": "1px",
+              "color": "rgb(147, 168, 255)",
+              "background": "rgba(0, 0, 0, 0)",
+              "fontWeight": "700",
+              "height": 48,
+              "contrast": 7.5
+            },
+            "targets": [
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "See all live",
+                "w": 301,
+                "h": 48,
+                "effW": 301,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "justNu": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Right now",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 11.89
+            },
+            "button": {
+              "tag": "button",
+              "text": "Show an idea",
+              "fontSize": "14px",
+              "fontWeight": "700",
+              "contrast": 16.68
+            },
+            "caption": {
+              "tag": "p",
+              "text": "One idea in Gothenburg, right now — your day stays as it is.",
+              "fontSize": "12px",
+              "fontWeight": "400",
+              "contrast": 8
+            },
+            "targets": [
+              {
+                "tag": "button",
+                "text": "Show an idea",
+                "w": 343,
+                "h": 44,
+                "effW": 343,
+                "effH": 44,
+                "extended": false
+              }
+            ]
+          },
+          "route": {
+            "dataLines": [
+              {
+                "tag": "span",
+                "text": "1",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 16.68
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0.4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 8
+              },
+              {
+                "tag": "span",
+                "text": "2",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 16.68
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0.4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 8
+              },
+              {
+                "tag": "span",
+                "text": "3",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 16.68
+              },
+              {
+                "tag": "span",
+                "text": "4 min · 0.3 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 8
+              }
+            ],
+            "eyebrows": [
+              {
+                "tag": "h2",
+                "text": "The stops, in order",
+                "fontSize": "12px",
+                "fontWeight": "600",
+                "contrast": 8
+              }
+            ],
+            "stations": [
+              {
+                "n": "1",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "2",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "3",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "4",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "5",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              }
+            ],
+            "targets": [
+              {
+                "tag": "button",
+                "text": "Follow the day",
+                "w": 138,
+                "h": 36,
+                "effW": 138,
+                "effH": 44,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "1BältespännarparkenPark",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "2NK Sushi TakameRestaurant",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3LerverkGallery",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "4MaritimanMuseum",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "5ZócaloRestaurant",
+                "w": 343,
+                "h": 65,
+                "effW": 343,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "1. Bältespännarparken",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "2. NK Sushi Takame",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "3. Lerverk",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "4. Maritiman",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "5. Zócalo",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "div",
+                "text": "Stops 3,4: 3. Lerverk, 4. Maritiman. Zoom in to ",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Zoom in",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Zoom out",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "a",
+                "text": "OpenFreeMap",
+                "w": 65,
+                "h": 11,
+                "effW": 65,
+                "effH": 11,
+                "extended": false
+              },
+              {
+                "tag": "a",
+                "text": "© OpenMapTiles",
+                "w": 75,
+                "h": 11,
+                "effW": 75,
+                "effH": 11,
+                "extended": false
+              },
+              {
+                "tag": "a",
+                "text": "OpenStreetMap",
+                "w": 71,
+                "h": 11,
+                "effW": 71,
+                "effH": 11,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Expand map",
+                "w": 44,
+                "h": 44,
+                "effW": 44,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "summary",
+                "text": "About this day and map",
+                "w": 159,
+                "h": 44,
+                "effW": 159,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3 detour ideas near your route",
+                "w": 343,
+                "h": 48,
+                "effW": 343,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "eyebrowSizes": [
+            "12px"
+          ]
+        }
+      },
+      "sheet": {
+        "h2": [
+          "Live in Gothenburg"
+        ],
+        "h3": [
+          "On now",
+          "During the day",
+          "Started earlier"
+        ],
+        "h4": [],
+        "groups": [
+          {
+            "state": "now",
+            "heading": {
+              "tag": "h3",
+              "text": "On now",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 6.63
+            },
+            "rows": [
+              "until 19:00",
+              "until 17:00",
+              "until 18:00",
+              "until 17:00",
+              "until 16:00",
+              "until 17:00",
+              "until 17:00",
+              "until 17:00",
+              "until 23:55",
+              "until 18:00",
+              "until 23:00",
+              "until 16:00",
+              "until 17:00",
+              "until 17:00",
+              "until 17:00",
+              "until 16:00",
+              "until 17:00",
+              "until 16:00",
+              "until 17:00",
+              "until 17:00"
+            ]
+          },
+          {
+            "state": "day",
+            "heading": {
+              "tag": "h3",
+              "text": "During the day",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 6.63
+            },
+            "rows": [
+              "All day"
+            ]
+          },
+          {
+            "state": "started",
+            "heading": {
+              "tag": "h3",
+              "text": "Started earlier",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 6.63
+            },
+            "rows": [
+              "started 10:00 · end time unknown",
+              "started 10:00 · end time unknown",
+              "started 10:00 · end time unknown"
+            ]
+          }
+        ],
+        "targets": [
+          {
+            "tag": "button",
+            "text": "Close live",
+            "w": 44,
+            "h": 44,
+            "effW": 44,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Around Gothenburg",
+            "w": 155,
+            "h": 44,
+            "effW": 155,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Whole area",
+            "w": 101,
+            "h": 44,
+            "effW": 101,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Near the route",
+            "w": 118,
+            "h": 44,
+            "effW": 118,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Near me",
+            "w": 106,
+            "h": 44,
+            "effW": 106,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Sat 24 Oct",
+            "w": 100,
+            "h": 44,
+            "effW": 100,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Next 7 days",
+            "w": 105,
+            "h": 44,
+            "effW": 105,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "For you",
+            "w": 81,
+            "h": 44,
+            "effW": 81,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "By time",
+            "w": 82,
+            "h": 44,
+            "effW": 82,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          }
+        ]
+      },
+      "sheetNight": [
+        {
+          "tag": "h3",
+          "text": "On now",
+          "fontSize": "12px",
+          "fontWeight": "600",
+          "contrast": 8.39
+        },
+        {
+          "tag": "h3",
+          "text": "During the day",
+          "fontSize": "12px",
+          "fontWeight": "600",
+          "contrast": 8.39
+        },
+        {
+          "tag": "h3",
+          "text": "Started earlier",
+          "fontSize": "12px",
+          "fontWeight": "600",
+          "contrast": 8.39
+        }
+      ]
+    },
+    {
+      "lang": "en",
+      "device": "desktop",
+      "loadMs": 3996,
+      "errors": [],
+      "themes": {
+        "day": {
+          "theme": "day",
+          "liveCard": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Live in Gothenburg · Sat 24 Oct",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 5.87
+            },
+            "groups": [
+              {
+                "state": "now",
+                "heading": {
+                  "tag": "h3",
+                  "text": "On now",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 6.98
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "until 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  },
+                  {
+                    "tag": "span",
+                    "text": "until 18:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  },
+                  {
+                    "tag": "span",
+                    "text": "until 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  }
+                ]
+              },
+              {
+                "state": "day",
+                "heading": {
+                  "tag": "h3",
+                  "text": "During the day",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 6.98
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "All day",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 5.87
+                  }
+                ]
+              }
+            ],
+            "seeAll": {
+              "text": "See all live",
+              "borderColor": "oklab(0.453642 -0.0118384 -0.20908 / 0.6)",
+              "borderWidth": "1px",
+              "color": "rgb(35, 66, 200)",
+              "background": "rgba(0, 0, 0, 0)",
+              "fontWeight": "700",
+              "height": 48,
+              "contrast": 5.87
+            },
+            "targets": [
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "See all live",
+                "w": 526,
+                "h": 48,
+                "effW": 526,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "justNu": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Right now",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 5.21
+            },
+            "button": {
+              "tag": "button",
+              "text": "Show an idea",
+              "fontSize": "14px",
+              "fontWeight": "700",
+              "contrast": 15.57
+            },
+            "caption": {
+              "tag": "p",
+              "text": "One idea in Gothenburg, right now — your day stays as it is.",
+              "fontSize": "12px",
+              "fontWeight": "400",
+              "contrast": 5.83
+            },
+            "targets": [
+              {
+                "tag": "button",
+                "text": "Show an idea",
+                "w": 576,
+                "h": 44,
+                "effW": 576,
+                "effH": 44,
+                "extended": false
+              }
+            ]
+          },
+          "route": {
+            "dataLines": [
+              {
+                "tag": "span",
+                "text": "1",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 15.57
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0.4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 5.83
+              },
+              {
+                "tag": "span",
+                "text": "2",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 15.57
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0.4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 5.83
+              },
+              {
+                "tag": "span",
+                "text": "3",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 15.57
+              },
+              {
+                "tag": "span",
+                "text": "4 min · 0.3 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 5.83
+              }
+            ],
+            "eyebrows": [
+              {
+                "tag": "h2",
+                "text": "The stops, in order",
+                "fontSize": "12px",
+                "fontWeight": "600",
+                "contrast": 5.83
+              }
+            ],
+            "stations": [
+              {
+                "n": "1",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "2",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "3",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "4",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              },
+              {
+                "n": "5",
+                "background": "rgb(238, 236, 231)",
+                "border": "rgb(22, 20, 17)"
+              }
+            ],
+            "targets": [
+              {
+                "tag": "summary",
+                "text": "About this day and map",
+                "w": 159,
+                "h": 44,
+                "effW": 159,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Follow the day",
+                "w": 138,
+                "h": 36,
+                "effW": 138,
+                "effH": 44,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "1BältespännarparkenPark",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "2NK Sushi TakameRestaurant",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3LerverkGallery",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "4MaritimanMuseum",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "5ZócaloRestaurant",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3 detour ideas near your route",
+                "w": 576,
+                "h": 48,
+                "effW": 576,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "eyebrowSizes": [
+            "12px"
+          ]
+        },
+        "night": {
+          "theme": "night",
+          "liveCard": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Live in Gothenburg · Sat 24 Oct",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 7.5
+            },
+            "groups": [
+              {
+                "state": "now",
+                "heading": {
+                  "tag": "h3",
+                  "text": "On now",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 8.84
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "until 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  },
+                  {
+                    "tag": "span",
+                    "text": "until 18:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  },
+                  {
+                    "tag": "span",
+                    "text": "until 17:00",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  }
+                ]
+              },
+              {
+                "state": "day",
+                "heading": {
+                  "tag": "h3",
+                  "text": "During the day",
+                  "fontSize": "12px",
+                  "fontWeight": "700",
+                  "contrast": 8.84
+                },
+                "rows": [
+                  {
+                    "tag": "span",
+                    "text": "All day",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "contrast": 7.5
+                  }
+                ]
+              }
+            ],
+            "seeAll": {
+              "text": "See all live",
+              "borderColor": "oklab(0.750605 0.00597283 -0.127675 / 0.6)",
+              "borderWidth": "1px",
+              "color": "rgb(147, 168, 255)",
+              "background": "rgba(0, 0, 0, 0)",
+              "fontWeight": "700",
+              "height": 48,
+              "contrast": 7.5
+            },
+            "targets": [
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "a",
+                "text": "goteborg.com",
+                "w": 103,
+                "h": 15,
+                "effW": 111,
+                "effH": 43,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "See all live",
+                "w": 526,
+                "h": 48,
+                "effW": 526,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "justNu": {
+            "eyebrow": {
+              "tag": "h2",
+              "text": "Right now",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 11.89
+            },
+            "button": {
+              "tag": "button",
+              "text": "Show an idea",
+              "fontSize": "14px",
+              "fontWeight": "700",
+              "contrast": 16.68
+            },
+            "caption": {
+              "tag": "p",
+              "text": "One idea in Gothenburg, right now — your day stays as it is.",
+              "fontSize": "12px",
+              "fontWeight": "400",
+              "contrast": 8
+            },
+            "targets": [
+              {
+                "tag": "button",
+                "text": "Show an idea",
+                "w": 576,
+                "h": 44,
+                "effW": 576,
+                "effH": 44,
+                "extended": false
+              }
+            ]
+          },
+          "route": {
+            "dataLines": [
+              {
+                "tag": "span",
+                "text": "1",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 16.68
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0.4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 8
+              },
+              {
+                "tag": "span",
+                "text": "2",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 16.68
+              },
+              {
+                "tag": "span",
+                "text": "5 min · 0.4 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 8
+              },
+              {
+                "tag": "span",
+                "text": "3",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "contrast": 16.68
+              },
+              {
+                "tag": "span",
+                "text": "4 min · 0.3 km",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "contrast": 8
+              }
+            ],
+            "eyebrows": [
+              {
+                "tag": "h2",
+                "text": "The stops, in order",
+                "fontSize": "12px",
+                "fontWeight": "600",
+                "contrast": 8
+              }
+            ],
+            "stations": [
+              {
+                "n": "1",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "2",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "3",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "4",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              },
+              {
+                "n": "5",
+                "background": "rgb(17, 16, 18)",
+                "border": "rgb(243, 240, 234)"
+              }
+            ],
+            "targets": [
+              {
+                "tag": "summary",
+                "text": "About this day and map",
+                "w": 159,
+                "h": 44,
+                "effW": 159,
+                "effH": 44,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "Follow the day",
+                "w": 138,
+                "h": 36,
+                "effW": 138,
+                "effH": 44,
+                "extended": true
+              },
+              {
+                "tag": "button",
+                "text": "1BältespännarparkenPark",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "2NK Sushi TakameRestaurant",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3LerverkGallery",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "4MaritimanMuseum",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "5ZócaloRestaurant",
+                "w": 576,
+                "h": 65,
+                "effW": 576,
+                "effH": 65,
+                "extended": false
+              },
+              {
+                "tag": "button",
+                "text": "3 detour ideas near your route",
+                "w": 576,
+                "h": 48,
+                "effW": 576,
+                "effH": 48,
+                "extended": false
+              }
+            ]
+          },
+          "eyebrowSizes": [
+            "12px"
+          ]
+        }
+      },
+      "sheet": {
+        "h2": [
+          "Live in Gothenburg"
+        ],
+        "h3": [
+          "On now",
+          "During the day",
+          "Started earlier"
+        ],
+        "h4": [],
+        "groups": [
+          {
+            "state": "now",
+            "heading": {
+              "tag": "h3",
+              "text": "On now",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 6.63
+            },
+            "rows": [
+              "until 19:00",
+              "until 17:00",
+              "until 18:00",
+              "until 17:00",
+              "until 16:00",
+              "until 17:00",
+              "until 17:00",
+              "until 17:00",
+              "until 23:55",
+              "until 18:00",
+              "until 23:00",
+              "until 16:00",
+              "until 17:00",
+              "until 17:00",
+              "until 17:00",
+              "until 16:00",
+              "until 17:00",
+              "until 16:00",
+              "until 17:00",
+              "until 17:00"
+            ]
+          },
+          {
+            "state": "day",
+            "heading": {
+              "tag": "h3",
+              "text": "During the day",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 6.63
+            },
+            "rows": [
+              "All day"
+            ]
+          },
+          {
+            "state": "started",
+            "heading": {
+              "tag": "h3",
+              "text": "Started earlier",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "contrast": 6.63
+            },
+            "rows": [
+              "started 10:00 · end time unknown",
+              "started 10:00 · end time unknown",
+              "started 10:00 · end time unknown"
+            ]
+          }
+        ],
+        "targets": [
+          {
+            "tag": "button",
+            "text": "Close live",
+            "w": 44,
+            "h": 44,
+            "effW": 44,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Around Gothenburg",
+            "w": 155,
+            "h": 44,
+            "effW": 155,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Whole area",
+            "w": 101,
+            "h": 44,
+            "effW": 101,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Near the route",
+            "w": 118,
+            "h": 44,
+            "effW": 118,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Near me",
+            "w": 106,
+            "h": 44,
+            "effW": 106,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Sat 24 Oct",
+            "w": 100,
+            "h": 44,
+            "effW": 100,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "Next 7 days",
+            "w": 105,
+            "h": 44,
+            "effW": 105,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "For you",
+            "w": 81,
+            "h": 44,
+            "effW": 81,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "button",
+            "text": "By time",
+            "w": 82,
+            "h": 44,
+            "effW": 82,
+            "effH": 44,
+            "extended": false
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          },
+          {
+            "tag": "a",
+            "text": "goteborg.com",
+            "w": 103,
+            "h": 15,
+            "effW": 111,
+            "effH": 43,
+            "extended": true
+          }
+        ]
+      },
+      "sheetNight": [
+        {
+          "tag": "h3",
+          "text": "On now",
+          "fontSize": "12px",
+          "fontWeight": "600",
+          "contrast": 8.39
+        },
+        {
+          "tag": "h3",
+          "text": "During the day",
+          "fontSize": "12px",
+          "fontWeight": "600",
+          "contrast": 8.39
+        },
+        {
+          "tag": "h3",
+          "text": "Started earlier",
+          "fontSize": "12px",
+          "fontWeight": "600",
+          "contrast": 8.39
+        }
+      ]
+    }
+  ],
+  "defaultInterests": {
+    "url": "?place=G%C3%B6teborg%2C+V%C3%A4stra+G%C3%B6talands+l%C3%A4n%2C+Sverige&place_ref=n25930131&planner=open&prefs=food%2Cculture%2Cviews&lang=sv",
+    "chips": [
+      {
+        "key": "food",
+        "label": "Mat & dryck",
+        "pressed": "true",
+        "text": "Mat & dryck"
+      },
+      {
+        "key": "culture",
+        "label": "Kultur",
+        "pressed": "true",
+        "text": "Kultur"
+      },
+      {
+        "key": "views",
+        "label": "Utsikt",
+        "pressed": "true",
+        "text": "Utsikt"
+      },
+      {
+        "key": "fika",
+        "label": "Fika",
+        "pressed": "false",
+        "text": "Fika"
+      },
+      {
+        "key": "nightlife",
+        "label": "Kvällsliv",
+        "pressed": "false",
+        "text": "Kvällsliv"
+      },
+      {
+        "key": "green",
+        "label": "Grönt & promenad",
+        "pressed": "false",
+        "text": "Grönt & promenad"
+      },
+      {
+        "key": "second_hand",
+        "label": "Second hand",
+        "pressed": "false",
+        "text": "Second hand"
+      }
+    ],
+    "free": [
+      {
+        "text": "Låt Parranda välja",
+        "pressed": "false"
+      }
+    ],
+    "autoButtons": 0
+  },
+  "finished": "2026-10-24T13:02:00.178Z"
+}
