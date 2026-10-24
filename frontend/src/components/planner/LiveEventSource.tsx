@@ -26,7 +26,7 @@ export function liveEventSource(event: PulseEvent, lang: Lang) {
     : { national: "Nationell", regional: "Regional", local: "Lokal" })[holiday.scope];
   if (!listedBy && !link && !credits.length && !recurring && !holiday) return null;
   return (
-    <span className="text-parranda-ink/68">
+    <span className="text-parranda-ink-meta">
       {holiday && <> · {scope} {lang === "en" ? "public holiday — programme not verified" : "helgdag — program inte verifierat"}
         {holiday.temporal_scope === "half_day" && <> · {lang === "en" ? "Half day — time unspecified" : "Halvdag — tid saknas"}</>}
         {holidayFlags.includes("Recommended") && <> · {lang === "en" ? "Recommended by source" : "Rekommenderad enligt källan"}</>}
@@ -43,7 +43,7 @@ export function liveEventSource(event: PulseEvent, lang: Lang) {
           {" · "}
           {/* Inline in the row's text: the 44px target is drawn by ::before, so
               a wrapped link keeps the line spacing and its mark after the last word. */}
-          <a href={link.href} target="_blank" rel="noopener noreferrer" className={`${inlineLinkTarget} underline decoration-parranda-ink/30 underline-offset-2 hover:text-parranda-clay hover:decoration-parranda-clay`}>
+          <a href={link.href} target="_blank" rel="noopener noreferrer" className={`${inlineLinkTarget} underline decoration-parranda-line-firm underline-offset-2 hover:text-parranda-clay hover:decoration-parranda-clay`}>
             <ExternalLinkText text={link.text} />
           </a>
         </>

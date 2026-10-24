@@ -2590,7 +2590,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             {relocating ? t("Hämtar position …", "Getting location …") : t("Använd min position", "Use my location")}
           </button>
           {relocateDenied && (
-            <p className="text-13 text-parranda-ink/72" aria-live="polite">
+            <p className="text-13 text-parranda-ink-muted" aria-live="polite">
               {t("Positionen blockerades — byt till en stad eller plats i stället.", "Location was blocked — choose a city or place instead.")}
             </p>
           )}
@@ -2611,7 +2611,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           matters most. Hiding it behind a collapsed panel made the dismissal
           effectively irreversible. */}
       {(excludedCount > 0 || pinnedCount > 0 || liveChoiceCount > 0) && (
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-13 text-parranda-ink/72" role="status">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-13 text-parranda-ink-muted" role="status">
           {liveChoiceCount > 0 && <span>{t("Live-valet behålls för sitt tillfälle", "Live choice saved for its occurrence")}</span>}
           {pinnedCount > 0 && (
             <span className="inline-flex items-center gap-1.5">
@@ -2644,7 +2644,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           screen is the evidence. Silently dropping it would let the ledger
           claim something the day does not show. */}
       {unkept.count > 0 && (
-        <div className="flex flex-col gap-1.5 rounded-parranda border-line border-parranda-glow/40 bg-parranda-glow/8 px-4 py-3 text-13 text-parranda-ink/85" role="status">
+        <div className="flex flex-col gap-1.5 rounded-parranda border-line border-parranda-glow/40 bg-parranda-glow/8 px-4 py-3 text-13 text-parranda-ink-soft" role="status">
           {unkept.reasons.map((entry: { id: string; label: string; reason: string | null }) => (
             <p key={entry.id}>{isLiveOccurrenceId(entry.id) ? t(`${entry.label || "Det valda tillfället"} kunde inte bekräftas som stopp i den här dagen. Ditt val finns kvar.`, `${entry.label || "The chosen occurrence"} could not be confirmed as a stop in this day. Your choice is retained.`) : unkeptReasonSentence(entry, t)}</p>
           ))}
@@ -2657,7 +2657,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           status={
             // Where "Your day" will stand, with the drawing ring: the day
             // lands under the line the reader is already looking at.
-            <p className="flex items-start gap-2.5 text-sm text-parranda-ink/75" aria-live="polite">
+            <p className="flex items-start gap-2.5 text-sm text-parranda-ink-muted" aria-live="polite">
               <RingMark className="mt-[3px] h-3.5 w-3.5" />
               <span>
                 {supplyPending && t("Hämtar källbelagda platser för din dag. Planen fortsätter automatiskt — du behöver inte försöka igen.", "Fetching source-backed places for your day. Your plan will continue automatically — no need to try again.")}
@@ -2779,9 +2779,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {dayChange && (phase === "done" || (phase === "error" && stopEditError)) && (!dayIsStale || stopEditError) && (dayChangeLine.length > 0 || stopEditFeedback || stopEditError) && (
         <div
           role="status"
-          className="flex items-center gap-x-2 rounded-parranda border-line border-parranda-ink/12 bg-parranda-ink/4 py-0.5 pl-4 pr-1"
+          className="flex items-center gap-x-2 rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint py-0.5 pl-4 pr-1"
         >
-          <p className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink/75">
+          <p className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink-muted">
             {stopEditError ? stopEditErrorMessage : stopEditFeedback ? t(stopEditFeedback === "remove" ? "Borttaget" : "Bytt", stopEditFeedback === "remove" ? "Removed" : "Replaced") : <>
               <span className="font-bold text-parranda-ink">
                 {dayChange.summary.trigger === "recheck" ? t("Letade efter fler platser", "Looked for more places") : t("Ändrat", "Changed")}:{" "}
@@ -2793,7 +2793,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             type="button"
             onClick={undoDayChange}
             aria-label={t("Ångra ändringen", "Undo this change")}
-            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-bold text-parranda-ink transition hover:bg-parranda-ink/8"
+            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-bold text-parranda-ink transition hover:bg-parranda-fill"
           >
             <UndoIcon className="h-3.5 w-3.5" />
             {t("Ångra", "Undo")}
@@ -2804,7 +2804,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {classification?.status === "edited_empty" && phase === "done" && (
         <section className={noticeCard} role="status">
           <h2 className="font-bold text-parranda-ink">{t("Dagen är tom", "Your day is empty")}</h2>
-          <p className="mt-1 text-sm text-parranda-ink/72">{t("Du har tagit bort alla stopp.", "You removed every stop.")}</p>
+          <p className="mt-1 text-sm text-parranda-ink-muted">{t("Du har tagit bort alla stopp.", "You removed every stop.")}</p>
           <button type="button" onClick={clearCommitments} className={buttonClass("secondary", "mt-3 min-h-11 px-4 text-sm")}>
             {t("Börja om", "Start over")}
           </button>
@@ -2852,7 +2852,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               </p>
             )}
             {restoredAt && (
-              <p className="mt-1 text-xs text-parranda-ink/68">
+              <p className="mt-1 text-xs text-parranda-ink-meta">
                 {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", { day: "numeric", month: "short", year: "numeric" })} —{" "}
                 {canUpdateSaved ? (
                   <button type="button" onClick={() => retryPlan({ sameDate: true })} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-parranda-clay">

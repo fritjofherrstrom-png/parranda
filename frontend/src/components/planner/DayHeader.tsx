@@ -123,7 +123,7 @@ export function PlaceSign({ text }: { text: string }) {
 
 function Note({ children }: { children: ReactNode }) {
   return (
-    <p className="flex items-start gap-2 text-13 leading-relaxed text-parranda-ink/72">
+    <p className="flex items-start gap-2 text-13 leading-relaxed text-parranda-ink-muted">
       <span aria-hidden="true" className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-glow" />
       <span>{children}</span>
     </p>
@@ -278,14 +278,14 @@ export default function DayHeader({
       <ul className="flex flex-wrap gap-1.5" aria-label={t("Om dagen", "About the day")}>
         {distance && (
           <li className={metaChip}>
-            <WalkIcon className="h-3.5 w-3.5 text-parranda-ink/72" />
+            <WalkIcon className="h-3.5 w-3.5 text-parranda-ink-muted" />
             {distance}
           </li>
         )}
         <li className={metaChip}>{stops}</li>
         {weatherChip && (
           <li className={metaChip}>
-            {observed?.condition === "sun" && <SunIcon className="h-3.5 w-3.5 text-parranda-ink/72" />}
+            {observed?.condition === "sun" && <SunIcon className="h-3.5 w-3.5 text-parranda-ink-muted" />}
             {weatherChip}
           </li>
         )}
@@ -312,7 +312,7 @@ export default function DayHeader({
               key={key}
               className={
                 state === "missing"
-                  ? "inline-flex items-center gap-1.5 rounded-full border-line border-dashed border-parranda-ink/30 px-2.5 py-1 text-xs font-semibold text-parranda-ink/72"
+                  ? "inline-flex items-center gap-1.5 rounded-full border-line border-dashed border-parranda-line-firm px-2.5 py-1 text-xs font-semibold text-parranda-ink-muted"
                   : labelChip
               }
             >
@@ -322,16 +322,16 @@ export default function DayHeader({
               {state === "pending" && <RingMark className="h-3 w-3" />}
               <span>{pickLabel(key, lang)}</span>
               {state === "covered" && <span className="sr-only">{t(" — med i dagen", " — in this day")}</span>}
-              {state === "partial" && <span className="text-parranda-ink/68">{t(" · delvis", " · partly")}</span>}
+              {state === "partial" && <span className="text-parranda-ink-meta">{t(" · delvis", " · partly")}</span>}
               {state === "missing" && <span>{t(" · inte med", " · not in this day")}</span>}
-              {state === "pending" && <span className="text-parranda-ink/68">{t(" · letar platser …", " · finding places …")}</span>}
-              {state === "unanswered" && <span className="text-parranda-ink/68">{t(" · ännu inte bedömt", " · not assessed yet")}</span>}
+              {state === "pending" && <span className="text-parranda-ink-meta">{t(" · letar platser …", " · finding places …")}</span>}
+              {state === "unanswered" && <span className="text-parranda-ink-meta">{t(" · ännu inte bedömt", " · not assessed yet")}</span>}
             </li>
           ))}
         </ul>
       )}
       {priorityShortfall && (
-        <p className="text-13 leading-relaxed text-parranda-ink/72" role="status">
+        <p className="text-13 leading-relaxed text-parranda-ink-muted" role="status">
           {priorityShortfall.state === "partial"
             ? t(`Ditt förstaval ${pickLabel(priorityShortfall.key, lang)} finns bara delvis med i den här dagen.`,
                 `Your first choice ${pickLabel(priorityShortfall.key, lang)} is only partly represented in this day.`)
@@ -347,7 +347,7 @@ export default function DayHeader({
           Looking again asks the same question; its result is said in the
           change line ("Looked for more places: …", with Undo). */}
       {displayedShortfall && (
-        <div className="flex flex-col items-start gap-2 text-13 leading-relaxed text-parranda-ink/72">
+        <div className="flex flex-col items-start gap-2 text-13 leading-relaxed text-parranda-ink-muted">
           <p role="status">
             {displayedShortfall === "failed"
               ? t("Inte alla platser kunde läsas in, så det kan finnas fler än de som visas.", "Not every place could be loaded, so there may be more than the ones shown.")
@@ -359,8 +359,8 @@ export default function DayHeader({
                 sourceUpdateHadFocus.current = document.activeElement === sourceUpdateRef.current;
                 onLookForMorePlaces();
               })}
-              className={`${compactPillTarget} gap-2 border-line border-parranda-ink/18 px-3.5 font-bold text-parranda-ink hover:border-parranda-ink/50 aria-busy:cursor-progress ${rechecking ? "" : "aria-disabled:opacity-60"}`}>
-              {rechecking ? <RingMark className="h-3.5 w-3.5" /> : <SearchIcon className="h-3.5 w-3.5 text-parranda-ink/72" />}
+              className={`${compactPillTarget} gap-2 border-line border-parranda-line px-3.5 font-bold text-parranda-ink hover:border-parranda-line-strong aria-busy:cursor-progress ${rechecking ? "" : "aria-disabled:opacity-60"}`}>
+              {rechecking ? <RingMark className="h-3.5 w-3.5" /> : <SearchIcon className="h-3.5 w-3.5 text-parranda-ink-muted" />}
               {rechecking ? t("Letar efter fler platser …", "Looking for more places …") : t("Leta efter fler platser", "Look for more places")}
             </button>
           )}
@@ -370,7 +370,7 @@ export default function DayHeader({
           how it was ASSEMBLED is one "About this day" line beside the map. */}
       {dayLimitationNote && <Note>{dayLimitationNote}</Note>}
       {restoredAt && (
-        <p className="text-xs text-parranda-ink/68">
+        <p className="text-xs text-parranda-ink-meta">
           {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", { day: "numeric", month: "short", year: "numeric" })} —{" "}
           {canUpdateSaved ? (
             <button type="button" onClick={() => resolveAndRun()} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-parranda-clay">
@@ -454,8 +454,8 @@ export function DayActions({
                     className={
                       "flex min-h-14 items-center gap-3 rounded-parranda-btn px-3.5 py-2 text-left text-15 transition " +
                       (first
-                        ? "bg-parranda-terracotta font-extrabold text-white hover:brightness-110"
-                        : "border-line border-parranda-ink/20 font-bold text-parranda-ink hover:border-parranda-ink/50")
+                        ? "bg-parranda-terracotta font-extrabold text-parranda-on-terracotta hover:brightness-110"
+                        : "border-line border-parranda-line font-bold text-parranda-ink hover:border-parranda-line-strong")
                     }
                   >
                     <span
@@ -463,7 +463,7 @@ export function DayActions({
                       className={
                         "type-data inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold " +
                         // A darker disc keeps the white digit at 6.7:1 on terracotta (white/22 gave 3.7:1).
-                        (first ? "bg-black/15" : "bg-parranda-ink/8")
+                        (first ? "bg-parranda-shade" : "bg-parranda-fill")
                       }
                     >
                       {index + 1}
@@ -471,7 +471,7 @@ export function DayActions({
                     <span className="min-w-0 flex-1">
                       <span className="sr-only">{t(`Del ${index + 1} i Google Maps: `, `Part ${index + 1} in Google Maps: `)}</span>
                       {routeEndLabel(part.from)} → {routeEndLabel(part.to)}
-                      <span className={"type-data block text-11 font-medium " + (first ? "text-white" : "text-parranda-ink/68")}>
+                      <span className={"type-data block text-11 font-medium " + (first ? "text-parranda-on-terracotta" : "text-parranda-ink-meta")}>
                         {newStops > 0
                           ? t(`${newStops} stopp`, `${newStops} ${newStops === 1 ? "stop" : "stops"}`)
                           : t("Sista biten", "The last stretch")}
@@ -483,7 +483,7 @@ export function DayActions({
               );
             })}
           </ol>
-          <p className="text-xs leading-relaxed text-parranda-ink/68">
+          <p className="text-xs leading-relaxed text-parranda-ink-meta">
             {t(
               "Google Maps tar bara några stopp per länk, så promenaden öppnas i delar. Ta dem i ordning — varje del börjar där den förra slutar.",
               "Google Maps takes only a few stops per link, so the walk opens in parts. Take them in order — each part starts where the previous one ends.",
@@ -529,19 +529,19 @@ export function DayActions({
       </div>
       {/* A split walk already names its start and finish in the sequence. */}
       {routeParts.length <= 1 && Boolean(routeOrigin || routeDestination) && (
-        <p className="text-xs text-parranda-ink/68">
+        <p className="text-xs text-parranda-ink-meta">
           {Boolean(routeOrigin) && `${t("Start", "Start")}: ${anchorIsPosition ? t("Din position", "Your position") : String(publishedStart?.label || t("kartans startpunkt", "map start point"))}`}
           {routeOrigin && routeDestination ? " · " : ""}
           {Boolean(routeDestination) && `${t("Slut", "Finish")}: ${anchorIsPosition ? t("Din position", "Your position") : String(publishedEnd?.label || t("kartans slutpunkt", "map end point"))}`}
         </p>
       )}
       {routeUrls.length === 0 && (
-        <p className="text-xs text-parranda-ink/68">
+        <p className="text-xs text-parranda-ink-meta">
           {t("Hela rutten kan inte öppnas i Maps. Öppna platserna var för sig där kartlänk finns.", "The whole route cannot be opened in Maps. Open places individually where a map link is available.")}
         </p>
       )}
       {routeUrls.length > 0 && (
-        <p className="text-xs text-parranda-ink/68">
+        <p className="text-xs text-parranda-ink-meta">
           {t("Google Maps beräknar gångvägen när du öppnar rutten.", "Google Maps works out the walking path when you open the route.")}
         </p>
       )}

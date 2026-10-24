@@ -772,7 +772,7 @@ export default function RouteMap({
 
   if (mapFailed) {
     return (
-      <p role="status" className="rounded-parranda border border-parranda-ink/10 px-4 py-3 text-sm text-parranda-ink/72">
+      <p role="status" className="rounded-parranda border-line border-parranda-line-faint px-4 py-3 text-sm text-parranda-ink-muted">
         {t(
           "Kartan kan inte visas i den här webbläsaren. Stoppen och Maps-rutten fungerar som vanligt.",
           "The map can't be shown in this browser. The stops and the Maps route work as usual.",
@@ -783,7 +783,7 @@ export default function RouteMap({
 
   return (
     <>
-    <div ref={frameRef} data-route-map="" className={`route-map-frame relative w-full overflow-hidden rounded-parranda border border-parranda-ink/10 transition-all ${heightClass}`}>
+    <div ref={frameRef} data-route-map="" className={`route-map-frame relative w-full overflow-hidden rounded-parranda border-line border-parranda-line-faint transition-all ${heightClass}`}>
       {/* Screen layout keeps each numbered touch footprint independently visible. */}
       <div ref={mapRef} className="h-full w-full" />
       {groupPicker && (
@@ -791,7 +791,7 @@ export default function RouteMap({
           ref={groupPickerRef}
           role="dialog"
           aria-label={t("Stopp i gruppen", "Stops in this group")}
-          className="route-map-group-picker absolute left-2 top-2 z-[2000] max-h-[calc(100%_-_1rem)] w-64 max-w-[calc(100%_-_1rem)] overflow-y-auto rounded-parranda border border-parranda-ink/20 bg-parranda-paper p-2 text-parranda-ink shadow-control"
+          className="route-map-group-picker absolute left-2 top-2 z-(--p-z-map-overlay) max-h-[calc(100%_-_1rem)] w-64 max-w-[calc(100%_-_1rem)] overflow-y-auto rounded-parranda border-line border-parranda-line bg-parranda-paper p-2 text-parranda-ink shadow-control"
         >
           <div className="flex items-center justify-between gap-2 pl-2">
             <strong className="text-sm">{t("Stopp i gruppen", "Stops in this group")}</strong>
@@ -806,7 +806,7 @@ export default function RouteMap({
             const badge = badgesRef.current[index];
             if (!badge) return null;
             return <button key={index} type="button" data-group-stop=""
-              className="mb-1 min-h-11 w-full rounded-parranda border border-parranda-ink/15 px-3 py-2 text-left text-sm hover:border-parranda-ember focus-visible:outline-2 focus-visible:outline-parranda-ember"
+              className="mb-1 min-h-11 w-full rounded-parranda border-line border-parranda-line-faint px-3 py-2 text-left text-sm hover:border-parranda-ember focus-visible:outline-2 focus-visible:outline-parranda-ember"
               onClick={() => {
                 const map = instanceRef.current?.map;
                 if (!map) return;
@@ -828,7 +828,7 @@ export default function RouteMap({
         </div>
       )}
       {!mapDrawn && (
-        <div className="absolute inset-0 flex items-center justify-center bg-parranda-ink/10 text-sm text-parranda-ink/68">
+        <div className="absolute inset-0 flex items-center justify-center bg-parranda-fill text-sm text-parranda-ink-meta">
           {t("Ritar kartan …", "Drawing the map …")}
         </div>
       )}
@@ -841,18 +841,18 @@ export default function RouteMap({
           aria-expanded={mapExpanded}
           aria-label={mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
           data-map-control=""
-          className="absolute right-2.5 top-2.5 z-(--p-z-map-control) inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-parranda-ink/20 bg-parranda-paper/90 text-parranda-ink/85 shadow-control backdrop-blur-xs transition hover:border-parranda-ember"
+          className="absolute right-2.5 top-2.5 z-(--p-z-map-control) inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border-line border-parranda-line bg-parranda-paper/90 text-parranda-ink-soft shadow-control backdrop-blur-xs transition hover:border-parranda-ember"
         >
           {mapExpanded ? <CollapseIcon className="h-5 w-5" /> : <ExpandIcon className="h-5 w-5" />}
         </button>
       )}
     </div>
     {tilesFailed && (
-      <p role="status" className="mt-1 text-xs text-parranda-ink/68">
+      <p role="status" className="mt-1 text-xs text-parranda-ink-meta">
         {t("Kartbakgrunden kunde inte hämtas — rutten och stoppen visas ändå.", "The map background couldn't be loaded — the route and stops are still shown.")}
       </p>
     )}
-    {layoutCrowded && <p role="status" className="mt-1 text-xs text-parranda-ink/68">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}
+    {layoutCrowded && <p role="status" className="mt-1 text-xs text-parranda-ink-meta">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}
     </>
   );
 }

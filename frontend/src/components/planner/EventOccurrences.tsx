@@ -9,7 +9,7 @@ export default function EventOccurrences({ event, lang, selectedDate, now, rende
   const slots = event.occurrences;
   if (!slots || slots.length < 1 || (slots.length === 1 && !renderChoice)) return null;
   return (
-    <details className="mt-1 text-xs text-parranda-ink/75">
+    <details className="mt-1 text-xs text-parranda-ink-muted">
       <summary className="min-h-11 cursor-pointer py-3 font-semibold text-parranda-live">
         {slots.length} {lang === "en" ? slots.length === 1 ? "occurrence" : "occurrences" : slots.length === 1 ? "tillfälle" : "tillfällen"}
       </summary>
