@@ -53,7 +53,7 @@ async function composedPlanner(t, liveEvents, { lang = 'en', picks = PICKS } = {
 }
 const sheet = h => h.container.querySelector('[role="dialog"]');
 function rowsUnder(h, heading) {
-  const title = [...sheet(h).querySelectorAll('p')].find(p => p.textContent.trim() === heading);
+  const title = [...sheet(h).querySelectorAll('h3')].find(p => p.textContent.trim() === heading);
   assert.ok(title, `"${heading}" is shown`);
   assert.equal(title.nextElementSibling?.tagName, 'UL');
   return [...title.nextElementSibling.children].map(li => li.textContent);

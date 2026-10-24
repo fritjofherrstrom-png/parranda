@@ -12,7 +12,7 @@
 import type { ReactNode } from "react";
 import { ExternalIcon } from "./icons";
 
-type ButtonTone = "primary" | "secondary" | "quiet" | "live" | "dashed";
+type ButtonTone = "primary" | "secondary" | "quiet" | "live" | "liveOutline" | "dashed";
 
 const TONES: Record<ButtonTone, string> = {
   // The one filled action on a surface: white on terracotta, 5.2:1 in both themes.
@@ -20,6 +20,9 @@ const TONES: Record<ButtonTone, string> = {
   secondary: "border-line border-parranda-ink/20 font-bold text-parranda-ink hover:border-parranda-ink/50",
   quiet: "bg-parranda-ink/8 font-bold text-parranda-ink hover:bg-parranda-ink/14",
   live: "bg-parranda-live font-extrabold text-parranda-on-live hover:brightness-110",
+  // A secondary step into Live content: Live blue as an outline, so the
+  // surface keeps one filled action (the route's own Maps button).
+  liveOutline: "border-line border-parranda-live/60 font-bold text-parranda-live hover:border-parranda-live hover:bg-parranda-live/8",
   // Optional, explicitly not part of the day.
   dashed: "border-line border-dashed border-parranda-ink/30 font-bold text-parranda-ink hover:border-parranda-ink/55",
 };
@@ -89,11 +92,13 @@ export function segmentClass(active: boolean, extra = ""): string {
 }
 
 /**
- * An inline text link that is still a 44px target. The invisible ::before
- * reaches 14px above and below the line, so the link never changes the text's
- * layout: no negative margins, and a wrapped link cannot run into the next row.
+ * An inline text link that is still a 44px target. The invisible ::before is
+ * 44px tall, centred on the link, so the link never changes the text's layout:
+ * no negative margins, and a wrapped link cannot run into the next row. (It
+ * reached 14px above and below the line before, which left a 14px link 43px
+ * tall: QA, 24 Oct 2026.)
  */
-export const inlineLinkTarget = "relative before:absolute before:-inset-x-1 before:-inset-y-[14px] before:content-['']";
+export const inlineLinkTarget = "relative before:absolute before:-inset-x-1 before:top-1/2 before:h-11 before:-translate-y-1/2 before:content-['']";
 
 /**
  * Link text that leaves Parranda: the text, then the external mark. The mark is
@@ -170,7 +175,9 @@ export function Eyebrow({
 }
 
 /** The mono fact line's look ("18 MIN · 1.5 KM"), for elements that also carry layout. */
-export const dataLine = "type-data text-11 text-parranda-ink/68";
+// Walking legs and other mono data lines: 12px, not 11 — set in capitals with
+// tracking, 11px was the smallest text on the page.
+export const dataLine = "type-data text-xs text-parranda-ink/68";
 
 /** A small mono fact line ("18 MIN · 1.5 KM"). Text keeps its own case; CSS sets it in capitals. */
 export function DataLine({ children, className = "" }: { children: ReactNode; className?: string }) {

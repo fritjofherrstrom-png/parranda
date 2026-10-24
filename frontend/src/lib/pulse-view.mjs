@@ -215,9 +215,19 @@ export function clothingAdvice(observed, lang) {
  *                UTC so a date-only value never shifts across midnight
  *   unresolved → "" (timing copy is omitted, never invented)
  *
+ * A stated start that has passed with no stated end reads "started 12:00 ·
+ * end time unknown": it is neither proven on now nor proven over.
+ *
+ * `omitDate` is a venue-local date the surrounding group already states (the
+ * Live card's day, a "by time" date heading). A row about that date then
+ * names only its clock; date ranges, other dates and every individual
+ * occurrence keep their full dates. `underOnNow` is set for a row listed
+ * under an "On now" heading: it then says only when it ends ("until 17:00",
+ * or the end's date and clock when that is a later day).
+ *
  * `now` is injectable so tests never depend on the real clock.
  */
-export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
+export function eventTiming(ev, lang, now = new Date(), selectedDate = null, { omitDate = null, underOnNow = false } = {}) {
   if (!ev || typeof ev !== "object") return "";
   const en = lang === "en";
   const locale = en ? "en-GB" : "sv-SE";
@@ -247,11 +257,20 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
     if (next === venueNow?.date && (!selectedDate || selectedDate === venueNow.date) &&
         win.local_start && win.local_end && win.local_end > win.local_start &&
         venueNow.clock >= (win.local_start.length === 5 ? win.local_start + ":00" : win.local_start) && venueNow.clock < (win.local_end.length === 5 ? win.local_end + ":00" : win.local_end)) {
-      const onNow = ev.recurrence?.occurrence_status === "unconfirmed"
+      const unconfirmed = ev.recurrence?.occurrence_status === "unconfirmed";
+      if (underOnNow && !unconfirmed) return `${en ? "until" : "till"} ${win.local_end}`;
+      const onNow = unconfirmed
         ? en ? "scheduled now" : "enligt schema nu"
         : en ? "on now" : "pågår nu";
       return `${onNow} · ${en ? "until" : "till"} ${win.local_end}`;
     }
+    // Only a start is listed and it has passed today: whether the session is
+    // still on is not stated, so it is called neither on now nor over.
+    if (next === venueNow?.date && (!selectedDate || selectedDate === venueNow.date) &&
+        win.local_start && !win.local_end && venueNow.clock >= withSeconds(win.local_start)) {
+      return startedWithoutEnd(win.local_start, en);
+    }
+    if (omitDate && next === omitDate) return clockRange || timeNotStated(en);
     return clockRange ? `${label} ${clockRange}` : label;
   }
 
@@ -284,8 +303,10 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
     const start = startsOn ? day(startsOn) : null;
     if (!start) return "";
     const end = endsOn && endsOn !== startsOn ? day(endsOn) : null;
+    const explicit = kind === "all_day" && win?.all_day_explicit === true;
+    if (omitDate && !end && startsOn === omitDate) return explicit ? (en ? "All day" : "Hela dagen") : timeNotStated(en);
     const dateLabel = end ? `${start} – ${end}` : start;
-    return kind === "all_day" && win?.all_day_explicit === true ? `${dateLabel} · ${en ? "All day" : "Hela dagen"}` : dateLabel;
+    return explicit ? `${dateLabel} · ${en ? "All day" : "Hela dagen"}` : dateLabel;
   }
 
   const startsAt = (win && win.starts_at) || ev.starts_at || null;
@@ -299,11 +320,12 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
   const zone = timezone ? { timeZone: timezone } : {};
   const dateOf = (d) => d.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short", ...zone });
   const clockOf = (d) => d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", ...(d.getUTCSeconds() ? { second: "2-digit" } : {}), ...zone });
+  // The group already names the venue-local date: say only the clock.
+  const omitted = (d) => Boolean(omitDate && timezone && venueLocalDate(d, timezone) === omitDate);
   const range = (start, end) => {
-    if (!end) return `${dateOf(start)} ${clockOf(start)}`;
-    return dateOf(start) === dateOf(end)
-      ? `${dateOf(start)} ${clockOf(start)}–${clockOf(end)}`
-      : `${dateOf(start)} ${clockOf(start)} – ${dateOf(end)} ${clockOf(end)}`;
+    if (!end) return omitted(start) ? clockOf(start) : `${dateOf(start)} ${clockOf(start)}`;
+    if (dateOf(start) !== dateOf(end)) return `${dateOf(start)} ${clockOf(start)} – ${dateOf(end)} ${clockOf(end)}`;
+    return omitted(start) ? `${clockOf(start)}–${clockOf(end)}` : `${dateOf(start)} ${clockOf(start)}–${clockOf(end)}`;
   };
 
   // ONGOING: a run that started earlier and has not ended yet. Its start
@@ -326,15 +348,29 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
   }
   if (nowValid && endValid && date.getTime() <= nowDate.getTime() && endsAt.getTime() > nowDate.getTime()) {
     const onNow = en ? "on now" : "pågår nu";
+    const until = en ? "until" : "till";
     try {
       const dayOpts = timezone ? { timeZone: timezone } : {};
       const sameDay =
         endsAt.toLocaleDateString(locale, dayOpts) === nowDate.toLocaleDateString(locale, dayOpts);
-      if (!sameDay) return onNow;
+      // Under an "On now" heading the row says only when it ends; a run that
+      // ends on a later day names that day, so no same-day close is implied.
+      if (!sameDay) return underOnNow ? `${until} ${dateOf(endsAt)} ${clockOf(endsAt)}` : onNow;
       const clockOpts = { hour: "2-digit", minute: "2-digit", ...(endsAt.getUTCSeconds() ? { second: "2-digit" } : {}), ...(timezone ? { timeZone: timezone } : {}) };
-      return `${onNow} · ${en ? "until" : "till"} ${endsAt.toLocaleTimeString(locale, clockOpts)}`;
+      const endClock = endsAt.toLocaleTimeString(locale, clockOpts);
+      return underOnNow ? `${until} ${endClock}` : `${onNow} · ${until} ${endClock}`;
     } catch {
       return onNow;
+    }
+  }
+
+  // A start with no stated end, already passed: neither on now nor over.
+  if (nowValid && !endValid && date.getTime() <= nowDate.getTime()) {
+    try {
+      const sameDay = dateOf(date) === dateOf(nowDate);
+      return startedWithoutEnd(sameDay ? clockOf(date) : `${dateOf(date)} ${clockOf(date)}`, en);
+    } catch {
+      return "";
     }
   }
 
@@ -343,6 +379,133 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
     return range(date, endValid && endsAt.getTime() > date.getTime() ? endsAt : null);
   } catch {
     return "";
+  }
+}
+
+function startedWithoutEnd(start, en) {
+  return en ? `started ${start} · end time unknown` : `började ${start} · sluttid okänd`;
+}
+
+function timeNotStated(en) {
+  return en ? "time not stated" : "tid ej angiven";
+}
+
+function withSeconds(clock) {
+  return typeof clock === "string" && clock.length === 5 ? `${clock}:00` : clock;
+}
+
+function venueLocalDate(instant, timezone) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(instant);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Where a Live row stands in time on the day it is listed for, from stated
+ * evidence only (the same evidence eventTiming reads):
+ *   now     — a stated start and end around now: a confirmed listed session or
+ *             a continuous run. Nothing else is "on now".
+ *   later   — a stated start later on the venue's current day
+ *   started — a stated start already passed today with no stated end, or a
+ *             schedule-based session whose occurrence is unconfirmed: neither
+ *             proven on now nor proven over
+ *   ended   — a stated end already passed today
+ *   day     — the day itself without one start: all day, a bare date, a
+ *             period, daily hours, a public holiday
+ *   timed   — a stated clock on a day other than the venue's current day
+ *   unknown — no usable timing
+ * Without a venue timezone a listed clock cannot be placed against now, so it
+ * is "timed", never "now".
+ */
+export function liveTimeState(ev, now = new Date(), selectedDate = null) {
+  if (!ev || typeof ev !== "object") return "unknown";
+  const win = ev.time_window && typeof ev.time_window === "object" ? ev.time_window : null;
+  const kind = win && typeof win.kind === "string" ? win.kind : null;
+  const nowDate = now instanceof Date ? now : new Date(now);
+  if (Number.isNaN(nowDate.getTime())) return "unknown";
+  const timezone = ev.timezone || win?.timezone || null;
+  const venueNow = venueLocalNow(nowDate, timezone);
+  const otherDay = Boolean(selectedDate && venueNow && selectedDate !== venueNow.date);
+
+  if (ev.calendar_fact?.kind === "public_holiday") return win?.starts_on || ev.starts_on ? "day" : "unknown";
+  if (kind === "period" || kind === "daily") return "day";
+  if (kind === "all_day" || (!kind && !ev.starts_at && !win?.starts_at && (win?.starts_on || ev.starts_on))) {
+    return win?.starts_on || ev.starts_on ? "day" : "unknown";
+  }
+  if (kind === "occurrences") {
+    const dates = listedDates(win.dates);
+    if (!dates.length) return "unknown";
+    if (!win.local_start) return "day";
+    if (!venueNow || otherDay || !dates.includes(venueNow.date)) return "timed";
+    const start = withSeconds(win.local_start);
+    const end = win.local_end ? withSeconds(win.local_end) : null;
+    if (venueNow.clock < start) return "later";
+    // No end, or an overnight end without a stated date: the start is all
+    // that is known.
+    if (!end || end <= start) return "started";
+    if (venueNow.clock < end) return ev.recurrence?.occurrence_status === "unconfirmed" ? "started" : "now";
+    return "ended";
+  }
+  const startsAt = win?.starts_at || ev.starts_at || null;
+  if (!startsAt) return "unknown";
+  const start = new Date(startsAt);
+  if (Number.isNaN(start.getTime())) return "unknown";
+  if (otherDay) return "timed";
+  const endsRaw = win?.ends_at || ev.ends_at || null;
+  const end = endsRaw ? new Date(endsRaw) : null;
+  const endValid = Boolean(end && !Number.isNaN(end.getTime()) && end.getTime() > start.getTime());
+  if (start.getTime() > nowDate.getTime()) {
+    if (!venueNow) return "timed";
+    return venueLocalDate(start, timezone) === venueNow.date ? "later" : "timed";
+  }
+  if (endValid && nowDate.getTime() < end.getTime()) return "now";
+  if (endValid) return "ended";
+  return "started";
+}
+
+const TIME_STATE_ORDER = ["now", "later", "timed", "day", "started", "ended", "unknown"];
+
+/**
+ * Live rows grouped by time state, in reading order: on now, later today (or
+ * at set times on another day), during the day, started earlier, earlier
+ * today, time not stated. The same rows come back; nothing is dropped,
+ * added or re-ranked inside a group except that a group of clock times is
+ * read in clock order. `eventOf`/`dateOf` read a navigation row's event and
+ * the date it is listed under.
+ */
+export function liveTimeGroups(items, { now = new Date(), selectedDate = null, eventOf = (item) => item, dateOf = () => selectedDate } = {}) {
+  const groups = new Map();
+  (Array.isArray(items) ? items : []).forEach((item, index) => {
+    const ev = item && eventOf(item);
+    if (!ev || typeof ev !== "object") return;
+    const state = liveTimeState(ev, now, dateOf(item) || selectedDate);
+    if (!groups.has(state)) groups.set(state, []);
+    groups.get(state).push({ item, ev, index });
+  });
+  return TIME_STATE_ORDER.filter((state) => groups.has(state)).map((state) => {
+    const rows = groups.get(state);
+    if (state === "later" || state === "timed") {
+      rows.sort((a, b) => startClock(a.ev).localeCompare(startClock(b.ev)) || a.index - b.index);
+    }
+    return { state, events: rows.map((row) => row.item) };
+  });
+}
+
+// A comparable venue-local start clock ("19:30:00"), or "~" to sort last.
+function startClock(ev) {
+  const win = ev.time_window && typeof ev.time_window === "object" ? ev.time_window : null;
+  if (win?.kind === "occurrences" && win.local_start) return withSeconds(win.local_start);
+  const startsAt = win?.starts_at || ev.starts_at || null;
+  const timezone = ev.timezone || win?.timezone || null;
+  if (!startsAt || !timezone) return "~";
+  const date = new Date(startsAt);
+  if (Number.isNaN(date.getTime())) return "~";
+  try {
+    return new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(date);
+  } catch {
+    return "~";
   }
 }
 

@@ -20,6 +20,8 @@ import {
   pulseHealthState,
   liveEventRelevance,
   liveHighlightGroups,
+  liveTimeState,
+  liveTimeGroups,
 } from "../src/lib/pulse-view.mjs";
 
 const CORE_A = { id: "a", label: "Museet", type: "museum" };
@@ -235,11 +237,13 @@ test("without the server's classification there is no link — the client never 
 });
 
 test("eventTiming: continuous instants render venue-local, never the viewer's clock", () => {
+  // Read before the start: a start that has passed with no end says so.
+  const before = new Date("2026-07-01T00:00:00Z");
   const ev = { starts_at: "2026-07-17T17:00:00Z", timezone: "Europe/Helsinki" };
-  assert.equal(eventTiming(ev, "sv"), "fre 17 juli 20:00", "17:00Z is 20:00 in Helsinki (EEST)");
-  assert.equal(eventTiming(ev, "en"), "Fri 17 Jul 20:00");
+  assert.equal(eventTiming(ev, "sv", before), "fre 17 juli 20:00", "17:00Z is 20:00 in Helsinki (EEST)");
+  assert.equal(eventTiming(ev, "en", before), "Fri 17 Jul 20:00");
   // time_window.continuous starts_at wins over a missing top-level field.
-  assert.equal(eventTiming({ time_window: { kind: "continuous", starts_at: "2026-07-17T17:00:00Z" }, timezone: "Europe/Helsinki" }, "sv"), "fre 17 juli 20:00");
+  assert.equal(eventTiming({ time_window: { kind: "continuous", starts_at: "2026-07-17T17:00:00Z" }, timezone: "Europe/Helsinki" }, "sv", before), "fre 17 juli 20:00");
 });
 
 test("eventTiming: a timed row names its date the way dated rows do", () => {
@@ -546,3 +550,117 @@ test('continuous sessions retain a known end before starting and after ending on
  assert.equal(eventTiming(ev,'en',new Date('2026-10-15T19:00:00Z'),'2026-10-15'),'Thu 15 Oct 22:00–23:00');
  assert.equal(eventTiming(ev,'en',new Date('2026-10-15T21:00:00Z'),'2026-10-15'),'Thu 15 Oct 22:00–23:00');
 });
+
+// Live at 14:05 in Stockholm on Friday 23 October 2026 (QA, staging): a lunch
+// theatre listed "12:00" with no end read as something about to happen.
+const QA_NOW = new Date("2026-10-23T12:05:00Z");
+const QA_DAY = "2026-10-23";
+const STOCKHOLM = "Europe/Stockholm";
+
+test("a passed start with no stated end is neither on now nor over", () => {
+  const lunch = { timezone: STOCKHOLM, starts_at: "2026-10-23T10:00:00Z" };
+  assert.equal(eventTiming(lunch, "sv", QA_NOW, QA_DAY), "började 12:00 · sluttid okänd");
+  assert.equal(eventTiming(lunch, "en", QA_NOW, QA_DAY), "started 12:00 · end time unknown");
+  assert.equal(liveTimeState(lunch, QA_NOW, QA_DAY), "started");
+  // Started on an earlier day: the start keeps its date.
+  const older = { timezone: STOCKHOLM, starts_at: "2026-10-20T16:00:00Z" };
+  assert.equal(eventTiming(older, "en", QA_NOW, QA_DAY), "started Tue 20 Oct 18:00 · end time unknown");
+  assert.equal(liveTimeState(older, QA_NOW, QA_DAY), "started");
+  // A listed session with only a start, already passed today.
+  const listed = { timezone: STOCKHOLM, time_window: { kind: "occurrences", dates: [QA_DAY], local_start: "12:00" } };
+  assert.equal(eventTiming(listed, "sv", QA_NOW, QA_DAY), "började 12:00 · sluttid okänd");
+  assert.equal(liveTimeState(listed, QA_NOW, QA_DAY), "started");
+  // Before the start nothing changes.
+  const early = new Date("2026-10-23T09:00:00Z");
+  assert.equal(eventTiming(lunch, "sv", early, QA_DAY), "fre 23 okt. 12:00");
+  assert.equal(liveTimeState(lunch, early, QA_DAY), "later");
+});
+
+test("on now needs a stated start and end around now; an unconfirmed schedule is not on now", () => {
+  const exhibition = { timezone: STOCKHOLM, starts_at: "2026-10-20T08:00:00Z", ends_at: "2026-10-23T15:00:00Z" };
+  assert.equal(liveTimeState(exhibition, QA_NOW, QA_DAY), "now");
+  assert.equal(eventTiming(exhibition, "sv", QA_NOW, QA_DAY), "pågår nu · till 17:00");
+  const session = { timezone: STOCKHOLM, time_window: { kind: "occurrences", dates: [QA_DAY], local_start: "13:00", local_end: "15:00" } };
+  assert.equal(liveTimeState(session, QA_NOW, QA_DAY), "now");
+  const scheduled = { ...session, recurrence: { occurrence_status: "unconfirmed" } };
+  assert.equal(liveTimeState(scheduled, QA_NOW, QA_DAY), "started", "a schedule match is not evidence it is on");
+  const ended = { timezone: STOCKHOLM, starts_at: "2026-10-23T08:00:00Z", ends_at: "2026-10-23T09:00:00Z" };
+  assert.equal(liveTimeState(ended, QA_NOW, QA_DAY), "ended");
+  const overnight = { timezone: STOCKHOLM, time_window: { kind: "occurrences", dates: [QA_DAY], local_start: "13:00", local_end: "02:00" } };
+  assert.equal(liveTimeState(overnight, QA_NOW, QA_DAY), "started", "an end without a date is not invented");
+  const noZone = { time_window: { kind: "occurrences", dates: [QA_DAY], local_start: "13:00", local_end: "15:00" } };
+  assert.equal(liveTimeState(noZone, QA_NOW, QA_DAY), "timed", "without a venue clock a listed time cannot be placed against now");
+});
+
+test("rows that are about the day, not a start, are 'during the day'", () => {
+  for (const ev of [
+    { time_window: { kind: "all_day", starts_on: QA_DAY, ends_on: QA_DAY, all_day_explicit: true } },
+    { starts_on: QA_DAY },
+    { time_window: { kind: "period", starts_on: "2026-10-01", ends_on: "2026-11-08" } },
+    { time_window: { kind: "daily", local_start: "10:00", local_end: "17:00" } },
+    { calendar_fact: { kind: "public_holiday" }, starts_on: QA_DAY },
+  ]) assert.equal(liveTimeState(ev, QA_NOW, QA_DAY), "day", JSON.stringify(ev));
+  assert.equal(liveTimeState({}, QA_NOW, QA_DAY), "unknown");
+  assert.equal(liveTimeState({ starts_at: "not-a-date" }, QA_NOW, QA_DAY), "unknown");
+  // Another selected day: clocks are "at set times", never now or later today.
+  const concert = { timezone: STOCKHOLM, starts_at: "2026-10-24T17:30:00Z" };
+  assert.equal(liveTimeState(concert, QA_NOW, "2026-10-24"), "timed");
+});
+
+test("a group that names the day lets its rows give only their clocks; ranges and other dates stay", () => {
+  const opts = { omitDate: QA_DAY };
+  const concert = { timezone: STOCKHOLM, starts_at: "2026-10-23T17:30:00Z" };
+  assert.equal(eventTiming(concert, "sv", QA_NOW, QA_DAY, opts), "19:30");
+  assert.equal(eventTiming({ ...concert, ends_at: "2026-10-23T19:00:00Z" }, "en", QA_NOW, QA_DAY, opts), "19:30–21:00");
+  const late = { timezone: STOCKHOLM, starts_at: "2026-10-23T20:00:00Z", ends_at: "2026-10-24T01:00:00Z" };
+  assert.equal(eventTiming(late, "en", QA_NOW, QA_DAY, opts), "Fri 23 Oct 22:00 – Sat 24 Oct 03:00", "a span over midnight keeps both dates");
+  assert.equal(eventTiming({ time_window: { kind: "all_day", starts_on: QA_DAY, ends_on: QA_DAY, all_day_explicit: true } }, "sv", QA_NOW, QA_DAY, opts), "Hela dagen");
+  assert.equal(eventTiming({ starts_on: QA_DAY }, "sv", QA_NOW, QA_DAY, opts), "tid ej angiven", "a bare date still does not claim the whole day");
+  const period = { time_window: { kind: "period", starts_on: "2026-10-01", ends_on: "2026-11-08", local_start: "10:00", local_end: "17:00" } };
+  assert.equal(eventTiming(period, "en", QA_NOW, QA_DAY, opts), "Thu 1 Oct – Sun 8 Nov · 10:00–17:00 · days per source");
+  const listed = { timezone: STOCKHOLM, time_window: { kind: "occurrences", dates: [QA_DAY, "2026-10-30"], local_start: "19:00", local_end: "21:00" } };
+  assert.equal(eventTiming(listed, "en", QA_NOW, QA_DAY, opts), "19:00–21:00");
+  assert.equal(eventTiming(listed, "en", QA_NOW, "2026-10-30", opts), "Fri 30 Oct 19:00–21:00", "another date keeps its date");
+  // Without a venue timezone the date cannot be proven equal, so it stays.
+  assert.equal(eventTiming({ starts_at: "2026-10-23T17:30:00Z" }, "en", QA_NOW, QA_DAY, opts).includes("23 Oct"), true);
+});
+
+test("time groups keep every row, read in order: now, later, day, started, ended, unknown", () => {
+  const rows = [
+    { title: "Lunch", timezone: STOCKHOLM, starts_at: "2026-10-23T10:00:00Z" },
+    { title: "Evening", timezone: STOCKHOLM, starts_at: "2026-10-23T18:00:00Z" },
+    { title: "Exhibition", timezone: STOCKHOLM, starts_at: "2026-10-20T08:00:00Z", ends_at: "2026-10-23T15:00:00Z" },
+    { title: "Festival", time_window: { kind: "all_day", starts_on: QA_DAY, ends_on: QA_DAY, all_day_explicit: true } },
+    { title: "Afternoon", timezone: STOCKHOLM, starts_at: "2026-10-23T14:00:00Z" },
+    { title: "Mystery" },
+  ];
+  const groups = liveTimeGroups(rows, { now: QA_NOW, selectedDate: QA_DAY });
+  assert.deepEqual(groups.map((g) => [g.state, g.events.map((e) => e.title)]), [
+    ["now", ["Exhibition"]],
+    ["later", ["Afternoon", "Evening"]],
+    ["day", ["Festival"]],
+    ["started", ["Lunch"]],
+    ["unknown", ["Mystery"]],
+  ]);
+  assert.equal(groups.flatMap((g) => g.events).length, rows.length, "nothing is dropped or added");
+  // Navigation rows: the event and its listed date are read through accessors.
+  const navRows = rows.slice(0, 2).map((event) => ({ event, date: QA_DAY }));
+  const byRow = liveTimeGroups(navRows, { now: QA_NOW, eventOf: (r) => r.event, dateOf: (r) => r.date });
+  assert.deepEqual(byRow.map((g) => [g.state, g.events.map((r) => r.event.title)]), [["later", ["Evening"]], ["started", ["Lunch"]]]);
+  assert.deepEqual(liveTimeGroups(null), []);
+});
+
+test("under an On now heading a row says only when it ends", () => {
+  const opts = { omitDate: QA_DAY, underOnNow: true };
+  const closesToday = { timezone: STOCKHOLM, starts_at: "2026-10-20T08:00:00Z", ends_at: "2026-10-23T15:00:00Z" };
+  assert.equal(eventTiming(closesToday, "sv", QA_NOW, QA_DAY, opts), "till 17:00");
+  assert.equal(eventTiming(closesToday, "en", QA_NOW, QA_DAY, opts), "until 17:00");
+  const runsOn = { timezone: STOCKHOLM, starts_at: "2026-10-20T08:00:00Z", ends_at: "2026-10-26T16:00:00Z" };
+  assert.equal(eventTiming(runsOn, "en", QA_NOW, QA_DAY, opts), "until Mon 26 Oct 17:00", "a later end names its day; no same-day close is implied");
+  assert.equal(eventTiming(runsOn, "en", QA_NOW, QA_DAY), "on now", "without the heading the row still says it is on now");
+  const session = { timezone: STOCKHOLM, time_window: { kind: "occurrences", dates: [QA_DAY], local_start: "13:00", local_end: "15:00" } };
+  assert.equal(eventTiming(session, "sv", QA_NOW, QA_DAY, opts), "till 15:00");
+  const scheduled = { ...session, recurrence: { occurrence_status: "unconfirmed" } };
+  assert.equal(eventTiming(scheduled, "sv", QA_NOW, QA_DAY, opts), "enligt schema nu · till 15:00", "an unconfirmed schedule keeps saying so");
+});
+

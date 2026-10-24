@@ -67,7 +67,7 @@ test('choice handoff is consumed once for language arrival and reused by Blitz',
  assert.equal(arrival.body.place_selection,'selected-token');
  assert.equal(h.window.sessionStorage.getItem('parranda:place-choice'),null);
  await h.fetchMock.respond(arrival,response);await h.clock.advance(30);
- await click(h,button(h,'Blitz right now'));
+ await click(h,button(h,'Show an idea'));
  assert.equal(h.fetchMock.pending().find(x=>x.url.startsWith('/api/blitz')).body.place_selection,'selected-token');
 });
 
@@ -114,10 +114,10 @@ test('restoring another selected place cancels old Blitz and requests the restor
  const h=await mountPlanner({url:'http://localhost/anywhere?place=Harbour&lang=en',storage:{'parranda:anywhere:saved':[entry]}});t.after(()=>h.unmount());
  await h.clock.advance(500);
  await h.fetchMock.respond(h.fetchMock.pending()[0],{...response,agnostic_route_output_experiment:{...response.agnostic_route_output_experiment,intake:{query:'Harbour',status:'resolved',resolved:{...selected,label:'Harbour, First City, Country',selection_id:'first-token'}}}});
- await h.clock.advance(30);await click(h,button(h,'Blitz right now'));
+ await h.clock.advance(30);await click(h,button(h,'Show an idea'));
  const old=h.fetchMock.pending().find(x=>x.url.startsWith('/api/blitz'));assert.equal(old.body.place_selection,'first-token');
  await click(h,button(h,'Saved Second City'));assert.equal(old.aborted,true);
- await click(h,button(h,'Blitz right now'));
+ await click(h,button(h,'Show an idea'));
  const fresh=h.fetchMock.pending().find(x=>x.url.startsWith('/api/blitz'));assert.equal(fresh.body.place_selection,'selected-token');
 });
 

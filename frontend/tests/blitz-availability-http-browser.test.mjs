@@ -67,7 +67,7 @@ async function harness(t, records, { weatherProvider = async () => ({
   t.after(()=>assert.deepEqual(errors,[]));
   return {page, async show(lang) {
     await page.goto(`http://127.0.0.1:${server.address().port}/__blitz-test?lang=${lang}`);
-    await page.getByRole('button',{name:lang==='sv'?'Blitz just nu':'Blitz right now',exact:true}).click();
+    await page.getByRole('button',{name:lang==='sv'?'Visa ett förslag':'Show an idea',exact:true}).click();
     await page.waitForFunction(()=>window.actualResponse);
     await page.getByText(records[0].name,{exact:true}).waitFor();
     return page.locator('#root').innerText();
