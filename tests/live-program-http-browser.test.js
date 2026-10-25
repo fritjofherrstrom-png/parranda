@@ -36,14 +36,30 @@ test('built Live groups forty bookings, preserves local supply and reaches later
  await context.addInitScript(epoch=>{const NativeDate=window.Date;window.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:[epoch]));}static now(){return epoch;}}},Date.parse(NOW));
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(new URL(r.url()).pathname==='/api/route-recommendations')composePosts.push(r.postDataJSON());});
  page.on('response',async r=>{if(!['/api/live-events','/api/planner-live-completion'].includes(new URL(r.url()).pathname))return;try{const b=await r.json();if(b.live_events?.pending!==true&&b.live_events)liveResponses.push(b.live_events);}catch{}});
+ // The day's Live upgrade makes the open sheet re-read its own question. Hold the upgrade until
+ // the reader has the programme open, so that refresh always lands under published rows. CI runs
+ // 39945567631 and 40098134634 met this order by chance and read the row as gone.
+ let upgrade;const upgradeHeld=new Promise(resolve=>upgrade=resolve);
+ await page.route(url=>url.pathname==='/api/planner-live-route-upgrade',async route=>{await upgradeHeld;await route.continue();});
  await page.goto(origin+'/anywhere?place=Fixture%20area&prefs=culture&day=1&rhythm=full&lang=en');
  await page.getByRole('button',{name:'Explore live',exact:true}).waitFor();await page.getByRole('button',{name:'Explore live',exact:true}).click();
  const sheet=page.getByRole('dialog',{name:'Live events',exact:true});assert.equal(await sheet.count(),1,'Live opens before source completion');
  release();await sheet.getByText('Published exhibition programme',{exact:true}).waitFor({timeout:15000});
- assert.equal(await sheet.getByText('Published exhibition programme',{exact:true}).count(),1);
  const program=sheet.locator('li').filter({has:page.getByText('Published exhibition programme',{exact:true})}).first();
  assert.match(await program.locator('summary').innerText(),/^40 occurrences$/);await program.locator('summary').click();
- assert.equal(await program.locator('details li').count(),40);assert.equal(await program.getByRole('button',{name:'Plan with this event',exact:true}).count(),0,'morning bookings do not gain evening eligibility by grouping');
+ const frames=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ const refreshing='Refreshing verified sources for this area …',shown=async()=>[await sheet.getByText('Published exhibition programme',{exact:true}).count(),await program.locator('details[open] li').count(),await sheet.getByText(refreshing,{exact:true}).count()];
+ assert.deepEqual(await shown(),[1,40,0]);
+ // Hold the refresh the upgrade starts, so the sheet can be read while it runs.
+ let holdRefresh=true,answerRefresh;const refreshHeld=new Promise(resolve=>answerRefresh=resolve);
+ await page.route(url=>url.pathname==='/api/live-events',async route=>{if(holdRefresh){holdRefresh=false;await refreshHeld;}await route.continue();});
+ const applied=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/planner-live-route-upgrade'),refresh=page.waitForRequest(r=>new URL(r.url()).pathname==='/api/live-events');
+ upgrade();assert.equal((await(await applied).json()).live_route_upgrade?.state,'applied','the fixture day takes its Live upgrade');
+ const asked=(await refresh).postDataJSON();assert.deepEqual([asked.scope,asked.time],['around_place','tonight'],'the upgrade re-reads the open question');await frames();
+ assert.deepEqual(await shown(),[1,40,1],'a same-question refresh keeps the published row and its opened occurrences, marked as refreshing');
+ answerRefresh();await sheet.getByText(refreshing,{exact:true}).waitFor({state:'detached'});
+ assert.deepEqual(await shown(),[1,40,0],'the refreshed answer replaces the rows in place');
+ assert.equal(await program.getByRole('button',{name:'Plan with this event',exact:true}).count(),0,'morning bookings do not gain evening eligibility by grouping');
  const accepted=liveResponses.find(x=>x.tonight?.some(e=>e.display_group_kind==='source_program'));
  assert.ok(accepted);const group=accepted.tonight.find(x=>x.title==='Published exhibition programme');
  assert.equal(group.occurrences.length,40);assert.deepEqual(group.occurrences.map(x=>x.source_occurrence_id),slots.map(x=>x.id));

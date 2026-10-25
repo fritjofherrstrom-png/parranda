@@ -9,13 +9,14 @@ import { useLiveClock } from "./useLiveClock";
  * Focus trapping, Escape and scroll locking stay with the planner, which owns
  * the trigger the focus returns to.
  */
-import type { RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { nextSourceDate, type LiveFallback } from "./useLiveFallback";
 import { liveDateLabel } from "../../lib/live-event-query.mjs";
 import { eventTiming, liveEventRelevance } from "../../lib/pulse-view.mjs";
 import { liveEventTags, liveNavigationGroups, type LiveNavigationRow, type LiveSheetSort } from "../../lib/live-navigation.mjs";
 import type { LiveEventScope } from "../../lib/live-event-query.mjs";
 import { CloseIcon, LocationIcon } from "../shared/icons";
+import { RingMark } from "../shared/RingMark";
 import { selectableLiveOccurrenceId } from "../../lib/live-stop-choice.mjs";
 import { busyButton, buttonClass, labelChip, pillClass, segmentClass, segmentGroup } from "../shared/ui";
 import { liveTagLabels } from "../../lib/live-tags.mjs";
@@ -58,19 +59,14 @@ export default function LiveSheet({
   liveQueryGeoHint,
   liveQueryError,
   liveFallback = null,
-  sheetLiveEvents,
-  sheetBuckets,
-  sheetBrowseBuckets,
-  sheetPulseState,
-  sheetFailure,
-  sheetSourceHealth,
-  sheetSources,
   wovenNames,
   includedInRoute,
   liveFailureSentence,
   dialogRef,
   closeRef,
   onClose,
+  // The rest is the collection's answer: its events, buckets, health and sources.
+  ...answer
 }: {
   lang: Lang;
   t: Translate;
@@ -112,8 +108,28 @@ export default function LiveSheet({
   closeRef: RefObject<HTMLButtonElement | null>;
   onClose: () => void;
 }) {
+  // A refresh of the question already on screen keeps its answer there,
+  // marked as refreshing, until the same question's new answer lands. A Live
+  // upgrade re-reads the reader's cell this way, and so does a re-pressed
+  // chip; a blank swap would drop the published rows and close an opened
+  // occurrence list. Only the place scopes hold: their question is the day's
+  // own anchor, which an upgrade keeps, while near the route and near me ask
+  // about a route or a position the refresh may have moved. Another place,
+  // day, scope or period still waits for its own answer.
+  const question = JSON.stringify([lang, anchorLabel, anchorIsPosition, planningDate, liveDayLabel, liveSheetScope, liveSheetTime, selected]);
+  const settled = useRef<{ question: string; answer: typeof answer } | null>(null);
+  const held = liveQueryPending && (liveSheetScope === "around_place" || liveSheetScope === "in_place") &&
+    settled.current?.question === question ? settled.current.answer : null;
+  const { sheetLiveEvents, sheetBuckets, sheetBrowseBuckets, sheetPulseState, sheetFailure, sheetSourceHealth, sheetSources } = held ?? answer;
   const sheetEvents: PulseEvent[] = liveSheetTime === "tonight" ? sheetBuckets.tonight : sheetBuckets.thisWeek;
   const sheetMoreEvents: PulseEvent[] = liveSheetTime === "tonight" ? sheetBrowseBuckets.tonight : sheetBrowseBuckets.thisWeek;
+  // Recorded after commit, so the render that starts a refresh still reads
+  // the answer that was on screen. An answer without rows holds nothing.
+  const listsRows = !liveQueryError && !sheetFailure && (sheetEvents.length > 0 || sheetMoreEvents.length > 0) &&
+    !["uncovered", "pending", "unavailable", "hidden"].includes(sheetPulseState);
+  useEffect(() => {
+    if (!liveQueryPending) settled.current = listsRows ? { question, answer } : null;
+  });
   const now = useLiveClock([...sheetEvents, ...sheetMoreEvents]);
   // Relevance is claimed only where the server established it for the
   // current picks: matched rows get the picks heading, every other row
@@ -126,7 +142,14 @@ export default function LiveSheet({
         {t("Planera med evenemanget", "Plan with this event")}
       </button>
     ) : null;
-  const sheetRow = (ev: PulseEvent, i: number, titleClassName: string, timingDate = sheetLiveEvents?.selected_date,
+  // Rows are keyed by identity, not position: when a Live upgrade weaves an
+  // earlier event into the route, the rows after it keep their nodes and an
+  // opened occurrence list. A repeated id is told apart by its earlier copies.
+  const rowKey = (events: PulseEvent[], i: number) => {
+    const id = events[i].id || "event";
+    return `${id}:${events.slice(0, i).filter(ev => (ev.id || "event") === id).length}`;
+  };
+  const sheetRow = (ev: PulseEvent, key: string, titleClassName: string, timingDate = sheetLiveEvents?.selected_date,
     navigationRow?: LiveNavigationRow<PulseEvent>) => {
     const displayProgram = ev.display_group_kind === "source_program";
     const relevance = liveRelevanceSentence(liveEventRelevance(navigationRow?.series || ev, selected), lang, t);
@@ -135,7 +158,7 @@ export default function LiveSheet({
     const timing = navigationRow?.kind === "undated" ? ""
       : eventTiming(ev, lang, now, navigationRow?.date || timingDate);
     return (
-      <li key={`${ev.id || "event"}:${i}`} className="flex min-w-0 flex-col gap-1 sm:gap-2">
+      <li key={key} className="flex min-w-0 flex-col gap-1 sm:gap-2">
         <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">{timing}</span>
         <span className="min-w-0 max-w-full break-words text-sm leading-relaxed text-parranda-ink/90">
           <span className={titleClassName}>{ev.title}</span>
@@ -156,12 +179,15 @@ export default function LiveSheet({
       </li>
     );
   };
-  const dateSection = (label: string, rows: LiveNavigationRow<PulseEvent>[]) => (
-    <section key={label} aria-label={label} className="flex flex-col gap-3">
-      <h4 className="text-xs font-bold text-parranda-ink/68">{label}</h4>
-      <ul className="flex flex-col gap-3">{rows.map((row, i) => sheetRow(row.event, i, "font-semibold", row.date || undefined, row))}</ul>
-    </section>
-  );
+  const dateSection = (label: string, rows: LiveNavigationRow<PulseEvent>[]) => {
+    const events = rows.map(row => row.event);
+    return (
+      <section key={label} aria-label={label} className="flex flex-col gap-3">
+        <h4 className="text-xs font-bold text-parranda-ink/68">{label}</h4>
+        <ul className="flex flex-col gap-3">{rows.map((row, i) => sheetRow(row.event, rowKey(events, i), "font-semibold", row.date || undefined, row))}</ul>
+      </section>
+    );
+  };
   const scopePhrase =
     liveSheetScope === "near_route"
       ? t("nära rutten", "near the route")
@@ -302,7 +328,7 @@ export default function LiveSheet({
               {wovenNames.map((n: string) => `${n} · ${includedInRoute}`).join(" · ")}
             </p>
           )}
-          {liveQueryPending ? (
+          {liveQueryPending && !held ? (
             <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4" aria-live="polite">
               <p className="text-sm text-parranda-ink/75">
                 {t("Uppdaterar verifierade källor för det här området …", "Refreshing verified sources for this area …")}
@@ -344,7 +370,7 @@ export default function LiveSheet({
               </p>
             </div>
           ) : sheetEvents.length > 0 || sheetMoreEvents.length > 0 ? (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3" aria-busy={held ? true : undefined}>
               {liveSheetSort === "by_time" ? <>
                 {navigation.dates.map(group => dateSection(liveDateLabel(group.date, lang), group.rows))}
                 {navigation.ranges.length > 0 && dateSection(t("Källans datumintervall", "Source date ranges"), navigation.ranges)}
@@ -354,7 +380,7 @@ export default function LiveSheet({
                 <>
                   <p className="text-xs font-bold text-parranda-ink/68">{t("Höjdpunkter för dina val", "Highlights for your picks")}</p>
                   <ul className="flex flex-col gap-3">
-                    {navigation.picks.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-bold"))}
+                    {navigation.picks.map((ev: PulseEvent, i: number) => sheetRow(ev, rowKey(navigation.picks, i), "font-bold"))}
                   </ul>
                 </>
               )}
@@ -364,7 +390,7 @@ export default function LiveSheet({
                     {navigation.picks.length > 0 ? t("Andra lokala höjdpunkter", "Other local highlights") : t("Höjdpunkter", "Highlights")}
                   </p>
                   <ul className="flex flex-col gap-3">
-                    {navigation.other.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-bold"))}
+                    {navigation.other.map((ev: PulseEvent, i: number) => sheetRow(ev, rowKey(navigation.other, i), "font-bold"))}
                   </ul>
                 </>
               )}
@@ -374,7 +400,7 @@ export default function LiveSheet({
                     {t(`Visa ${sheetMoreEvents.length} fler händelser`, `Show ${sheetMoreEvents.length} more events`)}
                   </summary>
                   <ul className="flex flex-col gap-3 border-t border-parranda-ink/10 pb-2 pt-3">
-                    {sheetMoreEvents.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-semibold"))}
+                    {sheetMoreEvents.map((ev: PulseEvent, i: number) => sheetRow(ev, rowKey(sheetMoreEvents, i), "font-semibold"))}
                   </ul>
                 </details>
               )}
@@ -442,7 +468,7 @@ export default function LiveSheet({
                     const date = liveFallback.kind === "following" ? nextSourceDate(ev, liveFallback.selectedDate) : null;
                     return <li key={ev.id ?? i} className="flex flex-col gap-1">
                       {date && <span className="type-data text-xs font-semibold text-parranda-live">{liveDateLabel(date, lang)}</span>}
-                      <ul>{sheetRow(ev, i, "font-bold", date || liveFallback.selectedDate)}</ul>
+                      <ul>{sheetRow(ev, rowKey(liveFallback.events, i), "font-bold", date || liveFallback.selectedDate)}</ul>
                     </li>;
                   })}
                 </ul> : <p>{t("Inga verifierade händelser listades samma dag i det större området.", "No verified same-day events were listed in the wider area.")}</p>}
@@ -469,6 +495,13 @@ export default function LiveSheet({
               {sheetSourceHealth?.reasons?.includes("source_collection_truncated")
             ? t("Vissa kalendrar kunde bara läsas delvis — fler händelser kan finnas hos källan.", "Some calendars were only partly read — more events may be listed at the source.")
             : t("Några källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
+            </p>
+          )}
+          {/* A held answer says it is being refreshed, where its counts were. */}
+          {held && (
+            <p role="status" className="flex items-center gap-2 text-xs text-parranda-ink/68">
+              <RingMark className="h-3 w-3" />
+              {t("Uppdaterar verifierade källor för det här området …", "Refreshing verified sources for this area …")}
             </p>
           )}
           {/* Counts describe a finished collection; while waiting, "0/1

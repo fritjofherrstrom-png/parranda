@@ -264,3 +264,48 @@ test('native LiveCard and expanded source occurrences expire together and resync
  await page.clock.runFor(60000);
  assert.equal(await page.locator('section').count(),0,'unmounted views stay unmounted after clock boundaries');
 });
+
+test('a refresh of the question on screen keeps its rows and an opened occurrence list; another question waits for its own answer',async t=>{
+ const {page,render}=await browserHarness(t);
+ const slot=(id,clock)=>({id,title:'Source programme',timezone:'Europe/Helsinki',time_window:{kind:'occurrences',dates:['2026-10-22'],local_start:clock}});
+ const programme={...slot('programme','11:00'),display_group_kind:'source_program',occurrences:[slot('a','11:00'),slot('b','11:03')]};
+ const concert={id:'concert',title:'Evening concert',timezone:'Europe/Helsinki',time_window:{kind:'occurrences',dates:['2026-10-22'],local_start:'21:00'}};
+ const answer=(tonight,this_week=[])=>({coverage:'covered',selected_date:'2026-10-22',tonight,this_week,acquisition:{source_health:{status:'healthy',result:'events_found',selected_source_count:1,responding_source_count:1}}});
+ // While the planner re-reads, it hands the sheet the day's own Live, which can still be collecting.
+ const rereading={coverage:'covered',selected_date:'2026-10-22',pending:true,tonight:[],this_week:[],acquisition:{source_health:{status:'pending',result:'pending',selected_source_count:1}}};
+ const opened=()=>page.locator('details[open]').count();
+ const box=/Refreshing verified sources for this area …/;
+ await render(answer([concert,programme]));
+ await page.getByText('2 occurrences',{exact:true}).click();
+ // A Live upgrade can weave an earlier event into the route; the row after it keeps its node.
+ await render(answer([programme]));
+ assert.equal(await opened(),1,'a row that moves up keeps its opened occurrences');
+ let shown=await render(rereading,'en','tonight',{liveQueryPending:true});
+ assert.match(shown,/Source programme/);
+ assert.match(shown,box);
+ assert.doesNotMatch(shown,/calendars are still updating|1 of 1 responded/);
+ assert.equal(await opened(),1,'the held answer keeps the opened occurrences');
+ assert.equal(await page.getByRole('status').filter({hasText:box}).count(),1,'the held answer says it is being refreshed');
+ assert.equal(await page.locator('div[aria-busy="true"]').filter({hasText:'Source programme'}).count(),1);
+ shown=await render(answer([programme]));
+ assert.equal(await opened(),1,'the refreshed answer replaces the rows in place');
+ assert.match(shown,/1 of 1 responded/);
+ assert.doesNotMatch(shown,box);
+ // Another period, near the route (its route can move), and another place wait for their own answer.
+ const near={liveSheetScope:'near_route',routeScopeAvailable:true};
+ for(const [settle,ask] of [[{},{time:'week'}],[near,near],[{},{anchorLabel:'Other area'}]]){
+  const {time='tonight',...extra}=ask;
+  await render(answer([programme]),'en','tonight',settle);
+  shown=await render(answer([programme],[programme]),'en',time,{...extra,liveQueryPending:true});
+  assert.match(shown,box,JSON.stringify(ask));
+  assert.doesNotMatch(shown,/Source programme/,JSON.stringify(ask));
+ }
+ // A failed refresh shows the failure; nothing is held for the next one.
+ await render(answer([programme]));
+ await render(rereading,'en','tonight',{liveQueryPending:true});
+ shown=await render(rereading,'en','tonight',{liveQueryError:'The Live view couldn’t update. Try again.'});
+ assert.match(shown,/The Live view couldn’t update/);
+ assert.doesNotMatch(shown,/Source programme/);
+ shown=await render(rereading,'en','tonight',{liveQueryPending:true});
+ assert.doesNotMatch(shown,/Source programme/);
+});
