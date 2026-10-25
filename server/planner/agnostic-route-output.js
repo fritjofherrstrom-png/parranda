@@ -2412,4 +2412,6 @@ module.exports = {
   shouldUseCapacityRepair,
   scrubAgnosticAppliedDay,
   MIN_VIABLE_GEOCODED_STOPS,
+  // exported for tests
+  buildRouteDaypartHonesty,
 };
