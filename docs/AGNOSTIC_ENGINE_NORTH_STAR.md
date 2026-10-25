@@ -156,7 +156,9 @@ nearest the anchor. The directory query is stratified by walking-reach ring and
 route type and each request selects from it by its own budget; Overpass's
 bounded cut is interleaved across the same rings for budgeted requests. Warm
 background rows (directory or Wikidata) never answer for a map source that was
-not asked, and a warm directory waits at most 10 s for a live primary. A map
+not asked, and a warm directory waits at most 10 s for a live primary; after a
+primary left a composition at that bound unanswered, the next compositions do
+not wait for it until it answers inside the bound again. A map
 answer still outstanding at that bound, or one that failed, does not cost the day
 the map evidence the process already holds for the anchor: an answered first
 pass or a fresh answer for another walking budget is kept and labelled, with no

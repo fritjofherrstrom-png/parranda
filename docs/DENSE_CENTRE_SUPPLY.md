@@ -131,7 +131,9 @@ On acquisition, a varied warm directory waits at most 10 s
 (`DIRECTORY_PRIMARY_WAIT_MS`) for the live primary. A primary that settles —
 rows or failure — is merged as usual, so a failed primary is still rescued. The
 bound is a latency ceiling for the slow/outage path, not a measured Overpass
-percentile, and it is unchanged.
+percentile. A primary that left the last composition at the bound unanswered is
+not waited for again until it answers inside it (engine review, 25 Oct 2026:
+every staging request paid the full wait for a map source that never answered).
 
 ### 3b. A walking-budget switch keeps the map evidence it already has
 

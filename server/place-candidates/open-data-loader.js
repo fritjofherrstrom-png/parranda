@@ -1764,6 +1764,13 @@ function composeOpenDataLoaders(
   visitSwedenSource = null,
   { primaryWaitMs = DIRECTORY_PRIMARY_WAIT_MS } = {},
 ) {
+  // Process-private: whether the map primary last left a composition at the
+  // wait bound without answering. While it has, a varied directory does not
+  // wait for it again; the primary is still started (it keeps warming its own
+  // cache), and an answer inside the bound restores the wait. Engine review,
+  // 25 Oct 2026: every staging request paid the full wait for a map source
+  // that never answered (11–16 s per adjustment).
+  let primarySilent = false;
   const composedLoader = async function loadComposedOpenData(request = {}) {
     const sources = [wikiSource, overtureSource, visitSwedenSource].filter(Boolean);
     const primaryAnchor = { lat: request.lat, lng: request.lng };
@@ -1821,7 +1828,11 @@ function composeOpenDataLoaders(
     let primarySettled = false;
     const osmPromise = Promise.resolve(osmLoader(request))
       .catch(() => withLoaderStatus([], "error_failed_closed", "osm_threw"));
-    osmPromise.then(() => { primarySettled = true; });
+    osmPromise.then((answer) => {
+      primarySettled = true;
+      const failed = typeof answer?.loader_status === "string" && answer.loader_status.startsWith("error");
+      if (!failed && Date.now() - primaryStartedAt <= primaryWaitMs) primarySilent = false;
+    });
     const eagerGroups = [];
     for (const [source, pending] of eagerLoads) {
       if (source.primaryRescue === false) continue;
@@ -1837,10 +1848,12 @@ function composeOpenDataLoaders(
     // the ordinary merge below keeps both families (and still rescues a
     // failed primary). A primary still outstanding at the bound keeps running
     // and caches its answer for the next request; this composition answers
-    // now, without asking any provider again.
+    // now, without asking any provider again. A primary that went silent at
+    // the bound last time gets no such chance until it answers inside it.
     const rescue = await awaitPrimaryOrRescue(osmPromise, eagerGroups, requestedIntents,
-      primaryWaitMs - (Date.now() - primaryStartedAt));
+      primarySilent ? 0 : primaryWaitMs - (Date.now() - primaryStartedAt));
     if (rescue.rescue && !primarySettled) {
+      primarySilent = true;
       // Keep the primary promise observed so a background failure can never
       // become an unhandled rejection.
       osmPromise.catch(() => {});

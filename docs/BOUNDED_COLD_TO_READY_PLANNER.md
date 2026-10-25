@@ -96,7 +96,9 @@ not answered. This source-cache guarantee does not claim that optional
 weather/Live/map tiles or a cold typed-place resolver perform zero network work.
 
 On that acquisition path a varied warm directory waits at most 10 s for the
-live primary. A primary that settles — with rows or a failure — is merged as
+live primary. After a primary left a composition at that bound unanswered, the
+next compositions do not wait for it; it is still started and warms its cache,
+and an answer inside the bound restores the wait. A primary that settles — with rows or a failure — is merged as
 usual (and a failed primary is still rescued by the directory). A primary still
 outstanding at the bound keeps running and caches its answer for the next
 request; this composition keeps the best map evidence the process already holds
