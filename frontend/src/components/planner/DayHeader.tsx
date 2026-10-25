@@ -10,12 +10,15 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
 import { walkingDistanceLabel } from "../../lib/route-context-view.mjs";
-import { CheckIcon, ExternalIcon, HalfCircleIcon, MinusIcon, ShareIcon, StarIcon, SunIcon, WalkIcon } from "../shared/icons";
-import { busyButton, buttonClass, Eyebrow, labelChip } from "../shared/ui";
+import { CheckIcon, ExternalIcon, HalfCircleIcon, MinusIcon, SearchIcon, ShareIcon, StarIcon, SunIcon, WalkIcon } from "../shared/icons";
+import { busyButton, buttonClass, compactPillTarget, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
+import { RingMark } from "../shared/RingMark";
 
 type RoutePart = WalkingRoutePart;
-type PickCoverage = { key: string; state: "covered" | "partial" | "missing" };
+// "pending": a pick the day on screen never answered — just added, its rebuild
+// still coming. That day says nothing about it yet, so neither does the chip.
+type PickCoverage = { key: string; state: "covered" | "partial" | "missing" | "pending" | "unanswered" };
 
 /** A quiet fact about the day, not a control. */
 // The day's facts are labels, not choices (ui.tsx labelChip).
@@ -162,8 +165,9 @@ export default function DayHeader({
   pickCoverage,
   priorityShortfall = null,
   dayLimitationNote,
-  sourceEvidenceNote = "",
-  onUpdateDay,
+  sourceShortfall = null,
+  onLookForMorePlaces,
+  rechecking = false,
   restoredAt,
   canUpdateSaved = true,
   resolveAndRun,
@@ -184,9 +188,12 @@ export default function DayHeader({
   pickCoverage: PickCoverage[];
   priorityShortfall?: PickCoverage | null;
   dayLimitationNote: string | null | undefined;
-  /** Historical source limitations of this published answer. */
-  sourceEvidenceNote?: string;
-  onUpdateDay?: () => void;
+  /** The published day's place sources fell short: one failed, or the places were not all in yet (historical, never a live job). */
+  sourceShortfall?: "failed" | "partial" | null;
+  /** Ask the same question again for more places (the day stays until the answer lands). */
+  onLookForMorePlaces?: () => void;
+  /** That look is the rebuild now running. */
+  rechecking?: boolean;
   restoredAt: string | null;
   canUpdateSaved?: boolean;
   resolveAndRun: () => void;
@@ -208,20 +215,20 @@ export default function DayHeader({
     : null;
   // The parent temporarily omits source notes while updating. They still
   // describe the held day, and its focused update action must stay mounted.
-  const previousSourceNote = useRef(sourceEvidenceNote);
+  const previousShortfall = useRef(sourceShortfall);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const sourceUpdateRef = useRef<HTMLButtonElement | null>(null);
   const sourceUpdateHadFocus = useRef(false);
-  const displayedSourceNote = sourceEvidenceNote || (staleNotice ? previousSourceNote.current : "");
+  const displayedShortfall = sourceShortfall || (staleNotice ? previousShortfall.current : null);
   useEffect(() => {
-    if (sourceEvidenceNote || !staleNotice) previousSourceNote.current = sourceEvidenceNote;
-  }, [sourceEvidenceNote, staleNotice]);
+    if (sourceShortfall || !staleNotice) previousShortfall.current = sourceShortfall;
+  }, [sourceShortfall, staleNotice]);
   useEffect(() => {
     // A healthy replacement removes the optional action. Keep a reader who
     // waited there with the day, without taking focus back from another task.
-    if (!displayedSourceNote && sourceUpdateHadFocus.current && document.activeElement === document.body) headingRef.current?.focus();
+    if (!displayedShortfall && sourceUpdateHadFocus.current && document.activeElement === document.body) headingRef.current?.focus();
     if (staleNotice !== "updating") sourceUpdateHadFocus.current = false;
-  }, [displayedSourceNote, staleNotice]);
+  }, [displayedShortfall, staleNotice]);
   return (
     <header className="@container flex flex-col gap-5" aria-busy={staleNotice === "updating"}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -231,9 +238,9 @@ export default function DayHeader({
         {staleNotice === "updating" && (
           <span
             aria-live="polite"
-            className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ink/10 px-2.5 py-0.5 text-11 font-bold text-parranda-ink/75"
+            className="inline-flex min-h-7 items-center gap-2 rounded-full border-line border-parranda-ember/60 px-2.5 text-xs font-bold text-parranda-clay"
           >
-            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-parranda-glow motion-safe:animate-pulse" />
+            <RingMark className="h-3 w-3" />
             {t("Uppdaterar dagen …", "Updating your day …")}
           </span>
         )}
@@ -312,10 +319,13 @@ export default function DayHeader({
               {state === "covered" && <CheckIcon className="h-3 w-3 text-parranda-ember" />}
               {state === "partial" && <HalfCircleIcon className="h-3 w-3 text-parranda-glow" />}
               {state === "missing" && <MinusIcon className="h-3 w-3" />}
+              {state === "pending" && <RingMark className="h-3 w-3" />}
               <span>{pickLabel(key, lang)}</span>
               {state === "covered" && <span className="sr-only">{t(" — med i dagen", " — in this day")}</span>}
               {state === "partial" && <span className="text-parranda-ink/68">{t(" · delvis", " · partly")}</span>}
               {state === "missing" && <span>{t(" · inte med", " · not in this day")}</span>}
+              {state === "pending" && <span className="text-parranda-ink/68">{t(" · letar platser …", " · finding places …")}</span>}
+              {state === "unanswered" && <span className="text-parranda-ink/68">{t(" · ännu inte bedömt", " · not assessed yet")}</span>}
             </li>
           ))}
         </ul>
@@ -329,33 +339,31 @@ export default function DayHeader({
                 `Your first choice ${pickLabel(priorityShortfall.key, lang)} is not represented in this day.`)}
         </p>
       )}
-      {/* Source limitations describe this published answer, never a live job.
-          The day remains until the reader explicitly asks for an update. */}
-      {displayedSourceNote && (
-        <div className="flex flex-col items-start gap-1 text-13 leading-relaxed text-parranda-ink/72">
+      {/* Source limitations describe this published answer, never a live job:
+          one plain sentence and the one thing a reader can do about it. A
+          bold "Some place information is missing", a hidden "About the place
+          sources" and an "Update the day" link that could swap the stops
+          silently confused more than they told (iPhone, 23 Oct 2026).
+          Looking again asks the same question; its result is said in the
+          change line ("Looked for more places: …", with Undo). */}
+      {displayedShortfall && (
+        <div className="flex flex-col items-start gap-2 text-13 leading-relaxed text-parranda-ink/72">
           <p role="status">
-            <span className="font-semibold text-parranda-ink">{t("Viss platsinformation saknas.", "Some place information is missing.")}</span>{" "}
-            {t("Det kan finnas fler platser än de som visas.", "There may be more places than those shown.")}
+            {displayedShortfall === "failed"
+              ? t("Inte alla platser kunde läsas in, så det kan finnas fler än de som visas.", "Not every place could be loaded, so there may be more than the ones shown.")
+              : t("Inte alla platser hann läsas in, så det kan finnas fler än de som visas.", "Not every place loaded in time, so there may be more than the ones shown.")}
           </p>
-          <div className="flex w-full flex-wrap items-start gap-x-4">
-            <details className="min-w-0 flex-1 open:basis-full">
-              <summary className="min-h-11 cursor-pointer py-3 font-semibold text-parranda-ink/75 hover:text-parranda-ink">
-                {t("Om platskällorna", "About the place sources")}
-              </summary>
-              <p>{displayedSourceNote}</p>
-              <p className="mt-1">{t("Du kan uppdatera dagen för att kontrollera källorna igen.", "You can update the day to check the sources again.")}</p>
-            </details>
-            {onUpdateDay && canUpdateSaved && (
-              <button type="button" ref={sourceUpdateRef}
-                {...busyButton(staleNotice === "updating", () => {
-                  sourceUpdateHadFocus.current = document.activeElement === sourceUpdateRef.current;
-                  onUpdateDay();
-                })}
-                className="inline-flex min-h-11 items-center font-semibold text-parranda-ink underline underline-offset-2 hover:text-parranda-clay aria-disabled:opacity-60 aria-busy:cursor-progress">
-                {staleNotice === "updating" ? t("Uppdaterar dagen …", "Updating the day …") : t("Uppdatera dagen", "Update the day")}
-              </button>
-            )}
-          </div>
+          {onLookForMorePlaces && canUpdateSaved && (
+            <button type="button" ref={sourceUpdateRef}
+              {...busyButton(staleNotice === "updating", () => {
+                sourceUpdateHadFocus.current = document.activeElement === sourceUpdateRef.current;
+                onLookForMorePlaces();
+              })}
+              className={`${compactPillTarget} gap-2 border-line border-parranda-ink/18 px-3.5 font-bold text-parranda-ink hover:border-parranda-ink/50 aria-busy:cursor-progress ${rechecking ? "" : "aria-disabled:opacity-60"}`}>
+              {rechecking ? <RingMark className="h-3.5 w-3.5" /> : <SearchIcon className="h-3.5 w-3.5 text-parranda-ink/72" />}
+              {rechecking ? t("Letar efter fler platser …", "Looking for more places …") : t("Leta efter fler platser", "Look for more places")}
+            </button>
+          )}
         </div>
       )}
       {/* What the day CONTAINS stays under the title (a thin day says so);

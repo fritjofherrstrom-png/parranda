@@ -1,0 +1,313 @@
+{
+ "recorded_at": "2026-10-18T00:22:20.916Z",
+ "source": "https://tions-dry-tells-chef.trycloudflare.com",
+ "build_sha": "166609cd4482f38ff52fe91ad5f657181d2a7b54",
+ "cases": [
+  {
+   "query": "Gamla stan",
+   "suggestions": [
+    {
+     "title": "Gamla stan",
+     "context": "Stockholms kommun · Sverige",
+     "kind": "district",
+     "place_ref": "r5695398"
+    },
+    {
+     "title": "Gamla Stan",
+     "context": "Kalmar kommun · Sverige",
+     "kind": "district",
+     "place_ref": "r6422394"
+    },
+    {
+     "title": "Gamla stan",
+     "context": "Raseborg · Uusimaa · Suomi",
+     "kind": "settlement",
+     "place_ref": "n1455328525"
+    },
+    {
+     "title": "Gamla Stan",
+     "context": "Motala · Sverige",
+     "kind": "settlement",
+     "place_ref": "n14029011019"
+    },
+    {
+     "title": "Gamla stan",
+     "context": "Köping · Sverige",
+     "kind": "settlement",
+     "place_ref": "w973335430"
+    }
+   ],
+   "suggestions_status": "ready",
+   "route_status": 200,
+   "intake": {
+    "status": "unresolved",
+    "blockers": [
+     "ambiguous_place"
+    ],
+    "resolved": null,
+    "candidates": [
+     {
+      "label": "Старый город, Центральный микрорайон, Vyborg, Выборгское городское поселение, Vyborgsky District, Leningrad Oblast, Northwestern Federal District, 188807, Russia",
+      "place_ref": "n3024933246"
+     },
+     {
+      "label": "Old Town, Porvoo, Porvoo sub-region, Uusimaa, Mainland Finland, 06100, Finland",
+      "place_ref": "n10929256189"
+     },
+     {
+      "label": "Gamla stan, Södermalms stadsdelsområde, Stockholm, Stockholm Municipality, Stockholm County, Sweden",
+      "place_ref": "r5695398"
+     },
+     {
+      "label": "Gamla stan, Kalmar kommun, Kalmar County, Sweden",
+      "place_ref": "r6422394"
+     }
+    ]
+   }
+  },
+  {
+   "query": "Lisbon",
+   "suggestions": [
+    {
+     "title": "Lisbon",
+     "context": "Linn · Iowa · United States",
+     "kind": "settlement",
+     "place_ref": "r129082"
+    },
+    {
+     "title": "Lisbon",
+     "context": "Ransom · North Dakota · United States",
+     "kind": "settlement",
+     "place_ref": "r181625"
+    },
+    {
+     "title": "Lisbon",
+     "context": "Columbiana · Ohio · United States",
+     "kind": "settlement",
+     "place_ref": "r183306"
+    },
+    {
+     "title": "Lisbon",
+     "context": "Grafton · New Hampshire · United States",
+     "kind": "settlement",
+     "place_ref": "r2035536"
+    },
+    {
+     "title": "Lisbon",
+     "context": "Kendall County · Illinois · United States",
+     "kind": "settlement",
+     "place_ref": "r123542"
+    }
+   ],
+   "suggestions_status": "ready",
+   "route_status": 200,
+   "intake": {
+    "status": "unresolved",
+    "blockers": [
+     "ambiguous_place"
+    ],
+    "resolved": null,
+    "candidates": [
+     {
+      "label": "Lisbon, Portugal",
+      "place_ref": "r5400890"
+     },
+     {
+      "label": "Lisbon, Franklin Township, Linn County, Iowa, United States",
+      "place_ref": "r129082"
+     },
+     {
+      "label": "Lisbon, Ransom County, North Dakota, 58054, United States",
+      "place_ref": "r181625"
+     },
+     {
+      "label": "Lisbon, Center Township, Columbiana County, Ohio, United States",
+      "place_ref": "r183306"
+     }
+    ]
+   }
+  },
+  {
+   "query": "Haga",
+   "suggestions": [
+    {
+     "title": "Haga",
+     "context": "Tomb · Norge",
+     "kind": "settlement",
+     "place_ref": "n6235716780"
+    },
+    {
+     "title": "Haga",
+     "context": "Aurskog-Høland · Norge",
+     "kind": "settlement",
+     "place_ref": "n6229018016"
+    },
+    {
+     "title": "Haga",
+     "context": "Lillehammer · Norge",
+     "kind": "settlement",
+     "place_ref": "n9660524961"
+    },
+    {
+     "title": "Haga",
+     "context": "Sundsvall · Sverige",
+     "kind": "district",
+     "place_ref": "r2733364"
+    },
+    {
+     "title": "Haga",
+     "context": "Solna kommun · Sverige",
+     "kind": "district",
+     "place_ref": "r20340455"
+    }
+   ],
+   "suggestions_status": "ready",
+   "route_status": 200,
+   "intake": {
+    "status": "unresolved",
+    "blockers": [
+     "ambiguous_place"
+    ],
+    "resolved": null,
+    "candidates": [
+     {
+      "label": "The Hague, South Holland, Netherlands",
+      "place_ref": "r192737"
+     },
+     {
+      "label": "Haaga, Western major district, Helsinki, Helsinki sub-region, Uusimaa, Mainland Finland, Finland",
+      "place_ref": "r187475"
+     },
+     {
+      "label": "Haga, Haga County, Tochigi Prefecture, 321-3325, Japan",
+      "place_ref": "r4847039"
+     }
+    ]
+   }
+  },
+  {
+   "query": "Möllevången",
+   "suggestions": [
+    {
+     "title": "Möllevången",
+     "context": "Östra Grevie · Sverige",
+     "kind": "district",
+     "place_ref": "n260205013"
+    },
+    {
+     "title": "Möllevången",
+     "context": "Malmö · Sverige",
+     "kind": "district",
+     "place_ref": "r3050065"
+    },
+    {
+     "title": "Möllevången",
+     "context": "Lund · Sverige",
+     "kind": "settlement",
+     "place_ref": "r4055466"
+    },
+    {
+     "title": "Møllevangen",
+     "context": "Årby · Region Sjælland · Danmark",
+     "kind": "district",
+     "place_ref": "n11302916569"
+    },
+    {
+     "title": "Møllevangen",
+     "context": "Rønne · Region Hovedstaden · Danmark",
+     "kind": "district",
+     "place_ref": "n2932886462"
+    }
+   ],
+   "suggestions_status": "ready",
+   "route_status": 200,
+   "intake": {
+    "status": "unresolved",
+    "blockers": [
+     "ambiguous_place"
+    ],
+    "resolved": null,
+    "candidates": [
+     {
+      "label": "Möllevången, Östra Grevie, Vellinge kommun, Skåne County, 235 99, Sweden",
+      "place_ref": "n260205013"
+     },
+     {
+      "label": "Möllevången, Innerstaden, Malmö, Malmö kommun, Skåne County, Sweden",
+      "place_ref": "r3050065"
+     },
+     {
+      "label": "Möllevången, Norr, Lund, Lund Municipality, Skåne County, Sweden",
+      "place_ref": "r4055466"
+     }
+    ]
+   }
+  },
+  {
+   "query": "Springfield",
+   "suggestions": [
+    {
+     "title": "Springfield",
+     "context": "MA · United States",
+     "kind": "settlement",
+     "place_ref": "r1181618"
+    },
+    {
+     "title": "Springfield",
+     "context": "Sangamon · Illinois · United States",
+     "kind": "settlement",
+     "place_ref": "r126326"
+    },
+    {
+     "title": "Springfield",
+     "context": "Greene · Missouri · United States",
+     "kind": "settlement",
+     "place_ref": "r141244"
+    },
+    {
+     "title": "Springfield",
+     "context": "Clark · Ohio · United States",
+     "kind": "settlement",
+     "place_ref": "r182868"
+    },
+    {
+     "title": "Springfield",
+     "context": "Lane · Oregon · United States",
+     "kind": "settlement",
+     "place_ref": "r186721"
+    }
+   ],
+   "suggestions_status": "ready",
+   "route_status": 200,
+   "intake": {
+    "status": "unresolved",
+    "blockers": [
+     "ambiguous_place"
+    ],
+    "resolved": null,
+    "candidates": [
+     {
+      "label": "Springfield, Sangamon County, Illinois, United States",
+      "place_ref": "r126326"
+     },
+     {
+      "label": "Springfield, Hampden County, Massachusetts, United States",
+      "place_ref": "r1181618"
+     },
+     {
+      "label": "Springfield, Greene County, Missouri, United States",
+      "place_ref": "r141244"
+     },
+     {
+      "label": "Springfield, Clark County, Ohio, United States",
+      "place_ref": "r182868"
+     },
+     {
+      "label": "Springfield, Lane County, Oregon, United States",
+      "place_ref": "r186721"
+     }
+    ]
+   }
+  }
+ ]
+}

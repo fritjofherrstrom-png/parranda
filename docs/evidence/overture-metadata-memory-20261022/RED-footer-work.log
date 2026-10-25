@@ -1,0 +1,40 @@
+✖ official 512-row-group footer can prefetch inside the existing 64MiB child heap (565.526041ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 644.648583
+
+✖ failing tests:
+
+test at tests/overture-large-metadata.test.js:8:1
+✖ official 512-row-group footer can prefetch inside the existing 64MiB child heap (565.526041ms)
+  AssertionError [ERR_ASSERTION]: metadata child failed (null): Error: invalid_overture_footer
+      at ensure (/Users/fritjof/Developer/parranda-branches/codex-pr617-review-fixes-20261017/server/place-candidates/overture-parquet-prefetch.js:151:107)
+      at byte (/Users/fritjof/Developer/parranda-branches/codex-pr617-review-fixes-20261017/server/place-candidates/overture-parquet-prefetch.js:152:24)
+      at skip (/Users/fritjof/Developer/parranda-branches/codex-pr617-review-fixes-20261017/server/place-candidates/overture-parquet-prefetch.js:169:54)
+      at skip (/Users/fritjof/Developer/parranda-branches/codex-pr617-review-fixes-20261017/server/place-candidates/overture-parquet-prefetch.js:169:114)
+      at skip (/Users/fritjof/Developer/parranda-branches/codex-pr617-review-fixes-20261017/server/place-candidates/overture-parquet-prefetch.js:169:114)
+      at skip (/Users/fritjof/Developer/parranda-branches/codex-pr617-review-fixes-20261017/server/place-candidates/overture-parquet-prefetch.js:167:108)
+      at skip (/Users/fritjof/Developer/parranda-branches/codex-pr617-review-fixes-20261017/server/place-candidates/overture-parquet-prefetch.js:169:114)
+      at pruneFooter (/Users/fritjof/Developer/parranda-branches/codex-pr617-review-fixes-20261017/server/place-candidates/overture-parquet-prefetch.js:189:86)
+      at prefetchOvertureParquet (/Users/fritjof/Developer/parranda-branches/codex-pr617-review-fixes-20261017/server/place-candidates/overture-parquet-prefetch.js:265:23)
+      at async run (/Users/fritjof/Developer/parranda-branches/codex-pr617-revi
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (/Users/fritjof/Developer/parranda-branches/codex-pr617-review-fixes-20261017/tests/overture-large-metadata.test.js:10:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.start (node:internal/test_runner/test:1096:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

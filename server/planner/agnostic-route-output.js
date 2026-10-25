@@ -36,6 +36,7 @@ const { buildCandidateCombinationInspect } = require("./candidate-combination-in
 const { resolveAgnosticCandidateReachPolicy } = require("./candidate-reach-policy");
 const { buildRouteCandidateFromCandidateCombination } = require("./candidate-combination-route-adapter");
 const { assessCityCandidateReadiness } = require("../place-candidates/readiness");
+const { readClockInstant } = require("../lib/clock");
 const {
   buildSelectedDayHoursFact,
   buildLocalDayAvailabilityWindow,
@@ -973,10 +974,8 @@ function buildBlockedAgnosticRouteOutputExperiment({ baselineResult, blocker, so
 // Availability and publication consume the same authoritative local-day
 // projection. Ordinary windows attached to uncertainty are source context only.
 function calendarObservationNow(clock) {
-  try {
-    const instant = typeof clock === 'function' ? clock() : new Date();
-    return instant instanceof Date && Number.isFinite(instant.getTime()) ? instant.getTime() : NaN;
-  } catch { return NaN; }
+  const instant = readClockInstant(clock);
+  return instant ? instant.getTime() : NaN;
 }
 
 function calendarDayAvailability(record, { date, context, window }) {
@@ -1199,8 +1198,8 @@ async function composeAgnosticRouteOutputOnce({
     Boolean(externalRequested) && typeof loaderStatus === "string" && (curatedCandidates.length > 0 || (loaderStatus.startsWith("loaded:") && loaderStatus !== "loaded:0"));
   let calendarObservedNow = null;
   const observedClock = () => {
-    const instant = typeof clock === 'function' ? clock() : new Date();
-    calendarObservedNow = instant instanceof Date && Number.isFinite(instant.getTime()) ? instant.getTime() : null;
+    const instant = readClockInstant(clock);
+    calendarObservedNow = instant ? instant.getTime() : null;
     return instant;
   };
   const ctx = retainedContext !== undefined ? structuredClone(retainedContext) : willRunTrustedSelection

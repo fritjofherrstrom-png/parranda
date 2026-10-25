@@ -4,6 +4,7 @@ const { createHash } = require('node:crypto');
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const HASH = /^[a-f0-9]{64}$/;
 const RELEASE = /^\d{4}-\d{2}-\d{2}\.\d+$/;
+const MAX_FALLBACK_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const ETAG = /^"[\x21\x23-\x7e]{1,200}"$/;
 
 function validAssets(assets, release) {
@@ -39,7 +40,8 @@ function validSample(records, receipt, now = Date.now()) {
 
 // This adapter alone interprets retained Overture evidence. The generic cache
 // does not grant freshness to old values, nor does it know release semantics.
-function createOvertureSampleCache({ cache, validateReceipt = () => true, now = Date.now }) {
+function createOvertureSampleCache({ cache, validateReceipt = () => true, now = Date.now, maxFallbackAgeMs = MAX_FALLBACK_AGE_MS }) {
+  const fallbackAgeMs = Math.max(0, Math.min(MAX_FALLBACK_AGE_MS, Number(maxFallbackAgeMs) || 0));
   function valid(value, key, at = now()) {
     try {
       return value?.version === 1 && value.cacheKey === key
@@ -74,11 +76,29 @@ function createOvertureSampleCache({ cache, validateReceipt = () => true, now = 
         signal: options.signal,
         validateCached: (value, entry) => valid(value, key, acceptedAt(entry)),
         shouldStore: value => valid(value, key) && (typeof options.shouldStore !== 'function' || options.shouldStore(decode(value))),
-        // Stale fallback is deliberately unavailable at this source boundary.
+        staleIfErrorMs: fallbackAgeMs,
+        onStale: (previous, info) => {
+          // Abandoned owners and successful empty/new answers cannot use a
+          // fallback. Identity, original receipt and age remain unchanged.
+          options.signal?.throwIfAborted();
+          const age = now() - previous.receipt.verifiedAt;
+          if ((!info.refreshError && !info.refreshValue?.source_error)
+            || !Number.isFinite(age) || age < 0 || age > fallbackAgeMs) {
+            if (info.refreshError) throw info.refreshError;
+            return info.refreshValue;
+          }
+          const records = decode(previous);
+          Object.defineProperty(records, 'source_error', { value: 'stale_cache_refresh_failed' });
+          Object.defineProperty(records, 'loader_metadata', { value: { cache: {
+            served_stale: true, stale_age_seconds: Math.floor(age / 1000),
+            refresh_reason: 'stale_cache_refresh_failed',
+          } } });
+          return records;
+        },
       });
       return valid(value, key) ? decode(value) : value;
     },
   };
 }
 
-module.exports = { createOvertureSampleCache, validSample, validAssets, digest };
+module.exports = { createOvertureSampleCache, validSample, validAssets, digest, MAX_FALLBACK_AGE_MS };

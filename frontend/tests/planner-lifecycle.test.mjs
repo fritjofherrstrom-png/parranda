@@ -94,3 +94,18 @@ test('the final partial interval can still deliver a ready day within the fixed 
   assert.deepEqual(delays, [1500]);
   assert.deepEqual(result.body, { days: ['ready'] });
 });
+
+test('a real server job may complete past60s inside the bounded90s window without resubmitting intent', async () => {
+  let clock=0,posts=0,polls=0;
+  const result=await fetchPlannerLifecycle('/api/route-recommendations',{
+    payload:{place:'Controlled place'},signal:new AbortController().signal,now:()=>clock,
+    wait:async ms=>{clock+=ms},
+    fetcher:async(_url,init)=>{
+      if(init.method==='DELETE')return response({});
+      if(JSON.parse(init.body).token)polls++;else posts++;
+      return clock>=69000?response({days:['actual job result']}):response({planner_lifecycle:{...pending.planner_lifecycle,remaining_ms:90000-clock,max_polls:30}},202);
+    },
+  });
+  assert.equal(result.response.status,200);assert.equal(posts,1);assert.ok(polls>20);
+  assert.deepEqual(result.body.days,['actual job result']);
+});

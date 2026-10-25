@@ -260,7 +260,10 @@ test("route result has one authoritative route and keeps broader candidates seco
 });
 
 test("map hierarchy mirrors route authority instead of numbering two competing plans", () => {
-  assert.match(anywherePlannerSource, /routeMarkerPresentation\(routeStops\)/);
+  // Every numbered pin starts on its own stop; overlapping stops share a group
+  // pin instead of being fanned out away from their places.
+  assert.doesNotMatch(anywherePlannerSource, /routeMarkerPresentation\(/);
+  assert.match(anywherePlannerSource, /const shiftX = 0;/);
   assert.match(anywherePlannerSource, /shell\.className = "route-map-marker-shell"/);
   assert.match(anywherePlannerSource, /origin\.style\.setProperty\("--route-marker-x", `\$\{shiftX\}px`\)/);
   assert.match(anywherePlannerSource, /routeContextSuggestions\.filter/);
