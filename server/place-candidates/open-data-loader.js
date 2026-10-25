@@ -188,6 +188,13 @@ const OSM_TAG_MAP = [
   { key: "shop", value: "antiques", type: "vintage-shop", tags: ["vintage", "antique"] },
   { key: "shop", value: "charity", type: "vintage-shop", tags: ["second_hand", "charity"] },
   { key: "shop", value: "vintage", type: "vintage-shop", tags: ["vintage", "second_hand"] },
+  // These shops explicitly sell used clothing/books. The qualifier is part of
+  // both acquisition and mapping; a name or an ordinary clothes/books tag is
+  // never second-hand evidence. Other used merchandise remains outside scope.
+  { key: "shop", value: "clothes", and: { second_hand: "yes" }, type: "vintage-shop", tags: ["second_hand"] },
+  { key: "shop", value: "clothes", and: { second_hand: "only" }, type: "vintage-shop", tags: ["second_hand"] },
+  { key: "shop", value: "books", and: { second_hand: "yes" }, type: "vintage-shop", tags: ["second_hand"] },
+  { key: "shop", value: "books", and: { second_hand: "only" }, type: "vintage-shop", tags: ["second_hand"] },
   // food (restaurant / taverna-style / street food)
   { key: "amenity", value: "restaurant", type: "restaurant", tags: ["mat"] },
   { key: "amenity", value: "fast_food", type: "street-food", tags: ["mat"] },
@@ -789,7 +796,7 @@ function createOpenDataLoader({
   // a 1.5 km disc, so reusing it would keep serving the narrow day this fixes.
   // `budgetsKey` is the same identity without the walking budget: requests
   // that differ only in Kort/Lagom/Lång share it.
-  function requestIdentity(request) {
+  function requestIdentity(request, previousContract = false) {
     const band = normalizeWalkingTargetBand(request.walkingTargetBand);
     const radiusKm = pinnedRadiusKm ?? rhythmAwareRadiusKm(band, request.dayRhythm);
     const anchorKey = `${request.lat.toFixed(3)},${request.lng.toFixed(3)}`;
@@ -797,7 +804,7 @@ function createOpenDataLoader({
     const scopeKey = spatialScopeCacheKey(request.spatialScope ?? null);
     const window = normalizeAvailabilityWindow(request.availabilityWindow);
     const windowKey = window ? `${window.weekday}.${window.startMinute}.${window.endMinute}` : "none";
-    return {
+    const identity = {
       key: !request.dayRhythm && !window
         ? `v8:${anchorKey}:r${radiusKm}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`
         : `${request.dayRhythm ? 'v10' : 'v9'}:${anchorKey}:r${radiusKm}:w${windowKey}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
@@ -805,6 +812,15 @@ function createOpenDataLoader({
       evidenceKey: `${request.dayRhythm ? 'v10' : 'v8'}-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
       radiusKm,
       targetKm: band ? band.targetKm : null,
+    };
+    // Compound shop selectors and relation acquisition change source recall.
+    // Old samples remain on disk, but cannot masquerade as an answer to this
+    // query contract (particularly an old cached empty answer).
+    return previousContract ? identity : {
+      ...identity,
+      key: `q2:${identity.key}`,
+      budgetsKey: `q2:${identity.budgetsKey}`,
+      evidenceKey: `q2:${identity.evidenceKey}`,
     };
   }
 
@@ -900,7 +916,7 @@ function createOpenDataLoader({
     const identity = requestIdentity(request);
     const key = identity.key;
     let produced = false;
-    const entry = request.cacheOnly === true ? cache.peek(key) : await cache.get(
+    let entry = request.cacheOnly === true ? cache.peek(key) : await cache.get(
       key,
       async () => {
         const result = await loadTracked(request, key);
@@ -935,6 +951,24 @@ function createOpenDataLoader({
         },
       },
     );
+    // Preserve the existing outage safety net during a query-contract upgrade.
+    // Only a failed refresh may retain positive previous-contract map facts;
+    // they keep their original age, are never stored under the new contract,
+    // and cannot prove that the broader query found no additional places.
+    if (request.cacheOnly !== true && entry?.status?.startsWith('error') &&
+        boundedStaleIfErrorMs > 0 && typeof cache.inspect === 'function') {
+      const old = cache.inspect(requestIdentity(request, true).key);
+      const age = Number.isFinite(old?.expiresAt) ? Math.max(0, now() - old.expiresAt) : Infinity;
+      if (age <= boundedStaleIfErrorMs && Array.isArray(old?.value?.records) && old.value.records.length > 0 &&
+          typeof old.value.status === 'string' && !old.value.status.startsWith('error') &&
+          old.value.error !== 'stale_cache_refresh_failed') {
+        entry = { ...old.value, error: 'stale_cache_refresh_failed', metadata: {
+          ...(old.value.metadata || {}),
+          cache: { served_stale: true, stale_age_seconds: Math.floor(age / 1000),
+            refresh_reason: safeLoaderToken(entry.error || 'provider_failed'), query_contract: 'previous' },
+        } };
+      }
+    }
     if (!entry) {
       const miss = withLoaderStatus([], 'loaded:0', null);
       Object.defineProperty(miss, PRIMARY_CACHE_MISS, { value: true });
@@ -974,10 +1008,10 @@ function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_
   // server-side (#273). Grouping by category with its own `out` guarantees each
   // category contributes regardless of node/way ordering. Still one request.
   const groups = new Map();
-  for (const { key, value, type } of mappings) {
+  for (const { key, value, and, type } of mappings) {
     const category = TYPE_CATEGORY[type] || "other";
     if (!groups.has(category)) groups.set(category, []);
-    groups.get(category).push({ key, value });
+    groups.get(category).push({ key, value, and });
   }
   const perCategory = Math.max(6, Math.ceil(limit / groups.size));
   const blocks = [];
@@ -985,10 +1019,12 @@ function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_
   for (const [category, entries] of groups) {
     const setName = `c${i}`;
     const filters = entries
-      .flatMap(({ key, value }) => anchors.flatMap(({ lat, lng }) => [
-        `node["${key}"="${value}"](around:${radiusM},${lat},${lng});`,
-        `way["${key}"="${value}"](around:${radiusM},${lat},${lng});`,
-      ]))
+      .flatMap(({ key, value, and }) => {
+        const selector = [[key, value], ...Object.entries(and || {})]
+          .map(([key, value]) => `["${key}"="${value}"]`).join('');
+        return anchors.flatMap(({ lat, lng }) => ['node', 'way', 'relation']
+          .map(kind => `${kind}${selector}(around:${radiusM},${lat},${lng});`));
+      })
       .join("");
     blocks.push(`(${filters})->.${setName};.${setName} out center ${perCategory};`);
     i += 1;
@@ -1515,7 +1551,8 @@ function resolveElementCoords(element) {
 
 function findOsmMapping(tags) {
   for (const mapping of OSM_TAG_MAP) {
-    if (tags[mapping.key] === mapping.value) return mapping;
+    if (tags[mapping.key] === mapping.value &&
+        Object.entries(mapping.and || {}).every(([key, value]) => tags[key] === value)) return mapping;
   }
   return null;
 }
