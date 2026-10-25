@@ -1656,7 +1656,8 @@ function resolveDefaultOpenDataLoader(env = process.env) {
       ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
     });
     overtureSource = createOvertureBackgroundSource({ source: overtureRaw,
-      cache: createOvertureSampleCache({ cache: overtureCache, validateReceipt: overtureRaw.validateReceipt }) });
+      cache: createOvertureSampleCache({ cache: overtureCache, validateReceipt: overtureRaw.validateReceipt,
+        validatePreviousReceipt: overtureRaw.validatePreviousReceipt }) });
   }
 
   // Official Swedish place supply through Visit Sweden's documented NAPI

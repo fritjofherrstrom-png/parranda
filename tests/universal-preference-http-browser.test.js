@@ -11,9 +11,11 @@ const path = require('node:path');
 const { chromium } = require('playwright-core');
 const { DuckDBInstance } = require('@duckdb/node-api');
 const { buildApp } = require('../server/app');
-const { createOpenDataLoader } = require('../server/place-candidates/open-data-loader');
-const { createOvertureSource } = require('../server/place-candidates/overture-source');
+const { createOpenDataLoader, resolveDefaultOpenDataLoader } = require('../server/place-candidates/open-data-loader');
+const { createOvertureSource, buildOvertureQuery, mapOvertureRow } = require('../server/place-candidates/overture-source');
 const { createSourceCache } = require('../server/place-candidates/source-cache');
+const { digest } = require('../server/place-candidates/overture-sample-cache');
+const { createHash } = require('node:crypto');
 
 const anchor = { lat: 44.8178, lng: 20.4569 };
 const clock = () => new Date('2026-10-25T09:00:00Z');
@@ -22,10 +24,40 @@ const scenarios = [
   { name: 'used-bookstore taxonomy through actual SQL', kind: 'directory', preferences: ['second_hand'], covered: ['second_hand'], partial: [] },
   { name: 'park relations preserve Green and partial Views', kind: 'osm-parks', preferences: ['green', 'views'], covered: ['green'], partial: ['scenic'] },
   { name: 'cafés preserve Coffee and partial Food', kind: 'osm-cafes', preferences: ['food', 'fika'], covered: ['coffee'], partial: ['food'] },
+  { name: 'previous-query reserve survives controlled outage', kind: 'directory-reserve', preferences: ['fika'], covered: ['coffee'], partial: [] },
 ];
 
 async function makeLoader(t, kind) {
   const state = { calls: 0, inputs: [], queries: [] };
+  if (kind === 'directory-reserve') {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'parranda-universal-reserve-browser-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const release = '2026-09-23.0', verifiedAt = Date.now() - 1000;
+    const asset = { path: `s3://overturemaps-us-west-2/release/${release}/theme=places/type=place/part-browser.zstd.parquet`, etag: '"reserve-v1"', length: 12000 };
+    const source = createOvertureSource();
+    const key = source.cacheKeyFor(anchor);
+    const records = Array.from({ length: 8 }, (_, i) => mapOvertureRow({
+      id: `30000000-0000-0000-0000-${String(i).padStart(12, '0')}`, name: `Кафе ${i}`,
+      category: 'coffee_shop', category_hierarchy: ['coffee_shop'], confidence: .99,
+      operating_status: null, licenses: ['CC0-1.0'], lat: anchor.lat + i * .0008, lng: anchor.lng + (i % 2) * .001,
+    }));
+    const priorSql = buildOvertureQuery({ release, parquetPaths: [asset.path], ...anchor }).replace(/, 'used_bookstore'/g, '');
+    const receipt = { version: 1, release, assets: [asset], acquiredAt: verifiedAt, verifiedAt, recordsHash: digest(records),
+      queryHash: createHash('sha256').update('overture-v6:normalizer-1\0').update(priorSql).digest('hex') };
+    const raw = createSourceCache({ dir, namespace: 'overture-v6', ttlMs: 100, now: () => verifiedAt });
+    raw.set(key, { version: 1, cacheKey: key, records, receipt });
+    const before = raw.inspect(key);
+    t.mock.method(globalThis, 'fetch', async () => { state.calls++; return { ok: false, status: 503 }; });
+    const loader = resolveDefaultOpenDataLoader({ PARRANDA_OPEN_DATA_LOADER: 'enabled', PARRANDA_OVERTURE_SOURCE: 'enabled',
+      PARRANDA_CACHE_DIR: dir, PARRANDA_SOURCE_CACHE_TTL_MS: '100', PARRANDA_OVERPASS_ENDPOINTS: 'https://controlled.example/overpass' });
+    return { state, load: async request => {
+      const rows = await loader(request); state.inputs = rows;
+      assert.equal(rows.loader_metadata.cache.served_stale, true);
+      assert.equal(rows.loader_metadata.cache.query_contract, 'previous');
+      assert.deepEqual(raw.inspect(key), before, 'HTTP composition must not renew the predecessor envelope');
+      return rows;
+    } };
+  }
   if (kind === 'directory') {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'parranda-universal-browser-'));
     const instance = await DuckDBInstance.create(':memory:');

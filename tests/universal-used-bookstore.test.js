@@ -127,7 +127,7 @@ for (const empty of [false, true]) test(`persisted prior-query ${empty ? 'negati
   assert.equal(source.validateReceipt(prior.receipt, key), false);
   assert.equal(restarted.peek(key), null, 'old fresh disk sample is not new-contract coverage');
   clock = 1200;
-  assert.equal(restarted.previous(key), null, 'old expired sample cannot become a renewal or stale fallback');
+  assert.equal(restarted.previous(key), null, 'old expired sample cannot enter current-query renewal');
   const fresh = await restarted.get(key, () => source.acquire({ ...ANCHOR, previousSample: prior }));
   assert.equal(queries, 1, 'changed category SQL forces actual acquisition even with unchanged source object');
   assert.equal(verifications, 0, 'old sample cannot take the HEAD-only renewal path');

@@ -127,8 +127,15 @@ The current `overture-v6` receipt cache binds each queried sample to a hash of
 the complete SQL and normalizer contract. Adding
 `used_bookstore` changes both the finite acquisition filter and route-type
 stratum CASE, so existing positive and negative SQL samples fail the source's
-receipt validator on restart. They cannot supply fresh coverage, stale fallback
-or a HEAD-only renewal; the existing acquisition path must query again. A
+receipt validator on restart. They cannot supply fresh coverage or a HEAD-only
+renewal; the existing acquisition path must query again. On actual refresh
+failure only, positive samples from that exact predecessor query may retain
+their existing seven-day last-known-good fallback. The source separately binds
+the old SQL/normalizer hash to its original window, caps, release and assets;
+the adapter preserves its receipt and expiry and marks it as previous-query
+stale evidence. Old negatives, unknown hashes, healthy empty answers and aborted
+owners cannot use that fallback. It is never stored or treated as current-query
+coverage. A
 complete manifest proving no place assets in the window remains category
 independent and needs no new cache policy. Old cache files are not migrated.
 
