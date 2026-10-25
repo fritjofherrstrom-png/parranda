@@ -185,7 +185,12 @@ function normalizeTimingRelevance(explicit, facts = {}) {
     return "unknown";
   }
 
-  if (startsAt <= now && (!endsAt || endsAt >= now)) {
+  // On now needs a stated end around now. A start that has passed with no
+  // stated end is not evidence the event is still on: its own day keeps its
+  // today/tonight relevance below, and an earlier day says nothing about now
+  // (engine review, 25 Oct 2026: a guided walk listed at 10:00 was "now" at
+  // 20:00, labelled "Just nu" and offered by Just nu as happening).
+  if (startsAt <= now && endsAt && endsAt >= now) {
     return "now";
   }
   const localStart = facts.timezone
@@ -203,6 +208,9 @@ function normalizeTimingRelevance(explicit, facts = {}) {
   }
   if (startsAt > now) {
     return "future";
+  }
+  if (!endsAt) {
+    return "unknown";
   }
   return "stale";
 }
