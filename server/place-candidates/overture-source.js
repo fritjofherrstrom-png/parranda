@@ -110,6 +110,7 @@ const EXACT_TYPE_MAP = new Map([
   ["antique_store", { type: "vintage-shop", tags: ["vintage", "antique"] }],
   ["second_hand_store", { type: "vintage-shop", tags: ["second_hand"] }],
   ["second_hand_clothing_store", { type: "vintage-shop", tags: ["second_hand"] }],
+  ["used_bookstore", { type: "vintage-shop", tags: ["second_hand"] }],
 ]);
 
 // Reviewed PRIMARY labels from Overture's 2026-03-04 taxonomy table, pinned in

@@ -26,6 +26,16 @@ claim to validate every edge in the provider's complete taxonomy graph. Primary
 must independently occur in the reviewed route map. Unknown or malformed primary
 labels are not repaired, lowercased, guessed from names or rolled up to an ancestor.
 
+The 2026-10-25 finite-map extension also admits the explicit `used_bookstore`
+primary as `vintage-shop` with the existing `second_hand` tag. The frozen official
+2026-09-23.0 taxonomy used in the source audit gives its hierarchy as
+`shopping > specialty_store > books_music_and_video_store > bookstore > used_bookstore`.
+Its own primary establishes used-book retail meaning; the `bookstore` ancestor
+does not. Ordinary bookstores, a used-bookstore alternate, and used-book words
+in a name remain insufficient. This adds no hours, quality, availability or
+source-trust claim; existing license, confidence, hierarchy, status and geometry
+guards still apply. No trails, libraries or broader retail classes are added.
+
 `basic_category` and `taxonomy.alternates` are not projected or consumed at all.
 An unsupported playground stays out even under a park ancestor. A bookstore with
 a coffee-shop alternate remains deliberately omitted; a coffee-shop primary
@@ -113,6 +123,15 @@ One STAC resolution and one data query per source warm; no schema fallback query
 TTL remains the shared source-cache default (six hours) or existing operator
 override. No new per-composition provider requests are added by selection.
 
+The current `overture-v6` receipt cache binds each queried sample to a hash of
+the complete SQL and normalizer contract. Adding
+`used_bookstore` changes both the finite acquisition filter and route-type
+stratum CASE, so existing positive and negative SQL samples fail the source's
+receipt validator on restart. They cannot supply fresh coverage, stale fallback
+or a HEAD-only renewal; the existing acquisition path must query again. A
+complete manifest proving no place assets in the window remains category
+independent and needs no new cache policy. Old cache files are not migrated.
+
 The five-second STAC timeout is **not** a total DuckDB/S3 deadline. Existing
 acquisition does not have a hard aggregate byte/time bound or global work queue;
 the geographic/row/output caps do not imply one. That resource-hardening work is
@@ -135,6 +154,15 @@ from v4 through the actual loader factory.
 
 All generated Parquet and injected-provider tests are deterministic contract
 evidence, **INVALID ACCEPTANCE** for live browser/Pi/provider contribution claims.
+
+`tests/universal-used-bookstore.test.js` exercises the frozen used-bookstore
+hierarchy through the actual production DuckDB SQL against generated Parquet,
+then normalization and second-hand intent selection. It includes ordinary,
+alternate-only, name-only, malformed hierarchy, unlicensed, closed,
+low-confidence and distant controls, inferred attribution and unknown hours.
+Persisted positive/negative prior-SQL receipts must force acquisition rather than
+claim the newly supported category. These are local deterministic checks, not
+fresh provider or runtime acceptance.
 Schema inspection and any direct live mapper diagnostic are not route acceptance.
 The #498 Kolding 1.7→4.8 evidence belongs to the prior executable normalization,
 not to this new taxonomy head. Do not transfer it as exact-head evidence.
