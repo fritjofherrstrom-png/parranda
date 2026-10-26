@@ -33,6 +33,8 @@ const { createRssAtomEventProvider } = require("../pulse-sources/rss-atom-event-
 const { createHtmlVenueCalendarProvider } = require("../pulse-sources/html-venue-calendar-provider");
 const { createSitevisionCalendarProvider } = require("../pulse-sources/sitevision-calendar-provider");
 const { createWixEventSitemapProvider } = require("../pulse-sources/wix-event-sitemap-provider");
+const { rememberConfiguredEventSource, bindSelectedEventSource, bindConfiguredWixProvider, captureLiveCollectionInputs, bindLiveCollection,
+  bindLiveCacheProducer, carryLiveDestinationEvidence, ownLiveDestinationCache, readLiveDestinationCache } = require('./live-source-destination-evidence');
 const { createLocalizedEventsApiProvider } = require("../pulse-sources/localized-events-api-provider");
 const { createMappedEventSourceProvider } = require("../pulse-sources/mapped-event-source-provider");
 const { trustedReviewedVenueResolution } = require("../pulse-sources/reviewed-event-venues");
@@ -248,7 +250,7 @@ function normalizeEventFeedRow(f, index = 0) {
   if (!f || !endpoint || !adapter || !Array.isArray(f.bbox) || f.bbox.length < 4) return null;
   const bbox = f.bbox.map(Number);
   if (!bbox.every(Number.isFinite)) return null;
-  return {
+  return rememberConfiguredEventSource(f, {
     id: String(f.id || `feed-${index}`),
     label: String(f.label || f.id || "Events"),
     // `base` remains for backward compatibility with the original Linked
@@ -326,7 +328,7 @@ function normalizeEventFeedRow(f, index = 0) {
       f.bbox[0] < f.bbox[2] && f.bbox[1] < f.bbox[3] &&
       /^official_(?:municipal|tourism)_/.test(f.source_family || '')
     ) === true,
-  };
+  });
 }
 
 function feedIdentities(feed) {
@@ -787,7 +789,7 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
       else endedSinceCollection += 1;
     }
   }
-  const { _rankable_events: _internalPool, ...publicResult } = collected;
+  const { _rankable_events: _internalPool, _live_destination_inputs: _privateInputs, ...publicResult } = collected;
   const tonightSurface = buildEventBucketSurface(
     filterEventsForLiveScope(tonightPool, scope),
     preferences,
@@ -838,13 +840,13 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
           : {}),
       }
     : null;
-  return {
+  return carryLiveDestinationEvidence(collected, {
     ...publicResult,
     ...(acquisition ? { acquisition } : {}),
     tonight,
     this_week: thisWeek,
     browse: buildEventBrowse(tonightSurface, thisWeekSurface),
-  };
+  });
 }
 
 function buildScopedEventSourcePlan({
@@ -888,7 +890,7 @@ function buildScopedEventSourcePlan({
       const identity = String(source.id || source.endpoint || source.base || "");
       if (!identity || seen.has(identity)) continue;
       seen.add(identity);
-      selected.push(source);
+      selected.push(bindSelectedEventSource(source, registry.find(row => row.id === source.id)));
       if (selected.length >= localCap) break;
     }
     if (selected.length >= localCap) break;
@@ -1004,6 +1006,9 @@ async function collectAnchorEvents({
     ),
   );
 
+  // Capture accepted AND refused originals before trust/normalization and
+  // geometry/fusion discard raw-record identity. Never infer from labels.
+  const destinationInputs = captureLiveCollectionInputs(collectedSources);
   const normalizedEvidence = [];
   for (const collection of collectedSources) {
     const source = collection.source;
@@ -1124,7 +1129,7 @@ async function collectAnchorEvents({
     outOfPeriodEventCount: outOfPeriodCount,
     rejected,
   });
-  return {
+  return bindLiveCollection({
     coverage: "covered",
     ...(selectedDate ? { selected_date: selectedDate } : {}),
     feed: feeds[0] || null,
@@ -1154,7 +1159,7 @@ async function collectAnchorEvents({
       venue_resolution: venueResolution.summary,
       geometry_scope: bounded.geometry_scope,
     },
-  };
+  }, destinationInputs);
 }
 
 // The Live period a row belongs to: the selected (or current) day, the
@@ -1439,7 +1444,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
     });
   }
   if (adapter === "wix_event_sitemap") {
-    return createWixEventSitemapProvider({
+    return bindConfiguredWixProvider(createWixEventSitemapProvider({
       ...common,
       status: "active",
       sitemapUrl: endpoint,
@@ -1450,7 +1455,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
       detailBudget: source.detail_budget || undefined,
       sitemapLimit: source.sitemap_limit || undefined,
       eventPathPrefix: source.event_path_prefix || undefined,
-    });
+    }), source);
   }
   if (adapter === "localized_events_api") {
     return createLocalizedEventsApiProvider({
@@ -1858,12 +1863,12 @@ function resolveDefaultEventSupply(
   const qualifiedRuntimeEnabled = !["disabled", "0", "false", "off", "no"].includes(
     String((env && env.PARRANDA_QUALIFIED_SOURCE_RUNTIME) || "").trim().toLowerCase(),
   );
-  const cache = eventCache || createSourceCache({
+  const cache = eventCache || ownLiveDestinationCache(createSourceCache({
     // v2 excludes transient partial-empty acquisitions that v1 could persist.
     namespace: EVENT_CACHE_NAMESPACE,
     ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
-  });
+  }));
   const sourceCollectionCache = createSourceCache({
     // Source snapshots also contain normalized atoms, including category tags.
     namespace: "agnostic-event-source-v2", ttlMs: EVENT_CACHE_TTL_MS,
@@ -2000,11 +2005,13 @@ function resolveDefaultEventSupply(
     // A broad calendar does not erase the existing local-discovery outcome.
     // Keep its current status alongside collection health, including cached
     // views, without allowing one to claim the other's successful coverage.
-    const withDiscoveryHealth = collected => discoveryHealth ? {
+    const withDiscoveryHealth = collected => discoveryHealth ? carryLiveDestinationEvidence(collected, {
       ...collected, acquisition: { ...collected.acquisition, discovery_health: discoveryHealth },
-    } : collected;
-    const cached = cache.peek(key);
-    if (cached) return rankCollectedEventsForPreferences(withDiscoveryHealth(cached), preferences, scope, now);
+    }) : collected;
+    const cacheRead = readLiveDestinationCache(cache, sourcePlan);
+    const cached = cacheRead.peek(key);
+    if (cached) return cacheRead.carry(cached,
+      rankCollectedEventsForPreferences(withDiscoveryHealth(cached), preferences, scope, now));
     const failed = failedRefreshes.read(key);
     if (failed) return rankCollectedEventsForPreferences(withDiscoveryHealth(failed), preferences, scope, now);
     // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
@@ -2012,7 +2019,7 @@ function resolveDefaultEventSupply(
     if (!collection) {
       collection = { result: null, settled: false };
       activeCollections.set(key, collection);
-      cache.warm(key, async () => {
+      cacheRead.warm(key, async () => {
         try {
           let collected;
           const discovery = discoverNow
@@ -2051,7 +2058,8 @@ function resolveDefaultEventSupply(
             failedRefreshes.remember(key, collection.result);
             throw error;
           }
-          collection.result = withDiscoveryHealth(withRequestTimeDiscovery(collected, discovery));
+          collection.result = bindLiveCacheProducer(collected,
+            withDiscoveryHealth(withRequestTimeDiscovery(collected, discovery)));
           if (isFailedEventRefresh(collection.result)) failedRefreshes.remember(key, collection.result);
           else failedRefreshes.forget(key);
           return collection.result;

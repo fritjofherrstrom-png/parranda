@@ -12,10 +12,49 @@ import {
   takeLiveCompletion,
 } from "../src/lib/live-completion.mjs";
 
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { setup: setupOriginal, request: originalRequest, originalBody } = require('../../tests/published-day-live-publication.test.js');
+
 const capabilityBody = (extra = {}) => ({
   days: [],
   live_events: { coverage: "covered", pending: true },
   live_completion: { version: 1, token: "opaque-token-1", expires_in_ms: 120000, ...extra },
+});
+
+test('real original-generation terminal snapshot reaches the parser and compatible callback without the capability', async t => {
+  const backend = await setupOriginal(t);
+  const original = await originalRequest(backend.server, { body: originalBody() });
+  await backend.complete();
+  const terminal = await originalRequest(backend.server, { url: '/api/planner-live-completion', body: { token: original.body.live_completion.token } });
+  assert.equal(terminal.body.day_snapshot.state, 'ready');
+  const read = readLiveCompletionResponse(terminal.status, terminal.body);
+  assert.deepEqual(read.daySnapshot, terminal.body.day_snapshot);
+  assert.equal(JSON.stringify(read).includes(original.body.live_completion.token), false);
+  const seen = [];
+  const h = harness([
+    { url: LIVE_COMPLETION_ENDPOINT, ...terminal },
+    { url: LIVE_ROUTE_UPGRADE_ENDPOINT, status: 200, body: { live_route_upgrade: { version: 1, state: 'not_eligible' } } },
+  ]);
+  await followLiveCompletion({ capability: takeLiveCompletion(original.body).capability, signal: new AbortController().signal,
+    onLiveEvents: (...args) => seen.push(args), ...h });
+  assert.deepEqual(seen, [[terminal.body.live_events, terminal.body.day_snapshot]]);
+  const { day_snapshot, ...legacy } = terminal.body;
+  assert.equal(Object.hasOwn(readLiveCompletionResponse(200, legacy), 'daySnapshot'), false);
+  const legacyHarness = harness([
+    { url: LIVE_COMPLETION_ENDPOINT, status: 200, body: legacy },
+    { url: LIVE_ROUTE_UPGRADE_ENDPOINT, status: 200, body: { live_route_upgrade: { version: 1, state: 'not_eligible' } } },
+  ]);
+  const legacySeen = [];
+  await followLiveCompletion({ capability: takeLiveCompletion(original.body).capability, signal: new AbortController().signal,
+    onLiveEvents: (...args) => legacySeen.push(args), ...legacyHarness });
+  assert.equal(legacySeen[0].length, 1, 'legacy callback keeps its single argument');
+  for (const value of [null, { ...day_snapshot, ref: 'bad' }, { ...day_snapshot, expires_at: day_snapshot.created_at }, { ...day_snapshot, token: 'must-not-survive' }]) {
+    const invalid = readLiveCompletionResponse(200, { ...terminal.body, day_snapshot: value });
+    assert.equal(invalid.kind, 'terminal');
+    assert.equal(invalid.liveEvents, terminal.body.live_events);
+    assert.deepEqual(invalid.daySnapshot, { version: 1, state: 'unavailable' });
+  }
 });
 
 test("the capability is taken out of the response, valid or not", () => {
