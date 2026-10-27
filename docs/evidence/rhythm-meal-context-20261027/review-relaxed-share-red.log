@@ -1,0 +1,29 @@
+✖ a released calm extent projects and restores date-bound exclusions without a count ceiling (602.060833ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 898.400375
+
+✖ failing tests:
+
+test at tests/published-day-projection.test.js:73:59
+✖ a released calm extent projects and restores date-bound exclusions without a count ceiling (602.060833ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(parsed)
+  
+      at TestContext.<anonymous> (<repo>/tests/published-day-projection.test.js:91:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
