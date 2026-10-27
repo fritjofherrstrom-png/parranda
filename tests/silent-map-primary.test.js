@@ -150,3 +150,47 @@ test('concurrent days at a silent place share one provider query; its late answe
   assert.equal(calls, 1, 'no further provider query: the cache answered');
   assert.deepEqual([ids(first()), ids(second())], published, 'already published days are not changed by the late answer');
 });
+
+test('a successful lifecycle cache read restores the full wait for a changed intent', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 });
+  const pending = [];
+  const osm = createOpenDataLoader({
+    cache: createSourceCache({ now: () => Date.now() }),
+    now: () => Date.now(),
+    elapsedNow: () => Date.now(),
+    fetcher: (_url, init) => new Promise((resolve, reject) => {
+      pending.push(() => resolve({ ok: true, json: async () => ({ elements:
+        Array.from({ length: 15 }, (_, i) => ({
+          type: 'node', id: 900 + i, lat: A.lat + i * .0001, lon: A.lng,
+          tags: { name: `Recovered ${i}`, ...[
+            { amenity: 'restaurant' }, { amenity: 'cafe' }, { tourism: 'museum' },
+          ][i % 3] },
+        })),
+      }) }));
+      init.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+    }),
+  });
+  const loader = composeOpenDataLoaders(osm, null, { eager: true, load: anchor => around(anchor) }, null,
+    { primaryWaitMs: BOUND, silentGraceMs: GRACE, silentPauseMs: PAUSE });
+  const first = await compose(t, loader, A, { tickMs: BOUND });
+  assert.equal(first().loader_metadata.primary_collection, 'background_refresh');
+  t.mock.timers.tick(20);
+  pending[0]();
+  await flush();
+  const recovered = await loader({ ...A, preferCachedSupply: true });
+  assert.equal(recovered.loader_metadata.primary_collection, 'cached_supply');
+  assert.equal(pending.length, 1, 'the lifecycle read uses the actual populated map cache');
+
+  let changed;
+  loader({ ...A, requestedIntents: ['food'], dayRhythm: true }).then(value => { changed = value; });
+  await flush();
+  assert.equal(pending.length, 2, 'the changed intent starts its own map query');
+  t.mock.timers.tick(GRACE);
+  await flush();
+  assert.equal(changed, undefined, 'a recovered place gives the new query its full wait');
+  t.mock.timers.tick(20);
+  pending[1]();
+  await flush();
+  assert.ok(changed.some(row => row.id === 'osm-node-900'), 'the new in-bound map answer joins the changed day');
+  assert.notEqual(changed.loader_metadata.primary_collection, 'neighbouring_budget_cache');
+});

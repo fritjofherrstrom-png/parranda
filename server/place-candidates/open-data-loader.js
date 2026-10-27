@@ -1803,9 +1803,16 @@ function composeOpenDataLoaders(
     map.set(key, value);
     if (map.size > SILENT_PRIMARY_MAX_PLACES) map.delete(map.keys().next().value);
   };
+  const recordPrimaryAnswer = (place, order) => {
+    if (!place) return;
+    remember(answeredInBound, place, Math.max(order, answeredInBound.get(place) || 0));
+    if ((silentPlaces.get(place)?.order || 0) <= order) silentPlaces.delete(place);
+  };
   const composedLoader = async function loadComposedOpenData(request = {}) {
     const sources = [wikiSource, overtureSource, visitSwedenSource].filter(Boolean);
     const primaryAnchor = { lat: request.lat, lng: request.lng };
+    const place = silentPlaceKey(primaryAnchor);
+    const order = ++primaryOrder;
     const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
     // The lifecycle's warm path reads existing evidence, including cached NAPI
     // corroboration, without launching refreshes just to render an adequate day.
@@ -1820,9 +1827,14 @@ function composeOpenDataLoaders(
     // evidence cannot: a missing requested intent or a reservoir that cannot
     // span the walking band goes through acquisition, which re-reads every
     // cache and fetches only the sources that have not answered yet.
+    const cacheReadStartedAt = Date.now();
     const primaryCached = request.preferCachedSupply === true && typeof osmLoader.readCached === 'function'
       ? await osmLoader.readCached(primaryAnchor, request) : null;
     if (Array.isArray(primaryCached) && primaryCached[PRIMARY_CACHE_MISS] !== true) {
+      // A real primary-cache answer recovers the place just as the ordinary
+      // loader's cache hit does. Background cache rows alone never do this.
+      const failed = typeof primaryCached.loader_status === 'string' && primaryCached.loader_status.startsWith('error');
+      if (!failed && Date.now() - cacheReadStartedAt <= primaryWaitMs) recordPrimaryAnswer(place, order);
       const selected = primaryCached?.loader_metadata?.regional_scout?.selected_anchor_coords;
       const sameAnchor = !selected || (selected.lat === primaryAnchor.lat && selected.lng === primaryAnchor.lng);
       const cachedGroups = await Promise.all(sources.map(source => typeof source.readCached === 'function'
@@ -1856,8 +1868,6 @@ function composeOpenDataLoaders(
         Promise.resolve().then(() => source.load(primaryAnchor, request)).catch(failedSourceValue),
       );
     }
-    const place = silentPlaceKey(primaryAnchor);
-    const order = ++primaryOrder;
     const silence = place ? silentPlaces.get(place) : null;
     const paused = Boolean(silence && Date.now() - silence.since < silentPauseMs &&
       silence.order > (answeredInBound.get(place) || 0));
@@ -1871,8 +1881,7 @@ function composeOpenDataLoaders(
       const failed = typeof answer?.loader_status === "string" && answer.loader_status.startsWith("error");
       if (!place || failed || Date.now() - primaryStartedAt > primaryWaitMs) return;
       // Answered inside the full bound: this place's map source is answering.
-      remember(answeredInBound, place, Math.max(order, answeredInBound.get(place) || 0));
-      if ((silentPlaces.get(place)?.order || 0) <= order) silentPlaces.delete(place);
+      recordPrimaryAnswer(place, order);
     });
     const eagerGroups = [];
     for (const [source, pending] of eagerLoads) {
