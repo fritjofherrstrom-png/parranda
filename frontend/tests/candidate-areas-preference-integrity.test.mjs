@@ -25,7 +25,7 @@ test.after(() => rmSync(temporary, { recursive: true, force: true }));
 const sourceRows = specs => specs.map((spec, i) => ({ id: `source-${i}`, name: `Source place ${i}`,
   type: 'museum', tags: [], lat: 50 + i * 0.00001, lng: 10, ...spec }));
 
-async function mountAreas(t, day, lang = 'sv') {
+async function mountAreas(t, day, lang = 'sv', props = {}) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/' });
   const previous = new Map();
   for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document,
@@ -40,6 +40,7 @@ async function mountAreas(t, day, lang = 'sv') {
     areas: day.areas, missingIntents: day.missing_intents, mapsPlaceContext: 'Source fixture',
     expandedCandidateKey: null, setExpandedCandidateKey: () => {}, commitments: {},
     releaseCommitment: () => {}, commit: () => {},
+    ...props,
   })));
   t.after(async () => {
     await act(() => root.unmount());
@@ -100,4 +101,13 @@ test('an unfiltered request still shows a varied set of actual source candidates
   assert.match(container.textContent, /Source place 1/);
   assert.match(container.textContent, /Source place 2/);
   assert.match(container.textContent, /3 träffar/);
+});
+
+test('nearby candidates show source kinds and explain a missing Add action', async t => {
+  const day = composeDistrictDay(sourceRows([{ type: 'gallery' }, { type: 'park' }, { type: 'cafe' }]), { candidateSurface: true });
+  const { container } = await mountAreas(t, day, 'en', { expandedCandidateKey: 'cluster:0:source-0' });
+  assert.deepEqual([...container.querySelectorAll('[data-stop-category]')].map(node => node.textContent).sort(), ['Gallery', 'Park', 'Café'].sort());
+  assert.match(container.textContent, /can't be added to this route right now/);
+  assert.ok(![...container.querySelectorAll('button')].some(node => /Add to my day/.test(node.textContent)));
+  assert.ok(container.querySelector('a[href*="maps"]'), 'the map remains an available next step');
 });

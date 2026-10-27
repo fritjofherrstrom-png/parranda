@@ -15,6 +15,7 @@ export interface DistrictArea {
     place_id?: string | null;
     candidate_id?: string | null;
     name?: string | null;
+    type?: string | null;
     lat: number;
     lng: number;
     address?: string | null;
