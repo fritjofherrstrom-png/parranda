@@ -178,6 +178,31 @@ function buildRichCandidateIndex(plannerRoles) {
   return index;
 }
 
+// Identity dedupe chooses one role for publication, but that role's fit is
+// deliberately narrower than the place's assessed fit. Merge facts only from
+// current admitted assessments; descriptive also_covers metadata is not an
+// admission decision. Retained frontier/walking records are the same trusted
+// role assessments, including those beyond the public per-role cut.
+function assessedIdentityPreferences(plannerRoles, rich, id) {
+  const covered = new Set(rich?.covered_preferences || []);
+  const partial = new Set(rich?.partial_preferences || []);
+  const assessments = [
+    ...(plannerRoles?.roles || []).flatMap(entry => entry.candidates || []),
+    ...(plannerRoles?.capacity_frontier_candidates || []),
+    ...(plannerRoles?.walking_fit_candidates || []),
+  ];
+  for (const candidate of assessments) {
+    if (candidate?.candidate_id !== id || candidate.planner_usable !== true ||
+        !["filled", "partial"].includes(candidate.candidate_status) ||
+        isExplicitlyUnavailable(candidate) || !finiteCoords(candidate.coordinates) ||
+        !(candidate.gates?.may_anchor_route === true || candidate.gates?.may_influence_routes === true ||
+          isExperimentallyAdmitted(candidate))) continue;
+    for (const intent of candidate.covered_preferences || []) covered.add(intent);
+    for (const intent of candidate.partial_preferences || []) partial.add(intent);
+  }
+  return { covered: [...covered], partial: [...partial].filter(intent => !covered.has(intent)) };
+}
+
 // Map ONE admitted, source-backed candidate to the engine's sourceCandidate
 // (place-candidate draft_place) shape. Trust is reconstructed CONSERVATIVELY:
 // these are never curated/human-verified, so the route built from them stays
@@ -193,20 +218,21 @@ function toSourceCandidate({
   reservoirSupport = false,
   reservoirFrontier = false,
   requestedIntents = null,
+  plannerRoles = null,
 }) {
   const provenance = (rich && rich.provenance) || {};
   const attribution = Array.isArray(provenance.attribution) ? provenance.attribution : [];
   const firstSource = attribution[0] || {};
   const confidence = (rich && rich.confidence) || pick.confidence || "needs_review";
   const roleCovered = Array.isArray(rich?.covered_preferences) ? [...rich.covered_preferences] : [];
-  const rolePartial = Array.isArray(rich?.partial_preferences) ? [...rich.partial_preferences] : [];
+  const assessed = assessedIdentityPreferences(plannerRoles, rich, pick.candidate_id);
   const requested = Array.isArray(requestedIntents) ? [...new Set(requestedIntents)] : null;
   const coveredPreferences = requested
-    ? roleCovered.filter((intent) => requested.includes(intent))
-    : roleCovered;
+    ? assessed.covered.filter((intent) => requested.includes(intent))
+    : assessed.covered;
   const partialPreferences = requested
-    ? rolePartial.filter((intent) => requested.includes(intent))
-    : rolePartial;
+    ? assessed.partial.filter((intent) => requested.includes(intent))
+    : assessed.partial;
   const missingPreferences = requested
     ? requested.filter(
         (intent) => !coveredPreferences.includes(intent) && !partialPreferences.includes(intent),
@@ -357,6 +383,7 @@ function mapPlannerReservoirToSourceCandidates({
         seen.add(id);
         out.push(
           toSourceCandidate({
+        plannerRoles,
             pick: { role, candidate_id: id, coordinates: coords },
             rich: richIndex.get(`${role}::${id}`) || rich,
             coords,
@@ -404,6 +431,7 @@ function mapPlannerReservoirToSourceCandidates({
       seen.add(rich.candidate_id);
       gatePassingSupportCount += 1;
       out.push(toSourceCandidate({
+        plannerRoles,
         pick: { role: roleEntry.role, candidate_id: rich.candidate_id, coordinates: rich.coordinates },
         rich: richIndex.get(`${roleEntry.role}::${rich.candidate_id}`) || rich,
         coords: finiteCoords(rich.coordinates), city, role: roleEntry.role,
@@ -437,6 +465,7 @@ function mapPlannerReservoirToSourceCandidates({
         seen.add(id);
         state.count += 1;
         out.push(toSourceCandidate({
+        plannerRoles,
           pick: { role: state.role, candidate_id: id, coordinates: rich.coordinates },
           rich: richIndex.get(`${state.role}::${id}`) || rich,
           coords: finiteCoords(rich.coordinates), city, role: state.role, requestedIntents,
@@ -483,6 +512,7 @@ function mapPlannerReservoirToSourceCandidates({
     gatePassingSupportCount += 1;
     out.push(
       toSourceCandidate({
+        plannerRoles,
         pick: { role, candidate_id: rich.candidate_id, coordinates: coords },
         rich: richIndex.get(`${role}::${rich.candidate_id}`) || rich,
         coords,
@@ -508,6 +538,7 @@ function mapPlannerReservoirToSourceCandidates({
       seen.add(deferred.rich.candidate_id);
       out.push(
         toSourceCandidate({
+        plannerRoles,
           pick: {
             role: deferred.role,
             candidate_id: deferred.rich.candidate_id,
@@ -606,6 +637,7 @@ function appendSecondSpinePlace({ out, seen, spine, plannerRoles, richIndex, cit
   seen.add(rich.candidate_id);
   out.push(
     toSourceCandidate({
+      plannerRoles,
       pick: { role, candidate_id: rich.candidate_id, coordinates: coords },
       rich: richIndex.get(`${role}::${rich.candidate_id}`) || rich,
       coords,
@@ -650,6 +682,7 @@ function appendWalkingCapacityFrontier({
     added += 1;
     out.push(
       toSourceCandidate({
+        plannerRoles,
         pick: {
           role,
           candidate_id: id,
@@ -700,7 +733,7 @@ function mapAdmittedSelectionToSourceCandidates({
     const coords = finiteCoords(pick.coordinates) || (rich && finiteCoords(rich.coordinates));
     if (!coords) continue; // no geo → cannot honestly be a stop
     seen.add(id);
-    out.push(toSourceCandidate({ pick, rich, coords, city, role, requestedIntents }));
+    out.push(toSourceCandidate({ pick, rich, coords, city, role, requestedIntents, plannerRoles }));
   }
   return out;
 }
@@ -719,7 +752,7 @@ function buildWalkingFitReservoirs({sourceCandidates, plannerRoles, origin, walk
     for (const next of plannerRoles?.walking_fit_candidates || []) {
       if (next.role !== base.role || ids.has(next.candidate_id) || !finiteCoords(next.coordinates) ||
           !comparableRoleReplacement(rich,next)) continue;
-      const replacement = toSourceCandidate({pick:{candidate_id:next.candidate_id},rich:next,
+      const replacement = toSourceCandidate({plannerRoles,pick:{candidate_id:next.candidate_id},rich:next,
         coords:next.coordinates,city:base.city,role:base.role,
         reservoirSelected:base.reservoir_selected === true,reservoirSupport:base.reservoir_support === true,
         requestedIntents:plannerRoles.requested_preferences});
