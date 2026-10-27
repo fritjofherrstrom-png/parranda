@@ -16,7 +16,7 @@ function createMealOrderPolicy(stops, context) {
   const current = Number(now[2]) * 60 + Number(now[3]);
   const meals = new Set(stops.filter(stop => preferenceFit(stop).coveredPreferences.includes('food')));
   if (!meals.size) return null;
-  const hours = new Map([...meals].map(stop => [stop, normalizeSelectedDayHoursFact(stop.selectedDayHours)]));
+  const hours = new Map([...meals].map(stop => [stop, normalizeSelectedDayHoursFact(stop.selectedDayHours ?? stop.selected_day_hours)]));
   const at = (stop, start, end) => {
     if (!meals.has(stop)) return false;
     const fact = hours.get(stop);

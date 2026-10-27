@@ -38,7 +38,8 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
   preferencePriority = [], pinnedIds = [], mealContext = null, ...context } = {}) {
   const requested = normalizeUserIntents(preferences).intents;
   const priority = canonicalPriority(preferencePriority, preferences);
-  if (requested.length < 2 || (!priority.length && !requested.includes('food'))) return selected;
+  const timedFood = priority[0] === 'food' && createMealOrderPolicy(rankedCandidates.map(({ item }) => item), mealContext);
+  if ((requested.length < 2 && !timedFood) || (!priority.length && !requested.includes('food'))) return selected;
   // Exhaustive set evaluation is deliberately bounded to the same 12-place
   // reservoir as the existing chooser, not factorial route-order search.
   const unique = new Map();

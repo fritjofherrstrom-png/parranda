@@ -1288,6 +1288,8 @@ async function composeAgnosticRouteOutputOnce({
     walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
     walkingFitSelection: synthesizeVia === "engine",
     experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
+    mealContext: preferencePriority?.[0] === 'food' && ctx?.timezoneKnown && ctx.timeAppliesToRequestedDate
+      ? { date: effectiveDate, nowLocalIso: ctx.now, fullDay: dayRhythm === 'full' } : null,
   };
   const selectionHelpers = trustedTimeAppliesToRequestedDate
     ? {

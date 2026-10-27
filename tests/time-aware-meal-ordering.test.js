@@ -144,3 +144,12 @@ test('releasing an intentionally empty extent cannot turn missing supply into an
   assert.equal(output.stops.length, 0);
   assert.notEqual(output.experiment.manual_edit_published, true);
 });
+
+test('Food as the sole explicit interest also retains the feasible complementary dinner', async () => {
+  const records = [...Array.from({ length: 6 }, (_, i) => record(`lunch-${i}`, 'restaurant', 3, { opening_hours: 'Mo-Su 11:00-15:00' })),
+    record('z-dinner', 'restaurant', 3, { opening_hours: 'Mo-Su 18:00-23:00' })];
+  const output = await day(records, { preferences: ['food'], preferencePriority: ['food'] });
+  assert.equal(output.stops.length, 6);
+  assert.equal(output.stops.at(-1).id, 'z-dinner');
+  assert.ok(output.stops.every(s => s.covered_preferences.includes('food')));
+});
