@@ -45,15 +45,17 @@ function extractOfficialProgramArticle(html, options = {}) {
       timing.starts_at || timing.starts_on,
       timing.time_window?.local_start || "",
       row.title,
+      ...(row.area ? [row.area] : []),
     ].join("|"));
     events.push(compact({
       id: sourceRecordId,
+      source_occurrence_id: row.area ? sourceRecordId : null,
       title: row.title,
       name: row.title,
       ...timing,
       source_url: sourceUrl,
       place_context: row.venue,
-      area: row.venue,
+      area: row.area || row.venue,
       source_language: sourceLanguage,
       event_language: sourceLanguage,
       translation_status: "not_required",
@@ -67,6 +69,11 @@ function extractOfficialProgramArticle(html, options = {}) {
   }
 
   const dedupedEvents = dedupeEvents(events);
+  if (grouped.programme_title && dedupedEvents.length) {
+    const dates = dedupedEvents.map((event) => event.starts_on).filter(Boolean).sort();
+    const programme = { title: grouped.programme_title, source_url: sourceUrl, starts_on: dates[0], ends_on: dates.at(-1) };
+    for (const event of dedupedEvents) event.programme = { ...programme };
+  }
   const significance = {
     source_prominence: "dedicated_programme",
     programme_event_count: dedupedEvents.length,

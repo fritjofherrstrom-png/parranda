@@ -625,6 +625,7 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
     geographic_relevance: event.geographic_relevance || null,
     source_scope_verified: event.source_scope_verified === true,
     local_significance: event.local_significance || null,
+    ...(event.programme ? { programme: event.programme } : {}),
     // The venue-local timezone so the UI shows the real local start time.
     timezone: eventTimezone || feed.timezone || feed.fallback_timezone || null,
   };
@@ -1055,9 +1056,13 @@ async function collectAnchorEvents({
   // Public payload cannot inject this seam; ambiguous, weak or out-of-radius
   // results remain mapless and are rejected by the unchanged fusion gate below.
   // The active Live time bucket gets first use of the bounded lookup budget.
+  // Within it, exact source programme areas matching the trusted locality get
+  // a lookup before other areas; a locality match supplies no venue geometry.
   const venueResolution = await resolveEventVenueGeometry(
     displayableEvidence.filter(event => !event.calendar_fact).sort((left, right) =>
-      periodRank.get(left) - periodRank.get(right) || compareVenueResolutionPriority(left, right)),
+      periodRank.get(left) - periodRank.get(right) ||
+      programmeLocalityLookupPriority(left, placeContext) - programmeLocalityLookupPriority(right, placeContext) ||
+      compareVenueResolutionPriority(left, right)),
     {
       resolver: venueResolver,
       anchor,
@@ -1185,6 +1190,16 @@ function boundedDateOnlyRange(startsOn, endsOn, maxDays = MAX_HAPPENING_DAYS) {
   const endOrdinal = dateOnlyOrdinal(endsOn);
   if (startOrdinal == null || endOrdinal == null || endOrdinal < startOrdinal) return false;
   return endOrdinal - startOrdinal <= maxDays;
+}
+
+function programmeLocalityLookupPriority(event, placeContext) {
+  if (!event?.programme) return 1;
+  const fold = value => typeof value === "string"
+    ? value.normalize("NFKD").replace(/\p{M}/gu, "").toLocaleLowerCase("en")
+      .replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+    : "";
+  const locality = fold(placeContext?.locality);
+  return locality && fold(event.area) === locality ? 0 : 1;
 }
 
 function compareVenueResolutionPriority(left, right) {
@@ -1697,7 +1712,9 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // explicit partial outcome are observed without deleting any shared cache.
 // v18 carries original configured-provider public-destination evidence. Older
 // snapshots remain on disk but cannot be mistaken for newly attested output.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v18";
+// v19 rebuilds programme facts and complementary discovery after thin-source
+// pools from v18. Prior files remain intact and expire on their original TTL.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v19";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read
@@ -1978,9 +1995,10 @@ function resolveDefaultEventSupply(
       });
       if (!discoveryHealth) discoveryHealth = demandHealth;
     }
-    // A place without its own approved or qualified source looks for one now,
-    // inside the out-of-band collection below; the day never waits for it.
-    const discoverNow = !hasApprovedLocalSource && typeof requestTimeDiscovery === "function";
+    // Complement a thin local mix inside the same out-of-band collection;
+    // one answering calendar does not establish complete local coverage.
+    const discoverNow = (!hasApprovedLocalSource || complementaryDiscoveryNeeded) &&
+      typeof requestTimeDiscovery === "function";
     if (sourcePlan.length === 0 && !discoverNow) {
       return {
         coverage: "uncovered",

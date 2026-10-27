@@ -59,13 +59,14 @@ const fields = {
   Recurrence: { rule: o('string'), label: o('string'), timezone: o('string'), occurrence_status: o(enumeration('unconfirmed')) },
   CalendarFact: { kind: r(enumeration('public_holiday')), scope: r(enumeration('national','regional','local')), country_code: r('string'),
     area: r('string'), temporal_scope: r(enumeration('full_day','half_day')), flags: r(array(enumeration('Recommended','Provisional','OneTime','Exception'),0,4)) },
+  Programme: { title: r('id200'), source_url: r('url'), starts_on: r('date'), ends_on: r('date') },
   EventSource: { identity: n('string'), family: n('string'), type: n('string'), provider_id: n('string'), occurrence_id: n('string'),
     attribution: n('string'), license: n('string'), label: n('string'), url: n('url'), tier: n('string'), confidence: n('string') },
   Event: { id: r('nonblank'), title: r('string'), place: n('string'), address: n('string'), source_provider_id: n('string'), source_series_id: n('id200'),
     source_occurrence_id: n('id200'), source_label: n('string'), source_url: n('url'), source_link_kind: n(enumeration('page','site_home')),
     source_link_host: n('string'), timezone: n('string'), starts_at: n('instant'), ends_at: n('instant'), starts_on: n('date'), ends_on: n('date'),
     occurrence_date: n('date'), live_occurrence_id: n('liveId'), live_choice_eligible: o('bool'), time_window: n('TimeWindow'), recurrence: n('recurrence'),
-    calendar_fact: n('CalendarFact'), sources: o(array('EventSource')), tags: o(array('string')), live_proximity: n('string'),
+    calendar_fact: n('CalendarFact'), programme: o('Programme'), sources: o(array('EventSource')), tags: o(array('string')), live_proximity: n('string'),
     geographic_relevance: n('string'), source_scope_verified: o('bool'), anchor_distance_km: n('nonnegative'), lat: n('lat'), lng: n('lng'),
     display_group_kind: n(enumeration('source_program')), occurrences: o(array('Event')), preference_match: n(enumeration('strong','partial','none','unrequested')),
     requested_preferences: n(array('string')), matched_preferences: n(array('string')), partial_preferences: n(array('string')),
@@ -269,6 +270,8 @@ function validateObject(type,value) {
   }
   if (type === 'Eligibility' && value.eligible && value.blockers?.length) refuse();
   if (type === 'SelectedHours' && !isDeepStrictEqual(normalizeSelectedDayHoursFact(value),value)) refuse();
+  if (type === 'Programme' && (value.ends_on < value.starts_on ||
+    Date.parse(value.ends_on) - Date.parse(value.starts_on) > 44 * 86400000)) refuse();
   if (['Event','EveningEvent','Stop','TimeWindow'].includes(type)) {
     if (value.starts_at && value.ends_at && Date.parse(value.ends_at) < Date.parse(value.starts_at)) refuse();
     if (value.starts_on && value.ends_on && value.ends_on < value.starts_on) refuse();
@@ -276,6 +279,7 @@ function validateObject(type,value) {
       occurrenceDate(value.live_occurrence_id) !== value.occurrence_date)) refuse();
     if (type === 'Event') {
       if ((value.lat != null) !== (value.lng != null)) refuse();
+      if (value.programme && (!value.starts_on || value.starts_on < value.programme.starts_on || value.starts_on > value.programme.ends_on)) refuse();
       if (value.live_choice_eligible === true) {
         // Source-issued IDs bind to the selected-day session. Materialize only
         // to validate that identity; retain the original copied temporal facts.

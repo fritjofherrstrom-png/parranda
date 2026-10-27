@@ -87,6 +87,29 @@ const livePanel = (h) => [...h.container.querySelectorAll('section')]
   .find((section) => /^Live (i|in) Testville/.test(section.querySelector('h2, p')?.textContent || ''));
 const occurrences = (text, pattern) => (text.match(pattern) || []).length;
 
+for (const lang of ['en', 'sv']) test(`${lang} Live retains the parent programme alongside its local activity`, async (t) => {
+  const title = '<img src=x onerror=alert(1)> Autumn Lights';
+  const activity = { ...PAGE, programme: { title, source_url: PAGE.source_url,
+    starts_on: '2026-09-25', ends_on: '2026-09-27' } };
+  const events = { ...liveEvents(), tonight: [activity], this_week: [],
+    browse: { tonight: { more: [] }, this_week: { more: [] } } };
+  const h = await composed(lang, { ...composedDay(), live_events: events });
+  t.after(() => h.unmount());
+  const check = root => {
+    assert.ok(root.textContent.includes(`${lang === 'en' ? 'Programme' : 'Program'}: ${title}`));
+    assert.match(root.textContent, /25 sep/i);
+    assert.match(root.textContent, /27 sep/i);
+    assert.equal(root.querySelectorAll('img').length, 0, 'programme title is escaped text');
+    assert.ok(root.textContent.includes(activity.title), 'the local activity keeps its own title');
+    assert.equal(anchorsTo(root, PAGE.source_url).length, 1, 'the exact event/programme source remains linked');
+  };
+  check(livePanel(h));
+  const saved = h.readStorage(LAST_KEY);
+  await click(h, button(h, /See all live|Se allt live/));
+  check(h.container.querySelector('[role="dialog"]'));
+  assert.deepEqual(h.readStorage(LAST_KEY), saved, 'reading programme context does not replace the day');
+});
+
 for (const lang of ['en', 'sv']) test(`${lang} Live credits survive without URLs and stay escaped in both periods`, async (t) => {
   const credit = '<img src=x onerror=alert(1)> & Source owner';
   const credited = (event) => ({ ...event, sources: [
