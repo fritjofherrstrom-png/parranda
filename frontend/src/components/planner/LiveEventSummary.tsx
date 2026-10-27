@@ -7,8 +7,11 @@ import type { PulseEvent } from "./types";
 // number or email address; venue words such as Telefonplan are not contacts.
 function placeDisplay(place?: string) {
   if (!place) return "";
-  const contact = /(?:[,;|·]|\s[–—-]\s)\s*(?:(?:tel(?:efon)?\.?|phone)\s*:?\s*\+?\d[\d\s()./-]{4,}|(?:(?:e-?post|e-?mail)\s*:?\s*)?[^\s@,;|·]+@[^\s@,;|·]+\.[^\s@,;|·]+)/i;
-  const match = contact.exec(place);
+  const field = String.raw`(?:(?:tel(?:efon)?\.?|phone)\s*:?\s*\+?\d[\d\s()./-]{4,}|(?:(?:e-?post|e-?mail)\s*:?\s*)?[^\s@,;|·]+@[^\s@,;|·]+\.[^\s@,;|·]+)`;
+  const separator = String.raw`(?:[,;|·]|\s[–—-]\s)\s*`;
+  // Only a closed contact-only tail may be omitted. An interior contact must
+  // never swallow a later street, town or entrance instruction.
+  const match = new RegExp(`${separator}${field}(?:\\s*${separator}${field})*\\s*$`, "i").exec(place);
   return match && match.index > 0 ? place.slice(0, match.index).trim() : place;
 }
 

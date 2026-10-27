@@ -33,8 +33,15 @@ Källupptäckt och modellpilot ägs av den separata lokala research-chatten.
   nya byggda CSS:en. Detta är kontrollerad renderingevidens, inte ett påstående
   om källupptäckt eller driftsatt UI.
 
-Oberoende review, exakt-head CI, deployment och nya riktiga Borrby-bilder
-redovisas med sina respektive revisioner i PR:ens handoff. Lokala rapporter,
+Oberoende helhetsreview hittade ett kontaktstädningsfall som kunde dölja en
+adress efter ett telefonnummer eller en e-postadress. Två monterade EN/SV-
+regressioner reproducerade felet RED; städningen kräver nu ett slutet suffix
+av enbart kontakter. Slutliga berörda kontroller: 173 PASS. Typecheck och
+frontendbygge passerar efter fixen. Se INDEPENDENT_REVIEW.md för den frysta
+granskningen; den beskrivna P2-punkten är rättad i den efterföljande fixen.
+
+Exakt-head CI, deployment och nya riktiga Borrby-bilder redovisas med sina
+respektive revisioner i PR:ens handoff. Lokala rapporter,
 RED/GREEN-loggar och tidigare riktiga Borrby-svar/bilder bevaras i projektets
 syskonkatalog parranda-event-discovery-evidence-20261027/.
 

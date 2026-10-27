@@ -20,12 +20,12 @@
 Files: frontend/src/components/planner/Live{Card,Sheet,EventSource}.tsx,
 EventOccurrences.tsx, timing consumers/lib declarations as necessary and focused frontend tests.
 Consumes existing PulseEvent. Produces shared readable presentation and separately rendered timing notice where required.
-- [ ] Reproduce current Borrby period/place/source clutter in mounted UI expectations; observe RED.
-- [ ] Implement minimal shared hierarchy and clear period notice; retain semantic controls for daily/occurrences/unknown timing.
-- [ ] Verify EN/SV, source link identity, contact-suffix cleanup and card/sheet consistency; report exact commands/results and files.
+- [x] Reproduce current Borrby period/place/source clutter in mounted UI expectations; observe RED.
+- [x] Implement minimal shared hierarchy and clear period notice; retain semantic controls for daily/occurrences/unknown timing.
+- [x] Verify EN/SV, source link identity, contact-suffix cleanup and card/sheet consistency; report exact commands/results and files.
 
 ### Task 2: Integration (root)
 
-- [ ] Check current main and follow-up source heads; this UI change can ship independently. Run affected verification before CI.
+- [x] Check current main and follow-up source heads; this UI change can ship independently. Run affected verification before CI.
 - [ ] Build/typecheck frontend, commit dist, whole-branch review and exact-head CI.
 - [ ] Main-targeted PR, coordinate current main/head/runtime, deploy and capture real Borrby screenshots.

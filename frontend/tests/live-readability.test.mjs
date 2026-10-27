@@ -96,6 +96,24 @@ for (const lang of ['en', 'sv']) test(`${lang} card and sheet separate title, pe
   assert.equal(JSON.stringify(reportedRows), original);
 });
 
+for (const lang of ['en', 'sv']) test(`${lang} contact cleanup keeps addresses after interior phone and email fields`, async t => {
+  const rows = [
+    period('interior-phone', 'Musteri programme', 'Kiviks Musteri; tel: 0414-719 00; Kiviks Stora Väg 7, Kivik'),
+    period('interior-email', 'Community programme', 'Bygdegården; info@bygdegarden.example; Stibyvägen 10, Gärsnäs; ingång från gården'),
+  ];
+  const original = JSON.stringify(rows);
+  const h = await composed(t, lang, rows);
+  const check = root => {
+    for (const row of rows) {
+      assert.ok(exactParagraph(eventRow(root, row.title), row.place), 'an interior contact cannot hide the following address or entrance');
+    }
+  };
+  check(card(h));
+  await click(h, /See all live|Se allt live/);
+  check(h.container.querySelector('[role="dialog"]'));
+  assert.equal(JSON.stringify(rows), original, 'canonical source places stay unchanged');
+});
+
 // Regressions caught: treating daily/explicit dates as uncertain periods and
 // claiming programme span is an event recurrence, plus invented unknown clocks.
 for (const lang of ['en', 'sv']) test(`${lang} readable timing keeps daily, occurrence, programme and unknown-time meanings`, async t => {
