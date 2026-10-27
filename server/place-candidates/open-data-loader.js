@@ -129,6 +129,13 @@ const REGIONAL_CLUSTER_RADIUS_KM = 3;
 // already holds (see `composeOpenDataLoaders`). This is a latency ceiling for
 // the slow/outage path, not a measured Overpass percentile.
 const DIRECTORY_PRIMARY_WAIT_MS = 10000;
+// At a place whose map primary left a composition at that bound unanswered,
+// the directory gives it this short grace instead, for a bounded pause (see
+// composeOpenDataLoaders). A cache hit, a coalesced in-flight answer or an
+// approved stale fallback arrives well within it.
+const SILENT_PRIMARY_GRACE_MS = 1000;
+const SILENT_PRIMARY_PAUSE_MS = 5 * 60 * 1000;
+const SILENT_PRIMARY_MAX_PLACES = 512;
 // Process-private marker: a cache-only primary read found no entry at all, as
 // opposed to a cached (possibly genuinely empty) Overpass answer.
 const PRIMARY_CACHE_MISS = Symbol("primaryCacheMiss");
@@ -1753,6 +1760,14 @@ function failedSourceValue() {
   return failed;
 }
 
+// The map cache's anchor bucket (~110 m): a rhythm or interest change at the
+// same place shares that place's pause; another place never does.
+function silentPlaceKey(anchor) {
+  const lat = Number(anchor?.lat);
+  const lng = Number(anchor?.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? `${lat.toFixed(3)},${lng.toFixed(3)}` : null;
+}
+
 // Compose the OSM loader (returns a `withLoaderStatus` array) with bounded
 // background sources (plain arrays). OSM runs first so a selected regional
 // cluster anchors every other source to the SAME place. A legacy function gets
@@ -1763,8 +1778,31 @@ function composeOpenDataLoaders(
   wikiSource = null,
   overtureSource = null,
   visitSwedenSource = null,
-  { primaryWaitMs = DIRECTORY_PRIMARY_WAIT_MS } = {},
+  {
+    primaryWaitMs = DIRECTORY_PRIMARY_WAIT_MS,
+    silentGraceMs = SILENT_PRIMARY_GRACE_MS,
+    silentPauseMs = SILENT_PRIMARY_PAUSE_MS,
+  } = {},
 ) {
+  // Process-private, per place (the map cache's ~110 m anchor bucket): a map
+  // primary that left a composition at the wait bound unanswered. A slow query
+  // is not proof of a dead source, so this never reaches another place. While
+  // a place is paused its primary is still started exactly as before (identical
+  // in-flight queries coalesce, a late answer already cached is a cache hit, a
+  // refused one serves its approved stale fallback), but a varied directory
+  // gives it only a short grace instead of the full wait. The pause is bounded,
+  // and a primary that answers inside the full bound ends it, even while
+  // paused. Start order decides: an older request never undoes what a newer
+  // one observed. Engine review, 25 Oct 2026: every staging request paid the
+  // full wait for a map source that never answered (11–16 s per adjustment).
+  const silentPlaces = new Map();
+  const answeredInBound = new Map();
+  let primaryOrder = 0;
+  const remember = (map, key, value) => {
+    map.delete(key);
+    map.set(key, value);
+    if (map.size > SILENT_PRIMARY_MAX_PLACES) map.delete(map.keys().next().value);
+  };
   const composedLoader = async function loadComposedOpenData(request = {}) {
     const sources = [wikiSource, overtureSource, visitSwedenSource].filter(Boolean);
     const primaryAnchor = { lat: request.lat, lng: request.lng };
@@ -1818,11 +1856,24 @@ function composeOpenDataLoaders(
         Promise.resolve().then(() => source.load(primaryAnchor, request)).catch(failedSourceValue),
       );
     }
+    const place = silentPlaceKey(primaryAnchor);
+    const order = ++primaryOrder;
+    const silence = place ? silentPlaces.get(place) : null;
+    const paused = Boolean(silence && Date.now() - silence.since < silentPauseMs &&
+      silence.order > (answeredInBound.get(place) || 0));
+    if (silence && !paused) silentPlaces.delete(place);
     const primaryStartedAt = Date.now();
     let primarySettled = false;
     const osmPromise = Promise.resolve(osmLoader(request))
       .catch(() => withLoaderStatus([], "error_failed_closed", "osm_threw"));
-    osmPromise.then(() => { primarySettled = true; });
+    osmPromise.then((answer) => {
+      primarySettled = true;
+      const failed = typeof answer?.loader_status === "string" && answer.loader_status.startsWith("error");
+      if (!place || failed || Date.now() - primaryStartedAt > primaryWaitMs) return;
+      // Answered inside the full bound: this place's map source is answering.
+      remember(answeredInBound, place, Math.max(order, answeredInBound.get(place) || 0));
+      if ((silentPlaces.get(place)?.order || 0) <= order) silentPlaces.delete(place);
+    });
     const eagerGroups = [];
     for (const [source, pending] of eagerLoads) {
       if (source.primaryRescue === false) continue;
@@ -1838,10 +1889,14 @@ function composeOpenDataLoaders(
     // the ordinary merge below keeps both families (and still rescues a
     // failed primary). A primary still outstanding at the bound keeps running
     // and caches its answer for the next request; this composition answers
-    // now, without asking any provider again.
+    // now, without asking any provider again. At a place whose primary went
+    // silent at the bound, that chance is the short grace (see above).
     const rescue = await awaitPrimaryOrRescue(osmPromise, eagerGroups, requestedIntents,
-      primaryWaitMs - (Date.now() - primaryStartedAt));
+      (paused ? Math.min(silentGraceMs, primaryWaitMs) : primaryWaitMs) - (Date.now() - primaryStartedAt));
     if (rescue.rescue && !primarySettled) {
+      if (!paused && place && order > (answeredInBound.get(place) || 0)) {
+        remember(silentPlaces, place, { since: Date.now(), order });
+      }
       // Keep the primary promise observed so a background failure can never
       // become an unhandled rejection.
       osmPromise.catch(() => {});
