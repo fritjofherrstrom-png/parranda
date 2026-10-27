@@ -517,3 +517,70 @@ test('an ordinary non-edit capacity refusal keeps its existing no-day policy', a
   assert.match(h.text(), /Parranda is busy right now/);
   assert.deepEqual(h.readStorage(LAST), before);
 });
+
+test('an explicit rhythm change releases the old stop count while preserving removed identities', async t => {
+  const h = await completed(t, { url: PLANNER_URL.replace('rhythm=full', 'rhythm=balanced') });
+  await expandMuseum(h); await click(h, 'Remove'); await h.clock.advance(400);
+  const removal = routeCalls(h).at(-1), remaining = initialStops.slice(1);
+  await h.fetchMock.respond(removal, response(remaining, dayPolicy.dayEditOutcome(removal.body.day_edit, remaining)));
+  await click(h, 'Adjust'); await click(h, 'Relaxed'); await h.clock.advance(400);
+  const relaxed = routeCalls(h).at(-1);
+  assert.equal(relaxed.body.day_rhythm, 'calm');
+  assert.equal(relaxed.body.day_edit, undefined, 'a new extent must not carry the preceding four-stop command');
+  assert.ok(relaxed.body.excluded_candidate_ids.includes('museum'), 'the removed place must not return');
+  await h.fetchMock.respond(relaxed, response(remaining));
+  await click(h, 'Full'); await h.clock.advance(400);
+  const full = routeCalls(h).at(-1);
+  assert.equal(full.body.day_rhythm, 'full');
+  assert.equal(full.body.day_edit, undefined);
+  assert.ok(full.body.excluded_candidate_ids.includes('museum'));
+  const expanded = [...remaining, { ...initialStops[0], id: 'another-museum', label: 'Another Museum' },
+    { ...initialStops[2], id: 'another-gallery', label: 'Another Gallery' }];
+  await h.fetchMock.respond(full, response(expanded));
+  assert.equal(h.readStorage(LAST).safeResponse.days[0].primary_route.main_stops.length, 6);
+  assert.equal(h.readStorage(LAST).inputs.dayEdit, undefined);
+  assert.equal(new URL(h.window.location.href).searchParams.has('edit'), false);
+  assert.equal(h.readStorage(LAST).commitments.entries.museum.kind, 'exclude');
+});
+
+test('rhythm expansion preserves a pin and Undo restores the exact shorter day without composing', async t => {
+  const h = await completed(t, { url: PLANNER_URL.replace('rhythm=full', 'rhythm=balanced') });
+  const lunch = [...h.container.querySelectorAll('button[aria-controls]')].find(b => b.textContent.includes('Fixture Lunch'));
+  await h.act(() => lunch.click()); await click(h, 'Keep this one'); await h.clock.advance(400);
+  await h.fetchMock.respond(routeCalls(h).at(-1), response());
+  await expandMuseum(h); await click(h, 'Remove'); await h.clock.advance(400);
+  const removal = routeCalls(h).at(-1), remaining = initialStops.slice(1);
+  await h.fetchMock.respond(removal, response(remaining, dayPolicy.dayEditOutcome(removal.body.day_edit, remaining)));
+  const before = h.readStorage(LAST);
+  await click(h, 'Adjust'); await click(h, 'Full'); await h.clock.advance(400);
+  const full = routeCalls(h).at(-1);
+  assert.equal(full.body.day_edit, undefined);
+  assert.deepEqual(full.body.pinned_candidate_ids, ['lunch']);
+  assert.ok(full.body.excluded_candidate_ids.includes('museum'));
+  await h.fetchMock.respond(full, response([...remaining, { ...initialStops[0], id: 'other', label: 'Other Museum' }]));
+  const count = routeCalls(h).length;
+  await click(h, 'Undo'); await h.clock.advance(500);
+  assert.deepEqual(h.readStorage(LAST), before);
+  assert.equal(routeCalls(h).length, count, 'Undo reinstalls the accepted answer, not another request');
+  assert.equal(h.readStorage(LAST).inputs.dayEdit.target_stop_count, 4);
+});
+
+test('a late removal cannot restore its old extent after an explicit rhythm change', async t => {
+  const h = await completed(t, { url: PLANNER_URL.replace('rhythm=full', 'rhythm=balanced') });
+  await expandMuseum(h); await click(h, 'Remove'); await h.clock.advance(400);
+  const removal = routeCalls(h).at(-1), remaining = initialStops.slice(1);
+  await h.fetchMock.respond(removal, response(remaining, dayPolicy.dayEditOutcome(removal.body.day_edit, remaining)), 200, { deferBody: true });
+  await click(h, 'Adjust'); await click(h, 'Full'); await h.clock.advance(400);
+  const full = routeCalls(h).at(-1);
+  assert.equal(removal.aborted, true);
+  assert.equal(full.body.day_edit, undefined);
+  assert.ok(full.body.excluded_candidate_ids.includes('museum'));
+  await h.fetchMock.respond(full, response([...remaining, { ...initialStops[0], id: 'other', label: 'Other Museum' }]));
+  const accepted = h.readStorage(LAST);
+  await h.fetchMock.releaseBody(removal); await h.clock.advance(500);
+  assert.deepEqual(h.readStorage(LAST), accepted);
+  const gallery = [...h.container.querySelectorAll('button[aria-controls]')].find(b => b.textContent.includes('Fixture Gallery'));
+  await h.act(() => gallery.click()); await click(h, 'Remove'); await h.clock.advance(400);
+  assert.equal(routeCalls(h).length, 4, 'a cancelled edit cannot leave future stop actions locked');
+  await h.fetchMock.respond(routeCalls(h).at(-1), { days: [] });
+});
