@@ -1,4 +1,4 @@
-import { eventTiming } from "../../lib/pulse-view.mjs";
+import LiveEventTiming from "./LiveEventTiming";
 import { liveEventSource } from "./LiveEventSource";
 import type { ReactNode } from "react";
 import type { PulseEvent } from "./types";
@@ -15,8 +15,8 @@ export default function EventOccurrences({ event, lang, selectedDate, now, rende
       </summary>
       <ul className="flex flex-col gap-2 pb-2">
         {slots.map((slot, i) => (
-          <li key={slot.id || i}>
-            {eventTiming(slot, lang, now, selectedDate)}
+          <li key={slot.id || i} className="flex min-w-0 flex-col gap-1 [overflow-wrap:anywhere]">
+            <LiveEventTiming event={slot} lang={lang} now={now} selectedDate={selectedDate} />
             {liveEventSource(slot, lang)}
             {renderChoice?.(slot)}
           </li>

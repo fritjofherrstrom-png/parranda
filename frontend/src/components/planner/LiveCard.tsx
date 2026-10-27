@@ -12,11 +12,10 @@ import { useLiveClock } from "./useLiveClock";
  * data and one callback that opens the sheet.
  */
 import type { Ref } from "react";
-import { eventTiming } from "../../lib/pulse-view.mjs";
 import { ChevronRightIcon } from "../shared/icons";
 import { buttonClass, Eyebrow } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
-import { liveEventSource } from "./LiveEventSource";
+import LiveEventSummary from "./LiveEventSummary";
 import EventOccurrences from "./EventOccurrences";
 import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
 import type { LiveEvents, PulseEvent } from "./types";
@@ -134,14 +133,7 @@ export default function LiveCard({
           <ul className="mt-2 flex flex-col gap-3">
             {pulseBuckets.tonight.slice(0, 4).map((ev: PulseEvent, i: number) => (
               <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-parranda-ink/85">
-                <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">
-                  {eventTiming(ev, lang, now, liveEvents?.selected_date)}
-                </span>
-                <span className="min-w-0 max-w-full break-words">
-                  <span className="font-bold text-parranda-ink">{ev.title}</span>
-                  {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
-                  {liveEventSource(ev, lang)}
-                </span>
+                <LiveEventSummary event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} />
                 <EventOccurrences event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} />
               </li>
             ))}

@@ -20,7 +20,7 @@ import { selectableLiveOccurrenceId } from "../../lib/live-stop-choice.mjs";
 import { busyButton, buttonClass, labelChip, pillClass, segmentClass, segmentGroup } from "../shared/ui";
 import { liveTagLabels } from "../../lib/live-tags.mjs";
 import { liveRelevanceSentence, nearbyDistanceLabel, type Lang, type Translate } from "./copy";
-import { liveEventSource } from "./LiveEventSource";
+import LiveEventSummary from "./LiveEventSummary";
 import EventOccurrences from "./EventOccurrences";
 import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
 import type { LiveEvents, LiveFailure, LiveSourceHealth, PulseEvent } from "./types";
@@ -136,12 +136,9 @@ export default function LiveSheet({
       : eventTiming(ev, lang, now, navigationRow?.date || timingDate);
     return (
       <li key={`${ev.id || "event"}:${i}`} className="flex min-w-0 flex-col gap-1 sm:gap-2">
-        <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">{timing}</span>
-        <span className="min-w-0 max-w-full break-words text-sm leading-relaxed text-parranda-ink/90">
-          <span className={titleClassName}>{ev.title}</span>
-          {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
-          {distance && <span className="font-semibold text-parranda-live"> · {distance}</span>}
-          {liveEventSource(ev, lang)}
+        <LiveEventSummary event={ev} lang={lang} now={now} selectedDate={navigationRow?.date || timingDate}
+          timing={timing} distance={distance} heading="h5" titleClassName={titleClassName} />
+        <div className="min-w-0 max-w-full break-words text-sm leading-relaxed text-parranda-ink/90">
           {/* A named list: aria-label on a plain span is not read, a list's is. */}
           {tags.length > 0 && <span role="list" aria-label={t("Taggar", "Tags")} className="mt-1 flex flex-wrap gap-1">
             {/* overflow-wrap:anywhere, not break-words: inside an inline-flex chip
@@ -149,7 +146,7 @@ export default function LiveSheet({
             {tags.map(tag => <span role="listitem" key={tag} className={`${labelChip} min-w-0 max-w-full [overflow-wrap:anywhere]`}>{tag}</span>)}
           </span>}
           {relevance && <span className="mt-0.5 block text-xs text-parranda-ink/68">{relevance}</span>}
-        </span>
+        </div>
         {!displayProgram && choice(ev, navigationRow?.series?.title || ev.title || "", navigationRow ? navigationRow.date : planningDate)}
         {(!navigationRow || displayProgram) && <EventOccurrences event={ev} lang={lang} now={now} selectedDate={navigationRow?.date || timingDate}
           renderChoice={slot => choice(slot, ev.title || "", navigationRow ? navigationRow.date : planningDate)} />}

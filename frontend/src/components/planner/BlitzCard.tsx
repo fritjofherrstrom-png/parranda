@@ -8,7 +8,8 @@
  */
 import type { AnywhereBlitzView, BlitzMoveView } from "../../lib/blitz-view.mjs";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
-import { eventSourceLink, eventTiming } from "../../lib/pulse-view.mjs";
+import { eventSourceLink } from "../../lib/pulse-view.mjs";
+import LiveEventTiming from "./LiveEventTiming";
 import { BoltIcon, ExternalIcon } from "../shared/icons";
 import { busyButton, buttonClass, Eyebrow } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
@@ -103,7 +104,6 @@ export default function BlitzCard({
           )}
           {blitzPhase === "done" && blitzResult?.state === "available" && blitzResult.best && (() => {
             const move = blitzResult.best;
-            const timing = move.kind === "live_event" ? eventTiming(move, lang) : "";
             const mapsUrl = mapsPlaceUrl(
               { name: move.title, lat: move.lat ?? undefined, lng: move.lng ?? undefined },
               typedPlaceLabel || undefined,
@@ -121,9 +121,9 @@ export default function BlitzCard({
               <div className="mt-2 flex flex-col gap-3">
                 <div>
                   <p className="type-title text-2xl text-parranda-ink">{move.title}</p>
+                  {move.kind === "live_event" && <LiveEventTiming event={move} lang={lang} />}
                   <div className="type-data mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-11 text-parranda-ink/72">
                     {move.kind === "live_event" && <span>{t("Live-händelse", "Live event")}</span>}
-                    {timing && <span>{timing}</span>}
                     {Number.isFinite(move.walking_minutes) && <span>{move.walking_minutes} {t("min till fots", "min walk")}</span>}
                     {move.source.label && <span>{move.source.label}</span>}
                   </div>
