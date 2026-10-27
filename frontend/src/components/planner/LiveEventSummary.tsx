@@ -20,7 +20,7 @@ export default function LiveEventSummary({ event, lang, now, selectedDate, timin
   now?: Date;
   selectedDate?: string | null;
   timing?: string;
-  distance?: string;
+  distance?: string | null;
   heading?: "h3" | "h5";
   titleClassName?: string;
 }) {
