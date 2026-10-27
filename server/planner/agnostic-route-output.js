@@ -443,7 +443,7 @@ function evaluateEligibility({
   // catalog supply. Geometry, preferences and walking still decide eligibility.
   // With no catalog supply, keep the existing loader blockers.
   if (externalRequested && loaderBlocker && curatedCandidateCount === 0 &&
-      !(dayEdit?.action === 'remove' && loaderStatus === 'loaded:0')) {
+      !(dayEdit?.action === 'remove' && !dayEdit.release_extent && loaderStatus === 'loaded:0')) {
     blockers.push(loaderBlocker);
   }
 
@@ -464,7 +464,7 @@ function evaluateEligibility({
   const geocodedCount = geocodedStops.length;
   // Manual shortening is not automatic route readiness. Count only factual
   // eligible supply; a zero/one-stop choice never fabricates a source pair.
-  const minimumCount = dayEdit?.action === 'remove' ? 0
+  const minimumCount = dayEdit?.release_extent ? MIN_VIABLE_GEOCODED_STOPS : dayEdit?.action === 'remove' ? 0
     : dayEdit ? Math.min(MIN_VIABLE_GEOCODED_STOPS, dayEdit.target_stop_count) : MIN_VIABLE_GEOCODED_STOPS;
   const coherence = (adaptedBody?.geometry_summary && adaptedBody.geometry_summary.coherence) || "incomplete";
   const reachExcludedCount = Number(plannerRoles?.reach_policy?.excluded_candidate_count) || 0;
@@ -1288,6 +1288,8 @@ async function composeAgnosticRouteOutputOnce({
     walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
     walkingFitSelection: synthesizeVia === "engine",
     experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
+    mealContext: preferencePriority?.[0] === 'food' && ctx?.timezoneKnown && ctx.timeAppliesToRequestedDate
+      ? { date: effectiveDate, nowLocalIso: ctx.now, fullDay: dayRhythm === 'full' } : null,
   };
   const selectionHelpers = trustedTimeAppliesToRequestedDate
     ? {
@@ -1762,6 +1764,8 @@ async function composeAgnosticRouteViaEngine({
       preferencePriority,
       dayEdit: stableDayEdit,
       reservedLiveStopCount: preserveLive ? 1 : 0,
+      mealContext: contextBlock?.time?.timezone_known === true && contextBlock.time.requested_date_is_today === true
+        ? { date: effectiveDate, nowLocalIso: contextBlock.time.now, fullDay: dayRhythm === 'full' } : null,
     });
     const engineResult = await generateAgnosticRecommendations({
       cityConfig: engineCityConfig,
@@ -1965,7 +1969,7 @@ async function composeAgnosticRouteViaEngine({
   const missingRetainedLive = dayEdit && dayEdit.preserve_retained !== false &&
     dayEdit.retained_candidate_ids.some(id => id.startsWith('live-event-') &&
       !(engineRoute?.main_stops || []).some(stop => stop.id === id));
-  const liveExtent = dayEdit?.target_stop_count ?? ({ light: 4, variation: 5, peak: 6 })[profileForCandidates(sourceCandidates)];
+  const liveExtent = (dayEdit?.release_extent ? null : dayEdit?.target_stop_count) ?? ({ light: 4, variation: 5, peak: 6 })[profileForCandidates(sourceCandidates)];
   const liveCountConflict = preserveLive && engineRoute?.main_stops?.length > liveExtent;
   const livePinConflict = activeLiveKeeps.length && requestedPins.some(id =>
     !(engineRoute?.main_stops || []).some(stop => stop.id === id));
@@ -1990,7 +1994,7 @@ async function composeAgnosticRouteViaEngine({
     if (engineDay?.day_edit) engineDay.day_edit = engineRoute.day_edit;
   }
 
-  if (dayEdit?.action === 'remove' && !(engineRoute?.main_stops || []).length) {
+  if (dayEdit?.action === 'remove' && !dayEdit.release_extent && !(engineRoute?.main_stops || []).length) {
     const result = applyRouteMutation({ baselineResult, primaryRoute: null, date: effectiveDate });
     scrubAgnosticAppliedDay(result, null);
     result.days[0].manual_empty_day = true;

@@ -2576,7 +2576,20 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
   };
   const chooseRhythm = (key: string) => {
-    if (walkKey !== key) { invalidateCommitmentIntent(); relaxDayEditForAdjustment(); setWalkKey(key); }
+    if (walkKey === key) return;
+    invalidateCommitmentIntent();
+    // A rhythm change releases only the extent, keeping the old rejection in
+    // its existing absolute place/date scope. Ordinary Keep choices are separate.
+    const scope = dayEditScopeRef.current;
+    if (dayEdit && scope?.anchorKey === anchorKey(lastRequestedAnchorRef.current) &&
+        scope?.dateIso === lastComposeDateIsoRef.current) {
+      const applied = dayEdit;
+      setDayEdit(normalizeDayEdit({ ...applied, action: "remove", replacement_preference: null,
+        target_stop_count: applied.retained_candidate_ids.length, preserve_retained: false, release_extent: true }));
+    } else { dayEditScopeRef.current = null; setDayEdit(null); }
+    pendingStopEditRef.current = null;
+    setStopEditPending(false);
+    setWalkKey(key);
   };
   const openLiveSheet = () => {
     // Reopening resumes the cell the reader selected. Reapplying
