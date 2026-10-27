@@ -294,7 +294,7 @@ test('publication observation preserves selected enrichment through exclusion fi
   assert.equal(h.counts().puts, 1);
 });
 
-test('pending Live remains enabled but neither original nor accepted upgrade trial publishes', async t => {
+test('pending Live stays enabled and an unsupported terminal upgrade explicitly refuses sharing without a write', async t => {
   const work = deferred();
   let eventCalls = 0;
   const feed = { ...HELSINKI_LINKED_EVENTS_FEED, id: 'offline-roma-events', label: 'Offline Roma transport', bbox: [12.3, 41.7, 12.7, 42.1] };
@@ -324,7 +324,7 @@ test('pending Live remains enabled but neither original nor accepted upgrade tri
   assert.equal(upgraded.status, 200);
   assert.equal(upgraded.body.live_route_upgrade.state, 'applied', 'real accepted trial still uses ordinary upgrade gates');
   assert.equal(upgraded.body.result.days[0].primary_route.main_stops.at(-1).event_id, 'roma-offline-concert');
-  assert.equal(upgraded.body.result.day_snapshot, undefined, 'trial builder must remain publication-side-effect free');
+  assert.deepEqual(upgraded.body.result.day_snapshot, { version: 1, state: 'unavailable' }, 'the applied HTTP answer explicitly refuses the unsupported event destination');
   assert.equal(h.counts().puts, 0);
   const warm = await request(h.server, { pathname: `${ROUTE}&include_day_snapshot=1` });
   assert.equal(warm.body.agnostic_route_output_experiment.promotion.promote, true);
