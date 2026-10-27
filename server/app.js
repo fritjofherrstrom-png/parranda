@@ -53,6 +53,7 @@ const { createLiveCompletionStore } = require('./planner/live-completion');
 const { createPublishedDayStore } = require('./planner/published-day-store');
 const { createPublishedDayReadHandler } = require('./planner/published-day-http');
 const { createDayPublication, publishTerminalDay } = require('./planner/published-day-publication');
+const { publicLiveSourceUrls } = require('./place-candidates/live-source-destination-evidence');
 const { retainComposition, createRouteUpgrade } = require('./planner/live-route-upgrade');
 const { nearbyCuratedSupply } = require('./planner/nearby-curated-supply');
 const { createPlaceSelectionStore, placeResolutionInputs } = require('./place-candidates/place-selection');
@@ -2608,7 +2609,16 @@ function buildApp({
             // Reuse the existing soft preference exception only for a kept
             // occurrence that actually passed source/time/walking validation.
             // Request IDs cannot promote a missing or ineligible event.
-            pinnedIds: [...pinnedCandidateIds, ...(experimentResult?.days?.[0]?.primary_route?.main_stops || [])
+            // A strict edit explicitly keeps these identities, just as a pin
+            // does. Their newly assigned roles may change preference coverage;
+            // that soft verdict must not veto the user's retained chain. The
+            // original source/availability/walking gates still ran above, and
+            // a replacement outside this list still needs requested relevance.
+            pinnedIds: [...pinnedCandidateIds,
+              ...(experiment.day_edit?.status === 'applied' && dayEdit &&
+                (dayEdit.action === 'replace' || dayEdit.preserve_retained !== false)
+                ? dayEdit.retained_candidate_ids : []),
+              ...(experimentResult?.days?.[0]?.primary_route?.main_stops || [])
               .filter(stop => stop.is_live_event === true && stop.live_choice_eligible === true &&
                 liveEventChoices.some(choice => choice.action === "keep" && choice.occurrence_id === stop.live_occurrence_id))
               .map(stop => stop.id)],
@@ -2708,7 +2718,21 @@ function buildApp({
         if (upgradeRequested) {
           const upgrade = createRouteUpgrade({ args: compositionArgs, retained: retainedComposition,
             structure: agnosticPlaceStructure, initialLive: liveEvents, published, publish: publishComposition });
-          if (upgrade && liveCompletion.bindUpgrade(liveCompletionIdentity.token, upgrade)) {
+          const publicationContext = upgrade && dayPublication?.liveContext(published, lang);
+          const publishUpgrade = upgrade && (async (live, current) => {
+            const outcome = await upgrade(live);
+            if (outcome?.live_route_upgrade?.state === 'applied' && publicationContext) {
+              // The final validated route is a different immutable answer. Use
+              // original producer authority and the same capability deadline;
+              // never reuse the original route's ref or reacquire source facts.
+              outcome.result.day_snapshot = await publishTerminalDay(
+                { ...publicationContext, published: outcome.result }, live, current, publishedDayStore);
+              if (publicLiveSourceUrls(live) === null)
+                outcome.result.day_snapshot = { version: 1, state: 'unavailable' };
+            }
+            return outcome;
+          });
+          if (publishUpgrade && liveCompletion.bindUpgrade(liveCompletionIdentity.token, publishUpgrade)) {
             published.live_completion.route_upgrade = 'explicit_request';
           }
         }

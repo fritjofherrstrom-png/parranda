@@ -1,0 +1,79 @@
+{
+  "status": "PASS",
+  "scope": "built mobile Chromium -> actual Node22/Linux arm64 HTTP, real immutable filesystem store, controlled provider transports and clock; not live-provider acceptance",
+  "date": "2026-10-27",
+  "stops": [
+    {
+      "id": "mercati-di-traiano",
+      "label": "Mercati di Traiano",
+      "lat": 41.8958,
+      "lng": 12.4865,
+      "is_live": false
+    },
+    {
+      "id": "piazza-navona",
+      "label": "Piazza Navona",
+      "lat": 41.8992,
+      "lng": 12.4731,
+      "is_live": false
+    },
+    {
+      "id": "teatro-di-marcello",
+      "label": "Teatro di Marcello",
+      "lat": 41.8931,
+      "lng": 12.4791,
+      "is_live": false
+    },
+    {
+      "id": "colosseum",
+      "label": "Colosseum",
+      "lat": 41.8902,
+      "lng": 12.4922,
+      "is_live": false
+    },
+    {
+      "id": "piazza-vittorio",
+      "label": "Piazza Vittorio",
+      "lat": 41.8948,
+      "lng": 12.5028,
+      "is_live": false
+    },
+    {
+      "id": "live-event-roma-original-concert",
+      "label": "Original concert",
+      "lat": 41.903,
+      "lng": 12.493,
+      "is_live": true,
+      "occurrence": "live:2026-10-27:aaae556a67507b2cbde7fcec250904a1"
+    }
+  ],
+  "senderRequests": [
+    {
+      "method": "POST",
+      "path": "/api/route-recommendations"
+    },
+    {
+      "method": "POST",
+      "path": "/api/planner-live-completion"
+    },
+    {
+      "method": "POST",
+      "path": "/api/planner-live-route-upgrade"
+    }
+  ],
+  "recipientRequests": [
+    {
+      "method": "GET",
+      "path": "/api/shared-days/9e9da19b4730abc24229f78ef811ea622ca5ab9f8835c426"
+    }
+  ],
+  "counts": {
+    "loads": 1,
+    "resolutions": 1,
+    "puts": 2,
+    "supplies": 1,
+    "collections": 1,
+    "transports": 1
+  },
+  "jsErrors": []
+}

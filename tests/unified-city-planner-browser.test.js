@@ -149,12 +149,22 @@ for (const [label, path, anchor] of [
   }
   await page.getByRole('button', { name: 'Expand map', exact: true }).click();
   await page.getByRole('button', { name: 'Shrink map', exact: true }).waitFor();
+  // The map grows in a CSS transition and is fitted to its new size a frame
+  // after it ends. A tap before that fit is undone by it.
+  await region.locator('[data-route-map]').evaluate(async frame => {
+    await Promise.all(frame.getAnimations().map(animation => animation.finished));
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
   // Stops a few metres apart share a group pin; tapping it zooms in until
-  // stop 1 has its own number, as a person would.
+  // stop 1 has its own number, as a person would. The map's answer to a tap
+  // is the tapped pin leaving once its stops separate. A fixed pause is not
+  // that answer: CI's first page stalled past 700 ms, and the next tap then
+  // waited for a pin that had already split.
   const stopOne = region.locator('.route-map-marker:not(.route-map-marker--group)').filter({ hasText: /^1$/ });
   for (let tap = 0; tap < 6 && !(await stopOne.isVisible()); tap++) {
-    await region.locator('.route-map-group').first().click();
-    await page.waitForTimeout(700);
+    const pin = await region.locator('.route-map-group').first().elementHandle();
+    await pin.click();
+    await pin.waitForElementState('hidden');
   }
   await stopOne.click();
   await region.locator('[data-route-map]').getByText(`${label} a`, { exact: true }).waitFor();

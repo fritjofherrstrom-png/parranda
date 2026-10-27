@@ -34,7 +34,8 @@ const { createHtmlVenueCalendarProvider } = require("../pulse-sources/html-venue
 const { createSitevisionCalendarProvider } = require("../pulse-sources/sitevision-calendar-provider");
 const { createWixEventSitemapProvider } = require("../pulse-sources/wix-event-sitemap-provider");
 const { rememberConfiguredEventSource, bindSelectedEventSource, bindConfiguredWixProvider, captureLiveCollectionInputs, bindLiveCollection,
-  bindLiveCacheProducer, carryLiveDestinationEvidence, ownLiveDestinationCache, readLiveDestinationCache } = require('./live-source-destination-evidence');
+  bindLiveCacheProducer, carryLiveDestinationEvidence, ownLiveDestinationCache, readLiveDestinationCache,
+  bindConfiguredPublicProvider, attestPublicProviderOutput, retainPublicProviderOutput, restorePublicProviderOutput } = require('./live-source-destination-evidence');
 const { createLocalizedEventsApiProvider } = require("../pulse-sources/localized-events-api-provider");
 const { createMappedEventSourceProvider } = require("../pulse-sources/mapped-event-source-provider");
 const { trustedReviewedVenueResolution } = require("../pulse-sources/reviewed-event-venues");
@@ -1328,9 +1329,12 @@ async function collectEventSource({
   if (!provider) {
     return { source, raw: [], status: "unavailable", reason: "source_adapter_unsupported" };
   }
+  bindConfiguredPublicProvider(provider, source);
 
   try {
-    const collect = () => provider.create({ key: null }).collect({ date: startParam });
+    const collect = async () => retainPublicProviderOutput(provider, source,
+      attestPublicProviderOutput(provider, source,
+        await provider.create({ key: null }).collect({ date: startParam })));
     // Share bounded source snapshots across the two Live period controls.
     // DATAtourisme also binds its date-window/geographic query to the snapshot.
     // The local API has no date/geometry filter. Final gates remain per view.
@@ -1341,6 +1345,7 @@ async function collectEventSource({
           shouldStore: value => ["ok", "empty"].includes(value?.collection_status?.status),
         })
       : await collect();
+    restorePublicProviderOutput(sourceCollectionCache, provider, source, collected);
     const raw = Array.isArray(collected && collected.time_sensitive_events) ? collected.time_sensitive_events : [];
     const outcome = normalizeDirectCollectionOutcome(collected?.collection_status, raw.length);
     return {
@@ -1690,7 +1695,9 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // discarded ends or merged source-owned occurrence identities. No cache purge.
 // v17 excludes first-page-only global inventory so bounded pagination and its
 // explicit partial outcome are observed without deleting any shared cache.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v17";
+// v18 carries original configured-provider public-destination evidence. Older
+// snapshots remain on disk but cannot be mistaken for newly attested output.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v18";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read
@@ -1869,11 +1876,11 @@ function resolveDefaultEventSupply(
     ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   }));
-  const sourceCollectionCache = createSourceCache({
+  const sourceCollectionCache = ownLiveDestinationCache(createSourceCache({
     // Source snapshots also contain normalized atoms, including category tags.
-    namespace: "agnostic-event-source-v2", ttlMs: EVENT_CACHE_TTL_MS,
+    namespace: "agnostic-event-source-v3", ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
-  });
+  }));
   const calendarReferenceCache = createSourceCache({
     namespace: "public-holiday-reference-v1", ttlMs: 86400000,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,

@@ -347,7 +347,7 @@ test('actual unsupported retained terminal event URL refuses whole snapshot with
   const upgrade = await request(h.server, { url: '/api/planner-live-route-upgrade', body: { token } });
   assert.equal(upgrade.status, 200); assert.equal(upgrade.body.live_route_upgrade.state, 'applied');
   assert.ok(upgrade.body.result.days[0].primary_route.main_stops.some(s => s.event_id === 'roma-original-concert'));
-  assert.equal(upgrade.body.result.day_snapshot, undefined);
+  assert.deepEqual(upgrade.body.result.day_snapshot, { version: 1, state: 'unavailable' });
   assert.equal(h.counts().puts, 0); assert.equal(h.counts().supplies, 1); assert.equal(h.counts().collections, 1);
 });
 
