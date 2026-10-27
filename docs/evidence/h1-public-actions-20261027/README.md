@@ -96,3 +96,8 @@ intermediate-cache regressions; no cache age renewal or extra acquisition.
 The broad native sender/recipient run predates these backend-only privacy/cache
 corrections. They do not change the built UI or the positive Linked Events
 source-output path; the final focused tests and Linux CI cover the updated code.
+
+A final reviewer pass also reproduced session-bearing matrix parameters and
+reserved home-network/localdomain suffixes through actual collection/publication.
+Four RED cases now pass with the normal public positives (21 total). Decoded
+semicolon path parameters and those reserved suffixes cannot receive authority.

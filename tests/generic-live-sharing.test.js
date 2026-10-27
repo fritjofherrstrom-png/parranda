@@ -6,7 +6,8 @@ const {setup,request,originalBody,eventRows,accepted,assertLiveFacts}=require('.
 const DATE='2026-10-27';
 function publicRows(options){return eventRows(options).map(row=>({...row,info_url:{en:'https://events.example.org/programme/original-concert'}}));}
 async function terminal(t,rows=publicRows){
-  const h=await setup(t,{rows,appOptions:{clock:{now:()=>`${DATE}T10:00:00.000Z`}}});
+  const now=`${DATE}T10:00:00.000Z`;
+  const h=await setup(t,{rows,appOptions:{clock:Object.assign(()=>new Date(now),{now:()=>now})}});
   const original=await request(h.server,{body:originalBody(DATE)});accepted(original.body);
   await h.complete();
   const reply=await request(h.server,{url:'/api/planner-live-completion',body:{token:original.body.live_completion.token}});
@@ -35,6 +36,10 @@ for(const [name,url] of [
   ['encoded login path','https://events.example.org/%6cogin/private-token'],
   ['encoded checkout separator','https://events.example.org/checkout%2fprivate-token'],
   ['double-encoded login path','https://events.example.org/%256cogin/private-token'],
+  ['matrix session token','https://events.example.org/login;jsessionid=private-token'],
+  ['matrix private token','https://events.example.org/private;token=private-token'],
+  ['home-network host','http://router.home.arpa/event/1'],
+  ['localdomain host','https://calendar.localdomain/event/1'],
 ])test(`generic sharing refuses ${name} while retaining the actual Live facts`,async t=>{
   const {h,body}=await terminal(t,options=>publicRows(options).map(row=>({...row,info_url:{en:url}})));
   assert.equal(body.live_events.tonight[0].source_url,url);
@@ -61,7 +66,7 @@ test('an actually applied Live route upgrade publishes a new exact snapshot inst
 
 test('generic provider authority survives owned disk reuse but not a JSON replay, config change or renewed cache age',async t=>{
   const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
-  const {resolveDefaultEventSupply,resolveEventFeedRegistry,collectAnchorEvents,HELSINKI_LINKED_EVENTS_FEED}=require('../server/place-candidates/agnostic-event-supply');
+  const {resolveDefaultEventSupply,collectAnchorEvents,HELSINKI_LINKED_EVENTS_FEED}=require('../server/place-candidates/agnostic-event-supply');
   const {LIVE_COLLECTION_READ}=require('../server/planner/live-completion');
   const {shapeCollectedLiveEvents}=require('../server/place-candidates/live-event-query');
   const {publicLiveSourceUrls}=require('../server/place-candidates/live-source-destination-evidence');
