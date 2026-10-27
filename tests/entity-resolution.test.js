@@ -111,6 +111,27 @@ test("same-place merge preserves exact source identities and ages without counti
   }
 });
 
+test("retained same-family observations cannot change canonical place identity with provider order", () => {
+  const { createExternalOpenProvider } = require('../server/place-candidates/external-open-provider');
+  const rows = [
+    { id: 'a', type: 'viewpoint', lat: 55.6 },
+    { id: 'b', type: 'viewpoint', lat: 55.6001 },
+    { id: '0', type: 'park', lat: 55.6002 },
+  ].map(row => ({ ...row, name: 'Cedar Grove', lng: 13,
+    sources: [{ provider: 'osm', family: 'map', tier: 'inferred', url: `https://www.openstreetmap.org/node/${row.id}` }] }));
+  for (const indices of [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]) {
+    const candidates = createExternalOpenProvider({ key: 'canonical-order' }, {
+      dataset: indices.map(i => rows[i]), observedAt: NOW,
+    }).listCandidates();
+    const result = resolveCandidateIdentity(candidates, { now: NOW });
+    assert.equal(result.candidates.length, 1);
+    const [canonical] = result.candidates;
+    assert.deepEqual({ id: canonical.id, type: canonical.type, lat: canonical.lat, lng: canonical.lng },
+      { id: '0', type: 'park', lat: 55.6002, lng: 13 }, indices.join(','));
+    assert.equal(canonical.evidence.length, 9, 'all three source observations retain their three actual claims');
+  }
+});
+
 // --- matchIdentity ---------------------------------------------------------
 test("close + same distinctive name + compatible category → same place", () => {
   const v = matchIdentity(curated(), external({ lat: 41.88965 }));

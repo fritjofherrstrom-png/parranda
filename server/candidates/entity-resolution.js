@@ -468,7 +468,13 @@ function evidenceOf(candidate, now) {
 }
 
 function evidenceCount(candidate) {
-  return Array.isArray(candidate.evidence) ? candidate.evidence.length : 0;
+  // Canonical strength keeps the original logical claim/provider/family
+  // groups. Retaining several observations must not give one source extra
+  // votes or let provider order change the surviving id/type/coordinates.
+  const evidence = Array.isArray(candidate.evidence) ? candidate.evidence : [];
+  return new Set(evidence.map(item => JSON.stringify([
+    item.claim_type, item.source_ref?.provider_id, item.source_ref?.source_family,
+  ]))).size;
 }
 
 function dedupeEvidence(evidence) {
