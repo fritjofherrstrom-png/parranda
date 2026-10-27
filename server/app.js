@@ -2608,7 +2608,16 @@ function buildApp({
             // Reuse the existing soft preference exception only for a kept
             // occurrence that actually passed source/time/walking validation.
             // Request IDs cannot promote a missing or ineligible event.
-            pinnedIds: [...pinnedCandidateIds, ...(experimentResult?.days?.[0]?.primary_route?.main_stops || [])
+            // A strict edit explicitly keeps these identities, just as a pin
+            // does. Their newly assigned roles may change preference coverage;
+            // that soft verdict must not veto the user's retained chain. The
+            // original source/availability/walking gates still ran above, and
+            // a replacement outside this list still needs requested relevance.
+            pinnedIds: [...pinnedCandidateIds,
+              ...(experiment.day_edit?.status === 'applied' && dayEdit &&
+                (dayEdit.action === 'replace' || dayEdit.preserve_retained !== false)
+                ? dayEdit.retained_candidate_ids : []),
+              ...(experimentResult?.days?.[0]?.primary_route?.main_stops || [])
               .filter(stop => stop.is_live_event === true && stop.live_choice_eligible === true &&
                 liveEventChoices.some(choice => choice.action === "keep" && choice.occurrence_id === stop.live_occurrence_id))
               .map(stop => stop.id)],
