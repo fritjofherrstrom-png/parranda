@@ -72,8 +72,8 @@ if (require.main === module) {
     const original = pending[LIVE_COLLECTION_READ]();
     assert.deepEqual([...proof(original)], [WIX_EVENT]);
     const memory = await supply(args); assert.deepEqual([...proof(memory)], [WIX_EVENT]);
-    const [file] = await fs.readdir(path.join(directory, 'agnostic-events-v17'));
-    const location = path.join(directory, 'agnostic-events-v17', file);
+    const [file] = await fs.readdir(path.join(directory, 'agnostic-events-v18'));
+    const location = path.join(directory, 'agnostic-events-v18', file);
     const bytes = await fs.readFile(location, 'utf8'), stat = await fs.stat(location);
     const disk = JSON.parse(bytes);
     assert.ok(disk.value._live_destination_inputs.claims.length);
@@ -284,7 +284,7 @@ if (require.main === module) {
     const acquired = await collect();
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'live-cache-get-'));
     t.after(() => fs.rm(directory, { recursive: true, force: true }));
-    const cacheOptions = { namespace: 'agnostic-events-v17', ttlMs: 123456, dir: directory };
+    const cacheOptions = { namespace: 'agnostic-events-v18', ttlMs: 123456, dir: directory };
     const cache = ownLiveDestinationCache(createSourceCache(cacheOptions));
     const realGet = cache.get; let originalPromise, receivedOptions, produced = 0;
     cache.get = function (...parameters) {
@@ -301,7 +301,7 @@ if (require.main === module) {
     const hit = reader.get('actual-owned-get', () => { throw new Error('no extra provider'); }, options);
     assert.equal(hit, originalPromise); assert.equal(await hit, result); assert.equal(produced, 1);
     assert.equal(cache.inspect('actual-owned-get').expiresAt, expiry);
-    const diskFile = path.join(directory, 'agnostic-events-v17', 'actual-owned-get.json');
+    const diskFile = path.join(directory, 'agnostic-events-v18', 'actual-owned-get.json');
     const diskBytes = await fs.readFile(diskFile, 'utf8'), diskStat = await fs.stat(diskFile);
     const restartedCache = ownLiveDestinationCache(createSourceCache(cacheOptions));
     const diskReader = readLiveDestinationCache(restartedCache, sourcePlan);

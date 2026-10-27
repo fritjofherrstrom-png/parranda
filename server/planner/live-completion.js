@@ -194,7 +194,8 @@ function createLiveCompletionStore({ now = () => Date.now() } = {}) {
       const run = entry.upgrade;
       const execution = Promise.resolve().then(async () => {
         try {
-          const body = await run(completed.body.live_events);
+          const body = await run(completed.body.live_events,
+            () => entries.get(token) === entry && entry.expiresAt > now());
           if (Buffer.byteLength(JSON.stringify(body)) > MAX_RESULT_BYTES) throw new Error('large_live_upgrade');
           return { status: 200, body: JSON.parse(JSON.stringify(body)) };
         } catch (_) {
@@ -207,7 +208,9 @@ function createLiveCompletionStore({ now = () => Date.now() } = {}) {
     }
     const result = await entry.attempt;
     if (entry.expiresAt <= now() || entries.get(token) !== entry) return { status: 410, body: { error: 'live_completion_expired' } };
-    return result;
+    // Keep the memoized applied publication private. A consumer must not be
+    // able to mutate its route while retaining the same immutable share ref.
+    return JSON.parse(JSON.stringify(result));
   }
   return { issue, read, readWithPublication, bindPublication, bindUpgrade, upgrade };
 }

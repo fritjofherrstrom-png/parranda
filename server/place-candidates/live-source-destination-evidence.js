@@ -6,6 +6,7 @@
 // exact completed detail response can create the private raw-record witness.
 const { createHash } = require('node:crypto');
 const { types: { isProxy, isPromise } } = require('node:util');
+const { isPublicSourceDestination: publicEventDestination } = require('../lib/public-source-destination');
 const NativePromise = Promise;
 const nativePromisePrototype = Promise.prototype;
 const nativeThen = Promise.prototype.then;
@@ -19,6 +20,7 @@ const configurations = new WeakMap();
 const originalLocs = new WeakMap();
 const sitemapDocuments = new WeakMap();
 const factories = new WeakMap();
+const publicFactories = new WeakMap();
 const details = new WeakMap();
 const frames = new WeakMap();
 const issuedWitnesses = new WeakMap();
@@ -26,6 +28,41 @@ const terminalWitnesses = new WeakMap();
 const ownedCaches = new WeakSet();
 const hash = value => createHash('sha256').update(value).digest('hex');
 const claimHash = (...parts) => hash(JSON.stringify(parts));
+
+// Approved general sharing contract: carry already-public event output from
+// the actual configured structured provider. This grants no event/route trust
+// and never authorizes URLs merely found in the final publication or an upload.
+const PUBLIC_EVENT_ADAPTERS = new Set(['linked_events', 'localized_events_api',
+  'tourism_listing', 'ckan_agenda', 'datatourisme', 'public_holidays',
+  'osm_market_schedules', 'schema_org', 'schema_org_html', 'rss_atom_event_detail', 'sitevision_calendar',
+  'html_venue_calendar', 'events_calendar', 'mapped_events', 'ical',
+  'scheduled_event_cards', 'embedded_program_rsc', 'official_program_article']);
+function data(object, key) {
+  if (!object || typeof object !== 'object' || isProxy(object)) return undefined;
+  return Object.getOwnPropertyDescriptor(object, key)?.value;
+}
+function publicProviderSource(source) {
+  return configurations.has(source) && PUBLIC_EVENT_ADAPTERS.has(source.adapter) ||
+    source?.kind === 'global' && source.id === 'ticketmaster-global' && source.source_identity === 'ticketmaster.com';
+}
+function bindConfiguredPublicProvider(provider, source) {
+  if (provider && publicProviderSource(source)) publicFactories.set(provider, fingerprint(source));
+  return provider;
+}
+function attestPublicProviderOutput(provider, source, result) {
+  const sourceHash = fingerprint(source);
+  if (!sourceHash || publicFactories.get(provider) !== sourceHash) return result;
+  const rows = data(result, 'time_sensitive_events');
+  if (!Array.isArray(rows) || isProxy(rows) || rows.length > MAX_CLAIMS) return result;
+  for (let i = 0; i < rows.length; i++) {
+    const row = data(rows, String(i));
+    const loc = data(row, 'source_url') || data(row, 'url');
+    const id = data(row, 'id') || data(row, 'source_event_id') || data(row, 'provider_id') || loc;
+    if (publicEventDestination(loc) && typeof id === 'string' && id.length <= 1000 && id === id.trim())
+      details.set(row, Object.freeze({ kind: 'public_event_output_v1', source: sourceHash, loc, id, source_url: loc }));
+  }
+  return result;
+}
 
 function eventDestination(value) {
   if (typeof value !== 'string' || value.length > 1000) return false;
@@ -144,6 +181,9 @@ function carryWixDetail(from, to) {
   return to;
 }
 function inputValid(input, source) {
+  if (input?.kind === 'public_event_output_v1') return publicProviderSource(source) &&
+    input.source === fingerprint(source) && publicEventDestination(input.loc) &&
+    input.source_url === input.loc && typeof input.id === 'string' && input.id.length <= 1000;
   return input && declared(source) && input.source === fingerprint(source) && input.root === ROOT &&
     (input.child === null || childDestination(input.child)) && eventDestination(input.loc) &&
     input.response === input.loc && input.id === input.loc && input.source_url === input.loc;
@@ -168,8 +208,11 @@ function captureLiveCollectionInputs(collections) {
       if (!identity) return null;
       // Refusals carry only nonauthorizing hashes: do not duplicate arbitrary
       // booking/capability/credential-looking raw strings into new provenance.
+      const sameOriginal = input?.kind !== 'public_event_output_v1' ||
+        input.loc === (data(raw, 'source_url') || data(raw, 'url')) &&
+        input.id === (data(raw, 'id') || data(raw, 'source_event_id') || data(raw, 'provider_id') || input.loc);
       const claim = { ...identity, source: fingerprint(collection.source),
-        input: inputValid(input, collection.source) ? input : null };
+        input: sameOriginal && inputValid(input, collection.source) ? input : null };
       bytes += Buffer.byteLength(JSON.stringify(claim));
       if (bytes > MAX_INPUT_BYTES) return null;
       claims.push(claim);
@@ -213,7 +256,8 @@ function originalInputsFit(input) {
       bytes += 80;
     }
     if (claim.input !== null) {
-      const keys = ['source','root','child','loc','response','id','source_url'];
+      const keys = data(claim.input, 'kind') === 'public_event_output_v1'
+        ? ['kind','source','loc','id','source_url'] : ['source','root','child','loc','response','id','source_url'];
       if (!dataOnly(claim.input, keys)) return false;
       for (const key of keys) {
         const value = claim.input[key];
@@ -397,5 +441,6 @@ function associateTerminalLiveEvidence(original, clone, witness) {
 }
 function liveDestinationRetention(live) { return frames.get(live) || null; }
 module.exports = { rememberConfiguredEventSource, bindSelectedEventSource, rememberWixSitemapLoc, rememberWixSitemapDocument, bindConfiguredWixProvider, beginWixCatalogCollection, carryWixDetail,
+  bindConfiguredPublicProvider, attestPublicProviderOutput,
   captureLiveCollectionInputs, bindLiveCollection, bindLiveCacheProducer, carryLiveDestinationEvidence,
   ownLiveDestinationCache, readLiveDestinationCache, publicLiveSourceUrls, associateTerminalLiveEvidence, liveDestinationRetention };

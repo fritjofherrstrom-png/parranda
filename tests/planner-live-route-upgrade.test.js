@@ -98,6 +98,17 @@ test('a reserved upgrade expires on the original capability deadline even when f
   assert.equal((await store.upgrade(token)).status,410,'late composition cannot restore authority');
 });
 
+test('an upgraded immutable reference cannot be retained while a consumer changes the route',async()=>{
+  const store=createLiveCompletionStore();
+  const pending={...collection(),pending:true};
+  Object.defineProperty(pending,LIVE_COLLECTION_READ,{value:()=>collection()});
+  const {token}=store.issue(pending);let calls=0;
+  store.bindUpgrade(token,async()=>{calls++;return {live_route_upgrade:{state:'applied'},result:{days:[{stops:['original']}],day_snapshot:{ref:'owned'}}};});
+  const first=await store.upgrade(token);first.body.result.days[0].stops[0]='changed';
+  const next=await store.upgrade(token);
+  assert.deepEqual(next.body.result.days[0].stops,['original']);assert.equal(calls,1);
+});
+
 test('retention bounds include original intent, publication and private candidate metadata, not just candidate rows',()=>{
   const published={agnostic_route_output_experiment:{promotion:{promote:true}},days:[]};
   const structure={district_day:{areas:[]}};

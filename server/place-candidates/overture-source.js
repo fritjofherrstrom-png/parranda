@@ -560,6 +560,8 @@ function corroborationSelection(records, primaryRecords) {
   return { retained, ambiguous };
 }
 
+const { attestPublicPlaceRecords } = require('./source-url-evidence');
+
 function createOvertureSource({
   queryRows = null,
   releaseResolver = resolveLatestOvertureRelease,
@@ -663,13 +665,13 @@ function createOvertureSource({
   function select(records, { lat, lng, requestedIntents = [], walkingTargetBand = null, corroborationRecords = [] } = {}) {
     if (!Array.isArray(records) || records.source_error) return records;
     if (!validCoordinate(lat, lng)) return [];
-    return selectRecords(records, {
+    return attestPublicPlaceRecords(selectRecords(records, {
       anchor: { lat, lng },
       requestedIntents,
       walkingTargetBand,
       corroborationRecords,
       limit: boundedLimit,
-    });
+    }), 'overture');
   }
 
   const loadOvertureAround = async function loadOvertureAround(request = {}) {
