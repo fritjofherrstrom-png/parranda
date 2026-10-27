@@ -137,7 +137,7 @@ test('control: disk-cached resolver facts recompute safe choice labels after res
   const first = resolver(rows, { cacheDir: dir, fetcher: async () => { calls++; return json(rows); } });
   const sourceFacts = await first(QUERY);
   assert.equal(calls, 1);
-  const namespace = path.join(dir, 'place-resolver-nominatim-v7');
+  const namespace = path.join(dir, 'place-resolver-nominatim-v8');
   const files = readdirSync(namespace);
   assert.equal(files.length, 1);
   const persisted = JSON.parse(readFileSync(path.join(namespace, files[0]), 'utf8'));
