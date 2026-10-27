@@ -18,7 +18,8 @@ import { stopIdentity as changeStopIdentity } from "../../lib/day-change.mjs";
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { lineProgress } from "../../lib/line-progress.mjs";
-import { eventSourceLink, eventTiming } from "../../lib/pulse-view.mjs";
+import { eventSourceLink } from "../../lib/pulse-view.mjs";
+import LiveEventTiming from "./LiveEventTiming";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { selectedDayHoursLabel } from "../../lib/selected-day-hours.mjs";
 import { stopHoursUnknown, stopWebsiteUrl, stopMatchedPreferences, stopPlaceDetails } from "../../lib/stop-card-facts.mjs";
@@ -519,12 +520,8 @@ export default function StopLine({
                   ) : (
                     <span className="text-17 font-extrabold">{name}</span>
                   )}
-                  {stop?.starts_at && (
-                    <span className="type-data rounded-full bg-parranda-live px-2 py-0.5 text-11 font-semibold text-parranda-on-live">
-                      {eventTiming(stop, lang, undefined, selectedDate)}
-                    </span>
-                  )}
                 </p>
+                <LiveEventTiming event={stop} lang={lang} selectedDate={selectedDate} />
                 {venue && venue !== name && <p className="mt-0.5 text-13 text-parranda-ink/72">{venue}</p>}
                 <p className="mt-1 text-13 text-parranda-ink/72">
                   {dayOffset === 0
