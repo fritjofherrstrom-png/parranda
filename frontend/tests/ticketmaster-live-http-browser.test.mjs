@@ -408,7 +408,12 @@ for (const coldPlace of [false, true]) test(`Ticketmaster exact occurrence survi
     await sheet.locator(`a[href="${TARGET_URL}"]`).waitFor({ state: 'visible' });
     const sheetText = await sheet.innerText();
     assert.match(sheetText, /Calendars:\s*1 of 1 responded/);
-    assert.match(sheetText, /via\s+Ticketmaster/);
+    const sourceRow = sheet.locator('li').filter({ has: page.locator(`a[href="${TARGET_URL}"]`) });
+    const sourceDetails = sourceRow.locator('summary').filter({ hasText: /^Source details$/ });
+    assert.equal(await sourceDetails.count(), 1, 'the exact occurrence has its own source disclosure');
+    assert.doesNotMatch(await sourceRow.innerText(), /via\s+Ticketmaster/, 'feed attribution starts collapsed');
+    await sourceDetails.click();
+    assert.match(await sourceRow.innerText(), /via\s+Ticketmaster/);
     const settledEntry = await savedDay(page);
     const live = settledEntry.safeResponse.live_events;
     assert.equal(live.acquisition.source_health.failed_source_count, 0);

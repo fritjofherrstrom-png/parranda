@@ -55,8 +55,9 @@ test('built Live groups forty bookings, preserves local supply and reaches later
  await sheet.getByText('Published exhibition programme',{exact:true}).waitFor({timeout:15000});
  assert.equal(await sheet.getByText('Published exhibition programme',{exact:true}).count(),1);
  const program=sheet.locator('li').filter({has:page.getByText('Published exhibition programme',{exact:true})}).first();
- assert.match(await program.locator('summary').innerText(),/^40 occurrences$/);await program.locator('summary').click();
- assert.equal(await program.locator('details li').count(),40);assert.equal(await program.getByRole('button',{name:'Plan with this event',exact:true}).count(),0,'morning bookings do not gain evening eligibility by grouping');
+ const occurrenceSummary=program.locator('summary').filter({hasText:/^40 occurrences$/});
+ assert.equal(await occurrenceSummary.count(),1);await occurrenceSummary.click();
+ assert.equal(await occurrenceSummary.locator('..').locator('li').count(),40);assert.equal(await program.getByRole('button',{name:'Plan with this event',exact:true}).count(),0,'morning bookings do not gain evening eligibility by grouping');
  const accepted=liveResponses.find(x=>x.tonight?.some(e=>e.display_group_kind==='source_program'));
  assert.ok(accepted);const group=accepted.tonight.find(x=>x.title==='Published exhibition programme');
  assert.equal(group.occurrences.length,40);assert.deepEqual(group.occurrences.map(x=>x.source_occurrence_id),slots.map(x=>x.id));
