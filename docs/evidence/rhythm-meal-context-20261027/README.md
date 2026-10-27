@@ -33,3 +33,11 @@ Set `PARRANDA_TEST_CHROMIUM` to an installed Chromium executable if Playwright's
 Final review pass also proves released Relaxed and Full publications parse on an empty recipient without permanent exclusions, and a second pending Remove cannot be replaced by an older accepted edit. Both variants were observed RED before correction. Controlled mobile screenshot: [meal-mobile.png](meal-mobile.png).
 
 The same meal-selection finding was also reproduced with Food as the sole interest: six lunch-only venues hid the seventh dinner before the engine. The existing six-place role cut now retains a complementary period within the same source tier and bound; no pin or rejected candidate is promoted. Sole-interest RED→GREEN;16 meal tests and60 related role/admission/rescue/priority tests pass.
+
+## Final source integration
+
+- Current main `c6d85fcd9318c12169f53344312244c4780acd26` (PR658 regional event programmes) was merged with ancestry in `fe969d6`; source merged cleanly. Generated HTML conflicts were resolved by rebuilding actual combined source.
+- Final engine refinement `d4d93c7` keeps complementary meals reachable for a single Food interest within the existing six-per-role bound. No source tier or availability is upgraded.
+- UI source `f0b1674bcf8412148e599c12cd4b94026f050339`, independently APPROVED in the other chat, is merged with ancestry. Known source kinds/consistent icons appear on optional place cards; non-eligible Maps tips explain that they cannot be added. Server permission and the ordinary shortened-day contract remain intact. Exact historical Landskrona park refusal cause remains unproven; no gate was relaxed to make Add appear.
+- On the combined source:60 affected UI tests, typecheck/build,3 built meal/rhythm HTTP-browser tests, plus the actual Remove4→source-permitted Add→4 integration all PASS,0JSerrors. Wide390px mobile pictures accompany the logs. The broader Linux/Node22 exact-head CI is the remaining final gate; its URL/result is in the PR.
+- CI/release scope must distinguish current main and this candidate from public `cf18a576`. No merge to main, Pi change, public cache clearing or deploy was performed here.
