@@ -49,13 +49,18 @@ function listLines(output) {
 }
 
 function collectDistDrift({ cwd = process.cwd() } = {}) {
+  // Pathspecs, `ls-files` output and the working-tree reads below are all
+  // relative to the working directory, so anchor every one at the top level.
+  // Started from frontend/, the pathspec meant frontend/frontend/dist, matched
+  // nothing and the guard passed over real drift.
+  const root = git(["rev-parse", "--show-toplevel"], { cwd }).trim();
   const drift = [];
 
-  const modified = listLines(git(["diff", "--name-only", "HEAD", "--", DIST_PREFIX], { cwd }));
+  const modified = listLines(git(["diff", "--name-only", "HEAD", "--", DIST_PREFIX], { cwd: root }));
   for (const file of modified) {
     let committed = null;
     try {
-      committed = git(["show", `HEAD:${file}`], { cwd });
+      committed = git(["show", `HEAD:${file}`], { cwd: root });
     } catch (_error) {
       // In git's diff-to-HEAD a file with no HEAD blob is an addition; the
       // untracked walk below reports those. A deletion keeps its HEAD blob and
@@ -63,7 +68,7 @@ function collectDistDrift({ cwd = process.cwd() } = {}) {
     }
     let working = null;
     try {
-      working = readFileSync(path.join(cwd, file), "utf8");
+      working = readFileSync(path.join(root, file), "utf8");
     } catch (_error) {
       drift.push({ file, kind: "deleted" });
       continue;
@@ -74,7 +79,7 @@ function collectDistDrift({ cwd = process.cwd() } = {}) {
   }
 
   const untracked = listLines(
-    git(["ls-files", "--others", "--exclude-standard", "--", DIST_PREFIX], { cwd }),
+    git(["ls-files", "--others", "--exclude-standard", "--", DIST_PREFIX], { cwd: root }),
   );
   for (const file of untracked) {
     drift.push({ file, kind: "untracked" });

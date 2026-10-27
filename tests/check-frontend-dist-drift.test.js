@@ -2,12 +2,13 @@
  * The dist-drift guard's comparison rules: Astro's nondeterministic island uid
  * is the ONLY tolerated build noise — any real content change is drift. The
  * git-walking half is exercised against a throwaway repo so the guard's verdict
- * (clean / modified / untracked / deleted) is pinned end-to-end.
+ * (clean / modified / untracked / deleted) is pinned end-to-end, and pinned to
+ * be the same wherever in the checkout the guard is started.
  */
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { execFileSync } = require("node:child_process");
+const { execFileSync, spawnSync } = require("node:child_process");
 const { mkdtempSync, mkdirSync, writeFileSync, rmSync, unlinkSync } = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -94,4 +95,54 @@ test("the guard's verdict against a real repo: clean, uid-only, modified, untrac
   // A committed file the build no longer produces → deleted drift.
   unlinkSync(page);
   assert.deepEqual(collectDistDrift({ cwd }), [{ file: `${DIST_PREFIX}/index.html`, kind: "deleted" }]);
+});
+
+test("the verdict is the same from the repo root and from frontend/ (pathspecs are cwd-relative)", (t) => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "dist-drift-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const git = (...args) =>
+    execFileSync("git", args, {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "t",
+        GIT_AUTHOR_EMAIL: "t@t",
+        GIT_COMMITTER_NAME: "t",
+        GIT_COMMITTER_EMAIL: "t@t",
+      },
+    });
+
+  git("init", "-q");
+  const distDir = path.join(root, DIST_PREFIX);
+  mkdirSync(distDir, { recursive: true });
+  const page = path.join(distDir, "index.html");
+  const stale = path.join(distDir, "stale.js");
+  writeFileSync(page, '<astro-island uid="AAA">day</astro-island>');
+  writeFileSync(stale, "console.log(0)");
+  git("add", ".");
+  git("commit", "-qm", "committed dist");
+
+  // One drift of each kind at once.
+  writeFileSync(page, '<astro-island uid="BBB">NEW day</astro-island>');
+  unlinkSync(stale);
+  writeFileSync(path.join(distDir, "extra.js"), "console.log(1)");
+  const expected = [
+    { file: `${DIST_PREFIX}/index.html`, kind: "modified" },
+    { file: `${DIST_PREFIX}/stale.js`, kind: "deleted" },
+    { file: `${DIST_PREFIX}/extra.js`, kind: "untracked" },
+  ];
+
+  const frontendDir = path.join(root, "frontend");
+  assert.deepEqual(collectDistDrift({ cwd: root }), expected);
+  assert.deepEqual(collectDistDrift({ cwd: frontendDir }), expected);
+
+  // The CLI started from frontend/ (`cd frontend && node ../scripts/…`) used
+  // to print "matches" and exit 0 over this same drift.
+  const cli = spawnSync(process.execPath, [require.resolve("../scripts/check-frontend-dist-drift")], {
+    cwd: frontendDir,
+    encoding: "utf8",
+  });
+  assert.equal(cli.status, 1, cli.stdout);
+  assert.match(cli.stderr, /modified\s+frontend\/dist\/index\.html/);
 });

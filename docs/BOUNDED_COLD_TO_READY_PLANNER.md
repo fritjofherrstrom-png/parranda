@@ -96,7 +96,14 @@ not answered. This source-cache guarantee does not claim that optional
 weather/Live/map tiles or a cold typed-place resolver perform zero network work.
 
 On that acquisition path a varied warm directory waits at most 10 s for the
-live primary. A primary that settles — with rows or a failure — is merged as
+live primary. At a place whose primary left a composition at that bound
+unanswered, the directory gives it a short grace (1 s) instead, for a bounded
+pause (5 min). The primary is still started exactly as before, so identical
+in-flight queries coalesce, a cached late answer is a cache hit and an approved
+stale fallback still arrives; an answer inside the full bound ends the pause.
+The pause is per place (the map cache anchor bucket): a slow query is not proof
+of a dead source, and start order decides, so an older request never undoes
+what a newer one observed. A primary that settles — with rows or a failure — is merged as
 usual (and a failed primary is still rescued by the directory). A primary still
 outstanding at the bound keeps running and caches its answer for the next
 request; this composition keeps the best map evidence the process already holds
