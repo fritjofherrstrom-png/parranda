@@ -1008,9 +1008,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       stop.is_live_event === true && stop.live_choice_eligible === true && stop.live_occurrence_id === choice.occurrence_id))) return;
     // Same question, same identity: only the day that answers it changed.
     const upgraded: SavedEntry = { ...previous, savedAt: new Date().toISOString(), safeResponse: safe, classification: cls };
-    // This slice only publishes original-route/events-only snapshots. An applied
-    // route is a different answer and cannot reuse that immutable reference.
-    setSharePublication(null);
+    // An applied route is a different answer: only its own new publication may
+    // be shared. Never retain the earlier route's reference or a GPS identity.
+    const publication = upgraded.inputs?.mode === "typed"
+      ? readyPublishedDay(result?.day_snapshot) : null;
+    setSharePublication(publication ? { entry: upgraded, publication } : null);
     lastEntryRef.current = upgraded;
     writeLS(LAST_KEY, upgraded);
     liveResponseRef.current = safe;

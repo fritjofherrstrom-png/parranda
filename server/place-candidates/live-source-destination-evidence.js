@@ -1,11 +1,12 @@
 'use strict';
 
-// Policy wix-public-event-catalog-v1, revision 1. Application-owned closed
-// declaration, independently approved from unchanged wikidata-entity-v1.
-// Syntax is never authority: only a bound collector's actual public catalog and
-// exact completed detail response can create the private raw-record witness.
+// Source-owned publication authority for existing public event providers.
+// The original Wix catalogue/detail witness remains supported separately.
+// Syntax is never authority: only the bound provider/collector output can
+// issue a raw-record witness; caller JSON and arbitrary URL bags cannot.
 const { createHash } = require('node:crypto');
 const { types: { isProxy, isPromise } } = require('node:util');
+const { isPublicSourceDestination: publicEventDestination } = require('../lib/public-source-destination');
 const NativePromise = Promise;
 const nativePromisePrototype = Promise.prototype;
 const nativeThen = Promise.prototype.then;
@@ -13,12 +14,14 @@ const nativeSpecies = Object.getOwnPropertyDescriptor(Promise, Symbol.species);
 const ROOT = 'https://www.visitystadosterlen.se/sitemap.xml';
 const FEED = 'visit-ystad-osterlen-calendar';
 const INPUTS = '_live_destination_inputs';
+const PROVIDER_INPUTS = '_public_provider_destination_inputs';
 const MAX_CLAIMS = 512;
 const MAX_INPUT_BYTES = 128 * 1024;
 const configurations = new WeakMap();
 const originalLocs = new WeakMap();
 const sitemapDocuments = new WeakMap();
 const factories = new WeakMap();
+const publicFactories = new WeakMap();
 const details = new WeakMap();
 const frames = new WeakMap();
 const issuedWitnesses = new WeakMap();
@@ -26,6 +29,84 @@ const terminalWitnesses = new WeakMap();
 const ownedCaches = new WeakSet();
 const hash = value => createHash('sha256').update(value).digest('hex');
 const claimHash = (...parts) => hash(JSON.stringify(parts));
+
+// Approved general sharing contract: carry already-public event output from
+// the actual configured structured provider. This grants no event/route trust
+// and never authorizes URLs merely found in the final publication or an upload.
+const PUBLIC_EVENT_ADAPTERS = new Set(['linked_events', 'localized_events_api',
+  'tourism_listing', 'ckan_agenda', 'datatourisme', 'public_holidays',
+  'osm_market_schedules', 'schema_org', 'schema_org_html', 'rss_atom_event_detail', 'sitevision_calendar',
+  'html_venue_calendar', 'events_calendar', 'mapped_events', 'ical',
+  'scheduled_event_cards', 'embedded_program_rsc', 'official_program_article']);
+function data(object, key) {
+  if (!object || typeof object !== 'object' || isProxy(object)) return undefined;
+  return Object.getOwnPropertyDescriptor(object, key)?.value;
+}
+const dataOnly = (object, keys) => object && typeof object === 'object' && !isProxy(object) &&
+  Reflect.ownKeys(object).length === keys.length && keys.every(key =>
+    Object.hasOwn(Object.getOwnPropertyDescriptor(object, key) || {}, 'value'));
+function publicProviderSource(source) {
+  return (configurations.has(source) && PUBLIC_EVENT_ADAPTERS.has(source.adapter)) ||
+    (source?.kind === 'global' && source.id === 'ticketmaster-global' && source.source_identity === 'ticketmaster.com');
+}
+function bindConfiguredPublicProvider(provider, source) {
+  if (provider && publicProviderSource(source)) publicFactories.set(provider, fingerprint(source));
+  return provider;
+}
+function attestPublicProviderOutput(provider, source, result) {
+  const sourceHash = fingerprint(source);
+  if (!sourceHash || publicFactories.get(provider) !== sourceHash) return result;
+  const rows = data(result, 'time_sensitive_events');
+  if (!Array.isArray(rows) || isProxy(rows) || rows.length > MAX_CLAIMS) return result;
+  for (let i = 0; i < rows.length; i++) {
+    const row = data(rows, String(i));
+    const loc = data(row, 'source_url') || data(row, 'url');
+    const id = data(row, 'id') || data(row, 'source_event_id') || data(row, 'provider_id') || loc;
+    if (publicEventDestination(loc) && typeof id === 'string' && id.length <= 1000 && id === id.trim())
+      details.set(row, Object.freeze({ kind: 'public_event_output_v1', source: sourceHash, loc, id, source_url: loc }));
+  }
+  return result;
+}
+
+function retainPublicProviderOutput(provider, source, result) {
+  if (publicFactories.get(provider) !== fingerprint(source)) return result;
+  const rows = data(result, 'time_sensitive_events');
+  if (!Array.isArray(rows) || isProxy(rows) || rows.length > MAX_CLAIMS) return result;
+  const records = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = data(rows, String(i)), binding = terminalBinding(row);
+    if (!binding) return result;
+    records.push({ binding, input: details.get(row) || null });
+  }
+  const original = { version: 1, source: fingerprint(source), records };
+  if (Buffer.byteLength(JSON.stringify(original)) <= MAX_INPUT_BYTES)
+    Object.defineProperty(result, PROVIDER_INPUTS, { value: original, enumerable: true, configurable: true });
+  return result;
+}
+
+function restorePublicProviderOutput(cache, provider, source, result) {
+  if (!ownedCaches.has(cache) || publicFactories.get(provider) !== fingerprint(source)) return result;
+  const original = data(result, PROVIDER_INPUTS), rows = data(result, 'time_sensitive_events');
+  if (!dataOnly(original, ['version','source','records']) || original.version !== 1 ||
+      original.source !== fingerprint(source) || !Array.isArray(rows) || isProxy(rows) || rows.length > MAX_CLAIMS ||
+      !Array.isArray(original.records) || isProxy(original.records) || original.records.length !== rows.length) return result;
+  const witnessed = [];
+  let bytes = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const row = data(rows, String(i)), receipt = data(original.records, String(i));
+    if (!dataOnly(receipt, ['binding','input']) || receipt.binding !== terminalBinding(row)) return result;
+    const input = receipt.input;
+    if (input !== null && (!dataOnly(input, ['kind','source','loc','id','source_url']) ||
+        input.kind !== 'public_event_output_v1' || !inputValid(input, source) ||
+        input.loc !== (data(row, 'source_url') || data(row, 'url')) ||
+        input.id !== (data(row, 'id') || data(row, 'source_event_id') || data(row, 'provider_id') || input.loc))) return result;
+    bytes += Buffer.byteLength(JSON.stringify(receipt));
+    if (bytes > MAX_INPUT_BYTES) return result;
+    if (input) witnessed.push([row, input]);
+  }
+  for (const [row, input] of witnessed) details.set(row, input);
+  return result;
+}
 
 function eventDestination(value) {
   if (typeof value !== 'string' || value.length > 1000) return false;
@@ -144,6 +225,9 @@ function carryWixDetail(from, to) {
   return to;
 }
 function inputValid(input, source) {
+  if (input?.kind === 'public_event_output_v1') return publicProviderSource(source) &&
+    input.source === fingerprint(source) && publicEventDestination(input.loc) &&
+    input.source_url === input.loc && typeof input.id === 'string' && input.id.length <= 1000;
   return input && declared(source) && input.source === fingerprint(source) && input.root === ROOT &&
     (input.child === null || childDestination(input.child)) && eventDestination(input.loc) &&
     input.response === input.loc && input.id === input.loc && input.source_url === input.loc;
@@ -168,8 +252,11 @@ function captureLiveCollectionInputs(collections) {
       if (!identity) return null;
       // Refusals carry only nonauthorizing hashes: do not duplicate arbitrary
       // booking/capability/credential-looking raw strings into new provenance.
+      const sameOriginal = input?.kind !== 'public_event_output_v1' ||
+        input.loc === (data(raw, 'source_url') || data(raw, 'url')) &&
+        input.id === (data(raw, 'id') || data(raw, 'source_event_id') || data(raw, 'provider_id') || input.loc);
       const claim = { ...identity, source: fingerprint(collection.source),
-        input: inputValid(input, collection.source) ? input : null };
+        input: sameOriginal && inputValid(input, collection.source) ? input : null };
       bytes += Buffer.byteLength(JSON.stringify(claim));
       if (bytes > MAX_INPUT_BYTES) return null;
       claims.push(claim);
@@ -197,9 +284,6 @@ function carryLiveDestinationEvidence(from, to) {
 }
 function ownLiveDestinationCache(cache) { ownedCaches.add(cache); return cache; }
 function originalInputsFit(input) {
-  const dataOnly = (object, keys) => object && typeof object === 'object' && !isProxy(object) &&
-    Reflect.ownKeys(object).length === keys.length && keys.every(key =>
-      Object.hasOwn(Object.getOwnPropertyDescriptor(object, key) || {}, 'value'));
   if (!dataOnly(input, ['version','claims']) || input.version !== 1 ||
       !Array.isArray(input.claims) || isProxy(input.claims) || input.claims.length > MAX_CLAIMS) return false;
   let bytes = 32;
@@ -213,7 +297,8 @@ function originalInputsFit(input) {
       bytes += 80;
     }
     if (claim.input !== null) {
-      const keys = ['source','root','child','loc','response','id','source_url'];
+      const keys = data(claim.input, 'kind') === 'public_event_output_v1'
+        ? ['kind','source','loc','id','source_url'] : ['source','root','child','loc','response','id','source_url'];
       if (!dataOnly(claim.input, keys)) return false;
       for (const key of keys) {
         const value = claim.input[key];
@@ -397,5 +482,7 @@ function associateTerminalLiveEvidence(original, clone, witness) {
 }
 function liveDestinationRetention(live) { return frames.get(live) || null; }
 module.exports = { rememberConfiguredEventSource, bindSelectedEventSource, rememberWixSitemapLoc, rememberWixSitemapDocument, bindConfiguredWixProvider, beginWixCatalogCollection, carryWixDetail,
+  bindConfiguredPublicProvider, attestPublicProviderOutput,
+  retainPublicProviderOutput, restorePublicProviderOutput,
   captureLiveCollectionInputs, bindLiveCollection, bindLiveCacheProducer, carryLiveDestinationEvidence,
   ownLiveDestinationCache, readLiveDestinationCache, publicLiveSourceUrls, associateTerminalLiveEvidence, liveDestinationRetention };

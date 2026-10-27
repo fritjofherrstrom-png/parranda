@@ -32,7 +32,7 @@
 const { createSourceCache } = require("./source-cache");
 const { createBackgroundSource, SOURCE_COMPLETION, SOURCE_SNAPSHOT, SOURCE_PENDING } = require("./background-source");
 const { createWikidataSource, WIKIDATA_CACHE_NAMESPACE } = require("./wikidata-source");
-const { createWikidataAttestingCache } = require('./source-url-evidence');
+const { createWikidataAttestingCache, createOsmAttestingCache, attestPublicPlaceRecords } = require('./source-url-evidence');
 const { normalizeSourceNameAliases } = require("./source-name-aliases");
 const { createOvertureSource } = require("./overture-source");
 const { createOvertureSampleCache } = require('./overture-sample-cache');
@@ -367,6 +367,7 @@ function createOpenDataLoader({
   const pinnedRadiusKm = Number.isFinite(radiusKm) ? clamp(radiusKm, 0.1, MAX_RADIUS_KM) : null;
   const boundedLimit = Math.max(1, Math.min(Math.floor(limit), MAX_LIMIT));
   const boundedTimeoutMs = Math.max(50, Math.floor(timeoutMs));
+  cache = createOsmAttestingCache(cache);
   const boundedStaleIfErrorMs = Math.max(0, Math.floor(Number(staleIfErrorMs) || 0));
   // Resolve the endpoint set. An explicit single `endpoint` (e.g. an injected
   // test) stays single-shot; otherwise the default primary + fallback mirror(s)
@@ -485,7 +486,7 @@ function createOpenDataLoader({
           walkingTargetBand,
           availabilityWindow,
         });
-        return withLoaderStatus(records, records.length > 0 ? `loaded:${records.length}` : "loaded:0", null);
+        return withLoaderStatus(attestPublicPlaceRecords(records, 'osm'), records.length > 0 ? `loaded:${records.length}` : "loaded:0", null);
       }
       last = attempt;
     }
@@ -519,6 +520,7 @@ function createOpenDataLoader({
         OVERPASS_FETCH_CAP,
         { origin: boundedAnchors[0] },
       );
+      attestPublicPlaceRecords(mapped, 'osm');
       const buckets = boundedAnchors.map(() => []);
       for (const record of mapped) {
         let nearestIndex = -1;
