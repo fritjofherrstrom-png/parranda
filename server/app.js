@@ -2626,7 +2626,7 @@ function buildApp({
           experiment.promotion = promotion;
           // Empty is an explicit user choice, not a calibrated walking route.
           // Only the trusted composer's accepted zero-stop state can publish it.
-          const manualEmptyPublished = Boolean(dayEdit?.action === 'remove' && dayEdit.target_stop_count === 0 &&
+          const manualEmptyPublished = Boolean(dayEdit?.action === 'remove' && !dayEdit.release_extent && dayEdit.target_stop_count === 0 &&
             strongAnchor && experiment.eligibility?.eligible === true && experiment.route_mutation === true &&
             experiment.day_edit?.status === 'applied' && experiment.day_edit.actual_stop_count === 0 &&
             experimentResult?.days?.[0]?.manual_empty_day === true && !experimentResult.days[0].primary_route);

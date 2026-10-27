@@ -34,6 +34,12 @@ function createMealOrderPolicy(stops, context) {
   const dinnerWanted = context.fullDay === true && band === 'midday' && stops.length >= 3;
   const fitsNow = stop => at(stop, current, current + 1);
   return {
+    scoreSet(candidate) {
+      const firstMeals = candidate.filter(fitsNow);
+      return [firstMeals.length ? 1 : 0,
+        dinnerWanted && candidate.length >= 3 && firstMeals.some(first =>
+          candidate.some(last => last !== first && laterDinner(last))) ? 1 : 0];
+    },
     score(candidate) {
       const first = candidate[0], last = candidate.at(-1);
       return [fitsNow(first) ? 1 : 0,

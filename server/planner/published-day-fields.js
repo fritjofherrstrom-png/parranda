@@ -30,7 +30,7 @@ const fields = {
   RequestEdit: { version: r(enumeration(1)), action: r(enumeration('remove','replace')), candidate_id: r('editId'),
     retained_candidate_ids: r(array('editId',0,6)), target_stop_count: r('count'), slot_index: r('count'),
     replacement_preference: rule(enumeration('food','culture','views','fika','nightlife','green','second_hand'),true,true),
-    removed_candidate_ids: r(array('editId',0,12)), preserve_retained: o('bool') },
+    removed_candidate_ids: r(array('editId',0,12)), preserve_retained: o('bool'), release_extent: o('bool') },
   AcknowledgedIntent: { dateIso: r('date'), place: r('label500'), placeLabel: r('label500'), placeRef: r('placeRef'), mode: r(enumeration('typed')),
     selected: r(array(enumeration('food','culture','views','fika','nightlife','green','second_hand'),0,7)),
     preferencePriority: o(array(enumeration('food','culture','views','fika','nightlife','green','second_hand'),0,7)),

@@ -5310,7 +5310,7 @@ function buildRouteFromTemplate(
     getActiveCityConfig().__reservedLiveStopCount === 1 ? 1 : 0;
   const normalSelectedCount = Math.max(0,
     desiredStopCount(sortedPool.length + reservedLiveStopCount, targetKm, distanceMode, dayProfile) - reservedLiveStopCount);
-  const selectedCount = dayEdit?.action === 'remove' && dayEdit.preserve_retained === false
+  const selectedCount = dayEdit?.action === 'remove' && dayEdit.preserve_retained === false && !dayEdit.release_extent
     ? Math.min(normalSelectedCount, dayEdit.target_stop_count) : normalSelectedCount;
   const strictPool = strictTags.length
     ? sortedPool.filter((entry) => itemMatchesStrictPreference(entry.item, strictTags))
@@ -5465,12 +5465,13 @@ function buildRouteFromTemplate(
       end,
       shape,
       targetKm: selectionTargetKm,
-      allowExpansion: !dayEdit && !reservedLiveStopCount,
+      allowExpansion: (!dayEdit || dayEdit.release_extent) && !reservedLiveStopCount,
     });
     selectedStops = selectBalancedDay({
       rankedCandidates: sortedPool, selected: constrained.selected, preferences,
       preferencePriority: options.preferencePriority || getActiveCityConfig().__preferencePriority || [],
       pinnedIds: options.pinnedStopIds || [], start, end, shape, targetKm: selectionTargetKm,
+      mealContext: getActiveCityConfig().__mealContext || null,
     });
   }
 

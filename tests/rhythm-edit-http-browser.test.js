@@ -61,9 +61,9 @@ test('built HTTP Remove -> Relaxed -> Full releases the extent while retaining e
   const full = await read(page);
   assert.equal(stops(full).length, controlCount);
   assert.ok(!stops(full).some(stop => stop.id === removed));
-  assert.equal(requests.at(-1).day_edit, undefined);
+  assert.equal(requests.at(-1).day_edit.release_extent, true);
   assert.ok(requests.at(-1).excluded_candidate_ids.includes(removed));
-  assert.equal(full.inputs.dayEdit, undefined);
+  assert.equal(full.inputs.dayEdit.release_extent, true);
   const before = requests.length;
   await page.getByRole('button', { name: 'Undo this change', exact: true }).click(); await waitRhythm('calm');
   assert.deepEqual(await read(page), relaxed);

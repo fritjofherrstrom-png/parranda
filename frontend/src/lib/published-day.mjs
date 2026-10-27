@@ -85,7 +85,11 @@ export function parsePublishedDay(value, { ref, decision, now = Date.now() } = {
       entries[id] = {kind,label,...(liveAction ? {liveAction} : {})};
     };
     for (const id of i.pinnedCandidateIds) add(id,'pin');
-    for (const id of i.excludedCandidateIds) add(id,'exclude');
+    const scopedRemovals = i.dayEdit?.release_extent
+      ? new Set([i.dayEdit.candidate_id,...i.dayEdit.removed_candidate_ids]) : new Set();
+    // The edit already owns these rejections for this absolute day. Hydrating
+    // them again as ordinary place commitments would make them outlive it.
+    for (const id of i.excludedCandidateIds) if (!scopedRemovals.has(id)) add(id,'exclude');
     for (const c of i.liveEventChoices.filter(c => c.occurrence_id.slice(5,15) === i.dateIso)) {
       add(c.occurrence_id,c.action === 'keep' ? 'pin' : 'exclude',c.action === 'keep' ? null : c.action);
       requireValue(c.action === 'keep' || !stops.some(s => s.live_occurrence_id === c.occurrence_id));

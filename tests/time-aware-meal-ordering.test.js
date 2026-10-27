@@ -119,3 +119,28 @@ test('partial Food fit and a coffee-only cafe do not acquire a meal slot', () =>
   const cafe = { id: 'coffee', type: 'cafe', coveredPreferences: ['coffee'], partialPreferences: ['food'] };
   assert.equal(createMealOrderPolicy([cafe], { date: DATE, nowLocalIso: DATE + 'T12:45:00', fullDay: true }), null);
 });
+
+for (const majority of ['lunch', 'dinner']) test(`bounded meal selection retains the complementary meal among several ${majority}-only places`, async () => {
+  const hours = { lunch: 'Mo-Su 11:00-15:00', dinner: 'Mo-Su 18:00-23:00' };
+  const complement = majority === 'lunch' ? 'dinner' : 'lunch';
+  const records = [...Array.from({ length: 3 }, (_, i) => record(`${majority}-${i}`, 'restaurant', 3, { opening_hours: hours[majority] })),
+    record(`z-${complement}`, 'restaurant', 3, { opening_hours: hours[complement] }),
+    ...rows('shop', 'vintage-shop', 4), ...rows('park', 'park', 4, 6)];
+  const control = await day(records, { pinnedStopIds: [`z-${complement}`] });
+  const output = await day(records);
+  assert.equal(output.stops.length, 6);
+  assert.ok(output.stops.some(s => s.id === `z-${complement}`));
+  assert.ok(output.stops[0].id.includes('lunch'));
+  assert.ok(output.stops.at(-1).id.includes('dinner'));
+  assert.equal(output.experiment.walking_validation.valid, true);
+  assert.ok(output.route.estimated_km <= control.route.estimated_km + .1);
+});
+
+test('releasing an intentionally empty extent cannot turn missing supply into an intentional empty success', async () => {
+  const output = await day([], { dayEdit: { version: 1, action: 'remove', candidate_id: 'old',
+    retained_candidate_ids: [], target_stop_count: 0, slot_index: 0, replacement_preference: null,
+    removed_candidate_ids: ['old'], preserve_retained: false, release_extent: true } });
+  assert.notEqual(output.experiment.promotion?.promote, true);
+  assert.equal(output.stops.length, 0);
+  assert.notEqual(output.experiment.manual_edit_published, true);
+});

@@ -2578,23 +2578,17 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const chooseRhythm = (key: string) => {
     if (walkKey === key) return;
     invalidateCommitmentIntent();
-    // A new rhythm explicitly chooses a new extent. Keep rejected identities,
-    // but do not carry the previous Remove/Replace transaction's count ceiling.
-    // The scope check prevents an old day's edit becoming a new place's ledger.
+    // A rhythm change releases only the extent, keeping the old rejection in
+    // its existing absolute place/date scope. Ordinary Keep choices are separate.
     const scope = dayEditScopeRef.current;
     if (dayEdit && scope?.anchorKey === anchorKey(lastRequestedAnchorRef.current) &&
-        scope?.dateIso === lastComposeDateIsoRef.current && commitmentAnchorKeyRef.current === scope.anchorKey) {
-      const next = { ...commitments };
-      for (const id of [dayEdit.candidate_id, ...dayEdit.removed_candidate_ids]) {
-        // A newer explicit Keep remains the user's choice.
-        if (!next[id]) next[id] = { kind: "exclude", label: "" };
-      }
-      setCommitments(next);
-    }
+        scope?.dateIso === lastComposeDateIsoRef.current) {
+      const applied = dayEdit;
+      setDayEdit(normalizeDayEdit({ ...applied, action: "remove", replacement_preference: null,
+        target_stop_count: applied.retained_candidate_ids.length, preserve_retained: false, release_extent: true }));
+    } else { dayEditScopeRef.current = null; setDayEdit(null); }
     pendingStopEditRef.current = null;
     setStopEditPending(false);
-    dayEditScopeRef.current = null;
-    setDayEdit(null);
     setWalkKey(key);
   };
   const openLiveSheet = () => {

@@ -1,0 +1,87 @@
+✖ trusted local midday Food-first Full puts the available lunch first and the distinct dinner last (236.6915ms)
+✖ trusted evening Food-first starts with dinner without resurrecting the already closed lunch (330.212459ms)
+✖ a dinner-only source window cannot become a lunch-first stop (108.900584ms)
+✖ unknown hours permit meal proposals without manufacturing current availability or known hours (318.640125ms)
+✔ a future day does not inherit the current hour as lunch urgency (283.282291ms)
+✔ unknown timezone and unranked Food retain the established ordering (349.391291ms)
+✔ a known lunch-only meal is never labelled as an evening meal (102.659208ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 3
+ℹ fail 4
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1941.000166
+
+✖ failing tests:
+
+test at tests/time-aware-meal-ordering.test.js:16:1
+✖ trusted local midday Food-first Full puts the available lunch first and the distinct dinner last (236.6915ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  'park-0' !== 'lunch'
+  
+      at TestContext.<anonymous> (<repo>/tests/time-aware-meal-ordering.test.js:20:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'park-0',
+    expected: 'lunch',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/time-aware-meal-ordering.test.js:30:1
+✖ trusted evening Food-first starts with dinner without resurrecting the already closed lunch (330.212459ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  'park-1' !== 'dinner'
+  
+      at TestContext.<anonymous> (<repo>/tests/time-aware-meal-ordering.test.js:32:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'park-1',
+    expected: 'dinner',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/time-aware-meal-ordering.test.js:37:1
+✖ a dinner-only source window cannot become a lunch-first stop (108.900584ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  'shop-0' !== 'dinner'
+  
+      at TestContext.<anonymous> (<repo>/tests/time-aware-meal-ordering.test.js:40:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'shop-0',
+    expected: 'dinner',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/time-aware-meal-ordering.test.js:43:1
+✖ unknown hours permit meal proposals without manufacturing current availability or known hours (318.640125ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'park'
+  - 'restaurant'
+  
+      at TestContext.<anonymous> (<repo>/tests/time-aware-meal-ordering.test.js:45:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'park',
+    expected: 'restaurant',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

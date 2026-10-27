@@ -70,6 +70,29 @@ test('projects a real final promoted typed publication, not its diagnostic trial
   captureEvidence('ordinary',published,projected,intent(),privacy());
 });
 
+for (const [rhythm, count] of [['full', 6], ['calm', 4]]) test(`a released ${rhythm} extent projects and restores date-bound exclusions without a count ceiling`, async () => {
+  const { normalizeDayEdit } = await import('../shared/planner-intent.mjs');
+  const { parsePublishedDay } = await import('../frontend/src/lib/published-day.mjs');
+  const original = await publication({ day_rhythm: 'full' });
+  const ids = original.days[0].primary_route.main_stops.map(s => s.id);
+  const command = normalizeDayEdit({ version: 1, action: 'remove', candidate_id: ids[0],
+    retained_candidate_ids: ids.slice(1), target_stop_count: ids.length - 1, slot_index: 0,
+    replacement_preference: null, removed_candidate_ids: [ids[0]], preserve_retained: false, release_extent: true });
+  const published = await publication({ day_rhythm: rhythm, day_edit: command, excluded_candidate_ids: [ids[0]] });
+  const projected = projectPublishedDay({ published, intent: { ...intent(), dayRhythm: rhythm, dayEdit: command,
+    excludedCandidateIds: [ids[0]] }, privacy: privacy(), language: 'en' });
+  assert.ok(projected);
+  assert.equal(projected.intent.dayEdit.release_extent, true);
+  assert.equal(projected.result.days[0].primary_route.main_stops.length, count);
+  assert.equal(projected.intent.dayEdit.target_stop_count, count);
+  const now = Date.parse(`${DATE}T10:00:00Z`), ref = 'a'.repeat(48);
+  const parsed = parsePublishedDay({ version: 1, ref, created_at: new Date(now).toISOString(),
+    expires_at: new Date(now + 60000).toISOString(), ...projected }, { ref, decision: require('../anywhere-render-decision'), now });
+  assert.ok(parsed);
+  assert.equal(parsed.entry.inputs.dayEdit.release_extent, true);
+  assert.ok(!parsed.entry.commitments?.entries?.[ids[0]], 'the recipient must not make a date-scoped rejection permanent');
+});
+
 for (const [field, limit] of [['resolved label', 500], ['stop id', 200], ['stop label', 500]]) {
   test(`portable identity boundaries round-trip through the actual recipient: ${field}`, async () => {
     const original = await publication();

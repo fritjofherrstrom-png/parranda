@@ -75,7 +75,8 @@ function projectPublishedDay(input = {}) {
       const applied = normalizeDayEdit({ version:1, action:'remove', candidate_id:command.candidate_id,
         retained_candidate_ids:finalIds, target_stop_count:finalIds.length, slot_index:command.slot_index,
         replacement_preference:null, removed_candidate_ids:command.removed_candidate_ids,
-        ...(command.preserve_retained === false ? {preserve_retained:false} : {}) });
+        ...(command.preserve_retained === false ? {preserve_retained:false} : {}),
+        ...(command.release_extent ? {release_extent:true} : {}) });
       if (!applied) return null;
       acknowledged.dayEdit = applied;
     } else if (experiment.day_edit) return null;

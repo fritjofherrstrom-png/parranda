@@ -15,16 +15,18 @@ Spec: docs/superpowers/specs/2026-10-27-rhythm-meal-context-design.md
 - No new source acquisition, hours claims, walking-budget exceptions or unrelated preferences.
 
 ## Task1 — explicit rhythm overrides prior extent
-- [ ] Add mounted real-component RED covering Remove→Relaxed→Full; no old day_edit in rhythm payload, exclusions/pins retained; control same-step/reload/interest change; Undo and late responses.
-- [ ] Run RED before product changes.
-- [ ] Update only chooseRhythm's extent transition, leaving other adjustment semantics intact.
-- [ ] Run focused GREEN and actual built UI→HTTP→engine regression, with fresh Full control.
-- [ ] Build dist, check drift; make traceable local commit.
+- [x] Add mounted real-component RED covering Remove→Relaxed→Full; no old count ceiling in rhythm payload (date-scoped release_extent after independent review), exclusions/pins retained; control same-step/reload/interest change; Undo and late responses.
+- [x] Run RED before product changes.
+- [x] Update chooseRhythm and the narrow shared extent-release interpretation, leaving other adjustment semantics intact.
+- [x] Run focused GREEN and actual built UI→HTTP→engine regression, with fresh Full control.
+- [x] Build dist, check drift; make traceable local commit.
 
 ## Task2 — trusted time-aware meal planning
-- [ ] Trace real HTTP time/preference/availability/ordering and freeze discriminatory midday, evening, future/unknown-time controls with actual admitted supply.
-- [ ] Add RED for lunch-start and separate later meal; negative facts and geometry/pin constraints.
-- [ ] Thread minimal private trusted context and implement bounded ordering through existing policy, leaving source/admission paths intact.
-- [ ] Verify real HTTP publication and built UI; source transports/clocks explicitly controlled.
+- [x] Trace real HTTP time/preference/availability/ordering and freeze discriminatory midday, evening, future/unknown-time controls with actual admitted supply.
+- [x] Add RED for lunch-start and separate later meal; negative facts and geometry/pin constraints.
+- [x] Thread minimal private trusted context and implement bounded ordering through existing policy, leaving source/admission paths intact.
+- [x] Verify real HTTP publication and built UI; source transports/clocks explicitly controlled.
 - [ ] Run relevant regressions, frontend suite/typecheck/build/dist serially, full exact-head CI if published, and final independent diff review.
 - [ ] Report exact head/base, changes, tests/skips, limits and release recommendation. No blind reuse of old-head acceptance.
+
+Final review correction: date-scoped command now explicitly releases the old extent instead of migrating removals into permanent commitments. Meal feasibility reaches bounded set selection before final order. Final CI/delivery checkbox is not a green-CI claim; actual status lives in the PR/evidence.
