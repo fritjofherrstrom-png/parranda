@@ -145,6 +145,8 @@ function buildDescriptor(options = {}) {
       "area",
       "tags",
       "local_significance",
+      "programme",
+      "source_occurrence_id",
     ],
     parrandaOwnedFields: ["intents", "route_role_hint"],
   };

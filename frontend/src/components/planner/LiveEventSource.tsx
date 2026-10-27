@@ -6,7 +6,7 @@
  * Shared by the Live card and the Live sheet so both surfaces say the same
  * thing about the same row.
  */
-import { eventSourceLink } from "../../lib/pulse-view.mjs";
+import { eventSourceLink, eventTiming } from "../../lib/pulse-view.mjs";
 import { ExternalLinkText, inlineLinkTarget } from "../shared/ui";
 import type { Lang } from "./copy";
 import type { PulseEvent } from "./types";
@@ -19,14 +19,20 @@ export function liveEventSource(event: PulseEvent, lang: Lang) {
     .filter(Boolean))];
   const recurring = event.recurrence?.occurrence_status === "unconfirmed";
   const holiday = event.calendar_fact?.kind === "public_holiday" ? event.calendar_fact : null;
+  const programme = event.programme;
+  const programmeDates = programme ? eventTiming({ starts_on: programme.starts_on, ends_on: programme.ends_on,
+    time_window: { kind: "period", starts_on: programme.starts_on, ends_on: programme.ends_on } }, lang) : "";
   const sourceArea = !holiday && event.source_scope_verified === true && event.geographic_relevance === "source_scope";
   const holidayFlags = Array.isArray(holiday?.flags) ? holiday.flags : [];
   const scope = holiday && (lang === "en"
     ? { national: "National", regional: "Regional", local: "Local" }
     : { national: "Nationell", regional: "Regional", local: "Lokal" })[holiday.scope];
-  if (!listedBy && !link && !credits.length && !recurring && !holiday) return null;
+  if (!listedBy && !link && !credits.length && !recurring && !holiday && !programme) return null;
   return (
     <span className="text-parranda-ink/68">
+      {programme && <> · {lang === "en" ? "Programme" : "Program"}: {programme.title}
+        {programmeDates && <> ({programmeDates})</>}
+      </>}
       {holiday && <> · {scope} {lang === "en" ? "public holiday — programme not verified" : "helgdag — program inte verifierat"}
         {holiday.temporal_scope === "half_day" && <> · {lang === "en" ? "Half day — time unspecified" : "Halvdag — tid saknas"}</>}
         {holidayFlags.includes("Recommended") && <> · {lang === "en" ? "Recommended by source" : "Rekommenderad enligt källan"}</>}
