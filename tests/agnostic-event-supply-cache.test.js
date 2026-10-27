@@ -23,6 +23,29 @@ const {
 const ORIGINAL_FETCH = global.fetch;
 const { createSourceCache } = require("../server/place-candidates/source-cache");
 
+test("a persisted v19 regional-only pool cannot answer for bounded local discovery", async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-regional-pool-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const anchor = { lat: 60.17, lng: 24.94 }, now = "2026-10-27T08:00:00Z";
+  const key = eventCacheKey(anchor, now, [HELSINKI_LINKED_EVENTS_FEED.id], 3000);
+  await createSourceCache({ namespace: "agnostic-events-v19", dir }).get(key, async () => ({
+    coverage: "covered", tonight: [], this_week: [], stale_regional_pool: true,
+    acquisition: { source_health: { status: "healthy", result: "empty" } },
+  }));
+  let collections = 0;
+  const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_CACHE_DIR: dir,
+    PARRANDA_EVENT_FEEDS: JSON.stringify([HELSINKI_LINKED_EVENTS_FEED]) }, {
+    requestTimeDiscovery: null, collectEvents: async () => {
+      collections++;
+      return { coverage: "covered", tonight: [], this_week: [], acquisition: { source_health: { status: "healthy", result: "empty" } } };
+    },
+  });
+  assert.equal((await supply({ anchor, now })).pending, true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(collections, 1);
+  assert.ok(fs.existsSync(path.join(dir, "agnostic-events-v19")), "prior files are preserved");
+});
+
 test("a persisted first-page-only Ticketmaster pool cannot bypass the bounded pagination policy", async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-first-page-pool-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -389,7 +412,7 @@ test("one neutral warm cache reranks for different preferences without refetchin
     assert.equal(culture.tonight[0].id, "a-concert");
     assert.equal(secondHand.tonight[0].id, "z-loppis");
     assert.equal(fetchCount, 1, "preference changes rerank cached evidence instead of recollecting providers");
-    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v19")), "persist programme facts and complementary discovery separately from previous event pools");
+    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v20")), "persist bounded local discovery separately from regional-only event pools");
     assert.ok(!fs.existsSync(path.join(cacheDir, "agnostic-events-v11")), "old result pools with borrowed timezone/bindings are not written");
     assert.ok(!fs.existsSync(path.join(cacheDir, "agnostic-events-v6")), "v6 pools that widened recurring ranges into daily windows are never read or written");
     const restarted = resolveDefaultEventSupply({

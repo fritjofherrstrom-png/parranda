@@ -72,7 +72,8 @@ const {
 const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
 const { resolveEventVenueGeometry } = require("./event-venue-resolution");
 const { placeAtHostVenue } = require("./host-venue-geometry");
-const { spatialScopeCacheKey } = require("./spatial-scope");
+const { spatialScopeCacheKey, sanitizeTrustedSpatialScope, deriveLocalAnchorSpatialScope,
+  pointWithinTrustedSpatialScope } = require("./spatial-scope");
 const {
   listedOccurrenceDates,
   selectedDateBucket,
@@ -861,6 +862,7 @@ function buildScopedEventSourcePlan({
   maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
   now,
   sourceBounds = null,
+  complementarySourceIds = [],
 } = {}) {
   const sourceCap = Math.max(1, Math.min(Number(maxSources) || DEFAULT_MAX_SOURCES, DEFAULT_MAX_SOURCES));
   const reserveGlobal = globalEnabled && globalSource ? 1 : 0;
@@ -885,8 +887,9 @@ function buildScopedEventSourcePlan({
       globalSource: null,
       globalEnabled: false,
       maxSources: DEFAULT_MAX_SOURCES,
-      maxLocalSources: DEFAULT_MAX_LOCAL_SOURCES,
+      maxLocalSources: localCap,
       coverageBounds: sourceBounds,
+      complementarySourceIds,
     });
     for (const source of localSources) {
       const identity = String(source.id || source.endpoint || source.base || "");
@@ -940,6 +943,7 @@ async function collectAnchorEvents({
   globalKey = null,
   maxSources = DEFAULT_MAX_SOURCES,
   maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
+  complementarySourceIds = [],
   venueResolver = null,
   venueResolutionLimit = 4,
   spatialScope = null,
@@ -959,6 +963,7 @@ async function collectAnchorEvents({
     globalEnabled: Boolean(globalKey),
     maxSources,
     maxLocalSources,
+    complementarySourceIds,
     sourceBounds,
     // The same server-owned instant the rest of this collection reasons with.
     // Without it this plan expired qualifications against the real clock while
@@ -1714,7 +1719,9 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // snapshots remain on disk but cannot be mistaken for newly attested output.
 // v19 rebuilds programme facts and complementary discovery after thin-source
 // pools from v18. Prior files remain intact and expire on their original TTL.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v19";
+// v20 revisits broad regional-only pools and reserves bounded complementary
+// acquisition; v19 answers cannot certify that this discovery path ran.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v20";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read
@@ -1978,8 +1985,11 @@ function resolveDefaultEventSupply(
     if (!hasApprovedLocalSource) {
       discoveryHealth = await resolveUncoveredDiscoveryHealth(sourceCatalog, anchor);
     }
-    const complementaryDiscoveryNeeded = localSourceMixNeedsDiscovery(sourcePlan) &&
-      placeContext && (discoverySpatialScope || spatialScope);
+    // Discovery geometry never widens event acceptance. Coordinate-only
+    // resolvers can attest a locality without publishing its exact boundary.
+    const discoveryScope = localDiscoveryScope(anchor, discoverySpatialScope || spatialScope);
+    const complementaryDiscoveryNeeded = placeContext && discoveryScope &&
+      localSourceMixNeedsDiscovery(sourcePlan, discoveryScope);
     if (
       (!hasApprovedLocalSource || complementaryDiscoveryNeeded) &&
       sourceCatalog &&
@@ -1991,7 +2001,7 @@ function resolveDefaultEventSupply(
         anchor,
         placeLabel,
         placeContext,
-        spatialScope: discoverySpatialScope || spatialScope,
+        spatialScope: discoveryScope,
       });
       if (!discoveryHealth) discoveryHealth = demandHealth;
     }
@@ -2018,7 +2028,7 @@ function resolveDefaultEventSupply(
       };
     }
     const descriptors = sourcePlan.map((source) => compactSourceStatus({ source, status: "pending", raw: [] }));
-    const key = eventCacheKey(
+    const baseKey = eventCacheKey(
       anchor,
       now,
       sourcePlan.map((source) => source.id),
@@ -2027,6 +2037,11 @@ function resolveDefaultEventSupply(
       selectedDate,
       time,
     );
+    // A plain coordinate/calendar warm-up has not performed local research.
+    // Do not let it answer for a later resolver-attested discovery request.
+    const key = discoverNow ? `${baseKey}:discovery:${createHash("sha256")
+      .update(JSON.stringify([placeLabel, placeContext, spatialScopeCacheKey(discoveryScope)]))
+      .digest("hex").slice(0, 20)}` : baseKey;
     // A broad calendar does not erase the existing local-discovery outcome.
     // Keep its current status alongside collection health, including cached
     // views, without allowing one to claim the other's successful coverage.
@@ -2060,6 +2075,7 @@ function resolveDefaultEventSupply(
               selectedDate,
               time,
               registry: discovered.length ? [...requestRegistry, ...discovered] : requestRegistry,
+              complementarySourceIds: discovered.map(source => source.id),
               ...(discovered.length ? { venueResolutionLimit: REQUEST_TIME_VENUE_RESOLUTION_LIMIT } : {}),
               radiusM: effectiveRadiusM,
               timeoutMs: WARM_TIMEOUT_MS,
@@ -2175,8 +2191,31 @@ async function resolveUncoveredDiscoveryHealth(sourceCatalog, anchor) {
   );
 }
 
-function localSourceMixNeedsDiscovery(sourcePlan) {
-  const local = sourcePlan.filter((source) => source?.kind !== "global" && !["national_open", "recurring_map", "calendar_open"].includes(source?.source_family));
+function localDiscoveryScope(anchor, spatialScope) {
+  const scope = sanitizeTrustedSpatialScope(spatialScope);
+  if (scope && pointWithinTrustedSpatialScope(anchor, scope)) return deriveLocalAnchorSpatialScope(scope, anchor);
+  if (!Number.isFinite(anchor?.lat) || !Number.isFinite(anchor?.lng)) return null;
+  const latDelta = DEFAULT_RADIUS_M / 1000 / 111.32;
+  const lngDelta = latDelta / Math.max(0.05, Math.abs(Math.cos(anchor.lat * Math.PI / 180)));
+  return sanitizeTrustedSpatialScope({ source: "trusted_anchor_aperture", kind: "unknown", bounds: {
+    south: Math.max(-90, anchor.lat - latDelta), north: Math.min(90, anchor.lat + latDelta),
+    west: Math.max(-180, anchor.lng - lngDelta), east: Math.min(180, anchor.lng + lngDelta),
+  } });
+}
+
+function localSourceMixNeedsDiscovery(sourcePlan, spatialScope) {
+  const bounds = spatialScope.bounds;
+  const local = sourcePlan.filter((source) => {
+    if (source?.kind === "global" || ["national_open", "recurring_map", "calendar_open"].includes(source?.source_family)) return false;
+    // A regional calendar is useful supply, but two such publishers do not
+    // establish a local source mix. Only coverage within the discovery area
+    // contributes to this conservative stopping heuristic.
+    const bbox = source?.bbox;
+    if (!Array.isArray(bbox) || bbox.length !== 4 || !bbox.every(Number.isFinite)) return false;
+    const [west, south, east, north] = bbox;
+    return west < east && south < north && west >= bounds.west && east <= bounds.east &&
+      south >= bounds.south && north <= bounds.north;
+  });
   const publishers = new Set();
   const families = new Set();
   for (const source of local) {
