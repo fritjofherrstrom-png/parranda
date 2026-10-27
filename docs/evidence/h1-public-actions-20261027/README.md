@@ -73,3 +73,26 @@ public Share authority; the copied public snapshot URL remains immutable and
 re-shareable. The reload proof above claims preserved day facts, not new Share
 permission from private storage. Safe refusal when a manual edit cannot preserve
 an explicit Live Keep remains a limitation, not successful Live editing.
+
+## Independent review corrections
+
+The pre-release review found and reproduced noncanonical private URLs (trailing
+DNS dots and encoded private path segments); five real configured
+provider→collector→HTTP cases failed RED. The URL decision now rejects trailing
+dots, decodes paths before checking private actions, and refuses ambiguous double
+encoding. `encoded-destination-GREEN.log`: all 17 pass including normal public
+Live/upgrade/storage and place-source positives; no blanket removal of links.
+
+The review also caught lost receipts in a fresh process reading an intermediate
+calendar snapshot (outer period changes, source snapshot unchanged), and in OSM
+cache envelopes/regional mapping. Source snapshots now persist bounded original
+raw-row receipts, bound to the configured source and row integrity; only the
+application-owned intermediate cache can revalidate them. Changed rows/config
+and injected caches refuse. OSM witnesses are re-established from the owned
+`{records,status,error,metadata}` envelope and the actual regional transport
+mapping. `destination-cache-GREEN.log`: 89 PASS including the three independent
+intermediate-cache regressions; no cache age renewal or extra acquisition.
+
+The broad native sender/recipient run predates these backend-only privacy/cache
+corrections. They do not change the built UI or the positive Linked Events
+source-output path; the final focused tests and Linux CI cover the updated code.

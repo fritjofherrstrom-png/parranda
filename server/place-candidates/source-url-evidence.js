@@ -148,6 +148,9 @@ function createWikidataAttestingCache(cache, namespace) {
   return namespace === 'wikidata-v2-lifecycle' ? createAttestingCache(cache, namespace, attestWikidataRecords) : cache;
 }
 function createOsmAttestingCache(cache) {
-  return createAttestingCache(cache, 'overpass', records => attestPublicPlaceRecords(records, 'osm'));
+  return createAttestingCache(cache, 'overpass', entry => {
+    attestPublicPlaceRecords(ownData(entry, 'records'), 'osm');
+    return entry;
+  });
 }
 module.exports = { attestPublicPlaceRecords, createOsmAttestingCache, PUBLIC_SOURCE_URL_POLICY_VERSION, attestWikidataRecords, createWikidataAttestingCache, publicSourceUrlsForRecords };

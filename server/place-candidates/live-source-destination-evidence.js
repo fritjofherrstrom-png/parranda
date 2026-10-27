@@ -1,9 +1,9 @@
 'use strict';
 
-// Policy wix-public-event-catalog-v1, revision 1. Application-owned closed
-// declaration, independently approved from unchanged wikidata-entity-v1.
-// Syntax is never authority: only a bound collector's actual public catalog and
-// exact completed detail response can create the private raw-record witness.
+// Source-owned publication authority for existing public event providers.
+// The original Wix catalogue/detail witness remains supported separately.
+// Syntax is never authority: only the bound provider/collector output can
+// issue a raw-record witness; caller JSON and arbitrary URL bags cannot.
 const { createHash } = require('node:crypto');
 const { types: { isProxy, isPromise } } = require('node:util');
 const { isPublicSourceDestination: publicEventDestination } = require('../lib/public-source-destination');
@@ -14,6 +14,7 @@ const nativeSpecies = Object.getOwnPropertyDescriptor(Promise, Symbol.species);
 const ROOT = 'https://www.visitystadosterlen.se/sitemap.xml';
 const FEED = 'visit-ystad-osterlen-calendar';
 const INPUTS = '_live_destination_inputs';
+const PROVIDER_INPUTS = '_public_provider_destination_inputs';
 const MAX_CLAIMS = 512;
 const MAX_INPUT_BYTES = 128 * 1024;
 const configurations = new WeakMap();
@@ -41,9 +42,12 @@ function data(object, key) {
   if (!object || typeof object !== 'object' || isProxy(object)) return undefined;
   return Object.getOwnPropertyDescriptor(object, key)?.value;
 }
+const dataOnly = (object, keys) => object && typeof object === 'object' && !isProxy(object) &&
+  Reflect.ownKeys(object).length === keys.length && keys.every(key =>
+    Object.hasOwn(Object.getOwnPropertyDescriptor(object, key) || {}, 'value'));
 function publicProviderSource(source) {
-  return configurations.has(source) && PUBLIC_EVENT_ADAPTERS.has(source.adapter) ||
-    source?.kind === 'global' && source.id === 'ticketmaster-global' && source.source_identity === 'ticketmaster.com';
+  return (configurations.has(source) && PUBLIC_EVENT_ADAPTERS.has(source.adapter)) ||
+    (source?.kind === 'global' && source.id === 'ticketmaster-global' && source.source_identity === 'ticketmaster.com');
 }
 function bindConfiguredPublicProvider(provider, source) {
   if (provider && publicProviderSource(source)) publicFactories.set(provider, fingerprint(source));
@@ -61,6 +65,46 @@ function attestPublicProviderOutput(provider, source, result) {
     if (publicEventDestination(loc) && typeof id === 'string' && id.length <= 1000 && id === id.trim())
       details.set(row, Object.freeze({ kind: 'public_event_output_v1', source: sourceHash, loc, id, source_url: loc }));
   }
+  return result;
+}
+
+function retainPublicProviderOutput(provider, source, result) {
+  if (publicFactories.get(provider) !== fingerprint(source)) return result;
+  const rows = data(result, 'time_sensitive_events');
+  if (!Array.isArray(rows) || isProxy(rows) || rows.length > MAX_CLAIMS) return result;
+  const records = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = data(rows, String(i)), binding = terminalBinding(row);
+    if (!binding) return result;
+    records.push({ binding, input: details.get(row) || null });
+  }
+  const original = { version: 1, source: fingerprint(source), records };
+  if (Buffer.byteLength(JSON.stringify(original)) <= MAX_INPUT_BYTES)
+    Object.defineProperty(result, PROVIDER_INPUTS, { value: original, enumerable: true, configurable: true });
+  return result;
+}
+
+function restorePublicProviderOutput(cache, provider, source, result) {
+  if (!ownedCaches.has(cache) || publicFactories.get(provider) !== fingerprint(source)) return result;
+  const original = data(result, PROVIDER_INPUTS), rows = data(result, 'time_sensitive_events');
+  if (!dataOnly(original, ['version','source','records']) || original.version !== 1 ||
+      original.source !== fingerprint(source) || !Array.isArray(rows) || isProxy(rows) || rows.length > MAX_CLAIMS ||
+      !Array.isArray(original.records) || isProxy(original.records) || original.records.length !== rows.length) return result;
+  const witnessed = [];
+  let bytes = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const row = data(rows, String(i)), receipt = data(original.records, String(i));
+    if (!dataOnly(receipt, ['binding','input']) || receipt.binding !== terminalBinding(row)) return result;
+    const input = receipt.input;
+    if (input !== null && (!dataOnly(input, ['kind','source','loc','id','source_url']) ||
+        input.kind !== 'public_event_output_v1' || !inputValid(input, source) ||
+        input.loc !== (data(row, 'source_url') || data(row, 'url')) ||
+        input.id !== (data(row, 'id') || data(row, 'source_event_id') || data(row, 'provider_id') || input.loc))) return result;
+    bytes += Buffer.byteLength(JSON.stringify(receipt));
+    if (bytes > MAX_INPUT_BYTES) return result;
+    if (input) witnessed.push([row, input]);
+  }
+  for (const [row, input] of witnessed) details.set(row, input);
   return result;
 }
 
@@ -240,9 +284,6 @@ function carryLiveDestinationEvidence(from, to) {
 }
 function ownLiveDestinationCache(cache) { ownedCaches.add(cache); return cache; }
 function originalInputsFit(input) {
-  const dataOnly = (object, keys) => object && typeof object === 'object' && !isProxy(object) &&
-    Reflect.ownKeys(object).length === keys.length && keys.every(key =>
-      Object.hasOwn(Object.getOwnPropertyDescriptor(object, key) || {}, 'value'));
   if (!dataOnly(input, ['version','claims']) || input.version !== 1 ||
       !Array.isArray(input.claims) || isProxy(input.claims) || input.claims.length > MAX_CLAIMS) return false;
   let bytes = 32;
@@ -442,5 +483,6 @@ function associateTerminalLiveEvidence(original, clone, witness) {
 function liveDestinationRetention(live) { return frames.get(live) || null; }
 module.exports = { rememberConfiguredEventSource, bindSelectedEventSource, rememberWixSitemapLoc, rememberWixSitemapDocument, bindConfiguredWixProvider, beginWixCatalogCollection, carryWixDetail,
   bindConfiguredPublicProvider, attestPublicProviderOutput,
+  retainPublicProviderOutput, restorePublicProviderOutput,
   captureLiveCollectionInputs, bindLiveCollection, bindLiveCacheProducer, carryLiveDestinationEvidence,
   ownLiveDestinationCache, readLiveDestinationCache, publicLiveSourceUrls, associateTerminalLiveEvidence, liveDestinationRetention };

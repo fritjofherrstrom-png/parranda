@@ -25,3 +25,19 @@ test('actual OSM transport factory retains its two source links and public websi
   assert.equal(records[0].sources[0].tier,'inferred');
   assert.equal(publicSourceUrlsForRecords(structuredClone(records)).size,0);
 });
+
+test('actual OSM owned cache envelope revalidates destinations on disk reuse without refreshing it',async t=>{
+  const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
+  const {createSourceCache}=require('../server/place-candidates/source-cache');
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'osm-destination-envelope-'));
+  t.after(()=>fs.rm(dir,{recursive:true,force:true}));let calls=0;
+  const options={endpoint:'https://overpass.example.org/api/interpreter',radiusKm:1,
+    fetcher:async()=>{calls++;return {ok:true,status:200,json:async()=>({elements:[{type:'node',id:1234,lat:55.6801,lon:14.23,tags:{name:'Source cafe',amenity:'cafe'}}]})};}};
+  const make=()=>createOpenDataLoader({...options,cache:createSourceCache({namespace:'overpass',dir})});
+  const original=await make()({lat:55.68,lng:14.23});assert.equal(original.length,1);
+  const before=calls;
+  const [file]=await fs.readdir(path.join(dir,'overpass')),location=path.join(dir,'overpass',file),bytes=await fs.readFile(location,'utf8');
+  const restored=await make()({lat:55.68,lng:14.23});
+  assert.deepEqual([...publicSourceUrlsForRecords(restored)],['https://www.openstreetmap.org/node/1234']);
+  assert.equal(calls,before,'disk reuse must not acquire again');assert.equal(await fs.readFile(location,'utf8'),bytes);
+});

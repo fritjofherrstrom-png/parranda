@@ -30,6 +30,11 @@ for(const [name,url] of [
   ['private host','https://calendar.internal/event/1'],
   ['private fragment','https://events.example.org/event/1#access-token'],
   ['private path','https://events.example.org/checkout/private-token'],
+  ['trailing-dot loopback','http://localhost./event/1'],
+  ['trailing-dot private host','https://calendar.internal./event/1'],
+  ['encoded login path','https://events.example.org/%6cogin/private-token'],
+  ['encoded checkout separator','https://events.example.org/checkout%2fprivate-token'],
+  ['double-encoded login path','https://events.example.org/%256cogin/private-token'],
 ])test(`generic sharing refuses ${name} while retaining the actual Live facts`,async t=>{
   const {h,body}=await terminal(t,options=>publicRows(options).map(row=>({...row,info_url:{en:url}})));
   assert.equal(body.live_events.tonight[0].source_url,url);

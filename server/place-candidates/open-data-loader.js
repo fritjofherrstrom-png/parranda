@@ -513,6 +513,7 @@ function createOpenDataLoader({
         OVERPASS_FETCH_CAP,
         { origin: boundedAnchors[0] },
       );
+      attestPublicPlaceRecords(mapped, 'osm');
       const buckets = boundedAnchors.map(() => []);
       for (const record of mapped) {
         let nearestIndex = -1;

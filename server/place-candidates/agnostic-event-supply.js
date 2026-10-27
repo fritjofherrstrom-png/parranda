@@ -35,7 +35,7 @@ const { createSitevisionCalendarProvider } = require("../pulse-sources/sitevisio
 const { createWixEventSitemapProvider } = require("../pulse-sources/wix-event-sitemap-provider");
 const { rememberConfiguredEventSource, bindSelectedEventSource, bindConfiguredWixProvider, captureLiveCollectionInputs, bindLiveCollection,
   bindLiveCacheProducer, carryLiveDestinationEvidence, ownLiveDestinationCache, readLiveDestinationCache,
-  bindConfiguredPublicProvider, attestPublicProviderOutput } = require('./live-source-destination-evidence');
+  bindConfiguredPublicProvider, attestPublicProviderOutput, retainPublicProviderOutput, restorePublicProviderOutput } = require('./live-source-destination-evidence');
 const { createLocalizedEventsApiProvider } = require("../pulse-sources/localized-events-api-provider");
 const { createMappedEventSourceProvider } = require("../pulse-sources/mapped-event-source-provider");
 const { trustedReviewedVenueResolution } = require("../pulse-sources/reviewed-event-venues");
@@ -1332,8 +1332,9 @@ async function collectEventSource({
   bindConfiguredPublicProvider(provider, source);
 
   try {
-    const collect = async () => attestPublicProviderOutput(provider, source,
-      await provider.create({ key: null }).collect({ date: startParam }));
+    const collect = async () => retainPublicProviderOutput(provider, source,
+      attestPublicProviderOutput(provider, source,
+        await provider.create({ key: null }).collect({ date: startParam })));
     // Share bounded source snapshots across the two Live period controls.
     // DATAtourisme also binds its date-window/geographic query to the snapshot.
     // The local API has no date/geometry filter. Final gates remain per view.
@@ -1344,6 +1345,7 @@ async function collectEventSource({
           shouldStore: value => ["ok", "empty"].includes(value?.collection_status?.status),
         })
       : await collect();
+    restorePublicProviderOutput(sourceCollectionCache, provider, source, collected);
     const raw = Array.isArray(collected && collected.time_sensitive_events) ? collected.time_sensitive_events : [];
     const outcome = normalizeDirectCollectionOutcome(collected?.collection_status, raw.length);
     return {
@@ -1874,11 +1876,11 @@ function resolveDefaultEventSupply(
     ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   }));
-  const sourceCollectionCache = createSourceCache({
+  const sourceCollectionCache = ownLiveDestinationCache(createSourceCache({
     // Source snapshots also contain normalized atoms, including category tags.
     namespace: "agnostic-event-source-v3", ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
-  });
+  }));
   const calendarReferenceCache = createSourceCache({
     namespace: "public-holiday-reference-v1", ttlMs: 86400000,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
