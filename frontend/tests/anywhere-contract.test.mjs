@@ -526,9 +526,13 @@ test("adjustments collapse to a summary and re-compose themselves — no submit 
 
 test("saving a live day does not freeze its adjustment controls as a restored snapshot", () => {
   const saveBlock = anywherePlannerSource.split("function saveDay() {")[1]?.split("function removeSavedDay")[0] ?? "";
-  const restoreBlock = anywherePlannerSource.split("function restoreEntry(entry: SavedEntry, restoreViewFromStorage = false) {")[1]?.split("const autoPlannedRef")[0] ?? "";
+  // Additive restore options must not make this wiring check inspect an empty
+  // block. Mounted exact-navigation tests prove the behavioral boundary.
+  const restoreBlock = anywherePlannerSource.match(/function restoreEntry\([^\n]*\) \{([\s\S]*?)\n  \}/)?.[1];
+  assert.ok(saveBlock && restoreBlock, "both actual handlers were located");
   assert.doesNotMatch(saveBlock, /setRestoredAt/);
-  assert.match(restoreBlock, /setRestoredAt\(entry\.savedAt\)/);
+  assert.match(restoreBlock, /setRestoredAt\(kind === "saved" \? entry\.savedAt : null\)/);
+  assert.match(restoreBlock, /setNavigationCapturedAt\(kind === "navigation" \? entry\.savedAt : null\)/);
 });
 
 test("latest compose wins and cancels stale network work", () => {
