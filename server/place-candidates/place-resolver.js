@@ -39,7 +39,7 @@
  */
 
 const { isValidCoordinate } = require("../planner/agnostic-place-intake");
-const { normalizeNominatimSpatialScope } = require("./spatial-scope");
+const { normalizeNominatimSpatialScope, pointWithinTrustedSpatialScope } = require("./spatial-scope");
 const { createWikidataPlaceResolver } = require("./wikidata-place-resolver");
 const { createSourceCache } = require("./source-cache");
 const { createSharedRateGate } = require("./shared-rate-gate");
@@ -319,14 +319,17 @@ function coordinateDistanceKm(a, b) {
 
 // Whether `container` is a municipality or region that another matched
 // settlement's own provider address names as the area it lies in. Same country
-// only; a namesake area the settlement does not name keeps competing.
+// only, with the settlement inside the provider's validated bounds. A shared
+// administrative name alone cannot identify which namesake area contains it.
 function containsMatchedSettlement(container, matches) {
   if (!["municipality", "region"].includes(container.spatial_scope?.kind)) return false;
   const containerName = normalizeNameForMatch(container.name);
-  if (!containerName) return false;
+  const countryCode = container.admin_context?.country_code;
+  if (!containerName || !countryCode) return false;
   return matches.some(place => place !== container &&
     place.spatial_scope?.kind === "settlement" &&
-    (place.admin_context?.country_code || null) === (container.admin_context?.country_code || null) &&
+    place.admin_context?.country_code === countryCode &&
+    pointWithinTrustedSpatialScope(place, container.spatial_scope) &&
     [place.admin_context?.municipality, place.admin_context?.county, place.admin_context?.region]
       .map(normalizeNameForMatch).includes(containerName));
 }

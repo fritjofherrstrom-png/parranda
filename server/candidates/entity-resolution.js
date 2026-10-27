@@ -476,7 +476,10 @@ function dedupeEvidence(evidence) {
   const out = [];
   for (const item of evidence) {
     const ref = item.source_ref || {};
-    const key = `${item.claim_type}|${ref.provider_id || ""}|${ref.source_family || ""}`;
+    // One provider/family may supply several exact source records or repeated
+    // observations. Keep their identity and age; only identical claims dedupe.
+    const key = JSON.stringify([item.claim_type, ref.provider_id, ref.source_family,
+      ref.source_tier, ref.url, item.value, item.observed_at, item.freshness, item.weight]);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(item);

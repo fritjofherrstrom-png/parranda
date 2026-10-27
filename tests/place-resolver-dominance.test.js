@@ -241,3 +241,22 @@ test("the municipality still wins when it is what was asked for, and an unrelate
   const result = await resolveAgnosticIntake({ placeQuery: "Seatville", placeResolver: resolverFor([elsewhere, municipality]) });
   assert.deepEqual(result.intake.blockers, ["ambiguous_place"]);
 });
+
+test("a matching administrative name cannot contain a town outside its provider bounds", async () => {
+  const town = seatTown("Seatville", "Seatville Municipality", 57.43, 13.82, 0.47, 21);
+  const municipality = namesakeMunicipality("Seatville", "Seatville Municipality", 55.47, 13.9, 0.48, 22);
+  for (const rows of [[municipality, town], [town, municipality]]) {
+    const result = await resolveAgnosticIntake({ placeQuery: "Seatville", placeResolver: resolverFor(rows) });
+    assert.deepEqual(result.intake.blockers, ["ambiguous_place"]);
+    assert.equal(result.anchor, null, 'a namesake municipality cannot select a geographically unrelated town');
+  }
+});
+
+test("two missing country identities cannot establish a town's administrative container", async () => {
+  const town = seatTown("Seatville", "Seatville Municipality", 55.43, 13.82, 0.47, 31);
+  const municipality = namesakeMunicipality("Seatville", "Seatville Municipality", 55.47, 13.9, 0.48, 32);
+  delete town.address.country_code;
+  delete municipality.address.country_code;
+  const result = await resolveAgnosticIntake({ placeQuery: "Seatville", placeResolver: resolverFor([town, municipality]) });
+  assert.deepEqual(result.intake.blockers, ["ambiguous_place"]);
+});

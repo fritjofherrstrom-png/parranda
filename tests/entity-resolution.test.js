@@ -92,6 +92,25 @@ test("wikidataIdOf reads id from evidence source urls or known fields", () => {
   assert.equal(wikidataIdOf(curated()), null);
 });
 
+test("same-place merge preserves exact source identities and ages without counting duplicate observations twice", () => {
+  const observation = (url, observed_at) => ({ claim_type: 'existence', value: true,
+    source_ref: { provider_id: 'osm', source_family: 'map', source_tier: 'inferred', url },
+    observed_at, freshness: 'fresh', weight: 1 });
+  const older = external({ id: 'a', evidence: [observation('https://www.openstreetmap.org/node/1', '2024-01-01')] });
+  const newer = external({ id: 'b', evidence: [observation('https://www.openstreetmap.org/way/2', '2026-06-03')] });
+  const duplicate = external({ id: 'c', evidence: [observation('https://www.openstreetmap.org/way/2', '2026-06-03')] });
+  for (const input of [[older, newer, duplicate], [newer, older, duplicate], [duplicate, newer, older]]) {
+    const result = resolveCandidateIdentity(input, { now: NOW });
+    assert.equal(result.candidates.length, 1);
+    assert.equal(result.summary.merged_count, 2);
+    assert.equal(result.candidates[0].evidence.length, 2);
+    assert.deepEqual(new Set(result.candidates[0].evidence.map(item => `${item.source_ref.url}|${item.observed_at}`)),
+      new Set(['https://www.openstreetmap.org/node/1|2024-01-01', 'https://www.openstreetmap.org/way/2|2026-06-03']));
+    const { reduceEvidence } = require('../server/candidates/evidence-reducer');
+    assert.equal(reduceEvidence(result.candidates[0].evidence, { now: NOW }).provenance_diversity, 1);
+  }
+});
+
 // --- matchIdentity ---------------------------------------------------------
 test("close + same distinctive name + compatible category → same place", () => {
   const v = matchIdentity(curated(), external({ lat: 41.88965 }));
