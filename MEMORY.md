@@ -1,5 +1,21 @@
 # Parranda — gemensam arbetshistorik
 
+## Produktspår bekräftat av Fritjof — 2026-10-27
+
+- Fritjof återförde en diskussion från en försvunnen sidochatt: överväg en
+  billig modell som förstärker motorn och hjälper Parranda att bli den avsedda
+  produkten. Möjliga användningar är att hitta relevanta källor, förstå svårare
+  källinnehåll och förbättra användarnas upplevelse.
+- Bevara detta som ett öppet produktspår när källupptäckt, Live och motorns
+  fortsatta utveckling diskuteras. De deterministiska förbättringarna av
+  festivalprogram i PR #658 är en grund att bygga vidare på.
+- Modell/provider, avgränsat användningsfall, kostnadstak och förväntad nytta
+  återstår att utvärdera. Bekräftelsen gäller att överväga spåret; den innehåller
+  inget nytt beslut om betaltjänst eller runtime-aktivering.
+- Befintlig policy för källbelagda modelläsarfakta finns i `CODEX.md` och
+  `docs/PARRANDA_ENGINE_GOALS.md`. Den aktuella festivalleveransen använder
+  befintliga kostnadsfria källor; dess modelläsare förblir avstängd.
+
 ## Aktuell Live-kostnadsgräns — 2026-10-12
 
 - Fritjof: inga nya betal-API:er, betald sökning eller modelläsaranrop nu.

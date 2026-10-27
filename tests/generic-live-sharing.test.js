@@ -84,8 +84,8 @@ test('generic provider authority survives owned disk reuse but not a JSON replay
   const proof=value=>publicLiveSourceUrls(shapeCollectedLiveEvents(value));
   assert.deepEqual([...proof(original)],['https://events.example.org/programme/original-concert']);
   assert.equal(proof(JSON.parse(JSON.stringify(original))),null);
-  const [file]=await fs.readdir(path.join(directory,'agnostic-events-v18'));
-  const location=path.join(directory,'agnostic-events-v18',file),bytes=await fs.readFile(location,'utf8'),stat=await fs.stat(location);
+  const [file]=await fs.readdir(path.join(directory,'agnostic-events-v19'));
+  const location=path.join(directory,'agnostic-events-v19',file),bytes=await fs.readFile(location,'utf8'),stat=await fs.stat(location);
   const script=`require('./tests/helpers/no-live-network');const {resolveDefaultEventSupply}=require('./server/place-candidates/agnostic-event-supply');const {shapeCollectedLiveEvents}=require('./server/place-candidates/live-event-query');const {publicLiveSourceUrls}=require('./server/place-candidates/live-source-destination-evidence');const {env,args}=JSON.parse(process.argv[1]);resolveDefaultEventSupply(env,{eventReader:null,requestTimeDiscovery:null,collectEvents:()=>{throw Error('no acquisition');}})(args).then(v=>{const p=publicLiveSourceUrls(shapeCollectedLiveEvents(v));process.stdout.write(JSON.stringify({urls:p?[...p]:null,health:v.acquisition.source_health}));});`;
   const child=require('node:child_process').spawnSync(process.execPath,['-e',script,JSON.stringify({env,args})],{cwd:path.join(__dirname,'..'),encoding:'utf8',timeout:30000});
   assert.equal(child.status,0,child.stderr);const restarted=JSON.parse(child.stdout);
