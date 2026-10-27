@@ -22,6 +22,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright-core';
+import { assertExactNavigation } from './helpers/exact-navigation-observation.mjs';
 import { liveDateLabel } from '../src/lib/live-event-query.mjs';
 
 const require = createRequire(import.meta.url);
@@ -55,6 +56,7 @@ const REQUIRED = ['initial-real-composition', 'settled-live-and-bounded-browse',
   'explicit-exact-keep', 'exact-no-compose-undo', 'keep-again', 'kept-url-reload',
   'ordinary-release', 'keep-for-manual-edits',
   'manual-shorter-remove-with-keep', 'manual-replace-with-keep', 'edited-url-reload',
+  'edited-language-navigation', 'edited-native-back',
   'release-after-strict-edit', 'released-edit-url-reload'];
 const stopsOf = body => body?.days?.[0]?.primary_route?.main_stops || [];
 const savedDay = page => page.evaluate(key => JSON.parse(localStorage.getItem(key) || 'null'), LAST);
@@ -480,13 +482,15 @@ for (const coldPlace of [false, true]) test(`Ticketmaster exact occurrence survi
     done('keep-again');
     setPhase('kept-url-reload');
     const beforeReloadCount = composeRequests().length;
-    await Promise.all([waitForPublished(page, body => stopsOf(body).length > 0), page.reload()]);
+    const acceptedKeep = await savedDay(page);
+    await assertExactNavigation({ page, navigate: () => page.reload(), expectedEntry: acceptedKeep,
+      readComposeCount: () => composeRequests().length });
     await page.getByRole('region', { name: 'The route', exact: true })
       .getByRole('button', { name: 'Kept — release', exact: true }).waitFor();
     const reloadedKeep = await awaitSaved(entry => entry.safeResponse?.agnostic_route_output_experiment?.live_event_choices?.honored_count === 1);
     assertExactKeep(reloadedKeep, chosen.live_occurrence_id);
-    assert.equal(composeRequests().length, beforeReloadCount + 1, 'ordinary URL reload revalidates once');
-    assert.deepEqual(composeRequests().at(-1).body.live_event_choices, [{ occurrence_id: chosen.live_occurrence_id, action: 'keep' }]);
+    assert.equal(composeRequests().length, beforeReloadCount, 'ordinary reload restores the exact accepted Keep without revalidation');
+    assert.deepEqual(reloadedKeep, acceptedKeep);
     await capture('kept-reloaded');
     done('kept-url-reload');
 
@@ -555,22 +559,38 @@ for (const coldPlace of [false, true]) test(`Ticketmaster exact occurrence survi
     setPhase('edited-url-reload');
     const editedIds = stopsOf(replacedEntry.safeResponse).map(stop => stop.id);
     const editedReloadCount = composeRequests().length;
-    await Promise.all([waitForPublished(page, body => Boolean(body.agnostic_route_output_experiment?.day_edit)), page.reload()]);
+    await assertExactNavigation({ page, navigate: () => page.reload(), expectedEntry: replacedEntry,
+      readComposeCount: () => composeRequests().length });
     await page.getByRole('region', { name: 'The route', exact: true })
       .getByRole('button', { name: 'Kept — release', exact: true }).waitFor();
     const editedReload = await awaitSaved(entry => entry.inputs?.dayEdit?.removed_candidate_ids?.length > 0 &&
       Object.values(entry.commitments?.entries || {}).some(item => item.kind === 'exclude'));
     assertShorter(editedReload, chosen.live_occurrence_id, cap, [removed.id, replaced.id]);
     assert.deepEqual(stopsOf(editedReload.safeResponse).map(stop => stop.id), editedIds, 'reload retains the applied edit rather than replaying replacement');
-    assert.equal(composeRequests().length, editedReloadCount + 1);
-    const reloadRequest = composeRequests().at(-1).body;
-    assert.equal(reloadRequest.day_edit.action, 'remove', 'persisted applied extent is not a one-shot Replace command');
-    assert.equal(reloadRequest.day_edit.target_stop_count, cap);
-    assert.deepEqual(reloadRequest.day_edit.retained_candidate_ids, editedIds);
-    assert.ok([removed.id, replaced.id].every(id => reloadRequest.excluded_candidate_ids.includes(id)));
+    assert.equal(composeRequests().length, editedReloadCount, 'applied replacement must not replay on exact reload');
+    assert.equal(editedReload.inputs.dayEdit.action, 'remove', 'persisted applied extent is not a one-shot Replace command');
+    assert.equal(editedReload.inputs.dayEdit.target_stop_count, cap);
+    assert.deepEqual(editedReload.inputs.dayEdit.retained_candidate_ids, editedIds);
+    assert.ok(editedReload.inputs.dayEdit.removed_candidate_ids.includes(removed.id), 'manual removal remains in its durable edit owner');
+    assert.equal(editedReload.commitments.entries[replaced.id]?.kind, 'exclude', 'replacement exclusion remains in its durable ledger owner');
     assert.equal(new URL(page.url()).searchParams.get('prio'), 'culture');
     await capture('edited-reload-preserves-priority-cap-exclusions');
     done('edited-url-reload');
+
+    setPhase('edited-language-navigation');
+    await assertExactNavigation({ page, expectedEntry: editedReload,
+      navigate: () => page.getByRole('link', { name: 'SV', exact: true }).click(),
+      readComposeCount: () => composeRequests().length, listName: 'Stoppen i ordning' });
+    assertExactKeep(await savedDay(page), chosen.live_occurrence_id);
+    await page.getByRole('heading', { name: /^En dag i/ }).waitFor();
+    await capture('edited-language-keeps-exact-answer');
+    done('edited-language-navigation');
+    setPhase('edited-native-back');
+    await assertExactNavigation({ page, expectedEntry: editedReload, navigate: () => page.goBack(),
+      readComposeCount: () => composeRequests().length });
+    assertShorter(await savedDay(page), chosen.live_occurrence_id, cap, [removed.id, replaced.id]);
+    await capture('edited-native-back-keeps-exact-answer');
+    done('edited-native-back');
 
     setPhase('release-after-strict-edit');
     const [releasedEditBody] = await Promise.all([
@@ -595,7 +615,8 @@ for (const coldPlace of [false, true]) test(`Ticketmaster exact occurrence survi
 
     setPhase('released-edit-url-reload');
     const releasedIds = stopsOf(releasedEdit.safeResponse).map(stop => stop.id);
-    await Promise.all([waitForPublished(page, body => Boolean(body.agnostic_route_output_experiment?.day_edit)), page.reload()]);
+    await assertExactNavigation({ page, navigate: () => page.reload(), expectedEntry: releasedEdit,
+      readComposeCount: () => composeRequests().length });
     const releasedReload = await awaitSaved(entry => Boolean(entry.inputs?.dayEdit) &&
       !Object.keys(entry.commitments?.entries || {}).some(id => id.startsWith('live:')));
     assertPriority(releasedReload);

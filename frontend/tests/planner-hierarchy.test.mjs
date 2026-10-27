@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { mountPlanner } from "./helpers/planner-harness.mjs";
+import { browserStorage } from "./helpers/exact-navigation-observation.mjs";
 
 const PLACE_URL = "http://localhost/anywhere?place=Testville&lang=en";
 
@@ -252,17 +253,41 @@ test("saved days follow the day instead of pushing it down", async (t) => {
   assert.ok(h.container.querySelector('button[aria-label="Day is saved"]'), "and the save control says so");
 });
 
-test("switching language keeps the day's own inputs", async (t) => {
-  const h = await plannerWith(t, composedDay(), "http://localhost/anywhere?place=Testville&prefs=food,culture&lang=en");
+test("switching language keeps the exact accepted answer and its own inputs", async (t) => {
+  let h = await mountPlanner({ url: "http://localhost/anywhere?place=Testville&prefs=food,culture&lang=en" });
+  let translated;
+  t.after(async () => { if (translated) await translated.unmount(); if (h) await h.unmount(); });
+  h.document.addEventListener("click", event => event.preventDefault());
+  await h.clock.advance(500);
+  const call = h.fetchMock.pending().find(call => call.url.startsWith("/api/route-recommendations"));
+  assert.ok(call, "a genuinely fresh input URL still acquires a day");
+  const body = composedDay();
+  body.days[0].date = call.body.dates[0];
+  await h.fetchMock.respond(call, body);
+  await h.clock.advance(50);
+  const before = h.readStorage("parranda:anywhere:last");
   const languages = h.container.querySelector('[role="group"][aria-label="Language"]');
   assert.ok(languages, "the planner offers a language switch");
   const swedish = [...languages.querySelectorAll("a")].find((a) => a.textContent === "SV");
-  const params = new URLSearchParams(swedish.getAttribute("href"));
-  assert.equal(params.get("place"), "Testville");
-  assert.equal(params.get("prefs"), "food,culture");
-  assert.equal(params.get("lang"), "sv");
+  const target = new URL(swedish.getAttribute("href"), h.window.location.href);
+  assert.equal(target.pathname, "/anywhere");
+  assert.ok(target.searchParams.get("view"), "the language link binds this publication instance, not just its inputs");
+  assert.equal(target.searchParams.get("lang"), "sv");
   const english = [...languages.querySelectorAll("a")].find((a) => a.textContent === "EN");
   assert.equal(english.getAttribute("aria-current"), "true", "the current language is marked");
+  await h.act(() => swedish.dispatchEvent(new h.window.MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })));
+  const storage = browserStorage(h.window.localStorage);
+  const sessionStorage = browserStorage(h.window.sessionStorage);
+  await h.unmount(); h = null;
+  translated = await mountPlanner({ url: target.href, storage, sessionStorage, props: { lang: "sv" }, navigationType: "navigate" });
+  await translated.clock.advance(2000);
+  assert.equal(translated.fetchMock.calls.length, 0, "language is presentation only, not new acquisition");
+  assert.match(translated.container.querySelector("header h1").textContent, /^En dag i Testville$/);
+  assert.match(translated.text(), /Place a/);
+  assert.match(translated.text(), /Place b/);
+  assert.deepEqual(translated.readStorage("parranda:anywhere:last"), before,
+    "absolute date, full response, inputs and commitment verdict remain exactly the accepted answer");
+  assert.deepEqual(before.inputs.selected, ["food", "culture"]);
 });
 
 const pendingLifecycle = (token) => ({

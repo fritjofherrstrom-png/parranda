@@ -1,7 +1,8 @@
 /**
  * The chosen place keeps its identity on reload, in another language and in a
- * new session. Links carry the place's OSM identity (`place_ref`), which the
- * server re-validates — never coordinates and never a session receipt.
+ * new document. Legacy input links carry the place's OSM identity (`place_ref`),
+ * while accepted local views restore that same answer without another request.
+ * Neither link carries coordinates or a session receipt.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -40,14 +41,15 @@ test("a chosen landing suggestion sends its identity to the planner", () => {
   assert.equal(new URL(routeForInput({}, "Lisboa", "sv", { placeRef: "lisboa" }).href, "http://localhost").searchParams.get("place_ref"), null);
 });
 
-const romeDay = (placeRef = "r41485") => {
+const romeDay = (dateIso, placeRef = "r41485") => {
+  assert.match(dateIso, /^\d{4}-\d{2}-\d{2}$/, "fixture date comes from the actual request");
   const stops = [
     { id: "a", label: "Place a", lat: 41.9, lng: 12.49, type: "museum" },
     { id: "b", label: "Place b", lat: 41.901, lng: 12.49, type: "restaurant" },
   ];
   return {
     days: [{
-      date: "2026-10-08",
+      date: dateIso,
       experimental_agnostic_route_applied: true,
       primary_route: { id: "__agnostic_compose__", main_stops: stops, estimated_km: 1.2, legs: [], map_route_points: [], map_path_points: stops.map(({ lat, lng }) => ({ lat, lng })), confidence: "low" },
       alternatives: [],
@@ -60,41 +62,56 @@ const romeDay = (placeRef = "r41485") => {
 };
 const composeCalls = (h) => h.fetchMock.calls.filter((call) => call.url.startsWith("/api/route-recommendations"));
 const click = (h, element) => h.act(() => element.dispatchEvent(new h.window.MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })));
+const browserStorage = storage => Object.fromEntries(Array.from({ length: storage.length }, (_, index) => {
+  const key = storage.key(index);
+  return [key, JSON.parse(storage.getItem(key))];
+}));
 
-test("reloading a chosen place, switching language and opening a shared link keep the same identity", async () => {
+test("legacy identity arrivals and exact local language links keep identity; unpublished fixtures cannot Share", async t => {
   // Arrival from the landing: the one-shot receipt handoff plus the identity.
-  const first = await mountPlanner({
+  let first = await mountPlanner({
     url: "http://localhost/anywhere?place=Rome&place_ref=r41485&planner=open&lang=en",
     sessionStorage: { "parranda:place-choice": { place: "Rome", selection: "receipt-1", label: "Rome, Roma Capitale, Lazio, Italy", at: Date.now() } },
   });
+  t.after(async () => { if (first) await first.unmount(); });
   first.document.addEventListener("click", (event) => event.preventDefault());
   await first.clock.advance(500);
   const [arrival] = composeCalls(first);
   assert.equal(arrival.body.place_selection, "receipt-1");
   assert.equal(arrival.body.place_ref, "r41485");
-  await first.fetchMock.respond(arrival, romeDay());
+  await first.fetchMock.respond(arrival, romeDay(arrival.body.dates[0]));
   await first.clock.advance(50);
 
   const reloadSearch = first.window.location.search;
   assert.equal(new URLSearchParams(reloadSearch).get("place_ref"), "r41485", "the address names the place");
   const sv = [...first.container.querySelectorAll("a")].find((a) => a.textContent.trim() === "SV");
   assert.equal(new URL(sv.href, "http://localhost").searchParams.get("place_ref"), "r41485", "the language link names it too");
-  const copied = [];
-  Object.defineProperty(first.window.navigator, "clipboard", { configurable: true, value: { writeText: async (text) => { copied.push(text); } } });
-  await click(first, [...first.container.querySelectorAll("button")].find((b) => /^Share/.test((b.getAttribute("aria-label") || b.textContent).trim())));
-  await first.clock.advance(10);
-  assert.equal(copied.length, 1, "the share link was produced");
-  assert.equal(new URL(copied[0]).searchParams.get("place_ref"), "r41485", "the share link names it");
+  assert.ok(![...first.container.querySelectorAll("button")].some((b) => /^Share/.test((b.getAttribute("aria-label") || b.textContent).trim())), "a fixture without a server publication cannot Share inputs as an exact day");
+  assert.match(first.text(), /Exact sharing is unavailable/);
+  const expected = first.readStorage("parranda:anywhere:last");
+  const targets = [
+    { url: first.window.location.href, navigationType: "reload", historyState: structuredClone(first.window.history.state) },
+    { url: sv.href, navigationType: "navigate" },
+  ];
+  await click(first, sv);
+  const storage = browserStorage(first.window.localStorage);
+  const sessionStorage = browserStorage(first.window.sessionStorage);
   await first.unmount();
+  first = null;
 
-  // A plain reload: the one-shot receipt is gone (Hermès, 773c48d), the identity is not.
-  for (const search of [reloadSearch, new URL(sv.href, "http://localhost").search, new URL(copied[0]).search]) {
-    const again = await mountPlanner({ url: `http://localhost/anywhere${search}` });
+  // Follow the real emitted address/history and storage, not an input-only
+  // substitute. Exact navigation must not spend an old receipt or recompose.
+  for (const target of targets) {
+    const again = await mountPlanner({ ...target, storage, sessionStorage,
+      props: { lang: new URL(target.url).searchParams.get("lang") } });
     try {
       await again.clock.advance(500);
-      const [call] = composeCalls(again);
-      assert.equal(call.body.place_selection, undefined, "no receipt survives into a new session");
-      assert.equal(call.body.place_ref, "r41485", search);
+      assert.equal(again.fetchMock.calls.length, 0, "exact navigation sends neither a new query nor a receipt");
+      assert.equal(new URL(again.window.location.href).searchParams.get("place_ref"), "r41485");
+      assert.match(again.text(), /Place a/);
+      assert.match(again.text(), /Place b/);
+      assert.equal(again.readStorage("parranda:anywhere:last").dateIso, expected.dateIso);
+      assert.deepEqual(again.readStorage("parranda:anywhere:last").safeResponse.days, expected.safeResponse.days);
     } finally {
       await again.unmount();
     }
@@ -135,7 +152,8 @@ async function rememberedDay() {
   const h = await mountPlanner({ url: "http://localhost/anywhere?place=Previous&lang=en" });
   try {
     await h.clock.advance(500);
-    await h.fetchMock.respond(composeCalls(h)[0], romeDay());
+    const call = composeCalls(h)[0];
+    await h.fetchMock.respond(call, romeDay(call.body.dates[0]));
     await h.clock.advance(50);
     const entry = h.readStorage(LAST_KEY);
     assert.ok(entry?.safeResponse, "a real composed stored-day precondition");
@@ -173,7 +191,7 @@ test("ref-only arrival requests its identity before stored-day fallback and adop
       assert.equal(calls[0].body.place_ref, "r41485");
       for (const field of ["place", "place_query", "lat", "lng", "place_selection"]) assert.equal(calls[0].body[field], undefined, field);
       assert.doesNotMatch(h.text(), /Saved day/);
-      await h.fetchMock.respond(calls[0], romeDay());
+      await h.fetchMock.respond(calls[0], romeDay(calls[0].body.dates[0]));
       await h.clock.advance(50);
       const stored = h.readStorage(LAST_KEY);
       assert.equal(stored.inputs.place, "Rome, Roma Capitale, Lazio, Italy");
@@ -186,14 +204,8 @@ test("ref-only arrival requests its identity before stored-day fallback and adop
       assert.equal(params.has("selection_id"), false);
       const sv = [...h.container.querySelectorAll("a")].find((a) => a.textContent.trim() === "SV");
       assert.equal(new URL(sv.href).searchParams.get("place_ref"), "r41485");
-      const copied = [];
-      Object.defineProperty(h.window.navigator, "clipboard", { configurable: true, value: { writeText: async (text) => { copied.push(text); } } });
-      await click(h, [...h.container.querySelectorAll("button")].find((b) => /^Share/.test((b.getAttribute("aria-label") || b.textContent).trim())));
-      await h.clock.advance(10);
-      assert.equal(copied.length, 1);
-      const share = new URL(copied[0]);
-      assert.equal(share.searchParams.get("place_ref"), "r41485");
-      for (const url of [share, new URL(sv.href)]) {
+      assert.ok(![...h.container.querySelectorAll("button")].some((b) => /^Share/.test((b.getAttribute("aria-label") || b.textContent).trim())), "no server-owned sidecar, no Share fallback");
+      for (const url of [new URL(sv.href)]) {
         assert.equal(url.searchParams.get("place"), stored.inputs.place);
         for (const field of ["selection_id", "place_selection", "lat", "lng"]) assert.equal(url.searchParams.has(field), false, field);
       }

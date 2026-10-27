@@ -32,6 +32,7 @@
 const { createSourceCache } = require("./source-cache");
 const { createBackgroundSource, SOURCE_COMPLETION, SOURCE_SNAPSHOT, SOURCE_PENDING } = require("./background-source");
 const { createWikidataSource, WIKIDATA_CACHE_NAMESPACE } = require("./wikidata-source");
+const { createWikidataAttestingCache } = require('./source-url-evidence');
 const { normalizeSourceNameAliases } = require("./source-name-aliases");
 const { createOvertureSource } = require("./overture-source");
 const { createOvertureSampleCache } = require('./overture-sample-cache');
@@ -1580,7 +1581,7 @@ function resolveDefaultOpenDataLoader(env = process.env) {
         ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
       });
       wikiSource = createBackgroundSource({
-        cache: wikiCache,
+        cache: createWikidataAttestingCache(wikiCache, WIKIDATA_CACHE_NAMESPACE),
         keyFor: ({ lat, lng } = {}) => `${Number(lat).toFixed(3)},${Number(lng).toFixed(3)}`,
         load: wikiRaw,
         // Start only after the primary has selected its regional cluster.
