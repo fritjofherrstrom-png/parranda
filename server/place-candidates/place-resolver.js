@@ -39,7 +39,7 @@
  */
 
 const { isValidCoordinate } = require("../planner/agnostic-place-intake");
-const { normalizeNominatimSpatialScope } = require("./spatial-scope");
+const { normalizeNominatimSpatialScope, pointWithinTrustedSpatialScope } = require("./spatial-scope");
 const { createWikidataPlaceResolver } = require("./wikidata-place-resolver");
 const { createSourceCache } = require("./source-cache");
 const { createSharedRateGate } = require("./shared-rate-gate");
@@ -317,6 +317,23 @@ function coordinateDistanceKm(a, b) {
   return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
+// Whether `container` is a municipality or region that another matched
+// settlement's own provider address names as the area it lies in. Same country
+// only, with the settlement inside the provider's validated bounds. A shared
+// administrative name alone cannot identify which namesake area contains it.
+function containsMatchedSettlement(container, matches) {
+  if (!["municipality", "region"].includes(container.spatial_scope?.kind)) return false;
+  const containerName = normalizeNameForMatch(container.name);
+  const countryCode = container.admin_context?.country_code;
+  if (!containerName || !countryCode) return false;
+  return matches.some(place => place !== container &&
+    place.spatial_scope?.kind === "settlement" &&
+    place.admin_context?.country_code === countryCode &&
+    pointWithinTrustedSpatialScope(place, container.spatial_scope) &&
+    [place.admin_context?.municipality, place.admin_context?.county, place.admin_context?.region]
+      .map(normalizeNameForMatch).includes(containerName));
+}
+
 function classifyConfidences(rawCandidates, query = null, context = {}) {
   if (!rawCandidates.length) return [];
   const sorted = [...dedupeSamePlace(rawCandidates)].sort((a, b) => (b.importance ?? -1) - (a.importance ?? -1));
@@ -341,10 +358,15 @@ function classifyConfidences(rawCandidates, query = null, context = {}) {
   if (exactStructuralMatches.length > 0) {
     // Already importance-sorted after dedupe. Compare exact identities only:
     // a surrounding administrative container must not manufacture a near-tie.
+    // A settlement and the area its own address names as the one it lies in
+    // ("Ystad" and "Ystads kommun", whose OSM names include the town's) are
+    // one answer: the area stays a weak alternative. Asking for the area by
+    // its own name still selects it, since the settlement does not match that.
     // Missing scores cannot establish dominance, nor can junk-floor leaders.
+    const identities = exactStructuralMatches.filter(candidate => !containsMatchedSettlement(candidate, exactStructuralMatches));
     const near = normalizeBias(context.near);
-    const local = near ? exactStructuralMatches.filter(candidate => coordinateDistanceKm(candidate, near) <= PLACE_BIAS_KM) : [];
-    const [leader, runnerUp] = exactStructuralMatches;
+    const local = near ? identities.filter(candidate => coordinateDistanceKm(candidate, near) <= PLACE_BIAS_KM) : [];
+    const [leader, runnerUp] = identities;
     // Popularity cannot settle competing exact identities when the leader
     // matches only a translated name. This also applies when every competing
     // match is translated; no language is evidence of which place was meant.
@@ -352,15 +374,15 @@ function classifyConfidences(rawCandidates, query = null, context = {}) {
       matching_names: candidate.own_names || [],
     }, query);
     const translatedLeader = !String(query).includes(",") && !ownName(leader) &&
-      exactStructuralMatches.length > 1;
+      identities.length > 1;
     const dominant = !translatedLeader && runnerUp &&
-      exactStructuralMatches.every((candidate) => candidate.importance !== null) &&
+      identities.every((candidate) => candidate.importance !== null) &&
       leader.importance >= JUNK_IMPORTANCE_FLOOR &&
       // Decimal boundary scores can round to a gap just above the margin.
       // Require a lead beyond floating-point noise before weakening a rival.
       leader.importance - runnerUp.importance > AMBIGUITY_MARGIN +
         Number.EPSILON * Math.max(1, Math.abs(leader.importance), Math.abs(runnerUp.importance));
-    const exact = new Set(local.length === 1 ? local : dominant ? [leader] : exactStructuralMatches);
+    const exact = new Set(local.length === 1 ? local : dominant ? [leader] : identities);
     return sorted.map((candidate) => ({
       ...candidate,
       confidence: exact.has(candidate) ? "medium" : "low",
@@ -520,7 +542,7 @@ function createNominatimPlaceResolver({
     .slice(0, 16);
   const lookupEndpointIdentity = createHash("sha256").update(lookupEndpoint).digest("hex").slice(0, 16);
   const cache = sourceCache || createSourceCache({
-    namespace: "place-resolver-nominatim-v7",
+    namespace: "place-resolver-nominatim-v8",
     ttlMs: cacheTtlMs,
     dir: cacheDir,
     now,
@@ -740,7 +762,7 @@ function createNominatimPlaceResolver({
     if (!endpointValid) return [];
     const context = { language: normalizeLanguage(options.language), near: normalizeBias(options.near), purpose: options.purpose === "event_venue" ? "event_venue" : "place" };
     const queryIdentity = createHash("sha256").update(JSON.stringify([query.toLowerCase(), context.language, context.near, context.purpose])).digest("hex");
-    const key = `v7:${endpointIdentity}:${queryIdentity}`;
+    const key = `v8:${endpointIdentity}:${queryIdentity}`;
     const result = await cache.get(
       key,
       () => enqueueProviderTask(() => fetchAndMapQueued(query, context)),

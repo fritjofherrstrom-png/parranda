@@ -128,6 +128,27 @@ test("freshness derives from best claim but is capped by observed age", () => {
   assert.equal(old.freshness, "stale");
 });
 
+test("a newer unknown or stale observation cannot renew an old place claim", () => {
+  const old = existence('map', 'inferred', { freshness: 'live', observed_at: '2026-01-01' });
+  for (const freshness of ['unknown', 'stale']) {
+    const metric = createEvidence({ claim_type: 'popularity', value: 900,
+      provider_id: 'map', source_family: 'map', source_tier: 'inferred', observed_at: NOW, freshness });
+    assert.equal(reduceEvidence([old, metric], { now: NOW }).freshness, 'stale', freshness);
+  }
+  const fresh = existence('official', 'official', { freshness: 'fresh', observed_at: NOW });
+  assert.equal(reduceEvidence([old, fresh], { now: NOW }).freshness, 'fresh',
+    'a genuine new observation counts without inheriting the old live claim');
+});
+
+test("the existing 45-day limit applies to each claim before selecting freshness", () => {
+  const metric = createEvidence({ claim_type: 'popularity', value: 900,
+    provider_id: 'map', source_family: 'map', observed_at: NOW, freshness: 'unknown' });
+  for (const [observed_at, expected] of [['2026-04-19', 'live'], ['2026-04-18', 'stale']]) {
+    const claim = existence('map', 'inferred', { observed_at, freshness: 'live' });
+    assert.equal(reduceEvidence([claim, metric], { now: NOW }).freshness, expected, observed_at);
+  }
+});
+
 test("zero-weight evidence is carried but cannot raise confidence or promote", () => {
   const derived = reduceEvidence(
     [
