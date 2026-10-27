@@ -6,6 +6,7 @@ const { normalizePreferencePriority, normalizeDayEdit } = require('../../shared/
 const { normalizeUserIntents } = require('../candidates/intent-vocabulary');
 const { preferenceFit } = require('./preference-focus');
 const { selectAgnosticCandidateSet, buildAgnosticEvaluationPool } = require('./agnostic-candidate-set');
+const { createMealOrderPolicy } = require('./meal-ordering');
 
 const UI_BY_INTENT = Object.freeze({ food: 'food', museums: 'culture', scenic: 'views',
   coffee: 'fika', bars: 'nightlife', green: 'green', second_hand: 'second_hand' });
@@ -122,10 +123,12 @@ function* orders(values, prefix = []) {
   }
 }
 
-function orderBalancedDay({ stops, geometry, geometryFor, chainKm, preferences = [], dayEdit = null }) {
+function orderBalancedDay({ stops, geometry, geometryFor, chainKm, preferences = [], preferencePriority = [], dayEdit = null, mealContext = null }) {
   const unchanged = { stops, geometry, changed: false };
   const strictEdit = dayEdit && (dayEdit.action === 'replace' || dayEdit.preserve_retained !== false);
-  if (stops.length > 6 || (!strictEdit && (normalizeUserIntents(preferences).intents.length < 2 ||
+  const meals = !strictEdit && canonicalPriority(preferencePriority, preferences)[0] === 'food'
+    ? createMealOrderPolicy(stops, mealContext) : null;
+  if (stops.length > 6 || (!strictEdit && !meals && (normalizeUserIntents(preferences).intents.length < 2 ||
       !stops.some(isMeal) || stops.every(isMeal)))) return unchanged;
   const baseKm = chainKm(stops);
   const score = candidate => {
@@ -136,6 +139,7 @@ function orderBalancedDay({ stops, geometry, geometryFor, chainKm, preferences =
       ? candidate.findIndex(stop => !dayEdit.retained_candidate_ids.includes(stop.id)) : -1;
     return [
       ...(strictEdit ? [replacementIndex < 0 ? 0 : -Math.abs(replacementIndex - dayEdit.slot_index), -orderDrift] : []),
+      ...(meals ? meals.score(candidate) : []),
       -candidate.slice(1).filter((stop, index) => isMeal(stop) && isMeal(candidate[index])).length,
       -(isMeal(candidate[0]) && isMeal(candidate[1]) ? 1 : 0),
       -chainKm(candidate),
@@ -152,7 +156,9 @@ function orderBalancedDay({ stops, geometry, geometryFor, chainKm, preferences =
     best = { stops: candidate, geometry: nextGeometry,
       changed: candidate.some((stop, index) => stop !== stops[index]), score: nextScore };
   }
-  return best;
+  if (!meals) return best;
+  const planned = meals.annotate(best.stops);
+  return { ...best, stops: planned, changed: best.changed || planned.some((stop, i) => stop !== best.stops[i]) };
 }
 
 function selectEditedDay({ rankedCandidates = [], selected = [], dayEdit, pinnedIds = [],

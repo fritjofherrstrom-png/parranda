@@ -4450,6 +4450,10 @@ function refineStopOrder(selectedStops, start, geometryFor) {
 // the ordering layer and never depends on the provisional-stop mapper carrying
 // role data (that mapper is owned elsewhere).
 function composeStopDaypartSlot(stop, roleById = null) {
+  // A meal's proposed place in this day is not source availability or open-now
+  // evidence. Only the trusted, geometry-checked ordering pass sets this field.
+  const mealSlot = SLOT_DAYPART.indexOf(stop?.plannedMealDaypart);
+  if (mealSlot >= 0) return mealSlot;
   // Only the trusted any-place reservoir sets this after checking selected
   // intent and source availability. Use the same band for ordering and labels;
   // retaining a midday cafe must not publish an already-past morning visit.
@@ -5534,7 +5538,9 @@ function buildRouteFromTemplate(
     composeGeometry = dp.geometry;
     agnosticDaypartOrdering = { applied: dp.applied, fallback: dp.fallback, reason: dp.reason };
     const balanced = orderBalancedDay({ stops: composeOrderedStops, geometry: composeGeometry,
-      geometryFor: geomFor, chainKm: selectedStopChainKm, preferences, dayEdit });
+      geometryFor: geomFor, chainKm: selectedStopChainKm, preferences, dayEdit,
+      preferencePriority: getActiveCityConfig().__preferencePriority || [],
+      mealContext: getActiveCityConfig().__mealContext || null });
     if (balanced.changed) {
       composeOrderedStops = balanced.stops;
       composeGeometry = balanced.geometry;

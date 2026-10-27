@@ -1762,6 +1762,8 @@ async function composeAgnosticRouteViaEngine({
       preferencePriority,
       dayEdit: stableDayEdit,
       reservedLiveStopCount: preserveLive ? 1 : 0,
+      mealContext: contextBlock?.time?.timezone_known === true && contextBlock.time.requested_date_is_today === true
+        ? { date: effectiveDate, nowLocalIso: contextBlock.time.now, fullDay: dayRhythm === 'full' } : null,
     });
     const engineResult = await generateAgnosticRecommendations({
       cityConfig: engineCityConfig,
