@@ -1299,7 +1299,8 @@ test("a calendar-only trusted place confirms local demand before reporting disco
   assert.equal(result.coverage, "covered", "supplemental country calendar selection is independent of local discovery");
   assert.equal(result.acquisition.discovery_health.status, "pending");
   assert.ok(result.acquisition.source_health.reasons.includes("background_refresh_pending"));
-  assert.deepEqual(demand, input);
+  assert.deepEqual(demand, { ...input, spatialScope:
+    require("../server/place-candidates/spatial-scope").sanitizeTrustedSpatialScope(input.spatialScope) });
 });
 
 test("an unaccepted scout demand is unavailable rather than falsely pending", async () => {

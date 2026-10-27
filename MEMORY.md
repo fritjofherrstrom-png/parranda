@@ -1,5 +1,23 @@
 # Parranda — gemensam arbetshistorik
 
+## Lokal research och modellpilot — 2026-10-27, förberedd kandidat
+
+- Den generella upptäcktsfixen och dess observationsgränser finns i
+  [`docs/LOCAL_SOURCE_COVERAGE.md`](docs/LOCAL_SOURCE_COVERAGE.md). Breda
+  regionala kalendrar får finnas kvar utan att stänga lokal research; en
+  kompletterande källa får plats inom befintligt källtak. Fixture/integration
+  är inte bevis för lyckad publik sökning, geokodning eller driftsatt UI.
+- [`docs/LOCAL_RESEARCH_MODEL_PILOT.md`](docs/LOCAL_RESEARCH_MODEL_PILOT.md)
+  bevarar Hitta/Förstå/Servera, källbank/belägg/återanvändning/lärloop och en
+  körbar offlineutvärdering. Startkorpus är en reducerad verklig programsida
+  plus sju märkta kontroller; modellnytta är ännu inte uppmätt.
+- Officiella modellnamn och priser kontrollerades 2026-10-27 i pilotunderlaget.
+  Provider, betald körning och budget är fortfarande öppna; $10–20 var ett
+  förslag, inte ett godkännande. Ingen modell/runtime har aktiverats.
+- Ursprungschatten äger sitt separata UI-arbete och eventuell nästa deploy.
+  Kontrollera aktuell main, PR-head, CI och publik health inför varje landing;
+  denna anteckning dokumenterar förberedelse, inte merge/runtimeacceptans.
+
 ## Produktspår bekräftat av Fritjof — 2026-10-27
 
 - Fritjof återförde en diskussion från en försvunnen sidochatt: överväg en
