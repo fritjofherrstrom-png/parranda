@@ -79,6 +79,30 @@ test("programme without a day heading cannot use a booking deadline as its event
   assert.deepEqual(parse(programme().replace("<h2>Friday 30/10</h2>", "")).events, []);
 });
 
+test("a programme missing both title year and day cannot promote booking deadlines into events", () => {
+  const html = "<h2>Programme Lantern Coast</h2><h3>West Quay</h3><p><strong>18:00 Harbour music</strong><br>Book by 25 October 2026.</p><p><strong>19:00 Candle workshop</strong><br>Book by 25 October 2026.</p>";
+  const result = parse(html, { sourceUrl: "https://festival.example/programme", sourceLanguage: "en" });
+  assert.deepEqual(result.events, []);
+  assert.equal(result.recognized, false);
+});
+
+test("a legacy programme preserves an explicit named-month date and year in its preceding heading", () => {
+  const html = "<h1>Harbour festival 30 October 2026</h1><h2>Programme at Harbour stage</h2><h3>West Quay</h3><p><strong>18:00 Opening concert</strong><br>Live music.</p><p><strong>20:00 Closing concert</strong><br>Live music.</p>";
+  const result = parse(html, { sourceUrl: "https://festival.example/programme", sourceLanguage: "en" });
+  assert.equal(result.recognized, true);
+  assert.deepEqual(result.events.map((event) => [event.title, event.starts_on]), [
+    ["Opening concert Live music.", "2026-10-30"],
+    ["Closing concert Live music.", "2026-10-30"],
+  ]);
+});
+
+test("preceding prose and incomplete heading dates cannot release malformed regional ownership", () => {
+  const rows = "<h2>Programme Lantern Coast</h2><h3>West Quay</h3><p><strong>18:00 Harbour music</strong><br>Book by 25 October 2026.</p><p><strong>19:00 Candle workshop</strong><br>Book by 25 October 2026.</p>";
+  for (const prefix of ["<p>Book by 30 October 2026.</p>", "<h1>Harbour festival 30 October</h1>", "<h1>Harbour festival 31 November 2026</h1>", "<h1>Harbour festival 30 October 2026</h1><p>Book by 25 October 2026.</p>"]) {
+    assert.deepEqual(parse(prefix + rows, { sourceLanguage: "en" }).events, [], prefix);
+  }
+});
+
 test("a programme with missing local area cannot fall back to the body booking deadline", () => {
   assert.deepEqual(parse(programme().replace("<h3>West Quay</h3>", "")).events, []);
 });
@@ -166,6 +190,35 @@ test("closed programme day scope rejects invalid dates, weekday disagreement and
 test("date and area scopes reset at each heading, rejecting rows after invalid or unrelated scope", () => {
   const html = programme() + "<h2>Saturday 31/11</h2><p>18:00 Invalid day<br>Text.</p><h2>Sunday 1/11</h2><p>19:00 Missing area<br>Text.</p><h3>East Quay</h3><p>20:00 Closing concert<br>Text.</p><h2>Contact</h2><h3>West Quay</h3><p>21:00 Office hours<br>Text.</p>";
   assert.deepEqual(parse(html).events.map((event) => event.title), ["Candle workshop", "Harbour concert", "Closing concert"]);
+});
+
+test("a Contact subheading ends regional scope before booking office hours", () => {
+  const html = programme() + "<h4>Contact</h4><p>09:00-17:00 Booking office<br>Call us for tickets.</p>";
+  assert.deepEqual(parse(html).events.map((event) => [event.title, event.starts_on, event.area]), [
+    ["Candle workshop", "2026-10-30", "West Quay"],
+    ["Harbour concert", "2026-10-30", "West Quay"],
+  ]);
+});
+
+test("Contact headings cannot reopen programme scope through later office day and area headings", () => {
+  for (const tag of ["h2", "h3", "h4"]) {
+    const html = programme() + `<${tag}>Contact</${tag}><h2>Saturday 31/10</h2><h3>Reception</h3><p>09:00-17:00 Booking office<br>Call us.</p><p>10:00-16:00 Ticket desk<br>Call us.</p>`;
+    assert.deepEqual(parse(html).events.map((event) => event.title), ["Candle workshop", "Harbour concert"], tag);
+  }
+});
+
+test("office dates after a stop heading cannot establish earlier ambiguous programme date order", () => {
+  const html = programme({ day: "Sunday 1/11" }) + "<h4>Contact</h4><h2>Friday 30/10</h2><h3>Reception</h3><p>09:00-17:00 Booking office<br>Call us.</p>";
+  assert.deepEqual(parse(html).events, []);
+});
+
+test("unsupported non-stop subheadings require a fresh area within the same programme day", () => {
+  const html = programme() + "<h4>Visitor information</h4><p>09:00-17:00 Booking office<br>Call us.</p><h3>East Quay</h3><p>20:00 Closing concert<br>Details.</p>";
+  assert.deepEqual(parse(html).events.map((event) => [event.title, event.starts_on, event.area]), [
+    ["Candle workshop", "2026-10-30", "West Quay"],
+    ["Harbour concert", "2026-10-30", "West Quay"],
+    ["Closing concert", "2026-10-30", "East Quay"],
+  ]);
 });
 
 test("free prose, missing first-line name, missing break and trailing prose are not programme titles", () => {

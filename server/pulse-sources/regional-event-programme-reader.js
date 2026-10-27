@@ -43,11 +43,19 @@ function collectRegionalEventProgramme(html) {
     const legacyDates = blocks.slice(previousIndex + 1, index).some((prior) => /^h[34]$/.test(prior.tag) && parseDateRange(prior.text, 2000));
     return previousSection && programmeTitle(previousSection.text) && !legacyDates && (/\b20\d{2}\b/.test(previousSection.text) || nextHeading?.tag === "h3");
   });
-  // Missing-date ownership still needs the regional paragraph/area shape.
+  // Missing-date ownership uses the regional paragraph/area shape, even
+  // without a title year; body dates must never repair missing programme facts.
   // Named-month date subheadings are evidence for the existing article
   // grammar, including when its programme title itself contains a year.
   const missingRegionalDay = firstDay < 0 && blocks.some((block, index) => {
-    if (block.tag !== "h2" || !programmeTitle(block.text) || !/\b20\d{2}\b/.test(block.text)) return false;
+    if (block.tag !== "h2" || !programmeTitle(block.text)) return false;
+    // The legacy reader also inherits its nearest date from the preceding
+    // eight blocks. Release only an explicitly dated/year-bearing heading;
+    // nearer booking prose must not become an inherited event date.
+    const precedingDate = blocks.slice(Math.max(0, index - 8), index)
+      .findLast((prior) => parseDateRange(prior.text, 2000));
+    if (precedingDate && /^h[1-4]$/.test(precedingDate.tag) &&
+      (precedingDate.text.match(/\b20\d{2}\b/g) || []).length === 1) return false;
     const following = blocks.slice(index + 1);
     const nextProgramme = following.findIndex((next) => /^h[12]$/.test(next.tag) && programmeTitle(next.text));
     const section = nextProgramme < 0 ? following : following.slice(0, nextProgramme);
@@ -68,13 +76,22 @@ function collectRegionalEventProgramme(html) {
   result.programme_title = title.text;
   result.program_section_count = 1;
   const following = blocks.slice(blocks.indexOf(title) + 1);
-  const nextProgramme = following.findIndex((block) => /^h[12]$/.test(block.tag) && programmeTitle(block.text));
-  const programmeBlocks = nextProgramme < 0 ? following : following.slice(0, nextProgramme);
+  // Stop sections bound both date-order evidence and event rows; office dates
+  // after Contact cannot establish a programme's otherwise ambiguous order.
+  const sectionEnd = following.findIndex((block) =>
+    (/^h[12]$/.test(block.tag) && programmeTitle(block.text)) ||
+    (/^h[1-4]$/.test(block.tag) && isStopMarker(block.text)));
+  const programmeBlocks = sectionEnd < 0 ? following : following.slice(0, sectionEnd);
   const ordering = programmeBlocks.filter((block) => block.tag === "h2").map((block) => numericDayAlternatives(block.text, year)).filter(Boolean);
   const dayMonthEstablished = ordering.some((option) => option.dayMonth && !option.monthDay) && !ordering.some((option) => option.monthDay && !option.dayMonth);
   let day = null;
   let area = null;
   for (const block of programmeBlocks) {
+    // Unsupported subheadings require a fresh area within the current day.
+    if (block.tag === "h4") {
+      area = null;
+      continue;
+    }
     if (/^h[12]$/.test(block.tag)) {
       day = block.tag === "h2" ? parseProgrammeDayHeading(block.text, year, dayMonthEstablished) : null;
       area = null;

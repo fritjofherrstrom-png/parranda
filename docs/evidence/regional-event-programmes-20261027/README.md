@@ -1,8 +1,9 @@
 # Regional programme discovery — 2026-10-27
 
-Owner: Codex. Original investigation base: cf18a576. Integrated base before
-final verification: 1cca6dda (#656); its nine unrelated files do not change
-the inspected event-source modules. Target: main through an independent PR.
+Owner: Codex. Original investigation base: cf18a576. Integrated main base:
+721c026a (#657), including 1cca6dda (#656); these unrelated identity/preferences
+changes do not alter the inspected event-source modules. Target: main through
+[PR #658](https://github.com/fritjofherrstrom-png/parranda/pull/658).
 
 ## Why this example was missed
 
@@ -38,7 +39,10 @@ the source mix as thin.
   It uses no URL year, image name, old anchor name, deadline or current-year guess.
 - A document must establish numeric date order independently. Invalid dates,
   contradictory weekdays, malformed/qualitative clock ranges and hidden inline
-  facts fail closed. The existing article grammar retains its own scope.
+  facts fail closed. Missing programme facts cannot be repaired from booking
+  deadlines. Contact/stop headings end both date-order and row scope, and an
+  unsupported subheading requires a fresh area. The existing article grammar
+  retains its own scope.
 - Source rows keep separate stable occurrence identities and precise names
   plus areas. Same-time activities at different places on one programme page
   survive fusion as distinct activities.
@@ -82,11 +86,21 @@ priority with a one-query cap, old editions, robots exclusions, absent/outside
 geometry, coherent programme publication, escaped EN/SV card/sheet context and
 persisted old-pool renewal. Each implementation regression has RED/GREEN evidence.
 
-Local full-suite output must retain its actual failures. The two generic sharing
-publication tests independently reproduce on untouched cf18a576 on macOS:
-the immutable store deliberately requires Linux `/proc/self/fd`, which is absent
-here. No permissive storage fallback is included; Linux CI verifies that path.
-Frontend typecheck/build and self-hosted contract validation are separate checks.
+Final focused parser/provider/scout/context/Live/venue/discovery checks pass
+115/115. EN/SV mounted Live card/sheet and related frontend checks pass 46/46;
+frontend typecheck/build, committed-dist and self-hosted contract checks pass.
+Independent whole-branch review found two parser scope issues; seven additional
+RED/GREEN regressions cover their fixes, including post-Contact date-order
+evidence and legacy explicit preceding-heading date compatibility. The raw
+replay counts above remain unchanged after those fixes.
+
+The local development full run reported 5,328 passed, 90 failed and 3 skipped
+(5,421 total). Eighty-nine failures concern immutable storage/publication on
+macOS: the store deliberately requires Linux `/proc/self/fd`, absent here. Two
+generic sharing failures independently reproduce on untouched cf18a576. One
+intermediate clock-title failure overlapped its code/test fix and is superseded
+by the final focused checks. No permissive storage fallback is included, and no
+local full-suite pass is claimed. Exact final-head Linux CI must verify that path.
 
 Local raw snapshots, before/after replay scripts/results, runtime flags and
 test logs are preserved in the task's sibling evidence directory
