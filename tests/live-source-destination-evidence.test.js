@@ -72,8 +72,8 @@ if (require.main === module) {
     const original = pending[LIVE_COLLECTION_READ]();
     assert.deepEqual([...proof(original)], [WIX_EVENT]);
     const memory = await supply(args); assert.deepEqual([...proof(memory)], [WIX_EVENT]);
-    const [file] = await fs.readdir(path.join(directory, 'agnostic-events-v20'));
-    const location = path.join(directory, 'agnostic-events-v20', file);
+    const [file] = await fs.readdir(path.join(directory, 'agnostic-events-v21'));
+    const location = path.join(directory, 'agnostic-events-v21', file);
     const bytes = await fs.readFile(location, 'utf8'), stat = await fs.stat(location);
     const disk = JSON.parse(bytes);
     assert.ok(disk.value._live_destination_inputs.claims.length);

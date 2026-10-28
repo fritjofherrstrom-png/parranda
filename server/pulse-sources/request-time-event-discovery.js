@@ -68,7 +68,7 @@ function createRequestTimeEventDiscovery({
   venueSeeds = null,
   scout = scoutLocalEventSources,
   fetcher,
-  cache = createSourceCache({ namespace: "request-time-event-discovery-v6", ttlMs: FOUND_TTL_MS }),
+  cache = createSourceCache({ namespace: "request-time-event-discovery-v7", ttlMs: FOUND_TTL_MS }),
   timezoneForPoint = coordinateTimezone,
   now = () => Date.now(),
   venueLookupWaitMs = VENUE_LOOKUP_WAIT_MS,
@@ -79,7 +79,9 @@ function createRequestTimeEventDiscovery({
   // Resolves to { status: "found" | "empty" | "failed", reason, feeds }.
   return async function discoverRequestTimeEventFeeds({ anchor, placeLabel = null, placeContext = null } = {}) {
     if (!validPoint(anchor)) return outcome("empty", "invalid_anchor");
-    const key = `rt-discovery-v6:${anchorBucket(anchor)}`;
+    // A v6 source list may have missed a programme behind the old page cut or
+    // card grammar. Keep its files intact, but do not certify that new reading.
+    const key = `rt-discovery-v7:${anchorBucket(anchor)}`;
     const held = holds.get(key);
     if (held && held.until > now()) return held.outcome;
     let result;

@@ -1721,7 +1721,9 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // pools from v18. Prior files remain intact and expire on their original TTL.
 // v20 revisits broad regional-only pools and reserves bounded complementary
 // acquisition; v19 answers cannot certify that this discovery path ran.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v20";
+// v21 rebuilds programme discovery after the dated-link/card-reader changes;
+// old v20 files remain intact but do not certify the corrected acquisition.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v21";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read
