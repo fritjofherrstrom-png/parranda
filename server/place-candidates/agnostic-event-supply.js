@@ -1725,7 +1725,9 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // old v20 files remain intact but do not certify the corrected acquisition.
 // v22 reselects the bounded complementary source after dedicated programmes
 // gain their own acquisition priority. Earlier v21 pools cannot attest it.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v22";
+// v23 cannot reuse v22 selection of programme interfaces whose payload exceeds
+// the adapter's unchanged default byte budget.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v23";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read

@@ -27,6 +27,9 @@ const {
   hasOfficialProgramArticleSignature,
 } = require("./official-program-article-provider");
 const {
+  hasOfficialProgramArticleSignature: hasOfficialProgramArticleStructure,
+} = require("./official-program-article-rows");
+const {
   buildLocalPlaceDiscoveryQueryPlan,
   extractPlaceListPageLinks,
   inspectPlaceSourcePage,
@@ -280,7 +283,9 @@ function inspectEventSourcePage({
         hasWixEventSitemapSignature(source, pageUrl) ||
         hasSitevisionCalendarSignature(source) ||
         hasEmbeddedProgramRscSignature(source) ||
-        hasOfficialProgramArticleSignature(source),
+        // This is page evidence for an independently fetched RSS interface,
+        // not proof that the programme adapter can collect the HTML itself.
+        hasOfficialProgramArticleStructure(source),
     },
   });
 
