@@ -168,7 +168,8 @@ for (const [label, path, anchor] of [
   }
   await stopOne.click();
   await region.locator('[data-route-map]').getByText(`${label} a`, { exact: true }).waitFor();
-  await region.locator('button[aria-controls="route-stop-panel-0"]').click();
+  assert.equal(await region.locator('button[aria-controls="route-stop-panel-0"]').getAttribute('aria-expanded'), 'true',
+    'selecting the map pin opens the corresponding list stop');
   await page.getByRole('button', { name: 'Keep this one', exact: true }).waitFor();
   const keepResponse = page.waitForResponse(r => new URL(r.url()).pathname === '/api/route-recommendations');
   await page.getByRole('button', { name: 'Keep this one', exact: true }).click();

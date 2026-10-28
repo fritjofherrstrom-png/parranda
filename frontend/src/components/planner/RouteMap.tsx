@@ -30,7 +30,7 @@
  * Displaced badges retain a dot at their authoritative geographic coordinate.
  * Stops, their order, route geometry and the Maps handoff remain unchanged.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { pinGroupLabel, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
 import { controlAwareView, type FitMark, type MapBox } from "../../lib/route-map-fit.mjs";
@@ -259,6 +259,16 @@ export default function RouteMap({
   selectedStopRef.current = selectedStopIndex ?? null;
   const onSelectStopRef = useRef(onSelectStop);
   onSelectStopRef.current = onSelectStop;
+  const selectionViewportTopRef = useRef<{ index: number; top: number } | null>(null);
+  const selectStop = (index: number) => {
+    if (!onSelectStopRef.current) return;
+    if (selectedStopRef.current !== index && frameRef.current) {
+      selectionViewportTopRef.current = { index, top: frameRef.current.getBoundingClientRect().top };
+    }
+    onSelectStopRef.current(index);
+  };
+  const selectStopRef = useRef(selectStop);
+  selectStopRef.current = selectStop;
   const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; routeIndex: number; element: HTMLElement; grouped?: boolean; move: (x: number, y: number, direction: "left" | "right") => void; showOrigin: (visible: boolean) => void; setGrouped: (grouped: boolean) => void; focus: () => void }>>([]);
   // Group pins by member key ("0,1,4"), the last shift of every pin (so a pin
   // stays put while the map moves), and the stop to focus once a group pin
@@ -605,7 +615,7 @@ export default function RouteMap({
                 && event.clientX === previous.x && event.clientY === previous.y)) return;
             }
             if (interaction === "click" && event) lastPointerRef.current = { x: event.clientX, y: event.clientY };
-            if (interaction === "click") onSelectStopRef.current?.(index);
+            if (interaction === "click") selectStopRef.current(index);
             const badge = badgesRef.current[badgeIndex];
             const point = map.project([stop.lng, stop.lat]);
             tipAnchorRef.current = { index: badgeIndex, interaction };
@@ -740,6 +750,15 @@ export default function RouteMap({
 
   // Updating a disclosure should not rebuild or refit the map.
   useEffect(() => { layoutRef.current(); }, [selectedStopIndex]);
+  // Opening a list panel above a mobile map must not move the map away from
+  // the finger. Keep its viewport position while the selected panel changes.
+  useLayoutEffect(() => {
+    const previous = selectionViewportTopRef.current;
+    selectionViewportTopRef.current = null;
+    if (!previous || previous.index !== selectedStopIndex || !frameRef.current) return;
+    const delta = frameRef.current.getBoundingClientRect().top - previous.top;
+    if (Math.abs(delta) > 0.5) window.scrollBy({ top: delta, behavior: "instant" });
+  }, [selectedStopIndex]);
 
   // Follow the page's theme without redrawing the day.
   useEffect(() => {
@@ -840,7 +859,7 @@ export default function RouteMap({
                 if (!map) return;
                 const point = map.project([badge.lng, badge.lat]);
                 tipAnchorRef.current = { index, interaction: "click" };
-                onSelectStopRef.current?.(badge.routeIndex);
+                selectStopRef.current(badge.routeIndex);
                 setGroupPicker(null);
                 setTip({ name: badge.name, x: point.x, y: point.y, direction: point.x < mapRef.current!.clientWidth / 2 ? "right" : "left" });
               }}>{index + 1}. {badge.name}</button>;
