@@ -48,8 +48,8 @@ export default function CandidateAreas({
         {structureOnly && matchCount > 0 && (
           <p className="mt-1.5 text-sm text-parranda-ink/75">
             {t(
-              "Parranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.",
-              "Parranda found place candidates, but not a reliable route yet.",
+              "Parranda hittade platser, men kunde inte bygga en rutt ännu.",
+              "Parranda found places, but couldn't build a route yet.",
             )}
           </p>
         )}

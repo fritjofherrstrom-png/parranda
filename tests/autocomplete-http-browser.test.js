@@ -57,6 +57,41 @@ async function landing(t, provider) {
   return { page, field, server };
 }
 
+test('mobile suggestions wrap long names and leave the submit action reachable', async t => {
+  const longName = 'Longplace' + 'x'.repeat(75);
+  const provider = createPlaceSuggestions({ fetcher: async () => ({ ok: true, status: 200, json: async () => ({
+    features: Array.from({ length: 5 }, (_, index) => ({
+      type: 'Feature', geometry: { type: 'Point', coordinates: [13, 55.6] },
+      properties: { name: index ? `Longplace ${index}` : longName, type: 'city', osm_key: 'place', osm_value: 'city',
+        osm_type: 'R', osm_id: 101 + index, state: 'Fixture Region', country: 'Fixture Country' },
+    })),
+  }) }) });
+  const { page, field } = await landing(t, provider);
+  await field.fill('Longplace');
+  const list = page.getByRole('listbox');
+  await list.waitFor();
+  const option = page.getByRole('option').filter({ hasText: longName });
+  const layout = await option.evaluate(element => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
+  assert.ok(layout.scrollWidth <= layout.clientWidth, 'long unbroken place names fit within the suggestion');
+  const listBox = await list.boundingBox();
+  const submitBox = await page.getByRole('button', { name: 'Build my day', exact: true }).boundingBox();
+  assert.ok(submitBox.y >= listBox.y + listBox.height, 'suggestions do not cover the submit action on mobile');
+  for (let index = 0; index < 5; index++) await field.press('ArrowDown');
+  const visibility = await page.evaluate(() => {
+    const input = document.querySelector('[role=combobox]');
+    const selected = document.getElementById(input.getAttribute('aria-activedescendant'));
+    const list = document.querySelector('[role=listbox]');
+    const optionRect = selected.getBoundingClientRect(), listRect = list.getBoundingClientRect();
+    return optionRect.top >= listRect.top && optionRect.bottom <= listRect.bottom;
+  });
+  assert.ok(visibility, 'keyboard selection scrolls into the visible list');
+  await option.click();
+  const selectedLabel = page.getByText(`${longName}, Fixture Region, Fixture Country`, { exact: true });
+  assert.ok(await selectedLabel.isVisible(), 'the full selected name remains readable after the list closes');
+  const selectedLayout = await selectedLabel.evaluate(element => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
+  assert.ok(selectedLayout.scrollWidth <= selectedLayout.clientWidth, 'the selected name wraps on mobile');
+});
+
 test('built autocomplete displays a valid 4500ms Photon answer through the actual HTTP handler', { timeout: 20000 }, async t => {
   let calls = 0, elapsed;
   const provider = createPlaceSuggestions({ fetcher: async (_url, { signal }) => {

@@ -134,8 +134,8 @@ export default function BlitzCard({
                 <p className="text-xs text-parranda-ink/68">
                   {move.kind === "place"
                     ? dayOnScreen
-                      ? t("Ett källstött platsförslag. Det ändrar inte dagens rutt.", "A source-backed place suggestion. It does not change today's route.")
-                      : t("Ett källstött platsförslag.", "A source-backed place suggestion.")
+                      ? t("Ett platsförslag som inte ändrar dagens rutt.", "A place suggestion that doesn't change today's route.")
+                      : t("Ett platsförslag.", "A place suggestion.")
                     : dayOnScreen
                     ? t("Ett förslag utifrån platsen, tiden och dina intressen. Det ändrar inte dagens rutt.", "An idea from your place, time and interests. It doesn't change today's route.")
                     : t("Ett förslag utifrån platsen, tiden och dina intressen.", "An idea from your place, time and interests.")}

@@ -2399,17 +2399,17 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Reference failures describe the server's verdict, not a misspelt name.
   // Neither optional URL text nor a previous saved day's label attests this ref.
   const referenceFailures: Record<string, string> = {
-    place_ref_not_found: t("Den valda platsreferensen kunde inte hittas. Välj en plats igen — ingen annan plats väljs automatiskt.", "The selected place reference could not be found. Choose a place again — no other place is selected automatically."),
-    place_ref_unavailable: t("Platsreferensen kunde inte kontrolleras just nu. Försök igen senare eller välj en annan plats — ingen annan plats väljs automatiskt.", "The place reference could not be checked right now. Try again later or choose another place — no other place is selected automatically."),
-    place_ref_unsupported: t("Platsreferensen avser en geografisk identitet som inte stöds för att planera en dag. Välj en annan plats.", "This place reference identifies a geographic type that is not supported for planning a day. Choose another place."),
-    place_ref_conflict: t("Platsreferensen och övriga platsval stämmer inte överens. Välj en plats igen för att få ett entydigt platsval.", "The place reference conflicts with the other place choices. Choose a place again to make the selection unambiguous."),
-    place_ref_invalid: t("Platsreferensen är ogiltig. Välj en plats igen — ingen annan plats väljs automatiskt.", "The place reference is invalid. Choose a place again — no other place is selected automatically."),
+    place_ref_not_found: t("Den valda platsen kunde inte hittas. Välj en plats igen.", "The selected place could not be found. Choose a place again."),
+    place_ref_unavailable: t("Platsen kunde inte kontrolleras just nu. Försök igen senare eller välj en annan plats.", "The place could not be checked right now. Try again later or choose another place."),
+    place_ref_unsupported: t("Det går inte att planera en dag för den här platsen. Välj en annan plats.", "A day cannot be planned for this place. Choose another place."),
+    place_ref_conflict: t("Platsvalen stämmer inte överens. Välj en plats igen.", "The place choices do not match. Choose a place again."),
+    place_ref_invalid: t("Platsvalet är ogiltigt. Välj en plats igen.", "The place selection is invalid. Choose a place again."),
   };
   const referenceBlockers = safeResponse?.agnostic_route_output_experiment?.intake?.blockers;
   const referenceFailure = Array.isArray(referenceBlockers)
     ? referenceBlockers.find((blocker: string) => Object.hasOwn(referenceFailures, blocker)) : null;
   const referenceFailureMessage = referenceFailure ? referenceFailures[referenceFailure]
-    : t("Den valda platsreferensen kunde inte bekräftas. Välj en plats igen — ingen annan plats väljs automatiskt.", "The selected place reference could not be confirmed. Choose a place again — no other place is selected automatically.");
+    : t("Den valda platsen kunde inte bekräftas. Välj en plats igen.", "The selected place could not be confirmed. Choose a place again.");
   // A resolved place whose place sources failed to answer is not a place
   // without places: the verdict is about the sources, never the reader's
   // picks, and since the page no longer retries on its own it offers the retry.
@@ -2443,8 +2443,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             `Parranda found ${classification.realPlaceCount === 1 ? "1 real place" : `${classification.realPlaceCount} real places`} ${anchorIsPosition ? "near you" : `near ${placeName}`}, but not enough for a reliable day yet — nothing is invented in its place.`,
           )
         : t(
-            `Parranda kunde inte komponera en dag ${anchorIsPosition ? "nära dig" : `för ${placeName}`} ännu — inget hittas på, inget fejkas.`,
-            `Parranda couldn't compose a day ${anchorIsPosition ? "near you" : `for ${placeName}`} yet — nothing is invented in its place.`,
+            `Parranda kunde inte bygga en dag ${anchorIsPosition ? "nära dig" : `för ${placeName}`} ännu.`,
+            `Parranda couldn't build a day ${anchorIsPosition ? "near you" : `for ${placeName}`} yet.`,
           )
     : "";
   const dayContextNote = contextNote(dayLimitations, t, {
@@ -2625,6 +2625,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // its shape stood instead of jumping sideways when it arrives.
   const dayIsComing = phase === "loading" && !staleNotice;
   const splitLayout = wideScreen && (dayWithRoute || dayIsComing);
+  const selectedCoreStop = split.core.find((stop: any, i: number) => {
+    const id = String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "").trim();
+    return expandedStopKey === `${id || i}:${i}`;
+  });
+  const selectedMapIndex = selectedCoreStop ? routeStops.indexOf(selectedCoreStop) : -1;
   const routeMap = dayWithRoute ? (
     <RouteMap
       hasPrimaryRoute={hasPrimaryRoute}
@@ -2634,9 +2639,17 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       routeContextSuggestions={routeContextSuggestions}
       showContext={detoursOpen}
       sketch={routeLineIsSketch}
+      selectedStopIndex={selectedMapIndex < 0 ? null : selectedMapIndex}
+      onSelectStop={(index) => {
+        const stop: any = routeStops[index];
+        const coreIndex = split.core.indexOf(stop);
+        if (coreIndex < 0) return;
+        const id = String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "").trim();
+        setExpandedStopKey(`${id || coreIndex}:${coreIndex}`);
+      }}
       mapExpanded={splitLayout ? undefined : mapExpanded}
       onToggleExpanded={splitLayout ? undefined : () => setMapExpanded((cur) => !cur)}
-      heightClass={splitLayout ? "h-full" : mapExpanded ? "h-96 sm:h-112" : "h-48 sm:h-60"}
+      heightClass={splitLayout ? "h-full" : mapExpanded ? "h-[min(70vh,36rem)]" : "h-60 sm:h-72"}
       regionLabel={splitLayout ? t("Interaktiv karta", "Interactive map") : undefined}
       t={t}
     />
@@ -2727,7 +2740,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 : navigationRestoreUnavailable
                 ? t("Den här sparade sidvyn kunde inte återställas. Ingen ny dag byggs automatiskt. Välj en startpunkt om du vill planera igen.", "This saved page view could not be restored. No new day is built automatically. Choose a starting point to plan again.")
                 : invalidPlaceLink
-                ? t("Länken har en ogiltig platsreferens. Välj en plats på startsidan — ingen annan plats väljs automatiskt.", "This link has an invalid place reference. Choose a place on the home page — no other place is selected automatically.")
+                ? t("Länken innehåller ett ogiltigt platsval. Välj en plats på startsidan.", "This link has an invalid place selection. Choose a place on the home page.")
                 : invalidDayEditLink
                 ? t("Länkens stoppändring är ogiltig. Välj en plats på startsidan — ingen oförändrad heldag skapas automatiskt.", "This link has an invalid stop edit. Choose a place on the home page — no unedited day is generated automatically.")
                 : conflictingPlaceLink
@@ -2831,13 +2844,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             <p className="flex items-start gap-2.5 text-sm text-parranda-ink/75" aria-live="polite">
               <RingMark className="mt-[3px] h-3.5 w-3.5" />
               <span>
-                {supplyPending && t("Hämtar källbelagda platser för din dag. Planen fortsätter automatiskt — du behöver inte försöka igen.", "Fetching source-backed places for your day. Your plan will continue automatically — no need to try again.")}
+                {supplyPending && t("Letar platser och bygger din dag …", "Finding places and building your day …")}
                 {!supplyPending && loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
-                {!supplyPending && loadingStage === 1 && t("Läser kartan och letar efter riktiga platser …", "Reading the map and looking for real places …")}
+                {!supplyPending && loadingStage === 1 && t("Letar efter platser …", "Looking for places …")}
                 {!supplyPending && loadingStage === 2 &&
                   t(
-                    "Komponerar dagen genom områdena — platser utan full kurering kan ta lite längre …",
-                    "Composing the day across the areas — places without full curation can take a little longer …",
+                    "Bygger din dag — det kan ta en liten stund …",
+                    "Building your day — this may take a little while …",
                   )}
               </span>
             </p>
@@ -2849,7 +2862,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         <div className={`flex flex-col items-start gap-3 ${noticeCard}`} role="alert">
           <p>{navigationInterrupted
             ? t("Planeringen pausades när du lämnade sidan. Dina val finns kvar.", "Planning paused when you left. Your choices are still here.")
-            : t("Motorn svarar inte just nu.", "The engine isn't answering right now.")}</p>
+            : t("Parranda kunde inte bygga din dag just nu.", "Parranda couldn't build your day right now.")}</p>
           <button type="button" onClick={() => retryPlan()} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
             {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök bygga dagen igen", "Try building the day again")}
           </button>
@@ -2900,8 +2913,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           </div>
           {sourcePartlyUnavailable && (
             <p>{t(
-              "En av platskällorna svarade inte just nu, så underlaget kan vara ofullständigt. Försök igen om en stund.",
-              "One of the place sources didn't answer just now, so the evidence may be incomplete. Try again in a moment.",
+              "Alla platser kunde inte hämtas. Försök igen om en stund.",
+              "Some places could not be loaded. Try again in a moment.",
             )}</p>
           )}
           {canUpdateSaved && (sourceUnavailable || sourcePartlyUnavailable || terminalSourceIssue) && (
@@ -3026,8 +3039,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             {structure.provenance === "agnostic_anchor" && (
               <p className="text-sm font-bold text-parranda-clay">
                 {t(
-                  "Källstödda platskandidater — inte en komponerad rutt ännu",
-                  "Source-backed place candidates — not a composed route yet",
+                  "Hittade platser — ingen rutt ännu",
+                  "Places found — no route yet",
                 )}
               </p>
             )}
@@ -3054,8 +3067,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {phase === "done" && upgradePending && !structure && (
         <p className={noticeCard} aria-live="polite">
           {t(
-            "Läser in mer från källorna — uppdateras automatiskt strax.",
-            "Reading more from the sources — updates automatically in a moment.",
+            "Letar efter fler platser …",
+            "Looking for more places …",
           )}
         </p>
       )}

@@ -39,10 +39,10 @@ async function previousDay() {
   } finally { await h.unmount(); }
 }
 const copyCases = [
-  ['place_ref_not_found', /reference could not be found/i, /platsreferensen kunde inte hittas/i, /right now|later|just nu|senare/],
+  ['place_ref_not_found', /selected place could not be found/i, /valda platsen kunde inte hittas/i, /right now|later|just nu|senare/],
   ['place_ref_unavailable', /could not be checked right now/i, /kunde inte kontrolleras just nu/i, /could not be found|kunde inte hittas/],
-  ['place_ref_unsupported', /geographic type.*not supported/i, /geografisk identitet.*inte stöds/i, /spelling|stavning/],
-  ['place_ref_conflict', /conflicts.*place choices/i, /platsval.*inte överens/i, /spelling|stavning/],
+  ['place_ref_unsupported', /day cannot be planned for this place/i, /inte att planera en dag för den här platsen/i, /spelling|stavning/],
+  ['place_ref_conflict', /place choices do not match/i, /platsval.*inte överens/i, /spelling|stavning/],
 ];
 for (const [kind, en, sv, misleading] of copyCases) for (const lang of ['en', 'sv']) {
   test(`${kind} in ${lang} explains the reference failure without borrowing a saved or unverified name`, async () => {
