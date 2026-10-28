@@ -1723,7 +1723,9 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // acquisition; v19 answers cannot certify that this discovery path ran.
 // v21 rebuilds programme discovery after the dated-link/card-reader changes;
 // old v20 files remain intact but do not certify the corrected acquisition.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v21";
+// v22 reselects the bounded complementary source after dedicated programmes
+// gain their own acquisition priority. Earlier v21 pools cannot attest it.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v22";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read

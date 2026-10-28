@@ -82,7 +82,7 @@ function collectCardEventProgramme(html) {
         const card = readCard(venueHeading);
         if (!card) continue;
         for (const time of card.times) {
-          result.rows.push({ title: card.name, date_range: date, time, states_daily: false, venue: `${card.name}, ${card.address}, ${locality}`, area: locality, program_marker: title });
+          result.rows.push({ title: card.name, date_range: date, time, states_daily: false, venue: `${card.name}, ${card.address}, ${locality}`, address: card.address, city: locality, area: locality, program_marker: title });
         }
       }
     }

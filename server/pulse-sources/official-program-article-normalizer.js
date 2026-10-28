@@ -55,6 +55,8 @@ function extractOfficialProgramArticle(html, options = {}) {
       ...timing,
       source_url: sourceUrl,
       place_context: row.venue,
+      address: row.address,
+      city: row.city,
       area: row.area || row.venue,
       source_language: sourceLanguage,
       event_language: sourceLanguage,

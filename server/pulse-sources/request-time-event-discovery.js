@@ -50,6 +50,10 @@ const ALLOWED_TERMS = new Set(["open_license", "api_terms_compatible"]);
 // Only three local sources are read per collection, so the event-specific
 // structured interfaces go first; RSS is often a site's blog, not its events.
 const ADAPTER_PRIORITY = Object.freeze({
+  // Dedicated, dated factual programmes must reach a bounded complementary
+  // slot before incidental listing interfaces. This is order, not trust or a
+  // claim of local coverage; ordinary per-event geographic gates still apply.
+  official_program_article: 183,
   events_calendar: 184,
   ical: 185,
   schema_org_html: 185,
@@ -68,7 +72,7 @@ function createRequestTimeEventDiscovery({
   venueSeeds = null,
   scout = scoutLocalEventSources,
   fetcher,
-  cache = createSourceCache({ namespace: "request-time-event-discovery-v7", ttlMs: FOUND_TTL_MS }),
+  cache = createSourceCache({ namespace: "request-time-event-discovery-v8", ttlMs: FOUND_TTL_MS }),
   timezoneForPoint = coordinateTimezone,
   now = () => Date.now(),
   venueLookupWaitMs = VENUE_LOOKUP_WAIT_MS,
@@ -79,9 +83,9 @@ function createRequestTimeEventDiscovery({
   // Resolves to { status: "found" | "empty" | "failed", reason, feeds }.
   return async function discoverRequestTimeEventFeeds({ anchor, placeLabel = null, placeContext = null } = {}) {
     if (!validPoint(anchor)) return outcome("empty", "invalid_anchor");
-    // A v6 source list may have missed a programme behind the old page cut or
-    // card grammar. Keep its files intact, but do not certify that new reading.
-    const key = `rt-discovery-v7:${anchorBucket(anchor)}`;
+    // Earlier found-source answers cannot attest the dedicated-programme
+    // ranking. Leave old caches intact instead of laundering their selection.
+    const key = `rt-discovery-v8:${anchorBucket(anchor)}`;
     const held = holds.get(key);
     if (held && held.until > now()) return held.outcome;
     let result;
