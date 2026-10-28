@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createRequestTimeEventDiscovery } = require('../server/pulse-sources/request-time-event-discovery');
 
-for (const legacy of [6, 7]) test(`corrected programme selection cannot reuse a legacy v${legacy} six-hour found-source answer`, async () => {
+for (const legacy of [6, 7, 8]) test(`corrected programme selection cannot reuse a legacy v${legacy} six-hour found-source answer`, async () => {
   let searches = 0;
   const keys = [];
   const prefix = `rt-discovery-v${legacy}:`;

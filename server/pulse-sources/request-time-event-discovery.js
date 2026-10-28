@@ -72,7 +72,7 @@ function createRequestTimeEventDiscovery({
   venueSeeds = null,
   scout = scoutLocalEventSources,
   fetcher,
-  cache = createSourceCache({ namespace: "request-time-event-discovery-v8", ttlMs: FOUND_TTL_MS }),
+  cache = createSourceCache({ namespace: "request-time-event-discovery-v9", ttlMs: FOUND_TTL_MS }),
   timezoneForPoint = coordinateTimezone,
   now = () => Date.now(),
   venueLookupWaitMs = VENUE_LOOKUP_WAIT_MS,
@@ -85,7 +85,7 @@ function createRequestTimeEventDiscovery({
     if (!validPoint(anchor)) return outcome("empty", "invalid_anchor");
     // Earlier found-source answers cannot attest the dedicated-programme
     // ranking. Leave old caches intact instead of laundering their selection.
-    const key = `rt-discovery-v8:${anchorBucket(anchor)}`;
+    const key = `rt-discovery-v9:${anchorBucket(anchor)}`;
     const held = holds.get(key);
     if (held && held.until > now()) return held.outcome;
     let result;
