@@ -144,29 +144,32 @@ function mapFestivosHoliday(holiday, { municipality, attribution, timezone } = {
 }
 
 function mapOpenHoliday(holiday, { country, matched, subdivisions, subdivisionByCode, timezone, sourceUrl } = {}) {
+  // HolidayResponse declares these optional reference lists nullable. This is
+  // not a default for the response body, dates, applicability or unknown types.
+  const references = holiday?.subdivisions ?? [], groups = holiday?.groups ?? [], tags = holiday?.tags ?? [];
   const start = normalizeSourceEventDate(holiday?.startDate), end = normalizeSourceEventDate(holiday?.endDate);
   const scope = ({ National: "national", Regional: "regional", Local: "local" })[holiday?.regionalScope];
   const temporal = ({ FullDay: "full_day", HalfDay: "half_day" })[holiday?.temporalScope];
   const name = localizedName(holiday?.name, country.officialLanguages);
   if (!text(holiday?.id, 100) || !start || !end || end < start || !scope || !temporal || !name
     || holiday.type !== "Public" || typeof holiday.nationwide !== "boolean"
-    || !Array.isArray(holiday.subdivisions) || !Array.isArray(holiday.groups)
-    || holiday.subdivisions.length > 5000 || holiday.groups.length > 200
-    || !Array.isArray(holiday.tags) || holiday.tags.length > 4
-    || holiday.tags.some(tag => !["Recommended", "Provisional", "OneTime", "Exception"].includes(tag))) return null;
+    || !Array.isArray(references) || !Array.isArray(groups)
+    || references.length > 5000 || groups.length > 200
+    || !Array.isArray(tags) || tags.length > 4
+    || tags.some(tag => !["Recommended", "Provisional", "OneTime", "Exception"].includes(tag))) return null;
   // Subgroup applicability is not proved by a geographic/country join.
-  if (holiday.groups.length) return "unresolved";
+  if (groups.length) return "unresolved";
   let area;
   if (holiday.nationwide) {
-    if (scope !== "national" || holiday.subdivisions.length) return null;
+    if (scope !== "national" || references.length) return null;
     area = localizedName(country.name, country.officialLanguages)?.text || country.isoCode;
   } else {
-    if (scope === "national" || !holiday.subdivisions.length) return null;
+    if (scope === "national" || !references.length) return null;
     const byCode = subdivisionByCode || new Map(flattenSubdivisions(subdivisions).map(value => [value.code, value]));
-    if (holiday.subdivisions.some(value => !text(value?.code, 80) || !byCode.has(value.code))) return null;
-    const applicable = [...new Set(holiday.subdivisions.map(value => value.code))].filter(code => matched.has(code));
+    if (references.some(value => !text(value?.code, 80) || !byCode.has(value.code))) return null;
+    const applicable = [...new Set(references.map(value => value.code))].filter(code => matched.has(code));
     if (!applicable.length) {
-      const possiblyLocal = holiday.subdivisions.some(value => byCode.get(value.code)
+      const possiblyLocal = references.some(value => byCode.get(value.code)
         .ancestors.some(code => matched.has(code)));
       return !matched.size || possiblyLocal ? "unresolved" : false;
     }
@@ -179,7 +182,7 @@ function mapOpenHoliday(holiday, { country, matched, subdivisions, subdivisionBy
     // Half days are date context, never an invented half-day clock.
     time_window: { kind: temporal === "half_day" ? "period" : "all_day", starts_on: start, ends_on: end },
     calendar_fact: { kind: "public_holiday", scope, country_code: country.isoCode, area,
-      temporal_scope: temporal, flags: [...new Set(holiday.tags)] },
+      temporal_scope: temporal, flags: [...new Set(tags)] },
     source_location_scope: ({ national: "country", regional: "region", local: "municipality" })[scope], place_context: area, timezone,
     source_url: sourceUrl, source_language: name.language.toLowerCase(), event_language: name.language.toLowerCase(),
     confidence: "low", provenance: { source_url: sourceUrl, source_label: "OpenHolidays API", license: "ODbL", attribution: OPEN_CREDIT } };

@@ -823,7 +823,7 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
       accepted_event_count: projectedCount,
       out_of_period_event_count: (Number(baseHealth.out_of_period_event_count) || 0) + endedSinceCollection,
       result: projectedCount > 0 ? "events_found"
-        : requestTimeDiscoveryFailed(collected) ? "unknown"
+        : requestTimeDiscoveryFailed(collected) || baseAcquisition.runtime_readiness?.unavailable_candidate_count > 0 ? "unknown"
         : baseHealth.responding_source_count > 0 ? "empty" : "unknown",
       reasons,
     };
@@ -905,6 +905,51 @@ function buildScopedEventSourcePlan({
   return selected.slice(0, sourceCap);
 }
 
+// Runtime requirements belong to the adapter and trusted server configuration,
+// not a publisher's readiness claim. This is eligibility, not source approval.
+function planRuntimeReadyEventSources({ datatourismeKey = null, ...options } = {}) {
+  const unavailable = source => normalizeLocalEventAdapter(source.adapter || source.kind) === "datatourisme" &&
+    !String(datatourismeKey || "").trim();
+  const initial = buildScopedEventSourcePlan(options);
+  const unavailableSources = initial.filter(unavailable).map(source => ({
+    ...compactSourceStatus({ source, status: "unavailable", reason: "source_credentials_unavailable", raw: [] }),
+    attempted: false,
+  }));
+  const sourcePlan = unavailableSources.length
+    ? buildScopedEventSourcePlan({ ...options, registry: options.registry.filter(source => !unavailable(source)) })
+    : initial;
+  return { sourcePlan, unavailableSources };
+}
+
+function withRuntimeReadiness(collected, unavailableSources) {
+  if (!unavailableSources.length) return collected;
+  const acquisition = collected.acquisition || {};
+  const health = acquisition.source_health || buildAnchorEventSourceHealth([]);
+  const pending = collected.pending === true || health.status === "pending";
+  const reasons = Array.isArray(health.reasons) ? health.reasons : [];
+  return carryLiveDestinationEvidence(collected, {
+    ...collected,
+    coverage: "covered",
+    acquisition: {
+      ...acquisition,
+      runtime_readiness: {
+        unavailable_candidate_count: unavailableSources.length,
+        unavailable_sources: unavailableSources,
+      },
+      source_health: {
+        ...health,
+        // These candidates made no request and are not selected-source failures.
+        // Keep selected-source counters intact; disclose the prerequisite separately.
+        unavailable_candidate_count: unavailableSources.length,
+        status: pending ? "pending" : health.responding_source_count > 0 ? "partial" : "unavailable",
+        result: health.result === "empty" ? "unknown" : health.result,
+        reasons: [...new Set([...reasons.filter(reason => reason !== "no_current_events_found"),
+          "source_prerequisites_unavailable", "source_credentials_unavailable"])],
+      },
+    },
+  });
+}
+
 /**
  * Collect ranked live events near an anchor, bucketed tonight / this_week.
  * @param {object} opts
@@ -954,7 +999,7 @@ async function collectAnchorEvents({
     MAX_EVENT_COLLECTION_RADIUS_M,
     Math.max(100, Math.round(radiusM || DEFAULT_RADIUS_M)),
   );
-  const sourcePlan = buildScopedEventSourcePlan({
+  const { sourcePlan, unavailableSources } = planRuntimeReadyEventSources({
     anchor,
     sourceAnchors,
     registry: registry || resolveEventFeedRegistry(),
@@ -963,6 +1008,7 @@ async function collectAnchorEvents({
     globalEnabled: Boolean(globalKey),
     maxSources,
     maxLocalSources,
+    datatourismeKey,
     complementarySourceIds,
     sourceBounds,
     // The same server-owned instant the rest of this collection reasons with.
@@ -972,7 +1018,7 @@ async function collectAnchorEvents({
     now,
   });
   if (sourcePlan.length === 0) {
-    return {
+    return withRuntimeReadiness({
       coverage: "uncovered",
       ...(selectedDate ? { selected_date: selectedDate } : {}),
       feed: null,
@@ -981,7 +1027,7 @@ async function collectAnchorEvents({
       this_week: [],
       browse: emptyEventBrowse(),
       acquisition: emptyAcquisition(effectiveRadiusM),
-    };
+    }, unavailableSources);
   }
 
   const nowDate = now ? new Date(now) : selectedDate ? new Date() : null;
@@ -1140,7 +1186,7 @@ async function collectAnchorEvents({
     outOfPeriodEventCount: outOfPeriodCount,
     rejected,
   });
-  return bindLiveCollection({
+  return withRuntimeReadiness(bindLiveCollection({
     coverage: "covered",
     ...(selectedDate ? { selected_date: selectedDate } : {}),
     feed: feeds[0] || null,
@@ -1170,7 +1216,7 @@ async function collectAnchorEvents({
       venue_resolution: venueResolution.summary,
       geometry_scope: bounded.geometry_scope,
     },
-  }, destinationInputs);
+  }, destinationInputs), unavailableSources);
 }
 
 // The Live period a row belongs to: the selected (or current) day, the
@@ -1637,6 +1683,7 @@ function eventCacheKey(
   spatialScope = null,
   selectedDate = null,
   time = "tonight",
+  unavailableSources = [],
 ) {
   const lat = Number(anchor.lat).toFixed(5);
   const lng = Number(anchor.lng).toFixed(5);
@@ -1646,8 +1693,11 @@ function eventCacheKey(
     .sort()
     .join(",");
   const radius = Math.min(MAX_EVENT_COLLECTION_RADIUS_M, Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)));
-  return createHash("sha256").update(JSON.stringify([lat, lng, hour, radius,
-    spatialScopeCacheKey(spatialScope), sources, selectedDate || "current", time])).digest("hex");
+  // Selected IDs alone do not identify skipped candidates. Bind their server-
+  // owned identities/reasons as well, never the credential value itself.
+  const unavailable = unavailableSources.map(source => JSON.stringify([source.id, source.adapter, source.reason])).sort();
+  return createHash("sha256").update(JSON.stringify([EVENT_CACHE_NAMESPACE, lat, lng, hour, radius,
+    spatialScopeCacheKey(spatialScope), sources, selectedDate || "current", time, unavailable])).digest("hex");
 }
 
 function sourceIdentityForUrl(value) {
@@ -1727,7 +1777,9 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // gain their own acquisition priority. Earlier v21 pools cannot attest it.
 // v23 cannot reuse v22 selection of programme interfaces whose payload exceeds
 // the adapter's unchanged default byte budget.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v23";
+// v24 isolates runtime prerequisite selection and nullable holiday contracts.
+// The namespace also participates in keys for operator-supplied caches.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v24";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read
@@ -1976,10 +2028,11 @@ function resolveDefaultEventSupply(
       const marketFeed = osmMarketFeedForAnchor(anchor);
       if (marketFeed) appendUniqueEventFeeds(requestRegistry, [marketFeed]);
     }
-    const sourcePlan = buildScopedEventSourcePlan({
+    const { sourcePlan, unavailableSources } = planRuntimeReadyEventSources({
       anchor,
       sourceAnchors,
       registry: requestRegistry,
+      datatourismeKey,
       sourceBounds: scope?.kind === "in_place" ? scope.trusted_place_scope?.bounds : null,
       now,
       globalSource: GLOBAL_FEED_DESCRIPTOR,
@@ -2016,7 +2069,7 @@ function resolveDefaultEventSupply(
     const discoverNow = (!hasApprovedLocalSource || complementaryDiscoveryNeeded) &&
       typeof requestTimeDiscovery === "function";
     if (sourcePlan.length === 0 && !discoverNow) {
-      return {
+      return withRuntimeReadiness({
         coverage: "uncovered",
         ...(selectedDate ? { selected_date: selectedDate } : {}),
         feed: null,
@@ -2031,7 +2084,7 @@ function resolveDefaultEventSupply(
             "source_discovery_environment_not_wired",
           ),
         ),
-      };
+      }, unavailableSources);
     }
     const descriptors = sourcePlan.map((source) => compactSourceStatus({ source, status: "pending", raw: [] }));
     const baseKey = eventCacheKey(
@@ -2042,6 +2095,7 @@ function resolveDefaultEventSupply(
       spatialScope,
       selectedDate,
       time,
+      unavailableSources,
     );
     // A plain coordinate/calendar warm-up has not performed local research.
     // Do not let it answer for a later resolver-attested discovery request.
@@ -2051,9 +2105,9 @@ function resolveDefaultEventSupply(
     // A broad calendar does not erase the existing local-discovery outcome.
     // Keep its current status alongside collection health, including cached
     // views, without allowing one to claim the other's successful coverage.
-    const withDiscoveryHealth = collected => discoveryHealth ? carryLiveDestinationEvidence(collected, {
+    const withDiscoveryHealth = collected => withRuntimeReadiness(discoveryHealth ? carryLiveDestinationEvidence(collected, {
       ...collected, acquisition: { ...collected.acquisition, discovery_health: discoveryHealth },
-    }) : collected;
+    }) : collected, unavailableSources);
     const cacheRead = readLiveDestinationCache(cache, sourcePlan);
     const cached = cacheRead.peek(key);
     if (cached) return cacheRead.carry(cached,
@@ -2123,7 +2177,7 @@ function resolveDefaultEventSupply(
         shouldStore: shouldCacheEventSupplyResult,
       });
     }
-    const pending = {
+    const pending = withRuntimeReadiness({
       coverage: "covered",
       ...(selectedDate ? { selected_date: selectedDate } : {}),
       feed: descriptors[0] || null,
@@ -2161,7 +2215,7 @@ function resolveDefaultEventSupply(
           reasons: ["background_refresh_pending"],
         },
       },
-    };
+    }, unavailableSources);
     // Capture this producer, not its cache key: a later refresh of the same key
     // must never replace an older planner's completion. Ranking remains frozen
     // to the original request; this reader performs no acquisition or catalog IO.
