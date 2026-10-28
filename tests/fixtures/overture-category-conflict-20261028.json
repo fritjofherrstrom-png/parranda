@@ -1,0 +1,48 @@
+{
+  "evidence_kind": "retained_normalized_source_snapshot_not_raw_parquet",
+  "captured_on": "2026-10-28",
+  "runtime_sha": "260280137d6e7caaf86edb855f4fecbdfd1b4e9d",
+  "cache_namespace": "overture-v6",
+  "cache_file_sha256": "1bf3893ab8defa52bfe85fdb7b7a1d02a6c3d5358bcd81b857ef8f057e5e57eb",
+  "record": {
+    "id": "overture-17df6255-580f-4267-9521-c597efcce03e",
+    "name": "Elvis Presley Statue",
+    "type": "restaurant",
+    "lat": 21.299707412719727,
+    "lng": -157.8517303466797,
+    "tags": [
+      "mat"
+    ],
+    "sources": [
+      {
+        "provider": "overture",
+        "family": "open_directory",
+        "tier": "inferred",
+        "url": "https://overturemaps.org/",
+        "license": "CDLA-Permissive-2.0"
+      }
+    ],
+    "chain": false,
+    "brand": null,
+    "operational_status": "source_indicated_active",
+    "operational_reasons": [
+      "overture_operating_status_active"
+    ],
+    "website": "http://www.elvis.com.au/presley/news/aloha_statue_hawaii.shtml"
+  },
+  "source_receipt": {
+    "version": 1,
+    "release": "2026-10-21.0",
+    "queryHash": "079d2a1055206d1286782934b9490544a76d4b4a188b0e2f2ce8dd751d74b51b",
+    "assets": [
+      {
+        "path": "s3://overturemaps-us-west-2/release/2026-10-21.0/theme=places/type=place/part-00000-a0a9949b-7e8e-59fe-803b-6cc55b17f790-c000.zstd.parquet",
+        "etag": "\"4875d0ea87ee1003e2dd155858941baa-11\"",
+        "length": 729511821
+      }
+    ],
+    "acquiredAt": 1793138603742,
+    "verifiedAt": 1793138603742,
+    "recordsHash": "d35e13cf226d7fe89e81d69025b8c01cf2fc97498b4b1c32f4d6a262f1a2c31d"
+  }
+}

@@ -30,6 +30,7 @@
  */
 
 const { createBoundedOvertureQuery } = require('./bounded-overture-query');
+const { hasContradictoryFoodListing } = require('./overture-category-consistency');
 const { createOvertureAssetResolver } = require('./overture-stac-assets');
 const { createHash } = require('node:crypto');
 const { validSample, validAssets, digest } = require('./overture-sample-cache');
@@ -299,6 +300,7 @@ function mapOvertureRow(row, { minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
   if (!licenses.length) return null;
   const brand = String(row.brand || "").trim() || null;
   const website = firstHttpUrl(row.websites);
+  if (hasContradictoryFoodListing({ name, type: mapping.type, website })) return null;
   const details = normalizePlaceDetails({ kind: OVERTURE_KINDS[row.category] }, mapping.type);
   return {
     id: `overture-${id}`,
@@ -493,9 +495,12 @@ function spreadAcrossWalkingReach(entries, { band }) {
 }
 
 function selectRecords(records, { anchor, requestedIntents = [], walkingTargetBand = null, corroborationRecords = [], limit = DEFAULT_LIMIT } = {}) {
-  const { retained, ambiguous } = corroborationSelection(records, corroborationRecords);
+  // Recheck older normalized samples too, without changing their source
+  // receipt, freshness or disk bytes, or acquiring another source page.
+  const consistent = records.filter(record => !hasContradictoryFoodListing(record));
+  const { retained, ambiguous } = corroborationSelection(consistent, corroborationRecords);
   const intents = normalizeUserIntents(requestedIntents).intents;
-  const entries = records.filter(record => !ambiguous.has(record.id)).map((record) => ({
+  const entries = consistent.filter(record => !ambiguous.has(record.id)).map((record) => ({
     record,
     ...intentMatch(record, intents),
     distance: distanceKm(anchor, record),
