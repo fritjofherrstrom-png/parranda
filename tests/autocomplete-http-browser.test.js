@@ -92,6 +92,25 @@ test('mobile suggestions wrap long names and leave the submit action reachable',
   assert.ok(selectedLayout.scrollWidth <= selectedLayout.clientWidth, 'the selected name wraps on mobile');
 });
 
+test('selected names wrap when the mobile field overflows, including names under forty characters', async t => {
+  const title = 'San Cristóbal de La Laguna';
+  const provider = createPlaceSuggestions({ fetcher: async () => ({ ok: true, status: 200, json: async () => ({ features: [{
+    type: 'Feature', geometry: { type: 'Point', coordinates: [-16.31, 28.49] },
+    properties: { name: title, type: 'city', osm_key: 'place', osm_value: 'city',
+      osm_type: 'R', osm_id: 202, country: 'Spain' },
+  }] }) }) });
+  const { page, field } = await landing(t, provider);
+  await page.setViewportSize({ width: 320, height: 844 });
+  await field.fill('San Cristóbal');
+  await page.getByRole('option').filter({ hasText: title }).click();
+  const value = await field.inputValue();
+  assert.ok(value.length < 40, 'the regression is not an extremely long name');
+  const label = page.getByText(value, { exact: true });
+  await label.waitFor({ state: 'visible' });
+  const box = await label.evaluate(element => ({ width: element.clientWidth, scroll: element.scrollWidth }));
+  assert.ok(box.scroll <= box.width, 'the chosen name wraps within the mobile viewport');
+});
+
 test('built autocomplete displays a valid 4500ms Photon answer through the actual HTTP handler', { timeout: 20000 }, async t => {
   let calls = 0, elapsed;
   const provider = createPlaceSuggestions({ fetcher: async (_url, { signal }) => {

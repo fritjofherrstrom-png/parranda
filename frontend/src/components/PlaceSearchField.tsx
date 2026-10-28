@@ -39,6 +39,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
   const [above, setAbove] = useState(false);
   const [composing, setComposing] = useState(false);
   const [retryGeneration, setRetryGeneration] = useState(0);
+  const [selectedOverflows, setSelectedOverflows] = useState(false);
   const listRef = useRef<HTMLUListElement>(null);
   const dismissed = useRef(false);
   const sequence = useRef(0);
@@ -116,6 +117,19 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
     if (optionRect.top < listRect.top) list.scrollTop += optionRect.top - listRect.top;
     else if (optionRect.bottom > listRect.bottom) list.scrollTop += optionRect.bottom - listRect.bottom;
   }, [shown, active, listId]);
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!selected || !input) { setSelectedOverflows(false); return; }
+    let active = true;
+    const measure = () => {
+      if (active) setSelectedOverflows(input.clientWidth > 0 && input.scrollWidth > input.clientWidth + 1);
+    };
+    measure();
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+    observer?.observe(input);
+    void document.fonts?.ready.then(measure);
+    return () => { active = false; observer?.disconnect(); };
+  }, [selected, value, inputRef]);
   return (
     <div className="relative min-w-0 flex-1" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) dismiss(); }}>
       <div className={"flex min-h-[3.75rem] items-center gap-3 rounded-parranda border-2 bg-parranda-ink/4 px-5 transition focus-within:border-parranda-ember focus-within:ring-3 focus-within:ring-parranda-glow/60 sm:min-h-16 " + (geoDenied ? "border-parranda-glow ring-3 ring-parranda-glow" : "border-parranda-ink")}>
@@ -137,7 +151,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
           placeholder={t("T.ex. Lyon eller Kyoto", "e.g. Lyon or Kyoto")} autoComplete="off"
           className="min-w-0 flex-1 bg-transparent text-lg text-parranda-ink outline-hidden placeholder:text-parranda-ink/68 focus-visible:outline-hidden sm:text-xl" />
       </div>
-      {selected && value.length > 40 && <span aria-hidden="true" className="mt-2 block text-sm leading-snug text-parranda-ink/75 [overflow-wrap:anywhere] sm:hidden">{value}</span>}
+      {selected && selectedOverflows && <span aria-hidden="true" className="mt-2 block text-sm leading-snug text-parranda-ink/75 [overflow-wrap:anywhere] sm:hidden">{value}</span>}
       {shown && <div className={"relative z-(--p-z-popover) mt-1 overflow-hidden rounded-parranda border border-parranda-ink/20 bg-parranda-paper shadow-pop sm:absolute sm:inset-x-0 " + (above ? "sm:bottom-full sm:mb-1 sm:mt-0" : "sm:top-full")}>
         <ul ref={listRef} id={listId} role="listbox" aria-label={t("Platsförslag", "Place suggestions")} className="max-h-[min(18rem,40svh)] overflow-y-auto overscroll-contain py-1">
           {choices.map((choice, index) => <li key={choice.selection_id} id={`${listId}-${index}`} role="option" aria-selected={active === index}
