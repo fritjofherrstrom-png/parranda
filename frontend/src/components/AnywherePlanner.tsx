@@ -89,7 +89,7 @@ import AppBar from "./shared/AppBar";
 import { KeepIcon, LocationIcon, MinusIcon, UndoIcon } from "./shared/icons";
 import { busyButton, buttonClass, noticeCard } from "./shared/ui";
 import { useMediaQuery } from "./shared/useMediaQuery";
-import AnchorCard, { type AdjustRebuild } from "./planner/AnchorCard";
+import AnchorCard, { ChangePlaceLink, type AdjustRebuild } from "./planner/AnchorCard";
 import BlitzCard from "./planner/BlitzCard";
 import CandidateAreas from "./planner/CandidateAreas";
 import DayHeader, { DayActions, dayAssemblyNotes } from "./planner/DayHeader";
@@ -2694,10 +2694,61 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       }}
       mapExpanded={splitLayout ? undefined : mapExpanded}
       onToggleExpanded={splitLayout ? undefined : () => setMapExpanded((cur) => !cur)}
-      heightClass={splitLayout ? "h-full" : mapExpanded ? "h-[min(70vh,36rem)]" : "h-60 sm:h-72"}
+      // On a phone the map is a short overview above the facts, still until
+      // expanded, so it never catches the thumb that scrolls the day.
+      heightClass={splitLayout ? "h-full" : mapExpanded ? "h-[min(70vh,36rem)]" : "h-52"}
+      still={!splitLayout && !mapExpanded}
       regionLabel={splitLayout ? t("Interaktiv karta", "Interactive map") : undefined}
       t={t}
     />
+  ) : null;
+  // A phone: the map's still overview opens the route, above its stops.
+  const mapOverview = routeMap && !splitLayout ? (
+    <div role="region" aria-label={t("Karta över dagen", "Map of the day")} className={"transition-opacity" + (staleNotice === "updating" ? " opacity-60" : "")}>
+      {routeMap}
+    </div>
+  ) : null;
+  // Before a day is on screen the card names the place and the day; once it
+  // is, the day's heading does, and the card keeps only the picks and Adjust.
+  // "Let Parranda choose" travels with the picks and Adjust, wherever they are.
+  const parrandaChoicePanel = hasAnchor && choosesEnabled ? (
+    <ParrandaChoice
+      t={t}
+      active={choosing}
+      view={answeredIntentMode === intentMode ? parrandaView : null}
+      composing={phase === "loading" || (intentMode !== answeredIntentMode && !restoredAt)}
+      onChoose={chooseForMe}
+      onTakeOver={takeOverChoice}
+    />
+  ) : null;
+  const anchorCard = hasAnchor ? (
+    <>
+      <AnchorCard
+        t={t}
+        lang={lang}
+        anchorLabel={anchorLabel}
+        dayOffset={dayOffset}
+        publishedDateLabel={navigationDay?.label}
+        activeDayOffset={navigationDay?.activeOffset}
+        moodLabel={moodLabel}
+        walkLabel={walkLabel}
+        adjustOpen={adjustOpen}
+        setAdjustOpen={setAdjustOpen}
+        preferences={ANYWHERE_PREFERENCES}
+        selected={selected}
+        preferencePriority={preferencePriority}
+        onToggleMood={toggleMood}
+        onClearPriority={clearPriority}
+        onSetDay={chooseDay}
+        rhythms={DAY_RHYTHMS}
+        walkKey={walkKey}
+        onSetRhythm={chooseRhythm}
+        onChangePlace={cancelActivePlannerForNavigation}
+        rebuild={adjustRebuild}
+        compact={dayWithRoute}
+      />
+      {parrandaChoicePanel}
+    </>
   ) : null;
 
   return (
@@ -2723,41 +2774,62 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       </div>
 
       <main className="flex min-w-0 flex-col gap-10 sm:gap-12">
-      {hasAnchor && (
-        <AnchorCard
+      {/* The day leads, compact: "A day in Lyon" with Change, the date and
+          forecast, the picks with Adjust, the facts — then the route: on a
+          phone the map's short overview, then the stops. While a day
+          composes, its heading's shape stands first too. */}
+      {dayWithRoute && (
+        <DayHeader
           t={t}
           lang={lang}
+          staleNotice={staleNotice}
+          navigationInterrupted={navigationInterrupted}
+          retryPlan={retryPlan}
+          mode={mode}
+          placeLabel={mode === "near_me" ? null : classification?.placeLabel}
           anchorLabel={anchorLabel}
-          dayOffset={dayOffset}
-          publishedDateLabel={navigationDay?.label}
-          activeDayOffset={navigationDay?.activeOffset}
-          moodLabel={moodLabel}
-          walkLabel={walkLabel}
-          adjustOpen={adjustOpen}
-          setAdjustOpen={setAdjustOpen}
-          preferences={ANYWHERE_PREFERENCES}
-          selected={selected}
-          preferencePriority={preferencePriority}
-          onToggleMood={toggleMood}
-          onClearPriority={clearPriority}
-          onSetDay={chooseDay}
-          rhythms={DAY_RHYTHMS}
-          walkKey={walkKey}
-          onSetRhythm={chooseRhythm}
-          onChangePlace={cancelActivePlannerForNavigation}
-          rebuild={adjustRebuild}
+          primaryRoute={primaryRoute}
+          date={safeResponse?.days?.[0]?.date}
+          relativeDay={navigationDay ? navigationDay.activeOffset : dayOffset}
+          weatherSummary={safeResponse?.days?.[0]?.weather_summary ?? null}
+          titleAction={<ChangePlaceLink t={t} lang={lang} onChangePlace={cancelActivePlannerForNavigation} />}
+          controls={anchorCard}
+          coreCount={split.core.length}
+          wovenCount={split.woven.length}
+          pickCoverage={shownPickCoverage}
+          priorityShortfall={priorityShortfall}
+          dayLimitationNote={dayLimitationNote}
+          sourceShortfall={sourceShortfall}
+          onLookForMorePlaces={lookForMorePlaces}
+          rechecking={recheckPending && staleNotice === "updating"}
+          restoredAt={restoredAt}
+          canUpdateSaved={canUpdateSaved}
+          resolveAndRun={() => retryPlan({ sameDate: true })}
         />
       )}
-      {hasAnchor && choosesEnabled && (
-        <ParrandaChoice
-          t={t}
-          active={choosing}
-          view={answeredIntentMode === intentMode ? parrandaView : null}
-          composing={phase === "loading" || (intentMode !== answeredIntentMode && !restoredAt)}
-          onChoose={chooseForMe}
-          onTakeOver={takeOverChoice}
+      {phase === "loading" && !staleNotice && (
+        <DayPlaceholder
+          part="heading"
+          status={
+            // Where "Your day" will stand, with the drawing ring: the day
+            // lands under the line the reader is already looking at.
+            <p className="flex items-start gap-2.5 text-sm text-parranda-ink/75" aria-live="polite">
+              <RingMark className="mt-[3px] h-3.5 w-3.5" />
+              <span>
+                {supplyPending && t("Letar platser och bygger din dag …", "Finding places and building your day …")}
+                {!supplyPending && loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
+                {!supplyPending && loadingStage === 1 && t("Letar efter platser …", "Looking for places …")}
+                {!supplyPending && loadingStage === 2 &&
+                  t(
+                    "Bygger din dag — det kan ta en liten stund …",
+                    "Building your day — this may take a little while …",
+                  )}
+              </span>
+            </p>
+          }
         />
       )}
+      {!dayWithRoute && anchorCard}
 
       {/* One permanently mounted result region: ready or final unavailable.
           Cleared while composing; PlaceChoices carries its own status. */}
@@ -2890,28 +2962,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </div>
       )}
 
-      {phase === "loading" && !staleNotice && (
-        <DayPlaceholder
-          inlineMap={!splitLayout}
-          status={
-            // Where "Your day" will stand, with the drawing ring: the day
-            // lands under the line the reader is already looking at.
-            <p className="flex items-start gap-2.5 text-sm text-parranda-ink/75" aria-live="polite">
-              <RingMark className="mt-[3px] h-3.5 w-3.5" />
-              <span>
-                {supplyPending && t("Letar platser och bygger din dag …", "Finding places and building your day …")}
-                {!supplyPending && loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
-                {!supplyPending && loadingStage === 1 && t("Letar efter platser …", "Looking for places …")}
-                {!supplyPending && loadingStage === 2 &&
-                  t(
-                    "Bygger din dag — det kan ta en liten stund …",
-                    "Building your day — this may take a little while …",
-                  )}
-              </span>
-            </p>
-          }
-        />
-      )}
+      {phase === "loading" && !staleNotice && <DayPlaceholder part="body" inlineMap={!splitLayout} />}
 
       {phase === "error" && staleNotice !== "update_failed" && (
         <div className={`flex flex-col items-start gap-3 ${noticeCard}`} role="alert">
@@ -3059,32 +3110,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </section>
       )}
 
-      {dayWithRoute && (
-        <DayHeader
-          t={t}
-          lang={lang}
-          staleNotice={staleNotice}
-          navigationInterrupted={navigationInterrupted}
-          retryPlan={retryPlan}
-          mode={mode}
-          placeLabel={mode === "near_me" ? null : classification?.placeLabel}
-          anchorLabel={anchorLabel}
-          primaryRoute={primaryRoute}
-          weather={dayflow?.weather ?? null}
-          coreCount={split.core.length}
-          wovenCount={split.woven.length}
-          pickCoverage={shownPickCoverage}
-          priorityShortfall={priorityShortfall}
-          dayLimitationNote={dayLimitationNote}
-          sourceShortfall={sourceShortfall}
-          onLookForMorePlaces={lookForMorePlaces}
-          rechecking={recheckPending && staleNotice === "updating"}
-          restoredAt={restoredAt}
-          canUpdateSaved={canUpdateSaved}
-          resolveAndRun={() => retryPlan({ sameDate: true })}
-        />
-      )}
-
       {/* Without a composed day, this card carries provenance only. Save/share
           remain route actions: offering them here would call an unsequenced
           candidate surface a day. */}
@@ -3132,7 +3157,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         <StopLine
           t={t}
           lang={lang}
-          map={splitLayout ? null : routeMap}
+          overview={mapOverview}
           stale={staleNotice === "updating"}
           newStopIdentities={newStopIdentities}
           routeLineIsSketch={routeLineIsSketch}

@@ -32,7 +32,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { pinGroupLabel, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
+import { pinGroupLabel, routeDisplayPath, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
 import { controlAwareView, type FitMark, type MapBox } from "../../lib/route-map-fit.mjs";
 import { BASEMAP_PROVIDER, basemapPaint, basemapStyle, type BasemapTheme } from "../../lib/route-map-style.mjs";
 import type { RouteContextSuggestion } from "../../lib/route-context-view.mjs";
@@ -72,6 +72,15 @@ function loadMapLibre(): Promise<MapLibre> {
     return mod;
   });
   return maplibreModule;
+}
+
+/** A still map takes no pan or zoom gesture; its markers still take a tap. */
+function applyStill(map: any, still: boolean): void {
+  for (const handler of [map.dragPan, map.touchZoomRotate, map.doubleClickZoom, map.boxZoom, map.keyboard]) {
+    if (still) handler?.disable?.();
+    else handler?.enable?.();
+  }
+  if (!still) map.touchZoomRotate?.disableRotation?.();
 }
 
 function currentTheme(): BasemapTheme {
@@ -177,6 +186,7 @@ export default function RouteMap({
   onToggleExpanded,
   heightClass,
   regionLabel,
+  still = false,
   t,
 }: {
   hasPrimaryRoute: boolean;
@@ -201,11 +211,19 @@ export default function RouteMap({
    * two landmarks with one name read as a duplicate.
    */
   regionLabel?: string;
+  /**
+   * A short overview in the page's scroll path (a phone, collapsed): the map
+   * does not pan or zoom, so a thumb scrolling the page past it scrolls the
+   * page. Its stops still open on a tap; Expand gives the full map.
+   */
+  still?: boolean;
   t: Translate;
 }) {
   const mapTitle = regionLabel || t("Karta över dagen", "Map of the day");
   const mapTitleRef = useRef(mapTitle);
   mapTitleRef.current = mapTitle;
+  const stillRef = useRef(still);
+  stillRef.current = still;
   const frameRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<{ ml: MapLibre; map: any; ready: Promise<void>; markers: any[] } | null>(null);
@@ -509,6 +527,7 @@ export default function RouteMap({
           return;
         }
         map.touchZoomRotate?.disableRotation?.();
+        applyStill(map, stillRef.current);
         map.addControl(new ml.NavigationControl({ showCompass: false }), "top-left");
         // The attribution is set from the start (not when the tiles answer), so
         // its size is known to the first fit and it stays even when they fail.
@@ -584,15 +603,22 @@ export default function RouteMap({
       let contextDots: any = emptyCollection;
       let candidateDots: any = emptyCollection;
       if (hasPrimaryRoute) {
-        const enginePath: Array<[number, number]> = (Array.isArray(primaryRoute?.map_path_points) ? primaryRoute.map_path_points : [])
+        const enginePath: Array<{ lat: number; lng: number }> = (Array.isArray(primaryRoute?.map_path_points) ? primaryRoute.map_path_points : [])
           .filter((point: any) => point && Number.isFinite(point.lat) && Number.isFinite(point.lng))
-          .map((point: any) => [point.lat, point.lng] as [number, number]);
-        const routePath = enginePath.length > 1
+          .map((point: any) => ({ lat: point.lat, lng: point.lng }));
+        const geometrySource = primaryRoute && Object.hasOwn(primaryRoute, "geometry_source")
+          ? primaryRoute.geometry_source : primaryRoute?.routing_source;
+        // `sketch` describes the original engine geometry, never these added
+        // presentation points. Detailed walking paths pass through unchanged.
+        const routePath = routeDisplayPath(enginePath.length > 1
           ? enginePath
-          : drawableRouteStops.map((stop: any) => [stop.lat, stop.lng] as [number, number]);
+          : drawableRouteStops.map((stop: any) => ({ lat: stop.lat, lng: stop.lng })), {
+          sketch,
+          routingSource: enginePath.length > 1 ? geometrySource : "heuristic",
+        });
         if (routePath.length > 1) {
-          routeLine = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: routePath.map(([lat, lng]) => [lng, lat]) } };
-          routePath.forEach(([lat, lng]: [number, number]) => marks.push({ lat, lng, avoidControls: false }));
+          routeLine = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: routePath.map(({ lat, lng }) => [lng, lat]) } };
+          routePath.forEach(({ lat, lng }) => marks.push({ lat, lng, avoidControls: false }));
         }
 
         routeStops.forEach((stop: any, index: number) => {
@@ -807,6 +833,11 @@ export default function RouteMap({
     };
   }, [mapExpanded]);
 
+  useEffect(() => {
+    const map = instanceRef.current?.map;
+    if (map) applyStill(map, still);
+  }, [still]);
+
   // The instance belongs to this element: release it with the element.
   useEffect(
     () => () => {
@@ -830,7 +861,7 @@ export default function RouteMap({
 
   return (
     <>
-    <div ref={frameRef} data-route-map="" className={`route-map-frame relative w-full overflow-hidden rounded-parranda border border-parranda-ink/10 transition-all ${heightClass}`}>
+    <div ref={frameRef} data-route-map="" data-still={still || undefined} className={`route-map-frame relative w-full overflow-hidden rounded-parranda border border-parranda-ink/10 transition-all ${heightClass}`}>
       {/* Screen layout keeps each numbered touch footprint independently visible. */}
       <div ref={mapRef} className="h-full w-full" />
       {groupPicker && (
@@ -895,6 +926,11 @@ export default function RouteMap({
         </button>
       )}
     </div>
+    {hasPrimaryRoute && sketch && (
+      <p className="mt-1 text-xs leading-relaxed text-parranda-ink/68">
+        {t("Ruttöversikt · linjen visar stoppens ordning, inte gångvägen.", "Route overview · the line shows stop order, not walking directions.")}
+      </p>
+    )}
     {tilesFailed && (
       <p role="status" className="mt-1 text-xs text-parranda-ink/68">
         {t("Kartbakgrunden kunde inte hämtas — rutten och stoppen visas ändå.", "The map background couldn't be loaded — the route and stops are still shown.")}
