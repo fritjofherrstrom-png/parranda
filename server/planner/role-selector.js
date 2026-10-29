@@ -14,6 +14,7 @@ const {
   rankEligible,
 } = require("../candidates/candidate-pool");
 const { plannerUsableOptionsForRole } = require("./candidate-combination");
+const { createMealOrderPolicy } = require('./meal-ordering');
 const { retainWalkingFitAlternatives } = require("./walking-fit-selection");
 const { scoreCandidateFit } = require("../candidates/fit-scorer");
 const { calibrateSource } = require("../candidates/source-calibration");
@@ -109,6 +110,42 @@ function keepPinnedEntriesInRole(entries, limit, pins) {
   return rescued.length ? [...kept, ...rescued] : kept;
 }
 
+// A ranking cut must not discard the sole complementary meal period before
+// bounded set selection can see it. Swap within the same source/admission tier,
+// keeping the existing limit and pins. This never admits a rejected candidate.
+function retainMealPeriods(entries, limit, pins, format, context) {
+  if (!context || entries.length <= limit) return entries;
+  const formatted = new Map(entries.map(entry => [entry, format(entry)]));
+  const usable = entry => plannerUsableOptionsForRole({ candidates: [formatted.get(entry)] }).length > 0 &&
+    formatted.get(entry).availability?.eligible !== false;
+  const score = rows => {
+    const stops = rows.filter(usable).map(entry => { const c = formatted.get(entry); return {
+      id: c.candidate_id, covered_preferences: c.covered_preferences,
+      selectedDayHours: c.availability?.selected_day_hours,
+    }; });
+    const [current, complementary] = createMealOrderPolicy(stops, context)?.scoreSet(stops) || [0, 0];
+    return current * 2 + complementary;
+  };
+  const selected = entries.slice(0, limit);
+  let best = score(selected), replacement = null;
+  for (const candidate of entries.slice(limit)) {
+    if (!usable(candidate)) continue;
+    for (let index = selected.length - 1; index > 0; index--) {
+      const a = formatted.get(candidate), b = formatted.get(selected[index]);
+      if (pins.has(b.candidate_id) || !usable(selected[index]) || a.confidence !== b.confidence ||
+          a.origin !== b.origin || a.provenance?.source_tier !== b.provenance?.source_tier ||
+          a.provenance?.human_verified !== b.provenance?.human_verified) continue;
+      const proposal = [...selected]; proposal[index] = candidate;
+      const next = score(proposal);
+      if (next > best) { best = next; replacement = { candidate, index }; }
+    }
+  }
+  if (!replacement) return entries;
+  const out = [...entries], from = out.indexOf(replacement.candidate);
+  [out[replacement.index], out[from]] = [out[from], out[replacement.index]];
+  return out;
+}
+
 function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   const limitPerRole = clampLimit(payload.limitPerRole ?? payload.limit_per_role);
   const pinnedIds = new Set(
@@ -148,7 +185,10 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   const rescuableByRole = [];
   const roles = activeRoleOrder.map((role) => {
     const spec = activeRoleSpec[role];
-    const entries = roleEntries[role];
+    const entries = spec.intents.includes('food')
+      ? retainMealPeriods(roleEntries[role], limitPerRole, pinnedIds,
+        entry => formatRoleCandidate(entry, role, roleEntries, activeRoleSpec), helpers.mealContext)
+      : roleEntries[role];
     const candidates = keepPinnedEntriesInRole(entries, limitPerRole, pinnedIds).map((entry) =>
       formatRoleCandidate(entry, role, roleEntries, activeRoleSpec),
     );

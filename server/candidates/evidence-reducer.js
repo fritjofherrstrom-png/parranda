@@ -125,20 +125,19 @@ function diversityConfidence(diversity) {
 }
 
 function deriveFreshness(items, now, reasons) {
-  let best = maxFreshness(items.map((item) => item.freshness));
-
-  // Age guard: if the freshest-claimed item is actually old, cap it down.
-  const ages = items
-    .map((item) => ageInDays(item.observed_at, now))
-    .filter((age) => Number.isFinite(age));
-  if (ages.length) {
-    const youngest = Math.min(...ages);
-    if (youngest > STALE_AGE_DAYS && freshnessRank(best) > freshnessRank("stale")) {
-      best = "stale";
-      reasons.push(`freshness_capped_age_${youngest}d`);
+  // Cap each claim before choosing the best. A newer unknown observation
+  // (including popularity) must not lend its date to an old fresh/live claim.
+  const fresh = items.map((item) => {
+    const freshness = normalizeFreshness(item.freshness);
+    const age = ageInDays(item.observed_at, now);
+    if (Number.isFinite(age) && age > STALE_AGE_DAYS && freshnessRank(freshness) > freshnessRank("stale")) {
+      const reason = `freshness_capped_age_${age}d`;
+      if (!reasons.includes(reason)) reasons.push(reason);
+      return "stale";
     }
-  }
-  return normalizeFreshness(best);
+    return freshness;
+  });
+  return maxFreshness(fresh);
 }
 
 function deriveConsensus(items, reasons) {

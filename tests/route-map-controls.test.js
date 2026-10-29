@@ -417,9 +417,11 @@ test("the expanded map shows a phone's day closer than the collapsed one", { tim
     await route.getByRole("button", { name: "Förstora kartan" }).click();
     await page.waitForTimeout(SETTLE_MS);
     const expanded = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES });
-    // A 192px strip holds this day a zoom level further out than the 384px map.
+    // The larger collapsed map already fits more of the day. Expansion still
+    // adds usable height and zooms in, until the phone's width limits the fit.
+    assert.ok(expanded.height >= collapsed.height * 2, 'expansion doubles the usable map height');
     assert.ok(
-      expanded.spread > collapsed.spread * 1.5,
+      expanded.spread > collapsed.spread * 1.25,
       `expected the day drawn larger once expanded: ${Math.round(collapsed.spread)}px → ${Math.round(expanded.spread)}px`,
     );
   } finally {

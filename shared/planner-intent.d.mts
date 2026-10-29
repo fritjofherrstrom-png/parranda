@@ -23,6 +23,7 @@ export interface DayEdit {
   removed_candidate_ids: string[];
   /** Only false is emitted canonically; absence/true preserves retained venues. */
   preserve_retained?: boolean;
+  release_extent?: true;
 }
 /** Bounded canonical copy, or null for any malformed/unsupported edit. */
 export declare function normalizeDayEdit(value: unknown): DayEdit | null;

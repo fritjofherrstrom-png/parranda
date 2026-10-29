@@ -50,6 +50,10 @@ const { createPlannerLifecycle, lifecycleLoader } = require('./planner/cold-life
 const { createPlannerSnapshotAssessor, memoizePlannerWeather } = require('./planner/source-snapshot-readiness');
 const { resolveAgnosticContext, defaultWeatherProvider } = require('./planner/agnostic-route-context');
 const { createLiveCompletionStore } = require('./planner/live-completion');
+const { createPublishedDayStore } = require('./planner/published-day-store');
+const { createPublishedDayReadHandler } = require('./planner/published-day-http');
+const { createDayPublication, publishTerminalDay } = require('./planner/published-day-publication');
+const { publicLiveSourceUrls } = require('./place-candidates/live-source-destination-evidence');
 const { retainComposition, createRouteUpgrade } = require('./planner/live-route-upgrade');
 const { nearbyCuratedSupply } = require('./planner/nearby-curated-supply');
 const { createPlaceSelectionStore, placeResolutionInputs } = require('./place-candidates/place-selection');
@@ -1504,6 +1508,7 @@ function buildApp({
   openDataLoader = resolveDefaultOpenDataLoader(),
   placeResolver = resolveDefaultPlaceResolver(),
   placeSelectionStore = createPlaceSelectionStore({ cacheDir: process.env.PARRANDA_CACHE_DIR }),
+  publishedDayStore = createPublishedDayStore({ directory: process.env.PARRANDA_CACHE_DIR }),
   placeSuggestions = resolveDefaultPlaceSuggestions(),
   eventSupply,
   sourceCatalog,
@@ -1547,6 +1552,7 @@ function buildApp({
   // from the open data the whole app depends on. On by default, generous
   // enough that a person planning days never notices it.
   app.use(createPublicAccessGuard({ env: process.env }));
+  app.use('/api/shared-days', createPublishedDayReadHandler(publishedDayStore));
   app.post('/api/place-suggestions', async (request, response) => {
     const query = typeof request.body?.query === 'string' ? request.body.query.trim().replace(/\s+/g, ' ') : '';
     if (query.length > 200) return response.status(400).json({ error: 'invalid_query' });
@@ -1936,12 +1942,12 @@ function buildApp({
 
   // Read only the original planner collection. Never normalize/replay a Live
   // query here: that could select a different geometry, date or source plan.
-  app.post('/api/planner-live-completion', (request, response) => {
+  app.post('/api/planner-live-completion', async (request, response) => {
     const body = request.body;
-    if (!body || Object.keys(body).some(key => key !== 'token')) {
+    if (!body || Array.isArray(body) || Object.keys(body).some(key => key !== 'token') || Object.keys(request.query).length) {
       return response.set('Cache-Control', 'no-store').status(400).json({ error: 'invalid_live_completion_request' });
     }
-    const result = liveCompletion.read(body.token);
+    const result = await liveCompletion.readWithPublication(body.token);
     response.set('Cache-Control', 'no-store').status(result.status).json(result.body);
   });
 
@@ -1982,7 +1988,7 @@ function buildApp({
     response.set('Cache-Control', 'no-store').status(204).end();
   });
 
-  async function recommendRoutes(request, response, lifecycle = null) {
+  async function recommendRoutes(request, response, lifecycle = null, dayPublication = null) {
     try {
       // Bound the request BEFORE any work: every date runs the whole
       // recommendation flow once, so an unbounded list is a public work
@@ -2046,8 +2052,9 @@ function buildApp({
           resolveContext: ({coords,date}) => resolveAgnosticContext({coords,date,
             trustedTimezone:snapshotTimezone,weatherProvider:scopedWeatherProvider,clock,lang}),
         }) } : {};
+      const publicationLoader = loader => dayPublication ? dayPublication.observeLoader(loader) : loader;
       let scopedOpenDataLoader = withoutExcludedCandidates(
-        lifecycle ? lifecycleLoader(openDataLoader, lifecycle, snapshotOptions) : openDataLoader,
+        publicationLoader(lifecycle ? lifecycleLoader(openDataLoader, lifecycle, snapshotOptions) : openDataLoader),
         excludedCandidateIds,
       );
       // Ledger v2: "keep this one". Selection-only — a pin can name a candidate
@@ -2395,7 +2402,7 @@ function buildApp({
         : [];
       if (lifecycle && curatedCandidates.length) {
         scopedOpenDataLoader = withoutExcludedCandidates(
-          lifecycleLoader(openDataLoader, lifecycle, { ...snapshotOptions, independentSupply: curatedCandidates }),
+          publicationLoader(lifecycleLoader(openDataLoader, lifecycle, { ...snapshotOptions, independentSupply: curatedCandidates })),
           excludedCandidateIds,
         );
       }
@@ -2566,8 +2573,12 @@ function buildApp({
       };
       const composition = await composeAgnosticRouteOutput({
         ...compositionArgs,
-        onRetainComposition: upgradeRequested ? snapshot => {
-          try { retainedComposition = retainComposition(snapshot); } catch (_) { retainedComposition = null; }
+        onRetainComposition: upgradeRequested || dayPublication ? snapshot => {
+          dayPublication?.retain(snapshot, { preferences, preferencePriority, dayRhythm: requestedRhythm,
+            excludedCandidateIds, pinnedCandidateIds, liveEventChoices, dayEdit });
+          if (upgradeRequested) {
+            try { retainedComposition = retainComposition(snapshot); } catch (_) { retainedComposition = null; }
+          }
         } : null,
       });
       const { result: experimentResult, experiment } = composition;
@@ -2601,7 +2612,16 @@ function buildApp({
             // Reuse the existing soft preference exception only for a kept
             // occurrence that actually passed source/time/walking validation.
             // Request IDs cannot promote a missing or ineligible event.
-            pinnedIds: [...pinnedCandidateIds, ...(experimentResult?.days?.[0]?.primary_route?.main_stops || [])
+            // A strict edit explicitly keeps these identities, just as a pin
+            // does. Their newly assigned roles may change preference coverage;
+            // that soft verdict must not veto the user's retained chain. The
+            // original source/availability/walking gates still ran above, and
+            // a replacement outside this list still needs requested relevance.
+            pinnedIds: [...pinnedCandidateIds,
+              ...(experiment.day_edit?.status === 'applied' && dayEdit &&
+                (dayEdit.action === 'replace' || dayEdit.preserve_retained !== false)
+                ? dayEdit.retained_candidate_ids : []),
+              ...(experimentResult?.days?.[0]?.primary_route?.main_stops || [])
               .filter(stop => stop.is_live_event === true && stop.live_choice_eligible === true &&
                 liveEventChoices.some(choice => choice.action === "keep" && choice.occurrence_id === stop.live_occurrence_id))
               .map(stop => stop.id)],
@@ -2609,7 +2629,7 @@ function buildApp({
           experiment.promotion = promotion;
           // Empty is an explicit user choice, not a calibrated walking route.
           // Only the trusted composer's accepted zero-stop state can publish it.
-          const manualEmptyPublished = Boolean(dayEdit?.action === 'remove' && dayEdit.target_stop_count === 0 &&
+          const manualEmptyPublished = Boolean(dayEdit?.action === 'remove' && !dayEdit.release_extent && dayEdit.target_stop_count === 0 &&
             strongAnchor && experiment.eligibility?.eligible === true && experiment.route_mutation === true &&
             experiment.day_edit?.status === 'applied' && experiment.day_edit.actual_stop_count === 0 &&
             experimentResult?.days?.[0]?.manual_empty_day === true && !experimentResult.days[0].primary_route);
@@ -2701,10 +2721,31 @@ function buildApp({
         if (upgradeRequested) {
           const upgrade = createRouteUpgrade({ args: compositionArgs, retained: retainedComposition,
             structure: agnosticPlaceStructure, initialLive: liveEvents, published, publish: publishComposition });
-          if (upgrade && liveCompletion.bindUpgrade(liveCompletionIdentity.token, upgrade)) {
+          const publicationContext = upgrade && dayPublication?.liveContext(published, lang);
+          const publishUpgrade = upgrade && (async (live, current) => {
+            const outcome = await upgrade(live);
+            if (outcome?.live_route_upgrade?.state === 'applied' && publicationContext) {
+              // The final validated route is a different immutable answer. Use
+              // original producer authority and the same capability deadline;
+              // never reuse the original route's ref or reacquire source facts.
+              outcome.result.day_snapshot = await publishTerminalDay(
+                { ...publicationContext, published: outcome.result }, live, current, publishedDayStore);
+              if (publicLiveSourceUrls(live) === null)
+                outcome.result.day_snapshot = { version: 1, state: 'unavailable' };
+            }
+            return outcome;
+          });
+          if (publishUpgrade && liveCompletion.bindUpgrade(liveCompletionIdentity.token, publishUpgrade)) {
             published.live_completion.route_upgrade = 'explicit_request';
           }
         }
+        if (dayPublication && liveCompletionIdentity) {
+          // This continuation belongs to the exact original capability and its
+          // fixed expiry, not the finished response/cold worker's lifetime.
+          liveCompletion.bindPublication(liveCompletionIdentity.token, dayPublication.liveContext(published, lang),
+            (context, live, current) => publishTerminalDay(context, live, current, publishedDayStore));
+        }
+        await dayPublication?.publish(published, lang, publishedDayStore);
         response.json(published);
         return;
       }
@@ -2745,7 +2786,15 @@ function buildApp({
   }
 
   app.post('/api/route-recommendations', async (request, response) => {
-    if (request.get('Prefer') !== 'respond-async') return recommendRoutes(request, response);
+    let publicationLifecycle = null;
+    // Capture raw own-presence before recommendation coercion or async cloning.
+    // After a 202 response, the original worker's signal owns publication.
+    const publication = createDayPublication(request, () => publicationLifecycle
+      ? !publicationLifecycle.signal.aborted && Date.now() < publicationLifecycle.deadline
+      : !response.destroyed && !response.writableEnded);
+    if (request.get('Prefer') !== 'respond-async') {
+      return recommendRoutes(request, response, null, publication);
+    }
     // Snapshot the original request once. No status request can replace its
     // preferences, normalized date, language or server-resolved anchor.
     const frozen = { body: structuredClone(request.body), query: structuredClone(request.query) };
@@ -2753,12 +2802,13 @@ function buildApp({
     const onClose = () => { if (!response.writableEnded) transport.abort(); };
     response.once('close', onClose);
     const result = await plannerLifecycle.start(async lifecycle => {
+      publicationLifecycle = lifecycle;
       let status = 200;
       let body;
       await recommendRoutes(frozen, {
         status(value) { status = value; return this; },
         json(value) { body = value; },
-      }, lifecycle);
+      }, lifecycle, publication);
       return { status, body };
     }, { signal: transport.signal });
     response.removeListener('close', onClose);

@@ -32,6 +32,7 @@
 const { createSourceCache } = require("./source-cache");
 const { createBackgroundSource, SOURCE_COMPLETION, SOURCE_SNAPSHOT, SOURCE_PENDING } = require("./background-source");
 const { createWikidataSource, WIKIDATA_CACHE_NAMESPACE } = require("./wikidata-source");
+const { createWikidataAttestingCache, createOsmAttestingCache, attestPublicPlaceRecords } = require('./source-url-evidence');
 const { normalizeSourceNameAliases } = require("./source-name-aliases");
 const { createOvertureSource } = require("./overture-source");
 const { createOvertureSampleCache } = require('./overture-sample-cache');
@@ -128,6 +129,13 @@ const REGIONAL_CLUSTER_RADIUS_KM = 3;
 // already holds (see `composeOpenDataLoaders`). This is a latency ceiling for
 // the slow/outage path, not a measured Overpass percentile.
 const DIRECTORY_PRIMARY_WAIT_MS = 10000;
+// At a place whose map primary left a composition at that bound unanswered,
+// the directory gives it this short grace instead, for a bounded pause (see
+// composeOpenDataLoaders). A cache hit, a coalesced in-flight answer or an
+// approved stale fallback arrives well within it.
+const SILENT_PRIMARY_GRACE_MS = 1000;
+const SILENT_PRIMARY_PAUSE_MS = 5 * 60 * 1000;
+const SILENT_PRIMARY_MAX_PLACES = 512;
 // Process-private marker: a cache-only primary read found no entry at all, as
 // opposed to a cached (possibly genuinely empty) Overpass answer.
 const PRIMARY_CACHE_MISS = Symbol("primaryCacheMiss");
@@ -188,6 +196,13 @@ const OSM_TAG_MAP = [
   { key: "shop", value: "antiques", type: "vintage-shop", tags: ["vintage", "antique"] },
   { key: "shop", value: "charity", type: "vintage-shop", tags: ["second_hand", "charity"] },
   { key: "shop", value: "vintage", type: "vintage-shop", tags: ["vintage", "second_hand"] },
+  // These shops explicitly sell used clothing/books. The qualifier is part of
+  // both acquisition and mapping; a name or an ordinary clothes/books tag is
+  // never second-hand evidence. Other used merchandise remains outside scope.
+  { key: "shop", value: "clothes", and: { second_hand: "yes" }, type: "vintage-shop", tags: ["second_hand"] },
+  { key: "shop", value: "clothes", and: { second_hand: "only" }, type: "vintage-shop", tags: ["second_hand"] },
+  { key: "shop", value: "books", and: { second_hand: "yes" }, type: "vintage-shop", tags: ["second_hand"] },
+  { key: "shop", value: "books", and: { second_hand: "only" }, type: "vintage-shop", tags: ["second_hand"] },
   // food (restaurant / taverna-style / street food)
   { key: "amenity", value: "restaurant", type: "restaurant", tags: ["mat"] },
   { key: "amenity", value: "fast_food", type: "street-food", tags: ["mat"] },
@@ -359,6 +374,9 @@ function createOpenDataLoader({
   const pinnedRadiusKm = Number.isFinite(radiusKm) ? clamp(radiusKm, 0.1, MAX_RADIUS_KM) : null;
   const boundedLimit = Math.max(1, Math.min(Math.floor(limit), MAX_LIMIT));
   const boundedTimeoutMs = Math.max(50, Math.floor(timeoutMs));
+  const attestingCache = createOsmAttestingCache(cache);
+  const canAttestCachedRecords = attestingCache !== cache;
+  cache = attestingCache;
   const boundedStaleIfErrorMs = Math.max(0, Math.floor(Number(staleIfErrorMs) || 0));
   // Resolve the endpoint set. An explicit single `endpoint` (e.g. an injected
   // test) stays single-shot; otherwise the default primary + fallback mirror(s)
@@ -477,7 +495,7 @@ function createOpenDataLoader({
           walkingTargetBand,
           availabilityWindow,
         });
-        return withLoaderStatus(records, records.length > 0 ? `loaded:${records.length}` : "loaded:0", null);
+        return withLoaderStatus(attestPublicPlaceRecords(records, 'osm'), records.length > 0 ? `loaded:${records.length}` : "loaded:0", null);
       }
       last = attempt;
     }
@@ -511,6 +529,7 @@ function createOpenDataLoader({
         OVERPASS_FETCH_CAP,
         { origin: boundedAnchors[0] },
       );
+      attestPublicPlaceRecords(mapped, 'osm');
       const buckets = boundedAnchors.map(() => []);
       for (const record of mapped) {
         let nearestIndex = -1;
@@ -789,7 +808,7 @@ function createOpenDataLoader({
   // a 1.5 km disc, so reusing it would keep serving the narrow day this fixes.
   // `budgetsKey` is the same identity without the walking budget: requests
   // that differ only in Kort/Lagom/Lång share it.
-  function requestIdentity(request) {
+  function requestIdentity(request, previousContract = false) {
     const band = normalizeWalkingTargetBand(request.walkingTargetBand);
     const radiusKm = pinnedRadiusKm ?? rhythmAwareRadiusKm(band, request.dayRhythm);
     const anchorKey = `${request.lat.toFixed(3)},${request.lng.toFixed(3)}`;
@@ -797,7 +816,7 @@ function createOpenDataLoader({
     const scopeKey = spatialScopeCacheKey(request.spatialScope ?? null);
     const window = normalizeAvailabilityWindow(request.availabilityWindow);
     const windowKey = window ? `${window.weekday}.${window.startMinute}.${window.endMinute}` : "none";
-    return {
+    const identity = {
       key: !request.dayRhythm && !window
         ? `v8:${anchorKey}:r${radiusKm}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`
         : `${request.dayRhythm ? 'v10' : 'v9'}:${anchorKey}:r${radiusKm}:w${windowKey}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
@@ -805,6 +824,15 @@ function createOpenDataLoader({
       evidenceKey: `${request.dayRhythm ? 'v10' : 'v8'}-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
       radiusKm,
       targetKm: band ? band.targetKm : null,
+    };
+    // Compound shop selectors and relation acquisition change source recall.
+    // Old samples remain on disk, but cannot masquerade as an answer to this
+    // query contract (particularly an old cached empty answer).
+    return previousContract ? identity : {
+      ...identity,
+      key: `q2:${identity.key}`,
+      budgetsKey: `q2:${identity.budgetsKey}`,
+      evidenceKey: `q2:${identity.evidenceKey}`,
     };
   }
 
@@ -900,7 +928,7 @@ function createOpenDataLoader({
     const identity = requestIdentity(request);
     const key = identity.key;
     let produced = false;
-    const entry = request.cacheOnly === true ? cache.peek(key) : await cache.get(
+    let entry = request.cacheOnly === true ? cache.peek(key) : await cache.get(
       key,
       async () => {
         const result = await loadTracked(request, key);
@@ -935,6 +963,27 @@ function createOpenDataLoader({
         },
       },
     );
+    // Preserve the existing outage safety net during a query-contract upgrade.
+    // Only a failed refresh may retain positive previous-contract map facts;
+    // they keep their original age, are never stored under the new contract,
+    // and cannot prove that the broader query found no additional places.
+    if (request.cacheOnly !== true && entry?.status?.startsWith('error') &&
+        boundedStaleIfErrorMs > 0 && typeof cache.inspect === 'function') {
+      const old = cache.inspect(requestIdentity(request, true).key);
+      const age = Number.isFinite(old?.expiresAt) ? Math.max(0, now() - old.expiresAt) : Infinity;
+      if (age <= boundedStaleIfErrorMs && Array.isArray(old?.value?.records) && old.value.records.length > 0 &&
+          typeof old.value.status === 'string' && !old.value.status.startsWith('error') &&
+          old.value.error !== 'stale_cache_refresh_failed') {
+        // This validated predecessor read bypasses get/peek. Retain the same
+        // source-owned destination proof without granting it to other caches.
+        if (canAttestCachedRecords) attestPublicPlaceRecords(old.value.records, 'osm');
+        entry = { ...old.value, error: 'stale_cache_refresh_failed', metadata: {
+          ...(old.value.metadata || {}),
+          cache: { served_stale: true, stale_age_seconds: Math.floor(age / 1000),
+            refresh_reason: safeLoaderToken(entry.error || 'provider_failed'), query_contract: 'previous' },
+        } };
+      }
+    }
     if (!entry) {
       const miss = withLoaderStatus([], 'loaded:0', null);
       Object.defineProperty(miss, PRIMARY_CACHE_MISS, { value: true });
@@ -974,10 +1023,10 @@ function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_
   // server-side (#273). Grouping by category with its own `out` guarantees each
   // category contributes regardless of node/way ordering. Still one request.
   const groups = new Map();
-  for (const { key, value, type } of mappings) {
+  for (const { key, value, and, type } of mappings) {
     const category = TYPE_CATEGORY[type] || "other";
     if (!groups.has(category)) groups.set(category, []);
-    groups.get(category).push({ key, value });
+    groups.get(category).push({ key, value, and });
   }
   const perCategory = Math.max(6, Math.ceil(limit / groups.size));
   const blocks = [];
@@ -985,10 +1034,12 @@ function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_
   for (const [category, entries] of groups) {
     const setName = `c${i}`;
     const filters = entries
-      .flatMap(({ key, value }) => anchors.flatMap(({ lat, lng }) => [
-        `node["${key}"="${value}"](around:${radiusM},${lat},${lng});`,
-        `way["${key}"="${value}"](around:${radiusM},${lat},${lng});`,
-      ]))
+      .flatMap(({ key, value, and }) => {
+        const selector = [[key, value], ...Object.entries(and || {})]
+          .map(([key, value]) => `["${key}"="${value}"]`).join('');
+        return anchors.flatMap(({ lat, lng }) => ['node', 'way', 'relation']
+          .map(kind => `${kind}${selector}(around:${radiusM},${lat},${lng});`));
+      })
       .join("");
     blocks.push(`(${filters})->.${setName};.${setName} out center ${perCategory};`);
     i += 1;
@@ -1515,7 +1566,8 @@ function resolveElementCoords(element) {
 
 function findOsmMapping(tags) {
   for (const mapping of OSM_TAG_MAP) {
-    if (tags[mapping.key] === mapping.value) return mapping;
+    if (tags[mapping.key] === mapping.value &&
+        Object.entries(mapping.and || {}).every(([key, value]) => tags[key] === value)) return mapping;
   }
   return null;
 }
@@ -1580,7 +1632,7 @@ function resolveDefaultOpenDataLoader(env = process.env) {
         ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
       });
       wikiSource = createBackgroundSource({
-        cache: wikiCache,
+        cache: createWikidataAttestingCache(wikiCache, WIKIDATA_CACHE_NAMESPACE),
         keyFor: ({ lat, lng } = {}) => `${Number(lat).toFixed(3)},${Number(lng).toFixed(3)}`,
         load: wikiRaw,
         // Start only after the primary has selected its regional cluster.
@@ -1619,7 +1671,8 @@ function resolveDefaultOpenDataLoader(env = process.env) {
       ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
     });
     overtureSource = createOvertureBackgroundSource({ source: overtureRaw,
-      cache: createOvertureSampleCache({ cache: overtureCache, validateReceipt: overtureRaw.validateReceipt }) });
+      cache: createOvertureSampleCache({ cache: overtureCache, validateReceipt: overtureRaw.validateReceipt,
+        validatePreviousReceipt: overtureRaw.validatePreviousReceipt }) });
   }
 
   // Official Swedish place supply through Visit Sweden's documented NAPI
@@ -1752,6 +1805,14 @@ function failedSourceValue() {
   return failed;
 }
 
+// The map cache's anchor bucket (~110 m): a rhythm or interest change at the
+// same place shares that place's pause; another place never does.
+function silentPlaceKey(anchor) {
+  const lat = Number(anchor?.lat);
+  const lng = Number(anchor?.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? `${lat.toFixed(3)},${lng.toFixed(3)}` : null;
+}
+
 // Compose the OSM loader (returns a `withLoaderStatus` array) with bounded
 // background sources (plain arrays). OSM runs first so a selected regional
 // cluster anchors every other source to the SAME place. A legacy function gets
@@ -1762,11 +1823,41 @@ function composeOpenDataLoaders(
   wikiSource = null,
   overtureSource = null,
   visitSwedenSource = null,
-  { primaryWaitMs = DIRECTORY_PRIMARY_WAIT_MS } = {},
+  {
+    primaryWaitMs = DIRECTORY_PRIMARY_WAIT_MS,
+    silentGraceMs = SILENT_PRIMARY_GRACE_MS,
+    silentPauseMs = SILENT_PRIMARY_PAUSE_MS,
+  } = {},
 ) {
+  // Process-private, per place (the map cache's ~110 m anchor bucket): a map
+  // primary that left a composition at the wait bound unanswered. A slow query
+  // is not proof of a dead source, so this never reaches another place. While
+  // a place is paused its primary is still started exactly as before (identical
+  // in-flight queries coalesce, a late answer already cached is a cache hit, a
+  // refused one serves its approved stale fallback), but a varied directory
+  // gives it only a short grace instead of the full wait. The pause is bounded,
+  // and a primary that answers inside the full bound ends it, even while
+  // paused. Start order decides: an older request never undoes what a newer
+  // one observed. Engine review, 25 Oct 2026: every staging request paid the
+  // full wait for a map source that never answered (11–16 s per adjustment).
+  const silentPlaces = new Map();
+  const answeredInBound = new Map();
+  let primaryOrder = 0;
+  const remember = (map, key, value) => {
+    map.delete(key);
+    map.set(key, value);
+    if (map.size > SILENT_PRIMARY_MAX_PLACES) map.delete(map.keys().next().value);
+  };
+  const recordPrimaryAnswer = (place, order) => {
+    if (!place) return;
+    remember(answeredInBound, place, Math.max(order, answeredInBound.get(place) || 0));
+    if ((silentPlaces.get(place)?.order || 0) <= order) silentPlaces.delete(place);
+  };
   const composedLoader = async function loadComposedOpenData(request = {}) {
     const sources = [wikiSource, overtureSource, visitSwedenSource].filter(Boolean);
     const primaryAnchor = { lat: request.lat, lng: request.lng };
+    const place = silentPlaceKey(primaryAnchor);
+    const order = ++primaryOrder;
     const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
     // The lifecycle's warm path reads existing evidence, including cached NAPI
     // corroboration, without launching refreshes just to render an adequate day.
@@ -1781,9 +1872,14 @@ function composeOpenDataLoaders(
     // evidence cannot: a missing requested intent or a reservoir that cannot
     // span the walking band goes through acquisition, which re-reads every
     // cache and fetches only the sources that have not answered yet.
+    const cacheReadStartedAt = Date.now();
     const primaryCached = request.preferCachedSupply === true && typeof osmLoader.readCached === 'function'
       ? await osmLoader.readCached(primaryAnchor, request) : null;
     if (Array.isArray(primaryCached) && primaryCached[PRIMARY_CACHE_MISS] !== true) {
+      // A real primary-cache answer recovers the place just as the ordinary
+      // loader's cache hit does. Background cache rows alone never do this.
+      const failed = typeof primaryCached.loader_status === 'string' && primaryCached.loader_status.startsWith('error');
+      if (!failed && Date.now() - cacheReadStartedAt <= primaryWaitMs) recordPrimaryAnswer(place, order);
       const selected = primaryCached?.loader_metadata?.regional_scout?.selected_anchor_coords;
       const sameAnchor = !selected || (selected.lat === primaryAnchor.lat && selected.lng === primaryAnchor.lng);
       const cachedGroups = await Promise.all(sources.map(source => typeof source.readCached === 'function'
@@ -1817,11 +1913,21 @@ function composeOpenDataLoaders(
         Promise.resolve().then(() => source.load(primaryAnchor, request)).catch(failedSourceValue),
       );
     }
+    const silence = place ? silentPlaces.get(place) : null;
+    const paused = Boolean(silence && Date.now() - silence.since < silentPauseMs &&
+      silence.order > (answeredInBound.get(place) || 0));
+    if (silence && !paused) silentPlaces.delete(place);
     const primaryStartedAt = Date.now();
     let primarySettled = false;
     const osmPromise = Promise.resolve(osmLoader(request))
       .catch(() => withLoaderStatus([], "error_failed_closed", "osm_threw"));
-    osmPromise.then(() => { primarySettled = true; });
+    osmPromise.then((answer) => {
+      primarySettled = true;
+      const failed = typeof answer?.loader_status === "string" && answer.loader_status.startsWith("error");
+      if (!place || failed || Date.now() - primaryStartedAt > primaryWaitMs) return;
+      // Answered inside the full bound: this place's map source is answering.
+      recordPrimaryAnswer(place, order);
+    });
     const eagerGroups = [];
     for (const [source, pending] of eagerLoads) {
       if (source.primaryRescue === false) continue;
@@ -1837,10 +1943,14 @@ function composeOpenDataLoaders(
     // the ordinary merge below keeps both families (and still rescues a
     // failed primary). A primary still outstanding at the bound keeps running
     // and caches its answer for the next request; this composition answers
-    // now, without asking any provider again.
+    // now, without asking any provider again. At a place whose primary went
+    // silent at the bound, that chance is the short grace (see above).
     const rescue = await awaitPrimaryOrRescue(osmPromise, eagerGroups, requestedIntents,
-      primaryWaitMs - (Date.now() - primaryStartedAt));
+      (paused ? Math.min(silentGraceMs, primaryWaitMs) : primaryWaitMs) - (Date.now() - primaryStartedAt));
     if (rescue.rescue && !primarySettled) {
+      if (!paused && place && order > (answeredInBound.get(place) || 0)) {
+        remember(silentPlaces, place, { since: Date.now(), order });
+      }
       // Keep the primary promise observed so a background failure can never
       // become an unhandled rejection.
       osmPromise.catch(() => {});

@@ -12,19 +12,19 @@
  * static build and the hydrated tree never disagree.
  *
  * Roles (contrast against the theme's paper):
- *   ink         text and strokes                       day 15.6:1 · night 16.7:1
+ *   ink         text and strokes                       day 14.3:1 · night 16.7:1
  *   paper       the ground
  *   terracotta  FILLED primary action, white text       5.2:1 in both themes
  *   ember       the route line, stations, live dot      graphic, ≥3:1
- *   clay        accent TEXT                             day 5.3:1 · night 8.9:1
- *   glow        eyebrows and honesty notes              day 5.2:1 · night 11.9:1
- *   live        Live: events, the Live card, transfers  day 6.6:1 · night 8.4:1
+ *   clay        accent TEXT                             day 4.9:1 · night 8.9:1
+ *   glow        eyebrows and honesty notes              day 4.8:1 · night 11.9:1
+ *   live        Live: events, the Live card, transfers  day 6.1:1 · night 8.4:1
  * Secondary text never goes below 65% ink (≥4.5:1 in the light theme).
  */
 :root {
   color-scheme: light;
   --p-color-ink: 22 20 17; /* #161411 */
-  --p-color-paper: 238 236 231; /* #EEECE7 */
+  --p-color-paper: 232 226 215; /* #E8E2D7 — warm daylight paper */
   --p-color-terracotta: 199 56 26; /* #C7381A */
   --p-color-ember: 232 67 29; /* #E8431D */
   --p-color-clay: 178 50 24; /* #B23218 */

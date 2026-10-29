@@ -153,7 +153,7 @@ test("cold-start refresh is bounded: the component delegates to the tested follo
   assert.match(anywherePlannerSource, /&\$\{LIVE_COMPLETION_QUERY\}/);
   assert.equal(LIVE_COMPLETION_QUERY, "include_live_completion=1&include_live_route_upgrade=1");
   // The waiting state is honest and visible.
-  assert.match(anywherePlannerSource, /Läser in mer från källorna — uppdateras automatiskt strax\./);
+  assert.match(anywherePlannerSource, /Letar efter fler platser/);
   // A silent UPGRADE refreshes the stored entry so save/share use the full day.
   assert.match(anywherePlannerSource, /if \(!silent \|\| safe\?\.place_structure\)/);
 });
@@ -244,11 +244,11 @@ test("route result has one authoritative route and keeps broader candidates seco
   assert.match(anywherePlannerSource, /\[detoursOpen, setDetoursOpen\] = useState\(false\)/);
   assert.match(anywherePlannerSource, /buildRouteContextSuggestions\(routeStops, day\?\.areas/);
   assert.match(anywherePlannerSource, /detour idea near your route/);
-  assert.match(anywherePlannerSource, /de ingår inte i dagens stopp eller Maps-rutten/);
+  assert.match(anywherePlannerSource, /inte ingår i dagens rutt/);
   assert.match(anywherePlannerSource, /destination: routeDestination/);
   assert.doesNotMatch(anywherePlannerSource, /t\("Dagens kvarter", "Today's neighborhoods"\)/);
   assert.match(anywherePlannerSource, /Places nearby/);
-  assert.match(anywherePlannerSource, /Parranda found place candidates, but not a reliable route yet\./);
+  assert.match(anywherePlannerSource, /Parranda found places, but couldn.t build a route yet/);
   assert.match(anywherePlannerSource, /t\("träffar", "places"\)/);
   assert.doesNotMatch(
     anywherePlannerSource,
@@ -314,7 +314,7 @@ test("a tapped stop discloses route facts before an explicit Maps action", () =>
   // provisional evidence rather than pretending an exact match is partial.
   assert.match(anywherePlannerSource, /partialPreferenceLabels\(stop, selected, lang\)/);
   assert.match(anywherePlannerSource, /A looser match for:/);
-  assert.match(anywherePlannerSource, /Source evidence is still provisional/);
+  assert.match(anywherePlannerSource, /Place details are not yet confirmed/);
   assert.doesNotMatch(anywherePlannerSource, /Matches some, but not all, of what you chose/);
   assert.doesNotMatch(anywherePlannerSource, /worth a look before you go/, "no hand-holding instruction");
   // Routing jargon "leg" is gone from the header too.
@@ -526,9 +526,13 @@ test("adjustments collapse to a summary and re-compose themselves — no submit 
 
 test("saving a live day does not freeze its adjustment controls as a restored snapshot", () => {
   const saveBlock = anywherePlannerSource.split("function saveDay() {")[1]?.split("function removeSavedDay")[0] ?? "";
-  const restoreBlock = anywherePlannerSource.split("function restoreEntry(entry: SavedEntry, restoreViewFromStorage = false) {")[1]?.split("const autoPlannedRef")[0] ?? "";
+  // Additive restore options must not make this wiring check inspect an empty
+  // block. Mounted exact-navigation tests prove the behavioral boundary.
+  const restoreBlock = anywherePlannerSource.match(/function restoreEntry\([^\n]*\) \{([\s\S]*?)\n  \}/)?.[1];
+  assert.ok(saveBlock && restoreBlock, "both actual handlers were located");
   assert.doesNotMatch(saveBlock, /setRestoredAt/);
-  assert.match(restoreBlock, /setRestoredAt\(entry\.savedAt\)/);
+  assert.match(restoreBlock, /setRestoredAt\(kind === "saved" \? entry\.savedAt : null\)/);
+  assert.match(restoreBlock, /setNavigationCapturedAt\(kind === "navigation" \? entry\.savedAt : null\)/);
 });
 
 test("latest compose wins and cancels stale network work", () => {
@@ -547,9 +551,9 @@ test("composed coverage comes from the route, never the broader district structu
 });
 
 test("planner honesty copy avoids internal catalog/citypack language", () => {
-  assert.match(anywherePlannerSource, /Parranda har inte full kurering här ännu/);
-  assert.match(anywherePlannerSource, /Parranda does not have full curation here yet/);
-  assert.match(anywherePlannerSource, /Reading the map and looking for real places/);
+  assert.match(anywherePlannerSource, /Platserna kommer från externa källor/);
+  assert.match(anywherePlannerSource, /Places come from external sources/);
+  assert.match(anywherePlannerSource, /Looking for places/);
   assert.doesNotMatch(anywherePlannerSource, /citypack|city pack|no catalog|ingen katalog|fullt citypack/i);
 });
 

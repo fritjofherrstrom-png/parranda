@@ -120,6 +120,7 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     intents: normalizeStringList(rawEvent.intents || rawEvent.match_tags),
     route_role_hint: firstString(rawEvent.route_role_hint, rawEvent.routeRoleHint),
     local_significance: normalizeLocalSignificance(rawEvent.local_significance),
+    programme: normalizeProgramme(rawEvent.programme, { sourceUrl, startsOn }),
     timing_relevance: timingRelevance,
     timezone,
     timing_reasons: timingReasons(timingRelevance, {
@@ -133,6 +134,27 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
       confidence,
     }),
   });
+}
+
+// Programme context belongs to this exact publisher document. It carries no
+// venue, coordinates, opening hours or independent route eligibility.
+function normalizeProgramme(value, { sourceUrl, startsOn }) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const title = typeof value.title === "string" ? value.title.trim() : "";
+  if (!title || title.length > 200 || !startsOn) return null;
+  const start = /^\d{4}-\d{2}-\d{2}$/.test(value.starts_on) ? normalizeSourceEventDate(value.starts_on) : null;
+  const end = /^\d{4}-\d{2}-\d{2}$/.test(value.ends_on) ? normalizeSourceEventDate(value.ends_on) : null;
+  if (!start || !end || end < start || startsOn < start || startsOn > end ||
+      Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`) > 44 * 86400000) return null;
+  try {
+    const url = new URL(value.source_url);
+    const eventUrl = new URL(sourceUrl);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return null;
+    url.hash = "";
+    eventUrl.hash = "";
+    if (url.href !== eventUrl.href) return null;
+    return { title, source_url: url.href, starts_on: start, ends_on: end };
+  } catch (_error) { return null; }
 }
 
 function normalizeLocalSignificance(value) {
@@ -185,7 +207,12 @@ function normalizeTimingRelevance(explicit, facts = {}) {
     return "unknown";
   }
 
-  if (startsAt <= now && (!endsAt || endsAt >= now)) {
+  // On now needs a stated end around now. A start that has passed with no
+  // stated end is not evidence the event is still on: its own day keeps its
+  // today/tonight relevance below, and an earlier day says nothing about now
+  // (engine review, 25 Oct 2026: a guided walk listed at 10:00 was "now" at
+  // 20:00, labelled "Just nu" and offered by Just nu as happening).
+  if (startsAt <= now && endsAt && endsAt >= now) {
     return "now";
   }
   const localStart = facts.timezone
@@ -203,6 +230,9 @@ function normalizeTimingRelevance(explicit, facts = {}) {
   }
   if (startsAt > now) {
     return "future";
+  }
+  if (!endsAt) {
+    return "unknown";
   }
   return "stale";
 }

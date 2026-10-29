@@ -28,6 +28,8 @@
  *   - NO network in tests: `fetcher` is injectable.
  */
 
+const { attestWikidataRecords } = require('./source-url-evidence');
+
 const DEFAULT_WIKIDATA_ENDPOINT = "https://query.wikidata.org/sparql";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
 const DEFAULT_RADIUS_KM = 1.5;
@@ -256,7 +258,7 @@ function createWikidataSource({
       } catch (_error) {
         return [];
       }
-      return controller.signal.aborted ? [] : mapWikidataResponse(payload, boundedLimit);
+      return controller.signal.aborted ? [] : attestWikidataRecords(mapWikidataResponse(payload, boundedLimit));
     } catch (_error) {
       void classifyFetchError(_error);
       return []; // fail closed: never throw, never hallucinate

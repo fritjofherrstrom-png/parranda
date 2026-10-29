@@ -33,7 +33,7 @@ const STOPS = [
   { id: "c", label: "Stop c", lat: 55.601, lng: 13.004, type: "cafe" },
   { id: "d", label: "Stop d", lat: 55.603, lng: 13.01, type: "restaurant" },
 ];
-const PAPER = { day: [238, 236, 231], night: [17, 16, 18] };
+const PAPER = { day: [232, 226, 215], night: [17, 16, 18] };
 
 function composedDay() {
   return {

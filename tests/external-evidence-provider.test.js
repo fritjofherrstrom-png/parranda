@@ -36,6 +36,20 @@ test("external candidates are a nested opt-in flag", () => {
   assert.equal(isExternalCandidatesEnabled({ candidate_sources: "curated" }), false);
 });
 
+test("mapping an old source record during a new request does not renew it through popularity", () => {
+  const [candidate] = externalCandidates([{
+    id: 'old-observations', name: 'Cedar Museum', type: 'museum', lat: 41.9, lng: 12.46,
+    sources: TWO_FAMILIES.map(source => ({ ...source, observed_at: '2024-01-01', freshness: 'fresh' })),
+    popularity: { count: 900 },
+  }]);
+  const result = evaluateCandidateEligibility(candidate, { now: DATE });
+  assert.equal(result.derived.freshness, 'stale');
+  assert.equal(result.derived.provenance_diversity, 2, 'source families are not erased or multiplied');
+  assert.equal(candidate.trust.human_verified, false);
+  assert.deepEqual(new Set(candidate.evidence.filter(item => item.claim_type === 'existence').map(item => item.observed_at)),
+    new Set(['2024-01-01T00:00:00.000Z']));
+});
+
 test("default Blitz (no candidate_mode) never invokes the external provider", async () => {
   const legacy = await buildBlitzDecision(rome, { date: DATE, preferences: ["scenic"] });
   assert.equal(legacy.experimental, undefined);

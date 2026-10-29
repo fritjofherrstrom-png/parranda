@@ -21,6 +21,8 @@ const {
 } = require("./official-program-article-time");
 
 const MIN_TIMED_ROWS_FOR_SIGNATURE = 2;
+const { collectRegionalEventProgramme } = require("./regional-event-programme-reader");
+const { collectCardEventProgramme } = require("./card-event-programme-reader");
 
 function hasOfficialProgramArticleSignature(html) {
   const grouped = collectOfficialProgramRows(html);
@@ -28,6 +30,10 @@ function hasOfficialProgramArticleSignature(html) {
 }
 
 function collectOfficialProgramRows(html) {
+  const cards = collectCardEventProgramme(html);
+  if (cards) return cards;
+  const regional = collectRegionalEventProgramme(html);
+  if (regional) return regional;
   const blocks = extractContentBlocks(html);
   const pageYear = inferPageYear(blocks);
   const segments = findProgramSegments(blocks);
