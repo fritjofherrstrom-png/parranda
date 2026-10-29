@@ -14,6 +14,12 @@ export function routePathIsSketch(
   stopCount: number | null | undefined,
 ): boolean;
 
+/** Display-only arcs. Pass the sketch classification of the original path. */
+export function routeDisplayPath(
+  pathPoints: RouteMapPoint[] | null | undefined,
+  options?: { sketch?: boolean; routingSource?: string | null },
+): Array<{ lat: number; lng: number }>;
+
 export function routeMarkerPresentation(
   stops: RouteMapPoint[] | null | undefined,
   options?: { collisionDistanceKm?: number; radiusPx?: number },
