@@ -29,10 +29,11 @@ FixtureMap.prototype.fire=function(event,...args){
 const empty=[];
 function Harness(){
   const [expanded,setExpanded]=React.useState(false);
+  const [selected,setSelected]=React.useState(null);
   const [stops,setStops]=React.useState([{id:'a',label:'Stop A',lat:55.595,lng:12.99},{id:'b',label:'Stop B',lat:55.598,lng:12.998},{id:'c',label:'Stop C',lat:55.603,lng:13.01}]);
   window.setMapTestStops=setStops;
   const route=React.useMemo(()=>({map_path_points:stops}),[stops]);
-  return <main style={{padding:12,minHeight:1800}}><button onClick={()=>setStops([{id:'new',label:'New day',lat:55.6,lng:13}])}>New day</button><section aria-label="The route"><RouteMap hasPrimaryRoute={true} routeStops={stops} primaryRoute={route} areas={empty} routeContextSuggestions={empty} showContext={false} sketch={true} mapExpanded={expanded} onToggleExpanded={()=>setExpanded(!expanded)} heightClass={expanded?'h-[420px]':'h-[190px]'} t={(_,en)=>en}/></section><button>Outside map</button></main>;
+  return <main style={{padding:12,minHeight:1800}}><button onClick={()=>setStops([{id:'new',label:'New day',lat:55.6,lng:13}])}>New day</button><button onClick={()=>setSelected(1)}>Select stop B</button><button onClick={()=>setSelected(null)}>Clear stop</button><output>Selected: {selected ?? 'none'}</output><section aria-label="The route"><RouteMap hasPrimaryRoute={true} routeStops={stops} primaryRoute={route} areas={empty} routeContextSuggestions={empty} showContext={false} sketch={true} selectedStopIndex={selected} onSelectStop={setSelected} mapExpanded={expanded} onToggleExpanded={()=>setExpanded(!expanded)} heightClass={expanded?'h-[420px]':'h-[190px]'} t={(_,en)=>en}/></section><button>Outside map</button></main>;
 } createRoot(document.getElementById('root')).render(<Harness/>);`);
 
   const compiler = path.join(frontend, 'node_modules/esbuild/bin/esbuild');
@@ -114,6 +115,25 @@ async function pageFor(t, hasTouch = false, diagnostics = null) {
   await page.locator('.route-map-marker').nth(2).waitFor();
   return page;
 }
+
+test('selecting a stop in the list highlights its map pin and clearing removes it', { timeout: 30000 }, async t => {
+  const page = await pageFor(t);
+  await page.getByRole('button', { name: 'Select stop B' }).click();
+  await page.waitForFunction(() => document.querySelector('[data-route-selected="true"]'));
+  const selected = page.locator('[data-route-selected="true"]');
+  await assert.equal(await selected.count(), 1);
+  assert.match(await selected.getAttribute('aria-label'), /2\. Stop B/);
+  await page.getByRole('button', { name: 'Clear stop' }).click();
+  await assert.equal(await selected.count(), 0);
+});
+
+test('a keyboard activation of a map stop selects its matching list stop', { timeout: 30000 }, async t => {
+  const page = await pageFor(t);
+  const pin = page.getByRole('button', { name: '2. Stop B', exact: true });
+  await pin.focus();
+  await pin.press('Enter');
+  await page.getByText('Selected: 1', { exact: true }).waitFor();
+});
 
 test('explicit click during expansion keeps its marker name after mouseleave and scroll', { timeout: 30000 }, async t => {
   const diagnostics = { stage: 'context initialization' };

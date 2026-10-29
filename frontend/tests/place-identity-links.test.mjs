@@ -170,7 +170,7 @@ test("malformed URL identities block planning and stored-day fallback without re
       try {
         await h.clock.advance(1000);
         assert.equal(composeCalls(h).length, 0, "never search a namesake as free text");
-        assert.match(h.text(), /invalid place reference/i);
+        assert.match(h.text(), /invalid place selection/i);
         assert.doesNotMatch(h.text(), /Saved day/);
         assert.equal(h.window.location.search, new URL(url).search);
         assert.deepEqual(h.readStorage(LAST_KEY), storage[LAST_KEY] ?? null);
@@ -228,7 +228,7 @@ test("valid first reference and first non-near anchor retain first-value URL sem
       assert.equal(composeCalls(h).length, 1);
       assert.equal(composeCalls(h)[0].body.place_ref, "r41485");
       assert.equal(composeCalls(h)[0].body.lat, undefined);
-      assert.doesNotMatch(h.text(), /conflicting place anchors|invalid place reference/i);
+      assert.doesNotMatch(h.text(), /conflicting place anchors|invalid place selection/i);
     } finally { await h.unmount(); }
   }
 });
@@ -243,7 +243,7 @@ test("valid ref plus explicit coordinate-field intent fails closed before planni
         await h.clock.advance(1000);
         assert.equal(h.fetchMock.calls.length, 0, fields);
         assert.match(h.text(), /conflicting place anchors/i, fields);
-        assert.doesNotMatch(h.text(), /invalid place reference|Saved day/i);
+        assert.doesNotMatch(h.text(), /invalid place selection|Saved day/i);
         assert.equal(h.window.location.search, new URL(url).search);
         assert.deepEqual(h.readStorage(LAST_KEY), storage[LAST_KEY] ?? null);
         assert.equal(h.container.querySelector("form"), null);

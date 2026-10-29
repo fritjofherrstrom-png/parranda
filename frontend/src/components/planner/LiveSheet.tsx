@@ -302,7 +302,7 @@ export default function LiveSheet({
           {liveQueryPending ? (
             <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4" aria-live="polite">
               <p className="text-sm text-parranda-ink/75">
-                {t("Uppdaterar verifierade källor för det här området …", "Refreshing verified sources for this area …")}
+                {t("Letar efter evenemang …", "Looking for events …")}
               </p>
             </div>
           ) : liveQueryError ? (
@@ -313,8 +313,8 @@ export default function LiveSheet({
             <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
               <p className="text-sm leading-relaxed text-parranda-ink/80">
                 {t(
-                  "Verifierad kalendertäckning saknas för det här området. Vi vet därför inte vad som händer här — det betyder inte att inget är på gång.",
-                  "No verified calendar coverage for this area yet. We don't know what's on here — that doesn't mean nothing is happening.",
+                  "Vi har inga verifierade evenemangskällor för området ännu. Det kan ändå hända saker här.",
+                  "We don't have verified event sources for this area yet. There may still be events here.",
                 )}
               </p>
             </div>
