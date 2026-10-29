@@ -190,7 +190,7 @@ for (const lang of ['sv', 'en']) test(`${lang} stop facts and controls stay comp
   assert.equal(evidence.open, false);
   assert.match(evidence.querySelector('summary').textContent, lang === 'sv' ? /Om platsinformationen/ : /About this place information/);
   assert.match(evidence.textContent, /Map source/);
-  assert.match(evidence.textContent, lang === 'sv' ? /provisoriskt/ : /provisional/);
+  assert.match(evidence.textContent, lang === 'sv' ? /inte bekräftade ännu/ : /not yet confirmed/);
 });
 
 for (const lang of ['sv', 'en']) test(`${lang} selected source details add useful specificity without invented descriptions`, async t => {

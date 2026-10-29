@@ -197,10 +197,10 @@ test("how the day was assembled sits with the route evidence, said once", async 
   assert.match(about.querySelector("summary").textContent, /About this day and map/);
   assert.equal(about.open, false, "closed until asked for");
   const card = about.textContent;
-  assert.match(card, /Built from source-backed places — Parranda does not have full curation here yet/);
+  assert.match(card, /Places come from external sources; coverage may be limited/);
   assert.match(card, /Distances and walking times are estimates\./);
   assert.match(card, /Local time is inferred from the location\./);
-  assert.doesNotMatch(card, /external sources|walking distances are estimates/i);
+  assert.doesNotMatch(card, /walking distances are estimates/i);
 });
 
 test("a day without source-backed provenance still names where its places came from", async (t) => {

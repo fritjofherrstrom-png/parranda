@@ -454,8 +454,8 @@ export default function StopLine({
                       <p className="text-xs leading-relaxed text-parranda-ink/68">
                         {stop?.candidate_status === "partial"
                           ? sourceLabel
-                            ? t(`Källstöd: ${sourceLabel} · underlaget är fortfarande provisoriskt`, `Source-backed by ${sourceLabel} · evidence is still provisional`)
-                            : t("Källunderlaget är fortfarande provisoriskt", "Source evidence is still provisional")
+                            ? t(`Källa: ${sourceLabel} · platsuppgifterna är inte bekräftade ännu`, `Source: ${sourceLabel} · place details are not yet confirmed`)
+                            : t("Platsuppgifterna är inte bekräftade ännu", "Place details are not yet confirmed")
                           : t(`Källa: ${sourceLabel}`, `Source: ${sourceLabel}`)}
                       </p>
                     </details>
@@ -608,8 +608,8 @@ export default function StopLine({
           </button>
           <p className="text-xs leading-relaxed text-parranda-ink/68">
             {t(
-              "Valfria idéer från platsunderlaget — de ingår inte i dagens stopp eller Maps-rutten.",
-              "Optional ideas from the place evidence — they are not part of this day's stops or the Maps route.",
+              "Fler idéer som inte ingår i dagens rutt.",
+              "More ideas outside today's route.",
             )}
           </p>
           {detoursOpen && (

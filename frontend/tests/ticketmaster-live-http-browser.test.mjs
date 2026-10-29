@@ -405,7 +405,7 @@ for (const coldPlace of [false, true]) test(`Ticketmaster exact occurrence survi
     await page.getByRole('button', { name: 'See all live', exact: true }).click();
     const sheet = page.getByRole('dialog', { name: 'Live events', exact: true });
     await sheet.getByRole('button', { name: 'By time', exact: true }).click();
-    await sheet.locator(`a[href="${TARGET_URL}"]`).waitFor({ state: 'visible' });
+    await sheet.locator(`p a[href="${TARGET_URL}"]`).waitFor({ state: 'visible' });
     const sheetText = await sheet.innerText();
     assert.match(sheetText, /Calendars:\s*1 of 1 responded/);
     const sourceRow = sheet.locator('li').filter({ has: page.locator(`a[href="${TARGET_URL}"]`) });
@@ -428,12 +428,12 @@ for (const coldPlace of [false, true]) test(`Ticketmaster exact occurrence survi
       'Live displays every selected-day row except the occurrence already presented in the actual route');
     await capture('live-selected-settled');
     await sheet.getByRole('button', { name: 'Next 7 days', exact: true }).click();
-    await sheet.locator('a[href="https://www.ticketmaster.se/event/fixture-following-0"]').waitFor({ state: 'visible' });
+    await sheet.locator('p a[href="https://www.ticketmaster.se/event/fixture-following-0"]').waitFor({ state: 'visible' });
     assert.equal(await sheet.getByRole('button', { name: 'Plan with this event', exact: true }).count(), 0,
       'following-day events cannot become a Keep for the selected day');
     await capture('live-following-settled');
     await sheet.getByRole('button', { name: liveDateLabel(DAY, 'en'), exact: true }).click();
-    await sheet.locator(`a[href="${TARGET_URL}"]`).waitFor({ state: 'visible' });
+    await sheet.locator(`p a[href="${TARGET_URL}"]`).waitFor({ state: 'visible' });
     assert.equal(composeRequests().length, composeBeforeBrowse, 'Live period/order inspection never composes the day');
     done('settled-live-and-bounded-browse');
 

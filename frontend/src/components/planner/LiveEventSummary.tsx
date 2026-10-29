@@ -1,5 +1,7 @@
 import LiveEventTiming from "./LiveEventTiming";
 import { liveEventSource } from "./LiveEventSource";
+import { eventSourceLink } from "../../lib/pulse-view.mjs";
+import { ExternalIcon } from "../shared/icons";
 import type { Lang } from "./copy";
 import type { PulseEvent } from "./types";
 
@@ -29,9 +31,17 @@ export default function LiveEventSummary({ event, lang, now, selectedDate, timin
 }) {
   const Heading = heading;
   const place = placeDisplay(event.place);
+  const sourceLink = eventSourceLink(event, lang);
   return (
     <div className="flex min-w-0 max-w-full flex-col gap-1 [overflow-wrap:anywhere]">
-      <Heading className={`text-15 leading-snug text-parranda-ink ${titleClassName}`}>{event.title}</Heading>
+      <Heading aria-label={event.title} className={`text-base leading-snug text-parranda-ink ${titleClassName}`}>
+        {sourceLink ? <a href={sourceLink.href} target="_blank" rel="noopener noreferrer"
+          aria-label={sourceLink.kind === "site_home" ? `${event.title} — ${sourceLink.text}` : event.title}
+          className="flex min-h-11 items-center gap-1.5 no-underline hover:text-parranda-live focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-parranda-live">
+          <span className="min-w-0">{event.title}</span>
+          <ExternalIcon className="h-3.5 w-3.5 text-parranda-ink/60" />
+        </a> : event.title}
+      </Heading>
       <LiveEventTiming event={event} lang={lang} now={now} selectedDate={selectedDate} timing={timing} />
       {(place || distance) && <p className="text-sm leading-relaxed text-parranda-ink/75">
         {place}{place && distance ? " · " : ""}{distance && <span className="font-semibold text-parranda-live">{distance}</span>}

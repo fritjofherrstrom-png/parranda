@@ -27,7 +27,7 @@ test('Live card timing stays in natural case with a separate visible uncertainty
     assert.ok(clockBox.y+clockBox.height<=placeBox.y+1,'place follows timing on a separate line');
     assert.equal(await page.getByText(lang==='en'?'Check current days and times with the organiser.':'Se aktuella dagar och tider hos arrangören.',{exact:true}).isVisible(),true);
     assert.equal(await page.getByText('© Source owner — CC BY 4.0',{exact:true}).isVisible(),true,'required credit remains visible');
-    assert.equal(await page.locator('a[href="https://venue.example/event"]').isVisible(),true,'destination stays outside disclosure');
+    assert.equal(await page.locator('p a[href="https://venue.example/event"]').isVisible(),true,'destination stays outside disclosure');
     assert.doesNotMatch(await page.locator('section').innerText(),/0414-719|info@kiviksmusteri/);
     const details=page.locator('summary').filter({hasText:lang==='en'?'Source details':'Källinformation'});
     await details.click();

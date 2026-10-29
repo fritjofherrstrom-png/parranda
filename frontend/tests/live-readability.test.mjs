@@ -74,7 +74,7 @@ for (const lang of ['en', 'sv']) test(`${lang} card and sheet separate title, pe
     assert.ok(exactParagraph(row, PERIOD_NOTE[lang]), 'period uncertainty is a separate, visible sentence');
     assert.ok(exactParagraph(row, 'Stibyvägen 10, Gärsnäs'), 'the address has its own line');
     assert.equal(row.querySelector('h3,h4,h5').textContent, reportedRows[0].title, 'source title remains unchanged');
-    const link = row.querySelector(`a[href="${source.source_url}"]`);
+    const link = row.querySelector(`p a[href="${source.source_url}"]`);
     assert.ok(link); assert.equal(link.textContent.replace(/\s*↗$/, ''), 'venue.example');
     const details = [...row.querySelectorAll('details')].find(d => /Source details|Källinformation/.test(d.querySelector('summary')?.textContent));
     assert.ok(details, 'long feed attribution has an explicitly named disclosure');
@@ -191,4 +191,26 @@ for (const lang of ['en', 'sv']) test(`${lang} route event timing keeps the same
   t.after(() => h.unmount());
   assert.ok(exactParagraph(h.container, PERIOD_NOTE[lang]));
   assert.ok(paragraphs(h.container).some(p => p.textContent.includes('09:30–15:30') && !p.textContent.includes(PERIOD_NOTE[lang])));
+});
+
+for (const lang of ['en', 'sv']) test(`${lang} event title opens its classified source and distinguishes a homepage`, async t => {
+  const rows = [
+    period('linked-page', 'Concert at the venue', 'Venue'),
+    period('home-only', 'Comedy night', 'Venue', { source_url: 'https://venue.example/', source_link_kind: 'site_home' }),
+    period('no-link', 'Event without a source link', 'Venue', { source_url: undefined, source_link_kind: undefined, source_link_host: undefined }),
+  ];
+  const h = await composed(t, lang, rows);
+  const check = root => {
+    const pageTitle = eventRow(root, rows[0].title).querySelector('h3 a,h4 a,h5 a');
+    assert.equal(pageTitle?.getAttribute('href'), source.source_url);
+    const homeRow = eventRow(root, rows[1].title);
+    const homeTitle = homeRow.querySelector('h3 a,h4 a,h5 a');
+    assert.equal(homeTitle?.getAttribute('href'), 'https://venue.example/');
+    assert.match(homeTitle?.getAttribute('aria-label') || '', lang === 'en' ? /homepage/i : /startsida/i);
+    assert.match(homeRow.textContent, lang === 'en' ? /not the event page/ : /inte evenemangssidan/);
+    assert.equal(eventRow(root, rows[2].title).querySelector('h3 a,h4 a,h5 a'), null);
+  };
+  check(card(h));
+  await click(h, /See all live|Se allt live/);
+  check(h.container.querySelector('[role="dialog"]'));
 });

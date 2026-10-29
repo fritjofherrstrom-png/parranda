@@ -15,7 +15,7 @@ export default function LiveEventTiming({ event, lang, now, selectedDate, timing
   const notice = eventTimingNotice(event, lang);
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <p className="max-w-full whitespace-normal text-sm font-semibold leading-snug text-parranda-live tabular-nums [overflow-wrap:anywhere]">{label}</p>
+      <p className="max-w-full whitespace-normal text-sm font-medium leading-snug text-parranda-live tabular-nums [overflow-wrap:anywhere]">{label}</p>
       {notice && <p className="text-xs leading-relaxed text-parranda-ink/68">{notice}</p>}
     </div>
   );
