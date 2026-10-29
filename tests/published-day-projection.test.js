@@ -63,11 +63,27 @@ test('projects a real final promoted typed publication, not its diagnostic trial
   assert.ok(projected, 'a valid authoritative final publication must project');
   assert.deepEqual(projected.result.days[0].primary_route.main_stops.map(s => s.id), published.days[0].primary_route.main_stops.map(s => s.id));
   assert.deepEqual(projected.result.days[0].primary_route.map_path_points, published.days[0].primary_route.map_path_points);
+  assert.equal(published.days[0].primary_route.geometry_source, 'heuristic', 'geometry provenance survives the generic composition label');
+  assert.equal(projected.result.days[0].primary_route.geometry_source, 'heuristic');
   assert.equal(classifyAnywhereResult(projected.result).status, classifyAnywhereResult(published).status);
   assert.equal(projected.intent.place, 'Northport, Testland');
   assert.equal(projected.intent.placeRef, 'r123456');
   assert.equal(projected.result.agnostic_route_output_experiment.experimental_route, undefined);
   captureEvidence('ordinary',published,projected,intent(),privacy());
+});
+
+test('the trusted selected-day forecast survives exact public-day projection with ordinary weather', async () => {
+  const published = await publication({ weather: { maxTemp: 99, rawCode: 95 } }, {
+    weatherProvider: async () => ({ maxTemp: 21, rawCode: 3, condition: 'clouds', source: 'controlled-provider', stale: false,
+      fetched_at: '2026-05-25T09:00:00Z', timezone_resolution: { timezone: 'Europe/Rome', timezone_source: 'weather_provider_auto' } }),
+  });
+  assert.equal(published.days[0].dayflow_context, undefined, 'ordinary weather still has no composition explanation');
+  assert.deepEqual(published.days[0].weather_summary, {
+    date: DATE, max_temp: 21, condition: 'clouds', source: 'controlled-provider', fetched_at: '2026-05-25T09:00:00Z', stale: false,
+  }, 'trusted provider supplies the summary, never request-body weather');
+  const projected = projectPublishedDay({ published, intent: intent(), privacy: privacy(), language: 'en' });
+  assert.ok(projected);
+  assert.deepEqual(projected.result.days[0].weather_summary, published.days[0].weather_summary);
 });
 
 for (const [rhythm, count] of [['full', 6], ['calm', 4]]) test(`a released ${rhythm} extent projects and restores date-bound exclusions without a count ceiling`, async () => {

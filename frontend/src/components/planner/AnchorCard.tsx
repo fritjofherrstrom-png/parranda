@@ -43,6 +43,7 @@ export default function AnchorCard({
   onSetRhythm,
   onChangePlace,
   rebuild = null,
+  compact = false,
 }: {
   t: Translate;
   lang: Lang;
@@ -68,6 +69,8 @@ export default function AnchorCard({
   /** A plain left-click on "Change": the planner cancels work it no longer needs. */
   onChangePlace: () => void;
   rebuild?: AdjustRebuild;
+  /** A day is on screen: its heading names the place and date above this card. */
+  compact?: boolean;
 }) {
   // Opening swaps "Adjust" for "Done" (and closing swaps back), so the button
   // that had keyboard focus leaves the DOM. Move focus to its counterpart, but
@@ -105,35 +108,31 @@ export default function AnchorCard({
   return (
     // No overflow-hidden: Change and Adjust sit 6px from the card's edge, and
     // clipping would cut their focus rings.
-    <section aria-label={t("Dagens utgångspunkt", "Your day's starting point")} className={panelCard}>
-      <div className="flex min-h-14 flex-wrap items-center gap-2.5 py-1.5 pl-4 pr-1.5">
-        <LocationIcon className="h-4 w-4 text-parranda-ember" />
-        {/* Wraps rather than truncates: at large text sizes "· tomorrow" was
-            cut off. Below ~10rem the row wraps and Change moves under it. */}
-        <span className="min-w-[min(100%,10rem)] flex-1 break-words text-base font-extrabold text-parranda-ink">
-          {anchorLabel}
-          <span className="font-medium text-parranda-ink/68">
-            {" · "}
-            {publishedDateLabel ?? (dayOffset === 0 ? t("idag", "today") : t("imorgon", "tomorrow"))}
+    <section aria-label={t("Dagens utgångspunkt", "Your day's starting point")} className={compact ? "flex flex-col" : panelCard}>
+      {/* With a day on screen its heading names the place and the date and
+          carries Change, so only the picks and Adjust stay here: one plain
+          row under the heading, no card of its own. */}
+      {!compact && (
+        <div className="flex min-h-14 flex-wrap items-center gap-2.5 py-1.5 pl-4 pr-1.5">
+          <LocationIcon className="h-4 w-4 text-parranda-ember" />
+          {/* Wraps rather than truncates: at large text sizes "· tomorrow" was
+              cut off. Below ~10rem the row wraps and Change moves under it. */}
+          <span className="min-w-[min(100%,10rem)] flex-1 break-words text-base font-extrabold text-parranda-ink">
+            {anchorLabel}
+            <span className="font-medium text-parranda-ink/68">
+              {" · "}
+              {publishedDateLabel ?? (dayOffset === 0 ? t("idag", "today") : t("imorgon", "tomorrow"))}
+            </span>
           </span>
-        </span>
-        <a
-          href={`/?lang=${lang}`}
-          onClick={(event) => {
-            if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
-              onChangePlace();
-            }
-          }}
-          aria-label={t("Byt plats", "Change place")}
-          className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-parranda-ink/8 px-4 text-13 font-bold text-parranda-ink transition hover:bg-parranda-ink/14"
-        >
-          {t("Byt", "Change")}
-        </a>
-      </div>
+          <ChangePlaceLink t={t} lang={lang} onChangePlace={onChangePlace} />
+        </div>
+      )}
 
       {!adjustOpen && (
-        <div className="flex min-h-12 flex-wrap items-center gap-2.5 border-t border-parranda-ink/10 py-1.5 pl-4 pr-1.5">
-          <span className="min-w-[min(100%,10rem)] flex-1 text-13 leading-snug text-parranda-ink/72">
+        <div className={compact
+          ? "flex min-h-11 items-center justify-between gap-3"
+          : "flex min-h-12 flex-wrap items-center gap-2.5 border-t border-parranda-ink/10 py-1.5 pl-4 pr-1.5"}>
+          <span className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink/72">
             <strong className="font-bold text-parranda-ink">{moodLabel || t("Inga intressen", "No interests")}</strong>
             {` · ${t("Dagens rytm", "Day rhythm")}: ${walkLabel}`}
           </span>
@@ -142,7 +141,7 @@ export default function AnchorCard({
             ref={adjustButton}
             aria-expanded={false}
             onClick={() => toggleAdjust(true)}
-            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-line border-parranda-ink/18 px-3.5 text-13 font-bold text-parranda-ink transition hover:border-parranda-ink/50"
+            className={controlPill}
           >
             {t("Justera", "Adjust")}
             <ChevronDownIcon className="h-3.5 w-3.5" />
@@ -151,10 +150,11 @@ export default function AnchorCard({
       )}
 
       {adjustOpen && (
-        <div id={panelId} className="flex flex-col gap-4 border-t border-parranda-ink/10 p-4">
+        <div id={panelId} className={compact ? `${panelCard} flex flex-col gap-5 p-4` : "flex flex-col gap-5 border-t border-parranda-ink/10 p-4"}>
+          {/* The status line, then Done: the panel needs no title of its own,
+              the row it replaced said what it adjusts. */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 flex-col gap-1">
-              <Eyebrow>{t("Justera dagen", "Adjust the day")}</Eyebrow>
               {/* With the panel open on a phone, the day is below the screen:
                   this line is where the reader learns the day is rebuilding,
                   then what the rebuild changed. */}
@@ -187,7 +187,7 @@ export default function AnchorCard({
               aria-expanded={true}
               aria-controls={panelId}
               onClick={() => toggleAdjust(false)}
-              className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-line border-parranda-ink/18 px-3.5 text-13 font-bold text-parranda-ink transition hover:border-parranda-ink/50"
+              className={controlPill}
             >
               {t("Klar", "Done")}
               <ChevronDownIcon className="h-3.5 w-3.5 rotate-180" />
@@ -242,7 +242,10 @@ export default function AnchorCard({
             )}
           </div>
 
-          <div className="flex flex-col gap-2 border-t border-parranda-ink/10 pt-4">
+          {/* When and rhythm are one short row of settings: side by side
+              where there is room, stacked on a phone, no rules between. */}
+          <div className="grid gap-5 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-8">
+          <div className="flex flex-col gap-2">
             <Eyebrow tone="glow">{t("När", "When")}</Eyebrow>
             <div className={segmentGroup} role="group" aria-label={t("Vilken dag", "Which day")}>
               {([0, 1] as const).map((offset) => (
@@ -258,7 +261,7 @@ export default function AnchorCard({
               choice. "Parranda chooses" sits apart: it is no fourth step.
               Each tap sets one value and recomposes once (the orchestrator
               owns that and Undo); nothing is sent while choosing. */}
-          <div className="flex flex-col gap-2 border-t border-parranda-ink/10 pt-4">
+          <div className="flex min-w-0 flex-col gap-2">
             <div className="flex min-h-11 items-center justify-between gap-3">
               <Eyebrow tone="glow">{t("Dagens rytm", "Day rhythm")}</Eyebrow>
               {free && (
@@ -317,9 +320,34 @@ export default function AnchorCard({
               </p>
             )}
           </div>
-
+          </div>
         </div>
       )}
     </section>
+  );
+}
+
+/** Change, Adjust and Done are the day's controls; they look alike. */
+const controlPill = "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-line border-parranda-ink/18 px-3.5 text-13 font-bold text-parranda-ink transition hover:border-parranda-ink/50";
+
+/**
+ * "Change": back to the landing for another place. A plain left-click lets the
+ * planner cancel work it no longer needs; the link still works on its own.
+ * Beside the day's title once a day is on screen, in the card before that.
+ */
+export function ChangePlaceLink({ t, lang, onChangePlace }: { t: Translate; lang: Lang; onChangePlace: () => void }) {
+  return (
+    <a
+      href={`/?lang=${lang}`}
+      onClick={(event) => {
+        if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+          onChangePlace();
+        }
+      }}
+      aria-label={t("Byt plats", "Change place")}
+      className={controlPill}
+    >
+      {t("Byt", "Change")}
+    </a>
   );
 }

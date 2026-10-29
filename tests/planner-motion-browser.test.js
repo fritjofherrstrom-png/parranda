@@ -136,7 +136,7 @@ for (const [width, reducedMotion] of [[375, 'no-preference'], [1280, 'no-prefere
       assert.equal(shape.sheen, 'parranda-sheen'); assert.equal(shape.breathe, 'parranda-breathe'); assert.equal(shape.ringDraw, 'parranda-mark-draw');
       assert.deepEqual(shape.delays, ['0s', '0.3s', '0.6s', '0.9s', '1.2s']);
     }
-    if (width < 1024) assert.ok(shape.map.y >= shape.station.y + shape.station.height, 'phone: stops before map');
+    if (width < 1024) assert.ok(shape.map.y + shape.map.height <= shape.station.y, 'phone: the map\'s overview before the stops');
     else assert.ok(shape.map.x > shape.station.x + shape.station.width - 1, 'desktop: map in second column');
     h.release(h.initial);
     await page.getByRole('list', { name: 'The stops, in order', exact: true }).waitFor();

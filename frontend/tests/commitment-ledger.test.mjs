@@ -83,7 +83,7 @@ test("the way back is visible without opening anything", () => {
   // is effectively irreversible.
   const ledgerBlock = component.slice(
     component.indexOf("{(excludedCount > 0 || pinnedCount > 0 || liveChoiceCount > 0) && ("),
-    component.indexOf("{phase === \"loading\" && !staleNotice && ("),
+    component.indexOf("<DayPlaceholder part=\"body\""),
   );
   assert.ok(ledgerBlock.includes("Start over without my choices"), "the ledger renders above the day, not inside Adjust");
   assert.ok(ledgerBlock.includes('role="status"'));

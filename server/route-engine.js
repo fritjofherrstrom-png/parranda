@@ -17,6 +17,7 @@ const { normalizeSelectedDayHoursFact } = require("./place-candidates/opening-ho
 const { normalizeSourceWebsite } = require("./lib/source-website");
 const { normalizeTrustSummary } = require("./route-candidates/contract");
 const { buildDayflowContext } = require("./planner/dayflow-context");
+const { buildDayWeatherSummary } = require("./planner/day-weather-summary");
 const { daypartSlotForRole, SLOT_DAYPART } = require("./planner/agnostic-route-ordering");
 const { selectAgnosticCandidateSet } = require("./planner/agnostic-candidate-set");
 const { selectBalancedDay, orderBalancedDay, selectEditedDay, dayEditOutcome } = require("./planner/day-composition-policy");
@@ -228,6 +229,8 @@ function buildAgnosticComposeTemplate(targetKm) {
 
 function markAgnosticComposeRoute(route) {
   if (route && typeof route === "object") {
+    // Composition provenance must not erase the source of the map geometry.
+    if (route.routing_source === "heuristic" || route.routing_source === "osrm") route.geometry_source = route.routing_source;
     route.routing_source = "agnostic_compose";
     route.confidence = "low";
   }
@@ -7230,6 +7233,7 @@ async function generateRecommendations({
         if (!primary || agnosticTooThin || manualEmptyDay || primaryEdit?.status === 'refused') {
           days.push({
             date,
+            weather_summary: buildDayWeatherSummary(weather, date),
             ...(primaryEdit ? { day_edit: primaryEdit } : {}),
             ...(manualEmptyDay ? { manual_empty_day: true } : {}),
             date_signals: dateSignals,
@@ -7282,6 +7286,7 @@ async function generateRecommendations({
 
         days.push({
           date,
+          weather_summary: buildDayWeatherSummary(weather, date),
           date_signals: dateSignals,
           live_events: annotatedLiveEvents,
           primary_route: primary.route,

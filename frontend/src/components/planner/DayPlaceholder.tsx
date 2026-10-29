@@ -2,13 +2,13 @@ import type { ReactNode } from "react";
 
 /**
  * The shape of the day that is coming, in the order the day lands: the
- * heading and its facts, the stops on their line, and — on a phone — the map
- * after them (StopLine: "on a phone the day comes first"). Wide screens hold
- * the map's column with DayMapPlaceholder instead, so the day arrives where
- * its shape stood rather than jumping down or sideways.
+ * compact title and its date, the day's facts, then — on a phone — the map's
+ * short overview and the stops on their line. Wide screens hold the map's
+ * column with DayMapPlaceholder instead, so the day arrives where its shape
+ * stood rather than jumping down or sideways.
  *
  * Decorative only: it carries no place, number or claim. The status line
- * passed in sits where "Your day" will, and is the one thing a reader hears.
+ * passed in sits above the title's shape, and is the one thing a reader hears.
  *
  * Every bar and frame carries the same slow sheen (skeleton + parranda-sheen
  * in tailwind.css) and the stations breathe in a soft wave down the line
@@ -23,41 +23,47 @@ const bar = `${shape} rounded-full`;
 // line does not read as a table.
 const NAME_WIDTHS = ["62%", "46%", "70%", "54%", "40%"];
 
-export default function DayPlaceholder({ status, inlineMap }: { status: ReactNode; inlineMap: boolean }) {
-  return (
-    <div className="flex flex-col">
-      {/* DayHeader's rhythm: eyebrow row, heading, facts — gap-5 apart. */}
-      <div className="flex flex-col gap-5">
+/**
+ * `part` splits the shape around the anchor card, which stands between the
+ * day's title and the rest while the day composes: "heading" goes above the
+ * card, "body" below it.
+ */
+export default function DayPlaceholder({ status, inlineMap = true, part = "all" }: { status?: ReactNode; inlineMap?: boolean; part?: "all" | "heading" | "body" }) {
+  const heading = (
+      <div className="flex flex-col gap-4">
         {status}
-        <div aria-hidden="true" data-day-shape="heading" className="flex flex-col gap-5">
-          <div className="flex flex-col gap-2">
-            <div className={`${bar} h-8 w-2/5 lg:h-11`} />
-            <div className={`${bar} h-10 w-4/5 sm:h-12 lg:h-14`} />
+        {/* DayHeader's title row (the title, Change beside it) and the date. */}
+        <div aria-hidden="true" data-day-shape="heading" className="flex flex-col gap-1.5">
+          <div className="flex min-h-11 items-center justify-between gap-3">
+            <div className={`${bar} h-7 w-3/5`} />
+            <div className={`${bar} h-11 w-24`} />
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            <div className={`${bar} h-6 w-28`} />
-            <div className={`${bar} h-6 w-16`} />
-          </div>
-          {/* What the day did for each pick. A note on missing sources only
-              stands when a source fell short, so the shape leaves it out: it
-              is the healthy day that should land without moving. */}
-          <div className="flex flex-wrap gap-2">
-            <div className={`${bar} h-6 w-28`} />
-            <div className={`${bar} h-6 w-20`} />
-            <div className={`${bar} h-6 w-24`} />
-          </div>
+          <div className={`${bar} h-4 w-40`} />
         </div>
       </div>
+  );
 
-      {/* A phone's stops follow the header closely (StopLine's -mt-6); wide
-          screens open with the "About this day" line first. */}
-      <div aria-hidden="true" className={inlineMap ? "mt-4" : "mt-10"}>
-        {!inlineMap && (
-          <div className="flex min-h-11 items-center">
-            <div className={`${bar} h-3 w-40`} />
-          </div>
-        )}
-        <div className={(inlineMap ? "" : "mt-8 ") + "mb-3 flex min-h-9 items-center justify-between gap-3"}>
+  const body = (
+      <div aria-hidden="true" className={"flex flex-col" + (part === "body" ? "" : " mt-4")}>
+        <div className="flex flex-wrap gap-1.5">
+          <div className={`${bar} h-6 w-28`} />
+          <div className={`${bar} h-6 w-16`} />
+        </div>
+        {/* What the day did for each pick. A note on missing sources only
+            stands when a source fell short, so the shape leaves it out: it
+            is the healthy day that should land without moving. */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <div className={`${bar} h-6 w-28`} />
+          <div className={`${bar} h-6 w-20`} />
+          <div className={`${bar} h-6 w-24`} />
+        </div>
+        {/* On a phone the route opens with the map's overview, the strip it
+            will be; then "About this day and map" and the stops' heading. */}
+        {inlineMap && <div data-day-shape="map" className={`${shape} mt-8 h-52 rounded-parranda`} />}
+        <div className={(inlineMap ? "mt-2" : "mt-8") + " flex min-h-11 items-center"}>
+          <div className={`${bar} h-3 w-40`} />
+        </div>
+        <div className="mb-3 mt-8 flex min-h-9 items-center justify-between gap-3">
           <div className={`${bar} h-3 w-36`} />
           <div className={`${bar} h-9 w-32`} />
         </div>
@@ -90,15 +96,15 @@ export default function DayPlaceholder({ status, inlineMap }: { status: ReactNod
             </div>
           ))}
         </div>
-        {inlineMap && (
-          <>
-            <div data-day-shape="map" className={`${shape} mt-8 h-48 rounded-parranda sm:h-60`} />
-            <div className="flex min-h-11 items-center">
-              <div className={`${bar} h-3 w-40`} />
-            </div>
-          </>
-        )}
       </div>
+  );
+
+  if (part === "heading") return heading;
+  if (part === "body") return body;
+  return (
+    <div className="flex flex-col">
+      {heading}
+      {body}
     </div>
   );
 }
