@@ -10,7 +10,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
 import { walkingDistanceLabel } from "../../lib/route-context-view.mjs";
-import { CheckIcon, ExternalIcon, HalfCircleIcon, MinusIcon, SearchIcon, ShareIcon, StarIcon, SunIcon, WalkIcon } from "../shared/icons";
+import { CheckIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, MinusIcon, RainIcon, SearchIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
 import { busyButton, buttonClass, compactPillTarget, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
@@ -24,13 +24,30 @@ type PickCoverage = { key: string; state: "covered" | "partial" | "missing" | "p
 // The day's facts are labels, not choices (ui.tsx labelChip).
 const metaChip = labelChip;
 
-/** The weather source's daily summary (server/weather.js), in the reader's words. */
+/** The source's daily condition, separate from its effect on day composition. */
 const WEATHER_CONDITIONS: Record<string, [string, string]> = {
   sun: ["Sol", "Sun"],
+  partly_cloudy: ["Växlande", "Partly cloudy"],
   clouds: ["Moln", "Clouds"],
+  fog: ["Dimma", "Fog"],
   rain: ["Regn", "Rain"],
+  snow: ["Snö", "Snow"],
+  thunderstorm: ["Åska", "Thunderstorms"],
   mixed: ["Växlande", "Mixed"],
 };
+const WEATHER_ICONS: Record<string, typeof SunIcon> = {
+  sun: SunIcon, partly_cloudy: CloudSunIcon, clouds: CloudIcon, fog: FogIcon,
+  rain: RainIcon, snow: SnowIcon, thunderstorm: ThunderstormIcon, mixed: CloudSunIcon,
+};
+// Match the provider's fresh-cache window (server/weather.js). Saved answers
+// keep their original observation time; restoring one cannot renew its weather.
+const FORECAST_FRESH_MS = 30 * 60 * 1000;
+
+function selectedDate(value: string | null | undefined): Date | null {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? date : null;
+}
 
 /**
  * The place name is set like a station sign: as large as the column allows for
@@ -159,7 +176,8 @@ export default function DayHeader({
   placeLabel,
   anchorLabel,
   primaryRoute,
-  weather,
+  date,
+  weatherSummary,
   coreCount,
   wovenCount,
   pickCoverage,
@@ -181,8 +199,10 @@ export default function DayHeader({
   placeLabel: string | null | undefined;
   anchorLabel: string;
   primaryRoute: any;
-  /** The selected date's weather read (dayflow_context), present only when the server has one. */
-  weather: any;
+  /** The date of the answer on screen, including held or restored days. */
+  date: string | null | undefined;
+  /** A trusted selected-day forecast; absence never gets a weather guess. */
+  weatherSummary: any;
   coreCount: number;
   wovenCount: number;
   pickCoverage: PickCoverage[];
@@ -199,19 +219,29 @@ export default function DayHeader({
   resolveAndRun: () => void;
 }) {
   // The day's facts as quiet chips: how far, how many stops, and the day's
-  // weather when the server read one for this date. The anchor card above
-  // already says which day; each stop states its own walk.
+  // weather when the server read one for this exact date; each stop states its own walk.
   const distance = Number.isFinite(primaryRoute?.estimated_km)
     ? `≈ ${walkingDistanceLabel(primaryRoute.estimated_km, lang)} ${t("till fots", "on foot")}`
     : null;
   const stops = `${coreCount} ${coreCount === 1 ? t("stopp", "stop") : t("stopp", "stops")}` +
     (wovenCount > 0 ? ` + ${wovenCount} live${lang === "en" ? " event" : "-event"}` : "");
-  const observed = weather?.provenance?.observed;
-  const condition = WEATHER_CONDITIONS[String(observed?.condition || "")];
-  // Only a current read with a real temperature; a stale forecast is not shown as the day's weather.
+  const displayedDate = selectedDate(date);
+  const condition = WEATHER_CONDITIONS[String(weatherSummary?.condition || "")];
+  const WeatherIcon = WEATHER_ICONS[String(weatherSummary?.condition || "")];
+  const forecastFetchedAt = typeof weatherSummary?.fetched_at === "string" ? Date.parse(weatherSummary.fetched_at) : NaN;
+  const forecastExpiresAt = forecastFetchedAt + FORECAST_FRESH_MS;
+  const [expiredForecast, setExpiredForecast] = useState<number | null>(null);
+  useEffect(() => {
+    const remaining = forecastExpiresAt - Date.now();
+    if (!Number.isFinite(remaining) || remaining <= 0) return;
+    const timer = setTimeout(() => setExpiredForecast(forecastExpiresAt), remaining);
+    return () => clearTimeout(timer);
+  }, [forecastExpiresAt]);
+  const forecastFresh = Number.isFinite(forecastFetchedAt) && forecastFetchedAt <= Date.now() + 5 * 60 * 1000
+    && forecastExpiresAt > Date.now() && expiredForecast !== forecastExpiresAt;
   const allPicksCovered = pickCoverage.length > 0 && pickCoverage.every(({ state }) => state === "covered");
-  const weatherChip = !weather?.provenance?.stale && Number.isFinite(observed?.max_temp)
-    ? [condition ? t(condition[0], condition[1]) : null, `${t("max", "high")} ${Math.round(observed.max_temp)}°`].filter(Boolean).join(" · ")
+  const weatherChip = forecastFresh && displayedDate && weatherSummary?.date === date && weatherSummary?.stale === false && Number.isFinite(weatherSummary?.max_temp)
+    ? `${Math.round(weatherSummary.max_temp)}°`
     : null;
   // The parent temporarily omits source notes while updating. They still
   // describe the held day, and its focused update action must stay mounted.
@@ -264,17 +294,14 @@ export default function DayHeader({
           </>
         )}
       </div>
-      <h1 ref={headingRef} tabIndex={-1} className="type-title text-[2.5rem] text-parranda-ink sm:text-5xl lg:text-[3.25rem]">
-        {mode === "near_me" && !placeLabel ? (
-          <>
-            {t("En dag", "A day")} <PlaceSign text={t("nära dig", "near you")} />
-          </>
-        ) : (
-          <>
-            {t("En dag i", "A day in")} <PlaceSign text={anchorLabel} />
-          </>
-        )}
-      </h1>
+      <div className="flex flex-col gap-2">
+        <h1 ref={headingRef} tabIndex={-1} className="type-title text-parranda-ink">
+          <PlaceSign text={mode === "near_me" && !placeLabel ? t("nära dig", "near you") : anchorLabel} />
+        </h1>
+        {displayedDate && <time dateTime={date!} className="text-15 leading-snug text-parranda-ink/75">
+          {displayedDate.toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
+        </time>}
+      </div>
       <ul className="flex flex-wrap gap-1.5" aria-label={t("Om dagen", "About the day")}>
         {distance && (
           <li className={metaChip}>
@@ -284,9 +311,13 @@ export default function DayHeader({
         )}
         <li className={metaChip}>{stops}</li>
         {weatherChip && (
-          <li className={metaChip}>
-            {observed?.condition === "sun" && <SunIcon className="h-3.5 w-3.5 text-parranda-ink/72" />}
-            {weatherChip}
+          <li className="inline-flex items-center gap-1.5">
+            <span className={metaChip} aria-label={t(`Prognosens högsta temperatur: ${weatherChip}C${condition ? `. ${condition[0]}` : ""}`, `Forecast high: ${weatherChip}C${condition ? `. ${condition[1]}` : ""}`)}
+              title={t("Prognosens högsta temperatur", "Forecast high")}>{weatherChip}</span>
+            {condition && <span className={metaChip}>
+              {WeatherIcon && <WeatherIcon className="h-3.5 w-3.5 text-parranda-ink/72" />}
+              {t(condition[0], condition[1])}
+            </span>}
           </li>
         )}
         {/* Every pick in the day: one fact here instead of repeating the picks

@@ -83,6 +83,7 @@ const dayFacts = (h) =>
   [...(h.container.querySelector('ul[aria-label="About the day"]')?.children ?? [])].map((li) => li.textContent.trim());
 const withWeather = (stale) => {
   const day = composedDay();
+  day.days[0].weather_summary = { date: '2026-09-25', max_temp: 11.6, condition: 'rain', source: 'open-meteo', fetched_at: new Date().toISOString(), stale };
   day.days[0].dayflow_context = {
     weather: { kind: "rain", headline: "Rain", provenance: { stale, observed: { condition: "rain", max_temp: 11.6 } } },
   };
@@ -165,12 +166,79 @@ test("the header states the day's facts as chips, without the day word or the lo
 
 test("the day's weather joins the facts when the server read one for the date", async (t) => {
   const h = await plannerWith(t, withWeather(false));
-  assert.deepEqual(dayFacts(h), ["≈ 2.1 km on foot", "3 stops", "Rain · high 12°"]);
+  assert.deepEqual(dayFacts(h), ["≈ 2.1 km on foot", "3 stops", "12°Rain"]);
+  assert.match(header(h).querySelector('[aria-label*="Forecast high"]').getAttribute('aria-label'), /12.*Rain/);
+});
+
+test('the city leads the heading with the actual selected date directly below it', async t => {
+  const h = await plannerWith(t, composedDay());
+  assert.equal(header(h).querySelector('h1').textContent, 'Testville');
+  const date = header(h).querySelector('time');
+  assert.equal(date?.dateTime, '2026-09-25');
+  assert.match(date?.textContent, /Fri,? 25 Sept 2026/);
+  assert.ok(header(h).querySelector('h1').compareDocumentPosition(date) & h.window.Node.DOCUMENT_POSITION_FOLLOWING);
+});
+
+test('a weather summary for another day is not shown beside the selected date', async t => {
+  const body = withWeather(false);
+  body.days[0].weather_summary.date = '2026-09-26';
+  const h = await plannerWith(t, body);
+  assert.deepEqual(dayFacts(h), ['≈ 2.1 km on foot', '3 stops']);
+});
+
+test('the compact weather badge distinguishes thunderstorms and keeps a zero high', async t => {
+  const body = withWeather(false);
+  body.days[0].weather_summary.condition = 'thunderstorm';
+  body.days[0].weather_summary.max_temp = 0;
+  const h = await plannerWith(t, body);
+  assert.deepEqual(dayFacts(h), ['≈ 2.1 km on foot', '3 stops', '0°Thunderstorms']);
 });
 
 test("a stale forecast is not shown as the day's weather", async (t) => {
   const h = await plannerWith(t, withWeather(true));
   assert.deepEqual(dayFacts(h), ["≈ 2.1 km on foot", "3 stops"]);
+});
+
+test('a forecast with missing temperature never becomes zero degrees', async t => {
+  const body = withWeather(false);
+  body.days[0].weather_summary.max_temp = null;
+  const h = await plannerWith(t, body);
+  assert.deepEqual(dayFacts(h), ['≈ 2.1 km on foot', '3 stops']);
+});
+
+test('a forecast expires on the open day without changing or reacquiring the route', async t => {
+  const h = await plannerWith(t, withWeather(false));
+  assert.match(dayFacts(h).join(' '), /12°/);
+  const calls = h.fetchMock.calls.length;
+  await h.clock.advance(30 * 60 * 1000);
+  assert.deepEqual(dayFacts(h), ['≈ 2.1 km on foot', '3 stops']);
+  assert.equal(h.fetchMock.calls.length, calls, 'expiry is presentation only, never a fresh acquisition');
+  assert.equal(header(h).querySelector('h1').textContent, 'Testville');
+});
+
+test('restoring a saved day does not present an expired or undated forecast as fresh', async t => {
+  for (const fetchedAt of [new Date(Date.now() - 60 * 60 * 1000).toISOString(), null]) {
+    let first = await mountPlanner({url: PLACE_URL});
+    let restored;
+    try {
+      await first.clock.advance(500);
+      const body = withWeather(false);
+      body.days[0].weather_summary.fetched_at = fetchedAt;
+      await first.fetchMock.respond(first.fetchMock.pending()[0], body);
+      await first.clock.advance(50);
+      const storage = browserStorage(first.window.localStorage);
+      assert.equal(storage['parranda:anywhere:last'].safeResponse.days[0].weather_summary.stale, false);
+      await first.unmount(); first = null;
+      restored = await mountPlanner({url:'http://localhost/anywhere?restore=last&lang=en', storage});
+      await restored.clock.advance(500);
+      assert.match(restored.text(), /Saved day/);
+      assert.deepEqual(dayFacts(restored), ['≈ 2.1 km on foot', '3 stops']);
+      assert.equal(restored.fetchMock.calls.length, 0);
+    } finally {
+      if (first) await first.unmount();
+      if (restored) await restored.unmount();
+    }
+  }
 });
 
 test("without stop-level coverage evidence the header claims nothing about the picks", async (t) => {
@@ -282,7 +350,7 @@ test("switching language keeps the exact accepted answer and its own inputs", as
   translated = await mountPlanner({ url: target.href, storage, sessionStorage, props: { lang: "sv" }, navigationType: "navigate" });
   await translated.clock.advance(2000);
   assert.equal(translated.fetchMock.calls.length, 0, "language is presentation only, not new acquisition");
-  assert.match(translated.container.querySelector("header h1").textContent, /^En dag i Testville$/);
+  assert.equal(translated.container.querySelector("header h1").textContent, 'Testville');
   assert.match(translated.text(), /Place a/);
   assert.match(translated.text(), /Place b/);
   assert.deepEqual(translated.readStorage("parranda:anywhere:last"), before,

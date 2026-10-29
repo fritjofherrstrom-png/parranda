@@ -3015,7 +3015,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           placeLabel={mode === "near_me" ? null : classification?.placeLabel}
           anchorLabel={anchorLabel}
           primaryRoute={primaryRoute}
-          weather={dayflow?.weather ?? null}
+          date={safeResponse?.days?.[0]?.date}
+          weatherSummary={safeResponse?.days?.[0]?.weather_summary ?? null}
           coreCount={split.core.length}
           wovenCount={split.woven.length}
           pickCoverage={shownPickCoverage}

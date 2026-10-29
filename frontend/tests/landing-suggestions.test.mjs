@@ -165,3 +165,32 @@ test('editing the text after choosing a row drops that chosen identity',async()=
   assert.equal(h.window.sessionStorage.getItem('parranda:place-choice'),null,'a changed name never travels with the old selection');
  }finally{await h.unmount();}
 });
+
+test('pressing Build my day keeps the open suggestion layout stable until activation', async () => {
+ const h = await mount();
+ try {
+  await type(h, 'Harbour Quarter');
+  await h.clock.advance(200);
+  await h.fetchMock.respond(h.fetchMock.calls[0], {status:'ready', choices:[choice()]});
+  const input = h.document.querySelector('#landingCity');
+  const submit = h.document.querySelector('button[type=submit]');
+  await h.act(() => input.focus());
+  assert.ok(h.document.querySelector('[role=listbox]'));
+  // Browsers focus a pressed submit button before pointer-up. On mobile the
+  // resulting blur used to remove the in-flow list and move the button away
+  // from the pointer, so the click never reached the form. jsdom has no layout;
+  // model only that native focus default, then check the real component state.
+  await h.act(() => {
+   const press = new h.window.MouseEvent('pointerdown', {bubbles:true,cancelable:true,button:0});
+   if (submit.dispatchEvent(press)) submit.focus();
+  });
+  assert.ok(h.document.querySelector('[role=listbox]'), 'the pointer target must not move before release');
+  assert.equal(input.value, 'Harbour Quarter');
+  assert.equal(h.window.sessionStorage.getItem('parranda:place-choice'), null, 'a pointer press must not silently choose the first result');
+  // Keyboard focus still dismisses suggestions normally; the submit button
+  // remains a standard button available to Tab and Enter.
+  await h.act(() => submit.focus());
+  assert.equal(h.document.querySelector('[role=listbox]'), null);
+  assert.equal(h.document.activeElement, submit);
+ } finally { await h.unmount(); }
+});

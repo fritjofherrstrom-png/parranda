@@ -52,6 +52,7 @@ const { buildAgnosticRouteOrdering, daypartForRole, fixedDaypartForRole, timeBan
 const { resolveWalkableMicroBase } = require("./walkable-micro-base");
 const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-route-context");
 const { buildDayflowContext } = require("./dayflow-context");
+const { buildDayWeatherSummary } = require("./day-weather-summary");
 const { calibrateAgnosticRouteReadiness } = require("./agnostic-route-readiness-calibration");
 const { buildAgnosticConstraintNegotiation } = require("./agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
@@ -1605,6 +1606,7 @@ async function composeAgnosticRouteOutputOnce({
   });
   attachWalkableMicroBaseToRoute(experimentalRoute, microBase.summary);
   const mutated = applyRouteMutation({ baselineResult, primaryRoute: experimentalRoute, date: effectiveDate });
+  if (mutated.days?.[0]) mutated.days[0].weather_summary = buildDayWeatherSummary(ctx?.weather, effectiveDate);
 
   // #262 — attach an honest day-level dayflow read when the trusted weather is
   // dayflow-relevant (buildDayflowContext returns null on boring weather). Live
@@ -1666,6 +1668,7 @@ async function composeAgnosticRouteViaEngine({
   candidateReadiness,
   sourceStatus,
   contextBlock,
+  ctx,
   baselineResult,
   walkingKmTarget,
   dayRhythm = null,
@@ -1778,7 +1781,7 @@ async function composeAgnosticRouteViaEngine({
       lang,
       pinnedStopIds: Array.isArray(pins) ? pins : [],
     });
-    return sanitizeAgnosticEngineDay({
+    const day = sanitizeAgnosticEngineDay({
       day: (engineResult && Array.isArray(engineResult.days) && engineResult.days[0]) || null,
       // Route PROSE uses the attested label or neutral fallback — never the
       // "Nearby" geometry placeholder from the coordinates-only config.
@@ -1786,6 +1789,8 @@ async function composeAgnosticRouteViaEngine({
       lang,
       anchorMode,
     });
+    if (day) day.weather_summary = buildDayWeatherSummary(ctx?.weather, effectiveDate);
+    return day;
   }
 
   // ONE finalisation pipeline, used for every candidate pin set and for the
@@ -2323,6 +2328,8 @@ function scrubAgnosticAppliedDay(result, engineDay) {
   } else {
     delete day.dayflow_context;
   }
+  if (engineDay?.weather_summary) day.weather_summary = engineDay.weather_summary;
+  else delete day.weather_summary;
 }
 
 function buildAgnosticRouteProse({ placeLabel, lang, curated = false }) {

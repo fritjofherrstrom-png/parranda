@@ -93,7 +93,7 @@ test("near-me headings and announcements stay near you even with a broad reverse
         assert.ok(compose, "coordinates compose without another permission prompt");
         await h.fetchMock.respond(compose, { ...composedDay(), ...(named ? { resolved_place_label: "Testville, Region, Country" } : {}) });
         await h.clock.advance(50);
-        assert.match(h.container.querySelector("h1").textContent, lang === "en" ? /^A day\s*near you$/ : /^En dag\s*nära dig$/);
+        assert.equal(h.container.querySelector("h1").textContent, context);
         assert.equal(compose.body.lat, 55.6);
         assert.equal(compose.body.lng, 13);
         const expected = lang === "en" ? `A day ${context} is ready: 3 stops.` : `En dag ${context} är klar: 3 stopp.`;
@@ -109,7 +109,7 @@ test("one h1, then h2 sections and h3 dayparts", async (t) => {
   const h = await planner(t);
   const headings = [...h.container.querySelectorAll("h1, h2, h3")].map((e) => `${e.tagName} ${e.textContent.trim()}`);
   assert.equal(headings.filter((x) => x.startsWith("H1")).length, 1, JSON.stringify(headings));
-  assert.match(headings[0], /^H1 A day in Testville/);
+  assert.equal(headings[0], 'H1 Testville');
   assert.ok(headings.includes("H2 The stops, in order"), JSON.stringify(headings));
   assert.ok(headings.includes("H3 Morning") && headings.includes("H3 Afternoon"), JSON.stringify(headings));
 });

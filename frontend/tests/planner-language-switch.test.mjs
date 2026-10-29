@@ -102,7 +102,7 @@ test("a Swedish near-me day asks in Swedish and names the reader's position", as
     "the request carries the page's language and does not opt coordinates into sharing");
   await answerDay(h, call);
   await h.clock.advance(50);
-  assert.match(h.container.querySelector("header h1").textContent, /^En dag nära dig$/);
+  assert.equal(h.container.querySelector("header h1").textContent, "nära dig");
   assert.match(h.text(), /Nära dig · idag/);
   assert.equal(call.body.place, undefined);
   assert.doesNotMatch(h.text(), /your position/i);

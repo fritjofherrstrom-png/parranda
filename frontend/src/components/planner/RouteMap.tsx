@@ -32,7 +32,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { pinGroupLabel, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
+import { pinGroupLabel, routeDisplayPath, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
 import { controlAwareView, type FitMark, type MapBox } from "../../lib/route-map-fit.mjs";
 import { BASEMAP_PROVIDER, basemapPaint, basemapStyle, type BasemapTheme } from "../../lib/route-map-style.mjs";
 import type { RouteContextSuggestion } from "../../lib/route-context-view.mjs";
@@ -584,15 +584,20 @@ export default function RouteMap({
       let contextDots: any = emptyCollection;
       let candidateDots: any = emptyCollection;
       if (hasPrimaryRoute) {
-        const enginePath: Array<[number, number]> = (Array.isArray(primaryRoute?.map_path_points) ? primaryRoute.map_path_points : [])
+        const enginePath: Array<{ lat: number; lng: number }> = (Array.isArray(primaryRoute?.map_path_points) ? primaryRoute.map_path_points : [])
           .filter((point: any) => point && Number.isFinite(point.lat) && Number.isFinite(point.lng))
-          .map((point: any) => [point.lat, point.lng] as [number, number]);
-        const routePath = enginePath.length > 1
+          .map((point: any) => ({ lat: point.lat, lng: point.lng }));
+        // `sketch` describes the original engine geometry, never these added
+        // presentation points. Detailed walking paths pass through unchanged.
+        const routePath = routeDisplayPath(enginePath.length > 1
           ? enginePath
-          : drawableRouteStops.map((stop: any) => [stop.lat, stop.lng] as [number, number]);
+          : drawableRouteStops.map((stop: any) => ({ lat: stop.lat, lng: stop.lng })), {
+          sketch,
+          routingSource: enginePath.length > 1 ? primaryRoute?.routing_source : "heuristic",
+        });
         if (routePath.length > 1) {
-          routeLine = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: routePath.map(([lat, lng]) => [lng, lat]) } };
-          routePath.forEach(([lat, lng]: [number, number]) => marks.push({ lat, lng, avoidControls: false }));
+          routeLine = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: routePath.map(({ lat, lng }) => [lng, lat]) } };
+          routePath.forEach(({ lat, lng }) => marks.push({ lat, lng, avoidControls: false }));
         }
 
         routeStops.forEach((stop: any, index: number) => {
@@ -895,6 +900,11 @@ export default function RouteMap({
         </button>
       )}
     </div>
+    {hasPrimaryRoute && sketch && (
+      <p className="mt-1 text-xs leading-relaxed text-parranda-ink/68">
+        {t("Ruttöversikt · linjen visar stoppens ordning, inte gångvägen.", "Route overview · the line shows stop order, not walking directions.")}
+      </p>
+    )}
     {tilesFailed && (
       <p role="status" className="mt-1 text-xs text-parranda-ink/68">
         {t("Kartbakgrunden kunde inte hämtas — rutten och stoppen visas ändå.", "The map background couldn't be loaded — the route and stops are still shown.")}

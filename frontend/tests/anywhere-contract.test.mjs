@@ -229,11 +229,11 @@ test("Pulse section: place-titled, dedup-aware, honest states, no jargon", () =>
 });
 
 test("route result has one authoritative route and keeps broader candidates secondary", () => {
-  // The day header (§3): "A day in {place}" + honest counts, and the Maps CTA
+  // The day header (§3): the place + selected date + honest counts, and the Maps CTA
   // over the FULL stop order (woven event included).
   assert.match(anywherePlannerSource, /t\("Din dag", "Your day"\)/);
-  assert.match(anywherePlannerSource, /t\("En dag i", "A day in"\)/);
-  assert.match(anywherePlannerSource, /t\("En dag", "A day"\)[\s\S]{0,120}t\("nära dig", "near you"\)/);
+  assert.match(anywherePlannerSource, /<PlaceSign text=\{mode === "near_me"/);
+  assert.match(anywherePlannerSource, /<time dateTime=\{date!\}/);
   assert.match(anywherePlannerSource, /t\("till fots", "on foot"\)/);
   assert.match(anywherePlannerSource, /t\("Öppna rutten i Maps", "Open route in Maps"\)/);
   // Daypart group headings come from stop.daypart and render only when the
