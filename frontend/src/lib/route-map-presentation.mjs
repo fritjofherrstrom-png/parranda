@@ -76,6 +76,58 @@ export function routePathIsSketch(pathPoints, stopCount) {
 }
 
 /**
+ * Display-only arcs for a sparse route overview, never for street geometry.
+ *
+ * Classification must happen on the published path BEFORE this interpolation:
+ * extra display points are not evidence of a computed walking path. A shallow
+ * quadratic bow stays within 12% of each leg in map space and still passes
+ * through every original stop. Neither source coordinates nor walking figures
+ * change. Fixed sampling and a small input cap bound work; polar, dateline and
+ * non-local legs keep their original geometry rather than inventing a bow.
+ */
+export function routeDisplayPath(pathPoints, { sketch = false, routingSource = null } = {}) {
+  const valid = (point) => point && Number.isFinite(point.lat) && Number.isFinite(point.lng)
+    && Math.abs(point.lat) <= 90 && Math.abs(point.lng) <= 180;
+  const points = Array.isArray(pathPoints) ? pathPoints.filter(valid) : [];
+  // A short street path can also satisfy the conservative sketch classifier.
+  // Only an explicitly heuristic source authorizes display interpolation.
+  if (!sketch || routingSource !== "heuristic" || points.length < 2 || points.length > 128) return points;
+
+  const mercatorY = (lat) => Math.log(Math.tan(Math.PI / 4 + radians(lat) / 2)) * 180 / Math.PI;
+  const latitude = (y) => (2 * Math.atan(Math.exp(radians(y))) - Math.PI / 2) * 180 / Math.PI;
+  const displayed = [points[0]];
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1];
+    const end = points[index];
+    if (Math.abs(start.lat) > 85 || Math.abs(end.lat) > 85
+      || Math.abs(end.lng - start.lng) > 180 || distanceKm(start, end) > 50
+      || (start.lat === end.lat && start.lng === end.lng)) {
+      displayed.push(end);
+      continue;
+    }
+    const startY = mercatorY(start.lat);
+    const endY = mercatorY(end.lat);
+    const dx = end.lng - start.lng;
+    const dy = endY - startY;
+    const controlX = (start.lng + end.lng) / 2 - dy * 0.24;
+    const controlY = (startY + endY) / 2 + dx * 0.24;
+    const arc = [];
+    for (let sample = 1; sample < 16; sample += 1) {
+      const t = sample / 16;
+      const remaining = 1 - t;
+      arc.push({
+        lat: latitude(remaining ** 2 * startY + 2 * remaining * t * controlY + t ** 2 * endY),
+        lng: remaining ** 2 * start.lng + 2 * remaining * t * controlX + t ** 2 * end.lng,
+      });
+    }
+    // A bow near a world edge must not wrap across it or leave map latitude.
+    if (arc.every((point) => valid(point) && Math.abs(point.lat) <= 85)) displayed.push(...arc);
+    displayed.push(end);
+  }
+  return displayed;
+}
+
+/**
  * Produces display-only offsets for route marker badges that would otherwise
  * overlap at ordinary city zoom levels. Geographic coordinates remain the
  * marker anchors and route geometry remains authoritative.

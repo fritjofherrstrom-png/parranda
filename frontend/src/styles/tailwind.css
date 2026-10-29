@@ -497,3 +497,9 @@
   width: 44px;
   height: 44px;
 }
+
+/* A still overview (RouteMap `still`) takes no zoom, so it shows no zoom
+   buttons: the strip keeps its room for the stops. */
+.route-map-frame[data-still] .maplibregl-ctrl-top-left {
+  display: none;
+}

@@ -59,14 +59,14 @@ async function composing(t, injected = {}) {
 const shape = (h, part) => h.container.querySelector(`[data-day-shape="${part}"]`);
 const follows = (earlier, later) => Boolean(earlier.compareDocumentPosition(later) & 4 /* DOCUMENT_POSITION_FOLLOWING */);
 
-test("on a phone the shape is the day's order: heading, stops, then the map", async (t) => {
+test("on a phone the shape is the day's order: heading, the map's overview, then the stops", async (t) => {
   const { h } = await composing(t);
   const heading = shape(h, "heading");
   const stations = shape(h, "stations");
   const map = shape(h, "map");
   assert.ok(heading && stations && map, "heading, stations and map are all held");
-  assert.ok(follows(heading, stations), "the stops follow the heading");
-  assert.ok(follows(stations, map), "the map follows the stops, as in the day itself");
+  assert.ok(follows(heading, map), "the overview follows the heading, as in the day itself");
+  assert.ok(follows(map, stations), "the stops follow the overview");
   assert.equal(shape(h, "map-column"), null, "no wide-screen column on a phone");
 });
 

@@ -48,10 +48,37 @@ type Leg = { km: number | null; minutes: number | null };
 
 const NO_NEW_STOPS: ReadonlySet<string> = new Set();
 
+/**
+ * How the day was assembled, as one line opened on request, beside the map it
+ * qualifies. Every fact is still on the page (and read by assistive tech when
+ * opened). How Maps walks the route is said beside the Maps action.
+ */
+function AboutDayAndMap({ t, assemblyNotes = [], routeLineIsSketch, dayContextNote }: {
+  t: Translate;
+  assemblyNotes?: string[];
+  routeLineIsSketch: boolean;
+  dayContextNote: string | null | undefined;
+}) {
+  return (
+    <details className="group mt-2">
+      <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-13 font-semibold text-parranda-ink-muted transition hover:text-parranda-ink [&::-webkit-details-marker]:hidden">
+        {t("Om dagen och kartan", "About this day and map")}
+        <ChevronDownIcon className="h-3.5 w-3.5 transition group-open:rotate-180" />
+      </summary>
+      <ul className="mb-1 flex flex-col gap-1.5 text-xs leading-relaxed text-parranda-ink-muted">
+        {assemblyNotes.map((note) => <li key={note}>{note}</li>)}
+        {routeLineIsSketch && <li>{t("Den prickade linjen visar stoppens ordning, inte gatorna.", "The dotted line shows the order of the stops, not the streets.")}</li>}
+        <li>{t("Avstånd och gångtider är uppskattningar.", "Distances and walking times are estimates.")}</li>
+        {dayContextNote && <li>{dayContextNote}</li>}
+      </ul>
+    </details>
+  );
+}
+
 export default function StopLine({
   t,
   lang,
-  map,
+  overview = null,
   stale,
   newStopIdentities = NO_NEW_STOPS,
   routeLineIsSketch,
@@ -86,8 +113,8 @@ export default function StopLine({
 }: {
   t: Translate;
   lang: Lang;
-  /** The map, when it is drawn inline (phones). On wide screens it sits beside the day instead. */
-  map: ReactNode;
+  /** A phone: the map's short, still overview, opening the route. Wide screens keep the map beside the day. */
+  overview?: ReactNode;
   stale: boolean;
   /** Stops the last adjustment added, using the change summary's place/occurrence identity. */
   newStopIdentities?: ReadonlySet<string>;
@@ -165,38 +192,30 @@ export default function StopLine({
                 ? t("Du är inte nära rutten just nu.", "You're not near the route right now.")
                 : null;
 
-  // HOW THE DAY WAS ASSEMBLED — one line, opened on request, beside the map
-  // it qualifies. Every fact is still on the page (and read by assistive tech
-  // when opened). How Maps walks the route is said beside the Maps action.
+  // HOW THE DAY WAS ASSEMBLED — one line, opened on request, under the map it
+  // qualifies, said once at the top of the stops. On a phone the map opens
+  // the route as a short overview, still until expanded: a tall map above the
+  // stops once kept them off the first screen and caught the thumb that meant
+  // to scroll. Wide screens keep the map beside the day.
   const about = (
-    <details className="group mt-2">
-      <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-13 font-semibold text-parranda-ink-muted transition hover:text-parranda-ink [&::-webkit-details-marker]:hidden">
-        {t("Om dagen och kartan", "About this day and map")}
-        <ChevronDownIcon className="h-3.5 w-3.5 transition group-open:rotate-180" />
-      </summary>
-      <ul className="mb-1 flex flex-col gap-1.5 text-xs leading-relaxed text-parranda-ink-muted">
-        {assemblyNotes.map((note) => <li key={note}>{note}</li>)}
-        {routeLineIsSketch && <li>{t("Den prickade linjen visar stoppens ordning, inte gatorna.", "The dotted line shows the order of the stops, not the streets.")}</li>}
-        <li>{t("Avstånd och gångtider är uppskattningar.", "Distances and walking times are estimates.")}</li>
-        {dayContextNote && <li>{dayContextNote}</li>}
-      </ul>
-    </details>
+    <AboutDayAndMap t={t} assemblyNotes={assemblyNotes} routeLineIsSketch={routeLineIsSketch} dayContextNote={dayContextNote} />
   );
 
   return (
     <section
       aria-label={t("Rutten", "The route")}
-      // On a phone the stops continue the day header directly above them,
-      // so they sit closer than the page's section rhythm.
+      // The stops continue the day header directly above them, so they sit
+      // closer than the page's section rhythm.
       // While an adjustment rebuilds the day, the day on screen stays — never
       // a silent swap — but reads as the one being replaced: its names fade,
       // the ember line goes quiet and one soft wash slides down it again.
       data-rebuilding={stale || undefined}
-      className={`${map ? "-mt-6" : ""} flex flex-col`}
+      className="-mt-4 flex flex-col"
     >
-      {!map && about}
+      {overview}
+      {about}
 
-      <div className={(map ? "" : "mt-8 ") + "mb-3 flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-1"}>
+      <div className="mb-3 mt-4 flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <Eyebrow as="h2">{t("Stoppen i ordning", "The stops, in order")}</Eyebrow>
         {canFollow && (
           <button
@@ -568,21 +587,6 @@ export default function StopLine({
           <span>{anchorIsPosition ? t(`Tillbaka till ${finishLeg.label}`, `Return to ${finishLeg.label}`) : t(`Till ${finishLeg.label}`, `To ${finishLeg.label}`)}</span>
           <span>{legLabel(finishLeg)}</span>
         </p>
-      )}
-
-      {/* ON A PHONE THE DAY COMES FIRST. The stops are the day; the map is its
-          overview, so inline (phones) it follows the line, edge to edge in the
-          column without a card of its own. A tall map above the stops kept
-          them off the first screen and caught the thumb that meant to scroll.
-          Wide screens keep the map beside the day (`map` is null here) and
-          the disclosure at the top. */}
-      {map && (
-        <>
-          <div role="region" aria-label={t("Karta över dagen", "Map of the day")} className={"mt-8 transition-opacity" + (stale ? " opacity-60" : "")}>
-            {map}
-          </div>
-          {about}
-        </>
       )}
 
       {/* Detours — collapsed by default (design handoff §3): optional ideas

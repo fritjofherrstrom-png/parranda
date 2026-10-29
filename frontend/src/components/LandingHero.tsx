@@ -189,6 +189,12 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
               onSelect={choice => { setSelectedPlace(choice); setValue(choice.query); inputRef.current?.focus(); }} />
             <button
               type="submit"
+              onPointerDown={event => {
+                // Keep focus in the combobox until the click submits. Blurring
+                // it on pointer-down removes the mobile's in-flow suggestions
+                // and moves this button before pointer-up can activate it.
+                if (event.button === 0) event.preventDefault();
+              }}
               className="min-h-[3.75rem] whitespace-nowrap rounded-parranda bg-parranda-terracotta px-8 text-17 font-extrabold text-parranda-on-terracotta transition [font-stretch:110%] hover:brightness-110 sm:min-h-16 sm:text-lg"
             >
               {t("Bygg min dag", "Build my day")}
