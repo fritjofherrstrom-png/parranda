@@ -49,7 +49,7 @@ test("old persisted ambiguity is bypassed and the new decision survives restart"
   const candidates = await resolver("Stockholm");
   assert.equal(fetches, 1, "v2 medium-confidence ambiguity must not survive the semantics change");
   assert.deepEqual(candidates.map((c) => c.confidence), ["medium", "low"]);
-  assert.ok(readdirSync(join(cacheDir, "place-resolver-nominatim-v7")).some((file) => file.startsWith("v7_")));
+  assert.ok(readdirSync(join(cacheDir, "place-resolver-nominatim-v8")).some((file) => file.startsWith("v8_")));
   const restarted = resolverFor([], { cacheDir, fetcher: async () => { throw new Error("cache miss"); } });
   assert.deepEqual(await restarted("Stockholm"), candidates);
 });
@@ -190,4 +190,73 @@ test("a dominant primary name and an explicitly qualified translated name still 
     const result = await resolveAgnosticIntake({ placeQuery: query, placeLanguage: "sv", placeResolver: resolverFor([nebraska, gothenburg]) });
     assert.deepEqual(result.anchor, { lat: 57.7072, lng: 11.9668 }, `${query} keeps its dominant own-name answer`);
   }
+});
+
+// Provider-shaped: a town and the municipality named after it, as observed on
+// staging for "Ystad" and "Simrishamn" (25 Oct 2026). The municipality's own
+// OSM names include the town's name, so both are exact structural matches
+// with near-equal importance; the town's address names that municipality as
+// the area it lies in. Generic fixture: no Swedish rule, no place list.
+function seatTown(name, municipality, lat, lon, importance, id) {
+  return {
+    name, display_name: `${name}, ${municipality}, Example County, Example Country`, lat: String(lat), lon: String(lon),
+    importance, osm_type: "node", osm_id: id, category: "place", type: "town", addresstype: "town",
+    address: { town: name, municipality, state: "Example County", country: "Example Country", country_code: "se" },
+    namedetails: { name },
+    boundingbox: [lat - 0.03, lat + 0.03, lon - 0.05, lon + 0.05].map(String),
+  };
+}
+function namesakeMunicipality(name, municipality, lat, lon, importance, id) {
+  return {
+    name: municipality, display_name: `${municipality}, Example County, Example Country`, lat: String(lat), lon: String(lon),
+    importance, osm_type: "relation", osm_id: id, category: "boundary", type: "administrative", addresstype: "municipality",
+    address: { municipality, state: "Example County", country: "Example Country", country_code: "se" },
+    namedetails: { name: municipality, short_name: name },
+    boundingbox: [lat - 0.12, lat + 0.12, lon - 0.2, lon + 0.2].map(String),
+  };
+}
+
+test("a town and the municipality around it are one answer: the town anchors, the municipality stays an option", async () => {
+  const town = seatTown("Seatville", "Seatville Municipality", 55.43, 13.82, 0.47, 11);
+  const municipality = namesakeMunicipality("Seatville", "Seatville Municipality", 55.47, 13.9, 0.48, 12);
+  for (const rows of [[municipality, town], [town, municipality]]) {
+    const resolver = resolverFor(rows);
+    const candidates = await resolver("Seatville");
+    assert.equal(candidates.find((c) => c.label.startsWith("Seatville,"))?.confidence, "medium");
+    assert.equal(candidates.find((c) => c.label.startsWith("Seatville Municipality"))?.confidence, "low");
+    const result = await resolveAgnosticIntake({ placeQuery: "Seatville", placeResolver: resolver });
+    assert.deepEqual(result.intake.blockers, []);
+    assert.deepEqual(result.anchor, { lat: 55.43, lng: 13.82 });
+  }
+});
+
+test("the municipality still wins when it is what was asked for, and an unrelated namesake area still competes", async () => {
+  const town = seatTown("Seatville", "Seatville Municipality", 55.43, 13.82, 0.47, 11);
+  const municipality = namesakeMunicipality("Seatville", "Seatville Municipality", 55.47, 13.9, 0.48, 12);
+  const asked = await resolverFor([town, municipality])("Seatville Municipality");
+  assert.equal(asked.find((c) => c.label.startsWith("Seatville Municipality"))?.confidence, "medium");
+  // The town's own address names another municipality: this namesake area is
+  // not its container, so the two remain competing answers.
+  const elsewhere = seatTown("Seatville", "Other Municipality", 55.43, 13.82, 0.47, 13);
+  const result = await resolveAgnosticIntake({ placeQuery: "Seatville", placeResolver: resolverFor([elsewhere, municipality]) });
+  assert.deepEqual(result.intake.blockers, ["ambiguous_place"]);
+});
+
+test("a matching administrative name cannot contain a town outside its provider bounds", async () => {
+  const town = seatTown("Seatville", "Seatville Municipality", 57.43, 13.82, 0.47, 21);
+  const municipality = namesakeMunicipality("Seatville", "Seatville Municipality", 55.47, 13.9, 0.48, 22);
+  for (const rows of [[municipality, town], [town, municipality]]) {
+    const result = await resolveAgnosticIntake({ placeQuery: "Seatville", placeResolver: resolverFor(rows) });
+    assert.deepEqual(result.intake.blockers, ["ambiguous_place"]);
+    assert.equal(result.anchor, null, 'a namesake municipality cannot select a geographically unrelated town');
+  }
+});
+
+test("two missing country identities cannot establish a town's administrative container", async () => {
+  const town = seatTown("Seatville", "Seatville Municipality", 55.43, 13.82, 0.47, 31);
+  const municipality = namesakeMunicipality("Seatville", "Seatville Municipality", 55.47, 13.9, 0.48, 32);
+  delete town.address.country_code;
+  delete municipality.address.country_code;
+  const result = await resolveAgnosticIntake({ placeQuery: "Seatville", placeResolver: resolverFor([town, municipality]) });
+  assert.deepEqual(result.intake.blockers, ["ambiguous_place"]);
 });

@@ -481,6 +481,16 @@
   color: rgb(var(--p-color-on-live));
 }
 
+/* The open stop in the list uses the same warm station on the map. A group
+   containing that stop is highlighted too, until its members separate. */
+.route-map-marker-shell[data-route-selected="true"] .route-map-marker {
+  color: rgb(var(--p-color-on-terracotta));
+}
+.route-map-marker-shell[data-route-selected="true"] .route-map-marker::before {
+  background: rgb(var(--p-color-terracotta));
+  border-color: rgb(var(--p-color-ink));
+}
+
 /* MapLibre defaults to 29px controls. Keep map zoom usable with a thumb without
    changing the route/map contract or hiding the provider attribution. */
 .route-map-frame .maplibregl-ctrl-group button {

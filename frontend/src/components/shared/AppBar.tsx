@@ -52,8 +52,8 @@ export default function AppBar({
    * on a language switch, to hand the day's position to the next page.
    */
   onNavigate?: (target: AppBarTarget) => void;
-  /** Where the link to `option` leads; defaults to this page's query with `lang` swapped. */
-  languageHref?: (option: Lang) => string;
+  /** Null explicitly refuses navigation; never replace it with a fresh query. */
+  languageHref?: (option: Lang) => string | null;
 }) {
   const [search, setSearch] = useState("");
   const [night, setNight] = useState<boolean | undefined>(undefined);
@@ -106,20 +106,27 @@ export default function AppBar({
         </button>
         {/* Each end rounds itself: overflow-hidden here would clip the focus ring. */}
         <div className="flex rounded-full border-line border-parranda-line" role="group" aria-label={languageLabel}>
-          {(["en", "sv"] as const).map((option) => (
+          {(["en", "sv"] as const).map((option) => {
+            const href = languageHref ? languageHref(option) : withLang(search, option);
+            return (
             <a
               key={option}
-              href={languageHref ? languageHref(option) : withLang(search, option)}
-              onClick={leaving("language")}
+              href={href ?? undefined}
+              role={href === null ? "link" : undefined}
+              aria-disabled={href === null ? true : undefined}
+              tabIndex={href === null ? -1 : undefined}
+              onClick={href === null ? (event) => event.preventDefault() : leaving("language")}
               aria-current={lang === option ? "true" : undefined}
               className={
                 "type-data inline-flex min-h-11 min-w-11 items-center justify-center px-3 text-xs font-semibold transition first:rounded-l-full last:rounded-r-full " +
-                (lang === option ? "bg-parranda-ink text-parranda-paper" : "text-parranda-ink-muted hover:text-parranda-ink")
+                (lang === option ? "bg-parranda-ink text-parranda-paper" : "text-parranda-ink-muted hover:text-parranda-ink") +
+                (href === null ? " cursor-not-allowed opacity-50" : "")
               }
             >
               {option.toUpperCase()}
             </a>
-          ))}
+            );
+          })}
         </div>
       </div>
     </nav>

@@ -26,6 +26,8 @@ export default function AnchorCard({
   lang,
   anchorLabel,
   dayOffset,
+  publishedDateLabel,
+  activeDayOffset,
   moodLabel,
   walkLabel,
   adjustOpen,
@@ -46,6 +48,9 @@ export default function AnchorCard({
   lang: Lang;
   anchorLabel: string;
   dayOffset: 0 | 1;
+  /** H1 projection: a restored absolute day is not necessarily today/tomorrow. */
+  publishedDateLabel?: string;
+  activeDayOffset?: 0 | 1 | null;
   moodLabel: string;
   walkLabel: string;
   adjustOpen: boolean;
@@ -109,7 +114,7 @@ export default function AnchorCard({
           {anchorLabel}
           <span className="font-medium text-parranda-ink-meta">
             {" · "}
-            {dayOffset === 0 ? t("idag", "today") : t("imorgon", "tomorrow")}
+            {publishedDateLabel ?? (dayOffset === 0 ? t("idag", "today") : t("imorgon", "tomorrow"))}
           </span>
         </span>
         <a
@@ -241,7 +246,7 @@ export default function AnchorCard({
             <Eyebrow tone="glow">{t("När", "When")}</Eyebrow>
             <div className={segmentGroup} role="group" aria-label={t("Vilken dag", "Which day")}>
               {([0, 1] as const).map((offset) => (
-                <button type="button" key={offset} aria-pressed={dayOffset === offset} onClick={() => { setTouched(`day:${offset}`); onSetDay(offset); }} className={segmentClass(dayOffset === offset) + ring(`day:${offset}`)}>
+                <button type="button" key={offset} aria-pressed={(activeDayOffset === undefined ? dayOffset : activeDayOffset) === offset} onClick={() => { setTouched(`day:${offset}`); onSetDay(offset); }} className={segmentClass((activeDayOffset === undefined ? dayOffset : activeDayOffset) === offset) + ring(`day:${offset}`)}>
                   {offset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")}
                 </button>
               ))}

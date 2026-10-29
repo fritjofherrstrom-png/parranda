@@ -1,0 +1,28 @@
+✖ rhythm change during a second removal keeps the newest rejection rather than the older saved edit (484.632375ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1212.279542
+
+✖ failing tests:
+
+test at frontend/tests/planner-stop-edit.test.mjs:607:1
+✖ rhythm change during a second removal keeps the newest rejection rather than the older saved edit (484.632375ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(full.body.excluded_candidate_ids.includes('gallery'))
+  
+      at TestContext.<anonymous> (file://<repo>/frontend/tests/planner-stop-edit.test.mjs:619:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

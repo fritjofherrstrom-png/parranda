@@ -12,21 +12,22 @@
  * static build and the hydrated tree never disagree.
  *
  * Roles (contrast against the theme's paper):
- *   ink         text and strokes                       day 15.6:1 · night 16.7:1
+ *   ink         text and strokes                       day 14.3:1 · night 16.7:1
  *   paper       the ground
  *   terracotta  FILLED primary action, white text       5.2:1 in both themes
  *   ember       the route line, stations, live dot      graphic, ≥3:1
- *   clay        accent TEXT                             day 5.3:1 · night 8.9:1
- *   glow        eyebrows and honesty notes              day 5.2:1 · night 11.9:1
- *   live        Live: events, the Live card, transfers  day 6.6:1 · night 8.4:1
+ *   clay        accent TEXT                             day 4.9:1 · night 8.9:1
+ *   glow        eyebrows and honesty notes              day 4.8:1 · night 11.9:1
+ *   live        Live: events, the Live card, transfers  day 6.1:1 · night 8.4:1
  * Text on terracotta and on live has its own `on-` role. Ink's lighter
  * strengths are named below (--p-ink-*); secondary text never goes below
- * meta, 68 % ink (≥4.5:1 on day paper and on panels up to a fill).
+ * meta, 68 % ink (≥4.5:1 in the light theme on paper and on panels up to
+ * fill-strong, which the contract test computes from these values).
  */
 :root {
   color-scheme: light;
   --p-color-ink: 22 20 17; /* #161411 */
-  --p-color-paper: 238 236 231; /* #EEECE7 */
+  --p-color-paper: 232 226 215; /* #E8E2D7 — warm daylight paper */
   --p-color-terracotta: 199 56 26; /* #C7381A */
   --p-color-ember: 232 67 29; /* #E8431D */
   --p-color-clay: 178 50 24; /* #B23218 */
@@ -35,7 +36,7 @@
   --p-color-on-live: 255 255 255;
   --p-color-on-terracotta: 255 255 255;
   /* Ink at a named strength. A component never writes an ink percentage:
-     text is ink, soft, muted or meta (meta is the 65 % floor, 5.8:1 on day
+     text is ink, soft, muted or meta (meta is the 65 % floor, 5.7:1 on day
      paper); lines frame and divide; fills sit behind content. Theme-
      independent, like the ink they thin. */
   --p-ink-soft: 0.85;

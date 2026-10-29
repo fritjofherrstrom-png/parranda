@@ -138,8 +138,8 @@ export function dayAssemblyNotes(t: Translate, { sourceBackedDay, timeAnchoring 
   const notes: string[] = [];
   if (sourceBackedDay) {
     notes.push(t(
-      "Byggd från källstödda platser — Parranda har inte full kurering här ännu.",
-      "Built from source-backed places — Parranda does not have full curation here yet.",
+      "Platserna kommer från externa källor; utbudet kan vara begränsat.",
+      "Places come from external sources; coverage may be limited.",
     ));
   }
   // Time-anchoring truth (#429): a today request at 22:00 must not read as a

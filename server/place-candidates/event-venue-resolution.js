@@ -59,9 +59,18 @@ function buildEventVenueQueries(event, { placeContext = null } = {}) {
     return appendBoundedQueryParts([head, ...townPart], contextParts);
   };
   const name = uniqueStrings([event.place_context])[0];
+  const address = uniqueStrings([event.address])[0];
+  // A card can retain a full display label while independently publishing its
+  // address. Only that exact comma-delimited source field establishes a literal
+  // venue prefix; arbitrary commas or partial street-number matches do not.
+  const addressMarker = address ? `, ${address}` : null;
+  const addressIndex = name && addressMarker ? name.indexOf(addressMarker) : -1;
+  const afterAddress = addressIndex > 0 ? name.slice(addressIndex + addressMarker.length) : null;
+  const sourceName = addressIndex > 0 && (afterAddress === "" || afterAddress.startsWith(",")) ? name.slice(0, addressIndex) : null;
   const shortName = name && /\s[–—-]\s/.test(name) ? name.split(/\s[–—-]\s/)[0].trim() : null;
   return uniqueStrings([
-    variant(uniqueStrings([event.address])[0]),
+    sourceName && variant(sourceName),
+    variant(address),
     variant(name),
     shortName && shortName.split(/\s+/).length >= 2 ? variant(shortName) : null,
     combined,
