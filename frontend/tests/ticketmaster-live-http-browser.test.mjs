@@ -587,7 +587,7 @@ for (const coldPlace of [false, true]) test(`Ticketmaster exact occurrence survi
       navigate: () => page.getByRole('link', { name: 'SV', exact: true }).click(),
       readComposeCount: () => composeRequests().length, listName: 'Stoppen i ordning' });
     assertExactKeep(await savedDay(page), chosen.live_occurrence_id);
-    await page.getByRole('heading', { name: PLACE, exact: true }).waitFor();
+    await page.getByRole('heading', { name: /^En dag i/ }).waitFor();
     await capture('edited-language-keeps-exact-answer');
     done('edited-language-navigation');
     setPhase('edited-native-back');
