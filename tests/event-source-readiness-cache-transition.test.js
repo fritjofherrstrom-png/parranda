@@ -45,7 +45,7 @@ test("new default namespace survives restart while legacy v23 files stay byte-id
   await Promise.all(tasks); await new Promise(resolve => setImmediate(resolve));
   const settled = await supply(args);
   assert.equal(settled.acquisition.source_health.status, "healthy");
-  assert.ok(fs.existsSync(path.join(directory, "agnostic-events-v24")), "persist the new acquisition contract separately");
+  assert.ok(fs.existsSync(path.join(directory, "agnostic-events-v25")), "persist the new acquisition contract separately");
   const restarted = resolveDefaultEventSupply({ ...env, PARRANDA_CACHE_DIR: directory }, options);
   assert.equal((await restarted(args)).pending, undefined);
   assert.equal(collections, 1, "current-policy healthy empty is reused after restart");
@@ -83,8 +83,8 @@ test("catalogue removal and restoration isolate readiness with unchanged facts a
   assert.equal(before.acquisition.source_health.status, "partial");
   assert.equal(before.acquisition.runtime_readiness.unavailable_candidate_count, 1);
   const initialRequests = sourceRequests;
-  const initialFiles = fs.readdirSync(path.join(directory, "agnostic-events-v24"));
-  const originalBytes = fs.readFileSync(path.join(directory, "agnostic-events-v24", initialFiles[0]), "utf8");
+  const initialFiles = fs.readdirSync(path.join(directory, "agnostic-events-v25"));
+  const originalBytes = fs.readFileSync(path.join(directory, "agnostic-events-v25", initialFiles[0]), "utf8");
   offered = false;
   const next = await supply(args);
   assert.equal(next.pending, true, "changed preflight context must not reuse the old credential-warning answer");
@@ -103,7 +103,7 @@ test("catalogue removal and restoration isolate readiness with unchanged facts a
   }
   assert.equal(collections, 2);
   assert.equal(sourceRequests, initialRequests * 2, "one bounded collection per changed context; no extra retries");
-  assert.equal(fs.readFileSync(path.join(directory, "agnostic-events-v24", initialFiles[0]), "utf8"), originalBytes);
+  assert.equal(fs.readFileSync(path.join(directory, "agnostic-events-v25", initialFiles[0]), "utf8"), originalBytes);
   offered = true;
   const restored = await supply(args);
   assert.equal(restored.pending, undefined);
