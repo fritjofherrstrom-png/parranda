@@ -74,6 +74,15 @@ function loadMapLibre(): Promise<MapLibre> {
   return maplibreModule;
 }
 
+/** A still map takes no pan or zoom gesture; its markers still take a tap. */
+function applyStill(map: any, still: boolean): void {
+  for (const handler of [map.dragPan, map.touchZoomRotate, map.doubleClickZoom, map.boxZoom, map.keyboard]) {
+    if (still) handler?.disable?.();
+    else handler?.enable?.();
+  }
+  if (!still) map.touchZoomRotate?.disableRotation?.();
+}
+
 function currentTheme(): BasemapTheme {
   const root = document.documentElement;
   const set = root.getAttribute("data-theme");
@@ -177,6 +186,7 @@ export default function RouteMap({
   onToggleExpanded,
   heightClass,
   regionLabel,
+  still = false,
   t,
 }: {
   hasPrimaryRoute: boolean;
@@ -201,11 +211,19 @@ export default function RouteMap({
    * two landmarks with one name read as a duplicate.
    */
   regionLabel?: string;
+  /**
+   * A short overview in the page's scroll path (a phone, collapsed): the map
+   * does not pan or zoom, so a thumb scrolling the page past it scrolls the
+   * page. Its stops still open on a tap; Expand gives the full map.
+   */
+  still?: boolean;
   t: Translate;
 }) {
   const mapTitle = regionLabel || t("Karta över dagen", "Map of the day");
   const mapTitleRef = useRef(mapTitle);
   mapTitleRef.current = mapTitle;
+  const stillRef = useRef(still);
+  stillRef.current = still;
   const frameRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<{ ml: MapLibre; map: any; ready: Promise<void>; markers: any[] } | null>(null);
@@ -509,6 +527,7 @@ export default function RouteMap({
           return;
         }
         map.touchZoomRotate?.disableRotation?.();
+        applyStill(map, stillRef.current);
         map.addControl(new ml.NavigationControl({ showCompass: false }), "top-left");
         // The attribution is set from the start (not when the tiles answer), so
         // its size is known to the first fit and it stays even when they fail.
@@ -814,6 +833,11 @@ export default function RouteMap({
     };
   }, [mapExpanded]);
 
+  useEffect(() => {
+    const map = instanceRef.current?.map;
+    if (map) applyStill(map, still);
+  }, [still]);
+
   // The instance belongs to this element: release it with the element.
   useEffect(
     () => () => {
@@ -837,7 +861,7 @@ export default function RouteMap({
 
   return (
     <>
-    <div ref={frameRef} data-route-map="" className={`route-map-frame relative w-full overflow-hidden rounded-parranda border border-parranda-ink/10 transition-all ${heightClass}`}>
+    <div ref={frameRef} data-route-map="" data-still={still || undefined} className={`route-map-frame relative w-full overflow-hidden rounded-parranda border border-parranda-ink/10 transition-all ${heightClass}`}>
       {/* Screen layout keeps each numbered touch footprint independently visible. */}
       <div ref={mapRef} className="h-full w-full" />
       {groupPicker && (

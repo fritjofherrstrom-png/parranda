@@ -143,8 +143,8 @@ for (const permission of ["deny", "prompt"]) {
 
     assert.equal(asked.count, 0, "the browser is never asked in the background");
     assert.equal(composeCalls(h).length, 1, "no second compose either");
-    assert.equal(h.container.querySelector("header h1").textContent, "nära dig");
-    assert.match(h.text(), /Nära dig · idag/);
+    assert.match(h.container.querySelector("header h1").textContent, /^En dag nära dig$/);
+    assert.match(h.container.querySelector("header time").textContent, /^Idag · /);
     assert.doesNotMatch(h.text(), /Platsdelning nekades|Planera en dag var som helst/);
   });
 }

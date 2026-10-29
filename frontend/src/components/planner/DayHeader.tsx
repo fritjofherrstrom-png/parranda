@@ -49,6 +49,17 @@ function selectedDate(value: string | null | undefined): Date | null {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? date : null;
 }
 
+/** "Thu 29 Oct" / "tors 29 okt": weekday, day, month (the design system's one
+ *  date form); the year only when the day is not in the current one. */
+function dayDateLabel(date: Date, lang: Lang): string {
+  const sameYear = date.getUTCFullYear() === new Date().getUTCFullYear();
+  return date
+    .toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", {
+      weekday: "short", day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }), timeZone: "UTC",
+    })
+    .replace(/[.,]/g, "");
+}
+
 /**
  * The place name is set like a station sign: as large as the column allows for
  * ITS longest word, so "Rome", "Malmö" and "Barcelona" each fill one line and
@@ -177,7 +188,10 @@ export default function DayHeader({
   anchorLabel,
   primaryRoute,
   date,
+  relativeDay = null,
   weatherSummary,
+  titleAction = null,
+  controls = null,
   coreCount,
   wovenCount,
   pickCoverage,
@@ -201,8 +215,14 @@ export default function DayHeader({
   primaryRoute: any;
   /** The date of the answer on screen, including held or restored days. */
   date: string | null | undefined;
+  /** 0 today, 1 tomorrow, null for any other day (a restored day after midnight is not "today"). */
+  relativeDay?: 0 | 1 | null;
   /** A trusted selected-day forecast; absence never gets a weather guess. */
   weatherSummary: any;
+  /** Beside the title: Change. */
+  titleAction?: ReactNode;
+  /** Under the title and date: the picks summary and Adjust. */
+  controls?: ReactNode;
   coreCount: number;
   wovenCount: number;
   pickCoverage: PickCoverage[];
@@ -218,8 +238,8 @@ export default function DayHeader({
   canUpdateSaved?: boolean;
   resolveAndRun: () => void;
 }) {
-  // The day's facts as quiet chips: how far, how many stops, and the day's
-  // weather when the server read one for this exact date; each stop states its own walk.
+  // The day's facts as quiet chips: how far and how many stops; each stop
+  // states its own walk. The date and its forecast stand under the heading.
   const distance = Number.isFinite(primaryRoute?.estimated_km)
     ? `≈ ${walkingDistanceLabel(primaryRoute.estimated_km, lang)} ${t("till fots", "on foot")}`
     : null;
@@ -260,9 +280,8 @@ export default function DayHeader({
     if (staleNotice !== "updating") sourceUpdateHadFocus.current = false;
   }, [displayedShortfall, staleNotice]);
   return (
-    <header className="@container flex flex-col gap-5" aria-busy={staleNotice === "updating"}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <Eyebrow tone="glow" line>{t("Din dag", "Your day")}</Eyebrow>
+    <header className="@container flex flex-col gap-4" aria-busy={staleNotice === "updating"}>
+      {(staleNotice === "updating" || staleNotice === "update_failed") && <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         {/* The day on screen is deliberately still here, and deliberately
             marked as not current. Never a silent swap. */}
         {staleNotice === "updating" && (
@@ -293,15 +312,49 @@ export default function DayHeader({
             </button>
           </>
         )}
+      </div>}
+      {/* The compact title: "A day in Lyon" on one line where the place
+          allows, with Change beside it, so the stops start high on a phone. */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-start justify-between gap-3">
+          <h1 ref={headingRef} tabIndex={-1} className="type-title min-w-0 pt-2.5 text-[1.625rem] text-parranda-ink [overflow-wrap:anywhere] [text-wrap:balance] sm:text-[2rem]">
+            {mode === "near_me" && !placeLabel ? (
+              <>{t("En dag", "A day")} {t("nära dig", "near you")}</>
+            ) : (
+              <>{t("En dag i", "A day in")} {anchorLabel}</>
+            )}
+          </h1>
+          {titleAction}
+        </div>
+        {/* When, under the title: the date as a timetable reads it, and the
+            forecast as one unit — the high, then a small badge for the sky.
+            Not among the facts chips: the weather is the day's condition,
+            not something the route did. */}
+        {(displayedDate || weatherChip) && (
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {displayedDate && <time dateTime={date!} className="type-data text-13 text-parranda-ink/80">
+              {relativeDay === 0 ? `${t("Idag", "Today")} · ` : relativeDay === 1 ? `${t("Imorgon", "Tomorrow")} · ` : ""}
+              {dayDateLabel(displayedDate, lang)}
+            </time>}
+            {/* A short rule, so "29 Oct" and "12°" never read as one figure. */}
+            {displayedDate && weatherChip && <span aria-hidden="true" className="h-3.5 w-[1.5px] rounded-full bg-parranda-ink/20" />}
+            {weatherChip && (
+              <span role="img" className="inline-flex items-center gap-1.5"
+                aria-label={t(`Prognosens högsta temperatur: ${weatherChip}C${condition ? `. ${condition[0]}` : ""}`, `Forecast high: ${weatherChip}C${condition ? `. ${condition[1]}` : ""}`)}
+                title={condition ? t(condition[0], condition[1]) : t("Prognosens högsta temperatur", "Forecast high")}>
+                <span className="type-data text-13 text-parranda-ink">{weatherChip}</span>
+                {WeatherIcon && (
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-parranda-ink/8">
+                    <WeatherIcon className="h-3.5 w-3.5 text-parranda-ink/80" />
+                  </span>
+                )}
+              </span>
+            )}
+          </p>
+        )}
       </div>
-      <div className="flex flex-col gap-2">
-        <h1 ref={headingRef} tabIndex={-1} className="type-title text-parranda-ink">
-          <PlaceSign text={mode === "near_me" && !placeLabel ? t("nära dig", "near you") : anchorLabel} />
-        </h1>
-        {displayedDate && <time dateTime={date!} className="text-15 leading-snug text-parranda-ink/75">
-          {displayedDate.toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
-        </time>}
-      </div>
+      {/* What the reader can change: the picks and rhythm, with Adjust. */}
+      {controls}
       <ul className="flex flex-wrap gap-1.5" aria-label={t("Om dagen", "About the day")}>
         {distance && (
           <li className={metaChip}>
@@ -310,16 +363,6 @@ export default function DayHeader({
           </li>
         )}
         <li className={metaChip}>{stops}</li>
-        {weatherChip && (
-          <li className="inline-flex items-center gap-1.5">
-            <span className={metaChip} aria-label={t(`Prognosens högsta temperatur: ${weatherChip}C${condition ? `. ${condition[0]}` : ""}`, `Forecast high: ${weatherChip}C${condition ? `. ${condition[1]}` : ""}`)}
-              title={t("Prognosens högsta temperatur", "Forecast high")}>{weatherChip}</span>
-            {condition && <span className={metaChip}>
-              {WeatherIcon && <WeatherIcon className="h-3.5 w-3.5 text-parranda-ink/72" />}
-              {t(condition[0], condition[1])}
-            </span>}
-          </li>
-        )}
         {/* Every pick in the day: one fact here instead of repeating the picks
             the anchor card names. A partial or missing pick lists them all. */}
         {allPicksCovered && (

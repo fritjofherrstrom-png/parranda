@@ -84,7 +84,7 @@ test("switching language restores the exact published day without another compos
   assert.equal(composeCalls(next).length, 0, "changing presentation must not ask the engine for a different day");
   assert.match(next.text(), /Fixture museum/);
   assert.match(next.text(), /Fixture café/);
-  assert.equal(next.container.querySelector("header h1").textContent, 'Testville');
+  assert.match(next.container.querySelector("header h1").textContent, /^En dag i Testville$/);
   const after = next.readStorage(LAST_KEY);
   assert.equal(after.dateIso, before.dateIso, "the absolute selected date is unchanged");
   assert.deepEqual(stopIds(after), stopIds(before));
@@ -155,7 +155,10 @@ test('a typed day restored through language remains editable on its original abs
   const anchor = next.container.querySelector('section[aria-label="Dagens utgångspunkt"]');
   assert.ok(anchor);
   assert.doesNotMatch(anchor.textContent, /Testville\s*·\s*idag/, 'yesterday must not be labelled today');
-  assert.match(anchor.textContent, /24\s+okt/i, 'the original absolute date is visible');
+  // The day's heading carries its date now; the card keeps only its controls.
+  const shownDate = next.container.querySelector('header time')?.textContent || '';
+  assert.match(shownDate, /24\s+okt/i, 'the original absolute date is visible');
+  assert.doesNotMatch(shownDate, /^Idag/, 'yesterday must not be labelled today in the heading either');
   const adjust = [...next.container.querySelectorAll('button')].find(element => element.textContent.trim() === 'Justera');
   assert.ok(adjust);
   await next.act(() => adjust.dispatchEvent(new next.window.MouseEvent('click', { bubbles: true })));
@@ -225,7 +228,7 @@ test('Undo after an explicit Today change restores calendar authority for the ne
   assert.deepEqual(stopIds(restored), stopIds(previous));
   assert.deepEqual(restored.commitments, previous.commitments);
   const anchor = next.container.querySelector('section[aria-label="Dagens utgångspunkt"]');
-  const restoredDateVisible = /24\s+okt/i.test(anchor.textContent);
+  const restoredDateVisible = /24\s+okt/i.test(next.container.querySelector('header time')?.textContent || '');
   const todayIsPressed = [...next.container.querySelectorAll('button')]
     .find(element => element.textContent.trim() === 'Idag')?.getAttribute('aria-pressed');
   await click(next, 'Fylld');
@@ -279,7 +282,7 @@ test('a near-me language view restores without storing or reusing a position fix
   await next.clock.advance(1500);
   assert.equal(next.fetchMock.calls.length, 0, 'saved geometry does not authorize a new acquisition');
   assert.match(next.text(), /Fixture museum/);
-  assert.equal(next.container.querySelector('header h1').textContent, 'nära dig');
+  assert.match(next.container.querySelector('header h1').textContent, /^En dag nära dig$/);
   assert.deepEqual(stopIds(next.readStorage(LAST_KEY)), stopIds(before));
 });
 

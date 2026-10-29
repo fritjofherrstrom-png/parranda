@@ -247,9 +247,13 @@ function measureMap({ expandNames, sideMap = false }) {
   const expand = [...frame.querySelectorAll("button")].find((button) =>
     expandNames.includes((button.getAttribute("aria-label") || button.textContent || "").trim()),
   );
+  // A phone's collapsed map is a still overview: it takes no zoom gesture and
+  // shows no zoom bar (RouteMap `still`), so only Expand and the attribution
+  // must stay clear of the stops there.
+  const still = frame.closest("[data-route-map]")?.hasAttribute("data-still") || frame.hasAttribute("data-still");
   const controls = {
     ...(sideMap ? {} : { "the expand button": expand }),
-    "the zoom bar": frame.querySelector(".maplibregl-ctrl-group"),
+    ...(still ? {} : { "the zoom bar": frame.querySelector(".maplibregl-ctrl-group") }),
     "the attribution": frame.querySelector(".maplibregl-ctrl-attrib"),
   };
   const problems = Object.entries(controls)

@@ -229,10 +229,11 @@ test("Pulse section: place-titled, dedup-aware, honest states, no jargon", () =>
 });
 
 test("route result has one authoritative route and keeps broader candidates secondary", () => {
-  // The day header (§3): the place + selected date + honest counts, and the Maps CTA
-  // over the FULL stop order (woven event included).
+  // The day header (§3): "A day in {place}", the selected date, honest
+  // counts, and the Maps CTA over the FULL stop order (woven event included).
   assert.match(anywherePlannerSource, /t\("Din dag", "Your day"\)/);
-  assert.match(anywherePlannerSource, /<PlaceSign text=\{mode === "near_me"/);
+  assert.match(anywherePlannerSource, /t\("En dag i", "A day in"\)/);
+  assert.match(anywherePlannerSource, /t\("En dag", "A day"\)[\s\S]{0,120}t\("nära dig", "near you"\)/);
   assert.match(anywherePlannerSource, /<time dateTime=\{date!\}/);
   assert.match(anywherePlannerSource, /t\("till fots", "on foot"\)/);
   assert.match(anywherePlannerSource, /t\("Öppna rutten i Maps", "Open route in Maps"\)/);
@@ -381,15 +382,27 @@ test("the anchor is chosen once: the planner shows it, and adjusts — never a s
   assert.doesNotMatch(anywherePlannerSource, /ANY-CITY PLANNER|Any-place Alpha|Experimental route|dogfood/i);
 });
 
+test("on a phone the map is a short, still overview until the reader expands it", () => {
+  // A tall map above the stops once kept them off the first screen and caught
+  // the thumb that meant to scroll. The overview is short, takes no pan or
+  // zoom gesture while collapsed, and shows no zoom buttons; its stops still
+  // open on a tap, and Expand gives the full interactive map.
+  const routeMap = componentSource("planner/RouteMap.tsx");
+  assert.match(anywherePlannerSource, /mapExpanded \? "h-\[min\(70vh,36rem\)\]" : "h-52"/);
+  assert.match(anywherePlannerSource, /still=\{!splitLayout && !mapExpanded\}/);
+  assert.match(routeMap, /function applyStill\(map: any, still: boolean\)/);
+  assert.match(routeMap, /\[map\.dragPan, map\.touchZoomRotate, map\.doubleClickZoom, map\.boxZoom, map\.keyboard\]/);
+  assert.match(routeMap, /applyStill\(map, stillRef\.current\)/, "applied as soon as the map exists");
+  assert.match(routeMap, /data-still=\{still \|\| undefined\}/);
+  assert.match(anywhereStyles, /\.route-map-frame\[data-still\] \.maplibregl-ctrl-top-left \{\s*display: none;/);
+});
+
 test("compact planner and map controls keep a 44px mobile touch target", () => {
-  assert.match(
-    anywherePlannerSource,
-    /aria-label=\{t\("Byt plats", "Change place"\)\}[\s\S]{0,180}min-h-11/,
-  );
-  assert.match(
-    anywherePlannerSource,
-    /aria-expanded=\{false\}[\s\S]{0,180}min-h-11/,
-  );
+  // The anchor card's Change and Adjust share one 44px pill (controlPill).
+  const anchorCard = componentSource("planner/AnchorCard.tsx");
+  assert.match(anchorCard, /const controlPill = "inline-flex min-h-11 /);
+  assert.match(anchorCard, /aria-label=\{t\("Byt plats", "Change place"\)\}\s*className=\{controlPill\}/);
+  assert.match(anchorCard, /aria-expanded=\{false\}[\s\S]{0,120}className=\{controlPill\}/);
   // The map's expand control is an icon: a 44×44 target named in both
   // languages, so it covers no more of the map than a thumb needs.
   assert.match(
