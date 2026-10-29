@@ -587,13 +587,15 @@ export default function RouteMap({
         const enginePath: Array<{ lat: number; lng: number }> = (Array.isArray(primaryRoute?.map_path_points) ? primaryRoute.map_path_points : [])
           .filter((point: any) => point && Number.isFinite(point.lat) && Number.isFinite(point.lng))
           .map((point: any) => ({ lat: point.lat, lng: point.lng }));
+        const geometrySource = primaryRoute && Object.hasOwn(primaryRoute, "geometry_source")
+          ? primaryRoute.geometry_source : primaryRoute?.routing_source;
         // `sketch` describes the original engine geometry, never these added
         // presentation points. Detailed walking paths pass through unchanged.
         const routePath = routeDisplayPath(enginePath.length > 1
           ? enginePath
           : drawableRouteStops.map((stop: any) => ({ lat: stop.lat, lng: stop.lng })), {
           sketch,
-          routingSource: enginePath.length > 1 ? (primaryRoute?.geometry_source ?? primaryRoute?.routing_source) : "heuristic",
+          routingSource: enginePath.length > 1 ? geometrySource : "heuristic",
         });
         if (routePath.length > 1) {
           routeLine = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: routePath.map(({ lat, lng }) => [lng, lat]) } };
