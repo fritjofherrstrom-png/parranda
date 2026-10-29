@@ -114,10 +114,11 @@ test('native mounted calendar layout retains escaped credit, admin scope and hal
     assert.match(shown,lang === 'en' ? /Provisional date/ : /Preliminärt datum/);
     assert.equal(shown.split(credit).length - 1,2);
     assert.equal(await page.locator('img').count(),0);
-    const anchors = page.locator('a');
-    assert.equal(await anchors.count(),1);
-    assert.equal(await anchors.getAttribute('href'),url);
-    assert.equal((await anchors.innerText()).replace(/\s*↗$/, ''),'api.example');
+    const titleLink = page.getByRole('heading', { name: 'Source holiday title' }).locator('a');
+    assert.equal(await titleLink.getAttribute('href'), url);
+    const sourceLink = page.locator('p a').filter({ hasText: 'api.example' });
+    assert.equal(await sourceLink.getAttribute('href'), url);
+    assert.equal((await sourceLink.innerText()).replace(/\s*↗$/, ''),'api.example');
     const dialog = await page.locator('[role="dialog"]').boundingBox();
     assert.ok(dialog.width <= 390,'dialog stays within the narrow fixture viewport');
   }
@@ -138,7 +139,7 @@ test('native mounted LiveSheet distinguishes captured uncovered and healthy cont
   for (const lang of ['en', 'sv']) for (const time of ['tonight', 'week']) {
     for (const response of captured) {
       const text = await render(response.live_events, lang, time);
-      assert.match(text, /No verified calendar coverage for this area yet|Verifierad kalendertäckning saknas för det här området/);
+      assert.match(text, /We don.t have verified event sources for this area yet|Vi har inga verifierade evenemangskällor för området ännu/);
       assert.doesNotMatch(text, falseEmpty);
       assert.doesNotMatch(text, /0\/0|no_approved_sources/);
       assert.equal(await page.evaluate(() => window.sheetState), 'uncovered');
@@ -151,7 +152,7 @@ test('native mounted LiveSheet distinguishes captured uncovered and healthy cont
     assert.match(pending, /calendars are still updating|Kalendrarna uppdateras fortfarande/);
     assert.doesNotMatch(pending, /responded|svarade/);
     const refreshing = await render(captured[0].live_events,lang,time,{liveQueryPending:true});
-    assert.match(refreshing, /Refreshing verified sources|Uppdaterar verifierade källor/);
+    assert.match(refreshing, /Looking for events|Letar efter evenemang/);
     assert.doesNotMatch(refreshing, falseEmpty);
     for (const status of ['unknown','unavailable']) {
       const unavailable = await render(events({status,result:'unknown',selected_source_count:0}),lang,time);
@@ -179,7 +180,7 @@ test('native mounted LiveSheet distinguishes captured uncovered and healthy cont
     assert.ok(shown.includes(lang === 'en' ? 'Recurring schedule — occurrence unconfirmed'
       : 'Återkommande schema — tillfället är inte bekräftat'));
     assert.ok(shown.includes('© OpenStreetMap contributors — ODbL'));
-    assert.equal(await page.locator('a[href="https://www.openstreetmap.org/node/42"]').count(),1);
+    assert.equal(await page.locator('p a[href="https://www.openstreetmap.org/node/42"]').count(),1);
   }
 });
 
@@ -287,8 +288,10 @@ test('native LiveCard and expanded source occurrences expire together and resync
 const programmeSlot=(id,starts_at,ends_at)=>({id,title:'Source programme',place:'Source venue',lat:59.33,lng:18.06,timezone:'Europe/Stockholm',
  starts_at,...(ends_at?{ends_at}:{}),source_provider_id:'source-calendar',source_label:'Source calendar',
  source_url:'https://calendar.example/programme',source_link_kind:'page',source_link_host:'calendar.example'});
-const rowState=(page,title)=>page.evaluate(title=>{const li=[...document.querySelectorAll('li')].find(li=>li.children[1]?.textContent.startsWith(title));
- return li&&{group:li.closest('[data-live-time-group]')?.getAttribute('data-live-time-group')??null,timing:li.children[0].textContent,
+// A row reads its title heading first, then its time line.
+const rowState=(page,title)=>page.evaluate(title=>{const li=[...document.querySelectorAll('li')].find(li=>li.querySelector(':scope > div > :is(h3,h4,h5)')?.textContent===title);
+ return li&&{group:li.closest('[data-live-time-group]')?.getAttribute('data-live-time-group')??null,
+  timing:li.querySelector(':scope > div > :is(h3,h4,h5) + div > p')?.textContent??'',
   slots:[...li.querySelectorAll('details li')].map(slot=>slot.textContent)};},title);
 const shown=async(page,title)=>{const {group,timing}=await rowState(page,title);return {group,timing};};
 

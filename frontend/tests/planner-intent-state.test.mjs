@@ -80,6 +80,16 @@ const edit = (overrides = {}) => ({
   replacement_preference: "culture", removed_candidate_ids: ["poi:old"], ...overrides,
 });
 
+test('release extent is canonical only for a non-retained remove command', () => {
+  const released = edit({ action: 'remove', target_stop_count: 2, replacement_preference: null,
+    preserve_retained: false, release_extent: true });
+  assert.deepEqual(intent.normalizeDayEdit(released), released);
+  for (const override of [{ release_extent: false }, { release_extent: 'true' },
+    { preserve_retained: true }, { action: 'replace', target_stop_count: 3 }]) {
+    assert.equal(intent.normalizeDayEdit({ ...released, ...override }), null);
+  }
+});
+
 test("day-edit canonicalization preserves retained order, strips provenance and sorts the removed set", () => {
   const raw = edit({ removed_candidate_ids: ["poi:other", "poi:old"], provenance: { verified: true }, token: "secret" });
   const actual = intent.normalizeDayEdit(raw);

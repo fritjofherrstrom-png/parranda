@@ -1,0 +1,26 @@
+✖ a released rhythm extent projects and restores the applied date-bound exclusions without a count ceiling (797.02125ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1098.877625
+
+✖ failing tests:
+
+test at tests/published-day-projection.test.js:73:1
+✖ a released rhythm extent projects and restores the applied date-bound exclusions without a count ceiling (797.02125ms)
+  AssertionError [ERR_ASSERTION]: the recipient must not make a date-scoped rejection permanent
+      at TestContext.<anonymous> (<repo>/tests/published-day-projection.test.js:93:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

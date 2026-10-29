@@ -19,6 +19,21 @@ function readPlannerEntry(search) {
   const coords = lat !== null && lng !== null ? { lat, lng } : null;
   const near = params.get("anchor") === "near";
   const restore = params.get("restore") === "last";
-  return { place, coords, near, restore, hasIntent: Boolean(params.has("place_ref") || place || coords || near || restore) };
+  return { place, coords, near, restore, hasIntent: Boolean(params.has("snapshot") || params.has("place_ref") || place || coords || near || restore) };
 }
-module.exports = { readPlannerEntry };
+
+/** URL intent only: ready does not attest snapshot existence, expiry or facts. */
+function readPublicDaySnapshotLink(search) {
+  const params = typeof search === "string" ? new URLSearchParams(search) : search;
+  if (!params.has("snapshot")) return { kind: "absent" };
+  if (params.getAll("snapshot").length !== 1 || params.getAll("lang").length > 1) return { kind: "invalid" };
+  for (const key of params.keys()) {
+    if (key !== "snapshot" && key !== "lang") return { kind: "invalid" };
+  }
+  const reference = params.get("snapshot");
+  if (reference.length !== 48 || /[^0-9a-f]/.test(reference)) return { kind: "invalid" };
+  const lang = params.get("lang");
+  if (lang !== null && lang !== "en" && lang !== "sv") return { kind: "invalid" };
+  return { kind: "ready", reference, lang };
+}
+module.exports = { readPlannerEntry, readPublicDaySnapshotLink };

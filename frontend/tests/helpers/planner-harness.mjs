@@ -208,7 +208,7 @@ async function buildComponent(entry) {
 /**
  * @returns {Promise<{ window, document, clock, fetchMock, container, unmount, act }>}
  */
-export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", storage = {}, sessionStorage = {}, entry = "components/AnywherePlanner.tsx", props = { lang: "en" }, injected = {}, navigationType } = {}) {
+export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", storage = {}, sessionStorage = {}, entry = "components/AnywherePlanner.tsx", props = { lang: "en" }, injected = {}, navigationType, historyState } = {}) {
   const code = await buildComponent(entry);
   bundleGeneration += 1;
 
@@ -217,6 +217,7 @@ export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", 
     pretendToBeVisual: false,
   });
   const { window } = dom;
+  if (historyState !== undefined) window.history.replaceState(historyState, "", window.location.href);
   Object.assign(window, injected);
   // jsdom does not expose browser Navigation Timing. Model only this external
   // entry signal; the URL, storage, planner and generation guards remain real.

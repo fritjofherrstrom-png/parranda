@@ -84,7 +84,11 @@ async function mountSheet(t, { events = [], more = [], lang = 'en', selected = [
 }
 
 const section = (h, label) => [...h.container.querySelectorAll('section')].find(node => node.getAttribute('aria-label') === label);
-const cardTitles = container => [...container.querySelectorAll('li > span:nth-child(2) > span:first-child')].map(node => node.textContent);
+const cardTitles = container => [...container.querySelectorAll('li > div > :is(h3, h4, h5)')].map(node => node.textContent);
+// Source attribution is a separate disclosure; it must neither stand in for
+// occurrence navigation nor conceal one of its selectable booking slots.
+const navigationDetails = container => [...container.querySelectorAll('details')]
+  .filter(node => !/^Source details$/.test(node.querySelector('summary')?.textContent.trim()));
 const programSlot = (id, startsAt, extra = {}) => event(id, null, {
   title: 'Source programme', source_provider_id: 'source-calendar', source_url: 'https://calendar.example/programme',
   lat: 59.3, lng: 18.1, time_window: { kind: 'continuous', starts_at: startsAt }, ...extra,
@@ -99,19 +103,19 @@ test('source programmes retain one For you card and disclose same-day slots in o
   const middle = event('middle', '2026-10-15', { time_window: { kind: 'occurrences', dates: ['2026-10-15'], local_start: '12:00' } });
   const h = await mountSheet(t, { events: [sourceProgram(slots), middle, earlier] });
   assert.equal(cardTitles(h.container).filter(title => title === 'Source programme').length, 1);
-  assert.equal(h.container.querySelector('summary')?.textContent.trim(), '3 occurrences');
+  assert.equal(navigationDetails(h.container)[0]?.querySelector('summary')?.textContent.trim(), '3 occurrences');
   assert.equal(h.container.querySelector('details ul')?.children.length, 3, 'For you preserves every original booking slot');
   await h.click('By time');
   assert.deepEqual([...h.container.querySelectorAll('section > h3')].map(node => node.textContent), ['Thu 15 Oct', 'Fri 16 Oct']);
   const firstDay = section(h, 'Thu 15 Oct');
   assert.deepEqual(cardTitles(firstDay), ['Source earlier', 'Source programme', 'Source middle'], 'the programme sorts by its first local slot');
-  assert.equal(firstDay.querySelector('summary')?.textContent.trim(), '2 occurrences');
+  assert.equal(navigationDetails(firstDay)[0]?.querySelector('summary')?.textContent.trim(), '2 occurrences');
   assert.equal(firstDay.querySelector('details ul')?.children.length, 2);
-  assert.match(firstDay.querySelector('details').textContent, /10:00/);
-  assert.match(firstDay.querySelector('details').textContent, /14:00/);
+  assert.match(navigationDetails(firstDay)[0].textContent, /10:00/);
+  assert.match(navigationDetails(firstDay)[0].textContent, /14:00/);
   const followingDay = section(h, 'Fri 16 Oct');
   assert.deepEqual(cardTitles(followingDay), ['Source programme']);
-  assert.equal(followingDay.querySelector('summary')?.textContent.trim(), '1 occurrence');
+  assert.equal(navigationDetails(followingDay)[0]?.querySelector('summary')?.textContent.trim(), '1 occurrence');
   assert.equal(followingDay.querySelector('details ul')?.children.length, 1, 'the next date has only its original slot');
   assert.doesNotMatch(followingDay.textContent, /14:00/);
 });
@@ -132,7 +136,7 @@ test('By time programme disclosure selects each exact eligible slot only on the 
     planningAvailable: true, onPlanOccurrence: (slot, label) => planned.push({ slot, label }) });
   const selectedDay = section(h, 'Thu 15 Oct');
   assert.equal(selectedDay.querySelectorAll(':scope > ul > li').length, 1, 'the programme itself is one display card');
-  assert.equal(selectedDay.querySelector('details')?.querySelectorAll('button').length, 3, 'only individually admitted slots offer actions');
+  assert.equal(navigationDetails(selectedDay)[0]?.querySelectorAll('button').length, 3, 'only individually admitted slots offer actions');
   assert.equal(selectedDay.querySelectorAll(':scope > ul > li > button').length, 0, 'the parent is never selectable');
   assert.equal(section(h, 'Fri 16 Oct').querySelectorAll('button').length, 0, 'listed dates never reuse a selected-day identity on another row');
   await h.click('Plan with this event', 0);
@@ -161,11 +165,11 @@ test('By time source programmes preserve venue, publisher and unresolved-time bo
   const h = await mountSheet(t, { events: [sourceProgram(slots)], sort: 'by_time' });
   const dated = section(h, 'Thu 15 Oct');
   assert.equal(dated.querySelectorAll(':scope > ul > li').length, 3);
-  assert.deepEqual([...dated.querySelectorAll('summary')].map(node => node.textContent.trim()), ['1 occurrence', '1 occurrence', '1 occurrence']);
+  assert.deepEqual(navigationDetails(dated).map(node => node.querySelector('summary').textContent.trim()), ['1 occurrence', '1 occurrence', '1 occurrence']);
   assert.equal(section(h, 'Source date ranges').querySelectorAll(':scope > ul > li').length, 1);
   assert.equal(section(h, 'Date not specified').querySelectorAll(':scope > ul > li').length, 1);
-  assert.equal(section(h, 'Source date ranges').querySelector('details'), null, 'ranges remain their exact source row');
-  assert.equal(section(h, 'Date not specified').querySelector('details'), null, 'an absent venue timezone does not acquire a date');
+  assert.equal(navigationDetails(section(h, 'Source date ranges')).length, 0, 'ranges remain their exact source row');
+  assert.equal(navigationDetails(section(h, 'Date not specified')).length, 0, 'an absent venue timezone does not acquire a date');
 });
 
 test('By time keeps explicit source-series same-date slots as individual navigation cards', async t => {
@@ -173,7 +177,7 @@ test('By time keeps explicit source-series same-date slots as individual navigat
   const h = await mountSheet(t, { events: [{ ...slots[0], source_series_id: 'stated-series', occurrences: slots }], sort: 'by_time' });
   const dated = section(h, 'Thu 15 Oct');
   assert.deepEqual(cardTitles(dated), ['Source programme', 'Source programme']);
-  assert.equal(dated.querySelector('details'), null, 'an explicit source series keeps its existing By time navigation');
+  assert.equal(navigationDetails(dated).length, 0, 'an explicit source series keeps its existing By time navigation');
 });
 
 test('source clocks with seconds retain chronological order and display precision', async t => {
@@ -184,7 +188,7 @@ test('source clocks with seconds retain chronological order and display precisio
   const group = section(h, 'Thu 15 Oct');
   assert.match(group.textContent, /09:30:15/);
   assert.match(group.textContent, /19:30:45/);
-  assert.deepEqual([...group.querySelectorAll('li > span:nth-child(2) > span:first-child')].map(node => node.textContent), ['Source early-clock', 'Source later-clock']);
+  assert.deepEqual(cardTitles(group), ['Source early-clock', 'Source later-clock']);
 });
 
 // A missing controlled sort toggle or a child-owned reset would break this.
@@ -213,11 +217,11 @@ test('By time places every supplied series slot and browse row in its actual dat
   assert.deepEqual([...h.container.querySelectorAll('section > h3')].map(node => node.textContent), ['Thu 15 Oct', 'Sat 17 Oct']);
   const firstDate = section(h, 'Thu 15 Oct');
   assert.ok(firstDate, 'event timestamp uses the venue date, including across UTC midnight');
-  assert.deepEqual([...firstDate.querySelectorAll('li > span:nth-child(2) > span:first-child')].map(node => node.textContent),
+  assert.deepEqual(cardTitles(firstDate),
     ['Source midnight', 'Source early-browse', 'Source series']);
   assert.match(firstDate.textContent, /01:30/);
   assert.match(section(h, 'Sat 17 Oct').textContent, /Source series/);
-  assert.equal(h.container.querySelectorAll('summary').length, 0, 'all dated slots are reachable without a hidden browse disclosure');
+  assert.equal(navigationDetails(h.container).length, 0, 'all dated slots are reachable without a hidden browse disclosure');
 });
 
 // Turning a range into a selected-date occurrence or using the viewer zone breaks this.
@@ -234,6 +238,25 @@ test('source ranges and missing date evidence stay separate from actual dates', 
   assert.match(section(h, 'Source date ranges').textContent, /Source long-continuous/);
   assert.match(section(h, 'Date not specified').textContent, /Source no-zone/);
   assert.match(section(h, 'Date not specified').textContent, /Source invalid/);
+});
+
+// A title one level below the nearest heading: under a date (h3) read by
+// time groups (h4) it is h5; under a date alone it is h4. Skipped levels or
+// a title outranking its group break this.
+test('By time titles sit one level below the nearest heading', async t => {
+  const RealDate = globalThis.Date;
+  const NOW = RealDate.parse('2026-10-15T12:00:00Z'); // 14:00 in Stockholm
+  globalThis.Date = class extends RealDate {
+    constructor(...args) { super(...(args.length ? args : [NOW])); }
+    static now() { return NOW; }
+  };
+  t.after(() => { globalThis.Date = RealDate; });
+  const h = await mountSheet(t, { events: [event('today', '2026-10-15'), event('tomorrow', '2026-10-16')], sort: 'by_time' });
+  const today = section(h, 'Thu 15 Oct');
+  assert.equal(today.querySelector(':scope > h3')?.textContent, 'Thu 15 Oct');
+  assert.deepEqual([...today.querySelectorAll('[data-live-time-group] > h4')].map(node => node.textContent), ['Later today']);
+  assert.deepEqual([...today.querySelectorAll('li > div > :is(h3, h4, h5)')].map(node => node.tagName), ['H5']);
+  assert.deepEqual([...section(h, 'Fri 16 Oct').querySelectorAll('li > div > :is(h3, h4, h5)')].map(node => node.tagName), ['H4']);
 });
 
 // Deriving tags from title/preferences or truncating stated date lists breaks this.

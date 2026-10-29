@@ -6,6 +6,7 @@ const { normalizePreferencePriority, normalizeDayEdit } = require('../../shared/
 const { normalizeUserIntents } = require('../candidates/intent-vocabulary');
 const { preferenceFit } = require('./preference-focus');
 const { selectAgnosticCandidateSet, buildAgnosticEvaluationPool } = require('./agnostic-candidate-set');
+const { createMealOrderPolicy } = require('./meal-ordering');
 
 const UI_BY_INTENT = Object.freeze({ food: 'food', museums: 'culture', scenic: 'views',
   coffee: 'fika', bars: 'nightlife', green: 'green', second_hand: 'second_hand' });
@@ -34,10 +35,11 @@ function isMeal(candidate) {
 }
 
 function selectBalancedDay({ rankedCandidates = [], selected = [], preferences = [],
-  preferencePriority = [], pinnedIds = [], ...context } = {}) {
+  preferencePriority = [], pinnedIds = [], mealContext = null, ...context } = {}) {
   const requested = normalizeUserIntents(preferences).intents;
   const priority = canonicalPriority(preferencePriority, preferences);
-  if (requested.length < 2 || (!priority.length && !requested.includes('food'))) return selected;
+  const timedFood = priority[0] === 'food' && createMealOrderPolicy(rankedCandidates.map(({ item }) => item), mealContext);
+  if ((requested.length < 2 && !timedFood) || (!priority.length && !requested.includes('food'))) return selected;
   // Exhaustive set evaluation is deliberately bounded to the same 12-place
   // reservoir as the existing chooser, not factorial route-order search.
   const unique = new Map();
@@ -45,6 +47,7 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
   const pool = buildAgnosticEvaluationPool({ rankedCandidates, requestedPreferences: preferences });
   const count = Math.min(selected.length, pool.length, 6);
   if (!count) return selected;
+  const meals = priority[0] === 'food' ? createMealOrderPolicy(pool.map(({ item }) => item), mealContext) : null;
   const describe = entries => selectAgnosticCandidateSet({ ...context,
     rankedCandidates: entries, desiredCount: entries.length, requestedPreferences: preferences,
     allowExpansion: false }).diagnostics;
@@ -111,6 +114,7 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
   const floor = unranked && ranked.length ? hitsOf(ranked[0], unranked) : 0;
   const best = pick(({ lead, tail, entries, diagnostics }) => [lead[0],
     !ranked.length || hitsOf(ranked[0], entries) >= floor ? 1 : 0, ...lead.slice(1),
+    ...(meals ? meals.scoreSet(entries.map(({ item }) => item)) : []),
     utilityOf(entries, intent => weights.get(intent)), diagnostics.spine_role_count, ...tail]);
   return best ? best.entries.map(({ item }) => item) : selected;
 }
@@ -122,10 +126,12 @@ function* orders(values, prefix = []) {
   }
 }
 
-function orderBalancedDay({ stops, geometry, geometryFor, chainKm, preferences = [], dayEdit = null }) {
+function orderBalancedDay({ stops, geometry, geometryFor, chainKm, preferences = [], preferencePriority = [], dayEdit = null, mealContext = null }) {
   const unchanged = { stops, geometry, changed: false };
   const strictEdit = dayEdit && (dayEdit.action === 'replace' || dayEdit.preserve_retained !== false);
-  if (stops.length > 6 || (!strictEdit && (normalizeUserIntents(preferences).intents.length < 2 ||
+  const meals = !strictEdit && canonicalPriority(preferencePriority, preferences)[0] === 'food'
+    ? createMealOrderPolicy(stops, mealContext) : null;
+  if (stops.length > 6 || (!strictEdit && !meals && (normalizeUserIntents(preferences).intents.length < 2 ||
       !stops.some(isMeal) || stops.every(isMeal)))) return unchanged;
   const baseKm = chainKm(stops);
   const score = candidate => {
@@ -136,6 +142,7 @@ function orderBalancedDay({ stops, geometry, geometryFor, chainKm, preferences =
       ? candidate.findIndex(stop => !dayEdit.retained_candidate_ids.includes(stop.id)) : -1;
     return [
       ...(strictEdit ? [replacementIndex < 0 ? 0 : -Math.abs(replacementIndex - dayEdit.slot_index), -orderDrift] : []),
+      ...(meals ? meals.score(candidate) : []),
       -candidate.slice(1).filter((stop, index) => isMeal(stop) && isMeal(candidate[index])).length,
       -(isMeal(candidate[0]) && isMeal(candidate[1]) ? 1 : 0),
       -chainKm(candidate),
@@ -152,7 +159,9 @@ function orderBalancedDay({ stops, geometry, geometryFor, chainKm, preferences =
     best = { stops: candidate, geometry: nextGeometry,
       changed: candidate.some((stop, index) => stop !== stops[index]), score: nextScore };
   }
-  return best;
+  if (!meals) return best;
+  const planned = meals.annotate(best.stops);
+  return { ...best, stops: planned, changed: best.changed || planned.some((stop, i) => stop !== best.stops[i]) };
 }
 
 function selectEditedDay({ rankedCandidates = [], selected = [], dayEdit, pinnedIds = [],
@@ -161,7 +170,8 @@ function selectEditedDay({ rankedCandidates = [], selected = [], dayEdit, pinned
   const byId = new Map(rankedCandidates.map(({ item }) => [item.id, item]));
   const refused = reason => ({ selected: [], reason });
   if (dayEdit.action === 'remove' && dayEdit.preserve_retained === false) {
-    const capped = selected.filter(item => !excluded.has(item.id)).slice(0, dayEdit.target_stop_count);
+    const eligible = selected.filter(item => !excluded.has(item.id));
+    const capped = dayEdit.release_extent ? eligible : eligible.slice(0, dayEdit.target_stop_count);
     return pinnedIds.some(id => !capped.some(item => item.id === id))
       ? refused('pin_conflict') : { selected: capped, reason: null };
   }
@@ -196,12 +206,12 @@ function selectEditedDay({ rankedCandidates = [], selected = [], dayEdit, pinned
 
 function dayEditOutcome(dayEdit, stops = [], reason = null) {
   const ids = stops.map(stop => stop.id);
-  const retained = dayEdit.retained_candidate_ids.filter(id => ids.includes(id));
+  const retained = dayEdit.release_extent ? ids : dayEdit.retained_candidate_ids.filter(id => ids.includes(id));
   return { version: 1, action: dayEdit.action, status: reason ? 'refused' : 'applied',
-    reason: reason || (dayEdit.action === 'replace' ? 'replaced' : dayEdit.preserve_retained === false ? 'recomposed_with_cap' : 'removed'), candidate_id: dayEdit.candidate_id,
-    target_stop_count: dayEdit.target_stop_count, actual_stop_count: ids.length,
+    reason: reason || (dayEdit.release_extent ? 'recomposed_with_rhythm' : dayEdit.action === 'replace' ? 'replaced' : dayEdit.preserve_retained === false ? 'recomposed_with_cap' : 'removed'), candidate_id: dayEdit.candidate_id,
+    target_stop_count: dayEdit.release_extent ? ids.length : dayEdit.target_stop_count, actual_stop_count: ids.length,
     retained_candidate_ids: retained,
-    unavailable_retained_candidate_ids: dayEdit.retained_candidate_ids.filter(id => !ids.includes(id)),
+    unavailable_retained_candidate_ids: dayEdit.release_extent ? [] : dayEdit.retained_candidate_ids.filter(id => !ids.includes(id)),
     replacement_candidate_id: dayEdit.action === 'replace' && !reason
       ? ids.find(id => !dayEdit.retained_candidate_ids.includes(id)) || null : null,
     result_candidate_ids: ids };

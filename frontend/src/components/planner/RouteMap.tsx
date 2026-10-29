@@ -30,7 +30,7 @@
  * Displaced badges retain a dot at their authoritative geographic coordinate.
  * Stops, their order, route geometry and the Maps handoff remain unchanged.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { pinGroupLabel, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
 import { controlAwareView, type FitMark, type MapBox } from "../../lib/route-map-fit.mjs";
@@ -171,6 +171,8 @@ export default function RouteMap({
   routeContextSuggestions,
   showContext,
   sketch,
+  selectedStopIndex,
+  onSelectStop,
   mapExpanded,
   onToggleExpanded,
   heightClass,
@@ -186,6 +188,9 @@ export default function RouteMap({
   showContext: boolean;
   /** The route line joins the stops' own coordinates — draw it dotted. */
   sketch: boolean;
+  /** The open list stop, in route order, if one is selected. */
+  selectedStopIndex?: number | null;
+  onSelectStop?: (index: number) => void;
   mapExpanded?: boolean;
   /** Offer the expand control only where the map can grow in place. */
   onToggleExpanded?: () => void;
@@ -250,7 +255,21 @@ export default function RouteMap({
     document.addEventListener("pointerdown", outside, true);
     return () => document.removeEventListener("pointerdown", outside, true);
   }, [groupPicker]);
-  const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; move: (x: number, y: number, direction: "left" | "right") => void; showOrigin: (visible: boolean) => void; setGrouped: (grouped: boolean) => void; focus: () => void }>>([]);
+  const selectedStopRef = useRef<number | null>(selectedStopIndex ?? null);
+  selectedStopRef.current = selectedStopIndex ?? null;
+  const onSelectStopRef = useRef(onSelectStop);
+  onSelectStopRef.current = onSelectStop;
+  const selectionViewportTopRef = useRef<{ index: number; top: number } | null>(null);
+  const selectStop = (index: number) => {
+    if (!onSelectStopRef.current) return;
+    if (selectedStopRef.current !== index && frameRef.current) {
+      selectionViewportTopRef.current = { index, top: frameRef.current.getBoundingClientRect().top };
+    }
+    onSelectStopRef.current(index);
+  };
+  const selectStopRef = useRef(selectStop);
+  selectStopRef.current = selectStop;
+  const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; routeIndex: number; element: HTMLElement; grouped?: boolean; move: (x: number, y: number, direction: "left" | "right") => void; showOrigin: (visible: boolean) => void; setGrouped: (grouped: boolean) => void; focus: () => void }>>([]);
   // Group pins by member key ("0,1,4"), the last shift of every pin (so a pin
   // stays put while the map moves), and the stop to focus once a group pin
   // opened from the keyboard has separated.
@@ -289,6 +308,16 @@ export default function RouteMap({
       for (const pin of pins) if (pin.members.length > 1) pin.members.forEach((i) => badgesRef.current[i].setGrouped(true));
     }
     syncGroupPins(map, groups);
+    // Keep the selected station visible even when it shares a grouped pin.
+    badgesRef.current.forEach((badge) => {
+      if (!badge.grouped && badge.routeIndex === selectedStopRef.current) badge.element.setAttribute("data-route-selected", "true");
+      else badge.element.removeAttribute("data-route-selected");
+    });
+    for (const [key, pin] of groupPinsRef.current) {
+      const selected = key.split(",").some((member) => badgesRef.current[Number(member)]?.routeIndex === selectedStopRef.current);
+      if (selected) pin.element.setAttribute("data-route-selected", "true");
+      else pin.element.removeAttribute("data-route-selected");
+    }
     // Origin dots are optional coordinate hints, never relocated coordinates.
     // Suppress a hint when it would paint over any station (including its own)
     // or a group pin; a stop inside a group pin shows none.
@@ -586,6 +615,7 @@ export default function RouteMap({
                 && event.clientX === previous.x && event.clientY === previous.y)) return;
             }
             if (interaction === "click" && event) lastPointerRef.current = { x: event.clientX, y: event.clientY };
+            if (interaction === "click") selectStopRef.current(index);
             const badge = badgesRef.current[badgeIndex];
             const point = map.project([stop.lng, stop.lat]);
             tipAnchorRef.current = { index: badgeIndex, interaction };
@@ -625,6 +655,9 @@ export default function RouteMap({
           disc.addEventListener("click", (event) => open("click", event));
           shell.addEventListener("focus", () => open("focus"));
           shell.addEventListener("blur", () => close("blur"));
+          shell.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); open("click"); }
+          });
           const targetMarker = new ml.Marker({ element: target, anchor: "center", offset: [shiftX, shiftY] }).setLngLat([stop.lng, stop.lat]).addTo(map);
           const discMarker = new ml.Marker({ element: shell, anchor: "center", offset: [shiftX, shiftY] }).setLngLat([stop.lng, stop.lat]).addTo(map);
           // MapLibre sets its own stacking; targets stay beneath every disc.
@@ -636,6 +669,8 @@ export default function RouteMap({
             lat: stop.lat,
             lng: stop.lng,
             name: markerName,
+            routeIndex: index,
+            element: shell,
             x: shiftX,
             y: shiftY,
             direction: "right",
@@ -712,6 +747,18 @@ export default function RouteMap({
       cancelled = true;
     };
   }, [areas, primaryRoute, hasPrimaryRoute, routeStops, routeContextSuggestions, showContext, sketch]);
+
+  // Updating a disclosure should not rebuild or refit the map.
+  useEffect(() => { layoutRef.current(); }, [selectedStopIndex]);
+  // Opening a list panel above a mobile map must not move the map away from
+  // the finger. Keep its viewport position while the selected panel changes.
+  useLayoutEffect(() => {
+    const previous = selectionViewportTopRef.current;
+    selectionViewportTopRef.current = null;
+    if (!previous || previous.index !== selectedStopIndex || !frameRef.current) return;
+    const delta = frameRef.current.getBoundingClientRect().top - previous.top;
+    if (Math.abs(delta) > 0.5) window.scrollBy({ top: delta, behavior: "instant" });
+  }, [selectedStopIndex]);
 
   // Follow the page's theme without redrawing the day.
   useEffect(() => {
@@ -812,6 +859,7 @@ export default function RouteMap({
                 if (!map) return;
                 const point = map.project([badge.lng, badge.lat]);
                 tipAnchorRef.current = { index, interaction: "click" };
+                selectStopRef.current(badge.routeIndex);
                 setGroupPicker(null);
                 setTip({ name: badge.name, x: point.x, y: point.y, direction: point.x < mapRef.current!.clientWidth / 2 ? "right" : "left" });
               }}>{index + 1}. {badge.name}</button>;

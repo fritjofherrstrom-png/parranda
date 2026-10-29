@@ -206,8 +206,8 @@ export function clothingAdvice(observed, lang) {
  *   occurrences→ the stated source date this row is about (the selected day, or
  *                the next listed date whose session has not ended) + its local
  *                clock — a listed series is never described as daily
- *   period     → the source's own date range and local clock plus "days per
- *                source": the source has not said which days carry a session
+ *   period     → the source's own date range and local clock; the separate
+ *                eventTimingNotice explains that session days are not known
  *   daily      → "dagligen HH–HH" from local_start/local_end (already local —
  *                never re-converted through a timezone); only sources that
  *                state every-day sessions produce this kind
@@ -290,7 +290,7 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null, { o
     const start = startsOn ? day(startsOn) : null;
     if (!start) return "";
     const end = endsOn && endsOn !== startsOn ? day(endsOn) : null;
-    return [end ? `${start} – ${end}` : start, clockRange, en ? "days per source" : "dagar enligt källan"]
+    return [end ? `${start} – ${end}` : start, clockRange]
       .filter(Boolean)
       .join(" · ");
   }
@@ -548,6 +548,16 @@ function startClock(ev) {
   } catch {
     return "~";
   }
+}
+
+/** A period states a span, not a daily schedule or confirmed sessions. Keep
+ *  this qualification separate from the compact date/clock in every surface.
+ *  Calendar facts describe dates rather than event sessions. */
+export function eventTimingNotice(ev, lang) {
+  if (ev?.time_window?.kind !== "period" || ev.calendar_fact?.kind === "public_holiday" || !eventTiming(ev, lang)) return "";
+  return lang === "en"
+    ? "Check current days and times with the organiser."
+    : "Se aktuella dagar och tider hos arrangören.";
 }
 
 function listedDates(values) {

@@ -48,7 +48,7 @@ const {
 const { normalizeSelectedHoursCalendar, resolveCandidateDayHours } = require('../place-candidates/opening-hours-calendar');
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
 const { operatorClosureForWindow } = require('../place-candidates/operator-visit-evidence');
-const { buildAgnosticRouteOrdering, daypartForRole, timeBandRank } = require("./agnostic-route-ordering");
+const { buildAgnosticRouteOrdering, daypartForRole, fixedDaypartForRole, timeBandRank } = require("./agnostic-route-ordering");
 const { resolveWalkableMicroBase } = require("./walkable-micro-base");
 const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-route-context");
 const { buildDayflowContext } = require("./dayflow-context");
@@ -443,7 +443,7 @@ function evaluateEligibility({
   // catalog supply. Geometry, preferences and walking still decide eligibility.
   // With no catalog supply, keep the existing loader blockers.
   if (externalRequested && loaderBlocker && curatedCandidateCount === 0 &&
-      !(dayEdit?.action === 'remove' && loaderStatus === 'loaded:0')) {
+      !(dayEdit?.action === 'remove' && !dayEdit.release_extent && loaderStatus === 'loaded:0')) {
     blockers.push(loaderBlocker);
   }
 
@@ -464,7 +464,7 @@ function evaluateEligibility({
   const geocodedCount = geocodedStops.length;
   // Manual shortening is not automatic route readiness. Count only factual
   // eligible supply; a zero/one-stop choice never fabricates a source pair.
-  const minimumCount = dayEdit?.action === 'remove' ? 0
+  const minimumCount = dayEdit?.release_extent ? MIN_VIABLE_GEOCODED_STOPS : dayEdit?.action === 'remove' ? 0
     : dayEdit ? Math.min(MIN_VIABLE_GEOCODED_STOPS, dayEdit.target_stop_count) : MIN_VIABLE_GEOCODED_STOPS;
   const coherence = (adaptedBody?.geometry_summary && adaptedBody.geometry_summary.coherence) || "incomplete";
   const reachExcludedCount = Number(plannerRoles?.reach_policy?.excluded_candidate_count) || 0;
@@ -777,10 +777,17 @@ function buildRouteDaypartHonesty({
   currentTimeBand = null,
   anchoredToLocalTime = false,
   trimmedDayparts = [],
+  stopRoles = [],
 } = {}) {
   const arc = (Array.isArray(daypartArc) ? daypartArc : []).filter(Boolean);
   const currentRank = timeBandRank(currentTimeBand);
-  const earliestRank = arc.length ? timeBandRank(arc[0]) : null;
+  // A balanced day that interleaves bands withholds its arc labels, but its
+  // stops still say whether the day leads with dayparts already past (review,
+  // 25 Oct 2026: a museum and a gallery at 20:00 carried no note at all). Only
+  // fixed dayparts count; a meal may be dinner.
+  const stopRanks = arc.length ? [] : (Array.isArray(stopRoles) ? stopRoles : [])
+    .map(role => timeBandRank(fixedDaypartForRole(role))).filter(rank => rank !== null);
+  const earliestRank = arc.length ? timeBandRank(arc[0]) : stopRanks.length ? Math.min(...stopRanks) : null;
   const caveats = [];
   if (anchoredToLocalTime) caveats.push("day_anchored_to_current_time");
   if (!anchoredToLocalTime && currentRank !== null && earliestRank !== null && earliestRank < currentRank) {
@@ -1281,6 +1288,8 @@ async function composeAgnosticRouteOutputOnce({
     walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
     walkingFitSelection: synthesizeVia === "engine",
     experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
+    mealContext: preferencePriority?.[0] === 'food' && ctx?.timezoneKnown && ctx.timeAppliesToRequestedDate
+      ? { date: effectiveDate, nowLocalIso: ctx.now, fullDay: dayRhythm === 'full' } : null,
   };
   const selectionHelpers = trustedTimeAppliesToRequestedDate
     ? {
@@ -1755,6 +1764,8 @@ async function composeAgnosticRouteViaEngine({
       preferencePriority,
       dayEdit: stableDayEdit,
       reservedLiveStopCount: preserveLive ? 1 : 0,
+      mealContext: contextBlock?.time?.timezone_known === true && contextBlock.time.requested_date_is_today === true
+        ? { date: effectiveDate, nowLocalIso: contextBlock.time.now, fullDay: dayRhythm === 'full' } : null,
     });
     const engineResult = await generateAgnosticRecommendations({
       cityConfig: engineCityConfig,
@@ -1958,7 +1969,7 @@ async function composeAgnosticRouteViaEngine({
   const missingRetainedLive = dayEdit && dayEdit.preserve_retained !== false &&
     dayEdit.retained_candidate_ids.some(id => id.startsWith('live-event-') &&
       !(engineRoute?.main_stops || []).some(stop => stop.id === id));
-  const liveExtent = dayEdit?.target_stop_count ?? ({ light: 4, variation: 5, peak: 6 })[profileForCandidates(sourceCandidates)];
+  const liveExtent = (dayEdit?.release_extent ? null : dayEdit?.target_stop_count) ?? ({ light: 4, variation: 5, peak: 6 })[profileForCandidates(sourceCandidates)];
   const liveCountConflict = preserveLive && engineRoute?.main_stops?.length > liveExtent;
   const livePinConflict = activeLiveKeeps.length && requestedPins.some(id =>
     !(engineRoute?.main_stops || []).some(stop => stop.id === id));
@@ -1983,7 +1994,7 @@ async function composeAgnosticRouteViaEngine({
     if (engineDay?.day_edit) engineDay.day_edit = engineRoute.day_edit;
   }
 
-  if (dayEdit?.action === 'remove' && !(engineRoute?.main_stops || []).length) {
+  if (dayEdit?.action === 'remove' && !dayEdit.release_extent && !(engineRoute?.main_stops || []).length) {
     const result = applyRouteMutation({ baselineResult, primaryRoute: null, date: effectiveDate });
     scrubAgnosticAppliedDay(result, null);
     result.days[0].manual_empty_day = true;
@@ -2003,6 +2014,7 @@ async function composeAgnosticRouteViaEngine({
       currentTimeBand,
       anchoredToLocalTime,
       trimmedDayparts,
+      stopRoles: (Array.isArray(engineRoute.main_stops) ? engineRoute.main_stops : []).map(stop => stop?.role),
     });
     Object.assign(engineRoute, daypartHonesty, {
       caveats: dedupe([...(Array.isArray(engineRoute.caveats) ? engineRoute.caveats : []), ...daypartHonesty.caveats]),
@@ -2404,4 +2416,6 @@ module.exports = {
   shouldUseCapacityRepair,
   scrubAgnosticAppliedDay,
   MIN_VIABLE_GEOCODED_STOPS,
+  // exported for tests
+  buildRouteDaypartHonesty,
 };

@@ -1,0 +1,11 @@
+✔ built HTTP Remove -> Relaxed -> Full releases the extent while retaining exclusion through Undo and reload (4304.951292ms)
+✔ HTTP uses trusted current context and cannot be made lunch-aware by forged client context (460.06825ms)
+✔ mobile built app publishes lunch first/dinner last and changes Relaxed -> Full through actual HTTP (2312.211458ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4867.920416

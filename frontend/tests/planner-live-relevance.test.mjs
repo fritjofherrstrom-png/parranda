@@ -98,7 +98,11 @@ test('the Live sheet claims picks only for server matches and labels every other
   const more = [...sheet(h).querySelectorAll('details li')].map(li => li.textContent);
   assert.equal(more.length, 2);
   assert.match(more[0], /Street food tasting.*Matches: Food & drink$/);
-  assert.match(more[1], /Library open house · Venue h-library · via\sOfficial calendar · calendar\.example/, 'source remains attribution and link names its destination');
+  assert.match(more[1], /Library open house.*Venue h-library/, 'the event keeps its title and place');
+  const library = [...sheet(h).querySelectorAll('li')].find(li => li.querySelector(':scope > div > :is(h3, h4, h5)')?.textContent === 'Library open house');
+  assert.match(library.querySelector('details').textContent, /via\sOfficial calendar/, 'the feed remains attribution');
+  assert.equal(library.querySelector('p a').textContent.replace(/\s*↗$/, ''), 'calendar.example', 'link names its actual destination');
+  assert.equal(library.querySelector('p a').getAttribute('href'), 'https://calendar.example/h-library');
   assert.doesNotMatch(more[1], /Matches:|looser match|local discovery/, 'no server reason, no relevance line');
 });
 
@@ -126,7 +130,11 @@ test('a pick added before the day recomposes is never claimed from the older ran
   assert.match(picks[0], /Fixture: kvällskonsert.*Matches: Culture$/, 'a match to a pick still held stays true');
   assert.doesNotMatch(sheet(h).textContent, /Nightlife/, 'the server never ranked for the new pick');
   const other = rowsUnder(h, 'Other local highlights');
-  assert.match(other[1], /Night swim at the harbour · Venue g-swim · via\sOfficial calendar · calendar\.example/);
+  assert.match(other[1], /Night swim at the harbour.*Venue g-swim/);
+  assert.match(other[1], /via\sOfficial calendar/);
+  const swim = [...sheet(h).querySelectorAll('li')].find(li => li.querySelector(':scope > div > :is(h3, h4, h5)')?.textContent === 'Night swim at the harbour');
+  assert.equal(swim.querySelector('p a').getAttribute('href'), 'https://calendar.example/g-swim');
+  assert.equal(swim.querySelector('p a').textContent.replace(/\s*↗$/, ''), 'calendar.example');
   assert.doesNotMatch(other[1], /beyond your picks|Matches:|looser match/,
     '"beyond your picks" is not established for a pick the server never checked');
 });

@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { mountPlanner } from "./helpers/planner-harness.mjs";
+import { browserStorage } from "./helpers/exact-navigation-observation.mjs";
 import { buildSavedEntry } from "../src/lib/anywhere-storage.mjs";
 
 const LAST_KEY = "parranda:anywhere:last";
@@ -52,31 +53,59 @@ async function mount(t, url, options = {}) {
   return h;
 }
 
-test("an adjustment is written to the address, and reloading that address composes the adjusted day", async (t) => {
-  const h = await mountPlanner({ url: "http://localhost/anywhere?place=Testville&planner=open&lang=en" });
+for (const navigationType of ["reload", "back_forward"]) test(`an accepted adjustment owns the address and ${navigationType} restores that exact answer`, async (t) => {
+  let h = await mountPlanner({ url: "http://localhost/anywhere?place=Testville&planner=open&lang=en" });
+  let reloaded;
+  t.after(async () => { if (reloaded) await reloaded.unmount(); if (h) await h.unmount(); });
   h.document.addEventListener("click", (event) => event.preventDefault());
   await h.clock.advance(500);
-  await h.fetchMock.respond(composeCalls(h)[0], composedDay());
+  const initial = composeCalls(h)[0];
+  const original = composedDay();
+  original.days[0].date = initial.body.dates[0];
+  await h.fetchMock.respond(initial, original);
   await h.clock.advance(50);
+  const before = h.readStorage(LAST_KEY);
+  const beforeAddress = h.window.location.href;
 
   await click(h, button(h, /^Adjust/));
   await click(h, button(h, /^Relaxed/));
   await click(h, button(h, /^Tomorrow/));
   await h.clock.advance(450);
-  const address = new URLSearchParams(h.window.location.search);
-  assert.equal(h.window.location.pathname, "/anywhere");
-  assert.equal(address.get("place"), "Testville");
-  assert.equal(address.get("rhythm"), "calm");
-  assert.equal(address.get("day"), "1");
-  assert.equal(address.get("lang"), "en");
-  const search = h.window.location.search;
-  await h.unmount();
+  const adjusted = composeCalls(h).at(-1);
+  assert.equal(adjusted.body.day_rhythm, "calm");
+  assert.notDeepEqual(adjusted.body.dates, initial.body.dates);
+  assert.deepEqual(h.readStorage(LAST_KEY), before, "pending inputs cannot replace the accepted day");
+  assert.equal(h.window.location.href, beforeAddress, "the accepted address stays authoritative while pending");
+  const response = composedDay();
+  response.days[0].date = adjusted.body.dates[0];
+  response.days[0].primary_route.main_stops[0].label = "Accepted adjusted stop";
+  await h.fetchMock.respond(adjusted, response);
+  await h.clock.advance(50);
+  const accepted = h.readStorage(LAST_KEY);
+  const address = new URL(h.window.location.href);
+  assert.equal(address.pathname, "/anywhere");
+  assert.equal(address.searchParams.get("rhythm"), "calm");
+  assert.equal(address.searchParams.get("day"), "1");
+  assert.equal(address.searchParams.get("lang"), "en");
+  assert.equal(accepted.dateIso, adjusted.body.dates[0]);
+  assert.equal(accepted.inputs.walkKey, "calm");
+  assert.equal(accepted.inputs.place, "Testville");
+  const storage = browserStorage(h.window.localStorage);
+  const sessionStorage = browserStorage(h.window.sessionStorage);
+  const historyState = structuredClone(h.window.history.state);
+  await h.unmount(); h = null;
 
-  const reloaded = await mount(t, `http://localhost/anywhere${search}`);
+  reloaded = await mountPlanner({ url: address.href, storage, sessionStorage, historyState, navigationType });
+  await reloaded.clock.advance(2000);
+  assert.equal(reloaded.fetchMock.calls.length, 0, "exact navigation makes no compose or background acquisition");
+  assert.match(reloaded.text(), /Accepted adjusted stop/);
+  assert.deepEqual(reloaded.readStorage(LAST_KEY), accepted, "restore retains the complete accepted answer and inputs");
+  await click(reloaded, button(reloaded, /^Adjust/));
+  await click(reloaded, button(reloaded, /^Full/));
   await reloaded.clock.advance(500);
-  const [arrival] = composeCalls(reloaded);
-  assert.equal(arrival.body.place, "Testville");
-  assert.equal(arrival.body.day_rhythm, "calm");
+  assert.equal(composeCalls(reloaded).length, 1, "an explicit adjustment still reaches the transport once");
+  assert.equal(composeCalls(reloaded)[0].body.day_rhythm, "full");
+  assert.deepEqual(composeCalls(reloaded)[0].body.dates, adjusted.body.dates, "ordinary edits keep the restored absolute date");
 });
 
 test("a restored snapshot keeps its restore address", async (t) => {

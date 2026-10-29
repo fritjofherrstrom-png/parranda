@@ -18,67 +18,33 @@ import { stopIdentity as changeStopIdentity } from "../../lib/day-change.mjs";
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { lineProgress } from "../../lib/line-progress.mjs";
-import { eventSourceLink, eventTiming } from "../../lib/pulse-view.mjs";
+import { eventSourceLink } from "../../lib/pulse-view.mjs";
+import LiveEventTiming from "./LiveEventTiming";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { selectedDayHoursLabel } from "../../lib/selected-day-hours.mjs";
-import { stopHoursUnknown, stopTypeLabel, stopWebsiteUrl, stopMatchedPreferences, stopPlaceDetails } from "../../lib/stop-card-facts.mjs";
-import { stopCategoryFamily, type StopCategoryFamily } from "../../lib/stop-category.mjs";
+import { stopHoursUnknown, stopWebsiteUrl, stopMatchedPreferences, stopPlaceDetails } from "../../lib/stop-card-facts.mjs";
 import { walkingDistanceLabel, type RouteContextSuggestion } from "../../lib/route-context-view.mjs";
 import {
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   ClockIcon,
-  CultureIcon,
-  DrinkIcon,
   ExternalIcon,
-  FoodIcon,
   KeepIcon,
   LocationIcon,
   MinusIcon,
-  NatureIcon,
   PlusIcon,
-  ShopIcon,
   ShuffleIcon,
-  SightIcon,
   TrashIcon,
   WalkIcon,
 } from "../shared/icons";
 import { busyButton, buttonClass, compactPillTarget, dataLine, Eyebrow, ExternalLinkText, inlineLinkTarget } from "../shared/ui";
-import { DAYPART_LABELS, label, partialPreferenceLabels, pickLabel, typeLabel, type Lang, type Translate } from "./copy";
+import { DAYPART_LABELS, label, partialPreferenceLabels, pickLabel, type Lang, type Translate } from "./copy";
 import { canCommitTo, type Commitments } from "./commitments";
+import StopCategory, { stopCategoryLabel } from "./StopCategory";
 import { useFollowPosition } from "./useFollowPosition";
 
 type Leg = { km: number | null; minutes: number | null };
-
-const CATEGORY_ICONS: Record<StopCategoryFamily, (props: { className?: string }) => ReactNode> = {
-  food: FoodIcon,
-  drink: DrinkIcon,
-  culture: CultureIcon,
-  nature: NatureIcon,
-  sight: SightIcon,
-  shop: ShopIcon,
-};
-
-/** A stop's kind as a compact badge: the family's symbol and the kind's own
- *  words, on a quiet tint. Same shape for every category; an unknown family
- *  shows the words alone. */
-function StopCategory({ type, label, muted }: { type: unknown; label: string; muted: boolean }) {
-  const family = stopCategoryFamily(type);
-  const Symbol = family ? CATEGORY_ICONS[family] : null;
-  return (
-    <span
-      data-stop-category={family || "other"}
-      className={
-        "inline-flex max-w-full items-center gap-1.5 rounded-full bg-parranda-ink/[0.07] py-1 pl-2 pr-2.5 text-xs font-semibold leading-none " +
-        (muted ? "text-parranda-ink/68" : "text-parranda-ink")
-      }
-    >
-      {Symbol && <Symbol className="h-3.5 w-3.5 text-parranda-ink/72" />}
-      <span className="truncate">{label}</span>
-    </span>
-  );
-}
 
 const NO_NEW_STOPS: ReadonlySet<string> = new Set();
 
@@ -293,9 +259,7 @@ export default function StopLine({
           const placeDetails = stopPlaceDetails(stop, lang);
           const partialLabels = partialPreferenceLabels(stop, selected, lang);
           const matchedLabels = stopMatchedPreferences(stop, selected).map((key) => pickLabel(key, lang));
-          const stopKindLabel = stop?.type === "vintage-shop"
-            ? stopTypeLabel(stop, lang)
-            : typeLabel(stop?.type, lang);
+          const stopKindLabel = stopCategoryLabel(stop, lang);
           const hoursUnknown = stopHoursUnknown(stop);
           const sourceLabel = String(stop?.source?.label || "").trim();
           const behind = currentIndex != null && i < currentIndex;
@@ -491,8 +455,8 @@ export default function StopLine({
                       <p className="text-xs leading-relaxed text-parranda-ink/68">
                         {stop?.candidate_status === "partial"
                           ? sourceLabel
-                            ? t(`Källstöd: ${sourceLabel} · underlaget är fortfarande provisoriskt`, `Source-backed by ${sourceLabel} · evidence is still provisional`)
-                            : t("Källunderlaget är fortfarande provisoriskt", "Source evidence is still provisional")
+                            ? t(`Källa: ${sourceLabel} · platsuppgifterna är inte bekräftade ännu`, `Source: ${sourceLabel} · place details are not yet confirmed`)
+                            : t("Platsuppgifterna är inte bekräftade ännu", "Place details are not yet confirmed")
                           : t(`Källa: ${sourceLabel}`, `Source: ${sourceLabel}`)}
                       </p>
                     </details>
@@ -557,12 +521,8 @@ export default function StopLine({
                   ) : (
                     <span className="text-17 font-extrabold">{name}</span>
                   )}
-                  {stop?.starts_at && (
-                    <span className="type-data rounded-full bg-parranda-live px-2 py-0.5 text-11 font-semibold text-parranda-on-live">
-                      {eventTiming(stop, lang, undefined, selectedDate)}
-                    </span>
-                  )}
                 </p>
+                <LiveEventTiming event={stop} lang={lang} selectedDate={selectedDate} />
                 {venue && venue !== name && <p className="mt-0.5 text-13 text-parranda-ink/72">{venue}</p>}
                 <p className="mt-1 text-13 text-parranda-ink/72">
                   {dayOffset === 0
@@ -653,8 +613,8 @@ export default function StopLine({
           </h3>
           <p className="text-xs leading-relaxed text-parranda-ink/68">
             {t(
-              "Valfria idéer från platsunderlaget — de ingår inte i dagens stopp eller Maps-rutten.",
-              "Optional ideas from the place evidence — they are not part of this day's stops or the Maps route.",
+              "Fler idéer som inte ingår i dagens rutt.",
+              "More ideas outside today's route.",
             )}
           </p>
           {detoursOpen && (
@@ -670,6 +630,8 @@ export default function StopLine({
                 // Same id shape the composed stops use, so a pin resolves
                 // against the very candidates the server already loaded.
                 const candidateId = String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "").trim();
+                const committable = canCommitTo(stop);
+                const kindLabel = stopCategoryLabel(stop, lang);
                 const candidatePanelId = `candidate-panel-detour-${index}`;
                 const expanded = expandedCandidateKey === candidateKey;
                 return (
@@ -684,6 +646,7 @@ export default function StopLine({
                       <span>{name}</span>
                       {expanded ? <MinusIcon className="h-4 w-4 shrink-0 text-parranda-ember" /> : <PlusIcon className="h-4 w-4 shrink-0 text-parranda-ink/68" />}
                     </button>
+                    {kindLabel && <div className="pb-1.5"><StopCategory type={stop.type} label={kindLabel} /></div>}
                     <p className={`${dataLine} pb-1.5`}>
                       {walkingDistanceLabel(stop.distance_km, lang)} {t("från", "from")} {stop.route_stop_name}
                     </p>
@@ -704,7 +667,7 @@ export default function StopLine({
                             a candidate the day did not choose. The server
                             still has to resolve it against its own loaded
                             pool — an unhonoured pin is reported, not faked. */}
-                        {candidateId && (commitments[candidateId]?.kind === "pin" || canCommitTo(stop)) && (
+                        {candidateId && (commitments[candidateId]?.kind === "pin" || committable) && (
                           <button
                             type="button"
                             onClick={() =>
@@ -723,6 +686,12 @@ export default function StopLine({
                               ? t("Med i dagen — släpp", "In my day — release")
                               : t("Lägg till i min dag", "Add to my day")}
                           </button>
+                        )}
+                        {(!candidateId || (commitments[candidateId]?.kind !== "pin" && !committable)) && (
+                          <p className="mt-2 text-xs leading-relaxed text-parranda-ink/68">
+                            {t("Tips att utforska — platsen kan inte läggas till i den här rutten just nu.",
+                              "A nearby tip — this place can't be added to this route right now.")}
+                          </p>
                         )}
                       </div>
                     )}

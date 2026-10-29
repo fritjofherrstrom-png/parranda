@@ -78,6 +78,7 @@ export declare function eventTiming(
         ends_on?: string | null;
         timezone?: string | null;
         time_window?: PulseTimeWindow | null;
+        calendar_fact?: { kind?: string } | null;
       }
     | null
     | undefined,
@@ -110,6 +111,12 @@ export declare function liveTimeGroups<T>(
     dateOf?: (item: T) => string | null | undefined;
   },
 ): { state: LiveTimeState; events: T[] }[];
+
+/** Session uncertainty for source periods; rendered separately from timing. */
+export declare function eventTimingNotice(
+  ev: Parameters<typeof eventTiming>[0],
+  lang: "sv" | "en",
+): string;
 
 export declare function pulseHealthState(
   liveEvents:

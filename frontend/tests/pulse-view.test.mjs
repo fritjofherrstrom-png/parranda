@@ -7,6 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { selectableLiveOccurrenceId } from "../src/lib/live-stop-choice.mjs";
+import * as pulseView from "../src/lib/pulse-view.mjs";
 import {
   splitRouteStops,
   wovenEventIds,
@@ -445,13 +446,26 @@ test("eventTiming: a period shows the source range and clock, never daily and ne
     timezone: "Europe/Stockholm",
     time_window: { kind: "period", starts_on: "2026-06-25", ends_on: "2026-07-16", local_start: "18:00", local_end: "21:00" },
   };
-  assert.equal(eventTiming(period, "sv", before, "2026-07-10"), "tors 25 juni – tors 16 juli · 18:00–21:00 · dagar enligt källan");
-  assert.equal(eventTiming(period, "en", before, "2026-07-10"), "Thu 25 Jun – Thu 16 Jul · 18:00–21:00 · days per source");
+  assert.equal(eventTiming(period, "sv", before, "2026-07-10"), "tors 25 juni – tors 16 juli · 18:00–21:00");
+  assert.equal(eventTiming(period, "en", before, "2026-07-10"), "Thu 25 Jun – Thu 16 Jul · 18:00–21:00");
   assert.equal(
     eventTiming({ time_window: { kind: "period", starts_on: "2026-06-25", ends_on: "2026-07-16" } }, "sv", before),
-    "tors 25 juni – tors 16 juli · dagar enligt källan",
+    "tors 25 juni – tors 16 juli",
   );
   assert.equal(eventTiming({ time_window: { kind: "period" } }, "en", before), "", "no stated range → omitted");
+});
+
+test("period notices qualify uncertain event sessions, never explicit dates, daily hours or calendar facts", () => {
+  const period = { time_window: { kind: "period", starts_on: "2026-10-01", ends_on: "2026-10-31" } };
+  assert.equal(pulseView.eventTimingNotice?.(period, "en"), "Check current days and times with the organiser.");
+  assert.equal(pulseView.eventTimingNotice?.(period, "sv"), "Se aktuella dagar och tider hos arrangören.");
+  for (const control of [null, {}, { time_window: { kind: "period" } }, THURSDAY_SERIES,
+    { time_window: { kind: "daily", local_start: "11:00" } },
+    { time_window: { kind: "all_day", starts_on: "2026-10-27" } },
+    { ...period, calendar_fact: { kind: "public_holiday" } }]) {
+    assert.equal(pulseView.eventTimingNotice?.(control, "en"), "");
+    assert.equal(pulseView.eventTimingNotice?.(control, "sv"), "");
+  }
 });
 
 // Live relevance is read from the server's per-row fit, in canonical intents
@@ -633,7 +647,7 @@ test("a group that names the day lets its rows give only their clocks; ranges an
   assert.equal(eventTiming({ time_window: { kind: "all_day", starts_on: QA_DAY, ends_on: QA_DAY, all_day_explicit: true } }, "sv", QA_NOW, QA_DAY, opts), "Hela dagen");
   assert.equal(eventTiming({ starts_on: QA_DAY }, "sv", QA_NOW, QA_DAY, opts), "tid ej angiven", "a bare date still does not claim the whole day");
   const period = { time_window: { kind: "period", starts_on: "2026-10-01", ends_on: "2026-11-08", local_start: "10:00", local_end: "17:00" } };
-  assert.equal(eventTiming(period, "en", QA_NOW, QA_DAY, opts), "Thu 1 Oct – Sun 8 Nov · 10:00–17:00 · days per source");
+  assert.equal(eventTiming(period, "en", QA_NOW, QA_DAY, opts), "Thu 1 Oct – Sun 8 Nov · 10:00–17:00", "a range keeps its dates; its uncertainty is the separate notice");
   const listed = { timezone: STOCKHOLM, time_window: { kind: "occurrences", dates: [QA_DAY, "2026-10-30"], local_start: "19:00", local_end: "21:00" } };
   assert.equal(eventTiming(listed, "en", QA_NOW, QA_DAY, opts), "19:00–21:00");
   assert.equal(eventTiming(listed, "en", QA_NOW, "2026-10-30", opts), "Fri 30 Oct 19:00–21:00", "another date keeps its date");

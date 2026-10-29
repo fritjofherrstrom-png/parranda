@@ -11,6 +11,7 @@ import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
+import { assertExactNavigation } from './helpers/exact-navigation-observation.mjs';
 
 const require = createRequire(import.meta.url);
 const { buildApp } = require('../../server/app');
@@ -281,15 +282,17 @@ test('built Planner withholds a recorded seasonal Monday closure across reload a
     [OWNER_WEBSITE, OWNER_HOURS_URL, 'https://museum-1.example/', 'https://museum-2.example/'].sort(),
     'only the selected websites and one source-owned visit-hours link are read');
 
-  const reloaded = nextPublished();
-  await f.page.reload();
-  const mondayAgain = await reloaded;
+  const beforeReload = await f.page.evaluate(() => JSON.parse(localStorage.getItem('parranda:anywhere:last')));
+  const beforeSourceReads = f.websiteRequests.length;
+  const restored = await assertExactNavigation({ page: f.page, navigate: () => f.page.reload(),
+    expectedEntry: beforeReload, readComposeCount: () => f.composeRequests.length });
+  const mondayAgain = restored.safeResponse;
   observations.push({ stage: 'monday-reload', body: mondayAgain });
   await waitRendered(mondayAgain);
   await assertMonday(mondayAgain, f.page);
-  assert.equal(f.composeRequests.length, 2, 'reload owns one new intent, without a replay submission');
-  assert.equal(f.collections, 2, 'each intent reuses its own single frozen supply acquisition');
-  assert.ok(f.websiteRequests.length <= 8, 'reload cannot expand the bounded source reads');
+  assert.equal(f.composeRequests.length, 1, 'reload displays the accepted Monday without another intent');
+  assert.equal(f.collections, 1, 'reload performs no supply acquisition');
+  assert.equal(f.websiteRequests.length, beforeSourceReads, 'reload cannot refresh the original source observation');
   if (evidenceDir) await f.page.screenshot({ path: join(evidenceDir, 'recorded-seasonal-monday-reload.png'), fullPage: true });
 
   // The server source cache and observed-at clock remain unchanged. Moving the
@@ -310,8 +313,8 @@ test('built Planner withholds a recorded seasonal Monday closure across reload a
   await waitRendered(tuesday);
   assert.equal(tuesday.days[0].date, '2026-10-20');
   assert.deepEqual(f.composeRequests.map(request => request.payload.dates),
-    [['2026-10-19'], ['2026-10-19'], ['2026-10-20']]);
-  assert.equal(f.collections, 3);
+    [['2026-10-19'], ['2026-10-20']]);
+  assert.equal(f.collections, 2, 'only the explicit Tuesday choice acquires another supply');
   assert.deepEqual(stopsOf(tuesday).map(stop => stop.id).sort(), [OWNER_ID, 'selected-1', 'selected-2'].sort(),
     'a cached Monday closure cannot exclude Tuesday');
   assert.equal(tuesday.agnostic_route_output_experiment.walking_validation.valid, true);
@@ -366,14 +369,13 @@ test('built UI displays recorded café ordinary hours conditionally through HTTP
     return stop.selected_day_hours;
   };
   const originalFact = await verify(f.body);
-  const reloaded = f.page.waitForResponse(async response => {
-    if (!COMPOSE_PATHS.has(new URL(response.url()).pathname) || response.status() !== 200) return false;
-    try { return stopsOf(await response.json()).some(row => row.id === cafeRecord.id); } catch { return false; }
-  }).then(response => response.json());
-  await f.page.reload();
-  const body = await reloaded;
+  const beforeReload = await f.page.evaluate(() => JSON.parse(localStorage.getItem('parranda:anywhere:last')));
+  const restored = await assertExactNavigation({ page: f.page, navigate: () => f.page.reload(),
+    expectedEntry: beforeReload, readComposeCount: () => f.composeRequests.length });
+  const body = restored.safeResponse;
   await f.page.getByRole('list', { name: 'The stops, in order', exact: true }).locator(':scope > li > button').filter({ hasText: cafeRecord.name }).waitFor();
   assert.deepEqual(await verify(body), originalFact, 'reload keeps original observation and qualified uncertainty');
-  assert.equal(f.collections, 2);
+  assert.equal(f.collections, 1, 'ordinary reload cannot acquire or renew source observations');
+  assert.equal(f.composeRequests.length, 1);
   assert.equal(f.websiteRequests.filter(url => url.includes('centralkonditoriet')).length, 1, 'date-independent calendar reused without refetch');
 });

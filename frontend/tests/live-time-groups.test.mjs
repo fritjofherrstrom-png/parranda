@@ -51,10 +51,14 @@ async function composed(t, lang) {
   return h;
 }
 const liveCard = (h) => [...h.container.querySelectorAll('section')].find(s => /^Live (in|i) Testville/.test(s.querySelector('h2')?.textContent || ''));
+// A row reads its title heading first, then its time line.
+const title = (li) => li.querySelector(':scope > div > :is(h3, h4, h5)');
 const groups = (root) => [...root.querySelectorAll('[data-live-time-group]')].map(g => ({
-  heading: g.querySelector('h3, h4')?.textContent,
-  rows: [...g.querySelectorAll(':scope > ul > li')].map(li => [li.children[0].textContent, li.children[1].querySelector('span')?.textContent]),
+  heading: g.querySelector(':scope > :is(h3, h4)')?.textContent,
+  rows: [...g.querySelectorAll(':scope > ul > li')].map(li => [li.querySelector(':scope > div > :is(h3, h4, h5) + div > p')?.textContent, title(li)?.textContent]),
 }));
+// A title sits one level below its time group's heading.
+const titleLevels = (root) => [...root.querySelectorAll('[data-live-time-group] > ul > li')].map(li => title(li)?.tagName);
 const button = (h, re) => [...h.container.querySelectorAll('button')].find(b => re.test(b.textContent.trim()));
 
 test('the Live card reads its rows by time state and names the day once (en)', async t => {
@@ -67,6 +71,8 @@ test('the Live card reads its rows by time state and names the day once (en)', a
     { heading: 'During the day', rows: [['All day', 'Light festival']] },
     { heading: 'Started earlier', rows: [['started 12:00 · end time unknown', 'Lunch theatre']] },
   ]);
+  assert.equal(card.querySelectorAll('[data-live-time-group] > h3').length, 4);
+  assert.deepEqual(titleLevels(card), ['H4', 'H4', 'H4', 'H4']);
   // The date is in the heading, not on every row.
   assert.equal((card.textContent.match(/Wed 7 Oct/g) || []).length, 1, card.textContent);
   // "See all live" is a secondary Live-blue outline, not a second filled action.
@@ -103,8 +109,10 @@ test('the Live sheet is headed h2, and By time reads the current day by time sta
   // The multi-day exhibition is a source date range and keeps its own section.
   assert.deepEqual(groups(section).map(g => g.heading), ['Later today', 'During the day', 'Started earlier']);
   assert.deepEqual([...section.querySelectorAll('[data-live-time-group] > h3')].map(h => h.textContent), ['Later today', 'During the day', 'Started earlier']);
+  assert.deepEqual(titleLevels(section), ['H4', 'H4', 'H4']);
   assert.deepEqual(groups(section)[0].rows.map(([timing]) => timing), ['19:30–21:00'], 'the day is named once, above');
   const ranges = [...sheet.querySelectorAll('section')].find(s => s.getAttribute('aria-label') === 'Source date ranges');
   assert.match(ranges.textContent, /Harbour exhibition/);
   assert.match(ranges.textContent, /on now · until 17:00/);
+  assert.deepEqual([...ranges.querySelectorAll('li > div > :is(h3, h4, h5)')].map(h => h.tagName), ['H4'], 'one level below the section heading');
 });

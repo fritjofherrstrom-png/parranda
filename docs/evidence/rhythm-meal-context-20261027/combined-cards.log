@@ -1,0 +1,57 @@
+{
+  "scope": "Built UI and real HTTP/composition with the existing Rome catalog; controlled resolver, weather and clock; no public/source acceptance",
+  "requests": [
+    {},
+    {
+      "edit": {
+        "version": 1,
+        "action": "remove",
+        "candidate_id": "teatro-di-marcello",
+        "retained_candidate_ids": [
+          "isola-tiberina",
+          "giardino-degli-aranci",
+          "colosseum",
+          "villa-celimontana"
+        ],
+        "target_stop_count": 4,
+        "slot_index": 0,
+        "replacement_preference": null,
+        "removed_candidate_ids": [
+          "teatro-di-marcello"
+        ]
+      }
+    },
+    {
+      "pins": [
+        "roscioli-salumeria"
+      ],
+      "edit": {
+        "version": 1,
+        "action": "remove",
+        "candidate_id": "teatro-di-marcello",
+        "retained_candidate_ids": [
+          "isola-tiberina",
+          "giardino-degli-aranci",
+          "colosseum",
+          "villa-celimontana"
+        ],
+        "target_stop_count": 4,
+        "slot_index": 0,
+        "replacement_preference": null,
+        "removed_candidate_ids": [
+          "teatro-di-marcello"
+        ],
+        "preserve_retained": false
+      }
+    }
+  ],
+  "errors": [],
+  "cards": [
+    {
+      "name": "Roscioli Salumeria con Cucina",
+      "category": "Restaurant",
+      "add": true
+    }
+  ],
+  "outcome": "PASS: source-kind badges, source-gated Add, and actual pin inclusion preserve the explicitly shortened four-stop day"
+}

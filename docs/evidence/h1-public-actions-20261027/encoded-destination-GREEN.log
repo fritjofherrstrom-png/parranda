@@ -1,0 +1,112 @@
+TAP version 13
+# Subtest: real configured Linked Events factory -> collector -> HTTP completion publishes the original day and public Live facts
+ok 1 - real configured Linked Events factory -> collector -> HTTP completion publishes the original day and public Live facts
+  ---
+  duration_ms: 1254.567351
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses booking query while retaining the actual Live facts
+ok 2 - generic sharing refuses booking query while retaining the actual Live facts
+  ---
+  duration_ms: 668.437294
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses login credentials while retaining the actual Live facts
+ok 3 - generic sharing refuses login credentials while retaining the actual Live facts
+  ---
+  duration_ms: 444.98779
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses private IP while retaining the actual Live facts
+ok 4 - generic sharing refuses private IP while retaining the actual Live facts
+  ---
+  duration_ms: 670.888008
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses loopback while retaining the actual Live facts
+ok 5 - generic sharing refuses loopback while retaining the actual Live facts
+  ---
+  duration_ms: 397.331154
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses private host while retaining the actual Live facts
+ok 6 - generic sharing refuses private host while retaining the actual Live facts
+  ---
+  duration_ms: 311.333428
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses private fragment while retaining the actual Live facts
+ok 7 - generic sharing refuses private fragment while retaining the actual Live facts
+  ---
+  duration_ms: 357.466384
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses private path while retaining the actual Live facts
+ok 8 - generic sharing refuses private path while retaining the actual Live facts
+  ---
+  duration_ms: 635.819927
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses trailing-dot loopback while retaining the actual Live facts
+ok 9 - generic sharing refuses trailing-dot loopback while retaining the actual Live facts
+  ---
+  duration_ms: 547.590246
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses trailing-dot private host while retaining the actual Live facts
+ok 10 - generic sharing refuses trailing-dot private host while retaining the actual Live facts
+  ---
+  duration_ms: 420.902695
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses encoded login path while retaining the actual Live facts
+ok 11 - generic sharing refuses encoded login path while retaining the actual Live facts
+  ---
+  duration_ms: 342.306187
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses encoded checkout separator while retaining the actual Live facts
+ok 12 - generic sharing refuses encoded checkout separator while retaining the actual Live facts
+  ---
+  duration_ms: 486.829147
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses double-encoded login path while retaining the actual Live facts
+ok 13 - generic sharing refuses double-encoded login path while retaining the actual Live facts
+  ---
+  duration_ms: 418.747535
+  type: 'test'
+  ...
+# Subtest: an actually applied Live route upgrade publishes a new exact snapshot instead of reusing the original route
+ok 14 - an actually applied Live route upgrade publishes a new exact snapshot instead of reusing the original route
+  ---
+  duration_ms: 680.140944
+  type: 'test'
+  ...
+# Subtest: generic provider authority survives owned disk reuse but not a JSON replay, config change or renewed cache age
+ok 15 - generic provider authority survives owned disk reuse but not a JSON replay, config change or renewed cache age
+  ---
+  duration_ms: 449.324426
+  type: 'test'
+  ...
+# Subtest: actual Overture factory can retain public attribution and website without granting a JSON clone authority
+ok 16 - actual Overture factory can retain public attribution and website without granting a JSON clone authority
+  ---
+  duration_ms: 15.563343
+  type: 'test'
+  ...
+# Subtest: actual OSM transport factory retains its two source links and public website, without upgrading source evidence
+ok 17 - actual OSM transport factory retains its two source links and public website, without upgrading source evidence
+  ---
+  duration_ms: 8.671363
+  type: 'test'
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 17
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 8843.558697

@@ -13,6 +13,7 @@ const test = require("node:test");
 
 const {
   resolveDefaultEventSupply,
+  collectAnchorEvents,
   eventCacheKey,
   HELSINKI_LINKED_EVENTS_FEED,
   rankCollectedEventsForPreferences,
@@ -21,6 +22,29 @@ const {
 
 const ORIGINAL_FETCH = global.fetch;
 const { createSourceCache } = require("../server/place-candidates/source-cache");
+
+test("a persisted v19 regional-only pool cannot answer for bounded local discovery", async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-regional-pool-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const anchor = { lat: 60.17, lng: 24.94 }, now = "2026-10-27T08:00:00Z";
+  const key = eventCacheKey(anchor, now, [HELSINKI_LINKED_EVENTS_FEED.id], 3000);
+  await createSourceCache({ namespace: "agnostic-events-v19", dir }).get(key, async () => ({
+    coverage: "covered", tonight: [], this_week: [], stale_regional_pool: true,
+    acquisition: { source_health: { status: "healthy", result: "empty" } },
+  }));
+  let collections = 0;
+  const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_CACHE_DIR: dir,
+    PARRANDA_EVENT_FEEDS: JSON.stringify([HELSINKI_LINKED_EVENTS_FEED]) }, {
+    requestTimeDiscovery: null, collectEvents: async () => {
+      collections++;
+      return { coverage: "covered", tonight: [], this_week: [], acquisition: { source_health: { status: "healthy", result: "empty" } } };
+    },
+  });
+  assert.equal((await supply({ anchor, now })).pending, true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(collections, 1);
+  assert.ok(fs.existsSync(path.join(dir, "agnostic-events-v19")), "prior files are preserved");
+});
 
 test("a persisted first-page-only Ticketmaster pool cannot bypass the bounded pagination policy", async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-first-page-pool-"));
@@ -42,6 +66,67 @@ test("a persisted first-page-only Ticketmaster pool cannot bypass the bounded pa
   assert.equal((await supply(request)).pending, true, "old truncated inventory must not masquerade as the corrected complete collection");
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(collections, 1);
+});
+
+test("a persisted healthy-empty v18 pool cannot suppress complementary local discovery", async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-complementary-cache-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const approved = {
+    id: "municipal-calendar", adapter: "ical", endpoint: "https://municipal.example/calendar.ics",
+    bbox: [13.6, 45.6, 13.9, 45.75], timezone: "Europe/Rome", source_tier: "official",
+    confidence: "medium", source_family: "official_municipal_calendar", source_identity: "municipal.example",
+  };
+  const discovered = {
+    ...approved, id: "independent-programme", endpoint: "https://programme.example/calendar.ics",
+    source_identity: "programme.example", source_family: "venue_calendar", source_tier: "unknown",
+    confidence: "low", status: "probationary", runtime_trust: "request_time_single_observation", pulse_only: true,
+  };
+  const request = {
+    anchor: { lat: 45.6496, lng: 13.7773 }, now: "2026-10-13T08:00:00Z", selectedDate: "2026-10-13",
+    placeContext: { locality: "Trieste", region: "Friuli – Venezia Giulia", country: "Italy" },
+    discoverySpatialScope: { source: "resolver_bounds", kind: "settlement", bounds: {
+      south: 45.6, north: 45.75, west: 13.6, east: 13.9,
+    } },
+  };
+  const key = eventCacheKey(request.anchor, request.now, [approved.id], 3000, null, request.selectedDate);
+  await createSourceCache({ namespace: "agnostic-events-v18", dir }).get(key, async () => ({
+    coverage: "covered", selected_date: request.selectedDate, tonight: [], this_week: [],
+    acquisition: { source_health: { status: "healthy", result: "empty" } },
+  }));
+  const oldDirectory = path.join(dir, "agnostic-events-v18");
+  const oldFile = path.join(oldDirectory, fs.readdirSync(oldDirectory)[0]);
+  const oldBytes = fs.readFileSync(oldFile, "utf8");
+  let searches = 0, collected;
+  const fetched = [];
+  const supply = resolveDefaultEventSupply({
+    PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_EVENT_READER: "disabled",
+    PARRANDA_EVENT_FEEDS: JSON.stringify([approved]), PARRANDA_CACHE_DIR: dir,
+  }, {
+    requestTimeDiscovery: async () => { searches++; return { status: "found", feeds: [discovered] }; },
+    collectEvents: input => {
+      collected = collectAnchorEvents({ ...input, fetcher: async url => {
+        fetched.push(String(url));
+        assert.ok([approved.endpoint, discovered.endpoint].includes(String(url)));
+        const event = String(url) === discovered.endpoint ? [
+          "BEGIN:VEVENT", "UID:independent-concert", "DTSTART:20261013T170000Z", "DTEND:20261013T180000Z",
+          "SUMMARY:Independent concert", "GEO:45.650;13.778", "URL:https://programme.example/concert", "END:VEVENT",
+        ] : [];
+        return { ok: true, status: 200, text: async () => ["BEGIN:VCALENDAR", "VERSION:2.0", ...event, "END:VCALENDAR", ""].join("\r\n") };
+      } });
+      return collected;
+    },
+  });
+  const pending = await supply(request);
+  assert.equal(pending.pending, true, "the previous final pool cannot bypass the new complementary collection");
+  await collected;
+  await new Promise(resolve => setImmediate(resolve));
+  const result = await supply(request);
+  assert.deepEqual(result.tonight.map(event => event.title), ["Independent concert"]);
+  assert.equal(result.tonight[0].route_eligible, false);
+  assert.equal(result.acquisition.request_time_discovery.status, "found");
+  assert.equal(searches, 1);
+  assert.equal(fetched.length, 2, "the existing source and independent source are each collected once");
+  assert.equal(fs.readFileSync(oldFile, "utf8"), oldBytes, "old cache files remain untouched");
 });
 
 // Coverage is opt-in — the product default has no baked-in city. A deployment
@@ -327,7 +412,7 @@ test("one neutral warm cache reranks for different preferences without refetchin
     assert.equal(culture.tonight[0].id, "a-concert");
     assert.equal(secondHand.tonight[0].id, "z-loppis");
     assert.equal(fetchCount, 1, "preference changes rerank cached evidence instead of recollecting providers");
-    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v17")), "persist bounded multi-page inventory and corrected occurrence facts separately from stale first-page pools");
+    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v24")), "persist corrected programme reading separately from prior incomplete event pools");
     assert.ok(!fs.existsSync(path.join(cacheDir, "agnostic-events-v11")), "old result pools with borrowed timezone/bindings are not written");
     assert.ok(!fs.existsSync(path.join(cacheDir, "agnostic-events-v6")), "v6 pools that widened recurring ranges into daily windows are never read or written");
     const restarted = resolveDefaultEventSupply({

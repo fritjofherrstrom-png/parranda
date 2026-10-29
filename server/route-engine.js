@@ -4450,6 +4450,10 @@ function refineStopOrder(selectedStops, start, geometryFor) {
 // the ordering layer and never depends on the provisional-stop mapper carrying
 // role data (that mapper is owned elsewhere).
 function composeStopDaypartSlot(stop, roleById = null) {
+  // A meal's proposed place in this day is not source availability or open-now
+  // evidence. Only the trusted, geometry-checked ordering pass sets this field.
+  const mealSlot = SLOT_DAYPART.indexOf(stop?.plannedMealDaypart);
+  if (mealSlot >= 0) return mealSlot;
   // Only the trusted any-place reservoir sets this after checking selected
   // intent and source availability. Use the same band for ordering and labels;
   // retaining a midday cafe must not publish an already-past morning visit.
@@ -5306,7 +5310,7 @@ function buildRouteFromTemplate(
     getActiveCityConfig().__reservedLiveStopCount === 1 ? 1 : 0;
   const normalSelectedCount = Math.max(0,
     desiredStopCount(sortedPool.length + reservedLiveStopCount, targetKm, distanceMode, dayProfile) - reservedLiveStopCount);
-  const selectedCount = dayEdit?.action === 'remove' && dayEdit.preserve_retained === false
+  const selectedCount = dayEdit?.action === 'remove' && dayEdit.preserve_retained === false && !dayEdit.release_extent
     ? Math.min(normalSelectedCount, dayEdit.target_stop_count) : normalSelectedCount;
   const strictPool = strictTags.length
     ? sortedPool.filter((entry) => itemMatchesStrictPreference(entry.item, strictTags))
@@ -5461,12 +5465,13 @@ function buildRouteFromTemplate(
       end,
       shape,
       targetKm: selectionTargetKm,
-      allowExpansion: !dayEdit && !reservedLiveStopCount,
+      allowExpansion: (!dayEdit || dayEdit.release_extent) && !reservedLiveStopCount,
     });
     selectedStops = selectBalancedDay({
       rankedCandidates: sortedPool, selected: constrained.selected, preferences,
       preferencePriority: options.preferencePriority || getActiveCityConfig().__preferencePriority || [],
       pinnedIds: options.pinnedStopIds || [], start, end, shape, targetKm: selectionTargetKm,
+      mealContext: getActiveCityConfig().__mealContext || null,
     });
   }
 
@@ -5534,7 +5539,9 @@ function buildRouteFromTemplate(
     composeGeometry = dp.geometry;
     agnosticDaypartOrdering = { applied: dp.applied, fallback: dp.fallback, reason: dp.reason };
     const balanced = orderBalancedDay({ stops: composeOrderedStops, geometry: composeGeometry,
-      geometryFor: geomFor, chainKm: selectedStopChainKm, preferences, dayEdit });
+      geometryFor: geomFor, chainKm: selectedStopChainKm, preferences, dayEdit,
+      preferencePriority: getActiveCityConfig().__preferencePriority || [],
+      mealContext: getActiveCityConfig().__mealContext || null });
     if (balanced.changed) {
       composeOrderedStops = balanced.stops;
       composeGeometry = balanced.geometry;

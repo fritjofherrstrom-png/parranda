@@ -20,7 +20,7 @@ import { selectableLiveOccurrenceId } from "../../lib/live-stop-choice.mjs";
 import { busyButton, buttonClass, labelChip, pillClass, segmentClass, segmentGroup } from "../shared/ui";
 import { liveTagLabels } from "../../lib/live-tags.mjs";
 import { liveRelevanceSentence, liveTimeGroupLabel, nearbyDistanceLabel, type Lang, type Translate } from "./copy";
-import { liveEventSource } from "./LiveEventSource";
+import LiveEventSummary from "./LiveEventSummary";
 import EventOccurrences from "./EventOccurrences";
 import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
 import type { LiveEvents, LiveFailure, LiveSourceHealth, PulseEvent } from "./types";
@@ -129,8 +129,11 @@ export default function LiveSheet({
   // A list for one day names that day once (the cell heading, a date
   // heading); its rows then say only their clocks.
   const selectedDay = liveSheetTime === "tonight" ? sheetLiveEvents?.selected_date ?? null : null;
+  // A row's title sits one level below the nearest heading above it: a
+  // section heading (h3) by default, a time group under a date (h4) or none.
   const sheetRow = (ev: PulseEvent, i: number, titleClassName: string, timingDate = sheetLiveEvents?.selected_date,
-    navigationRow?: LiveNavigationRow<PulseEvent>, omitDate: string | null = null, underOnNow = false) => {
+    navigationRow?: LiveNavigationRow<PulseEvent>, omitDate: string | null = null, underOnNow = false,
+    heading: "h3" | "h4" | "h5" = "h4") => {
     const displayProgram = ev.display_group_kind === "source_program";
     const relevance = liveRelevanceSentence(liveEventRelevance(navigationRow?.series || ev, selected), lang, t);
     const distance = nearbyDistanceLabel(ev, lang);
@@ -141,12 +144,9 @@ export default function LiveSheet({
       : eventTiming(liveTimeRepresentative(ev, now, timingDay), lang, now, timingDay, { omitDate, underOnNow });
     return (
       <li key={`${ev.id || "event"}:${i}`} className="flex min-w-0 flex-col gap-1 sm:gap-2">
-        <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">{timing}</span>
-        <span className="min-w-0 max-w-full break-words text-sm leading-relaxed text-parranda-ink/90">
-          <span className={titleClassName}>{ev.title}</span>
-          {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
-          {distance && <span className="font-semibold text-parranda-live"> · {distance}</span>}
-          {liveEventSource(ev, lang)}
+        <LiveEventSummary event={ev} lang={lang} now={now} selectedDate={navigationRow?.date || timingDate}
+          timing={timing} distance={distance} heading={heading} titleClassName={titleClassName} />
+        <div className="min-w-0 max-w-full break-words text-sm leading-relaxed text-parranda-ink/90">
           {/* A named list: aria-label on a plain span is not read, a list's is. */}
           {tags.length > 0 && <span role="list" aria-label={t("Taggar", "Tags")} className="mt-1 flex flex-wrap gap-1">
             {/* overflow-wrap:anywhere, not break-words: inside an inline-flex chip
@@ -154,7 +154,7 @@ export default function LiveSheet({
             {tags.map(tag => <span role="listitem" key={tag} className={`${labelChip} min-w-0 max-w-full [overflow-wrap:anywhere]`}>{tag}</span>)}
           </span>}
           {relevance && <span className="mt-0.5 block text-xs text-parranda-ink/68">{relevance}</span>}
-        </span>
+        </div>
         {!displayProgram && choice(ev, navigationRow?.series?.title || ev.title || "", navigationRow ? navigationRow.date : planningDate)}
         {(!navigationRow || displayProgram) && <EventOccurrences event={ev} lang={lang} now={now} selectedDate={navigationRow?.date || timingDate}
           renderChoice={slot => choice(slot, ev.title || "", navigationRow ? navigationRow.date : planningDate)} />}
@@ -172,16 +172,17 @@ export default function LiveSheet({
     const byState = states.some((group) => group.state === "now" || group.state === "later" || group.state === "started" || group.state === "ended");
     const dayNamed = Boolean(date && date === selectedDay);
     const GroupHeading = dayNamed ? "h3" : "h4";
+    const rowHeading = byState ? (dayNamed ? "h4" : "h5") : (dayNamed ? "h3" : "h4");
     return (
       <section key={label} aria-label={label} className="flex flex-col gap-3">
         {!dayNamed && <h3 className="text-xs font-bold text-parranda-ink/68">{label}</h3>}
         {byState ? states.map((group) => (
           <div key={group.state} className="flex flex-col gap-2" data-live-time-group={group.state}>
             <GroupHeading className="text-xs font-semibold text-parranda-live">{liveTimeGroupLabel(group.state, t)}</GroupHeading>
-            <ul className="flex flex-col gap-3">{group.events.map((row, i) => sheetRow(row.event, i, "font-semibold", row.date || undefined, row, date, group.state === "now"))}</ul>
+            <ul className="flex flex-col gap-3">{group.events.map((row, i) => sheetRow(row.event, i, "font-semibold", row.date || undefined, row, date, group.state === "now", rowHeading))}</ul>
           </div>
         )) : (
-          <ul className="flex flex-col gap-3">{rows.map((row, i) => sheetRow(row.event, i, "font-semibold", row.date || undefined, row, date))}</ul>
+          <ul className="flex flex-col gap-3">{rows.map((row, i) => sheetRow(row.event, i, "font-semibold", row.date || undefined, row, date, false, rowHeading))}</ul>
         )}
       </section>
     );
@@ -329,7 +330,7 @@ export default function LiveSheet({
           {liveQueryPending ? (
             <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4" aria-live="polite">
               <p className="text-sm text-parranda-ink/75">
-                {t("Uppdaterar verifierade källor för det här området …", "Refreshing verified sources for this area …")}
+                {t("Letar efter evenemang …", "Looking for events …")}
               </p>
             </div>
           ) : liveQueryError ? (
@@ -340,8 +341,8 @@ export default function LiveSheet({
             <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
               <p className="text-sm leading-relaxed text-parranda-ink/80">
                 {t(
-                  "Verifierad kalendertäckning saknas för det här området. Vi vet därför inte vad som händer här — det betyder inte att inget är på gång.",
-                  "No verified calendar coverage for this area yet. We don't know what's on here — that doesn't mean nothing is happening.",
+                  "Vi har inga verifierade evenemangskällor för området ännu. Det kan ändå hända saker här.",
+                  "We don't have verified event sources for this area yet. There may still be events here.",
                 )}
               </p>
             </div>

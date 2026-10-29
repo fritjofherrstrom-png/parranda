@@ -16,7 +16,7 @@ import { eventTiming, liveTimeGroups, liveTimeRepresentative } from "../../lib/p
 import { ChevronRightIcon } from "../shared/icons";
 import { buttonClass, Eyebrow } from "../shared/ui";
 import { liveTimeGroupLabel, type Lang, type Translate } from "./copy";
-import { liveEventSource } from "./LiveEventSource";
+import LiveEventSummary from "./LiveEventSummary";
 import EventOccurrences from "./EventOccurrences";
 import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
 import type { LiveEvents, PulseEvent } from "./types";
@@ -113,7 +113,7 @@ export default function LiveCard({
           backend reason tokens never reach product copy. */}
       {pulseState === "uncovered" && (
         <p className="mt-3 text-sm text-parranda-ink/75">
-          {t("Ingen live-eventkälla täcker den här platsen än — Parranda hittar inte på en.", "No live-events feed reaches this place yet — Parranda won't invent one.")}
+          {t("Vi har inga verifierade evenemangskällor för området ännu. Det kan ändå hända saker här.", "We don't have verified event sources for this area yet. There may still be events here.")}
         </p>
       )}
       {pulseState === "pending" && (
@@ -138,23 +138,20 @@ export default function LiveCard({
       )}
 
       {shown.length > 0 && (
-        <div className="mt-4 flex flex-col gap-4">
-          {!grouped && <p className="text-sm font-bold text-parranda-ink">{liveDayLabel}</p>}
+        <div className="mt-4 flex flex-col gap-2">
+          {/* The heading above names a selected day; only an unnamed one is
+              stated here. */}
+          {!selectedDate && <p className="text-sm font-bold text-parranda-ink">{liveDayLabel}</p>}
           {(grouped ? timeGroups : [{ state: null, events: shown }]).map((group) => (
-            <div key={group.state ?? "all"} className="flex flex-col gap-2" data-live-time-group={group.state ?? undefined}>
+            <div key={group.state ?? "all"} className="flex flex-col gap-1" data-live-time-group={group.state ?? undefined}>
               {group.state && <h3 className="text-xs font-bold text-parranda-ink/75">{liveTimeGroupLabel(group.state, t)}</h3>}
-              <ul className="flex flex-col gap-3">
+              <ul className="flex flex-col divide-y divide-parranda-ink/12">
                 {group.events.map((ev: PulseEvent, i: number) => (
-                  <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-parranda-ink/85">
-                    <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">
-                      {eventTiming(liveTimeRepresentative(ev, now, selectedDate), lang, now, selectedDate,
-                        { omitDate: grouped ? selectedDate : null, underOnNow: group.state === "now" })}
-                    </span>
-                    <span className="min-w-0 max-w-full break-words">
-                      <span className="font-bold text-parranda-ink">{ev.title}</span>
-                      {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
-                      {liveEventSource(ev, lang)}
-                    </span>
+                  <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 py-3 text-sm leading-relaxed text-parranda-ink/85 first:pt-1">
+                    {/* A title sits one level below its time group's heading. */}
+                    <LiveEventSummary event={ev} lang={lang} now={now} selectedDate={selectedDate} heading={group.state ? "h4" : "h3"}
+                      timing={eventTiming(liveTimeRepresentative(ev, now, selectedDate), lang, now, selectedDate,
+                        { omitDate: grouped ? selectedDate : null, underOnNow: group.state === "now" })} />
                     <EventOccurrences event={ev} lang={lang} now={now} selectedDate={selectedDate ?? undefined} />
                   </li>
                 ))}

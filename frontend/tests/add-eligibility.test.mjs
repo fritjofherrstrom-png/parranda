@@ -77,7 +77,7 @@ function composedDay(stopIds, nearby = []) {
               name: n.name,
               lat: 41.9002,
               lng: 12.49,
-              type: "cafe",
+              type: n.type ?? "cafe",
               tags: [],
               ...(n.eligible === undefined ? {} : { commitment_eligible: n.eligible }),
             })),
@@ -142,6 +142,7 @@ test("a display-only candidate stays visible but offers no Add", async (t) => {
   await openIdea(h, "Display Only");
   assert.match(h.text(), /Display Only/, "still shown as an idea");
   assert.ok(!buttonMatching(h, ADD), "but never as something to commit to");
+  assert.match(h.text(), /can't be added to this route right now/, "the missing action has an explanation");
 });
 
 test("a missing eligibility field means no Add", async (t) => {
@@ -153,6 +154,34 @@ test("a missing eligibility field means no Add", async (t) => {
   await openIdea(h, "Unspecified Place");
   assert.match(h.text(), /Unspecified Place/);
   assert.ok(!buttonMatching(h, ADD), "absent eligibility must fail closed");
+  assert.match(h.text(), /can't be added to this route right now/);
+});
+
+test("detour cards show their source kind before opening the place", async (t) => {
+  for (const [type, expected, family] of [
+    ['gallery', 'Gallery', 'culture'], ['park', 'Park', 'nature'], ['vintage-shop', 'Second hand', 'shop'],
+  ]) {
+    const h = await plannerWith([{ id: `typed-${type}`, name: 'Source place', type, eligible: true }]);
+    try {
+      await click(h, buttonMatching(h, /detour ideas? near your route/));
+      const card = buttonMatching(h, /^Source place/).closest('li');
+      assert.equal(card.querySelector('[data-stop-category]')?.textContent, expected);
+      assert.equal(card.querySelector('[data-stop-category]')?.getAttribute('data-stop-category'), family);
+      assert.equal(card.querySelector('[aria-expanded]')?.getAttribute('aria-expanded'), 'false');
+    } finally { await h.unmount(); }
+  }
+});
+
+test("a detour name cannot invent a kind or reveal an unknown engine token", async () => {
+  const h = await plannerWith([{ id: 'unknown-kind', name: 'Vintage Gallery Park', type: 'internal_unknown_type', eligible: false }]);
+  try {
+    await openIdea(h, 'Vintage Gallery Park');
+    const card = buttonMatching(h, /^Vintage Gallery Park/).closest('li');
+    assert.equal(card.querySelector('[data-stop-category]'), null);
+    assert.doesNotMatch(card.textContent, /internal_unknown_type/);
+    assert.ok(!buttonMatching(h, ADD));
+    assert.match(card.textContent, /can't be added to this route right now/);
+  } finally { await h.unmount(); }
 });
 
 test("eligibility is read, never inferred from anything the client can see", async (t) => {
