@@ -63,6 +63,8 @@ test('projects a real final promoted typed publication, not its diagnostic trial
   assert.ok(projected, 'a valid authoritative final publication must project');
   assert.deepEqual(projected.result.days[0].primary_route.main_stops.map(s => s.id), published.days[0].primary_route.main_stops.map(s => s.id));
   assert.deepEqual(projected.result.days[0].primary_route.map_path_points, published.days[0].primary_route.map_path_points);
+  assert.equal(published.days[0].primary_route.geometry_source, 'heuristic', 'geometry provenance survives the generic composition label');
+  assert.equal(projected.result.days[0].primary_route.geometry_source, 'heuristic');
   assert.equal(classifyAnywhereResult(projected.result).status, classifyAnywhereResult(published).status);
   assert.equal(projected.intent.place, 'Northport, Testland');
   assert.equal(projected.intent.placeRef, 'r123456');

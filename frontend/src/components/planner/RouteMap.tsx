@@ -593,7 +593,7 @@ export default function RouteMap({
           ? enginePath
           : drawableRouteStops.map((stop: any) => ({ lat: stop.lat, lng: stop.lng })), {
           sketch,
-          routingSource: enginePath.length > 1 ? primaryRoute?.routing_source : "heuristic",
+          routingSource: enginePath.length > 1 ? (primaryRoute?.geometry_source ?? primaryRoute?.routing_source) : "heuristic",
         });
         if (routePath.length > 1) {
           routeLine = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: routePath.map(({ lat, lng }) => [lng, lat]) } };

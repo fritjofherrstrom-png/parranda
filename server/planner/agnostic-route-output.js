@@ -2091,6 +2091,7 @@ async function composeAgnosticRouteViaEngine({
       estimated_km: deferredWalking.result.estimatedKm,
       legs: deferredWalking.result.legs,
       map_path_points: deferredWalking.result.pathPoints,
+      geometry_source: deferredWalking.result.source || "heuristic",
       longest_leg_km: metrics.longestLegKm,
       longest_leg_minutes: Math.max(...legMinutes),
       average_leg_minutes: Math.round(legMinutes.reduce((sum, value) => sum + value, 0) / legMinutes.length),

@@ -81,7 +81,7 @@ const fields = {
   Leg: { from_label: n('string'), to_label: n('string'), distance_km: n('nonnegative'), estimated_walk_minutes: n('nonnegative') },
   PrimaryRoute: { id: n('string'), main_stops: r(array('Stop',1)), map_route_points: r(array('RoutePoint')),
     map_path_points: r(array('Point')), legs: r(array('Leg')), estimated_km: rule('nonnegative',true,true),
-    routing_source: n('string'), route_shape: n('string'), public_route_scope: n('string'), caveats: n(array('string')),
+    routing_source: n('string'), geometry_source: n('string'), route_shape: n('string'), public_route_scope: n('string'), caveats: n(array('string')),
     anchored_to_local_time: o('bool'), trust_summary: n('TrustSummary'), credibility_tier: n('string') },
   WeatherObserved: { condition: n('string'), max_temp: n('number'), apparent_temp_max: n('number'), precipitation_probability_max: n('number'),
     precipitation_sum: n('number'), wind_speed_max: n('number') },

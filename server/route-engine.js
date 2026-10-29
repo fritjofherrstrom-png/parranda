@@ -229,6 +229,8 @@ function buildAgnosticComposeTemplate(targetKm) {
 
 function markAgnosticComposeRoute(route) {
   if (route && typeof route === "object") {
+    // Composition provenance must not erase the source of the map geometry.
+    if (route.routing_source === "heuristic" || route.routing_source === "osrm") route.geometry_source = route.routing_source;
     route.routing_source = "agnostic_compose";
     route.confidence = "low";
   }
