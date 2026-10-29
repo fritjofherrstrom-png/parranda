@@ -27,7 +27,7 @@ const { createDateRangeListingProvider } = require("../pulse-sources/date-range-
 const { createLinkedEventsProvider } = require("../pulse-sources/linked-events-source-provider");
 const { createTicketmasterProvider } = require("../pulse-sources/ticketmaster-source-provider");
 const { groupLiveProgramViews, diversifyLiveHighlights } = require("./live-program-presentation");
-const { createSchemaOrgEventProvider } = require("../pulse-sources/schema-org-event-provider");
+const { createSchemaOrgEventProvider, schemaOrgCollectionLocationScope } = require("../pulse-sources/schema-org-event-provider");
 const { createEventsCalendarProvider } = require("../pulse-sources/events-calendar-source-provider");
 const { createRssAtomEventProvider } = require("../pulse-sources/rss-atom-event-provider");
 const { createHtmlVenueCalendarProvider } = require("../pulse-sources/html-venue-calendar-provider");
@@ -1084,7 +1084,10 @@ async function collectAnchorEvents({
       sourceEvidence.push(normalized);
     }
     // A source found on a venue's own website places its rows there on evidence.
-    normalizedEvidence.push(...placeAtHostVenue(sourceEvidence, source.host_venue, { placeContext }));
+    normalizedEvidence.push(...placeAtHostVenue(sourceEvidence, source.host_venue, {
+      placeContext,
+      sourceLocationScope: collection.sourceLocationScope,
+    }));
   }
 
   // Only rows that can appear in the requested Live period may use the
@@ -1419,6 +1422,7 @@ async function collectEventSource({
       raw,
       status: outcome.status,
       reason: outcome.reason,
+      sourceLocationScope: schemaOrgCollectionLocationScope(collected),
     };
   } catch (_error) {
     return { source, raw: [], status: "failed", reason: String(_error?.code || "").startsWith("source_redirect_")
@@ -1468,6 +1472,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
     return createSchemaOrgEventProvider({
       ...common,
       format: adapter === "schema_org_html" ? "html" : source.format,
+      timezone: source.timezone || source.fallback_timezone || undefined,
     });
   }
   if (adapter === "events_calendar" || adapter === "ical") {
@@ -1779,7 +1784,7 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // the adapter's unchanged default byte budget.
 // v24 isolates runtime prerequisite selection and nullable holiday contracts.
 // The namespace also participates in keys for operator-supplied caches.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v24";
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v25";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read

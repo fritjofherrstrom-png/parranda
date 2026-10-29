@@ -1,5 +1,26 @@
 "use strict";
 
+// Timezone validation/rendering is immutable for a process and these fixed
+// options. Bound retained native formatters rather than rebuilding one for
+// every offset sample of every source timestamp.
+const MAX_TIMEZONE_FORMATTERS = 32;
+const timezoneFormatters = new Map();
+
+function timezoneFormatter(timezone) {
+  const cached = timezoneFormatters.get(timezone);
+  if (cached) return cached;
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  });
+  if (timezoneFormatters.size >= MAX_TIMEZONE_FORMATTERS) {
+    timezoneFormatters.delete(timezoneFormatters.keys().next().value);
+  }
+  timezoneFormatters.set(timezone, formatter);
+  return formatter;
+}
+
 function normalizeUtcEventDateTime(value) {
   const raw = firstString(value);
   if (!raw) return null;
@@ -29,7 +50,7 @@ function normalizeIanaTimezone(value) {
   const timezone = firstString(value);
   if (!timezone) return null;
   try {
-    new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format(0);
+    timezoneFormatter(timezone);
     return timezone;
   } catch (_error) {
     return null;
@@ -41,16 +62,7 @@ function datePartsInTimezone(value, timezone) {
   const date = value instanceof Date ? value : new Date(value);
   if (!trustedTimezone || !Number.isFinite(date.getTime())) return null;
   try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: trustedTimezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hourCycle: "h23",
-    }).formatToParts(date);
+    const parts = timezoneFormatter(trustedTimezone).formatToParts(date);
     const values = Object.fromEntries(
       parts
         .filter((part) => part.type !== "literal")
