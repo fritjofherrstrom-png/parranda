@@ -1,6 +1,7 @@
 import LiveEventTiming from "./LiveEventTiming";
 import { liveEventSource } from "./LiveEventSource";
 import { eventSourceLink } from "../../lib/pulse-view.mjs";
+import { ExternalIcon } from "../shared/icons";
 import type { Lang } from "./copy";
 import type { PulseEvent } from "./types";
 
@@ -36,8 +37,9 @@ export default function LiveEventSummary({ event, lang, now, selectedDate, timin
       <Heading aria-label={event.title} className={`text-base leading-snug text-parranda-ink ${titleClassName}`}>
         {sourceLink ? <a href={sourceLink.href} target="_blank" rel="noopener noreferrer"
           aria-label={sourceLink.kind === "site_home" ? `${event.title} — ${sourceLink.text}` : event.title}
-          className="underline decoration-parranda-live/50 underline-offset-4 hover:text-parranda-live focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-parranda-live after:ml-1 after:text-parranda-live after:content-['↗']">
-          {event.title}
+          className="flex min-h-11 items-center gap-1.5 no-underline hover:text-parranda-live focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-parranda-live">
+          <span className="min-w-0">{event.title}</span>
+          <ExternalIcon className="h-3.5 w-3.5 text-parranda-ink/60" />
         </a> : event.title}
       </Heading>
       <LiveEventTiming event={event} lang={lang} now={now} selectedDate={selectedDate} timing={timing} />
