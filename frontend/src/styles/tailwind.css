@@ -252,6 +252,12 @@
   border-radius: 6px 0 0 0;
   max-width: calc(100% - 20px);
 }
+/* The corner spans the map, so the attribution's max-width is measured
+   against the map: a shrink-to-fit corner made it 20px narrower than its own
+   text and broke it onto two lines. The corner takes no taps (MapLibre). */
+.route-map-frame .maplibregl-ctrl-bottom-right {
+  left: 0;
+}
 .route-map-frame .maplibregl-ctrl-bottom-right .maplibregl-ctrl {
   margin: 0;
 }

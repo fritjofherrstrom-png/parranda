@@ -210,15 +210,16 @@ async function openDay({ browser, origin }, { width, stops }) {
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.clock.setFixedTime(FIXED_NOW);
   await page.goto(`${origin}/anywhere?place=Testville&lang=sv`);
-  // Phones draw the map inside the route section; from 64rem the planner puts
-  // the same map beside the day, sticky, at the window's height, with no
-  // expand control (there is nothing left to expand into).
+  // Phones draw the map in the day's header, between the picks line and the
+  // facts; from 64rem the planner puts the same map beside the day, sticky, at
+  // the window's height, with no expand control (there is nothing left to
+  // expand into).
   const route = width >= 1024
     ? page.getByRole("complementary", { name: "Karta över dagen" })
-    : page.getByRole("region", { name: "Rutten" });
+    : page.locator("header [data-route-map]");
   // Every stop is on the map once: its own number, or in a group pin naming it.
   await page.waitForFunction((n) => {
-    const numbers = [...document.querySelectorAll('section[aria-label="Rutten"] .route-map-marker, aside[aria-label="Karta över dagen"] .route-map-marker')]
+    const numbers = [...document.querySelectorAll('header [data-route-map] .route-map-marker, aside[aria-label="Karta över dagen"] .route-map-marker')]
       .filter((element) => getComputedStyle(element).visibility !== "hidden")
       .flatMap((element) => element.textContent.trim().split(",").flatMap((part) => {
         const [a, b] = part.split("–").map(Number);
@@ -235,7 +236,7 @@ async function openDay({ browser, origin }, { width, stops }) {
 // the page.
 function measureMap({ expandNames, sideMap = false }) {
   const frame = document.querySelector(
-    sideMap ? 'aside[aria-label="Karta över dagen"] .maplibregl-map' : 'section[aria-label="Rutten"] .maplibregl-map',
+    sideMap ? 'aside[aria-label="Karta över dagen"] .maplibregl-map' : 'header [data-route-map] .maplibregl-map',
   ).parentElement;
   const box = (element) => {
     const rect = element.getBoundingClientRect();
@@ -342,7 +343,7 @@ test("a marker centred in the viewport's last fractional pixel row is still hit-
   const { context, page } = await openDay(current, { width: 390, stops: DAYS["diagonal, Live stop north-east"] });
   try {
     const centreY = () => page.evaluate(() => {
-      const rect = [...document.querySelectorAll('section[aria-label="Rutten"] .route-map-marker')].find((element) => getComputedStyle(element).visibility !== "hidden").getBoundingClientRect();
+      const rect = [...document.querySelectorAll('header [data-route-map] .route-map-marker')].find((element) => getComputedStyle(element).visibility !== "hidden").getBoundingClientRect();
       return { y: (rect.top + rect.bottom) / 2, innerHeight, scrollY };
     });
     const start = await centreY();
@@ -440,7 +441,7 @@ test("a delayed shrink refits to the rendered mobile size after the old timer bo
   const { context, page, route } = await openDay(current, { width: 320, stops });
   try {
     await page.evaluate(() => {
-      document.querySelector('section[aria-label="Rutten"] .maplibregl-map').parentElement.style.transitionDuration = "1200ms";
+      document.querySelector('header [data-route-map] .maplibregl-map').parentElement.style.transitionDuration = "1200ms";
     });
     const original = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES });
     for (const name of ["Förstora kartan", "Förminska kartan"]) {

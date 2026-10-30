@@ -4,9 +4,9 @@
  * second form here. Adjusting is collapsed to one line by default; every change
  * recomposes on its own (no submit) — the orchestrator's handlers own that.
  */
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { normalizePreferencePriority } from "../../../../shared/planner-intent.mjs";
-import { CheckIcon, ChevronDownIcon, LocationIcon } from "../shared/icons";
+import { CheckIcon, LocationIcon } from "../shared/icons";
 import { compactPillTarget, Eyebrow, panelCard, segmentClass, segmentGroup } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
@@ -44,6 +44,7 @@ export default function AnchorCard({
   onChangePlace,
   rebuild = null,
   compact = false,
+  dayWhen = null,
 }: {
   t: Translate;
   lang: Lang;
@@ -69,8 +70,10 @@ export default function AnchorCard({
   /** A plain left-click on "Change": the planner cancels work it no longer needs. */
   onChangePlace: () => void;
   rebuild?: AdjustRebuild;
-  /** A day is on screen: its heading names the place and date above this card. */
+  /** A day is on screen: its heading names the place above this card. */
   compact?: boolean;
+  /** Compact: which day is on screen, said first in the picks line. */
+  dayWhen?: ReactNode;
 }) {
   // Opening swaps "Adjust" for "Done" (and closing swaps back), so the button
   // that had keyboard focus leaves the DOM. Move focus to its counterpart, but
@@ -105,13 +108,25 @@ export default function AnchorCard({
   const orderedPreferences = preferences;
   const free = rhythms.find((preset) => preset.key === "free");
   const current = rhythms.find((preset) => preset.key === walkKey);
+  const doneControl = (
+    <button
+      type="button"
+      ref={doneButton}
+      aria-expanded={true}
+      aria-controls={panelId}
+      onClick={() => toggleAdjust(false)}
+      className={controlPill}
+    >
+      {t("Klar", "Done")}
+    </button>
+  );
   return (
     // No overflow-hidden: Change and Adjust sit 6px from the card's edge, and
     // clipping would cut their focus rings.
     <section aria-label={t("Dagens utgångspunkt", "Your day's starting point")} className={compact ? "flex flex-col" : panelCard}>
-      {/* With a day on screen its heading names the place and the date and
-          carries Change, so only the picks and Adjust stay here: one plain
-          row under the heading, no card of its own. */}
+      {/* With a day on screen its heading names the place and carries
+          Change, so only which day, the picks and Adjust stay here: one
+          plain row under the heading, no card of its own. */}
       {!compact && (
         <div className="flex min-h-14 flex-wrap items-center gap-2.5 py-1.5 pl-4 pr-1.5">
           <LocationIcon className="h-4 w-4 text-parranda-ember" />
@@ -128,31 +143,48 @@ export default function AnchorCard({
         </div>
       )}
 
-      {!adjustOpen && (
+      {/* Compact, the line stays while the panel is open, with Adjust
+          turned into Done in its place: which day is shown, and the picks
+          as they change, stay in view above the controls that change them. */}
+      {(compact || !adjustOpen) && (
         <div className={compact
-          ? "flex min-h-11 items-center justify-between gap-3"
+          ? "flex min-h-9 items-center justify-between gap-3"
           : "flex min-h-12 flex-wrap items-center gap-2.5 border-t-line border-parranda-line-faint py-1.5 pl-4 pr-1.5"}>
-          <span className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink-muted">
-            <strong className="font-bold text-parranda-ink">{moodLabel || t("Inga intressen", "No interests")}</strong>
-            {` · ${t("Dagens rytm", "Day rhythm")}: ${walkLabel}`}
-          </span>
-          <button
-            type="button"
-            ref={adjustButton}
-            aria-expanded={false}
-            onClick={() => toggleAdjust(true)}
-            className={controlPill}
-          >
-            {t("Justera", "Adjust")}
-            <ChevronDownIcon className="h-3.5 w-3.5" />
-          </button>
+          {/* Compact, one even line in the title's quiet voice: the day, then
+              the picks and the rhythm. The card form keeps the picks in bold
+              under the place it names. */}
+          {compact ? (
+            <span className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink-muted">
+              {dayWhen}
+              {dayWhen ? " · " : ""}
+              {moodLabel || t("Inga intressen", "No interests")}
+              {` · ${t("Dagens rytm", "Day rhythm")}: ${walkLabel}`}
+            </span>
+          ) : (
+            <span className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink-muted">
+              <strong className="font-bold text-parranda-ink">{moodLabel || t("Inga intressen", "No interests")}</strong>
+              {` · ${t("Dagens rytm", "Day rhythm")}: ${walkLabel}`}
+            </span>
+          )}
+          {adjustOpen ? doneControl : (
+            <button
+              type="button"
+              ref={adjustButton}
+              aria-expanded={false}
+              onClick={() => toggleAdjust(true)}
+              className={controlPill}
+            >
+              {t("Justera", "Adjust")}
+            </button>
+          )}
         </div>
       )}
 
       {adjustOpen && (
-        <div id={panelId} className={compact ? `${panelCard} flex flex-col gap-5 p-4` : "flex flex-col gap-5 border-t-line border-parranda-line-faint p-4"}>
-          {/* The status line, then Done: the panel needs no title of its own,
-              the row it replaced said what it adjusts. */}
+        <div id={panelId} className={compact ? `${panelCard} mt-2 flex flex-col gap-5 p-4` : "flex flex-col gap-5 border-t-line border-parranda-line-faint p-4"}>
+          {/* The status line, then Done (in the card form; compact, Done
+              stands in the line above): the panel needs no title of its own,
+              the row it opened from says what it adjusts. */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 flex-col gap-1">
               {/* With the panel open on a phone, the day is below the screen:
@@ -181,17 +213,7 @@ export default function AnchorCard({
                 </p>
               )}
             </div>
-            <button
-              type="button"
-              ref={doneButton}
-              aria-expanded={true}
-              aria-controls={panelId}
-              onClick={() => toggleAdjust(false)}
-              className={controlPill}
-            >
-              {t("Klar", "Done")}
-              <ChevronDownIcon className="h-3.5 w-3.5 rotate-180" />
-            </button>
+            {!compact && doneControl}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -327,8 +349,11 @@ export default function AnchorCard({
   );
 }
 
-/** Change, Adjust and Done are the day's controls; they look alike. */
-const controlPill = "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-line border-parranda-line px-3.5 text-13 font-bold text-parranda-ink transition hover:border-parranda-line-strong";
+/**
+ * Change, Adjust and Done are the day's controls; they look alike: plain words
+ * on an outlined 36px pill with a 44px touch target, like the stops' Follow.
+ */
+const controlPill = `${compactPillTarget} shrink-0 gap-1.5 border-line border-parranda-line px-3.5 font-bold text-parranda-ink hover:border-parranda-line-strong`;
 
 /**
  * "Change": back to the landing for another place. A plain left-click lets the

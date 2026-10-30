@@ -398,16 +398,19 @@ test("on a phone the map is a short, still overview until the reader expands it"
 });
 
 test("compact planner and map controls keep a 44px mobile touch target", () => {
-  // The anchor card's Change and Adjust share one 44px pill (controlPill).
+  // Change, Adjust and Done share one pill (controlPill): drawn 36px tall,
+  // 44px to the touch through compactPillTarget's taller ::before.
   const anchorCard = componentSource("planner/AnchorCard.tsx");
-  assert.match(anchorCard, /const controlPill = "inline-flex min-h-11 /);
+  assert.match(componentSource("shared/ui.tsx"), /export const compactPillTarget =\s*"relative inline-flex min-h-9 [^"]*before:-inset-y-1 /);
+  assert.match(anchorCard, /const controlPill = `\$\{compactPillTarget\} /);
   assert.match(anchorCard, /aria-label=\{t\("Byt plats", "Change place"\)\}\s*className=\{controlPill\}/);
   assert.match(anchorCard, /aria-expanded=\{false\}[\s\S]{0,120}className=\{controlPill\}/);
-  // The map's expand control is an icon: a 44×44 target named in both
-  // languages, so it covers no more of the map than a thumb needs.
+  assert.match(anchorCard, /aria-expanded=\{true\}[\s\S]{0,120}className=\{controlPill\}/);
+  // The map's expand control says what it does, in both languages, on the
+  // same pill: 36px drawn, 44px to the touch.
   assert.match(
     anywherePlannerSource,
-    /aria-expanded=\{mapExpanded\}\s*aria-label=\{mapExpanded \? t\("Förminska kartan", "Shrink map"\) : t\("Förstora kartan", "Expand map"\)\}[\s\S]{0,260}min-h-11 min-w-11/,
+    /aria-expanded=\{mapExpanded\}\s*data-map-control=""\s*className="[^"]*\bmin-h-9\b[^"]*before:-inset-y-1[^"]*"\s*>\s*\{mapExpanded \? t\("Förminska kartan", "Shrink map"\) : t\("Förstora kartan", "Expand map"\)\}/,
   );
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-ctrl-group button\s*\{[\s\S]*width: 44px;/);
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-ctrl-group button\s*\{[\s\S]*height: 44px;/);
@@ -573,8 +576,9 @@ test("grouped controls never clip the focus ring that sits outside them", () => 
 });
 
 test("adjustments collapse to a summary and re-compose themselves — no submit past the landing", () => {
-  // Collapsed summary (mood · day · length) with an aria-expanded toggle...
-  assert.match(anywherePlannerSource, /!adjustOpen && \(/);
+  // Collapsed summary (mood · day · length) with an aria-expanded toggle; with
+  // a day on screen the summary stays above the open panel, Done in Adjust's place...
+  assert.match(anywherePlannerSource, /\(compact \|\| !adjustOpen\) && \(/);
   assert.match(anywherePlannerSource, /\{moodLabel \|\| t\("Inga intressen", "No interests"\)\}/);
   assert.match(anywherePlannerSource, /t\("Justera", "Adjust"\)/);
   assert.match(anywherePlannerSource, /aria-expanded=\{false\}/);
