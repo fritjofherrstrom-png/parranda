@@ -36,7 +36,6 @@ import { pinGroupLabel, routeDisplayPath, screenPinPresentation } from "../../li
 import { controlAwareView, type FitMark, type MapBox } from "../../lib/route-map-fit.mjs";
 import { BASEMAP_PROVIDER, basemapPaint, basemapStyle, type BasemapTheme } from "../../lib/route-map-style.mjs";
 import type { RouteContextSuggestion } from "../../lib/route-context-view.mjs";
-import { CollapseIcon, ExpandIcon } from "../shared/icons";
 import type { DistrictArea } from "./types";
 import type { Translate } from "./copy";
 
@@ -911,22 +910,24 @@ export default function RouteMap({
           {t("Ritar kartan …", "Drawing the map …")}
         </div>
       )}
-      {/* An icon, so it covers no more of the map than a thumb needs. It is a
-          map control (data-map-control): the fit keeps every stop clear of it. */}
+      {/* Said in words, like the day's other controls: an icon alone left the
+          reader guessing. A 36px pill on paper with a 44px touch target; it is
+          a map control (data-map-control), so the fit keeps every stop clear. */}
       {onToggleExpanded && (
         <button
           type="button"
           onClick={onToggleExpanded}
           aria-expanded={mapExpanded}
-          aria-label={mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
           data-map-control=""
-          className="absolute right-2.5 top-2.5 z-(--p-z-map-control) inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border-line border-parranda-line bg-parranda-paper/90 text-parranda-ink-soft shadow-control backdrop-blur-xs transition hover:border-parranda-ember"
+          className="absolute right-2.5 top-2.5 z-(--p-z-map-control) inline-flex min-h-9 items-center rounded-full border-line border-parranda-line bg-parranda-paper px-3.5 text-13 font-bold text-parranda-ink shadow-control transition before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] hover:border-parranda-line-strong"
         >
-          {mapExpanded ? <CollapseIcon className="h-5 w-5" /> : <ExpandIcon className="h-5 w-5" />}
+          {mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
         </button>
       )}
     </div>
-    {hasPrimaryRoute && sketch && (
+    {/* The still overview is a picture of the day; how to read its line is
+        said once the map is opened to be read (and in "About this day"). */}
+    {hasPrimaryRoute && sketch && !still && (
       <p className="mt-1 text-xs leading-relaxed text-parranda-ink-meta">
         {t("Ruttöversikt · linjen visar stoppens ordning, inte gångvägen.", "Route overview · the line shows stop order, not walking directions.")}
       </p>

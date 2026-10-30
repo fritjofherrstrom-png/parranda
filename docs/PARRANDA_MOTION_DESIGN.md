@@ -23,8 +23,8 @@ underlaget `parranda-motion-design.md`, implementerad genom #637 och #639.
 
 ## Laddning och ombyggnad
 
-- På telefon följer laddningsformen dagens ordning: kompakt rubrik → fakta →
-  kartans låga översikt → stopp. Översikten står still (ingen panorering eller
+- På telefon följer laddningsformen dagens ordning: kompakt rubrik → kartans
+  låga översikt → fakta → stopp. Översikten står still (ingen panorering eller
   zoom) tills den förstoras, så den fångar aldrig tummen som skrollar. På bred
   skärm hålls kartans andra kolumn redan under laddningen.
 - Vid ombyggnad behålls den tidigare dagen synligt, men markeras som inte

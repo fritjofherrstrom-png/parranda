@@ -243,11 +243,12 @@ async function openDay({ browser, origin }, { width, stops }) {
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.clock.setFixedTime(FIXED_NOW);
   await page.goto(`${origin}/anywhere?place=Testville&lang=sv`);
-  // Phones draw the map inside the route section; from 64rem the planner puts
-  // the same map beside the day, sticky, with no expand control.
+  // Phones draw the map in the day's header, between the picks line and the
+  // facts; from 64rem the planner puts the same map beside the day, sticky,
+  // with no expand control.
   const route = width >= 1024
     ? page.getByRole("complementary", { name: "Karta över dagen" })
-    : page.getByRole("region", { name: "Rutten" });
+    : page.locator("header [data-route-map]");
   // Every stop is on the map once: its own number, or in a group pin naming it.
   await page.waitForFunction(stopsShown, stops.length, { timeout: 15_000 });
   await route.getByText("Ritar kartan …").waitFor({ state: "detached" });
@@ -266,7 +267,7 @@ function discNumbers(text) {
 
 // Runs in the page: are stops 1..n each shown exactly once?
 function stopsShown(n) {
-  const discs = [...document.querySelectorAll('section[aria-label="Rutten"] .route-map-marker, aside[aria-label="Karta över dagen"] .route-map-marker')]
+  const discs = [...document.querySelectorAll('header [data-route-map] .route-map-marker, aside[aria-label="Karta över dagen"] .route-map-marker')]
     .filter((element) => getComputedStyle(element).visibility !== "hidden");
   const numbers = discs.flatMap((element) => element.textContent.trim().split(",").flatMap((part) => {
     const [a, b] = part.split("–").map(Number);
@@ -279,7 +280,7 @@ function stopsShown(n) {
 // the viewport), then finds the numbers drawn under another disc, and checks
 // what a tap on each visible number, and around its disc, would hit.
 function measureMarkers() {
-  const container = document.querySelector('section[aria-label="Rutten"] .maplibregl-map, aside[aria-label="Karta över dagen"] .maplibregl-map');
+  const container = document.querySelector('header [data-route-map] .maplibregl-map, aside[aria-label="Karta över dagen"] .maplibregl-map');
   container.scrollIntoView({ block: "center" });
   const frame = container.parentElement;
   const map = container.getBoundingClientRect();
@@ -360,7 +361,7 @@ function measureMarkers() {
 
 // Runs in the page: where each marker's disc is now.
 function markerCentres() {
-  return [...document.querySelectorAll('section[aria-label="Rutten"] .route-map-marker, aside[aria-label="Karta över dagen"] .route-map-marker')].filter((element) => getComputedStyle(element).visibility !== "hidden").map((element) => {
+  return [...document.querySelectorAll('header [data-route-map] .route-map-marker, aside[aria-label="Karta över dagen"] .route-map-marker')].filter((element) => getComputedStyle(element).visibility !== "hidden").map((element) => {
     const rect = element.getBoundingClientRect();
     return { name: `marker ${element.textContent.trim()}`, x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 };
   });
@@ -380,7 +381,7 @@ function openNames() {
 // mouse right after a tap (the test parks it off the map), which closes the
 // name again; a phone has no mouse to go back to. What counts is what opened.
 function recordTaps() {
-  const pane = document.querySelector('section[aria-label="Rutten"] [data-route-map], aside[aria-label="Karta över dagen"] [data-route-map]');
+  const pane = document.querySelector('header [data-route-map], aside[aria-label="Karta över dagen"] [data-route-map]');
   window.tapRecord = { clicked: false, opened: [] };
   new MutationObserver(() => {
     for (const tooltip of pane.querySelectorAll(".route-map-tooltip")) {

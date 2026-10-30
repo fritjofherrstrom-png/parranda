@@ -92,7 +92,7 @@ import { useMediaQuery } from "./shared/useMediaQuery";
 import AnchorCard, { ChangePlaceLink, type AdjustRebuild } from "./planner/AnchorCard";
 import BlitzCard from "./planner/BlitzCard";
 import CandidateAreas from "./planner/CandidateAreas";
-import DayHeader, { DayActions, dayAssemblyNotes } from "./planner/DayHeader";
+import DayHeader, { DayActions, DayWhen, dayAssemblyNotes } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
 import DayPlaceholder, { DayMapPlaceholder } from "./planner/DayPlaceholder";
@@ -2657,14 +2657,20 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       t={t}
     />
   ) : null;
-  // A phone: the map's still overview opens the route, above its stops.
+  // A phone: the map's still overview stands in the day's header, between
+  // the picks line and the facts, the picture of the day before its numbers.
+  // Its canvas is the "Map of the day" landmark; this wrapper only fades.
   const mapOverview = routeMap && !splitLayout ? (
-    <div role="region" aria-label={t("Karta över dagen", "Map of the day")} className={"transition-opacity" + (staleNotice === "updating" ? " opacity-60" : "")}>
+    <div data-map-overview="" className={"transition-opacity" + (staleNotice === "updating" ? " opacity-60" : "")}>
       {routeMap}
     </div>
   ) : null;
   // Before a day is on screen the card names the place and the day; once it
-  // is, the day's heading does, and the card keeps only the picks and Adjust.
+  // is, the day's heading names the place and the card keeps which day, the
+  // picks and Adjust. "Today" belongs to the shown date only when it is
+  // today's: a saved day from yesterday keeps the offset it was composed with.
+  const shownDate = safeResponse?.days?.[0]?.date;
+  const shownDay = typeof shownDate === "string" ? navigationDayPresentation(shownDate, lang) : null;
   const anchorCard = hasAnchor ? (
     <AnchorCard
       t={t}
@@ -2689,6 +2695,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       onChangePlace={cancelActivePlannerForNavigation}
       rebuild={adjustRebuild}
       compact={dayWithRoute}
+      dayWhen={dayWithRoute ? <DayWhen t={t} lang={lang} date={shownDate} relativeDay={shownDay ? shownDay.activeOffset : null} /> : null}
     />
   ) : null;
 
@@ -2697,7 +2704,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       className={
         splitLayout
           ? "grid w-full grid-cols-[minmax(0,34rem)_minmax(0,1fr)] items-start gap-x-10 gap-y-8 xl:grid-cols-[minmax(0,36rem)_minmax(0,1fr)] xl:gap-x-14"
-          : "mx-auto flex w-full max-w-2xl flex-col gap-8"
+          : "mx-auto flex w-full max-w-2xl flex-col gap-5"
       }
     >
       <div className={splitLayout ? "col-span-full" : ""}>
@@ -2715,10 +2722,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       </div>
 
       <main className="flex min-w-0 flex-col gap-10 sm:gap-12">
-      {/* The day leads, compact: "A day in Lyon" with Change, the date and
-          forecast, the picks with Adjust, the facts — then the route: on a
-          phone the map's short overview, then the stops. While a day
-          composes, its heading's shape stands first too. */}
+      {/* The day leads, compact: "A day in Lyon" with Change, which day and
+          the picks with Adjust, on a phone the map's short overview, the
+          facts — then the route's stops. While a day composes, its heading's
+          shape stands first too. */}
       {dayWithRoute && (
         <DayHeader
           t={t}
@@ -2730,11 +2737,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           placeLabel={mode === "near_me" ? null : classification?.placeLabel}
           anchorLabel={anchorLabel}
           primaryRoute={primaryRoute}
-          date={safeResponse?.days?.[0]?.date}
-          relativeDay={navigationDay ? navigationDay.activeOffset : dayOffset}
+          date={shownDate}
           weatherSummary={safeResponse?.days?.[0]?.weather_summary ?? null}
           titleAction={<ChangePlaceLink t={t} lang={lang} onChangePlace={cancelActivePlannerForNavigation} />}
           controls={anchorCard}
+          overview={mapOverview}
           coreCount={split.core.length}
           wovenCount={split.woven.length}
           pickCoverage={shownPickCoverage}
@@ -3098,7 +3105,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         <StopLine
           t={t}
           lang={lang}
-          overview={mapOverview}
           stale={staleNotice === "updating"}
           newStopIdentities={newStopIdentities}
           routeLineIsSketch={routeLineIsSketch}
