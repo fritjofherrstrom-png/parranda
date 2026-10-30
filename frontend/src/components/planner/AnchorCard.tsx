@@ -119,7 +119,7 @@ export default function AnchorCard({
               cut off. Below ~10rem the row wraps and Change moves under it. */}
           <span className="min-w-[min(100%,10rem)] flex-1 break-words text-base font-extrabold text-parranda-ink">
             {anchorLabel}
-            <span className="font-medium text-parranda-ink/68">
+            <span className="font-medium text-parranda-ink-meta">
               {" · "}
               {publishedDateLabel ?? (dayOffset === 0 ? t("idag", "today") : t("imorgon", "tomorrow"))}
             </span>
@@ -131,8 +131,8 @@ export default function AnchorCard({
       {!adjustOpen && (
         <div className={compact
           ? "flex min-h-11 items-center justify-between gap-3"
-          : "flex min-h-12 flex-wrap items-center gap-2.5 border-t border-parranda-ink/10 py-1.5 pl-4 pr-1.5"}>
-          <span className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink/72">
+          : "flex min-h-12 flex-wrap items-center gap-2.5 border-t-line border-parranda-line-faint py-1.5 pl-4 pr-1.5"}>
+          <span className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink-muted">
             <strong className="font-bold text-parranda-ink">{moodLabel || t("Inga intressen", "No interests")}</strong>
             {` · ${t("Dagens rytm", "Day rhythm")}: ${walkLabel}`}
           </span>
@@ -150,7 +150,7 @@ export default function AnchorCard({
       )}
 
       {adjustOpen && (
-        <div id={panelId} className={compact ? `${panelCard} flex flex-col gap-5 p-4` : "flex flex-col gap-5 border-t border-parranda-ink/10 p-4"}>
+        <div id={panelId} className={compact ? `${panelCard} flex flex-col gap-5 p-4` : "flex flex-col gap-5 border-t-line border-parranda-line-faint p-4"}>
           {/* The status line, then Done: the panel needs no title of its own,
               the row it replaced said what it adjusts. */}
           <div className="flex items-center justify-between gap-3">
@@ -164,7 +164,7 @@ export default function AnchorCard({
                   {t("Uppdaterar dagen …", "Updating your day …")}
                 </p>
               ) : rebuild?.state === "updated" ? (
-                <p data-adjust-rebuild="updated" className="flex items-start gap-1.5 text-xs leading-snug text-parranda-ink/72">
+                <p data-adjust-rebuild="updated" className="flex items-start gap-1.5 text-xs leading-snug text-parranda-ink-muted">
                   <CheckIcon className="mt-px h-3 w-3 shrink-0 text-parranda-ember" />
                   <span>
                     <span className="font-bold text-parranda-ink">{t("Uppdaterad", "Updated")}: </span>
@@ -176,7 +176,7 @@ export default function AnchorCard({
                   {t("Kunde inte uppdatera — din förra dag visas.", "Couldn't update — your previous day is shown.")}
                 </p>
               ) : (
-                <p className="text-xs text-parranda-ink/68">
+                <p className="text-xs text-parranda-ink-meta">
                   {t("Dagen byggs om direkt när du ändrar.", "The day rebuilds as you change it.")}
                 </p>
               )}
@@ -196,7 +196,7 @@ export default function AnchorCard({
 
           <div className="flex flex-col gap-2">
             <Eyebrow tone="glow">{t("Intressen", "Interests")}</Eyebrow>
-            <p id={priorityHelpId} className="text-xs text-parranda-ink/68">
+            <p id={priorityHelpId} className="text-xs text-parranda-ink-meta">
               {priority.length > 0
                 ? t("Siffrorna visar ordningen du valde i. Ettan väger tyngst.", "Numbers show the order you picked. 1 weighs most.")
                 : t("Tryck av och på ett intresse för att låta det väga tyngst.", "Tap an interest off and on to make it weigh most.")}
@@ -219,7 +219,7 @@ export default function AnchorCard({
                         `${compactPillTarget} gap-1.5 px-3.5${ring(`pick:${pref.key}`)} ` +
                         (active
                           ? "bg-parranda-ink font-bold text-parranda-paper"
-                          : "border-line border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45 hover:text-parranda-ink")
+                          : "border-line border-parranda-line font-semibold text-parranda-ink-muted hover:border-parranda-line-strong hover:text-parranda-ink")
                       }
                     >
                       {active && (rank
@@ -235,7 +235,7 @@ export default function AnchorCard({
               <button
                 type="button"
                 onClick={onClearPriority}
-                className="inline-flex min-h-11 self-start items-center text-xs font-semibold text-parranda-ink/72 underline underline-offset-2 hover:text-parranda-clay"
+                className="inline-flex min-h-11 self-start items-center text-xs font-semibold text-parranda-ink-muted underline underline-offset-2 hover:text-parranda-clay"
               >
                 {t("Rensa ordningen", "Clear order")}
               </button>
@@ -278,7 +278,7 @@ export default function AnchorCard({
                     // "optional, not part of the day" (ui.tsx), which a rhythm is not.
                     (walkKey === free.key
                       ? "bg-parranda-ink font-bold text-parranda-paper"
-                      : "border-line border-parranda-ink/18 font-semibold text-parranda-ink/72 hover:border-parranda-ink/45 hover:text-parranda-ink")
+                      : "border-line border-parranda-line font-semibold text-parranda-ink-muted hover:border-parranda-line-strong hover:text-parranda-ink")
                   }
                 >
                   {walkKey === free.key && <CheckIcon className="h-3 w-3" />}
@@ -287,7 +287,7 @@ export default function AnchorCard({
               )}
             </div>
             <div
-              className="grid grid-cols-3 rounded-full border-line border-parranda-ink/18 sm:max-w-sm"
+              className="grid grid-cols-3 rounded-full border-line border-parranda-line sm:max-w-sm"
               role="group"
               aria-label={t("Dagens rytm", "Day rhythm")}
             >
@@ -304,8 +304,8 @@ export default function AnchorCard({
                     }}
                     className={
                       "min-h-11 px-2 text-13 leading-tight transition first:rounded-l-full last:rounded-r-full" + ring(`rhythm:${preset.key}`) + " " +
-                      (index > 0 ? "border-l-line border-parranda-ink/18 " : "") +
-                      (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink/72 hover:text-parranda-ink")
+                      (index > 0 ? "border-l-line border-parranda-line " : "") +
+                      (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink-muted hover:text-parranda-ink")
                     }
                   >
                     {lang === "en" ? preset.en : preset.sv}
@@ -314,7 +314,7 @@ export default function AnchorCard({
               })}
             </div>
             {current && (
-              <p className="text-13 leading-snug text-parranda-ink/72" aria-live="polite">
+              <p className="text-13 leading-snug text-parranda-ink-muted" aria-live="polite">
                 <strong className="font-bold text-parranda-ink">{lang === "en" ? current.en : current.sv}:</strong>{" "}
                 {lang === "en" ? current.noteEn : current.noteSv}
               </p>
@@ -328,7 +328,7 @@ export default function AnchorCard({
 }
 
 /** Change, Adjust and Done are the day's controls; they look alike. */
-const controlPill = "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-line border-parranda-ink/18 px-3.5 text-13 font-bold text-parranda-ink transition hover:border-parranda-ink/50";
+const controlPill = "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-line border-parranda-line px-3.5 text-13 font-bold text-parranda-ink transition hover:border-parranda-line-strong";
 
 /**
  * "Change": back to the landing for another place. A plain left-click lets the
