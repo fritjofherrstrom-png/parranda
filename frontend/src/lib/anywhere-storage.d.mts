@@ -21,6 +21,8 @@ export interface SavedInputs {
   liveSheetSort?: "for_you" | "by_time";
   dayEdit?: DayEdit | null;
   invalidDayEdit?: boolean;
+  /** Set when the reader asked Parranda to choose the day's interests. */
+  intentMode?: "parranda_chooses" | null;
 }
 
 export interface SavedEntry {
