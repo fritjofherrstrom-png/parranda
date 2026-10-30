@@ -450,7 +450,7 @@ test("route, saved-day, Blitz, and source actions keep a 44px mobile touch targe
   // ones draw the 44px target with ::before, so wrapping never moves the text.
   assert.match(anywherePlannerSource, /href=\{link\.href\}[\s\S]{0,120}\$\{inlineLinkTarget\}/);
   assert.match(anywherePlannerSource, /href=\{sourceLink\.href\}[\s\S]{0,120}\$\{inlineLinkTarget\}/);
-  assert.match(componentSource("shared/ui.tsx"), /inlineLinkTarget = "relative before:absolute before:-inset-x-1 before:-inset-y-\[14px\]/);
+  assert.match(componentSource("shared/ui.tsx"), /inlineLinkTarget = "relative before:absolute before:-inset-x-1 before:top-1\/2 before:h-11 before:-translate-y-1\/2/);
   assert.doesNotMatch(anywherePlannerSource, /-my-3|&nbsp;↗/);
   assert.match(anywherePlannerSource, /href=\{liveSourceLink\.href\}[\s\S]{0,180}min-h-11/);
 });

@@ -151,7 +151,6 @@ export default function StopLine({
   const opensWithDaypart = Boolean(firstDaypart && label(DAYPART_LABELS, firstDaypart, lang));
   const legLabel = (leg: Leg) =>
     `${leg.minutes != null ? `${leg.minutes} min` : ""}${leg.minutes != null && leg.km != null ? " · " : ""}${leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}`;
-  const lastCoreIndex = split.core.length - 1;
 
   // "YOU ARE HERE". Today only, and only after an explicit tap: the reader's
   // live position is read against the stations in route order. Stations
@@ -292,9 +291,11 @@ export default function StopLine({
               ? "border-parranda-ember bg-parranda-paper text-parranda-ink"
               : behind
                 ? "border-parranda-line-firm bg-parranda-paper text-parranda-ink-meta"
-                : i === lastCoreIndex && split.woven.length === 0
-                  ? "border-parranda-ink bg-parranda-ink text-parranda-paper"
-                  : "border-parranda-ink bg-parranda-paper text-parranda-ink";
+                // Every station is drawn as on the map: a ring with its
+                // number. A filled last station read as "selected" rather
+                // than "end of the day", and the map never showed it; a fill
+                // now means only the stop that is open below it.
+                : "border-parranda-ink bg-parranda-paper text-parranda-ink";
           return (
             <li key={stopKey} className="flex flex-col">
               {leg && (leg.minutes != null || leg.km != null) && (
@@ -338,10 +339,10 @@ export default function StopLine({
                     {/* Named by the change line above ("4 stops swapped"):
                         which ones are new, for as long as that line stands. */}
                     {!stale && newStopIdentities.has(changeStopIdentity(stop) ?? "") && (
-                      <span className="type-eyebrow text-10 text-parranda-glow">{t("ny", "new")}</span>
+                      <span className="type-eyebrow text-11 text-parranda-glow">{t("ny", "new")}</span>
                     )}
                     {isCurrent && (
-                      <span className="type-eyebrow rounded-full bg-parranda-terracotta px-2 py-0.5 text-10 text-parranda-on-terracotta">
+                      <span className="type-eyebrow rounded-full bg-parranda-terracotta px-2 py-0.5 text-11 text-parranda-on-terracotta">
                         {progress?.state === "at" ? t("Du är här", "You're here") : t("Nästa", "Next")}
                       </span>
                     )}
@@ -599,20 +600,24 @@ export default function StopLine({
           section-sized gap after the light About line read as missing content. */}
       {routeContextSuggestions.length > 0 && (
         <div className="mt-5 flex flex-col gap-2.5">
-          <button
-            type="button"
-            aria-expanded={detoursOpen}
-            onClick={() => setDetoursOpen((cur) => !cur)}
-            className={buttonClass("dashed", "min-h-12 w-full justify-between px-4 text-left text-sm")}
-          >
-            <span>
-              {routeContextSuggestions.length}{" "}
-              {routeContextSuggestions.length === 1
-                ? t("idé nära din rutt", "detour idea near your route")
-                : t("idéer nära din rutt", "detour ideas near your route")}
-            </span>
-            <ChevronDownIcon className={"h-4 w-4 shrink-0 transition " + (detoursOpen ? "rotate-180" : "")} />
-          </button>
+          {/* A heading that is also the disclosure: the ideas are a part of
+              the route section a reader can jump to, open or closed. */}
+          <h3>
+            <button
+              type="button"
+              aria-expanded={detoursOpen}
+              onClick={() => setDetoursOpen((cur) => !cur)}
+              className={buttonClass("dashed", "min-h-12 w-full justify-between px-4 text-left text-sm")}
+            >
+              <span>
+                {routeContextSuggestions.length}{" "}
+                {routeContextSuggestions.length === 1
+                  ? t("idé nära din rutt", "detour idea near your route")
+                  : t("idéer nära din rutt", "detour ideas near your route")}
+              </span>
+              <ChevronDownIcon className={"h-4 w-4 shrink-0 transition " + (detoursOpen ? "rotate-180" : "")} />
+            </button>
+          </h3>
           <p className="text-xs leading-relaxed text-parranda-ink-meta">
             {t(
               "Fler idéer som inte ingår i dagens rutt.",

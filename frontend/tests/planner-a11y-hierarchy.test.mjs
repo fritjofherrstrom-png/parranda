@@ -375,3 +375,14 @@ test("how the day was assembled is one closed line beside the map", async (t) =>
   assert.match(about[0].textContent, /Places come from external sources/);
   assert.doesNotMatch(h.container.querySelector("header").textContent, /source-backed/);
 });
+
+test("every station is a numbered ring, as on the map; a fill marks only the opened stop", async (t) => {
+  const h = await planner(t);
+  const stations = () => [...h.container.querySelectorAll('ol[aria-label="The stops, in order"] > li > button > span:first-child')];
+  assert.ok(stations().length >= 3);
+  // A filled last station read as "selected", and the map never showed it.
+  for (const station of stations()) assert.match(station.className, /bg-parranda-paper/, station.textContent);
+  const rows = [...h.container.querySelectorAll('ol[aria-label="The stops, in order"] > li > button')];
+  await h.act(() => rows.at(-1).dispatchEvent(new h.window.Event("click", { bubbles: true })));
+  assert.match(stations().at(-1).className, /bg-parranda-terracotta/, "the opened stop is the one filled station");
+});

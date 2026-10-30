@@ -53,7 +53,7 @@ async function composedPlanner(t, liveEvents, { lang = 'en', picks = PICKS } = {
 }
 const sheet = h => h.container.querySelector('[role="dialog"]');
 function rowsUnder(h, heading) {
-  const title = [...sheet(h).querySelectorAll('p')].find(p => p.textContent.trim() === heading);
+  const title = [...sheet(h).querySelectorAll('h3')].find(p => p.textContent.trim() === heading);
   assert.ok(title, `"${heading}" is shown`);
   assert.equal(title.nextElementSibling?.tagName, 'UL');
   return [...title.nextElementSibling.children].map(li => li.textContent);
@@ -99,7 +99,7 @@ test('the Live sheet claims picks only for server matches and labels every other
   assert.equal(more.length, 2);
   assert.match(more[0], /Street food tasting.*Matches: Food & drink$/);
   assert.match(more[1], /Library open house.*Venue h-library/, 'the event keeps its title and place');
-  const library = [...sheet(h).querySelectorAll('li')].find(li => li.querySelector('h5')?.textContent === 'Library open house');
+  const library = [...sheet(h).querySelectorAll('li')].find(li => li.querySelector(':scope > div > :is(h3, h4, h5)')?.textContent === 'Library open house');
   assert.match(library.querySelector('details').textContent, /via\sOfficial calendar/, 'the feed remains attribution');
   assert.equal(library.querySelector('p a').textContent.replace(/\s*↗$/, ''), 'calendar.example', 'link names its actual destination');
   assert.equal(library.querySelector('p a').getAttribute('href'), 'https://calendar.example/h-library');
@@ -132,7 +132,7 @@ test('a pick added before the day recomposes is never claimed from the older ran
   const other = rowsUnder(h, 'Other local highlights');
   assert.match(other[1], /Night swim at the harbour.*Venue g-swim/);
   assert.match(other[1], /via\sOfficial calendar/);
-  const swim = [...sheet(h).querySelectorAll('li')].find(li => li.querySelector('h5')?.textContent === 'Night swim at the harbour');
+  const swim = [...sheet(h).querySelectorAll('li')].find(li => li.querySelector(':scope > div > :is(h3, h4, h5)')?.textContent === 'Night swim at the harbour');
   assert.equal(swim.querySelector('p a').getAttribute('href'), 'https://calendar.example/g-swim');
   assert.equal(swim.querySelector('p a').textContent.replace(/\s*↗$/, ''), 'calendar.example');
   assert.doesNotMatch(other[1], /beyond your picks|Matches:|looser match/,

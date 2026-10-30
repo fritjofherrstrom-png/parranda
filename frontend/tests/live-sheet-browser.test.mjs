@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync, readdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { chromium } from 'playwright-core';
+
+const { groupLiveProgramViews } = createRequire(import.meta.url)('../../server/place-candidates/live-program-presentation.js');
 
 // Native browser, real mounted React, deterministic captured/fixture data.
 // This is NOT real-provider, deployed-runtime, geographic or phone acceptance.
@@ -224,14 +227,23 @@ test('native LiveSheet clock updates exact and listed time status without parent
   await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
   await render(events,'en','tonight',{liveSheetSort:sort});
   const row=title=>page.getByRole('listitem').filter({has:page.getByText(title,{exact:true})}).first();
-  assert.match(await row('Exact workshop').innerText(),/on now · until 21:00/);
-  assert.match(await row('Listed workshop').innerText(),/on now · until 21:00:15/);
+  const group=title=>row(title).evaluate(li=>li.closest('[data-live-time-group]')?.getAttribute('data-live-time-group')??null);
+  // For you keeps "on now" on the row. By time says it once, as the group's
+  // "On now" heading, and the row keeps only its end.
+  const onNow=async title=>sort==='by_time'?(await group(title))==='now':/on now/.test(await row(title).innerText());
+  const lead=sort==='by_time'?'':'on now · ';
+  assert.ok(await onNow('Exact workshop'));
+  assert.ok((await row('Exact workshop').innerText()).includes(`${lead}until 21:00`));
+  assert.ok(await onNow('Listed workshop'));
+  assert.ok((await row('Listed workshop').innerText()).includes(`${lead}until 21:00:15`));
+  if(sort==='by_time')assert.doesNotMatch(await row('Exact workshop').innerText(),/on now/);
   await page.clock.runFor(10100);
-  assert.doesNotMatch(await row('Exact workshop').innerText(),/on now/,'exact end boundary refreshes without any user input');
+  assert.equal(await onNow('Exact workshop'),false,'exact end boundary refreshes without any user input');
+  if(sort==='by_time')assert.equal(await group('Exact workshop'),'ended');
   assert.match(await row('Exact workshop').innerText(),/20:00–21:00/,'known end remains visible after expiry');
-  assert.match(await row('Listed workshop').innerText(),/on now/);
+  assert.ok(await onNow('Listed workshop'));
   await page.clock.runFor(15000);
-  assert.doesNotMatch(await row('Listed workshop').innerText(),/on now/,'source second precision is honored too');
+  assert.equal(await onNow('Listed workshop'),false,'source second precision is honored too');
  }
  const allDay={id:'all-day',title:'Source whole day',time_window:{kind:'all_day',all_day_explicit:true,starts_on:'2026-10-22',ends_on:'2026-10-22'}};
  await render({coverage:'covered',selected_date:'2026-10-22',tonight:[allDay]},'en','tonight',{liveSheetSort:'by_time'});
@@ -249,19 +261,84 @@ test('native LiveCard and expanded source occurrences expire together and resync
  await page.getByText('Exact workshop',{exact:true}).waitFor();
  await page.getByText('2 occurrences',{exact:true}).click();
  const row=title=>page.getByRole('listitem').filter({has:page.getByText(title,{exact:true})}).first();
- assert.match(await row('Exact workshop').innerText(),/on now/);
+ const group=title=>row(title).evaluate(li=>li.closest('[data-live-time-group]')?.getAttribute('data-live-time-group')??null);
+ // The card says "On now" once, as the group heading; the row keeps its end.
+ assert.equal(await group('Exact workshop'),'now');
+ assert.match(await row('Exact workshop').innerText(),/until 21:00/);
  assert.match(await page.locator('details').innerText(),/on now · until 21:00:15/);
  await page.clock.runFor(10100);
- assert.doesNotMatch(await row('Exact workshop').innerText(),/on now/);
+ assert.equal(await group('Exact workshop'),'ended');
+ assert.match(await row('Exact workshop').innerText(),/20:00–21:00/);
  assert.match(await page.locator('details').innerText(),/on now/);
  await page.clock.runFor(15000);
  assert.doesNotMatch(await page.locator('details').innerText(),/on now/);
  // Simulate a tab waking after a system-clock adjustment, without a parent render.
  await page.clock.setSystemTime(new Date('2026-10-15T18:59:30Z'));
  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
- await page.waitForFunction(()=>document.querySelector('section').textContent.includes('on now'));
- assert.match(await row('Exact workshop').innerText(),/on now/);
+ await page.waitForFunction(()=>document.querySelector('[data-live-time-group="now"]')?.textContent.includes('Exact workshop'));
+ assert.equal(await group('Exact workshop'),'now');
  await page.evaluate(()=>window.unmountView());
  await page.clock.runFor(60000);
  assert.equal(await page.locator('section').count(),0,'unmounted views stay unmounted after clock boundaries');
+});
+
+// A display programme from the real server builder, in the real card and sheet,
+// while only the clock moves (review of #643, F1). The row's group and time
+// line follow the slot that stands where it is in the day; every slot stays.
+const programmeSlot=(id,starts_at,ends_at)=>({id,title:'Source programme',place:'Source venue',lat:59.33,lng:18.06,timezone:'Europe/Stockholm',
+ starts_at,...(ends_at?{ends_at}:{}),source_provider_id:'source-calendar',source_label:'Source calendar',
+ source_url:'https://calendar.example/programme',source_link_kind:'page',source_link_host:'calendar.example'});
+// A row reads its title heading first, then its time line.
+const rowState=(page,title)=>page.evaluate(title=>{const li=[...document.querySelectorAll('li')].find(li=>li.querySelector(':scope > div > :is(h3,h4,h5)')?.textContent===title);
+ return li&&{group:li.closest('[data-live-time-group]')?.getAttribute('data-live-time-group')??null,
+  timing:li.querySelector(':scope > div > :is(h3,h4,h5) + div > p')?.textContent??'',
+  slots:[...li.querySelectorAll('details li')].map(slot=>slot.textContent)};},title);
+const shown=async(page,title)=>{const {group,timing}=await rowState(page,title);return {group,timing};};
+
+test('a source programme row follows its slots in the card and the sheet without new data',async t=>{
+ const {page,render}=await browserHarness(t);
+ await page.clock.install({time:new Date('2026-10-24T08:59:50Z')});
+ const [programme]=groupLiveProgramViews([programmeSlot('slot-early','2026-10-24T08:00:00Z','2026-10-24T09:00:00Z'),
+  programmeSlot('slot-active','2026-10-24T09:30:00Z','2026-10-24T10:30:00Z')]);
+ assert.equal(programme.display_group_kind,'source_program');
+ const events={coverage:'covered',selected_date:'2026-10-24',tonight:[programme],this_week:[]};
+ await page.evaluate(events=>window.renderCard(events,'en'),events);
+ await page.getByText('Source programme',{exact:true}).waitFor();
+ assert.deepEqual(await shown(page,'Source programme'),{group:'now',timing:'until 11:00'});
+ await page.clock.runFor(10100);
+ assert.deepEqual(await shown(page,'Source programme'),{group:'later',timing:'11:30–12:30'},'the first slot is over: the next one leads');
+ await page.clock.fastForward('45:00');
+ const card=await rowState(page,'Source programme');
+ assert.deepEqual({group:card.group,timing:card.timing},{group:'now',timing:'until 12:30'});
+ assert.equal(card.slots.length,2,'every slot stays listed');
+ assert.match(card.slots[0],/^Sat 24 Oct 10:00–11:00/);
+ assert.match(card.slots[1],/^on now · until 12:30/);
+ await render(events,'en','tonight',{liveSheetSort:'for_you'});
+ assert.deepEqual(await shown(page,'Source programme'),{group:null,timing:'on now · until 12:30'});
+ await render(events,'en','tonight',{liveSheetSort:'by_time'});
+ assert.deepEqual(await shown(page,'Source programme'),{group:'now',timing:'until 12:30'});
+ await page.clock.fastForward('46:00');
+ assert.deepEqual(await shown(page,'Source programme'),{group:'ended',timing:'11:30–12:30'});
+ assert.equal((await rowState(page,'Source programme')).slots.length,2);
+});
+
+// Review of #643, F2: an individual occurrence names no group, so a start
+// with no end keeps its date there; the grouped row names only its clock.
+test('an expanded start-only occurrence keeps its date while its grouped row gives the clock',async t=>{
+ const {page}=await browserHarness(t);
+ await page.clock.install({time:new Date('2026-10-24T09:45:00Z')});
+ const [programme]=groupLiveProgramViews([programmeSlot('start-early','2026-10-24T08:00:00Z'),programmeSlot('start-later','2026-10-24T11:00:00Z')]);
+ const listed=(id,dates)=>({id,title:'Listed series',timezone:'Europe/Stockholm',time_window:{kind:'occurrences',dates,local_start:'10:00'},
+  source_url:'https://calendar.example/series',source_label:'Source calendar'});
+ const series={...listed('series',['2026-10-24','2026-10-25']),occurrences:[listed('series-sat',['2026-10-24']),listed('series-sun',['2026-10-25'])]};
+ await page.evaluate(events=>window.renderCard(events,'en'),{coverage:'covered',selected_date:'2026-10-24',tonight:[programme,series],this_week:[]});
+ await page.getByText('Source programme',{exact:true}).waitFor();
+ const p=await rowState(page,'Source programme');
+ assert.deepEqual({group:p.group,timing:p.timing},{group:'later',timing:'13:00'});
+ assert.match(p.slots[0],/^started Sat 24 Oct 10:00 · end time unknown/);
+ assert.match(p.slots[1],/^Sat 24 Oct 13:00/);
+ const s=await rowState(page,'Listed series');
+ assert.deepEqual({group:s.group,timing:s.timing},{group:'started',timing:'started 10:00 · end time unknown'});
+ assert.match(s.slots[0],/^started Sat 24 Oct 10:00 · end time unknown/);
+ assert.match(s.slots[1],/^Sun 25 Oct 10:00/);
 });

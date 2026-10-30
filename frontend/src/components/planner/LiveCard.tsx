@@ -12,9 +12,10 @@ import { useLiveClock } from "./useLiveClock";
  * data and one callback that opens the sheet.
  */
 import type { Ref } from "react";
+import { eventTiming, liveTimeGroups, liveTimeRepresentative } from "../../lib/pulse-view.mjs";
 import { ChevronRightIcon } from "../shared/icons";
 import { buttonClass, Eyebrow } from "../shared/ui";
-import type { Lang, Translate } from "./copy";
+import { liveTimeGroupLabel, type Lang, type Translate } from "./copy";
 import LiveEventSummary from "./LiveEventSummary";
 import EventOccurrences from "./EventOccurrences";
 import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
@@ -62,6 +63,15 @@ export default function LiveCard({
   openLiveSheet: () => void;
 }) {
   const now = useLiveClock([...pulseBuckets.tonight, ...pulseBuckets.thisWeek]);
+  // The same four highlights as before, read by where they stand in the day:
+  // on now, later, during the day, started earlier. The day itself is named
+  // once, in the heading above, so a row says only its clock. Rows the
+  // sources give no place in time keep the plain list. A programme row's time
+  // line is read from the same slot that places it in a group.
+  const selectedDate = liveEvents?.selected_date ?? null;
+  const shown = pulseBuckets.tonight.slice(0, 4);
+  const timeGroups = liveTimeGroups(shown, { now, selectedDate });
+  const grouped = Boolean(selectedDate) && timeGroups.some((group) => group.state !== "unknown");
   return (
     <section
       className="rounded-parranda border-line border-parranda-live/35 bg-parranda-live/8 p-5 sm:p-6"
@@ -127,17 +137,27 @@ export default function LiveCard({
         </p>
       )}
 
-      {pulseBuckets.tonight.length > 0 && (
-        <div className="mt-4">
-          {!liveEvents?.selected_date && <p className="mb-2 text-sm font-bold text-parranda-ink">{liveDayLabel}</p>}
-          <ul className="flex flex-col divide-y divide-parranda-line-faint">
-            {pulseBuckets.tonight.slice(0, 4).map((ev: PulseEvent, i: number) => (
-              <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 py-3 text-sm leading-relaxed text-parranda-ink-soft first:pt-1">
-                <LiveEventSummary event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} />
-                <EventOccurrences event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} />
-              </li>
-            ))}
-          </ul>
+      {shown.length > 0 && (
+        <div className="mt-4 flex flex-col gap-2">
+          {/* The heading above names a selected day; only an unnamed one is
+              stated here. */}
+          {!selectedDate && <p className="text-sm font-bold text-parranda-ink">{liveDayLabel}</p>}
+          {(grouped ? timeGroups : [{ state: null, events: shown }]).map((group) => (
+            <div key={group.state ?? "all"} className="flex flex-col gap-1" data-live-time-group={group.state ?? undefined}>
+              {group.state && <h3 className="text-xs font-bold text-parranda-ink-muted">{liveTimeGroupLabel(group.state, t)}</h3>}
+              <ul className="flex flex-col divide-y divide-parranda-line-faint">
+                {group.events.map((ev: PulseEvent, i: number) => (
+                  <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 py-3 text-sm leading-relaxed text-parranda-ink-soft first:pt-1">
+                    {/* A title sits one level below its time group's heading. */}
+                    <LiveEventSummary event={ev} lang={lang} now={now} selectedDate={selectedDate} heading={group.state ? "h4" : "h3"}
+                      timing={eventTiming(liveTimeRepresentative(ev, now, selectedDate), lang, now, selectedDate,
+                        { omitDate: grouped ? selectedDate : null, underOnNow: group.state === "now" })} />
+                    <EventOccurrences event={ev} lang={lang} now={now} selectedDate={selectedDate ?? undefined} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       )}
       {/* The card keeps a one-line summary for the week — the full list
@@ -156,7 +176,7 @@ export default function LiveCard({
           type="button"
           ref={liveSheetTriggerRef}
           onClick={openLiveSheet}
-          className={buttonClass("live", "mt-4 min-h-12 w-full px-4 text-sm")}
+          className={buttonClass("liveOutline", "mt-4 min-h-12 w-full px-4 text-sm")}
         >
           {pulseBuckets.tonight.length > 0 || pulseBuckets.thisWeek.length > 0
             ? t("Se allt live", "See all live")

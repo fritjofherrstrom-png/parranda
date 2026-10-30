@@ -37,3 +37,12 @@ test('the sheet names its tags as a list, not with aria-label on a plain span', 
   assert.match(sheet, /<span role="list" aria-label=\{t\("Taggar", "Tags"\)\}/);
   assert.match(sheet, /<span role="listitem" key=\{tag\}/);
 });
+
+test('catch-all placeholders name no category and are not shown; real tags stay', () => {
+  // Ticketmaster's "Miscellaneous" and "Undefined" read as noise beside real
+  // tags (QA, Berlin, 23 Oct 2026). "Arts & Theatre" has no existing
+  // translation ("arts" is deliberately not guessed), so it stays as written.
+  assert.equal(liveTagLabel('Miscellaneous', 'sv'), '');
+  assert.equal(liveTagLabel('undefined', 'en'), '');
+  assert.deepEqual(liveTagLabels(['Miscellaneous', 'Music', 'Undefined', 'Arts & Theatre'], 'sv'), ['Musik', 'Arts & Theatre']);
+});

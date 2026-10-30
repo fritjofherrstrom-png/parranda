@@ -192,12 +192,12 @@ test('Blitz on a restored position explains missing consent and offers a deliber
   freeze(t); const { entry } = await completed(t);
   const h = await mountPlanner({ url: 'http://localhost/anywhere?restore=last&lang=en', storage: { [LAST]: entry } });
   t.after(() => h.unmount()); const gps = geo(h);
-  await click(h, 'Blitz right now');
+  await click(h, 'Show an idea');
   assert.equal(h.fetchMock.calls.filter(c => c.url.includes('/api/blitz')).length, 0);
   assert.equal(gps.requests.length, 0);
-  assert.match(h.text(), /Blitz needs your location/);
-  assert.doesNotMatch(h.text(), /Blitz could not read the moment/);
-  await click(h, 'Share position for Blitz'); await gps.grant();
+  assert.match(h.text(), /The idea needs your location/);
+  assert.doesNotMatch(h.text(), /could not read the moment/);
+  await click(h, 'Share my position'); await gps.grant();
   const blitz = h.fetchMock.calls.find(c => c.url.includes('/api/blitz'));
   assert.deepEqual(blitz.body, { lat: 59.3326, lng: 18.0649, preferences: ['food', 'culture', 'views'] });
   assert.equal(routes(h).length, 0, 'Blitz consent does not rebuild the saved day');
@@ -254,7 +254,7 @@ test('late Blitz position consent after navigation sends nothing', async t => {
   freeze(t); const { entry } = await completed(t);
   const h = await mountPlanner({ url: 'http://localhost/anywhere?restore=last&lang=en', storage: { [LAST]: entry } });
   t.after(() => h.unmount()); const gps = geo(h);
-  await click(h, 'Blitz right now'); await click(h, 'Share position for Blitz');
+  await click(h, 'Show an idea'); await click(h, 'Share my position');
   const home = [...h.container.querySelectorAll('a')].find(a => a.getAttribute('href') === '/?lang=en');
   await h.act(() => { const e = new h.window.MouseEvent('click', { bubbles: true, cancelable: true }); home.addEventListener('click', e => e.preventDefault(), { once: true }); home.dispatchEvent(e); });
   await gps.grant();

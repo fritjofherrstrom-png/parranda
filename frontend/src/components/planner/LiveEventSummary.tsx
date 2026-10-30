@@ -26,7 +26,7 @@ export default function LiveEventSummary({ event, lang, now, selectedDate, timin
   selectedDate?: string | null;
   timing?: string;
   distance?: string | null;
-  heading?: "h3" | "h5";
+  heading?: "h3" | "h4" | "h5";
   titleClassName?: string;
 }) {
   const Heading = heading;
