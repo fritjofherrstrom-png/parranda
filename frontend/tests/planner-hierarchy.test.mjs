@@ -185,8 +185,9 @@ test('a day in the city leads the heading, with the selected date directly below
   const date = header(h).querySelector('time');
   assert.equal(date?.dateTime, '2026-09-25');
   // Weekday, day, month: the design system's one date form. No comma, and
-  // the year only outside the current one.
-  assert.match(date?.textContent, /^Today · Fri 25 Sept?$/);
+  // the year only outside the current one. The fixture day (25 Sep 2026) is
+  // in the past, so no "Today": that word belongs to today's date only.
+  assert.match(date?.textContent, /^Fri 25 Sept?( 2026)?$/);
   assert.ok(header(h).querySelector('h1').compareDocumentPosition(date) & h.window.Node.DOCUMENT_POSITION_FOLLOWING);
 });
 
@@ -266,6 +267,33 @@ test('restoring a saved day does not present an expired or undated forecast as f
       if (first) await first.unmount();
       if (restored) await restored.unmount();
     }
+  }
+});
+
+test("a saved day restored the next day shows its own date, never Today", async t => {
+  // Found in review (29→30 Oct): a saved day from yesterday was headed
+  // "Today · Thu 29 Oct". "Today" belongs to the shown date only when that
+  // date is today's, whatever offset the day was first composed with.
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-09-25T12:00:00Z") });
+  let first = await mountPlanner({ url: PLACE_URL });
+  let restored;
+  try {
+    await first.clock.advance(500);
+    await first.fetchMock.respond(first.fetchMock.pending()[0], composedDay());
+    await first.clock.advance(50);
+    assert.match(header(first).querySelector("time").textContent, /^Today · Fri 25 Sept?$/);
+    const storage = browserStorage(first.window.localStorage);
+    await first.unmount(); first = null;
+    t.mock.timers.setTime(new Date("2026-09-26T12:00:00Z").getTime());
+    restored = await mountPlanner({ url: "http://localhost/anywhere?restore=last&lang=en", storage });
+    await restored.clock.advance(500);
+    assert.match(restored.text(), /Saved day/);
+    const shown = header(restored).querySelector("time").textContent;
+    assert.match(shown, /^Fri 25 Sept?$/);
+    assert.equal(restored.fetchMock.calls.length, 0);
+  } finally {
+    if (first) await first.unmount();
+    if (restored) await restored.unmount();
   }
 });
 
