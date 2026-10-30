@@ -1719,9 +1719,14 @@ function createOvertureBackgroundSource({ source, cache }) {
   const sampleKey = typeof source?.sampleKey === "string" ? source.sampleKey : "default";
   const keyFor = typeof source.cacheKeyFor === 'function' ? source.cacheKeyFor
     : ({ lat, lng } = {}) => `${Number(lat).toFixed(3)},${Number(lng).toFixed(3)}:${sampleKey}`;
+  // A dense centre's first window can outlast the Planner's wait (Paris,
+  // 5 km, cold: 66 s on 2026-10-22). Cancelling it with the request meant the
+  // next request started over and the city never got its directory sample;
+  // it now keeps warming until its own query timeout.
   const background = createBackgroundSource({
     cache,
     keyFor,
+    keepWarming: true,
     load: (anchor) => source.acquire({ ...anchor, previousSample: cache.previous?.(keyFor(anchor)) || null }),
   });
   const forRequest = (rows, anchor = {}, request = {}) => {
