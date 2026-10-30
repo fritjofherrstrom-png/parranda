@@ -35,7 +35,7 @@ export default function ParrandaChoice({
         <button type="button" onClick={onChoose} className={buttonClass("dashed", "min-h-11 px-4 text-sm")}>
           {t("Låt Parranda välja dagen", "Let Parranda choose the day")}
         </button>
-        <p className="text-13 leading-snug text-parranda-ink/72">
+        <p className="text-13 leading-snug text-parranda-ink-muted">
           {t(
             "Vet du inte vad du vill? Parranda väljer inriktning efter platserna, tiden och vädret. Du kan ta över när som helst.",
             "Not sure what you want? Parranda picks the day's direction from the places, the time and the weather. Take over any time.",
@@ -51,7 +51,7 @@ export default function ParrandaChoice({
     <section aria-label={t("Parrandas val", "Parranda's choice")} className={`flex flex-col gap-3 p-4 ${panelCard}`}>
       <Eyebrow tone="glow">{settled && picks.length ? t("Parranda valde", "Parranda chose") : t("Parranda väljer", "Parranda chooses")}</Eyebrow>
       {!settled ? (
-        <p className="text-13 leading-snug text-parranda-ink/72">
+        <p className="text-13 leading-snug text-parranda-ink-muted">
           {composing
             ? t("Väljer efter platserna, tiden och vädret …", "Choosing from the places, the time and the weather …")
             : t("Parranda kunde inte välja för den här dagen.", "Parranda couldn't choose for this day.")}
@@ -68,7 +68,7 @@ export default function ParrandaChoice({
               ))}
             </ul>
           )}
-          {view?.note && <p className="text-13 leading-snug text-parranda-ink/72">{view.note}</p>}
+          {view?.note && <p className="text-13 leading-snug text-parranda-ink-muted">{view.note}</p>}
         </>
       )}
       <button

@@ -29,11 +29,11 @@ export default function StopCategory({ type, label, muted = false }: { type: unk
     <span
       data-stop-category={family || "other"}
       className={
-        "inline-flex max-w-full items-center gap-1.5 rounded-full bg-parranda-ink/[0.07] py-1 pl-2 pr-2.5 text-xs font-semibold leading-none " +
-        (muted ? "text-parranda-ink/68" : "text-parranda-ink")
+        "inline-flex max-w-full items-center gap-1.5 rounded-full bg-parranda-fill py-1 pl-2 pr-2.5 text-xs font-semibold leading-none " +
+        (muted ? "text-parranda-ink-meta" : "text-parranda-ink")
       }
     >
-      {Symbol && <Symbol className="h-3.5 w-3.5 text-parranda-ink/72" />}
+      {Symbol && <Symbol className="h-3.5 w-3.5 text-parranda-ink-muted" />}
       <span className="truncate">{label}</span>
     </span>
   );
