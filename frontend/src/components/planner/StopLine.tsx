@@ -34,8 +34,6 @@ import {
   LocationIcon,
   MinusIcon,
   PlusIcon,
-  ShuffleIcon,
-  TrashIcon,
   WalkIcon,
 } from "../shared/icons";
 import { busyButton, buttonClass, compactPillTarget, dataLine, Eyebrow, ExternalLinkText, inlineLinkTarget } from "../shared/ui";
@@ -374,100 +372,98 @@ export default function StopLine({
                 />
               </button>
               {expanded && (
-                <div
-                  id={panelId}
-                  className="mb-2 ml-14 mt-1 flex flex-col rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint p-4"
-                >
+                // The open stop continues the stop's own column, like its
+                // name: what it is and does for the picks, its facts, then
+                // two kinds of action. Going there leads, outlined; changing
+                // the day follows, in quiet fills. No card of its own.
+                <div id={panelId} className="mb-1 ml-14 mt-1 flex flex-col gap-3">
+                  {(placeDetails.kindLabel || matchedLabels.length > 0 || partialLabels.length > 0) && (
+                    <p className="text-15 leading-snug text-parranda-ink-soft">
+                      {[
+                        placeDetails.kindLabel ? `${placeDetails.kindLabel}.` : "",
+                        matchedLabels.length > 0 ? `${t("Matchar dina val:", "Matches your picks:")} ${matchedLabels.join(", ")}.` : "",
+                        partialLabels.length > 0 ? `${t("Lösare träff för:", "A looser match for:")} ${partialLabels.join(", ")}.` : "",
+                      ].filter(Boolean).join(" ")}
+                    </p>
+                  )}
                   {/* Facts only. The schedule row is a bounded source fact
                       for the selected local day, never an "open now" claim. */}
-                  <div className="flex flex-col gap-1.5 text-13 leading-snug text-parranda-ink-muted">
-                    {placeDetails.kindLabel && <span className="font-semibold text-parranda-ink">{placeDetails.kindLabel}</span>}
-                    {placeDetails.address && <span>{placeDetails.address}</span>}
-                    {leg && (leg.minutes != null || leg.km != null) && (
-                      <span>
-                        {legLabel(leg)}
-                        {prevName ? ` ${t("till fots från", "walk from")} ${prevName}` : ` ${t("till fots", "on foot")}`}
-                      </span>
-                    )}
-                    {hoursLabel && <span>{hoursLabel}</span>}
-                    {hoursUnknown && !hoursLabel && (
-                      <span>{t("Öppettider saknas för den valda dagen", "Opening hours unavailable for the selected day")}</span>
-                    )}
-                  </div>
-                  {partialLabels.length > 0 && (
-                    <p className="mt-2 text-xs text-parranda-ink-meta">
-                      {t("Lösare träff för:", "A looser match for:")} {partialLabels.join(", ")}
-                    </p>
+                  {(placeDetails.address || (leg && (leg.minutes != null || leg.km != null)) || hoursLabel || hoursUnknown) && (
+                    <div className="flex flex-col gap-1 text-13 leading-snug text-parranda-ink-muted">
+                      {placeDetails.address && <span>{placeDetails.address}</span>}
+                      {leg && (leg.minutes != null || leg.km != null) && (
+                        <span>
+                          {legLabel(leg)}
+                          {prevName ? ` ${t("till fots från", "walk from")} ${prevName}` : ` ${t("till fots", "on foot")}`}
+                        </span>
+                      )}
+                      {hoursLabel && <span>{hoursLabel}</span>}
+                      {hoursUnknown && !hoursLabel && (
+                        <span>{t("Öppettider saknas för den valda dagen", "Opening hours unavailable for the selected day")}</span>
+                      )}
+                    </div>
                   )}
-                  {matchedLabels.length > 0 && (
-                    <p className="mt-2 text-xs text-parranda-ink-muted">
-                      {t("Matchar dina val:", "Matches your picks:")} {matchedLabels.join(", ")}
-                    </p>
+                  {(pin || website) && (
+                    <div role="group" aria-label={t("Gå dit", "Go there")} className="flex flex-wrap gap-2">
+                      {pin && (
+                        <a href={pin} target="_blank" rel="noopener noreferrer" className={buttonClass("secondary", "min-h-11 px-4 text-13")}>
+                          {t("Öppna i Maps", "Open in Maps")}<ExternalIcon className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                      {website && (
+                        <a href={website} target="_blank" rel="noopener noreferrer" className={buttonClass("secondary", "min-h-11 px-4 text-13")}>
+                          {t("Webbplats", "Website")}<ExternalIcon className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                    </div>
                   )}
-                  <div role="group" aria-label={t("Ändra stopp", "Edit stop")} className="mt-3 flex flex-wrap items-center gap-1.5">
+                  <div role="group" aria-label={t("Ändra stopp", "Edit stop")} className="flex flex-wrap items-center gap-2">
                     {/* Existing identity-bound edits stay together. A kept
-                        stop offers release; Replace and Remove keep their
-                        separate orchestration and busy contracts. */}
+                        stop offers release, drawn as the chosen state (ink);
+                        Replace and Remove keep their separate orchestration
+                        and busy contracts. */}
                     {hasRealId && (commitments[stopIdentity]?.kind === "pin" ? (
                       <button
                         type="button"
                         onClick={() => releaseCommitment(stopIdentity)}
-                        className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-parranda-btn border-line border-parranda-ember/60 bg-parranda-ember/10 px-3 text-13 font-bold text-parranda-ink transition hover:border-parranda-ember"
+                        className={buttonClass("quiet", "min-h-11 bg-parranda-ink px-4 text-13 text-parranda-paper hover:bg-parranda-ink hover:brightness-110")}
                       >
-                        <KeepIcon className="h-4 w-4 text-parranda-ember" />
                         {t("Behålls — släpp", "Kept — release")}
                       </button>
                     ) : (
                       <button
                         type="button"
                         onClick={() => keepStop(stopIdentity, name)}
-                        className={buttonClass("secondary", "min-h-11 px-3 text-13")}
+                        className={buttonClass("quiet", "min-h-11 px-4 text-13")}
                       >
-                        <KeepIcon className="h-4 w-4" />
                         {t("Behåll den här", "Keep this one")}
                       </button>
                     ))}
                     {hasRealId && commitments[stopIdentity]?.kind !== "pin" && (
-                      <div className="inline-flex items-center gap-1.5">
+                      <div className="inline-flex flex-wrap items-center gap-2">
                       {/* Busy, not disabled, while the edit runs: the pressed
                           button keeps keyboard focus (ui.tsx busyButton). */}
                       <button
                         type="button"
                         {...busyButton(editPending, () => dismissStop(stopIdentity, name))}
                         title={t("Byt till ett liknande stopp", "Replace with a similar stop")}
-                        className={buttonClass("secondary", "min-h-11 px-3 text-13")}
+                        className={buttonClass("quiet", "min-h-11 px-4 text-13")}
                       >
-                        <ShuffleIcon className="h-4 w-4" />
                         {t("Byt", "Replace")}
                       </button>
                       <button
                         type="button"
                         {...busyButton(editPending, () => removeStop(stopIdentity, name))}
                         title={t("Ta bort stoppet utan ersättning", "Remove this stop without replacement")}
-                        className={buttonClass("secondary", "min-h-11 px-3 text-13")}
+                        className={buttonClass("quiet", "min-h-11 px-4 text-13")}
                       >
-                        <TrashIcon className="h-4 w-4" />
                         {t("Ta bort", "Remove")}
                       </button>
                       </div>
                     )}
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-5">
-                    {pin && (
-                      <a href={pin} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex min-h-11 items-center gap-1.5 text-13 font-semibold text-parranda-ink-soft underline decoration-parranda-line-firm underline-offset-2 hover:text-parranda-ink">
-                        {t("Öppna i Maps", "Open in Maps")}<ExternalIcon className="h-3.5 w-3.5" />
-                      </a>
-                    )}
-                    {website && (
-                      <a href={website} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex min-h-11 items-center gap-1.5 text-13 font-semibold text-parranda-ink-soft underline decoration-parranda-line-firm underline-offset-2 hover:text-parranda-ink">
-                        {t("Webbplats", "Website")}<ExternalIcon className="h-3.5 w-3.5" />
-                      </a>
-                    )}
-                  </div>
                   {(sourceLabel || stop?.candidate_status === "partial") && (
-                    <details className="group">
+                    <details className="group -mt-1">
                       <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold text-parranda-ink-muted hover:text-parranda-ink [&::-webkit-details-marker]:hidden">
                         {t("Om platsinformationen", "About this place information")}
                         <ChevronDownIcon className="h-3.5 w-3.5 transition group-open:rotate-180" />
