@@ -153,7 +153,7 @@ test("cold-start refresh is bounded: the component delegates to the tested follo
   assert.match(anywherePlannerSource, /&\$\{LIVE_COMPLETION_QUERY\}/);
   assert.equal(LIVE_COMPLETION_QUERY, "include_live_completion=1&include_live_route_upgrade=1");
   // The waiting state is honest and visible.
-  assert.match(anywherePlannerSource, /Läser in mer från källorna — uppdateras automatiskt strax\./);
+  assert.match(anywherePlannerSource, /Letar efter fler platser/);
   // A silent UPGRADE refreshes the stored entry so save/share use the full day.
   assert.match(anywherePlannerSource, /if \(!silent \|\| safe\?\.place_structure\)/);
 });
@@ -229,11 +229,12 @@ test("Pulse section: place-titled, dedup-aware, honest states, no jargon", () =>
 });
 
 test("route result has one authoritative route and keeps broader candidates secondary", () => {
-  // The day header (§3): "A day in {place}" + honest counts, and the Maps CTA
-  // over the FULL stop order (woven event included).
+  // The day header (§3): "A day in {place}", the selected date, honest
+  // counts, and the Maps CTA over the FULL stop order (woven event included).
   assert.match(anywherePlannerSource, /t\("Din dag", "Your day"\)/);
   assert.match(anywherePlannerSource, /t\("En dag i", "A day in"\)/);
   assert.match(anywherePlannerSource, /t\("En dag", "A day"\)[\s\S]{0,120}t\("nära dig", "near you"\)/);
+  assert.match(anywherePlannerSource, /<time dateTime=\{date!\}/);
   assert.match(anywherePlannerSource, /t\("till fots", "on foot"\)/);
   assert.match(anywherePlannerSource, /t\("Öppna rutten i Maps", "Open route in Maps"\)/);
   // Daypart group headings come from stop.daypart and render only when the
@@ -244,11 +245,11 @@ test("route result has one authoritative route and keeps broader candidates seco
   assert.match(anywherePlannerSource, /\[detoursOpen, setDetoursOpen\] = useState\(false\)/);
   assert.match(anywherePlannerSource, /buildRouteContextSuggestions\(routeStops, day\?\.areas/);
   assert.match(anywherePlannerSource, /detour idea near your route/);
-  assert.match(anywherePlannerSource, /de ingår inte i dagens stopp eller Maps-rutten/);
+  assert.match(anywherePlannerSource, /inte ingår i dagens rutt/);
   assert.match(anywherePlannerSource, /destination: routeDestination/);
   assert.doesNotMatch(anywherePlannerSource, /t\("Dagens kvarter", "Today's neighborhoods"\)/);
   assert.match(anywherePlannerSource, /Places nearby/);
-  assert.match(anywherePlannerSource, /Parranda found place candidates, but not a reliable route yet\./);
+  assert.match(anywherePlannerSource, /Parranda found places, but couldn.t build a route yet/);
   assert.match(anywherePlannerSource, /t\("träffar", "places"\)/);
   assert.doesNotMatch(
     anywherePlannerSource,
@@ -314,7 +315,7 @@ test("a tapped stop discloses route facts before an explicit Maps action", () =>
   // provisional evidence rather than pretending an exact match is partial.
   assert.match(anywherePlannerSource, /partialPreferenceLabels\(stop, selected, lang\)/);
   assert.match(anywherePlannerSource, /A looser match for:/);
-  assert.match(anywherePlannerSource, /Source evidence is still provisional/);
+  assert.match(anywherePlannerSource, /Place details are not yet confirmed/);
   assert.doesNotMatch(anywherePlannerSource, /Matches some, but not all, of what you chose/);
   assert.doesNotMatch(anywherePlannerSource, /worth a look before you go/, "no hand-holding instruction");
   // Routing jargon "leg" is gone from the header too.
@@ -381,20 +382,35 @@ test("the anchor is chosen once: the planner shows it, and adjusts — never a s
   assert.doesNotMatch(anywherePlannerSource, /ANY-CITY PLANNER|Any-place Alpha|Experimental route|dogfood/i);
 });
 
+test("on a phone the map is a short, still overview until the reader expands it", () => {
+  // A tall map above the stops once kept them off the first screen and caught
+  // the thumb that meant to scroll. The overview is short, takes no pan or
+  // zoom gesture while collapsed, and shows no zoom buttons; its stops still
+  // open on a tap, and Expand gives the full interactive map.
+  const routeMap = componentSource("planner/RouteMap.tsx");
+  assert.match(anywherePlannerSource, /mapExpanded \? "h-\[min\(70vh,36rem\)\]" : "h-52"/);
+  assert.match(anywherePlannerSource, /still=\{!splitLayout && !mapExpanded\}/);
+  assert.match(routeMap, /function applyStill\(map: any, still: boolean\)/);
+  assert.match(routeMap, /\[map\.dragPan, map\.touchZoomRotate, map\.doubleClickZoom, map\.boxZoom, map\.keyboard\]/);
+  assert.match(routeMap, /applyStill\(map, stillRef\.current\)/, "applied as soon as the map exists");
+  assert.match(routeMap, /data-still=\{still \|\| undefined\}/);
+  assert.match(anywhereStyles, /\.route-map-frame\[data-still\] \.maplibregl-ctrl-top-left \{\s*display: none;/);
+});
+
 test("compact planner and map controls keep a 44px mobile touch target", () => {
+  // Change, Adjust and Done share one pill (controlPill): drawn 36px tall,
+  // 44px to the touch through compactPillTarget's taller ::before.
+  const anchorCard = componentSource("planner/AnchorCard.tsx");
+  assert.match(componentSource("shared/ui.tsx"), /export const compactPillTarget =\s*"relative inline-flex min-h-9 [^"]*before:-inset-y-1 /);
+  assert.match(anchorCard, /const controlPill = `\$\{compactPillTarget\} /);
+  assert.match(anchorCard, /aria-label=\{t\("Byt plats", "Change place"\)\}\s*className=\{controlPill\}/);
+  assert.match(anchorCard, /aria-expanded=\{false\}[\s\S]{0,120}className=\{controlPill\}/);
+  assert.match(anchorCard, /aria-expanded=\{true\}[\s\S]{0,120}className=\{controlPill\}/);
+  // The map's expand control says what it does, in both languages, on the
+  // same pill: 36px drawn, 44px to the touch.
   assert.match(
     anywherePlannerSource,
-    /aria-label=\{t\("Byt plats", "Change place"\)\}[\s\S]{0,180}min-h-11/,
-  );
-  assert.match(
-    anywherePlannerSource,
-    /aria-expanded=\{false\}[\s\S]{0,180}min-h-11/,
-  );
-  // The map's expand control is an icon: a 44×44 target named in both
-  // languages, so it covers no more of the map than a thumb needs.
-  assert.match(
-    anywherePlannerSource,
-    /aria-expanded=\{mapExpanded\}\s*aria-label=\{mapExpanded \? t\("Förminska kartan", "Shrink map"\) : t\("Förstora kartan", "Expand map"\)\}[\s\S]{0,260}min-h-11 min-w-11/,
+    /aria-expanded=\{mapExpanded\}\s*data-map-control=""\s*className="[^"]*\bmin-h-9\b[^"]*before:-inset-y-1[^"]*"\s*>\s*\{mapExpanded \? t\("Förminska kartan", "Shrink map"\) : t\("Förstora kartan", "Expand map"\)\}/,
   );
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-ctrl-group button\s*\{[\s\S]*width: 44px;/);
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-ctrl-group button\s*\{[\s\S]*height: 44px;/);
@@ -445,31 +461,86 @@ test("keyboard-reachable controls have one visible focus contract", () => {
   assert.match(anywhereStyles, /outline-offset: 3px/);
 });
 
+// The whole Linje surface with its comments removed, so a sentence that
+// mentions a border is never read as a class.
+function linjeSurface() {
+  return [plannerSurfaceSource(), componentSource("PlaceSearchField.tsx"), componentSource("LandingHero.tsx")]
+    .join("\n")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:"'`\w])\/\/.*$/gm, "$1");
+}
+
+const tokensCss = readFileSync(new URL("../src/styles/tokens.css", import.meta.url), "utf8");
+function tokenBlock(selector) {
+  const start = tokensCss.indexOf(`${selector} {`);
+  return tokensCss.slice(start, tokensCss.indexOf("}", start));
+}
+function tokenValue(block, name) {
+  return block.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1].trim();
+}
+const channels = (value) => value.split(/\s+/).map(Number);
+const over = (fg, alpha, bg) => fg.map((c, i) => c * alpha + bg[i] * (1 - alpha));
+function luminance(rgb) {
+  const [r, g, b] = rgb.map((c) => (c / 255 <= 0.03928 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrast(a, b) {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+const INK_ROLES = ["ink-soft", "ink-muted", "ink-meta", "line-strong", "line-firm", "line", "line-faint", "fill-strong", "fill", "fill-faint"];
+
 test("small text keeps AA contrast on every Linje surface", () => {
-  // tokens.css: secondary text never goes below 65 % ink. ink/60 was 4.42:1
-  // on a day-theme panel (ink/4 over paper); 65 % clears 4.5:1 on panels up
-  // to ink/10. White at 85 % on terracotta was 4.18:1, and the digit on a
-  // white/22 disc 3.7:1.
-  const surface = [plannerSurfaceSource(), componentSource("PlaceSearchField.tsx"), componentSource("LandingHero.tsx")].join("\n");
-  const faint = [...surface.matchAll(/(?<![\w-])text-parranda-ink\/(\d+)/g)].map(m => Number(m[1])).filter(n => n < 65);
-  assert.deepEqual(faint, [], "no ink text below 65 %");
-  assert.doesNotMatch(surface, /text-white\/\d+/);
-  assert.doesNotMatch(componentSource("planner/DayHeader.tsx"), /bg-white\/22/);
+  // Secondary text never goes below meta, 68 % ink. ink/60 was 4.42:1 on a
+  // day-theme panel, white at 85 % on terracotta 4.18:1, and the digit on a
+  // white/22 disc 3.7:1. A component writes no ink percentage at all (24 of
+  // them had drifted in by the 23 Oct audit): its lighter strengths are the
+  // named roles, so the floor is checked once, here, for every text strength
+  // on the strongest fill text can sit on, in both themes.
+  const surface = linjeSurface();
+  assert.doesNotMatch(surface, /parranda-ink\/(\d|\[)/, "ink strengths are named, never numbers");
+  assert.doesNotMatch(surface, /(?<![\w-])text-white(?![\w-])/, "text on terracotta is on-terracotta");
+  for (const role of INK_ROLES) {
+    const token = `--p-ink-${role.replace(/^ink-/, "")}`;
+    assert.ok(anywhereStyles.includes(`--color-parranda-${role}: rgb(var(--p-color-ink) / var(${token}));`), role);
+  }
+  const day = tokenBlock(":root");
+  const night = tokenBlock(':root[data-theme="night"]');
+  const fillStrong = Number(tokenValue(day, "--p-ink-fill-strong"));
+  for (const strength of ["--p-ink-soft", "--p-ink-muted", "--p-ink-meta"]) {
+    const alpha = Number(tokenValue(day, strength));
+    for (const [theme, block] of [["day", day], ["night", night]]) {
+      const ink = channels(tokenValue(block, "--p-color-ink"));
+      const panel = over(ink, fillStrong, channels(tokenValue(block, "--p-color-paper")));
+      const ratio = contrast(over(ink, alpha, panel), panel);
+      assert.ok(ratio >= 4.5, `${strength} on a ${theme} fill-strong panel is ${ratio.toFixed(2)}:1`);
+    }
+  }
 });
 
 test("frames, elevation, layers and small text come from Linje tokens", () => {
   // 7fb8c10 design-system audit: 35 hand-written 1.5px borders, raw z-index
-  // numbers, black shadows in five strengths and 52 fixed px text sizes.
-  const surface = [plannerSurfaceSource(), componentSource("PlaceSearchField.tsx"), componentSource("LandingHero.tsx")].join("\n");
+  // numbers, black shadows in five strengths and 52 fixed px text sizes. The
+  // 23 Oct audit found what those patterns let through: 34 one-pixel frames
+  // beside the 1.5px line, z-[2000] above the Live sheet's documented layer,
+  // black and white written raw, and arbitrary role opacities.
+  const surface = linjeSurface();
   assert.doesNotMatch(surface, /border(-[trblxy])?-\[1\.5px\]/);
-  assert.doesNotMatch(surface, /(?<![\w-])z-\d+(?![\w-])/);
+  assert.doesNotMatch(surface, /(?<=[\s"'`:{])border(-[trblxy])?(?=[\s"'`}])/, "every frame is border-line");
+  assert.doesNotMatch(surface, /(?<![\w-])z-(\d+(?![\w-])|\[)/);
   assert.doesNotMatch(surface, /(?<![\w-])shadow-(xs|sm|md|lg|xl|2xl)(?![\w-])/);
+  assert.doesNotMatch(surface, /(?<![\w-])(bg|text|border|ring|from|via|to)-(black|white)(?![\w-])/);
+  assert.doesNotMatch(surface, /parranda-[a-z-]+\/\[/, "no arbitrary opacity on a role");
   assert.doesNotMatch(surface, /text-\[\d+px\]/);
-  const tokens = readFileSync(new URL("../src/styles/tokens.css", import.meta.url), "utf8");
-  for (const token of ["--p-line", "--p-shadow-control", "--p-shadow-marker", "--p-shadow-pop", "--p-shadow-sheet", "--p-z-popover", "--p-z-map-control", "--p-z-map-tooltip", "--p-z-sheet"]) {
-    assert.match(tokens, new RegExp(`${token}:`), token);
+  for (const token of ["--p-line", "--p-shadow-control", "--p-shadow-marker", "--p-shadow-pop", "--p-shadow-sheet", "--p-scrim", "--p-shade", "--p-color-on-terracotta", "--p-z-raised", "--p-z-popover", "--p-z-map-control", "--p-z-map-tooltip", "--p-z-map-overlay", "--p-z-sheet"]) {
+    assert.match(tokensCss, new RegExp(`${token}:`), token);
   }
+  // The layers stack in their documented order, the Live sheet on top.
+  const day = tokenBlock(":root");
+  const layers = ["--p-z-raised", "--p-z-popover", "--p-z-map-control", "--p-z-map-tooltip", "--p-z-map-overlay", "--p-z-sheet"].map((name) => Number(tokenValue(day, name)));
+  assert.deepEqual(layers, [...layers].sort((a, b) => a - b));
   assert.doesNotMatch(anywhereStyles, /box-shadow:[^;]*rgb\(0 0 0/);
+  assert.doesNotMatch(anywhereStyles, /border(-top|-right|-bottom|-left)?: 1px/);
   assert.doesNotMatch(anywhereStyles, /font-size: \d+px/);
   assert.match(anywhereStyles, /z-index: var\(--p-z-map-tooltip\)/);
 });
@@ -505,8 +576,9 @@ test("grouped controls never clip the focus ring that sits outside them", () => 
 });
 
 test("adjustments collapse to a summary and re-compose themselves — no submit past the landing", () => {
-  // Collapsed summary (mood · day · length) with an aria-expanded toggle...
-  assert.match(anywherePlannerSource, /!adjustOpen && \(/);
+  // Collapsed summary (mood · day · length) with an aria-expanded toggle; with
+  // a day on screen the summary stays above the open panel, Done in Adjust's place...
+  assert.match(anywherePlannerSource, /\(compact \|\| !adjustOpen\) && \(/);
   assert.match(anywherePlannerSource, /\{moodLabel \|\| t\("Inga intressen", "No interests"\)\}/);
   assert.match(anywherePlannerSource, /t\("Justera", "Adjust"\)/);
   assert.match(anywherePlannerSource, /aria-expanded=\{false\}/);
@@ -526,9 +598,13 @@ test("adjustments collapse to a summary and re-compose themselves — no submit 
 
 test("saving a live day does not freeze its adjustment controls as a restored snapshot", () => {
   const saveBlock = anywherePlannerSource.split("function saveDay() {")[1]?.split("function removeSavedDay")[0] ?? "";
-  const restoreBlock = anywherePlannerSource.split("function restoreEntry(entry: SavedEntry, restoreViewFromStorage = false) {")[1]?.split("const autoPlannedRef")[0] ?? "";
+  // Additive restore options must not make this wiring check inspect an empty
+  // block. Mounted exact-navigation tests prove the behavioral boundary.
+  const restoreBlock = anywherePlannerSource.match(/function restoreEntry\([^\n]*\) \{([\s\S]*?)\n  \}/)?.[1];
+  assert.ok(saveBlock && restoreBlock, "both actual handlers were located");
   assert.doesNotMatch(saveBlock, /setRestoredAt/);
-  assert.match(restoreBlock, /setRestoredAt\(entry\.savedAt\)/);
+  assert.match(restoreBlock, /setRestoredAt\(kind === "saved" \? entry\.savedAt : null\)/);
+  assert.match(restoreBlock, /setNavigationCapturedAt\(kind === "navigation" \? entry\.savedAt : null\)/);
 });
 
 test("latest compose wins and cancels stale network work", () => {
@@ -547,9 +623,9 @@ test("composed coverage comes from the route, never the broader district structu
 });
 
 test("planner honesty copy avoids internal catalog/citypack language", () => {
-  assert.match(anywherePlannerSource, /Parranda har inte full kurering här ännu/);
-  assert.match(anywherePlannerSource, /Parranda does not have full curation here yet/);
-  assert.match(anywherePlannerSource, /Reading the map and looking for real places/);
+  assert.match(anywherePlannerSource, /Platserna kommer från externa källor/);
+  assert.match(anywherePlannerSource, /Places come from external sources/);
+  assert.match(anywherePlannerSource, /Looking for places/);
   assert.doesNotMatch(anywherePlannerSource, /citypack|city pack|no catalog|ingen katalog|fullt citypack/i);
 });
 

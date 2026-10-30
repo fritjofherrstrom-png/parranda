@@ -10,7 +10,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
 import { walkingDistanceLabel } from "../../lib/route-context-view.mjs";
-import { CheckIcon, ExternalIcon, HalfCircleIcon, MinusIcon, SearchIcon, ShareIcon, StarIcon, SunIcon, WalkIcon } from "../shared/icons";
+import { CheckIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, MinusIcon, RainIcon, SearchIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
 import { busyButton, buttonClass, compactPillTarget, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
@@ -24,13 +24,63 @@ type PickCoverage = { key: string; state: "covered" | "partial" | "missing" | "p
 // The day's facts are labels, not choices (ui.tsx labelChip).
 const metaChip = labelChip;
 
-/** The weather source's daily summary (server/weather.js), in the reader's words. */
+/** The source's daily condition, separate from its effect on day composition. */
 const WEATHER_CONDITIONS: Record<string, [string, string]> = {
   sun: ["Sol", "Sun"],
+  partly_cloudy: ["Växlande", "Partly cloudy"],
   clouds: ["Moln", "Clouds"],
+  fog: ["Dimma", "Fog"],
   rain: ["Regn", "Rain"],
+  snow: ["Snö", "Snow"],
+  thunderstorm: ["Åska", "Thunderstorms"],
   mixed: ["Växlande", "Mixed"],
 };
+const WEATHER_ICONS: Record<string, typeof SunIcon> = {
+  sun: SunIcon, partly_cloudy: CloudSunIcon, clouds: CloudIcon, fog: FogIcon,
+  rain: RainIcon, snow: SnowIcon, thunderstorm: ThunderstormIcon, mixed: CloudSunIcon,
+};
+// Match the provider's fresh-cache window (server/weather.js). Saved answers
+// keep their original observation time; restoring one cannot renew its weather.
+const FORECAST_FRESH_MS = 30 * 60 * 1000;
+
+function selectedDate(value: string | null | undefined): Date | null {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? date : null;
+}
+
+/** "Thu 29 Oct" / "tors 29 okt": weekday, day, month (the design system's one
+ *  date form); the year only when the day is not in the current one. */
+function dayDateLabel(date: Date, lang: Lang): string {
+  const sameYear = date.getUTCFullYear() === new Date().getUTCFullYear();
+  return date
+    .toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", {
+      weekday: "short", day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }), timeZone: "UTC",
+    })
+    .replace(/[.,]/g, "");
+}
+
+/**
+ * Which day is on screen, said first in the picks line under the title (When
+ * is one of the settings Adjust opens): "Today" and "Tomorrow" only when the
+ * shown date is today's or tomorrow's, otherwise the date itself, so a saved
+ * day reopened later never reads as today.
+ */
+export function DayWhen({ t, lang, date, relativeDay }: {
+  t: Translate;
+  lang: Lang;
+  date: string | null | undefined;
+  /** 0 today, 1 tomorrow, null for any other day. */
+  relativeDay: 0 | 1 | null;
+}) {
+  const shown = selectedDate(date);
+  if (!shown) return null;
+  return (
+    <time dateTime={date!}>
+      {relativeDay === 0 ? t("Idag", "Today") : relativeDay === 1 ? t("Imorgon", "Tomorrow") : dayDateLabel(shown, lang)}
+    </time>
+  );
+}
 
 /**
  * The place name is set like a station sign: as large as the column allows for
@@ -121,13 +171,9 @@ export function PlaceSign({ text }: { text: string }) {
   );
 }
 
+/** A day-shape caveat under the facts: one plain line, like the facts' own voice. */
 function Note({ children }: { children: ReactNode }) {
-  return (
-    <p className="flex items-start gap-2 text-13 leading-relaxed text-parranda-ink/72">
-      <span aria-hidden="true" className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-glow" />
-      <span>{children}</span>
-    </p>
-  );
+  return <p className="text-13 leading-relaxed text-parranda-ink-muted">{children}</p>;
 }
 
 /**
@@ -138,8 +184,8 @@ export function dayAssemblyNotes(t: Translate, { sourceBackedDay, timeAnchoring 
   const notes: string[] = [];
   if (sourceBackedDay) {
     notes.push(t(
-      "Byggd från källstödda platser — Parranda har inte full kurering här ännu.",
-      "Built from source-backed places — Parranda does not have full curation here yet.",
+      "Platserna kommer från externa källor; utbudet kan vara begränsat.",
+      "Places come from external sources; coverage may be limited.",
     ));
   }
   // Time-anchoring truth (#429): a today request at 22:00 must not read as a
@@ -159,7 +205,11 @@ export default function DayHeader({
   placeLabel,
   anchorLabel,
   primaryRoute,
-  weather,
+  date,
+  weatherSummary,
+  titleAction = null,
+  controls = null,
+  overview = null,
   coreCount,
   wovenCount,
   pickCoverage,
@@ -181,8 +231,16 @@ export default function DayHeader({
   placeLabel: string | null | undefined;
   anchorLabel: string;
   primaryRoute: any;
-  /** The selected date's weather read (dayflow_context), present only when the server has one. */
-  weather: any;
+  /** The date of the answer on screen, including held or restored days. */
+  date: string | null | undefined;
+  /** A trusted selected-day forecast; absence never gets a weather guess. */
+  weatherSummary: any;
+  /** Beside the title: Change. */
+  titleAction?: ReactNode;
+  /** Under the title: which day, the picks and rhythm, with Adjust. */
+  controls?: ReactNode;
+  /** A phone: the map's short, still overview, between the title and the facts. */
+  overview?: ReactNode;
   coreCount: number;
   wovenCount: number;
   pickCoverage: PickCoverage[];
@@ -198,20 +256,30 @@ export default function DayHeader({
   canUpdateSaved?: boolean;
   resolveAndRun: () => void;
 }) {
-  // The day's facts as quiet chips: how far, how many stops, and the day's
-  // weather when the server read one for this date. The anchor card above
-  // already says which day; each stop states its own walk.
+  // The day's facts as quiet chips: how far, how many stops and the selected
+  // date's forecast; each stop states its own walk, the picks line says which day.
   const distance = Number.isFinite(primaryRoute?.estimated_km)
     ? `≈ ${walkingDistanceLabel(primaryRoute.estimated_km, lang)} ${t("till fots", "on foot")}`
     : null;
   const stops = `${coreCount} ${coreCount === 1 ? t("stopp", "stop") : t("stopp", "stops")}` +
     (wovenCount > 0 ? ` + ${wovenCount} live${lang === "en" ? " event" : "-event"}` : "");
-  const observed = weather?.provenance?.observed;
-  const condition = WEATHER_CONDITIONS[String(observed?.condition || "")];
-  // Only a current read with a real temperature; a stale forecast is not shown as the day's weather.
+  const displayedDate = selectedDate(date);
+  const condition = WEATHER_CONDITIONS[String(weatherSummary?.condition || "")];
+  const WeatherIcon = WEATHER_ICONS[String(weatherSummary?.condition || "")];
+  const forecastFetchedAt = typeof weatherSummary?.fetched_at === "string" ? Date.parse(weatherSummary.fetched_at) : NaN;
+  const forecastExpiresAt = forecastFetchedAt + FORECAST_FRESH_MS;
+  const [expiredForecast, setExpiredForecast] = useState<number | null>(null);
+  useEffect(() => {
+    const remaining = forecastExpiresAt - Date.now();
+    if (!Number.isFinite(remaining) || remaining <= 0) return;
+    const timer = setTimeout(() => setExpiredForecast(forecastExpiresAt), remaining);
+    return () => clearTimeout(timer);
+  }, [forecastExpiresAt]);
+  const forecastFresh = Number.isFinite(forecastFetchedAt) && forecastFetchedAt <= Date.now() + 5 * 60 * 1000
+    && forecastExpiresAt > Date.now() && expiredForecast !== forecastExpiresAt;
   const allPicksCovered = pickCoverage.length > 0 && pickCoverage.every(({ state }) => state === "covered");
-  const weatherChip = !weather?.provenance?.stale && Number.isFinite(observed?.max_temp)
-    ? [condition ? t(condition[0], condition[1]) : null, `${t("max", "high")} ${Math.round(observed.max_temp)}°`].filter(Boolean).join(" · ")
+  const weatherChip = forecastFresh && displayedDate && weatherSummary?.date === date && weatherSummary?.stale === false && Number.isFinite(weatherSummary?.max_temp)
+    ? `${Math.round(weatherSummary.max_temp)}°`
     : null;
   // The parent temporarily omits source notes while updating. They still
   // describe the held day, and its focused update action must stay mounted.
@@ -230,9 +298,8 @@ export default function DayHeader({
     if (staleNotice !== "updating") sourceUpdateHadFocus.current = false;
   }, [displayedShortfall, staleNotice]);
   return (
-    <header className="@container flex flex-col gap-5" aria-busy={staleNotice === "updating"}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <Eyebrow tone="glow" line>{t("Din dag", "Your day")}</Eyebrow>
+    <header className="@container flex flex-col gap-4" aria-busy={staleNotice === "updating"}>
+      {(staleNotice === "updating" || staleNotice === "update_failed") && <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         {/* The day on screen is deliberately still here, and deliberately
             marked as not current. Never a silent swap. */}
         {staleNotice === "updating" && (
@@ -263,128 +330,147 @@ export default function DayHeader({
             </button>
           </>
         )}
-      </div>
-      <h1 ref={headingRef} tabIndex={-1} className="type-title text-[2.5rem] text-parranda-ink sm:text-5xl lg:text-[3.25rem]">
-        {mode === "near_me" && !placeLabel ? (
-          <>
-            {t("En dag", "A day")} <PlaceSign text={t("nära dig", "near you")} />
-          </>
-        ) : (
-          <>
-            {t("En dag i", "A day in")} <PlaceSign text={anchorLabel} />
-          </>
-        )}
-      </h1>
-      <ul className="flex flex-wrap gap-1.5" aria-label={t("Om dagen", "About the day")}>
-        {distance && (
-          <li className={metaChip}>
-            <WalkIcon className="h-3.5 w-3.5 text-parranda-ink/72" />
-            {distance}
-          </li>
-        )}
-        <li className={metaChip}>{stops}</li>
-        {weatherChip && (
-          <li className={metaChip}>
-            {observed?.condition === "sun" && <SunIcon className="h-3.5 w-3.5 text-parranda-ink/72" />}
-            {weatherChip}
-          </li>
-        )}
-        {/* Every pick in the day: one fact here instead of repeating the picks
-            the anchor card names. A partial or missing pick lists them all. */}
-        {allPicksCovered && (
-          <li className={metaChip}>
-            <CheckIcon className="h-3 w-3 text-parranda-ember" />
-            {t("Alla val finns med", "All picks included")}
-          </li>
-        )}
-      </ul>
-      {/* What the day did for each pick, in the pick's own words. A pick
-          the route only partly covers, or does not cover, says so here
-          rather than at the foot of the page. When every pick is in the day
-          the facts row above says so in one chip instead. */}
-      {pickCoverage.length > 0 && !allPicksCovered && (
-        <ul className="flex flex-wrap gap-2" aria-label={t("Dina val i dagen", "Your picks in this day")}>
-          {pickCoverage.map(({ key, state }) => (
-            // Status, not selection: covered and partial are labels like the
-            // facts row (an ink fill would read as a chosen chip, as in Adjust).
-            // Missing keeps the dashed tone, which means "not in the day".
-            <li
-              key={key}
-              className={
-                state === "missing"
-                  ? "inline-flex items-center gap-1.5 rounded-full border-line border-dashed border-parranda-ink/30 px-2.5 py-1 text-xs font-semibold text-parranda-ink/72"
-                  : labelChip
-              }
-            >
-              {state === "covered" && <CheckIcon className="h-3 w-3 text-parranda-ember" />}
-              {state === "partial" && <HalfCircleIcon className="h-3 w-3 text-parranda-glow" />}
-              {state === "missing" && <MinusIcon className="h-3 w-3" />}
-              {state === "pending" && <RingMark className="h-3 w-3" />}
-              <span>{pickLabel(key, lang)}</span>
-              {state === "covered" && <span className="sr-only">{t(" — med i dagen", " — in this day")}</span>}
-              {state === "partial" && <span className="text-parranda-ink/68">{t(" · delvis", " · partly")}</span>}
-              {state === "missing" && <span>{t(" · inte med", " · not in this day")}</span>}
-              {state === "pending" && <span className="text-parranda-ink/68">{t(" · letar platser …", " · finding places …")}</span>}
-              {state === "unanswered" && <span className="text-parranda-ink/68">{t(" · ännu inte bedömt", " · not assessed yet")}</span>}
-            </li>
-          ))}
-        </ul>
-      )}
-      {priorityShortfall && (
-        <p className="text-13 leading-relaxed text-parranda-ink/72" role="status">
-          {priorityShortfall.state === "partial"
-            ? t(`Ditt förstaval ${pickLabel(priorityShortfall.key, lang)} finns bara delvis med i den här dagen.`,
-                `Your first choice ${pickLabel(priorityShortfall.key, lang)} is only partly represented in this day.`)
-            : t(`Ditt förstaval ${pickLabel(priorityShortfall.key, lang)} finns inte med i den här dagen.`,
-                `Your first choice ${pickLabel(priorityShortfall.key, lang)} is not represented in this day.`)}
-        </p>
-      )}
-      {/* Source limitations describe this published answer, never a live job:
-          one plain sentence and the one thing a reader can do about it. A
-          bold "Some place information is missing", a hidden "About the place
-          sources" and an "Update the day" link that could swap the stops
-          silently confused more than they told (iPhone, 23 Oct 2026).
-          Looking again asks the same question; its result is said in the
-          change line ("Looked for more places: …", with Undo). */}
-      {displayedShortfall && (
-        <div className="flex flex-col items-start gap-2 text-13 leading-relaxed text-parranda-ink/72">
-          <p role="status">
-            {displayedShortfall === "failed"
-              ? t("Inte alla platser kunde läsas in, så det kan finnas fler än de som visas.", "Not every place could be loaded, so there may be more than the ones shown.")
-              : t("Inte alla platser hann läsas in, så det kan finnas fler än de som visas.", "Not every place loaded in time, so there may be more than the ones shown.")}
-          </p>
-          {onLookForMorePlaces && canUpdateSaved && (
-            <button type="button" ref={sourceUpdateRef}
-              {...busyButton(staleNotice === "updating", () => {
-                sourceUpdateHadFocus.current = document.activeElement === sourceUpdateRef.current;
-                onLookForMorePlaces();
-              })}
-              className={`${compactPillTarget} gap-2 border-line border-parranda-ink/18 px-3.5 font-bold text-parranda-ink hover:border-parranda-ink/50 aria-busy:cursor-progress ${rechecking ? "" : "aria-disabled:opacity-60"}`}>
-              {rechecking ? <RingMark className="h-3.5 w-3.5" /> : <SearchIcon className="h-3.5 w-3.5 text-parranda-ink/72" />}
-              {rechecking ? t("Letar efter fler platser …", "Looking for more places …") : t("Leta efter fler platser", "Look for more places")}
-            </button>
-          )}
+      </div>}
+      {/* Two rows, each with its control on the right: where (the title,
+          Change) and how (which day, the picks and rhythm, Adjust). Change and
+          Adjust stand one above the other, so the stops start high on a phone. */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-start justify-between gap-3">
+          <h1 ref={headingRef} tabIndex={-1} className="type-title min-w-0 pt-1.5 text-[1.625rem] text-parranda-ink [overflow-wrap:anywhere] [text-wrap:balance] sm:pt-0.5 sm:text-[2rem]">
+            {mode === "near_me" && !placeLabel ? (
+              <>{t("En dag", "A day")} {t("nära dig", "near you")}</>
+            ) : (
+              <>{t("En dag i", "A day in")} {anchorLabel}</>
+            )}
+          </h1>
+          {titleAction}
         </div>
-      )}
-      {/* What the day CONTAINS stays under the title (a thin day says so);
-          how it was ASSEMBLED is one "About this day" line beside the map. */}
-      {dayLimitationNote && <Note>{dayLimitationNote}</Note>}
-      {restoredAt && (
-        <p className="text-xs text-parranda-ink/68">
-          {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", { day: "numeric", month: "short", year: "numeric" })} —{" "}
-          {canUpdateSaved ? (
-            <button type="button" onClick={() => resolveAndRun()} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-parranda-clay">
-              {t("bygg om för färska events", "rebuild for fresh events")}
-            </button>
-          ) : (
-            <span>{t("Den sparade dagen kan inte uppdateras säkert. ", "We cannot safely update this saved day. ")}
-              <a href={`/?lang=${lang}`} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">
-                {t("Välj startpunkt och datum", "Choose a starting point and date")}
-              </a>
-            </span>
+        {controls}
+      </div>
+      {/* On a phone the map's still overview pictures the day before its
+          facts; it sits in the column edge to edge, no card of its own. */}
+      {overview}
+      {/* The facts, what the day did for each pick and the day's caveats
+          read as one block, as in the prototype: rows 6px apart, the
+          header's larger step only between the title block, the map and it. */}
+      <div className="flex flex-col gap-1.5">
+        <ul className="flex flex-wrap gap-1.5" aria-label={t("Om dagen", "About the day")}>
+          {distance && (
+            <li className={metaChip}>
+              <WalkIcon className="h-3.5 w-3.5 text-parranda-ink-muted" />
+              {distance}
+            </li>
           )}
-        </p>
-      )}
+          <li className={metaChip}>{stops}</li>
+          {/* The selected date's forecast, one chip like the walk: the sky's
+              icon, then the high. Only a fresh reading for this date shows. */}
+          {weatherChip && (
+            <li className={metaChip}>
+              <span role="img" className="inline-flex items-center gap-1.5"
+                aria-label={t(`Prognosens högsta temperatur: ${weatherChip}C${condition ? `. ${condition[0]}` : ""}`, `Forecast high: ${weatherChip}C${condition ? `. ${condition[1]}` : ""}`)}
+                title={condition ? t(condition[0], condition[1]) : t("Prognosens högsta temperatur", "Forecast high")}>
+                {WeatherIcon && <WeatherIcon className="h-3.5 w-3.5 text-parranda-ink-muted" />}
+                {weatherChip}
+              </span>
+            </li>
+          )}
+          {/* Every pick in the day: one fact here instead of repeating the picks
+              the picks line names. A partial or missing pick lists them all. */}
+          {allPicksCovered && (
+            <li className={metaChip}>
+              <CheckIcon className="h-3 w-3 text-parranda-ember" />
+              {t("Alla val finns med", "All picks included")}
+            </li>
+          )}
+        </ul>
+        {/* What the day did for each pick, in the pick's own words. A pick
+            the route only partly covers, or does not cover, says so here
+            rather than at the foot of the page. When every pick is in the day
+            the facts row above says so in one chip instead. */}
+        {pickCoverage.length > 0 && !allPicksCovered && (
+          <ul className="flex flex-wrap gap-2" aria-label={t("Dina val i dagen", "Your picks in this day")}>
+            {pickCoverage.map(({ key, state }) => (
+              // Status, not selection: covered and partial are labels like the
+              // facts row (an ink fill would read as a chosen chip, as in Adjust).
+              // Missing keeps the dashed tone, which means "not in the day".
+              <li
+                key={key}
+                className={
+                  state === "missing"
+                    ? "inline-flex items-center gap-1.5 rounded-full border-line border-dashed border-parranda-line-firm px-2.5 py-1 text-xs font-semibold text-parranda-ink-muted"
+                    : labelChip
+                }
+              >
+                {state === "covered" && <CheckIcon className="h-3 w-3 text-parranda-ember" />}
+                {state === "partial" && <HalfCircleIcon className="h-3 w-3 text-parranda-glow" />}
+                {state === "missing" && <MinusIcon className="h-3 w-3" />}
+                {state === "pending" && <RingMark className="h-3 w-3" />}
+                <span>{pickLabel(key, lang)}</span>
+                {state === "covered" && <span className="sr-only">{t(" — med i dagen", " — in this day")}</span>}
+                {state === "partial" && <span className="text-parranda-ink-meta">{t(" · delvis", " · partly")}</span>}
+                {state === "missing" && <span>{t(" · inte med", " · not in this day")}</span>}
+                {state === "pending" && <span className="text-parranda-ink-meta">{t(" · letar platser …", " · finding places …")}</span>}
+                {state === "unanswered" && <span className="text-parranda-ink-meta">{t(" · ännu inte bedömt", " · not assessed yet")}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {priorityShortfall && (
+          <p className="text-13 leading-relaxed text-parranda-ink-muted" role="status">
+            {priorityShortfall.state === "partial"
+              ? t(`Ditt förstaval ${pickLabel(priorityShortfall.key, lang)} finns bara delvis med i den här dagen.`,
+                  `Your first choice ${pickLabel(priorityShortfall.key, lang)} is only partly represented in this day.`)
+              : t(`Ditt förstaval ${pickLabel(priorityShortfall.key, lang)} finns inte med i den här dagen.`,
+                  `Your first choice ${pickLabel(priorityShortfall.key, lang)} is not represented in this day.`)}
+          </p>
+        )}
+        {/* Source limitations describe this published answer, never a live job:
+            one plain sentence and the one thing a reader can do about it. A
+            bold "Some place information is missing", a hidden "About the place
+            sources" and an "Update the day" link that could swap the stops
+            silently confused more than they told (iPhone, 23 Oct 2026).
+            Looking again asks the same question; its result is said in the
+            change line ("Looked for more places: …", with Undo). */}
+        {displayedShortfall && (
+          <div className="flex flex-col items-start gap-2 text-13 leading-relaxed text-parranda-ink-muted">
+            <p role="status">
+              {displayedShortfall === "failed"
+                ? t("Inte alla platser kunde läsas in, så det kan finnas fler än de som visas.", "Not every place could be loaded, so there may be more than the ones shown.")
+                : t("Inte alla platser hann läsas in, så det kan finnas fler än de som visas.", "Not every place loaded in time, so there may be more than the ones shown.")}
+            </p>
+            {onLookForMorePlaces && canUpdateSaved && (
+              <button type="button" ref={sourceUpdateRef}
+                {...busyButton(staleNotice === "updating", () => {
+                  sourceUpdateHadFocus.current = document.activeElement === sourceUpdateRef.current;
+                  onLookForMorePlaces();
+                })}
+                className={`${compactPillTarget} gap-2 border-line border-parranda-line px-3.5 font-bold text-parranda-ink hover:border-parranda-line-strong aria-busy:cursor-progress ${rechecking ? "" : "aria-disabled:opacity-60"}`}>
+                {rechecking ? <RingMark className="h-3.5 w-3.5" /> : <SearchIcon className="h-3.5 w-3.5 text-parranda-ink-muted" />}
+                {rechecking ? t("Letar efter fler platser …", "Looking for more places …") : t("Leta efter fler platser", "Look for more places")}
+              </button>
+            )}
+          </div>
+        )}
+        {/* What the day CONTAINS stays under the title (a thin day says so);
+            how it was ASSEMBLED is one "About this day" line beside the map. */}
+        {dayLimitationNote && <Note>{dayLimitationNote}</Note>}
+        {restoredAt && (
+          <p className="text-xs text-parranda-ink-meta">
+            {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", { day: "numeric", month: "short", year: "numeric" })} —{" "}
+            {canUpdateSaved ? (
+              <button type="button" onClick={() => resolveAndRun()} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-parranda-clay">
+                {t("bygg om för färska events", "rebuild for fresh events")}
+              </button>
+            ) : (
+              <span>{t("Den sparade dagen kan inte uppdateras säkert. ", "We cannot safely update this saved day. ")}
+                <a href={`/?lang=${lang}`} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">
+                  {t("Välj startpunkt och datum", "Choose a starting point and date")}
+                </a>
+              </span>
+            )}
+          </p>
+        )}
+      </div>
     </header>
   );
 }
@@ -454,8 +540,8 @@ export function DayActions({
                     className={
                       "flex min-h-14 items-center gap-3 rounded-parranda-btn px-3.5 py-2 text-left text-15 transition " +
                       (first
-                        ? "bg-parranda-terracotta font-extrabold text-white hover:brightness-110"
-                        : "border-line border-parranda-ink/20 font-bold text-parranda-ink hover:border-parranda-ink/50")
+                        ? "bg-parranda-terracotta font-extrabold text-parranda-on-terracotta hover:brightness-110"
+                        : "border-line border-parranda-line font-bold text-parranda-ink hover:border-parranda-line-strong")
                     }
                   >
                     <span
@@ -463,7 +549,7 @@ export function DayActions({
                       className={
                         "type-data inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold " +
                         // A darker disc keeps the white digit at 6.7:1 on terracotta (white/22 gave 3.7:1).
-                        (first ? "bg-black/15" : "bg-parranda-ink/8")
+                        (first ? "bg-parranda-shade" : "bg-parranda-fill")
                       }
                     >
                       {index + 1}
@@ -471,7 +557,7 @@ export function DayActions({
                     <span className="min-w-0 flex-1">
                       <span className="sr-only">{t(`Del ${index + 1} i Google Maps: `, `Part ${index + 1} in Google Maps: `)}</span>
                       {routeEndLabel(part.from)} → {routeEndLabel(part.to)}
-                      <span className={"type-data block text-11 font-medium " + (first ? "text-white" : "text-parranda-ink/68")}>
+                      <span className={"type-data block text-11 font-medium " + (first ? "text-parranda-on-terracotta" : "text-parranda-ink-meta")}>
                         {newStops > 0
                           ? t(`${newStops} stopp`, `${newStops} ${newStops === 1 ? "stop" : "stops"}`)
                           : t("Sista biten", "The last stretch")}
@@ -483,7 +569,7 @@ export function DayActions({
               );
             })}
           </ol>
-          <p className="text-xs leading-relaxed text-parranda-ink/68">
+          <p className="text-xs leading-relaxed text-parranda-ink-meta">
             {t(
               "Google Maps tar bara några stopp per länk, så promenaden öppnas i delar. Ta dem i ordning — varje del börjar där den förra slutar.",
               "Google Maps takes only a few stops per link, so the walk opens in parts. Take them in order — each part starts where the previous one ends.",
@@ -529,19 +615,19 @@ export function DayActions({
       </div>
       {/* A split walk already names its start and finish in the sequence. */}
       {routeParts.length <= 1 && Boolean(routeOrigin || routeDestination) && (
-        <p className="text-xs text-parranda-ink/68">
+        <p className="text-xs text-parranda-ink-meta">
           {Boolean(routeOrigin) && `${t("Start", "Start")}: ${anchorIsPosition ? t("Din position", "Your position") : String(publishedStart?.label || t("kartans startpunkt", "map start point"))}`}
           {routeOrigin && routeDestination ? " · " : ""}
           {Boolean(routeDestination) && `${t("Slut", "Finish")}: ${anchorIsPosition ? t("Din position", "Your position") : String(publishedEnd?.label || t("kartans slutpunkt", "map end point"))}`}
         </p>
       )}
       {routeUrls.length === 0 && (
-        <p className="text-xs text-parranda-ink/68">
+        <p className="text-xs text-parranda-ink-meta">
           {t("Hela rutten kan inte öppnas i Maps. Öppna platserna var för sig där kartlänk finns.", "The whole route cannot be opened in Maps. Open places individually where a map link is available.")}
         </p>
       )}
       {routeUrls.length > 0 && (
-        <p className="text-xs text-parranda-ink/68">
+        <p className="text-xs text-parranda-ink-meta">
           {t("Google Maps beräknar gångvägen när du öppnar rutten.", "Google Maps works out the walking path when you open the route.")}
         </p>
       )}

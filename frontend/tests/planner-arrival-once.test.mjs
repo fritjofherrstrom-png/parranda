@@ -144,7 +144,8 @@ for (const permission of ["deny", "prompt"]) {
     assert.equal(asked.count, 0, "the browser is never asked in the background");
     assert.equal(composeCalls(h).length, 1, "no second compose either");
     assert.match(h.container.querySelector("header h1").textContent, /^En dag nära dig$/);
-    assert.match(h.text(), /Nära dig · idag/);
+    // The fixture day is 25 Sep 2026, in the past: its date alone, never "Idag".
+    assert.match(h.container.querySelector("header time").textContent, /^fre 25 sep( 2026)?$/);
     assert.doesNotMatch(h.text(), /Platsdelning nekades|Planera en dag var som helst/);
   });
 }

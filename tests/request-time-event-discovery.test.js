@@ -10,8 +10,9 @@ const {
   isFailedEventRefresh,
   resolveDefaultEventSupply,
   shouldCacheEventSupplyResult,
-  HELSINKI_LINKED_EVENTS_FEED,
 } = require("../server/place-candidates/agnostic-event-supply");
+
+const { createSourceCache } = require("../server/place-candidates/source-cache");
 
 const ANCHOR = { lat: 45.6496, lng: 13.7773 };
 const PLACE_CONTEXT = { locality: "Trieste", region: "Friuli – Venezia Giulia", country: "Italy", country_code: "it" };
@@ -356,18 +357,137 @@ test("a failed discovery keeps the collection retryable instead of caching a hea
   assert.equal(shouldCacheEventSupplyResult(verifiedEmpty), true, "a verified empty answer is still cacheable");
 });
 
-test("a place with an approved local source does not search", async () => {
-  let called = false;
-  const { supply, settled } = supplyWith({
-    env: { PARRANDA_EVENT_FEEDS: JSON.stringify([HELSINKI_LINKED_EVENTS_FEED]) },
-    discovery: async () => {
-      called = true;
-      return { status: "empty", reason: null, feeds: [] };
-    },
+function approvedCalendar(id, family = "official_municipal_calendar") {
+  return {
+    id, label: id, adapter: "ical", endpoint: `https://${id}.example/cal.ics`,
+    bbox: [13.6, 45.6, 13.9, 45.75], timezone: "Europe/Rome",
+    source_tier: "official", confidence: "medium", source_identity: `${id}.example`,
+    source_family: family, terms_status: "open_license", status: "active",
+  };
+}
+
+function calendarEvent(id, title) {
+  return [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT", `UID:${id}`,
+    "DTSTART:20261013T170000Z", "DTEND:20261013T180000Z", `SUMMARY:${title}`,
+    "LOCATION:Source-owned venue", "GEO:45.650;13.778", `URL:https://${id}.example/event`,
+    "END:VEVENT", "END:VCALENDAR", "",
+  ].join("\r\n");
+}
+
+const COMPLEMENTARY_REQUEST = {
+  anchor: ANCHOR, placeLabel: "Trieste, Italy",
+  placeContext: { locality: "Trieste", region: "Friuli – Venezia Giulia", country: "Italy" },
+  discoverySpatialScope: { source: "resolver_bounds", kind: "settlement", bounds: {
+    south: 45.6, north: 45.75, west: 13.6, east: 13.9,
+  } },
+  now: "2026-10-13T08:00:00Z", selectedDate: "2026-10-13",
+};
+
+function collectingSupply({ feeds, discovery, calendars }) {
+  let produced;
+  const fetched = [];
+  const cache = createSourceCache({ namespace: "complementary-discovery-test", ttlMs: 60_000 });
+  const warm = cache.warm;
+  cache.warm = (key, factory, options) => warm(key, () => {
+    produced = Promise.resolve().then(factory);
+    return produced;
+  }, options);
+  const supply = resolveDefaultEventSupply({
+    PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_EVENT_READER: "disabled",
+    PARRANDA_EVENT_FEEDS: JSON.stringify(feeds),
+  }, {
+    eventCache: cache, requestTimeDiscovery: discovery,
+    collectEvents: input => collectAnchorEvents({
+      ...input,
+      eventReader: { read: async () => assert.fail("a paid reader must never be invoked") },
+      fetcher: async url => {
+        const endpoint = String(url);
+        fetched.push(endpoint);
+        assert.ok(calendars.has(endpoint), `unexpected collection fetch: ${endpoint}`);
+        return { ok: true, status: 200, text: async () => calendars.get(endpoint) };
+      },
+    }),
   });
-  await supply({ anchor: { lat: 60.17, lng: 24.94 }, now: "2026-10-10T08:00:00Z" });
-  await settled();
-  assert.equal(called, false);
+  return { supply, fetched, produced: () => produced };
+}
+
+test("one approved local publisher is complemented by an independent probationary event", async () => {
+  let searches = 0;
+  const discovery = createRequestTimeEventDiscovery({
+    cache: memoryCache(),
+    sourceSearch: async () => {
+      searches += 1;
+      return { status: "ok", seeds: [{ url: "https://programme.example/agenda" }] };
+    },
+    scout: async input => {
+      assert.equal(input.eventReader, null, "complementary discovery remains free and deterministic");
+      return scoutResult([scoutedSource("programme")]);
+    },
+    timezoneForPoint: () => "Europe/Rome",
+  });
+  const { supply, fetched, produced } = collectingSupply({
+    feeds: [approvedCalendar("municipal")], discovery,
+    calendars: new Map([
+      ["https://municipal.example/cal.ics", calendarEvent("municipal", "Municipal concert")],
+      ["https://programme.example/cal.ics", calendarEvent("programme", "Independent programme concert")],
+    ]),
+  });
+  assert.equal((await supply(COMPLEMENTARY_REQUEST)).pending, true);
+  const result = await produced();
+  assert.equal(searches, 1, "a responding local publisher cannot establish complete local coverage");
+  assert.deepEqual(result.tonight.map(event => event.title).sort(), ["Independent programme concert", "Municipal concert"]);
+  const independent = result.tonight.find(event => event.title === "Independent programme concert");
+  assert.equal(independent.source_url, "https://programme.example/event");
+  assert.equal(independent.trust_level, "low");
+  assert.equal(independent.route_eligible, false);
+  assert.equal(independent.pulse_display_eligible, true);
+  assert.equal(result.acquisition.source_health.accepted_event_count, 2);
+  assert.deepEqual(result.acquisition.request_time_discovery, { status: "found", reason: null, feed_count: 1 });
+  const cached = await supply(COMPLEMENTARY_REQUEST);
+  assert.deepEqual(cached.tonight.map(event => event.title).sort(), ["Independent programme concert", "Municipal concert"]);
+  assert.equal(searches, 1, "the ordinary warmed result avoids redundant discovery");
+  assert.equal(fetched.length, 2, "the approved and new feed are each collected once");
+});
+
+test("two independent local publishers and families avoid redundant discovery", async () => {
+  const { supply, produced } = collectingSupply({
+    feeds: [approvedCalendar("municipal"), approvedCalendar("venue", "venue_calendar")],
+    discovery: async () => assert.fail("a diverse local source mix must not search"),
+    calendars: new Map([
+      ["https://municipal.example/cal.ics", calendarEvent("municipal", "Municipal concert")],
+      ["https://venue.example/cal.ics", calendarEvent("venue", "Venue concert")],
+    ]),
+  });
+  await supply(COMPLEMENTARY_REQUEST);
+  const result = await produced();
+  assert.deepEqual(result.tonight.map(event => event.title).sort(), ["Municipal concert", "Venue concert"]);
+  assert.equal(result.acquisition.request_time_discovery, undefined);
+  assert.equal(result.acquisition.source_health.status, "healthy");
+});
+
+test("failed complementary discovery retains approved events and reports partial acquisition", async () => {
+  for (const discovery of [
+    async () => ({ status: "failed", reason: "source_search_failed", feeds: [] }),
+    async () => { throw new Error("discovery unavailable"); },
+  ]) {
+    const { supply, produced } = collectingSupply({
+      feeds: [approvedCalendar("municipal")], discovery,
+      calendars: new Map([["https://municipal.example/cal.ics", calendarEvent("municipal", "Municipal concert")]]),
+    });
+    await supply(COMPLEMENTARY_REQUEST);
+    const result = await produced();
+    assert.deepEqual(result.tonight.map(event => event.title), ["Municipal concert"]);
+    assert.equal(result.acquisition.request_time_discovery?.status, "failed");
+    const health = result.acquisition.source_health;
+    assert.equal(health.status, "partial");
+    assert.equal(health.result, "events_found");
+    assert.equal(health.responding_source_count, 1);
+    assert.equal(health.accepted_event_count, 1);
+    assert.ok(health.reasons.includes("request_time_discovery_failed"));
+    assert.equal(shouldCacheEventSupplyResult(result), true, "useful retained events stay cacheable despite the separate discovery outage");
+    assert.equal(isFailedEventRefresh(result), false);
+  }
 });
 
 test("the default lane follows the configured source search and can be switched off", () => {

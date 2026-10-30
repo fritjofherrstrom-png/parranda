@@ -2388,6 +2388,16 @@ test("unit: scrubAgnosticAppliedDay deletes a fallback dayflow but keeps a genui
   assert.deepEqual(withEngine.days[0].dayflow_context, engineFlow, "the engine's own dayflow read is preserved");
 });
 
+test('unit: promoted weather summary belongs to the selected place, never the baseline city', () => {
+  const wrong = { date: DATE, max_temp: 37, condition: 'sun', stale: false };
+  const result = { days: [{ weather_summary: wrong }] };
+  scrubAgnosticAppliedDay(result, { primary_route: {} });
+  assert.equal(result.days[0].weather_summary, undefined);
+  const actual = { date: DATE, max_temp: 8, condition: 'rain', stale: false };
+  scrubAgnosticAppliedDay(result, { primary_route: {}, weather_summary: actual });
+  assert.deepEqual(result.days[0].weather_summary, actual);
+});
+
 test("unit: only a resolver-attested label drives prose; no label → neutral, never fabricated", async () => {
   const baseline = { city: "atlantis", days: [{ date: DATE, primary_route: null, alternatives: [] }], readiness: { unsupported: true } };
   const { result } = await composeAgnosticRouteOutput({

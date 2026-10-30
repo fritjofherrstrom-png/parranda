@@ -135,6 +135,8 @@ for (const [label, path, anchor] of [
   assert.equal(new URL(page.url()).pathname, '/anywhere');
   assert.equal(new URL(page.url()).searchParams.has('city'), false);
   const region = page.getByRole('region', { name: 'The route', exact: true });
+  // On a phone the map stands in the day's header, above the route's stops.
+  const map = page.locator('header [data-route-map]');
   // Every stop is on the map once: its own number, or in a group pin naming it.
   await page.waitForFunction(() => {
     const numbers = [...document.querySelectorAll('.route-map-marker')].filter(e => getComputedStyle(e).visibility !== 'hidden')
@@ -151,7 +153,7 @@ for (const [label, path, anchor] of [
   await page.getByRole('button', { name: 'Shrink map', exact: true }).waitFor();
   // The map grows in a CSS transition and is fitted to its new size a frame
   // after it ends. A tap before that fit is undone by it.
-  await region.locator('[data-route-map]').evaluate(async frame => {
+  await map.evaluate(async frame => {
     await Promise.all(frame.getAnimations().map(animation => animation.finished));
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   });
@@ -160,15 +162,16 @@ for (const [label, path, anchor] of [
   // is the tapped pin leaving once its stops separate. A fixed pause is not
   // that answer: CI's first page stalled past 700 ms, and the next tap then
   // waited for a pin that had already split.
-  const stopOne = region.locator('.route-map-marker:not(.route-map-marker--group)').filter({ hasText: /^1$/ });
+  const stopOne = map.locator('.route-map-marker:not(.route-map-marker--group)').filter({ hasText: /^1$/ });
   for (let tap = 0; tap < 6 && !(await stopOne.isVisible()); tap++) {
-    const pin = await region.locator('.route-map-group').first().elementHandle();
+    const pin = await map.locator('.route-map-group').first().elementHandle();
     await pin.click();
     await pin.waitForElementState('hidden');
   }
   await stopOne.click();
-  await region.locator('[data-route-map]').getByText(`${label} a`, { exact: true }).waitFor();
-  await region.locator('button[aria-controls="route-stop-panel-0"]').click();
+  await map.getByText(`${label} a`, { exact: true }).waitFor();
+  assert.equal(await region.locator('button[aria-controls="route-stop-panel-0"]').getAttribute('aria-expanded'), 'true',
+    'selecting the map pin opens the corresponding list stop');
   await page.getByRole('button', { name: 'Keep this one', exact: true }).waitFor();
   const keepResponse = page.waitForResponse(r => new URL(r.url()).pathname === '/api/route-recommendations');
   await page.getByRole('button', { name: 'Keep this one', exact: true }).click();

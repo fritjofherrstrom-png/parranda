@@ -30,13 +30,12 @@
  * Displaced badges retain a dot at their authoritative geographic coordinate.
  * Stops, their order, route geometry and the Maps handoff remain unchanged.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { pinGroupLabel, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
+import { pinGroupLabel, routeDisplayPath, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
 import { controlAwareView, type FitMark, type MapBox } from "../../lib/route-map-fit.mjs";
 import { BASEMAP_PROVIDER, basemapPaint, basemapStyle, type BasemapTheme } from "../../lib/route-map-style.mjs";
 import type { RouteContextSuggestion } from "../../lib/route-context-view.mjs";
-import { CollapseIcon, ExpandIcon } from "../shared/icons";
 import type { DistrictArea } from "./types";
 import type { Translate } from "./copy";
 
@@ -72,6 +71,15 @@ function loadMapLibre(): Promise<MapLibre> {
     return mod;
   });
   return maplibreModule;
+}
+
+/** A still map takes no pan or zoom gesture; its markers still take a tap. */
+function applyStill(map: any, still: boolean): void {
+  for (const handler of [map.dragPan, map.touchZoomRotate, map.doubleClickZoom, map.boxZoom, map.keyboard]) {
+    if (still) handler?.disable?.();
+    else handler?.enable?.();
+  }
+  if (!still) map.touchZoomRotate?.disableRotation?.();
 }
 
 function currentTheme(): BasemapTheme {
@@ -171,10 +179,13 @@ export default function RouteMap({
   routeContextSuggestions,
   showContext,
   sketch,
+  selectedStopIndex,
+  onSelectStop,
   mapExpanded,
   onToggleExpanded,
   heightClass,
   regionLabel,
+  still = false,
   t,
 }: {
   hasPrimaryRoute: boolean;
@@ -186,6 +197,9 @@ export default function RouteMap({
   showContext: boolean;
   /** The route line joins the stops' own coordinates — draw it dotted. */
   sketch: boolean;
+  /** The open list stop, in route order, if one is selected. */
+  selectedStopIndex?: number | null;
+  onSelectStop?: (index: number) => void;
   mapExpanded?: boolean;
   /** Offer the expand control only where the map can grow in place. */
   onToggleExpanded?: () => void;
@@ -196,11 +210,19 @@ export default function RouteMap({
    * two landmarks with one name read as a duplicate.
    */
   regionLabel?: string;
+  /**
+   * A short overview in the page's scroll path (a phone, collapsed): the map
+   * does not pan or zoom, so a thumb scrolling the page past it scrolls the
+   * page. Its stops still open on a tap; Expand gives the full map.
+   */
+  still?: boolean;
   t: Translate;
 }) {
   const mapTitle = regionLabel || t("Karta över dagen", "Map of the day");
   const mapTitleRef = useRef(mapTitle);
   mapTitleRef.current = mapTitle;
+  const stillRef = useRef(still);
+  stillRef.current = still;
   const frameRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<{ ml: MapLibre; map: any; ready: Promise<void>; markers: any[] } | null>(null);
@@ -250,7 +272,21 @@ export default function RouteMap({
     document.addEventListener("pointerdown", outside, true);
     return () => document.removeEventListener("pointerdown", outside, true);
   }, [groupPicker]);
-  const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; move: (x: number, y: number, direction: "left" | "right") => void; showOrigin: (visible: boolean) => void; setGrouped: (grouped: boolean) => void; focus: () => void }>>([]);
+  const selectedStopRef = useRef<number | null>(selectedStopIndex ?? null);
+  selectedStopRef.current = selectedStopIndex ?? null;
+  const onSelectStopRef = useRef(onSelectStop);
+  onSelectStopRef.current = onSelectStop;
+  const selectionViewportTopRef = useRef<{ index: number; top: number } | null>(null);
+  const selectStop = (index: number) => {
+    if (!onSelectStopRef.current) return;
+    if (selectedStopRef.current !== index && frameRef.current) {
+      selectionViewportTopRef.current = { index, top: frameRef.current.getBoundingClientRect().top };
+    }
+    onSelectStopRef.current(index);
+  };
+  const selectStopRef = useRef(selectStop);
+  selectStopRef.current = selectStop;
+  const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; routeIndex: number; element: HTMLElement; grouped?: boolean; move: (x: number, y: number, direction: "left" | "right") => void; showOrigin: (visible: boolean) => void; setGrouped: (grouped: boolean) => void; focus: () => void }>>([]);
   // Group pins by member key ("0,1,4"), the last shift of every pin (so a pin
   // stays put while the map moves), and the stop to focus once a group pin
   // opened from the keyboard has separated.
@@ -289,6 +325,16 @@ export default function RouteMap({
       for (const pin of pins) if (pin.members.length > 1) pin.members.forEach((i) => badgesRef.current[i].setGrouped(true));
     }
     syncGroupPins(map, groups);
+    // Keep the selected station visible even when it shares a grouped pin.
+    badgesRef.current.forEach((badge) => {
+      if (!badge.grouped && badge.routeIndex === selectedStopRef.current) badge.element.setAttribute("data-route-selected", "true");
+      else badge.element.removeAttribute("data-route-selected");
+    });
+    for (const [key, pin] of groupPinsRef.current) {
+      const selected = key.split(",").some((member) => badgesRef.current[Number(member)]?.routeIndex === selectedStopRef.current);
+      if (selected) pin.element.setAttribute("data-route-selected", "true");
+      else pin.element.removeAttribute("data-route-selected");
+    }
     // Origin dots are optional coordinate hints, never relocated coordinates.
     // Suppress a hint when it would paint over any station (including its own)
     // or a group pin; a stop inside a group pin shows none.
@@ -480,6 +526,7 @@ export default function RouteMap({
           return;
         }
         map.touchZoomRotate?.disableRotation?.();
+        applyStill(map, stillRef.current);
         map.addControl(new ml.NavigationControl({ showCompass: false }), "top-left");
         // The attribution is set from the start (not when the tiles answer), so
         // its size is known to the first fit and it stays even when they fail.
@@ -555,15 +602,22 @@ export default function RouteMap({
       let contextDots: any = emptyCollection;
       let candidateDots: any = emptyCollection;
       if (hasPrimaryRoute) {
-        const enginePath: Array<[number, number]> = (Array.isArray(primaryRoute?.map_path_points) ? primaryRoute.map_path_points : [])
+        const enginePath: Array<{ lat: number; lng: number }> = (Array.isArray(primaryRoute?.map_path_points) ? primaryRoute.map_path_points : [])
           .filter((point: any) => point && Number.isFinite(point.lat) && Number.isFinite(point.lng))
-          .map((point: any) => [point.lat, point.lng] as [number, number]);
-        const routePath = enginePath.length > 1
+          .map((point: any) => ({ lat: point.lat, lng: point.lng }));
+        const geometrySource = primaryRoute && Object.hasOwn(primaryRoute, "geometry_source")
+          ? primaryRoute.geometry_source : primaryRoute?.routing_source;
+        // `sketch` describes the original engine geometry, never these added
+        // presentation points. Detailed walking paths pass through unchanged.
+        const routePath = routeDisplayPath(enginePath.length > 1
           ? enginePath
-          : drawableRouteStops.map((stop: any) => [stop.lat, stop.lng] as [number, number]);
+          : drawableRouteStops.map((stop: any) => ({ lat: stop.lat, lng: stop.lng })), {
+          sketch,
+          routingSource: enginePath.length > 1 ? geometrySource : "heuristic",
+        });
         if (routePath.length > 1) {
-          routeLine = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: routePath.map(([lat, lng]) => [lng, lat]) } };
-          routePath.forEach(([lat, lng]: [number, number]) => marks.push({ lat, lng, avoidControls: false }));
+          routeLine = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: routePath.map(({ lat, lng }) => [lng, lat]) } };
+          routePath.forEach(({ lat, lng }) => marks.push({ lat, lng, avoidControls: false }));
         }
 
         routeStops.forEach((stop: any, index: number) => {
@@ -586,6 +640,7 @@ export default function RouteMap({
                 && event.clientX === previous.x && event.clientY === previous.y)) return;
             }
             if (interaction === "click" && event) lastPointerRef.current = { x: event.clientX, y: event.clientY };
+            if (interaction === "click") selectStopRef.current(index);
             const badge = badgesRef.current[badgeIndex];
             const point = map.project([stop.lng, stop.lat]);
             tipAnchorRef.current = { index: badgeIndex, interaction };
@@ -625,6 +680,9 @@ export default function RouteMap({
           disc.addEventListener("click", (event) => open("click", event));
           shell.addEventListener("focus", () => open("focus"));
           shell.addEventListener("blur", () => close("blur"));
+          shell.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); open("click"); }
+          });
           const targetMarker = new ml.Marker({ element: target, anchor: "center", offset: [shiftX, shiftY] }).setLngLat([stop.lng, stop.lat]).addTo(map);
           const discMarker = new ml.Marker({ element: shell, anchor: "center", offset: [shiftX, shiftY] }).setLngLat([stop.lng, stop.lat]).addTo(map);
           // MapLibre sets its own stacking; targets stay beneath every disc.
@@ -636,6 +694,8 @@ export default function RouteMap({
             lat: stop.lat,
             lng: stop.lng,
             name: markerName,
+            routeIndex: index,
+            element: shell,
             x: shiftX,
             y: shiftY,
             direction: "right",
@@ -713,6 +773,18 @@ export default function RouteMap({
     };
   }, [areas, primaryRoute, hasPrimaryRoute, routeStops, routeContextSuggestions, showContext, sketch]);
 
+  // Updating a disclosure should not rebuild or refit the map.
+  useEffect(() => { layoutRef.current(); }, [selectedStopIndex]);
+  // Opening a list panel above a mobile map must not move the map away from
+  // the finger. Keep its viewport position while the selected panel changes.
+  useLayoutEffect(() => {
+    const previous = selectionViewportTopRef.current;
+    selectionViewportTopRef.current = null;
+    if (!previous || previous.index !== selectedStopIndex || !frameRef.current) return;
+    const delta = frameRef.current.getBoundingClientRect().top - previous.top;
+    if (Math.abs(delta) > 0.5) window.scrollBy({ top: delta, behavior: "instant" });
+  }, [selectedStopIndex]);
+
   // Follow the page's theme without redrawing the day.
   useEffect(() => {
     const root = document.documentElement;
@@ -760,6 +832,11 @@ export default function RouteMap({
     };
   }, [mapExpanded]);
 
+  useEffect(() => {
+    const map = instanceRef.current?.map;
+    if (map) applyStill(map, still);
+  }, [still]);
+
   // The instance belongs to this element: release it with the element.
   useEffect(
     () => () => {
@@ -772,7 +849,7 @@ export default function RouteMap({
 
   if (mapFailed) {
     return (
-      <p role="status" className="rounded-parranda border border-parranda-ink/10 px-4 py-3 text-sm text-parranda-ink/72">
+      <p role="status" className="rounded-parranda border-line border-parranda-line-faint px-4 py-3 text-sm text-parranda-ink-muted">
         {t(
           "Kartan kan inte visas i den här webbläsaren. Stoppen och Maps-rutten fungerar som vanligt.",
           "The map can't be shown in this browser. The stops and the Maps route work as usual.",
@@ -783,7 +860,7 @@ export default function RouteMap({
 
   return (
     <>
-    <div ref={frameRef} data-route-map="" className={`route-map-frame relative w-full overflow-hidden rounded-parranda border border-parranda-ink/10 transition-all ${heightClass}`}>
+    <div ref={frameRef} data-route-map="" data-still={still || undefined} className={`route-map-frame relative w-full overflow-hidden rounded-parranda border-line border-parranda-line-faint transition-all ${heightClass}`}>
       {/* Screen layout keeps each numbered touch footprint independently visible. */}
       <div ref={mapRef} className="h-full w-full" />
       {groupPicker && (
@@ -791,7 +868,7 @@ export default function RouteMap({
           ref={groupPickerRef}
           role="dialog"
           aria-label={t("Stopp i gruppen", "Stops in this group")}
-          className="route-map-group-picker absolute left-2 top-2 z-[2000] max-h-[calc(100%_-_1rem)] w-64 max-w-[calc(100%_-_1rem)] overflow-y-auto rounded-parranda border border-parranda-ink/20 bg-parranda-paper p-2 text-parranda-ink shadow-control"
+          className="route-map-group-picker absolute left-2 top-2 z-(--p-z-map-overlay) max-h-[calc(100%_-_1rem)] w-64 max-w-[calc(100%_-_1rem)] overflow-y-auto rounded-parranda border-line border-parranda-line bg-parranda-paper p-2 text-parranda-ink shadow-control"
         >
           <div className="flex items-center justify-between gap-2 pl-2">
             <strong className="text-sm">{t("Stopp i gruppen", "Stops in this group")}</strong>
@@ -806,12 +883,13 @@ export default function RouteMap({
             const badge = badgesRef.current[index];
             if (!badge) return null;
             return <button key={index} type="button" data-group-stop=""
-              className="mb-1 min-h-11 w-full rounded-parranda border border-parranda-ink/15 px-3 py-2 text-left text-sm hover:border-parranda-ember focus-visible:outline-2 focus-visible:outline-parranda-ember"
+              className="mb-1 min-h-11 w-full rounded-parranda border-line border-parranda-line-faint px-3 py-2 text-left text-sm hover:border-parranda-ember focus-visible:outline-2 focus-visible:outline-parranda-ember"
               onClick={() => {
                 const map = instanceRef.current?.map;
                 if (!map) return;
                 const point = map.project([badge.lng, badge.lat]);
                 tipAnchorRef.current = { index, interaction: "click" };
+                selectStopRef.current(badge.routeIndex);
                 setGroupPicker(null);
                 setTip({ name: badge.name, x: point.x, y: point.y, direction: point.x < mapRef.current!.clientWidth / 2 ? "right" : "left" });
               }}>{index + 1}. {badge.name}</button>;
@@ -828,31 +906,38 @@ export default function RouteMap({
         </div>
       )}
       {!mapDrawn && (
-        <div className="absolute inset-0 flex items-center justify-center bg-parranda-ink/10 text-sm text-parranda-ink/68">
+        <div className="absolute inset-0 flex items-center justify-center bg-parranda-fill text-sm text-parranda-ink-meta">
           {t("Ritar kartan …", "Drawing the map …")}
         </div>
       )}
-      {/* An icon, so it covers no more of the map than a thumb needs. It is a
-          map control (data-map-control): the fit keeps every stop clear of it. */}
+      {/* Said in words, like the day's other controls: an icon alone left the
+          reader guessing. A 36px pill on paper with a 44px touch target; it is
+          a map control (data-map-control), so the fit keeps every stop clear. */}
       {onToggleExpanded && (
         <button
           type="button"
           onClick={onToggleExpanded}
           aria-expanded={mapExpanded}
-          aria-label={mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
           data-map-control=""
-          className="absolute right-2.5 top-2.5 z-(--p-z-map-control) inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-parranda-ink/20 bg-parranda-paper/90 text-parranda-ink/85 shadow-control backdrop-blur-xs transition hover:border-parranda-ember"
+          className="absolute right-2.5 top-2.5 z-(--p-z-map-control) inline-flex min-h-9 items-center rounded-full border-line border-parranda-line bg-parranda-paper px-3.5 text-13 font-bold text-parranda-ink shadow-control transition before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] hover:border-parranda-line-strong"
         >
-          {mapExpanded ? <CollapseIcon className="h-5 w-5" /> : <ExpandIcon className="h-5 w-5" />}
+          {mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
         </button>
       )}
     </div>
+    {/* The still overview is a picture of the day; how to read its line is
+        said once the map is opened to be read (and in "About this day"). */}
+    {hasPrimaryRoute && sketch && !still && (
+      <p className="mt-1 text-xs leading-relaxed text-parranda-ink-meta">
+        {t("Ruttöversikt · linjen visar stoppens ordning, inte gångvägen.", "Route overview · the line shows stop order, not walking directions.")}
+      </p>
+    )}
     {tilesFailed && (
-      <p role="status" className="mt-1 text-xs text-parranda-ink/68">
+      <p role="status" className="mt-1 text-xs text-parranda-ink-meta">
         {t("Kartbakgrunden kunde inte hämtas — rutten och stoppen visas ändå.", "The map background couldn't be loaded — the route and stops are still shown.")}
       </p>
     )}
-    {layoutCrowded && <p role="status" className="mt-1 text-xs text-parranda-ink/68">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}
+    {layoutCrowded && <p role="status" className="mt-1 text-xs text-parranda-ink-meta">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}
     </>
   );
 }

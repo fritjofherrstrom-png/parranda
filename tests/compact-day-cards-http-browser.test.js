@@ -169,9 +169,10 @@ test('built free-text day publishes a compact Relaxed route, useful source facts
   const { urlEntryCommitments } = await import('../frontend/src/lib/url-entry-commitments.mjs');
   observations.pureReloadVerdict = urlEntryCommitments(savedBeforeReload, { navigationType: 'reload',
     anchor: { place: 'Fixture Area' }, dateIso: DATE, selected: ['second_hand'], walkKey: 'calm', preferencePriority: ['second_hand'] });
-  const reloadReady = nextDay(route => route.day_profile === 'light' && route.main_stops.some(stop => stop.id === keptId));
-  await page.reload();
-  const reloaded = (await (await reloadReady).json()).days[0].primary_route;
+  const { assertExactNavigation } = await import('../frontend/tests/helpers/exact-navigation-observation.mjs');
+  const restored = await assertExactNavigation({ page, navigate: () => page.reload(),
+    expectedEntry: savedBeforeReload, readComposeCount: () => posts.length });
+  const reloaded = restored.safeResponse.days[0].primary_route;
   await rendered(reloaded);
   observations.navigationAfterReload = await page.evaluate(() => performance.getEntriesByType('navigation').map(entry => entry.type));
   assert.deepEqual(observations.navigationAfterReload, ['reload']);
@@ -189,6 +190,9 @@ test('built free-text day publishes a compact Relaxed route, useful source facts
   assert.ok(full.estimated_km > calm.estimated_km);
   assert.ok(full.main_stops.every(stop => stop.type === 'vintage-shop'));
   assert.ok(full.main_stops.some(stop => stop.id === keptId));
+  assert.deepEqual(posts.at(-1).dates, [DATE], 'the explicit Full edit uses the restored absolute date');
+  assert.equal(posts.at(-1).day_rhythm, 'full');
+  assert.deepEqual(posts.at(-1).pinned_candidate_ids, [keptId]);
   const removeIndex = full.main_stops.findIndex(stop => stop.id !== keptId), removedId = full.main_stops[removeIndex].id;
   await list.locator(':scope > li > button').nth(removeIndex).click();
   const removeReady = nextDay(route => route.main_stops.length === 5 && !route.main_stops.some(stop => stop.id === removedId));
