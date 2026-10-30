@@ -12,11 +12,11 @@ import { stopIdentity as changeStopIdentity } from "../../lib/day-change.mjs";
  *
  * Grammar kept from the September tidy-up (docs/APP_ARCHITECTURE_AND_HIERARCHY.md):
  *   - the route's evidence (what the line is, what the numbers are, how the day
- *     was assembled) is stated beside the map, inside this section;
+ *     was assembled) is stated once, in this section's About line;
  *   - daypart headings come from stop.daypart only, never by reordering;
  *   - detours are collapsed, dashed, and explicitly not the route.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { lineProgress } from "../../lib/line-progress.mjs";
 import { eventSourceLink } from "../../lib/pulse-view.mjs";
 import LiveEventTiming from "./LiveEventTiming";
@@ -78,7 +78,6 @@ function AboutDayAndMap({ t, assemblyNotes = [], routeLineIsSketch, dayContextNo
 export default function StopLine({
   t,
   lang,
-  overview = null,
   stale,
   newStopIdentities = NO_NEW_STOPS,
   routeLineIsSketch,
@@ -113,8 +112,6 @@ export default function StopLine({
 }: {
   t: Translate;
   lang: Lang;
-  /** A phone: the map's short, still overview, opening the route. Wide screens keep the map beside the day. */
-  overview?: ReactNode;
   stale: boolean;
   /** Stops the last adjustment added, using the change summary's place/occurrence identity. */
   newStopIdentities?: ReadonlySet<string>;
@@ -149,6 +146,9 @@ export default function StopLine({
   detoursOpen: boolean;
   setDetoursOpen: (update: (cur: boolean) => boolean) => void;
 }) {
+  // Read as each station reads its heading below: the first one always opens its daypart.
+  const firstDaypart = String((split.core[0] as any)?.daypart || "");
+  const opensWithDaypart = Boolean(firstDaypart && label(DAYPART_LABELS, firstDaypart, lang));
   const legLabel = (leg: Leg) =>
     `${leg.minutes != null ? `${leg.minutes} min` : ""}${leg.minutes != null && leg.km != null ? " · " : ""}${leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}`;
   const lastCoreIndex = split.core.length - 1;
@@ -192,11 +192,10 @@ export default function StopLine({
                 ? t("Du är inte nära rutten just nu.", "You're not near the route right now.")
                 : null;
 
-  // HOW THE DAY WAS ASSEMBLED — one line, opened on request, under the map it
-  // qualifies, said once at the top of the stops. On a phone the map opens
-  // the route as a short overview, still until expanded: a tall map above the
-  // stops once kept them off the first screen and caught the thumb that meant
-  // to scroll. Wide screens keep the map beside the day.
+  // HOW THE DAY WAS ASSEMBLED — one line, opened on request, said once where
+  // the line ends: it qualifies the stops, their walks and the map above
+  // them. On a phone the map's still overview stands in the day's header,
+  // between the title and the facts; wide screens keep the map beside the day.
   const about = (
     <AboutDayAndMap t={t} assemblyNotes={assemblyNotes} routeLineIsSketch={routeLineIsSketch} dayContextNote={dayContextNote} />
   );
@@ -210,12 +209,9 @@ export default function StopLine({
       // a silent swap — but reads as the one being replaced: its names fade,
       // the ember line goes quiet and one soft wash slides down it again.
       data-rebuilding={stale || undefined}
-      className="-mt-4 flex flex-col"
+      className="-mt-6 flex flex-col"
     >
-      {overview}
-      {about}
-
-      <div className="mb-3 mt-4 flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      <div className="mb-2 flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <Eyebrow as="h2">{t("Stoppen i ordning", "The stops, in order")}</Eyebrow>
         {canFollow && (
           <button
@@ -253,7 +249,11 @@ export default function StopLine({
         </p>
       )}
       <ol
-        className={"relative flex flex-col before:pointer-events-none before:absolute before:bottom-7 before:left-[19px] before:top-7 before:w-1.5 before:rounded-full before:transition-colors before:content-[''] " + (stale ? "route-redraw before:bg-parranda-line-faint" : "before:bg-parranda-ember")}
+        className={"relative flex flex-col before:pointer-events-none before:absolute before:bottom-7 before:left-[19px] before:w-1.5 before:rounded-full before:transition-colors before:content-[''] " +
+          // A list that opens with a daypart starts its line at that
+          // heading's crossing mark, so the mark caps the line.
+          (opensWithDaypart ? "before:top-3 " : "before:top-7 ") +
+          (stale ? "route-redraw before:bg-parranda-line-faint" : "before:bg-parranda-ember")}
         aria-label={t("Stoppen i ordning", "The stops, in order")}
       >
         {split.core.map((stop: any, i: number) => {
@@ -305,8 +305,10 @@ export default function StopLine({
                   {leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}
                 </span>
               )}
+              {/* A later daypart crosses the line with room above it; the
+                  first sits right under the stops' heading. */}
               {daypartHeading && (
-                <h3 className="type-eyebrow relative mb-1 mt-6 flex min-h-6 items-center pl-14 text-parranda-glow">
+                <h3 className={"type-eyebrow relative mb-1 flex min-h-6 items-center pl-14 text-parranda-glow " + (i === 0 ? "mt-0" : "mt-6")}>
                   <span aria-hidden="true" className="absolute left-3.5 top-1/2 h-1 w-4 -translate-y-1/2 rounded-full bg-parranda-ink" />
                   {daypartHeading}
                 </h3>
@@ -588,11 +590,12 @@ export default function StopLine({
           <span>{legLabel(finishLeg)}</span>
         </p>
       )}
+      {about}
 
       {/* Detours — collapsed by default (design handoff §3): optional ideas
           must never read as part of the route, and the caption stays visible
           even while collapsed. Their dots join the map only while open. */}
-      {/* Close under the map and its About line: they are one block, and a
+      {/* Close under the route's About line: they are one block, and a
           section-sized gap after the light About line read as missing content. */}
       {routeContextSuggestions.length > 0 && (
         <div className="mt-5 flex flex-col gap-2.5">
