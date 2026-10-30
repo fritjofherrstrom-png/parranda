@@ -2731,7 +2731,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           anchorLabel={anchorLabel}
           primaryRoute={primaryRoute}
           date={safeResponse?.days?.[0]?.date}
-          relativeDay={navigationDay ? navigationDay.activeOffset : dayOffset}
+          // "Today" belongs to the shown date only when it is today's: a
+          // saved day from yesterday keeps the offset it was composed with.
+          relativeDay={typeof safeResponse?.days?.[0]?.date === "string"
+            ? navigationDayPresentation(safeResponse.days[0].date, lang).activeOffset
+            : null}
           weatherSummary={safeResponse?.days?.[0]?.weather_summary ?? null}
           titleAction={<ChangePlaceLink t={t} lang={lang} onChangePlace={cancelActivePlannerForNavigation} />}
           controls={anchorCard}
