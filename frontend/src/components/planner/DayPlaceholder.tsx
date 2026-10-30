@@ -69,7 +69,7 @@ export default function DayPlaceholder({ status, inlineMap = true, part = "all" 
         </div>
         <div
           data-day-shape="stations"
-          className="relative flex flex-col before:absolute before:bottom-7 before:left-[19px] before:top-7 before:w-1.5 before:rounded-full before:bg-parranda-ink/10 before:content-['']"
+          className="relative flex flex-col before:absolute before:bottom-7 before:left-[19px] before:top-7 before:w-1.5 before:rounded-full before:bg-parranda-fill before:content-['']"
         >
           {NAME_WIDTHS.map((width, index) => (
             <div key={index} className="flex flex-col">
@@ -81,10 +81,10 @@ export default function DayPlaceholder({ status, inlineMap = true, part = "all" 
               <div className="flex min-h-16 items-center gap-3.5 py-2">
                 {/* Paper under the disc, so the line stops at the station. Each
                     disc breathes, a beat after the one above it. */}
-                <div className="relative z-[1] h-11 w-11 shrink-0 rounded-full bg-parranda-paper">
+                <div className="relative z-(--p-z-raised) h-11 w-11 shrink-0 rounded-full bg-parranda-paper">
                   <div
                     data-day-station=""
-                    className="h-full w-full rounded-full bg-parranda-ink/10 motion-safe:animate-[parranda-breathe_2.8s_ease-in-out_infinite]"
+                    className="h-full w-full rounded-full bg-parranda-fill motion-safe:animate-[parranda-breathe_2.8s_ease-in-out_infinite]"
                     style={{ animationDelay: `${index * 300}ms` }}
                   />
                 </div>

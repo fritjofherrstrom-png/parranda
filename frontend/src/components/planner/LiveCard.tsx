@@ -90,20 +90,20 @@ export default function LiveCard({
           {showDay && dayflow?.weather?.headline && (
             <p className="text-15 font-bold leading-snug text-parranda-ink">
               {dayflow.weather.headline}
-              {dayflow.weather.pitch ? <span className="font-medium text-parranda-ink/75"> — {dayflow.weather.pitch}</span> : null}
+              {dayflow.weather.pitch ? <span className="font-medium text-parranda-ink-muted"> — {dayflow.weather.pitch}</span> : null}
             </p>
           )}
           {clothing && (
             <p className="text-sm text-parranda-ink">
               <span className="font-bold">{clothing.headline}</span>
-              <span className="text-parranda-ink/75"> — {clothing.advice}</span>
+              <span className="text-parranda-ink-muted"> — {clothing.advice}</span>
             </p>
           )}
         </div>
       )}
 
       {wovenNames.length > 0 && (
-        <p className="mt-3 text-13 text-parranda-ink/72">
+        <p className="mt-3 text-13 text-parranda-ink-muted">
           {wovenNames.map((n: string) => `${n} · ${includedInRoute}`).join(" · ")}
         </p>
       )}
@@ -112,25 +112,25 @@ export default function LiveCard({
           pulseHealthState says whether collection actually succeeded. Raw
           backend reason tokens never reach product copy. */}
       {pulseState === "uncovered" && (
-        <p className="mt-3 text-sm text-parranda-ink/75">
+        <p className="mt-3 text-sm text-parranda-ink-muted">
           {t("Vi har inga verifierade evenemangskällor för området ännu. Det kan ändå hända saker här.", "We don't have verified event sources for this area yet. There may still be events here.")}
         </p>
       )}
       {pulseState === "pending" && (
-        <p className="mt-3 text-sm text-parranda-ink/75">{t("Kollar kalendrarna — uppdateras automatiskt strax.", "Checking the calendars — updates automatically in a moment.")}</p>
+        <p className="mt-3 text-sm text-parranda-ink-muted">{t("Kollar kalendrarna — uppdateras automatiskt strax.", "Checking the calendars — updates automatically in a moment.")}</p>
       )}
       {pulseState === "soft_empty" && (
-        <p className="mt-3 text-sm text-parranda-ink/75">
+        <p className="mt-3 text-sm text-parranda-ink-muted">
           {t("Källorna svarade men listar inga händelser för perioden.", "The sources responded but list no events for this period.")}
         </p>
       )}
       {pulseState === "rejected_empty" && (
-        <p className="mt-3 text-sm text-parranda-ink/75">
+        <p className="mt-3 text-sm text-parranda-ink-muted">
           {liveRejectedSentence(liveEvents, lang)}
         </p>
       )}
       {pulseState === "unavailable" && (
-        <p className="mt-3 text-sm text-parranda-ink/75">
+        <p className="mt-3 text-sm text-parranda-ink-muted">
           {liveFailure
             ? liveFailureSentence(liveFailure)
             : t("Parranda kunde inte verifiera händelser just nu — försök igen om en stund.", "Parranda couldn't verify events right now — try again shortly.")}
@@ -144,10 +144,10 @@ export default function LiveCard({
           {!selectedDate && <p className="text-sm font-bold text-parranda-ink">{liveDayLabel}</p>}
           {(grouped ? timeGroups : [{ state: null, events: shown }]).map((group) => (
             <div key={group.state ?? "all"} className="flex flex-col gap-1" data-live-time-group={group.state ?? undefined}>
-              {group.state && <h3 className="text-xs font-bold text-parranda-ink/75">{liveTimeGroupLabel(group.state, t)}</h3>}
-              <ul className="flex flex-col divide-y divide-parranda-ink/12">
+              {group.state && <h3 className="text-xs font-bold text-parranda-ink-muted">{liveTimeGroupLabel(group.state, t)}</h3>}
+              <ul className="flex flex-col divide-y divide-parranda-line-faint">
                 {group.events.map((ev: PulseEvent, i: number) => (
-                  <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 py-3 text-sm leading-relaxed text-parranda-ink/85 first:pt-1">
+                  <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 py-3 text-sm leading-relaxed text-parranda-ink-soft first:pt-1">
                     {/* A title sits one level below its time group's heading. */}
                     <LiveEventSummary event={ev} lang={lang} now={now} selectedDate={selectedDate} heading={group.state ? "h4" : "h3"}
                       timing={eventTiming(liveTimeRepresentative(ev, now, selectedDate), lang, now, selectedDate,
@@ -164,7 +164,7 @@ export default function LiveCard({
           lives in the Live sheet. The count comes from the bucket, never
           from copy. */}
       {pulseBuckets.thisWeek.length > 0 && (
-        <p className="mt-4 border-t border-parranda-live/25 pt-3 text-sm text-parranda-ink/75">
+        <p className="mt-4 border-t-line border-parranda-live/25 pt-3 text-sm text-parranda-ink-muted">
           <span className="font-bold text-parranda-ink">{t("Kommande 7 dagar", "Next 7 days")}</span>
           {" · "}
           {pulseBuckets.thisWeek.length}{" "}
@@ -185,7 +185,7 @@ export default function LiveCard({
         </button>
       )}
       {pulseState === "partial" && (
-        <p className="mt-2 text-xs text-parranda-ink/68">
+        <p className="mt-2 text-xs text-parranda-ink-meta">
           {liveEvents?.acquisition?.source_health?.reasons?.includes("source_collection_truncated")
             ? t("Vissa kalendrar kunde bara läsas delvis — fler händelser kan finnas hos källan.", "Some calendars were only partly read — more events may be listed at the source.")
             : t("Några källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
@@ -193,7 +193,7 @@ export default function LiveCard({
       )}
 
       {pulseSources && (
-        <p className="mt-3 text-xs text-parranda-ink/68">
+        <p className="mt-3 text-xs text-parranda-ink-meta">
           {t("Källa", "Source")}: {pulseSources}
         </p>
       )}

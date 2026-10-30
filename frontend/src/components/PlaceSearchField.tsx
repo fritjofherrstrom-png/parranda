@@ -132,8 +132,8 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
   }, [selected, value, inputRef]);
   return (
     <div className="relative min-w-0 flex-1" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) dismiss(); }}>
-      <div className={"flex min-h-[3.75rem] items-center gap-3 rounded-parranda border-2 bg-parranda-ink/4 px-5 transition focus-within:border-parranda-ember focus-within:ring-3 focus-within:ring-parranda-glow/60 sm:min-h-16 " + (geoDenied ? "border-parranda-glow ring-3 ring-parranda-glow" : "border-parranda-ink")}>
-        <SearchIcon className="h-5 w-5 shrink-0 text-parranda-ink/68" />
+      <div className={"flex min-h-[3.75rem] items-center gap-3 rounded-parranda border-2 bg-parranda-fill-faint px-5 transition focus-within:border-parranda-ember focus-within:ring-3 focus-within:ring-parranda-glow/60 sm:min-h-16 " + (geoDenied ? "border-parranda-glow ring-3 ring-parranda-glow" : "border-parranda-ink")}>
+        <SearchIcon className="h-5 w-5 shrink-0 text-parranda-ink-meta" />
         <input id="landingCity" ref={inputRef} value={value} onChange={onChange}
           role="combobox" aria-autocomplete="list" aria-expanded={shown} aria-controls={shown ? listId : undefined}
           aria-activedescendant={shown && active >= 0 ? `${listId}-${active}` : undefined}
@@ -149,25 +149,25 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
             if (shown && active >= 0 && event.key === "Enter") { event.preventDefault(); choose(choices[active]); }
           }}
           placeholder={t("T.ex. Lyon eller Kyoto", "e.g. Lyon or Kyoto")} autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent text-lg text-parranda-ink outline-hidden placeholder:text-parranda-ink/68 focus-visible:outline-hidden sm:text-xl" />
+          className="min-w-0 flex-1 bg-transparent text-lg text-parranda-ink outline-hidden placeholder:text-parranda-ink-meta focus-visible:outline-hidden sm:text-xl" />
       </div>
-      {selected && selectedOverflows && <span aria-hidden="true" className="mt-2 block text-sm leading-snug text-parranda-ink/75 [overflow-wrap:anywhere] sm:hidden">{value}</span>}
-      {shown && <div className={"relative z-(--p-z-popover) mt-1 overflow-hidden rounded-parranda border border-parranda-ink/20 bg-parranda-paper shadow-pop sm:absolute sm:inset-x-0 " + (above ? "sm:bottom-full sm:mb-1 sm:mt-0" : "sm:top-full")}>
+      {selected && selectedOverflows && <span aria-hidden="true" className="mt-2 block text-sm leading-snug text-parranda-ink-muted [overflow-wrap:anywhere] sm:hidden">{value}</span>}
+      {shown && <div className={"relative z-(--p-z-popover) mt-1 overflow-hidden rounded-parranda border-line border-parranda-line bg-parranda-paper shadow-pop sm:absolute sm:inset-x-0 " + (above ? "sm:bottom-full sm:mb-1 sm:mt-0" : "sm:top-full")}>
         <ul ref={listRef} id={listId} role="listbox" aria-label={t("Platsförslag", "Place suggestions")} className="max-h-[min(18rem,40svh)] overflow-y-auto overscroll-contain py-1">
           {choices.map((choice, index) => <li key={choice.selection_id} id={`${listId}-${index}`} role="option" aria-selected={active === index}
             onMouseDown={event => event.preventDefault()} onClick={() => choose(choice)} onMouseEnter={() => setActive(index)}
-            className={"cursor-pointer px-5 py-3 text-parranda-ink " + (active === index ? "bg-parranda-ink/8" : "hover:bg-parranda-ink/4")}>
+            className={"cursor-pointer px-5 py-3 text-parranda-ink " + (active === index ? "bg-parranda-fill" : "hover:bg-parranda-fill-faint")}>
             <span className="block text-base font-bold [overflow-wrap:anywhere]">{choice.title}</span>
-            {(choice.context || kindLabel(choice.kind)) && <span className="block text-sm text-parranda-ink/68 [overflow-wrap:anywhere]">
+            {(choice.context || kindLabel(choice.kind)) && <span className="block text-sm text-parranda-ink-meta [overflow-wrap:anywhere]">
               {[kindLabel(choice.kind), choice.context].filter(Boolean).join(" · ")}
             </span>}
           </li>)}
         </ul>
-        {choices.some(choice => choice.attribution) && <div className="border-t border-parranda-ink/10 px-5 py-1.5 text-11 text-parranda-ink/68">
+        {choices.some(choice => choice.attribution) && <div className="border-t-line border-parranda-line-faint px-5 py-1.5 text-11 text-parranda-ink-meta">
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
         </div>}
       </div>}
-      <span role="status" className={status === "unavailable" ? "mt-1 block text-xs text-parranda-ink/68" : "sr-only"}>
+      <span role="status" className={status === "unavailable" ? "mt-1 block text-xs text-parranda-ink-meta" : "sr-only"}>
         {status === "loading" ? t("Söker platser …", "Finding places …") : status === "unavailable" ? t("Förslag saknas just nu. Du kan ändå söka med Bygg min dag.", "Suggestions are unavailable. You can still search with Build my day.") : ""}
       </span>
       {status === "unavailable" && <button type="button"

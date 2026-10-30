@@ -4,7 +4,8 @@
    role tokens in tokens.css onto utilities. `inline` makes each utility read
    the token itself (rgb(var(--p-color-ink))), so a theme switch on <html>
    re-colours everything without a rebuild — and opacity modifiers
-   (text-parranda-ink/65) still work through color-mix. */
+   (bg-parranda-live/8) still work through color-mix. Ink takes no modifier:
+   its lighter strengths are the named roles below. */
 @theme inline {
   --color-parranda-ink: rgb(var(--p-color-ink));
   --color-parranda-paper: rgb(var(--p-color-paper));
@@ -14,6 +15,22 @@
   --color-parranda-glow: rgb(var(--p-color-glow));
   --color-parranda-live: rgb(var(--p-color-live));
   --color-parranda-on-live: rgb(var(--p-color-on-live));
+  --color-parranda-on-terracotta: rgb(var(--p-color-on-terracotta));
+
+  /* Ink at its named strengths (tokens.css --p-ink-*). */
+  --color-parranda-ink-soft: rgb(var(--p-color-ink) / var(--p-ink-soft));
+  --color-parranda-ink-muted: rgb(var(--p-color-ink) / var(--p-ink-muted));
+  --color-parranda-ink-meta: rgb(var(--p-color-ink) / var(--p-ink-meta));
+  --color-parranda-line-strong: rgb(var(--p-color-ink) / var(--p-ink-line-strong));
+  --color-parranda-line-firm: rgb(var(--p-color-ink) / var(--p-ink-line-firm));
+  --color-parranda-line: rgb(var(--p-color-ink) / var(--p-ink-line));
+  --color-parranda-line-faint: rgb(var(--p-color-ink) / var(--p-ink-line-faint));
+  --color-parranda-fill-strong: rgb(var(--p-color-ink) / var(--p-ink-fill-strong));
+  --color-parranda-fill: rgb(var(--p-color-ink) / var(--p-ink-fill));
+  --color-parranda-fill-faint: rgb(var(--p-color-ink) / var(--p-ink-fill-faint));
+
+  --color-parranda-scrim: var(--p-scrim);
+  --color-parranda-shade: var(--p-shade);
 
   --radius-parranda: var(--p-radius-card);
   --radius-parranda-btn: var(--p-radius-button);
@@ -45,7 +62,7 @@
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: rgb(var(--p-color-ink) / 0.14);
+    border-color: rgb(var(--p-color-ink) / var(--p-ink-line-faint));
   }
 
   /* Tailwind 4 gives buttons the default cursor; every Parranda button is an
@@ -230,7 +247,7 @@
 }
 .route-map-frame .maplibregl-ctrl.maplibregl-ctrl-attrib {
   background: rgb(var(--p-color-paper) / 0.85);
-  color: rgb(var(--p-color-ink) / 0.75);
+  color: rgb(var(--p-color-ink) / var(--p-ink-muted));
   font-size: 0.625rem;
   line-height: 1.35;
   padding: 1px 6px;
@@ -245,17 +262,17 @@
 }
 .route-map-frame .maplibregl-ctrl-group {
   background: rgb(var(--p-color-paper));
-  border: 1px solid rgb(var(--p-color-ink) / 0.14);
+  border: var(--p-line) solid rgb(var(--p-color-ink) / var(--p-ink-line-faint));
   border-radius: 10px;
   box-shadow: var(--p-shadow-control);
   overflow: hidden;
 }
 .route-map-frame .maplibregl-ctrl-group button + button {
-  border-top: 1px solid rgb(var(--p-color-ink) / 0.14);
+  border-top: var(--p-line) solid rgb(var(--p-color-ink) / var(--p-ink-line-faint));
 }
 .route-map-frame .maplibregl-ctrl-group button:hover,
 .route-map-frame .maplibregl-ctrl-group button:focus-visible {
-  background: rgb(var(--p-color-ink) / 0.08);
+  background: rgb(var(--p-color-ink) / var(--p-ink-fill));
 }
 /* MapLibre's own focus glow is clipped by the group's rounded overflow, so a
    keyboard user saw only a hairline. Draw the shared focus colour inside the
@@ -469,7 +486,7 @@
 /* The open stop in the list uses the same warm station on the map. A group
    containing that stop is highlighted too, until its members separate. */
 .route-map-marker-shell[data-route-selected="true"] .route-map-marker {
-  color: #fff;
+  color: rgb(var(--p-color-on-terracotta));
 }
 .route-map-marker-shell[data-route-selected="true"] .route-map-marker::before {
   background: rgb(var(--p-color-terracotta));

@@ -174,7 +174,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
             {t("stopp", "stop")}
             <em className="not-italic text-parranda-ember">?</em>
           </h1>
-          <p className="max-w-md text-lg leading-relaxed text-parranda-ink/75 sm:text-xl">
+          <p className="max-w-md text-lg leading-relaxed text-parranda-ink-muted sm:text-xl">
             {t("Skriv en stad eller plats — eller använd din position.", "Type a city or place — or use your location.")}
           </p>
         </header>
@@ -195,7 +195,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
                 // and moves this button before pointer-up can activate it.
                 if (event.button === 0) event.preventDefault();
               }}
-              className="min-h-[3.75rem] whitespace-nowrap rounded-parranda bg-parranda-terracotta px-8 text-17 font-extrabold text-white transition [font-stretch:110%] hover:brightness-110 sm:min-h-16 sm:text-lg"
+              className="min-h-[3.75rem] whitespace-nowrap rounded-parranda bg-parranda-terracotta px-8 text-17 font-extrabold text-parranda-on-terracotta transition [font-stretch:110%] hover:brightness-110 sm:min-h-16 sm:text-lg"
             >
               {t("Bygg min dag", "Build my day")}
             </button>
@@ -205,18 +205,18 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
             <button
               type="button"
               {...busyButton(locating, useLocation)}
-              className="inline-flex min-h-12 items-center gap-2 rounded-full border-line border-parranda-ink/22 px-5 text-15 font-bold text-parranda-ink transition hover:border-parranda-ink/55 aria-disabled:opacity-60 aria-busy:cursor-progress"
+              className="inline-flex min-h-12 items-center gap-2 rounded-full border-line border-parranda-line px-5 text-15 font-bold text-parranda-ink transition hover:border-parranda-line-strong aria-disabled:opacity-60 aria-busy:cursor-progress"
             >
               <LocationIcon className="h-4 w-4 text-parranda-ember" />
               {locating ? t("Hämtar position …", "Getting location …") : t("Använd min position", "Use my location")}
             </button>
-            <span className="text-13 text-parranda-ink/68">
+            <span className="text-13 text-parranda-ink-meta">
               {t("Hela dagen planeras runt din position.", "The day is planned around where you are.")}
             </span>
           </div>
 
           {geoDenied && (
-            <p className="text-13 leading-relaxed text-parranda-ink/72" aria-live="polite">
+            <p className="text-13 leading-relaxed text-parranda-ink-muted" aria-live="polite">
               {t(
                 "Positionen blockerades — inga problem. Skriv en stad eller plats i stället.",
                 "Location was blocked — no problem. Type a city or place instead.",
@@ -242,7 +242,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
         )}
       </main>
 
-      <footer className={`${dataLine} flex items-center justify-between border-t-line border-parranda-ink/14 py-4`}>
+      <footer className={`${dataLine} flex items-center justify-between border-t-line border-parranda-line-faint py-4`}>
         <span>Parranda</span>
         <span>{t("din rutt, din stad", "your route, your city")}</span>
       </footer>

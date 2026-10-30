@@ -146,14 +146,14 @@ export default function LiveSheet({
       <li key={`${ev.id || "event"}:${i}`} className="flex min-w-0 flex-col gap-1 sm:gap-2">
         <LiveEventSummary event={ev} lang={lang} now={now} selectedDate={navigationRow?.date || timingDate}
           timing={timing} distance={distance} heading={heading} titleClassName={titleClassName} />
-        <div className="min-w-0 max-w-full break-words text-sm leading-relaxed text-parranda-ink/90">
+        <div className="min-w-0 max-w-full break-words text-sm leading-relaxed text-parranda-ink-soft">
           {/* A named list: aria-label on a plain span is not read, a list's is. */}
           {tags.length > 0 && <span role="list" aria-label={t("Taggar", "Tags")} className="mt-1 flex flex-wrap gap-1">
             {/* overflow-wrap:anywhere, not break-words: inside an inline-flex chip
                 only "anywhere" lets an unbroken source word wrap at 320px. */}
             {tags.map(tag => <span role="listitem" key={tag} className={`${labelChip} min-w-0 max-w-full [overflow-wrap:anywhere]`}>{tag}</span>)}
           </span>}
-          {relevance && <span className="mt-0.5 block text-xs text-parranda-ink/68">{relevance}</span>}
+          {relevance && <span className="mt-0.5 block text-xs text-parranda-ink-meta">{relevance}</span>}
         </div>
         {!displayProgram && choice(ev, navigationRow?.series?.title || ev.title || "", navigationRow ? navigationRow.date : planningDate)}
         {(!navigationRow || displayProgram) && <EventOccurrences event={ev} lang={lang} now={now} selectedDate={navigationRow?.date || timingDate}
@@ -175,7 +175,7 @@ export default function LiveSheet({
     const rowHeading = byState ? (dayNamed ? "h4" : "h5") : (dayNamed ? "h3" : "h4");
     return (
       <section key={label} aria-label={label} className="flex flex-col gap-3">
-        {!dayNamed && <h3 className="text-xs font-bold text-parranda-ink/68">{label}</h3>}
+        {!dayNamed && <h3 className="text-xs font-bold text-parranda-ink-meta">{label}</h3>}
         {byState ? states.map((group) => (
           <div key={group.state} className="flex flex-col gap-2" data-live-time-group={group.state}>
             <GroupHeading className="text-xs font-semibold text-parranda-live">{liveTimeGroupLabel(group.state, t)}</GroupHeading>
@@ -200,17 +200,17 @@ export default function LiveSheet({
 
   return (
     <div className="fixed inset-0 z-(--p-z-sheet)">
-      <div aria-hidden="true" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
+      <div aria-hidden="true" onClick={onClose} className="absolute inset-0 bg-parranda-scrim backdrop-blur-[2px]" />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={t("Live-händelser", "Live events")}
         tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t border-parranda-ink/14 bg-parranda-paper px-5 pb-8 pt-4 shadow-sheet sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:rounded-3xl sm:border sm:px-7"
+        className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t-line border-parranda-line-faint bg-parranda-paper px-5 pb-8 pt-4 shadow-sheet sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:rounded-3xl sm:border-line sm:px-7"
       >
         <div className="flex justify-center sm:hidden" aria-hidden="true">
-          <span className="h-1 w-11 rounded-full bg-parranda-ink/20" />
+          <span className="h-1 w-11 rounded-full bg-parranda-line" />
         </div>
         <div className="mt-3 flex items-center justify-between gap-3">
           <h2 className="type-title text-3xl text-parranda-ink">
@@ -229,7 +229,7 @@ export default function LiveSheet({
             type="button"
             aria-label={t("Stäng live", "Close live")}
             onClick={onClose}
-            className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-parranda-ink/16 text-parranda-ink/80 transition hover:border-parranda-ember"
+            className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border-line border-parranda-line text-parranda-ink-soft transition hover:border-parranda-ember"
           >
             <CloseIcon />
           </button>
@@ -279,12 +279,12 @@ export default function LiveSheet({
             </button>
           </div>
           {!routeScopeAvailable && (
-            <p className="text-xs text-parranda-ink/68">
+            <p className="text-xs text-parranda-ink-meta">
               {t("Nära rutten blir tillgängligt när en rutt finns.", "Near the route becomes available when a route exists.")}
             </p>
           )}
-          {liveQueryGeoHint && <p className="text-xs text-parranda-ink/68">{liveQueryGeoHint}</p>}
-          {liveSheetScope === "in_place" && <p className="text-xs text-parranda-ink/68">{t("Söker inom platsens kartområde. Händelser längre bort visas med avstånd.", "Searches the place's map area. Events farther away show their distance.")}</p>}
+          {liveQueryGeoHint && <p className="text-xs text-parranda-ink-meta">{liveQueryGeoHint}</p>}
+          {liveSheetScope === "in_place" && <p className="text-xs text-parranda-ink-meta">{t("Söker inom platsens kartområde. Händelser längre bort visas med avstånd.", "Searches the place's map area. Events farther away show their distance.")}</p>}
         </div>
 
         {/* WHEN — a real axis over the live_events buckets. */}
@@ -318,28 +318,28 @@ export default function LiveSheet({
         </div>
 
         {/* The ACTIVE scope×time cell — heading, list or honest emptiness. */}
-        <div className="mt-5 flex flex-col gap-3 border-t border-parranda-ink/10 pt-4">
-          <p className="type-eyebrow text-parranda-ink/68">
+        <div className="mt-5 flex flex-col gap-3 border-t-line border-parranda-line-faint pt-4">
+          <p className="type-eyebrow text-parranda-ink-meta">
             {liveSheetTime === "tonight" ? liveDayLabel : t("Kommande 7 dagar", "Next 7 days")} · {scopePhrase}
           </p>
           {liveSheetScope !== "near_me" && liveSheetTime === "tonight" && wovenNames.length > 0 && (
-            <p className="text-xs text-parranda-ink/68">
+            <p className="text-xs text-parranda-ink-meta">
               {wovenNames.map((n: string) => `${n} · ${includedInRoute}`).join(" · ")}
             </p>
           )}
           {liveQueryPending ? (
-            <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4" aria-live="polite">
-              <p className="text-sm text-parranda-ink/75">
+            <div className="rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint p-4" aria-live="polite">
+              <p className="text-sm text-parranda-ink-muted">
                 {t("Letar efter evenemang …", "Looking for events …")}
               </p>
             </div>
           ) : liveQueryError ? (
-            <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
-              <p className="text-sm leading-relaxed text-parranda-ink/80">{liveQueryError}</p>
+            <div className="rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint p-4">
+              <p className="text-sm leading-relaxed text-parranda-ink-soft">{liveQueryError}</p>
             </div>
           ) : sheetPulseState === "uncovered" ? (
-            <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
-              <p className="text-sm leading-relaxed text-parranda-ink/80">
+            <div className="rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint p-4">
+              <p className="text-sm leading-relaxed text-parranda-ink-soft">
                 {t(
                   "Vi har inga verifierade evenemangskällor för området ännu. Det kan ändå hända saker här.",
                   "We don't have verified event sources for this area yet. There may still be events here.",
@@ -347,8 +347,8 @@ export default function LiveSheet({
               </p>
             </div>
           ) : sheetPulseState === "pending" ? (
-            <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
-              <p className="text-sm leading-relaxed text-parranda-ink/75">
+            <div className="rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint p-4">
+              <p className="text-sm leading-relaxed text-parranda-ink-muted">
                 {t(
                   "Kalendrarna uppdateras fortfarande. Försök igen för att fortsätta hämtningen.",
                   "The calendars are still updating. Try again to continue checking.",
@@ -356,12 +356,12 @@ export default function LiveSheet({
               </p>
             </div>
           ) : sheetFailure ? (
-            <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
-              <p className="text-sm leading-relaxed text-parranda-ink/80">{liveFailureSentence(sheetFailure)}</p>
+            <div className="rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint p-4">
+              <p className="text-sm leading-relaxed text-parranda-ink-soft">{liveFailureSentence(sheetFailure)}</p>
             </div>
           ) : sheetPulseState === "unavailable" || sheetPulseState === "hidden" ? (
-            <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
-              <p className="text-sm leading-relaxed text-parranda-ink/80">
+            <div className="rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint p-4">
+              <p className="text-sm leading-relaxed text-parranda-ink-soft">
                 {t(
                   "Live-information är inte tillgänglig just nu. Vi vet därför inte vad som händer här — det betyder inte att inget är på gång.",
                   "Live information is unavailable right now. We don't know what's on here — that doesn't mean nothing is happening.",
@@ -377,7 +377,7 @@ export default function LiveSheet({
               </> : <>
               {navigation.picks.length > 0 && (
                 <>
-                  <h3 className="text-xs font-bold text-parranda-ink/68">{t("Höjdpunkter för dina val", "Highlights for your picks")}</h3>
+                  <h3 className="text-xs font-bold text-parranda-ink-meta">{t("Höjdpunkter för dina val", "Highlights for your picks")}</h3>
                   <ul className="flex flex-col gap-3">
                     {navigation.picks.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-bold", undefined, undefined, selectedDay))}
                   </ul>
@@ -385,7 +385,7 @@ export default function LiveSheet({
               )}
               {navigation.other.length > 0 && (
                 <>
-                  <h3 className="text-xs font-bold text-parranda-ink/68">
+                  <h3 className="text-xs font-bold text-parranda-ink-meta">
                     {navigation.picks.length > 0 ? t("Andra lokala höjdpunkter", "Other local highlights") : t("Höjdpunkter", "Highlights")}
                   </h3>
                   <ul className="flex flex-col gap-3">
@@ -394,11 +394,11 @@ export default function LiveSheet({
                 </>
               )}
               {sheetMoreEvents.length > 0 && (
-                <details className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 px-4 py-2">
+                <details className="rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint px-4 py-2">
                   <summary className="flex min-h-11 cursor-pointer items-center text-sm font-bold text-parranda-ink">
                     {t(`Visa ${sheetMoreEvents.length} fler händelser`, `Show ${sheetMoreEvents.length} more events`)}
                   </summary>
-                  <ul className="flex flex-col gap-3 border-t border-parranda-ink/10 pb-2 pt-3">
+                  <ul className="flex flex-col gap-3 border-t-line border-parranda-line-faint pb-2 pt-3">
                     {sheetMoreEvents.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-semibold", undefined, undefined, selectedDay))}
                   </ul>
                 </details>
@@ -406,8 +406,8 @@ export default function LiveSheet({
               </>}
             </div>
           ) : (
-            <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
-              <p className="text-sm leading-relaxed text-parranda-ink/80">
+            <div className="rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint p-4">
+              <p className="text-sm leading-relaxed text-parranda-ink-soft">
                 {/* An empty display is not proof of an empty calendar. Use the
                     same collection states as the Live card before describing
                     a genuinely empty selected period. */}
@@ -454,7 +454,7 @@ export default function LiveSheet({
           )}
           {liveFallback && (
             <section aria-label={t("Separata Live-förslag", "Separate Live suggestions")}
-              className="flex flex-col gap-3 rounded-parranda border border-parranda-live/30 bg-parranda-live/5 p-4">
+              className="flex flex-col gap-3 rounded-parranda border-line border-parranda-live/30 bg-parranda-live/5 p-4">
               <h3 className="text-sm font-bold text-parranda-live">
                 {liveFallback.kind === "following"
                   ? t(`Följande dagar — runt ${anchorLabel}`, `Following days — around ${anchorLabel}`)
@@ -471,16 +471,16 @@ export default function LiveSheet({
                     </li>;
                   })}
                 </ul> : <p>{t("Inga verifierade händelser listades samma dag i det större området.", "No verified same-day events were listed in the wider area.")}</p>}
-              {liveFallback.partial && <p className="text-xs text-parranda-ink/68">
+              {liveFallback.partial && <p className="text-xs text-parranda-ink-meta">
                 {t("Vissa källor kunde inte läsas. De här träffarna är verifierade, men listan kan vara ofullständig.", "Some sources could not be read. These events are verified, but the list may be incomplete.")}
               </p>}
-              {liveFallback.widerStatus && <p role={liveFallback.widerStatus === "checking" ? "status" : undefined} className="text-xs text-parranda-ink/68">
+              {liveFallback.widerStatus && <p role={liveFallback.widerStatus === "checking" ? "status" : undefined} className="text-xs text-parranda-ink-meta">
                 {liveFallback.widerStatus === "checking"
                   ? t("Kollar också samma dag i det större området…", "Also checking the same day in the wider area…")
                   : t("Det större området kunde inte bekräftas just nu.", "The wider area could not be confirmed right now.")}
               </p>}
               {liveFallback.kind === "following" && !liveFallback.widerStatus && liveFallback.events.length > 0 &&
-                <p className="text-xs text-parranda-ink/68">{t("Inga verifierade händelser listades samma dag i det större området. Här visas källornas senare lokala datum.", "No verified same-day events were listed in the wider area. These are the sources' later local dates.")}</p>}
+                <p className="text-xs text-parranda-ink-meta">{t("Inga verifierade händelser listades samma dag i det större området. Här visas källornas senare lokala datum.", "No verified same-day events were listed in the wider area. These are the sources' later local dates.")}</p>}
             </section>
           )}
           {(liveQueryError || (!liveQueryPending && (sheetPulseState === "pending" || sheetPulseState === "unavailable"))) && (
@@ -490,7 +490,7 @@ export default function LiveSheet({
             </button>
           )}
           {sheetPulseState === "partial" && (
-            <p className="text-xs text-parranda-ink/68">
+            <p className="text-xs text-parranda-ink-meta">
               {sheetSourceHealth?.reasons?.includes("source_collection_truncated")
             ? t("Vissa kalendrar kunde bara läsas delvis — fler händelser kan finnas hos källan.", "Some calendars were only partly read — more events may be listed at the source.")
             : t("Några källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
@@ -500,7 +500,7 @@ export default function LiveSheet({
               responded" would read as a failure that has not happened. */}
           {sheetSourceHealth && Number.isInteger(sheetSourceHealth.selected_source_count) &&
             !liveQueryPending && sheetPulseState !== "pending" && sheetPulseState !== "uncovered" && (sheetSourceHealth.selected_source_count ?? 0) > 0 && (
-            <p className="text-xs text-parranda-ink/68">
+            <p className="text-xs text-parranda-ink-meta">
               {t("Kalendrar", "Calendars")}: {sheetSourceHealth.responding_source_count ?? 0} {t("av", "of")} {sheetSourceHealth.selected_source_count ?? 0} {t("svarade", "responded")}
               {/* Returned rows are not hits: every row can still be
                   rejected by date, geometry or trust gates. Name hits
@@ -510,7 +510,7 @@ export default function LiveSheet({
             </p>
           )}
           {sheetSources && (
-            <p className="text-xs text-parranda-ink/68">
+            <p className="text-xs text-parranda-ink-meta">
               {t("Källa", "Source")}: {sheetSources}
             </p>
           )}

@@ -39,11 +39,11 @@ export default function LiveEventSummary({ event, lang, now, selectedDate, timin
           aria-label={sourceLink.kind === "site_home" ? `${event.title} — ${sourceLink.text}` : event.title}
           className="flex min-h-11 items-center gap-1.5 no-underline hover:text-parranda-live focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-parranda-live">
           <span className="min-w-0">{event.title}</span>
-          <ExternalIcon className="h-3.5 w-3.5 text-parranda-ink/65" />
+          <ExternalIcon className="h-3.5 w-3.5 text-parranda-ink-meta" />
         </a> : event.title}
       </Heading>
       <LiveEventTiming event={event} lang={lang} now={now} selectedDate={selectedDate} timing={timing} />
-      {(place || distance) && <p className="text-sm leading-relaxed text-parranda-ink/75">
+      {(place || distance) && <p className="text-sm leading-relaxed text-parranda-ink-muted">
         {place}{place && distance ? " · " : ""}{distance && <span className="font-semibold text-parranda-live">{distance}</span>}
       </p>}
       {liveEventSource(event, lang)}
