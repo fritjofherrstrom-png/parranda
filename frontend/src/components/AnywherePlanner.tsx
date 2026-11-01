@@ -2387,9 +2387,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const canUpdateSaved = !restoredAt || Boolean(lastRequestedAnchorRef.current && lastComposeDateIsoRef.current);
   const dayLimitationNote = limitationNote(dayLimitations, split.core.length, t, { sourcesIncomplete: incompletePlaceSources });
 
-  // The route line joins the stops' own coordinates unless the route carries
-  // walking geometry; the map draws that sketch dotted and the caption says so.
-  const routeLineIsSketch = routePathIsSketch(primaryRoute?.map_path_points, routeStops.length);
+  // Only explicitly attested pedestrian geometry draws a path. Other days
+  // retain their numbered places without implying streets between them.
+  const routeLineIsSketch = routePathIsSketch(primaryRoute?.map_path_points, routeStops.length, {
+    geometrySource: primaryRoute?.geometry_source, geometryMode: primaryRoute?.geometry_mode,
+  });
   const sourceBackedDay = structure?.provenance === "agnostic_anchor"
     && primaryRoute?.trust_summary?.human_verified !== true;
   // How the day was assembled, minus what another line already says in full:

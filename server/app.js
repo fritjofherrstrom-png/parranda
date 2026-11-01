@@ -67,6 +67,7 @@ const {
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
 const { reconcileAgnosticConstraintNegotiation } = require("./planner/agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./planner/agnostic-walking-target");
+const { resolveDefaultWalkingRuntime } = require("./walking-runtime");
 const { resolveAgnosticIntake, parsePlaceQuery } = require("./planner/agnostic-place-intake");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const {
@@ -1513,8 +1514,8 @@ function buildApp({
   eventSupply,
   sourceCatalog,
   reviewedPlaceSource,
-  walkingRouter = null,
-  walkingConfig = null,
+  walkingRouter,
+  walkingConfig,
   weatherProvider = null,
   clock = null,
   // NEW-frontend /anywhere takeover (contract-gated): the flag decides serving,
@@ -1522,6 +1523,14 @@ function buildApp({
   // values (env flag + the frontend workspace's build output).
   anywhereV2Dir = path.join(appRoot, "frontend", "dist"),
 } = {}) {
+  // Server-owned opt-in only. Explicit injections (including null) keep
+  // test/operator overrides independent of process defaults.
+  if (walkingRouter === undefined && walkingConfig === undefined) {
+    ({ walkingRouter, walkingConfig } = resolveDefaultWalkingRuntime());
+  } else {
+    walkingRouter ??= null;
+    walkingConfig ??= null;
+  }
   // Event venue recovery reuses the same trusted, rate-limited server resolver
   // as freeform place intake. Explicit test injections still win, including
   // `null`; no public payload can provide either seam.

@@ -124,8 +124,12 @@ async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfi
   }
 
   // 4. Every leg must have finite, non-negative distance + walking minutes.
-  const legDistances = result.legs.map((leg) => Number(leg && leg.distance_km));
-  const legMinutes = result.legs.map((leg) => Number(leg && leg.estimated_walk_minutes));
+  // Retain the existing numeric-string seam for injected/legacy routers, but
+  // never coerce absent facts (especially null) into a measured zero.
+  const metric = value => value === null || value === undefined || typeof value === 'boolean'
+    || (typeof value === 'string' && !value.trim()) ? NaN : Number(value);
+  const legDistances = result.legs.map((leg) => metric(leg?.distance_km));
+  const legMinutes = result.legs.map((leg) => metric(leg?.estimated_walk_minutes));
   const hasValidLegDistances = legDistances.every((value) => Number.isFinite(value) && value >= 0);
   const hasValidLegMinutes = legMinutes.every((value) => Number.isFinite(value) && value >= 0);
   if (!hasValidLegDistances || !hasValidLegMinutes) {
@@ -200,6 +204,9 @@ async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfi
     checks: fullChecks,
     result: {
       source: result.source || null,
+      ...(result.source === "osrm" && result.mode === "walking" && !result.fallbackUsed
+        ? { mode: "walking", ...(result.attribution ? { attribution: result.attribution } : {}) }
+        : {}),
       estimatedKm: totalKm,
       legs: result.legs,
       pathPoints: result.pathPoints,
