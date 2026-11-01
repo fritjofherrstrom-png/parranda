@@ -86,6 +86,18 @@ test('the trusted selected-day forecast survives exact public-day projection wit
   assert.deepEqual(projected.result.days[0].weather_summary, published.days[0].weather_summary);
 });
 
+test('exact day projection preserves the closed pedestrian geometry and attribution contract', async () => {
+  const published=await publication();
+  const route=published.days[0].primary_route;
+  route.geometry_source='osrm';
+  route.geometry_mode='walking';
+  route.geometry_attribution={label:'FOSSGIS routing',url:'https://routing.openstreetmap.de/about.html',fixMapUrl:'https://www.openstreetmap.org/fixthemap'};
+  const projected=projectPublishedDay({published,intent:intent(),privacy:privacy(),language:'en'});
+  assert.ok(projected);
+  assert.equal(projected.result.days[0].primary_route.geometry_mode,'walking');
+  assert.deepEqual(projected.result.days[0].primary_route.geometry_attribution,route.geometry_attribution);
+});
+
 for (const [rhythm, count] of [['full', 6], ['calm', 4]]) test(`a released ${rhythm} extent projects and restores date-bound exclusions without a count ceiling`, async () => {
   const { normalizeDayEdit } = await import('../shared/planner-intent.mjs');
   const { parsePublishedDay } = await import('../frontend/src/lib/published-day.mjs');

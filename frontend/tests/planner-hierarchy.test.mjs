@@ -381,16 +381,28 @@ test("what the day contains still leads: a thin day says so under the title", as
   assert.doesNotMatch(header(h).textContent, /Local time/);
 });
 
-test("the map caption calls a straight-line sketch what it is", async (t) => {
+test("the map explanation names pins-only geometry without implying a walking path", async (t) => {
   const h = await plannerWith(t, composedDay());
-  assert.match(routeCard(h).textContent, /The dotted line shows the order of the stops, not the streets\./);
+  assert.match(routeCard(h).textContent, /The pins show the stops\. A walking path has not been confirmed on the map\./);
+  assert.doesNotMatch(routeCard(h).textContent, /dotted line|not the streets/);
+  assert.match(routeCard(h).textContent, /Distances and walking times are estimates\./);
 });
 
-test("a route with walking geometry makes no sketch claim", async (t) => {
-  const streets = Array.from({ length: 14 }, (_, i) => ({ lat: 55.6 + i * 0.0002, lng: 13 + (i % 3) * 0.0002 }));
-  const h = await plannerWith(t, composedDay({ pathPoints: streets }));
+test("dense OSRM geometry without a walking mode retains the unconfirmed-path explanation", async (t) => {
+  const path = Array.from({ length: 14 }, (_, i) => ({ lat: 55.6 + i * 0.0002, lng: 13 + (i % 3) * 0.0002 }));
+  const response = composedDay({ pathPoints: path });
+  response.days[0].primary_route.geometry_source = "osrm";
+  const h = await plannerWith(t, response);
+  assert.match(routeCard(h).textContent, /A walking path has not been confirmed on the map\./);
+  assert.match(routeCard(h).textContent, /Distances and walking times are estimates\./);
+});
 
-  assert.doesNotMatch(routeCard(h).textContent, /dotted line/);
+test("a short explicit walking path makes no unconfirmed-path claim and keeps time estimates honest", async (t) => {
+  const stops = [stop("a", "Place a", 55.6), stop("b", "Place b", 55.601)];
+  const response = composedDay({ stops, pathPoints: [{lat:55.6,lng:13}, {lat:55.601,lng:13}] });
+  Object.assign(response.days[0].primary_route, { geometry_source: "osrm", geometry_mode: "walking" });
+  const h = await plannerWith(t, response);
+  assert.doesNotMatch(routeCard(h).textContent, /walking path has not been confirmed|dotted line/);
   assert.match(routeCard(h).textContent, /Distances and walking times are estimates\./);
 });
 

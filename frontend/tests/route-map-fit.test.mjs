@@ -189,10 +189,13 @@ test("the route line's own points only have to stay on the map", () => {
   assert.ok(strict.zoom < view.zoom, `${strict.zoom} < ${view.zoom}`);
 });
 
-test("a bowed overview stays in the phone map while its stop targets clear controls", () => {
+test("a routed walking path stays in the phone map while stop targets clear controls", () => {
   const stops = [stop(55.6, 12.98), stop(55.6, 13.02), stop(55.61, 13.02)];
-  const curve = routeDisplayPath(stops, { sketch: true, routingSource: "heuristic" }).map((point) => ({ ...point, radius: 0, avoidControls: false }));
-  const marks = [...stops, ...curve];
+  const path = [{ lat: 55.6, lng: 12.98 }, { lat: 55.598, lng: 12.99 },
+    { lat: 55.598, lng: 13.015 }, { lat: 55.6, lng: 13.02 }, { lat: 55.61, lng: 13.02 }];
+  const line = routeDisplayPath(path, { geometrySource: "osrm", geometryMode: "walking" })
+    .map((point) => ({ ...point, radius: 0, avoidControls: false }));
+  const marks = [...stops, ...line];
   assertClear(fit(marks), marks);
 });
 

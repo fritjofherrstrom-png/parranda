@@ -11,9 +11,17 @@ test('walking integrity rejects a claimed 1km total with 12km legs',async()=>{
  const out=await validateAgnosticWalkingOrder({stops,targetKm:4,walkingRouter:router(1,[6,6])});
  assert.equal(out.valid,false);assert.equal(out.result,null);
 });
-test('walking integrity rejects contradictory native OSRM transport',async()=>{
- const original=global.fetch;global.fetch=async()=>({ok:true,json:async()=>({routes:[{distance:1000,legs:[{distance:6000,duration:3600},{distance:6000,duration:3600}],geometry:{coordinates:stops.map(p=>[p.lng,p.lat])}}]})});
- try{const out=await validateAgnosticWalkingOrder({stops,targetKm:4,walkingRouter:routeWalkingPath,walkingConfig:{defaultProvider:'osrm'}});assert.equal(out.valid,false);assert.equal(out.result,null);}finally{global.fetch=original;}
+test('contradictory native OSRM transport loses pedestrian authority and falls back to explicit estimates',async()=>{
+ const original=global.fetch;let calls=0;
+ global.fetch=async()=>{calls++;return new Response(JSON.stringify({code:'Ok',waypoints:stops.map(p=>({location:[p.lng,p.lat],distance:0})),routes:[{
+  distance:1000,duration:7200,legs:[{distance:6000,duration:3600},{distance:6000,duration:3600}],
+  geometry:{type:'LineString',coordinates:stops.map(p=>[p.lng,p.lat])},
+ }]}));};
+ try{const out=await validateAgnosticWalkingOrder({stops,targetKm:4,walkingRouter:routeWalkingPath,
+  walkingConfig:{defaultProvider:'osrm',transportMode:'foot',osrmBaseUrl:'https://routing.openstreetmap.de/routed-foot/'}});
+  assert.equal(calls,1);assert.equal(out.valid,true);assert.equal(out.result.source,'heuristic');
+  assert.equal(out.result.fallbackUsed,true);assert.equal(out.result.mode,undefined);
+ }finally{global.fetch=original;}
 });
 test('walking integrity permits independent tenth-kilometre rounding',async()=>{
  const out=await validateAgnosticWalkingOrder({stops,walkingRouter:router(1.1,[0.5,0.5])});assert.equal(out.valid,true);assert.equal(out.result.estimatedKm,1.1);

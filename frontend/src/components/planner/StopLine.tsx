@@ -67,7 +67,7 @@ function AboutDayAndMap({ t, assemblyNotes = [], routeLineIsSketch, dayContextNo
       </summary>
       <ul className="mb-1 flex flex-col gap-1.5 text-xs leading-relaxed text-parranda-ink-muted">
         {assemblyNotes.map((note) => <li key={note}>{note}</li>)}
-        {routeLineIsSketch && <li>{t("Den prickade linjen visar stoppens ordning, inte gatorna.", "The dotted line shows the order of the stops, not the streets.")}</li>}
+        {routeLineIsSketch && <li>{t("Nålarna visar stoppen. Ingen gångväg har bekräftats på kartan.", "The pins show the stops. A walking path has not been confirmed on the map.")}</li>}
         <li>{t("Avstånd och gångtider är uppskattningar.", "Distances and walking times are estimates.")}</li>
         {dayContextNote && <li>{dayContextNote}</li>}
       </ul>
