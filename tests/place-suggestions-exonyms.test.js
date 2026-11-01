@@ -74,4 +74,6 @@ test('cancellation during the alternate page retains the native serial slot unti
   assert.equal((await queued).status,'unavailable');
   assert.equal(urls.length,2,'a second native query must not overlap the unsettled alternate request');
  }finally{release();}
+ assert.equal((await suggestions('newest')).status,'ready','settled cancellation releases the native slot for subsequent work');
+ assert.equal(urls.length,4,'the fresh query can complete both bounded pages after the expired queued owner');
 });

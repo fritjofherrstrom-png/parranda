@@ -136,8 +136,9 @@ test('a new built-UI prefix cancels its abandoned HTTP owner and never publishes
   const entered = deferred(), aborted = deferred(), release = deferred();
   const calls = [];
   const provider = createPlaceSuggestions({ fetcher: async (url, { signal }) => {
-    const query = new URL(url).searchParams.get('q');
-    calls.push(query);
+    const parameters = new URL(url).searchParams;
+    const query = parameters.get('q');
+    calls.push({query, language: parameters.get('lang')});
     if (calls.length === 1) {
       signal.addEventListener('abort', () => aborted.resolve(true), { once: true });
       entered.resolve();
@@ -160,7 +161,15 @@ test('a new built-UI prefix cancels its abandoned HTTP owner and never publishes
     assert.equal(await page.getByRole('option').filter({ hasText: 'Obsolete Harbour' }).count(), 0);
     await field.fill('oldport');
     await page.getByRole('option').filter({ hasText: 'Fresh Oldport' }).waitFor();
-    assert.deepEqual(calls, ['oldport', 'newport', 'oldport'], 'late abandoned work must not populate the cache');
+    assert.deepEqual(calls, [
+      {query:'oldport',language:null}, {query:'newport',language:null},
+      {query:'oldport',language:null}, {query:'oldport',language:'en'},
+    ], 'abandoned work is not cached; the fresh fuzzy city also reads its bounded English-name page');
+    await field.fill('newport');
+    await page.getByRole('option').filter({ hasText: 'Newport' }).waitFor();
+    await field.fill('oldport');
+    await page.getByRole('option').filter({ hasText: 'Fresh Oldport' }).waitFor();
+    assert.equal(calls.length,4,'the complete fresh answer, including its alternate-name page, is cached');
   } finally { release.resolve(); }
 });
 
