@@ -375,9 +375,14 @@ function mapPlannerReservoirToSourceCandidates({
     for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
       const role = roleEntry?.role;
       if (!role) continue;
-      for (const rich of plannerUsableOptionsForRole(roleEntry)) {
+      // Relative best-tier selection is for automatic choices. An explicit
+      // pin/retained identity must pass the same individual admission and
+      // availability gates, not disappear merely because another place now
+      // ranks better. Only already-gated candidates in this role are inspected.
+      for (const rich of Array.isArray(roleEntry.candidates) ? roleEntry.candidates : []) {
         const id = rich?.candidate_id;
         if (!id || !pins.has(String(id)) || seen.has(id)) continue;
+        if (!plannerUsableOptionsForRole({ candidates: [rich] }).length) continue;
         // Pins can use explicit experimental admission. Modern requested-role
         // rhythm depth below can also use these admitted places, in tier order;
         // support/legacy depth remains stricter. Every path preserves the
