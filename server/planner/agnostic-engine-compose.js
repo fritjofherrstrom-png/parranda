@@ -372,6 +372,20 @@ function mapPlannerReservoirToSourceCandidates({
     ...(Array.isArray(retainedIds) ? retainedIds : [])])];
   const pins = new Set(selectionIds);
   if (pins.size > 0) {
+    // A direct-coverage rejection cannot be bypassed through an adjacent role
+    // (e.g. a rejected coffee choice also partially matching food). Inspect
+    // only the requested identities and preserve individually admitted direct
+    // matches; an identity with no direct assessment may still use partial fit.
+    const coveredAdmission = new Map();
+    for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
+      for (const rich of Array.isArray(roleEntry?.candidates) ? roleEntry.candidates : []) {
+        const id = rich?.candidate_id;
+        if (!id || !pins.has(String(id)) || !Array.isArray(rich.covered_preferences) ||
+            rich.covered_preferences.length === 0) continue;
+        coveredAdmission.set(String(id), coveredAdmission.get(String(id)) === true ||
+          plannerUsableOptionsForRole({ candidates: [rich] }).length > 0);
+      }
+    }
     for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
       const role = roleEntry?.role;
       if (!role) continue;
@@ -382,6 +396,7 @@ function mapPlannerReservoirToSourceCandidates({
       for (const rich of Array.isArray(roleEntry.candidates) ? roleEntry.candidates : []) {
         const id = rich?.candidate_id;
         if (!id || !pins.has(String(id)) || seen.has(id)) continue;
+        if (coveredAdmission.get(String(id)) === false) continue;
         if (!plannerUsableOptionsForRole({ candidates: [rich] }).length) continue;
         // Pins can use explicit experimental admission. Modern requested-role
         // rhythm depth below can also use these admitted places, in tier order;

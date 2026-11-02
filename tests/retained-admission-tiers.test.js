@@ -2,6 +2,43 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { compose, record, rows } = require('./helpers/day-composition-fixtures');
+const { mapPlannerReservoirToSourceCandidates } = require('../server/planner/agnostic-engine-compose');
+
+// Controlled rich-role fixtures. The unchanged HTTP regression in
+// agnostic-engine-promotion.test.js proves this cross-role path is reachable.
+function adjacentRoleFixture(includeRejectedCoverage = true) {
+  const rich = (id, covered, partial) => ({
+    candidate_id: id, label: id, type: 'cafe', candidate_status: 'partial',
+    planner_usable: true, origin: 'external_open', confidence: 'low',
+    covered_preferences: covered, partial_preferences: partial,
+    coordinates: { lat: 41.9, lng: 12.49 }, local_feel_rank: 3,
+    gates: { may_influence_routes: true },
+  });
+  const adjacent = rich('explicit-place', [], ['food']);
+  const roles = [{ role: 'food_anchor', slot: 'anchor', requested: true,
+    candidates: [rich('stronger-food', ['food'], []), adjacent] }];
+  if (includeRejectedCoverage) roles.push({ role: 'coffee_fika_stop', slot: 'stop', requested: true,
+    candidates: [{ ...rich('explicit-place', ['coffee'], []),
+      candidate_status: 'fallback', planner_usable: false }] });
+  return { requested_preferences: ['food', 'coffee'], roles };
+}
+
+for (const field of ['pinnedIds', 'retainedIds']) test(`a ${field} identity rejected for its covered role cannot enter through adjacent-only rescue`, () => {
+  const plannerRoles = adjacentRoleFixture();
+  const before = structuredClone(plannerRoles);
+  const output = mapPlannerReservoirToSourceCandidates({ plannerRoles, [field]: ['explicit-place'] });
+  assert.ok(!output.some(candidate => candidate.id === 'explicit-place'),
+    'adjacent-role admission must not revive a rejection for the identity’s covered role');
+  assert.deepEqual(plannerRoles, before, 'rescue must not mutate role assessments');
+});
+
+test('adjacent-only admission without a covered-role rejection remains available to an explicit choice', () => {
+  const output = mapPlannerReservoirToSourceCandidates({
+    plannerRoles: adjacentRoleFixture(false), pinnedIds: ['explicit-place'],
+  });
+  assert.ok(output.some(candidate => candidate.id === 'explicit-place'),
+    'the rejection guard is not a blanket ban on admitted partial coverage');
+});
 
 const originalFetch = global.fetch;
 test.before(() => { global.fetch = async () => { throw new Error('unexpected network'); }; });
