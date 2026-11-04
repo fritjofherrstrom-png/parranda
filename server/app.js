@@ -59,6 +59,7 @@ const { nearbyCuratedSupply } = require('./planner/nearby-curated-supply');
 const { createPlaceSelectionStore, placeResolutionInputs } = require('./place-candidates/place-selection');
 const { toPlaceRef } = require('./place-candidates/place-ref');
 const { resolveDefaultPlaceSuggestions } = require('./place-candidates/place-suggestions');
+const { isPlaceSearchQueryEligible } = require('../shared/place-search-query.mjs');
 const { attributeToWithheldDay } = require("./planner/pin-refusal-reasons");
 const {
   markCommitmentEligibility,
@@ -1565,7 +1566,7 @@ function buildApp({
   app.post('/api/place-suggestions', async (request, response) => {
     const query = typeof request.body?.query === 'string' ? request.body.query.trim().replace(/\s+/g, ' ') : '';
     if (query.length > 200) return response.status(400).json({ error: 'invalid_query' });
-    if (query.length < 3) return response.json({ status: 'ready', choices: [] });
+    if (!isPlaceSearchQueryEligible(query)) return response.json({ status: 'ready', choices: [] });
     if (typeof placeSuggestions !== 'function') return response.json({ status: 'unavailable', choices: [] });
     const previous = placeSelectionStore.read(request.body?.context_selection);
     const controller = new AbortController();

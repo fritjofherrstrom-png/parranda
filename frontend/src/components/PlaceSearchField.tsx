@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { LAST_KEY } from "../lib/anywhere-storage.mjs";
 import { SearchIcon } from "./shared/icons";
+import { isPlaceSearchQueryEligible } from "../../../shared/place-search-query.mjs";
 
 export interface PlaceSuggestion {
   title: string;
@@ -53,7 +54,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
     const query = value.trim();
     dismissed.current = false;
     setChoices([]); setActive(-1); setOpen(false); setStatus("idle");
-    if (selected || composing || query.length < 3 || query.length > 200) return;
+    if (selected || composing || !isPlaceSearchQueryEligible(query)) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     let timeout: ReturnType<typeof setTimeout> | undefined;

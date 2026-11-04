@@ -14,6 +14,7 @@ const {
   rankEligible,
 } = require("../candidates/candidate-pool");
 const { plannerUsableOptionsForRole } = require("./candidate-combination");
+const { explicitAdmissionByIdentity } = require("./explicit-selection-admission");
 const { createMealOrderPolicy } = require('./meal-ordering');
 const { retainWalkingFitAlternatives } = require("./walking-fit-selection");
 const { scoreCandidateFit } = require("../candidates/fit-scorer");
@@ -178,6 +179,13 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   }
 
   const roleRelevantCandidateCount = uniqueEntryCandidateCount(Object.values(roleEntries).flat());
+  // A direct rejection may itself be below the cut until that identity is
+  // pinned. Judge counterfactual admission on the complete assessed universe.
+  const commitmentAdmission = explicitAdmissionByIdentity(
+    Object.values(roleEntries).map(entries => ({ candidates: entries.map(roleAdmissionFields) })),
+  );
+  const commitmentAdmissibleIds = [...commitmentAdmission]
+    .filter(([, allowed]) => allowed).map(([id]) => id);
 
   // Collected across roles and returned as a SIBLING of `roles`, never on a
   // role entry: buildPlannerCandidateInspectSidecar emits `roles` verbatim, so
@@ -192,36 +200,14 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
     const candidates = keepPinnedEntriesInRole(entries, limitPerRole, pinnedIds).map((entry) =>
       formatRoleCandidate(entry, role, roleEntries, activeRoleSpec),
     );
-    // The ids beyond the ranking cut that a pin would re-admit AND the hoist
-    // would then accept — an ADMISSION answer, not a promise the finished day
-    // can afford the detour. The walking budget can still refuse afterwards,
-    // and reports that honestly on its own.
-    //
-    // keepPinnedEntriesInRole makes this role's candidate list depend on which
-    // pins the request happened to carry — right for composing, wrong for
-    // answering "could this be committed to?", because the answer is no right
-    // up until the user pins it and then yes. This records the counterfactual
-    // so that question has a stable answer.
-    //
-    // Rescue alone is not enough: the tail is where the rejected statuses live
-    // (entries are sorted filled -> partial -> admitted -> fallback), and the
-    // hoist runs plannerUsableOptionsForRole over the re-admitted list. So each
-    // candidate is asked the question the hoist would ask — would it survive
-    // admission once rescued — rather than being declared eligible for having a
-    // rank. Answering otherwise re-creates the exact round-trip refusal this
-    // whole slice exists to remove.
+    // The tail uses the same individual, identity-wide explicit admission
+    // verdict as rescue and public eligibility, never relative peer ranking.
     const pinRescuableCandidateIds = [];
     for (const entry of entries.slice(limitPerRole)) {
-      // Cheap reject before formatting: a fallback entry can never pass the
-      // hoist's own filter, and formatting the whole tail of a dense role is
-      // work no answer depends on.
-      if (entry?.candidate_status === "fallback") continue;
-      const formatted = formatRoleCandidate(entry, role, roleEntries, activeRoleSpec);
-      const id = formatted?.candidate_id;
+      const id = entry?.candidate?.id;
       if (id == null || id === "") continue;
       if (candidates.some((existing) => existing?.candidate_id === id)) continue;
-      const asIfRescued = { candidates: [...candidates, formatted] };
-      if (plannerUsableOptionsForRole(asIfRescued).some((option) => option?.candidate_id === id)) {
+      if (commitmentAdmission.get(String(id)) === true) {
         pinRescuableCandidateIds.push(String(id));
       }
     }
@@ -279,6 +265,8 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
     // verbatim, and this is internal bookkeeping about the ranked tail — not
     // something the public payload should carry.
     commitment_rescuable_ids: [...new Set(rescuableByRole)],
+    // Complete pre-cut verdict; keep private, outside emitted role entries.
+    commitment_admissible_ids: commitmentAdmissibleIds,
     // Private sibling; never append these to public role lists or Add supply.
     ...(walkingFitCandidates.length ? { walking_fit_candidates: walkingFitCandidates } : {}),
     summary: summarizeRoles(roles),
@@ -686,24 +674,36 @@ function sourceCategoryOf(candidate) {
   return "second_hand";
 }
 
+// Share admission fields with the rich formatter without formatting every
+// pre-cut candidate's provenance just to answer counterfactual eligibility.
+function roleAdmissionFields(entry) {
+  const { candidate, candidate_status, fit, availability, operational } = entry;
+  return {
+    candidate_id: candidate.id,
+    candidate_status,
+    planner_usable: candidate_status === "filled" || candidate_status === "partial",
+    covered_preferences: fit.covered_preferences,
+    ...(Number.isFinite(entry.local_feel_rank) ? { local_feel_rank: entry.local_feel_rank } : {}),
+    ...(availability ? { availability: { ...availability } } : {}),
+    ...(operational ? { operational_viability: { ...operational, reasons: [...operational.reasons] } } : {}),
+  };
+}
+
 function formatRoleCandidate(entry, role, roleEntries, roleSpec = ROLE_SPEC) {
-  const { candidate, derived, fit, gates, calibration, candidate_status, experimental_admission, availability, operational } = entry;
+  const { candidate, derived, fit, gates, calibration, experimental_admission } = entry;
   const provenance = candidateProvenance(candidate, derived);
   const website = normalizeSourceWebsite(candidate.website);
   return {
-    candidate_id: candidate.id,
+    ...roleAdmissionFields(entry),
     label: candidate.label,
     type: candidate.type,
     candidate_kind: candidate.candidate_kind,
-    candidate_status,
-    planner_usable: candidate_status === "filled" || candidate_status === "partial",
     origin: candidateOrigin(candidate),
     confidence: derived.existence_confidence || candidate.trust?.confidence || null,
     provenance,
     attribution: provenance.attribution,
     ...(website ? { website } : {}),
     ...(candidate.place_details ? { place_details: candidate.place_details } : {}),
-    covered_preferences: fit.covered_preferences,
     partial_preferences: fit.partial_preferences,
     missing_preferences: fit.missing_preferences,
     fit_reasons: fit.reasons,
@@ -711,7 +711,6 @@ function formatRoleCandidate(entry, role, roleEntries, roleSpec = ROLE_SPEC) {
     // rank); default/citypack role payloads stay byte-identical.
     ...(Number.isFinite(entry.local_feel_rank)
       ? {
-          local_feel_rank: entry.local_feel_rank,
           local_feel_reasons: entry.local_feel_reasons || [],
           chain: entry.candidate.chain === true,
           brand: typeof entry.candidate.brand === "string" ? entry.candidate.brand : null,
@@ -738,8 +737,6 @@ function formatRoleCandidate(entry, role, roleEntries, roleSpec = ROLE_SPEC) {
     calibration: calibration
       ? { level: calibration.level, influence: calibration.influence, reasons: calibration.reasons }
       : null,
-    ...(availability ? { availability: { ...availability } } : {}),
-    ...(operational ? { operational_viability: { ...operational, reasons: [...operational.reasons] } } : {}),
     also_covers: alsoCovers(candidate.id, role, roleEntries, roleSpec),
   };
 }
