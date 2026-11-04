@@ -77,7 +77,8 @@ export function DayWhen({ t, lang, date, relativeDay }: {
   if (!shown) return null;
   return (
     <time dateTime={date!}>
-      {relativeDay === 0 ? t("Idag", "Today") : relativeDay === 1 ? t("Imorgon", "Tomorrow") : dayDateLabel(shown, lang)}
+      {relativeDay === 0 ? `${t("Idag", "Today")} · ` : relativeDay === 1 ? `${t("Imorgon", "Tomorrow")} · ` : ""}
+      {dayDateLabel(shown, lang)}
     </time>
   );
 }
@@ -199,6 +200,9 @@ export default function DayHeader({
   t,
   lang,
   staleNotice,
+  updateMessage = null,
+  updateTakingLonger = false,
+  relativeDay = null,
   navigationInterrupted,
   retryPlan,
   mode,
@@ -225,6 +229,10 @@ export default function DayHeader({
   t: Translate;
   lang: Lang;
   staleNotice: string | null;
+  /** Current requested operation, never confirmation of an unpublished day. */
+  updateMessage?: string | null;
+  updateTakingLonger?: boolean;
+  relativeDay?: 0 | 1 | null;
   navigationInterrupted: boolean;
   retryPlan: () => void;
   mode: "typed" | "near_me";
@@ -237,7 +245,7 @@ export default function DayHeader({
   weatherSummary: any;
   /** Beside the title: Change. */
   titleAction?: ReactNode;
-  /** Under the title: which day, the picks and rhythm, with Adjust. */
+  /** Under the title: the picks and rhythm, with Adjust. */
   controls?: ReactNode;
   /** A phone: the map's short, still overview, between the title and the facts. */
   overview?: ReactNode;
@@ -298,18 +306,23 @@ export default function DayHeader({
     if (staleNotice !== "updating") sourceUpdateHadFocus.current = false;
   }, [displayedShortfall, staleNotice]);
   return (
-    <header className="@container flex flex-col gap-4" aria-busy={staleNotice === "updating"}>
+    <header className="@container flex flex-col gap-4">
       {(staleNotice === "updating" || staleNotice === "update_failed") && <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         {/* The day on screen is deliberately still here, and deliberately
             marked as not current. Never a silent swap. */}
         {staleNotice === "updating" && (
           <span
             aria-live="polite"
-            className="inline-flex min-h-7 items-center gap-2 rounded-full border-line border-parranda-ember/60 px-2.5 text-xs font-bold text-parranda-clay"
+            className="inline-flex min-h-7 min-w-0 max-w-full items-center gap-2 rounded-full border-line border-parranda-ember/60 px-2.5 py-1 text-xs font-bold text-parranda-clay [overflow-wrap:anywhere]"
           >
-            <RingMark className="h-3 w-3" />
-            {t("Uppdaterar dagen …", "Updating your day …")}
+            <RingMark className="h-3 w-3 shrink-0" />
+            <span className="min-w-0">{updateMessage || t("Uppdaterar dagen …", "Updating your day …")}</span>
           </span>
+        )}
+        {staleNotice === "updating" && updateTakingLonger && (
+          <p className="w-full text-13 leading-relaxed text-parranda-ink-muted" aria-live="polite">
+            {t("Det tar lite längre tid. Din tidigare dag visas tills uppdateringen är klar.", "This is taking a little longer. Your previous day is still shown until the update is ready.")}
+          </p>
         )}
         {staleNotice === "update_failed" && (
           <>
@@ -332,19 +345,21 @@ export default function DayHeader({
         )}
       </div>}
       {/* Two rows, each with its control on the right: where (the title,
-          Change) and how (which day, the picks and rhythm, Adjust). Change and
+          Change) and how (the picks and rhythm, Adjust). Change and
           Adjust stand one above the other, so the stops start high on a phone. */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-start justify-between gap-3">
-          <h1 ref={headingRef} tabIndex={-1} className="type-title min-w-0 pt-1.5 text-[1.625rem] text-parranda-ink [overflow-wrap:anywhere] [text-wrap:balance] sm:pt-0.5 sm:text-[2rem]">
-            {mode === "near_me" && !placeLabel ? (
-              <>{t("En dag", "A day")} {t("nära dig", "near you")}</>
-            ) : (
-              <>{t("En dag i", "A day in")} {anchorLabel}</>
-            )}
+          <h1 ref={headingRef} tabIndex={-1} className="min-w-0 flex-1 text-parranda-ink [overflow-wrap:anywhere]">
+            <span className="type-eyebrow block pb-1 text-xs text-parranda-ink-muted">
+              {t("Din dag", "Your day")}<span className="sr-only">{mode === "near_me" && !placeLabel ? " " : t(" i ", " in ")}</span>
+            </span>
+            <span className="type-title block text-[1.75rem] leading-tight [text-wrap:balance] sm:text-[2rem]">
+              {mode === "near_me" && !placeLabel ? t("nära dig", "near you") : anchorLabel}
+            </span>
           </h1>
           {titleAction}
         </div>
+        {displayedDate && <p className="text-13 text-parranda-ink-muted"><DayWhen t={t} lang={lang} date={date} relativeDay={relativeDay} /></p>}
         {controls}
       </div>
       {/* On a phone the map's still overview pictures the day before its

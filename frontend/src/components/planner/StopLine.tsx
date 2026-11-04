@@ -298,7 +298,7 @@ export default function StopLine({
           return (
             <li key={stopKey} className="flex flex-col">
               {leg && (leg.minutes != null || leg.km != null) && (
-                <span className={`${dataLine} flex min-h-10 items-center gap-2 pl-14 transition-opacity${stale ? " opacity-45" : ""}`}>
+                <span className={`${dataLine} flex min-h-10 items-center gap-2 pl-14`}>
                   <WalkIcon className="h-3.5 w-3.5" />
                   {leg.minutes != null ? `${leg.minutes} min` : ""}
                   {leg.minutes != null && leg.km != null ? " · " : ""}
@@ -332,8 +332,8 @@ export default function StopLine({
                   {behind ? <CheckIcon className="h-4 w-4" /> : routeNumber}
                   {behind && <span className="sr-only">{routeNumber}</span>}
                 </span>
-                <span className={"flex min-w-0 flex-1 flex-col gap-0.5 transition-opacity" + (stale ? " opacity-45" : "")}>
-                  <span className={"flex flex-wrap items-center gap-x-2 text-17 font-extrabold leading-tight " + (behind ? "text-parranda-ink-meta" : "text-parranda-ink")}>
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className={"flex flex-wrap items-center gap-x-2 text-17 font-extrabold leading-tight [overflow-wrap:anywhere] " + (behind ? "text-parranda-ink-meta" : "text-parranda-ink")}>
                     {name}
                     {/* Named by the change line above ("4 stops swapped"):
                         which ones are new, for as long as that line stands. */}

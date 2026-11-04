@@ -92,7 +92,7 @@ import { useMediaQuery } from "./shared/useMediaQuery";
 import AnchorCard, { ChangePlaceLink, type AdjustRebuild } from "./planner/AnchorCard";
 import BlitzCard from "./planner/BlitzCard";
 import CandidateAreas from "./planner/CandidateAreas";
-import DayHeader, { DayActions, DayWhen, dayAssemblyNotes } from "./planner/DayHeader";
+import DayHeader, { DayActions, dayAssemblyNotes } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
 import DayPlaceholder, { DayMapPlaceholder } from "./planner/DayPlaceholder";
@@ -2481,6 +2481,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       adjustmentSignature(feedbackInputs.selected, feedbackInputs.dayOffset === 1 ? 1 : 0,
         feedbackInputs.walkKey ?? "", feedbackLedger.applies ? feedbackLedger.entries : {},
         feedbackInputs.preferencePriority ?? [], feedbackInputs.dayEdit);
+  // Compare today's editable intent with the immutable ledger answered by
+  // the day on screen. This describes a request, never a confirmed Keep, and
+  // vanishes if the intent is released or a newer answer takes over.
+  const requestedKeeps = Object.entries(commitments).filter(([id, entry]) =>
+    !isLiveOccurrenceId(id) && entry.kind === "pin" &&
+    !(feedbackLedger.applies && feedbackLedger.entries[id]?.kind === "pin"));
+  const pendingUpdateMessage = staleNotice !== "updating" ? null
+    : recheckPending ? t("Letar efter fler platser …", "Looking for more places …")
+    : requestedKeeps.length === 1 && requestedKeeps[0][1].label
+      ? t(`Planerar med ${requestedKeeps[0][1].label} …`, `Planning with ${requestedKeeps[0][1].label} …`)
+      : requestedKeeps.length > 1 ? t("Planerar med dina behållna platser …", "Planning with your kept places …")
+      : null;
   const publishedFirstChoice = normalizePreferencePriority(feedbackInputs?.preferencePriority, feedbackInputs?.selected)[0];
   // A pick the day on screen never answered (just added; its rebuild still
   // coming) is not "missing" from that day. Only active work is pending;
@@ -2653,7 +2665,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       onToggleExpanded={splitLayout ? undefined : () => setMapExpanded((cur) => !cur)}
       // On a phone the map is a short overview above the facts, still until
       // expanded, so it never catches the thumb that scrolls the day.
-      heightClass={splitLayout ? "h-full" : mapExpanded ? "h-[min(70vh,36rem)]" : "h-52"}
+      heightClass={splitLayout ? "h-full" : mapExpanded ? "h-[min(70vh,36rem)]" : "h-40"}
       still={!splitLayout && !mapExpanded}
       regionLabel={splitLayout ? t("Interaktiv karta", "Interactive map") : undefined}
       t={t}
@@ -2663,7 +2675,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // the picks line and the facts, the picture of the day before its numbers.
   // Its canvas is the "Map of the day" landmark; this wrapper only fades.
   const mapOverview = routeMap && !splitLayout ? (
-    <div data-map-overview="" className={"transition-opacity" + (staleNotice === "updating" ? " opacity-60" : "")}>
+    <div data-map-overview="" aria-busy={staleNotice === "updating"}>
       {routeMap}
     </div>
   ) : null;
@@ -2697,7 +2709,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       onChangePlace={cancelActivePlannerForNavigation}
       rebuild={adjustRebuild}
       compact={dayWithRoute}
-      dayWhen={dayWithRoute ? <DayWhen t={t} lang={lang} date={shownDate} relativeDay={shownDay ? shownDay.activeOffset : null} /> : null}
     />
   ) : null;
 
@@ -2723,7 +2734,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </p>}
       </div>
 
-      <main className="flex min-w-0 flex-col gap-10 sm:gap-12">
+      <main className="flex min-w-0 flex-col gap-6 sm:gap-10">
       {/* The day leads, compact: "A day in Lyon" with Change, which day and
           the picks with Adjust, on a phone the map's short overview, the
           facts — then the route's stops. While a day composes, its heading's
@@ -2733,6 +2744,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           t={t}
           lang={lang}
           staleNotice={staleNotice}
+          updateMessage={pendingUpdateMessage}
+          updateTakingLonger={loadingStage >= 2}
+          relativeDay={shownDay?.activeOffset ?? null}
           navigationInterrupted={navigationInterrupted}
           retryPlan={retryPlan}
           mode={mode}

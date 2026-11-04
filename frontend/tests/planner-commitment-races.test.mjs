@@ -568,6 +568,7 @@ test("starting over invalidates the commitment request already in flight", async
   await addOutsider(h);
   await h.clock.advance(500);
   const inFlight = h.fetchMock.pending()[0];
+  assert.match(h.container.querySelector("main header").textContent, /Planning with Place outsider/);
   assert.deepEqual(inFlight.body.pinned_candidate_ids, ["outsider"]);
 
   await click(h, buttonMatching(h, /Start over without my choices/));
@@ -575,6 +576,7 @@ test("starting over invalidates the commitment request already in flight", async
   await h.clock.advance(50);
 
   assert.ok(!/Place q/.test(h.text()), "the cleared ledger's old answer cannot take the screen");
+  assert.doesNotMatch(h.container.querySelector("main header").textContent, /Planning with Place outsider/, "withdrawn intent never remains the pending operation");
 });
 
 test("a scheduled silent refresh cannot wake under a newer ledger intent", async (t) => {

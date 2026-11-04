@@ -43,7 +43,7 @@ export default function DayPlaceholder({ status, inlineMap = true, part = "all" 
   const body = (
       <div aria-hidden="true" className={"flex flex-col" + (part === "body" ? "" : " mt-4")}>
         {/* On a phone the map's overview comes first, the strip it will be. */}
-        {inlineMap && <div data-day-shape="map" className={`${shape} mb-4 h-52 rounded-parranda`} />}
+        {inlineMap && <div data-day-shape="map" className={`${shape} mb-4 h-40 rounded-parranda`} />}
         <div className="flex flex-wrap gap-1.5">
           <div className={`${bar} h-6 w-28`} />
           <div className={`${bar} h-6 w-16`} />

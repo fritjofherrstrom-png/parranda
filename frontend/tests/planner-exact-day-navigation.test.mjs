@@ -84,7 +84,7 @@ test("switching language restores the exact published day without another compos
   assert.equal(composeCalls(next).length, 0, "changing presentation must not ask the engine for a different day");
   assert.match(next.text(), /Fixture museum/);
   assert.match(next.text(), /Fixture café/);
-  assert.match(next.container.querySelector("header h1").textContent, /^En dag i Testville$/);
+  assert.match(next.container.querySelector("header h1").textContent, /^Din dag i Testville$/);
   const after = next.readStorage(LAST_KEY);
   assert.equal(after.dateIso, before.dateIso, "the absolute selected date is unchanged");
   assert.deepEqual(stopIds(after), stopIds(before));
@@ -282,7 +282,7 @@ test('a near-me language view restores without storing or reusing a position fix
   await next.clock.advance(1500);
   assert.equal(next.fetchMock.calls.length, 0, 'saved geometry does not authorize a new acquisition');
   assert.match(next.text(), /Fixture museum/);
-  assert.match(next.container.querySelector('header h1').textContent, /^En dag nära dig$/);
+  assert.match(next.container.querySelector('header h1').textContent, /^Din dag nära dig$/);
   assert.deepEqual(stopIds(next.readStorage(LAST_KEY)), stopIds(before));
 });
 

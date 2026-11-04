@@ -229,11 +229,10 @@ test("Pulse section: place-titled, dedup-aware, honest states, no jargon", () =>
 });
 
 test("route result has one authoritative route and keeps broader candidates secondary", () => {
-  // The day header (§3): "A day in {place}", the selected date, honest
+  // The day header (§3): "Your day / {place}", the selected date, honest
   // counts, and the Maps CTA over the FULL stop order (woven event included).
   assert.match(anywherePlannerSource, /t\("Din dag", "Your day"\)/);
-  assert.match(anywherePlannerSource, /t\("En dag i", "A day in"\)/);
-  assert.match(anywherePlannerSource, /t\("En dag", "A day"\)[\s\S]{0,120}t\("nära dig", "near you"\)/);
+  assert.match(anywherePlannerSource, /t\("nära dig", "near you"\)/);
   assert.match(anywherePlannerSource, /<time dateTime=\{date!\}/);
   assert.match(anywherePlannerSource, /t\("till fots", "on foot"\)/);
   assert.match(anywherePlannerSource, /t\("Öppna rutten i Maps", "Open route in Maps"\)/);
@@ -386,7 +385,7 @@ test("on a phone the map is a short, still overview until the reader expands it"
   // zoom gesture while collapsed, and shows no zoom buttons; its stops still
   // open on a tap, and Expand gives the full interactive map.
   const routeMap = componentSource("planner/RouteMap.tsx");
-  assert.match(anywherePlannerSource, /mapExpanded \? "h-\[min\(70vh,36rem\)\]" : "h-52"/);
+  assert.match(anywherePlannerSource, /mapExpanded \? "h-\[min\(70vh,36rem\)\]" : "h-40"/);
   assert.match(anywherePlannerSource, /still=\{!splitLayout && !mapExpanded\}/);
   assert.match(routeMap, /function applyStill\(map: any, still: boolean\)/);
   assert.match(routeMap, /\[map\.dragPan, map\.touchZoomRotate, map\.doubleClickZoom, map\.boxZoom, map\.keyboard\]/);

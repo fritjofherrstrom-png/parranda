@@ -191,9 +191,11 @@ test("the day's weather is one fact chip: the sky's icon, then the high", async 
 
 test('a day in the city leads the heading, with the selected date directly below it', async t => {
   const h = await plannerWith(t, composedDay());
-  assert.equal(header(h).querySelector('h1').textContent, 'A day in Testville');
+  assert.equal(header(h).querySelector('h1').textContent, 'Your day in Testville');
   const date = header(h).querySelector('time');
   assert.equal(date?.dateTime, '2026-09-25');
+  assert.equal(header(h).querySelectorAll('time[datetime="2026-09-25"]').length, 1, 'selected date is stated once');
+  assert.ok(!header(h).querySelector('section[aria-label="Your day\'s starting point"] time'), 'date belongs beside the city, not the settings summary');
   // Weekday, day, month: the design system's one date form. No comma, and
   // the year only outside the current one. The fixture day (25 Sep 2026) is
   // in the past, so no "Today": that word belongs to today's date only.
@@ -211,8 +213,8 @@ test('the compact heading: Change beside the title, then which day and the picks
   assert.ok(title.compareDocumentPosition(card) & h.window.Node.DOCUMENT_POSITION_FOLLOWING, "title before the picks");
   // One even line: which day, the picks, the rhythm. The date is said once,
   // here; the place only in the title.
-  const line = card.querySelector('time').parentElement;
-  assert.match(line.textContent, /^Fri 25 Sept? · Food & drink · Culture · Views · Day rhythm: /);
+  const line = card.querySelector('span');
+  assert.match(line.textContent, /^Food & drink · Culture · Views · Day rhythm: /);
   assert.equal(line.querySelector('strong'), null, "no part of the line shouts");
   assert.equal(header(h).querySelectorAll('time').length, 1);
   assert.doesNotMatch(card.textContent, /Testville/);
@@ -230,7 +232,8 @@ test('opening Adjust keeps which day and the picks in view, with Done in Adjust\
   await h.act(() => card.querySelector('button[aria-expanded="false"]').click());
   const done = card.querySelector('button[aria-expanded="true"]');
   assert.equal(done?.textContent.trim(), 'Done');
-  assert.equal(done.parentElement, card.querySelector('time').parentElement.parentElement, "Done stands at the end of the line");
+  assert.ok(done.parentElement.textContent.includes('Food & drink'), 'Done stays with the picks');
+  assert.equal(header(h).querySelector('time')?.dateTime, '2026-09-25', 'the displayed date stays beside the city while Adjust is open');
   assert.equal(h.window.document.activeElement, done, "focus moves to Done");
   assert.ok(h.window.document.getElementById(done.getAttribute('aria-controls')), "Done names the open panel");
   assert.equal(card.querySelectorAll('button[aria-expanded]').length, 1, "one Done, not two");
@@ -272,7 +275,7 @@ test('a forecast expires on the open day without changing or reacquiring the rou
   await h.clock.advance(30 * 60 * 1000);
   assert.equal(forecast(h), null);
   assert.equal(h.fetchMock.calls.length, calls, 'expiry is presentation only, never a fresh acquisition');
-  assert.equal(header(h).querySelector('h1').textContent, 'A day in Testville');
+  assert.equal(header(h).querySelector('h1').textContent, 'Your day in Testville');
 });
 
 test('restoring a saved day does not present an expired or undated forecast as fresh', async t => {
@@ -312,7 +315,7 @@ test("a saved day restored the next day shows its own date, never Today", async 
     await first.clock.advance(500);
     await first.fetchMock.respond(first.fetchMock.pending()[0], composedDay());
     await first.clock.advance(50);
-    assert.equal(header(first).querySelector("time").textContent, "Today");
+    assert.match(header(first).querySelector("time").textContent, /^Today · Fri 25 Sept?$/);
     const storage = browserStorage(first.window.localStorage);
     await first.unmount(); first = null;
     t.mock.timers.setTime(new Date("2026-09-26T12:00:00Z").getTime());
@@ -449,7 +452,7 @@ test("switching language keeps the exact accepted answer and its own inputs", as
   translated = await mountPlanner({ url: target.href, storage, sessionStorage, props: { lang: "sv" }, navigationType: "navigate" });
   await translated.clock.advance(2000);
   assert.equal(translated.fetchMock.calls.length, 0, "language is presentation only, not new acquisition");
-  assert.match(translated.container.querySelector("header h1").textContent, /^En dag i Testville$/);
+  assert.match(translated.container.querySelector("header h1").textContent, /^Din dag i Testville$/);
   assert.match(translated.text(), /Place a/);
   assert.match(translated.text(), /Place b/);
   assert.deepEqual(translated.readStorage("parranda:anywhere:last"), before,

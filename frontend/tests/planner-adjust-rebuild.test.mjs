@@ -124,3 +124,29 @@ test("once rebuilt, the panel says what changed and the new stop is marked", asy
   assert.doesNotMatch(rows.find((row) => row.includes("Place a")), /\bnew\b/);
   assert.equal(button(h, /Coffee/).className.includes("parranda-ring"), false, "the ring ends with the wait");
 });
+
+// A kept place is still an intent until the response lands: name that intent
+// while leaving the published route available to read.
+test("ordinary Keep names its current intent and explains a longer retained-day wait", async (t) => {
+  const h = await mountPlanner({ url: PLACE_URL });
+  t.after(() => h.unmount());
+  await h.clock.advance(500);
+  await h.fetchMock.respond(composeCalls(h)[0], FIRST_DAY);
+  await h.clock.advance(50);
+  await click(h, button(h, /^1Place a/));
+  await click(h, button(h, /^Keep this one$/));
+  await h.clock.advance(400);
+  const rebuild = composeCalls(h).at(-1);
+  const header = () => h.container.querySelector("main header");
+  assert.match(header().textContent, /Planning with Place a/);
+  const progress = [...header().querySelectorAll('[aria-live="polite"]')].find(node => /Planning with Place a/.test(node.textContent));
+  assert.equal(progress.closest('[aria-busy="true"]') === null, true, 'progress must be announced while the held route is busy');
+  assert.doesNotMatch(header().textContent, /Your previous day is still shown/);
+  await h.clock.advance(10000);
+  assert.match(header().textContent, /Your previous day is still shown/);
+  assert.match(h.container.querySelector('section[aria-label="The route"]').textContent, /Place a/);
+  await h.fetchMock.respond(rebuild, FIRST_DAY);
+  await h.clock.advance(50);
+  assert.doesNotMatch(header().textContent, /Planning with Place a|Your previous day is still shown/);
+  assert.match(h.text(), /1 place kept/);
+});
