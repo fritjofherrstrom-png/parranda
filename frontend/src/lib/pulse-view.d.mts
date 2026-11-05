@@ -78,12 +78,19 @@ export declare function eventTiming(
         ends_on?: string | null;
         timezone?: string | null;
         time_window?: PulseTimeWindow | null;
+        calendar_fact?: { kind?: string } | null;
       }
     | null
     | undefined,
   lang: "sv" | "en",
   now?: Date,
   selectedDate?: string | null,
+): string;
+
+/** Session uncertainty for source periods; rendered separately from timing. */
+export declare function eventTimingNotice(
+  ev: Parameters<typeof eventTiming>[0],
+  lang: "sv" | "en",
 ): string;
 
 export declare function pulseHealthState(

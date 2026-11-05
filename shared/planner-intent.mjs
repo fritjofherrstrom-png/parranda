@@ -63,7 +63,9 @@ export function normalizeDayEdit(value) {
       !Number.isInteger(value.target_stop_count) || value.target_stop_count < 0 || value.target_stop_count > 6 ||
       !Number.isInteger(value.slot_index) || value.slot_index < 0 || value.slot_index > 5 ||
       (value.replacement_preference !== null && !preferenceKeys.has(value.replacement_preference)) ||
-      (Object.hasOwn(value, "preserve_retained") && typeof value.preserve_retained !== "boolean")) return null;
+      (Object.hasOwn(value, "preserve_retained") && typeof value.preserve_retained !== "boolean") ||
+      (Object.hasOwn(value, "release_extent") && (value.release_extent !== true ||
+        value.action !== "remove" || value.preserve_retained !== false))) return null;
   const retained = value.retained_candidate_ids;
   if (retained.includes(value.candidate_id) || value.removed_candidate_ids.some(id => retained.includes(id)) ||
       value.target_stop_count !== retained.length + (value.action === "replace" ? 1 : 0)) return null;
@@ -77,5 +79,6 @@ export function normalizeDayEdit(value) {
     replacement_preference: value.replacement_preference,
     removed_candidate_ids: [...value.removed_candidate_ids].sort(),
     ...(value.preserve_retained === false ? { preserve_retained: false } : {}),
+    ...(value.release_extent === true ? { release_extent: true } : {}),
   };
 }

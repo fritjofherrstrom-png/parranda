@@ -8,6 +8,19 @@ async function type(h,value) {
  await h.act(()=>{const input=h.document.querySelector('#landingCity');Object.getOwnPropertyDescriptor(h.window.HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new h.window.Event('input',{bubbles:true}));});
 }
 async function key(h,key) {await h.act(()=>h.document.querySelector('#landingCity').dispatchEvent(new h.window.KeyboardEvent('keydown',{key,bubbles:true})));}
+test('two-character East Asian search waits for IME completion and keeps the short Latin guard',async()=>{
+ const h=await mount();try {
+  const input=h.document.querySelector('#landingCity');
+  await h.act(()=>input.dispatchEvent(new h.window.CompositionEvent('compositionstart',{bubbles:true})));
+  await type(h,'京都');await h.clock.advance(250);
+  assert.equal(h.fetchMock.calls.length,0,'an unfinished IME must not search');
+  await h.act(()=>input.dispatchEvent(new h.window.CompositionEvent('compositionend',{bubbles:true})));
+  await h.clock.advance(200);assert.equal(h.fetchMock.calls.length,1);assert.equal(h.fetchMock.calls[0].body.query,'京都');
+  await h.fetchMock.respond(h.fetchMock.calls[0],{status:'ready',choices:[choice('京都市','Japan')]});
+  assert.equal(h.document.querySelector('[role=option]').textContent,'京都市Japan');
+  await type(h,'ha');await h.clock.advance(250);assert.equal(h.fetchMock.calls.length,1);
+ }finally{await h.unmount();}
+});
 test('typing debounces suggestions attached to a combobox; keyboard choice fills the field',async()=>{
  const h=await mount({injected:{__PARRANDA_CITIES__:{rome:{key:'rome',label:'Rome'}}}});try {
   assert.equal([...h.document.querySelectorAll('a')].some(link=>new URL(link.href).searchParams.has('city')),false);
@@ -164,4 +177,33 @@ test('editing the text after choosing a row drops that chosen identity',async()=
   await h.act(()=>h.document.querySelector('form').dispatchEvent(new h.window.Event('submit',{bubbles:true,cancelable:true})));
   assert.equal(h.window.sessionStorage.getItem('parranda:place-choice'),null,'a changed name never travels with the old selection');
  }finally{await h.unmount();}
+});
+
+test('pressing Build my day keeps the open suggestion layout stable until activation', async () => {
+ const h = await mount();
+ try {
+  await type(h, 'Harbour Quarter');
+  await h.clock.advance(200);
+  await h.fetchMock.respond(h.fetchMock.calls[0], {status:'ready', choices:[choice()]});
+  const input = h.document.querySelector('#landingCity');
+  const submit = h.document.querySelector('button[type=submit]');
+  await h.act(() => input.focus());
+  assert.ok(h.document.querySelector('[role=listbox]'));
+  // Browsers focus a pressed submit button before pointer-up. On mobile the
+  // resulting blur used to remove the in-flow list and move the button away
+  // from the pointer, so the click never reached the form. jsdom has no layout;
+  // model only that native focus default, then check the real component state.
+  await h.act(() => {
+   const press = new h.window.MouseEvent('pointerdown', {bubbles:true,cancelable:true,button:0});
+   if (submit.dispatchEvent(press)) submit.focus();
+  });
+  assert.ok(h.document.querySelector('[role=listbox]'), 'the pointer target must not move before release');
+  assert.equal(input.value, 'Harbour Quarter');
+  assert.equal(h.window.sessionStorage.getItem('parranda:place-choice'), null, 'a pointer press must not silently choose the first result');
+  // Keyboard focus still dismisses suggestions normally; the submit button
+  // remains a standard button available to Tab and Enter.
+  await h.act(() => submit.focus());
+  assert.equal(h.document.querySelector('[role=listbox]'), null);
+  assert.equal(h.document.activeElement, submit);
+ } finally { await h.unmount(); }
 });

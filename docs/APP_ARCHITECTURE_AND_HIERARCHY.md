@@ -69,8 +69,8 @@ cost with almost no product traffic.
    whether it is source-backed, whether it is thin (the plan and its trust).
 3. **How do I follow it?** — the ordered stops, the walks between them, a
    route-woven live event, and the map (the plan's geometry). On a phone the
-   stops come first and the map follows them; on a wide screen the map sits
-   beside the day.
+   map's short, still overview pictures the day under its title, before the
+   facts and the stops; on a wide screen the map sits beside the day.
 4. **What else is near it?** — optional detour ideas (explicitly not the route).
 5. **What is happening now?** — Live (weather, events) and Blitz (one next move).
 6. **What did I keep?** — saved days (navigation, not content).
@@ -84,7 +84,7 @@ cost with almost no product traffic.
 | "Local time is derived" | Engine wording | "Local time is inferred from the location" | Say what it means for the reader, not the mechanism |
 | Pick coverage | Italic line at the foot of the route card | Chips under the day facts: covered / partly / not in this day; when every pick is covered, one "All picks included" chip in the facts row instead of repeating the anchor card | The user's intent is part of "what is my day"; a partial or missing pick always shows all of them |
 | Estimates disclaimer | Between title and actions | Map caption | It qualifies the map and the leg numbers |
-| Route line | Solid straight segments across water and buildings | Dotted when it only joins the stops' own coordinates, with a caption | Honest geometry: it is an order, not a street path |
+| Route line | Solid straight segments across water and buildings | Dotted when it only joins the stops' own coordinates; said in "About this day and map", and as a caption under the map once it is opened to be read (expanded on a phone, beside the day on a wide screen) | Honest geometry: it is an order, not a street path. The still overview is a picture of the day, and a caption there stood between the day's summary and its first stop |
 | Detour dots | Always on the map, unexplained | Only while the detour list is open | No mark without its explanation |
 | Woven live event | Its walk shown only inside the card | Same walk connector as every other stop | One visual grammar for the route |
 | Blitz | Small link inside the collapsed Adjust panel | Visible action in the "now" zone below Live, offered only where it can answer (not after an unresolved place or a capacity refusal); its copy says "near you" only for a position anchor | A product pillar should be discoverable, and it belongs with "now" — but never as the answer to a failure it shares |
@@ -98,8 +98,8 @@ cost with almost no product traffic.
 | Curated section | "Extra curated" beside the chips | "Hand-picked in" on its own line above them | Say what a visitor gets, and keep the chips on one row at 320 px |
 | Landing search | Two focus rings (square inside rounded); a placeholder cut off at 320 px | One ring on the field, also after a blocked position; "e.g. Lyon or Kyoto" | Visual noise; text that fits |
 | Returning visitor | No way back to the last day from the landing | "Continue · A day in …" | The planner already restores it; the landing now offers it |
-| Phone day order | Map (in its own tinted card) above "About this day and map" and the stops; no stop on the first screen of an iPhone 17 | Stops first, then the map edge to edge in the column with "About this day and map" under it | The stops are the day, the map its overview. A tall map above the stops pushed the day off the first screen and caught the thumb meant to scroll the page |
-| Day facts | One monospace line, "Today · ≈ 2.5 km on foot · longest stretch 1.3 km · 4 stops", that wrapped with a separator opening the second line | Quiet chips: distance on foot, number of stops, and the selected date's weather ("Rain · high 12°") when the server read one and it is not stale; no day word, no longest stretch | The anchor card already says which day and each stop states its own walk; weather is a fact the day is planned around, shown only when it is real |
+| Phone day order | Map (in its own tinted card) above "About this day and map" and the stops; no stop on the first screen of an iPhone 17. Later the stops first, then the map; then (#671) a date and weather line, the facts, and the map with its caption and About before the stops | The title with Change, the picks line ("Today · Culture · Day rhythm: Balanced") with Adjust, the map's short, still overview edge to edge in the column, the facts, then the stops; "About this day and map" closes the route | The reviewed Linje prototype (30 Oct 2026): the summary reads as one unit, Change and Adjust stand one above the other, and the first stop starts on the first screen. The overview is short and takes no pan or zoom until expanded, so it never catches the thumb meant to scroll the page |
+| Day facts | One monospace line, "Today · ≈ 2.5 km on foot · longest stretch 1.3 km · 4 stops", that wrapped with a separator opening the second line | Quiet chips: distance on foot, number of stops, and the selected date's forecast as one chip — the sky's icon, then the high — when the server read one for that date and it is fresh; no day word, no longest stretch | The picks line says which day ("Today", "Tomorrow", or the date of any other day) and each stop states its own walk; weather is a fact the day is planned around, shown only when it is real |
 | Adjust panel | "Let Parranda choose" on a row of its own under the rhythm scale; "Changes apply on their own" as the panel's last line; 44px-tall mood pills over three rows | "Let Parranda choose" beside the rhythm heading, still apart from the three-step scale; "The day rebuilds as you change it" under the panel heading; 36px pills with a 44px touch target | Less height for the same choices, the explanation where the panel starts, no smaller target for the thumb |
 
 ### Principles for future surfaces

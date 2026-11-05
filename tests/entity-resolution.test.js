@@ -92,6 +92,46 @@ test("wikidataIdOf reads id from evidence source urls or known fields", () => {
   assert.equal(wikidataIdOf(curated()), null);
 });
 
+test("same-place merge preserves exact source identities and ages without counting duplicate observations twice", () => {
+  const observation = (url, observed_at) => ({ claim_type: 'existence', value: true,
+    source_ref: { provider_id: 'osm', source_family: 'map', source_tier: 'inferred', url },
+    observed_at, freshness: 'fresh', weight: 1 });
+  const older = external({ id: 'a', evidence: [observation('https://www.openstreetmap.org/node/1', '2024-01-01')] });
+  const newer = external({ id: 'b', evidence: [observation('https://www.openstreetmap.org/way/2', '2026-06-03')] });
+  const duplicate = external({ id: 'c', evidence: [observation('https://www.openstreetmap.org/way/2', '2026-06-03')] });
+  for (const input of [[older, newer, duplicate], [newer, older, duplicate], [duplicate, newer, older]]) {
+    const result = resolveCandidateIdentity(input, { now: NOW });
+    assert.equal(result.candidates.length, 1);
+    assert.equal(result.summary.merged_count, 2);
+    assert.equal(result.candidates[0].evidence.length, 2);
+    assert.deepEqual(new Set(result.candidates[0].evidence.map(item => `${item.source_ref.url}|${item.observed_at}`)),
+      new Set(['https://www.openstreetmap.org/node/1|2024-01-01', 'https://www.openstreetmap.org/way/2|2026-06-03']));
+    const { reduceEvidence } = require('../server/candidates/evidence-reducer');
+    assert.equal(reduceEvidence(result.candidates[0].evidence, { now: NOW }).provenance_diversity, 1);
+  }
+});
+
+test("retained same-family observations cannot change canonical place identity with provider order", () => {
+  const { createExternalOpenProvider } = require('../server/place-candidates/external-open-provider');
+  const rows = [
+    { id: 'a', type: 'viewpoint', lat: 55.6 },
+    { id: 'b', type: 'viewpoint', lat: 55.6001 },
+    { id: '0', type: 'park', lat: 55.6002 },
+  ].map(row => ({ ...row, name: 'Cedar Grove', lng: 13,
+    sources: [{ provider: 'osm', family: 'map', tier: 'inferred', url: `https://www.openstreetmap.org/node/${row.id}` }] }));
+  for (const indices of [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]) {
+    const candidates = createExternalOpenProvider({ key: 'canonical-order' }, {
+      dataset: indices.map(i => rows[i]), observedAt: NOW,
+    }).listCandidates();
+    const result = resolveCandidateIdentity(candidates, { now: NOW });
+    assert.equal(result.candidates.length, 1);
+    const [canonical] = result.candidates;
+    assert.deepEqual({ id: canonical.id, type: canonical.type, lat: canonical.lat, lng: canonical.lng },
+      { id: '0', type: 'park', lat: 55.6002, lng: 13 }, indices.join(','));
+    assert.equal(canonical.evidence.length, 9, 'all three source observations retain their three actual claims');
+  }
+});
+
 // --- matchIdentity ---------------------------------------------------------
 test("close + same distinctive name + compatible category → same place", () => {
   const v = matchIdentity(curated(), external({ lat: 41.88965 }));

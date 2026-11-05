@@ -5,24 +5,21 @@ const {createHash}=require('node:crypto');
 const {createSourceCache}=require('./source-cache');
 const {sanitizeTrustedSpatialScope}=require('./spatial-scope');
 const {isValidCoordinate}=require('../planner/agnostic-place-intake');
+const {isPlaceSearchQueryEligible}=require('../../shared/place-search-query.mjs');
 const DEFAULT_ENDPOINT='https://photon.komoot.io/api/';
 const LAYERS=['city','district','locality','county','state','country'];
 const KINDS={city:'settlement',district:'district',locality:'settlement',county:'region',state:'region',country:'region'};
 // Photon ranks exact default-name matches ahead of importance, so five hamlets
 // called "Malmo" can push Malmö (or every US "Lisbon" push Lisboa) past the
-// visible rows. Read a wider page; rank by visible-name match first, and only
-// within comparable exact/prefix matches lift major places — cities and countries
-// by their own OSM tag. Nonprefix relevance keeps Photon's order; no alias is
-// inferred from inclusion in the page.
+// visible rows. Keep native names canonical, but obtain source-owned English
+// matching names when a Latin query leaves a major place in the fuzzy tier.
+// A name on another page is evidence only for the same geographic OSM identity.
 const PROVIDER_LIMIT=20;
 const VISIBLE_LIMIT=5;
 const MAJOR_PLACES=['city','country'];
 const LETTERS={ø:'o',æ:'ae',œ:'oe',ß:'ss',đ:'d',ł:'l',ı:'i',þ:'th'};
 const fold=value=>String(value||'').normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase().replace(/[øæœßđłıþ]/g,letter=>LETTERS[letter]).replace(/\s+/g,' ').trim();
-// Only the source-backed visible name establishes exact/prefix relevance.
-// Photon's mapped response has no matched-alias evidence: a nonprefix name
-// may be an exonym or merely fuzzy. Preserve provider order for that tier;
-// never infer equivalence or lift a fuzzy major place over an exact small one.
+// A nonprefix title alone never establishes equivalence to the query.
 function matchTier(title,query) {
  const t=fold(title),q=fold(query);
  return q&&t===q?0:q&&t.startsWith(q)?1:2;
@@ -62,9 +59,23 @@ function mapFeature(feature,language=null) {
 
 // Stable: match tier first, then major places, then provider order.
 function rankChoices(choices,query) {
- return choices.map((choice,index)=>({choice,index,tier:matchTier(choice.title,query)}))
+ return choices.map((choice,index)=>({choice,index,tier:Math.min(matchTier(choice.title,query),...(choice.matchNames||[]).map(name=>matchTier(name,query)))}))
   .sort((a,b)=>a.tier-b.tier||(a.tier<2 ? Number(b.choice.major)-Number(a.choice.major) : 0)||a.index-b.index)
   .map(entry=>entry.choice).slice(0,VISIBLE_LIMIT);
+}
+
+function needsEnglishNames(choices,query) {
+ return /\p{Script=Latin}/u.test(query)&&!(/[^\p{Script=Latin}\p{M}\p{N}\p{P}\p{Zs}]/u.test(query))&&
+  choices.some(choice=>choice.major&&matchTier(choice.title,query)===2);
+}
+function joinMatchingNames(choices,translated) {
+ const names=new Map(translated.map(choice=>[choice.candidate.osm_ref,choice]));
+ return choices.map(choice=>{
+  const alternate=names.get(choice.candidate.osm_ref);
+  if(!alternate||alternate.kind!==choice.kind||alternate.candidate.osm_class!==choice.candidate.osm_class||
+   Math.abs(alternate.candidate.lat-choice.candidate.lat)>.001||Math.abs(alternate.candidate.lng-choice.candidate.lng)>.001)return choice;
+  return {...choice,matchNames:[alternate.title]};
+ });
 }
 
 // Race caller settlement, while still observing a transport that ignores abort.
@@ -78,7 +89,7 @@ function untilAbort(work,signal) {
 }
 
 function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fetch,now=()=>Date.now(),sleep=ms=>new Promise(r=>setTimeout(r,ms)),minIntervalMs=750,timeoutMs=5000}={}) {
- const cache=createSourceCache({namespace:'place-suggestions-v3',ttlMs:60*60*1000,maxEntries:256,now});
+ const cache=createSourceCache({namespace:'place-suggestions-v4',ttlMs:60*60*1000,maxEntries:256,now});
  const jobs=new Map();
  const budgetMs=Math.max(1,Math.min(5000,Number(timeoutMs)||5000));
  let pending=0,lastStarted=-Infinity,tail=Promise.resolve();
@@ -91,33 +102,41 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
   ownerSignal.addEventListener('abort',cancelQueued,{once:true});
   if(ownerSignal.aborted)cancelQueued();
   const work=tail.catch(()=>{}).then(async()=>{
-   started=true;let transport=null,response=null;
+   started=true;let transport=null,response=null,fallback=null;
    try {
-    if(ownerSignal.aborted || performance.now()>=deadline)return {status:'unavailable',choices:[]};
-    const wait=Math.max(0,lastStarted+minIntervalMs-performance.now());
-    if(wait)await untilAbort(sleep(wait),ownerSignal);
-    if(ownerSignal.aborted || performance.now()>=deadline)return {status:'unavailable',choices:[]};
-    lastStarted=performance.now();
-    const url=new URL(endpoint);url.searchParams.set('q',query);url.searchParams.set('limit',String(PROVIDER_LIMIT));
-    LAYERS.forEach(layer=>url.searchParams.append('layer',layer));
-    // Keep source-owned local names: forcing the UI language can translate an
-    // exact native-query match into a nonprefix title before visible-name ranking.
-    if(context.near){url.searchParams.set('lat',String(context.near.lat));url.searchParams.set('lon',String(context.near.lng));url.searchParams.set('zoom','12');}
-    transport=Promise.resolve().then(()=>fetcher(url.toString(),{
-     headers:{'User-Agent':'Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)'},signal:ownerSignal,
-    }));
-    response=await untilAbort(transport,ownerSignal);
-    if(response.status===429)return {status:'busy',choices:[],retry_after_ms:1000};
-    if(!response.ok)return {status:'unavailable',choices:[]};
-    const data=await untilAbort(response.json(),ownerSignal);
-    if(ownerSignal.aborted || performance.now()>=deadline || !Array.isArray(data?.features))return {status:'unavailable',choices:[]};
-    const seen=new Set();const choices=[];
-    for(const feature of data.features.slice(0,30)) {
-     const choice=mapFeature(feature,context.language);if(!choice||seen.has(choice.candidate.osm_ref))continue;
-     seen.add(choice.candidate.osm_ref);choices.push(choice);
+    let canonical=[];
+    for(const language of [null,'en']) {
+     if(ownerSignal.aborted || performance.now()>=deadline)return {status:'unavailable',choices:[]};
+     const wait=Math.max(0,lastStarted+minIntervalMs-performance.now());
+     if(wait)await untilAbort(sleep(wait),ownerSignal);
+     if(ownerSignal.aborted || performance.now()>=deadline)return {status:'unavailable',choices:[]};
+     lastStarted=performance.now();
+     const url=new URL(endpoint);url.searchParams.set('q',query);url.searchParams.set('limit',String(PROVIDER_LIMIT));
+     LAYERS.forEach(layer=>url.searchParams.append('layer',layer));
+     // Never force the UI language on the canonical page (Göteborg != Gothenburg).
+     if(language)url.searchParams.set('lang',language);
+     if(context.near){url.searchParams.set('lat',String(context.near.lat));url.searchParams.set('lon',String(context.near.lng));url.searchParams.set('zoom','12');}
+     transport=Promise.resolve().then(()=>fetcher(url.toString(),{
+      headers:{'User-Agent':'Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)'},signal:ownerSignal,
+     }));
+     response=await untilAbort(transport,ownerSignal);
+     if(response.status===429)return fallback||{status:'busy',choices:[],retry_after_ms:1000};
+     if(!response.ok)return fallback||{status:'unavailable',choices:[]};
+     const data=await untilAbort(response.json(),ownerSignal);
+     if(ownerSignal.aborted || performance.now()>=deadline)return {status:'unavailable',choices:[]};
+     if(!Array.isArray(data?.features))return fallback||{status:'unavailable',choices:[]};
+     const seen=new Set();const choices=[];
+     for(const feature of data.features.slice(0,30)) {
+      const choice=mapFeature(feature,context.language);if(!choice||seen.has(choice.candidate.osm_ref))continue;
+      seen.add(choice.candidate.osm_ref);choices.push(choice);
+     }
+     if(language)return {status:'ready',choices:rankChoices(joinMatchingNames(canonical,choices),query)};
+     canonical=choices;
+     if(needsEnglishNames(choices,query)) {
+      fallback={status:'ready',choices:rankChoices(choices,query),cacheable:false};
+     } else return {status:'ready',choices:rankChoices(choices,query)};
     }
-    return {status:'ready',choices:rankChoices(choices,query)};
-   }catch(_){return {status:'unavailable',choices:[]};}finally{
+   }catch(_){return !ownerSignal.aborted&&fallback?fallback:{status:'unavailable',choices:[]};}finally{
     if(ownerSignal.aborted && response?.body){
      try{Promise.resolve(response.body.cancel()).catch(()=>{});}catch{}
     }
@@ -132,7 +151,7 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
  return async function suggestions(raw,{language,near,signal}={}) {
   if(signal?.aborted)return {status:'unavailable',choices:[]};
   const query=typeof raw==='string'?raw.trim().replace(/\s+/g,' '):'';
-  if(query.length<3||query.length>200)return {status:'ready',choices:[]};
+  if(!isPlaceSearchQueryEligible(query))return {status:'ready',choices:[]};
   const context={language:/^[a-z]{2}$/.test(language||'')?language:null,near:near&&isValidCoordinate(near.lat,near.lng)?{lat:Math.round(near.lat*100)/100,lng:Math.round(near.lng*100)/100}:null};
   const key=createHash('sha256').update(JSON.stringify([endpoint,query.toLowerCase(),context])).digest('hex');
   let job=jobs.get(key);
@@ -143,7 +162,7 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
    job={controller,owners:new Set(),done:false,promise:null};
    jobs.set(key,job);
    const produced=cache.get(key,()=>acquire(query,context,controller.signal,deadline),{
-    shouldStore:value=>value.status==='ready' && performance.now()<deadline,signal:controller.signal,
+    shouldStore:value=>value.status==='ready' && value.cacheable!==false && performance.now()<deadline,signal:controller.signal,
    });
    job.promise=untilAbort(produced,controller.signal)
    .then(value=>{job.done=true;return value;},()=>{job.done=true;return {status:'unavailable',choices:[]};}).finally(()=>{

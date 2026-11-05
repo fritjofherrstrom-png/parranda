@@ -145,5 +145,5 @@ test("product Blitz calls the trusted contract without re-composing or mutating 
   assert.match(body, /routeAnchorCoords/);
   assert.doesNotMatch(body, /setSelected|resolveAndRun|execute\(/);
   assert.doesNotMatch(plannerSource, /chooseBlitzPreferences/);
-  assert.match(plannerSurfaceSource(), /It does not change today's route/);
+  assert.match(plannerSurfaceSource(), /your day stays as it is/);
 });

@@ -39,11 +39,25 @@ test('built Live groups forty bookings, preserves local supply and reaches later
  await page.goto(origin+'/anywhere?place=Fixture%20area&prefs=culture&day=1&rhythm=full&lang=en');
  await page.getByRole('button',{name:'Explore live',exact:true}).waitFor();await page.getByRole('button',{name:'Explore live',exact:true}).click();
  const sheet=page.getByRole('dialog',{name:'Live events',exact:true});assert.equal(await sheet.count(),1,'Live opens before source completion');
- release();await sheet.getByText('Published exhibition programme',{exact:true}).waitFor({timeout:15000});
+ // The day's own Live answer can land after the sheet's first rows: a terminal
+ // completion, then the route upgrade it authorizes. An applied upgrade is a
+ // new day, so the open sheet refreshes and hides its rows meanwhile (CI read
+ // no programme there). Assert once that answer and the refresh are complete.
+ const pathOf=r=>new URL(r.url()).pathname;let upgradeAnswered=false;
+ page.on('response',r=>{if(pathOf(r)==='/api/planner-live-route-upgrade')upgradeAnswered=true;});
+ const refresh=new Promise(resolve=>page.on('request',q=>{if(upgradeAnswered&&pathOf(q)==='/api/live-events')resolve(q);}));
+ const terminal=page.waitForResponse(r=>pathOf(r)==='/api/planner-live-completion'&&r.status()===200,{timeout:15000});
+ const upgrade=page.waitForResponse(r=>pathOf(r)==='/api/planner-live-route-upgrade',{timeout:15000});upgrade.catch(()=>{});
+ release();
+ if((await(await terminal).json()).live_completion?.route_upgrade==='explicit_request'&&
+  (await(await upgrade).json()).live_route_upgrade?.state==='applied')await(await refresh).response();
+ await sheet.locator('[aria-busy="true"]').first().waitFor({state:'detached'});
+ await sheet.getByText('Published exhibition programme',{exact:true}).waitFor({timeout:15000});
  assert.equal(await sheet.getByText('Published exhibition programme',{exact:true}).count(),1);
  const program=sheet.locator('li').filter({has:page.getByText('Published exhibition programme',{exact:true})}).first();
- assert.match(await program.locator('summary').innerText(),/^40 occurrences$/);await program.locator('summary').click();
- assert.equal(await program.locator('details li').count(),40);assert.equal(await program.getByRole('button',{name:'Plan with this event',exact:true}).count(),0,'morning bookings do not gain evening eligibility by grouping');
+ const occurrenceSummary=program.locator('summary').filter({hasText:/^40 occurrences$/});
+ assert.equal(await occurrenceSummary.count(),1);await occurrenceSummary.click();
+ assert.equal(await occurrenceSummary.locator('..').locator('li').count(),40);assert.equal(await program.getByRole('button',{name:'Plan with this event',exact:true}).count(),0,'morning bookings do not gain evening eligibility by grouping');
  const accepted=liveResponses.find(x=>x.tonight?.some(e=>e.display_group_kind==='source_program'));
  assert.ok(accepted);const group=accepted.tonight.find(x=>x.title==='Published exhibition programme');
  assert.equal(group.occurrences.length,40);assert.deepEqual(group.occurrences.map(x=>x.source_occurrence_id),slots.map(x=>x.id));

@@ -110,6 +110,7 @@ const EXACT_TYPE_MAP = new Map([
   ["antique_store", { type: "vintage-shop", tags: ["vintage", "antique"] }],
   ["second_hand_store", { type: "vintage-shop", tags: ["second_hand"] }],
   ["second_hand_clothing_store", { type: "vintage-shop", tags: ["second_hand"] }],
+  ["used_bookstore", { type: "vintage-shop", tags: ["second_hand"] }],
 ]);
 
 // Reviewed PRIMARY labels from Overture's 2026-03-04 taxonomy table, pinned in
@@ -560,6 +561,8 @@ function corroborationSelection(records, primaryRecords) {
   return { retained, ambiguous };
 }
 
+const { attestPublicPlaceRecords } = require('./source-url-evidence');
+
 function createOvertureSource({
   queryRows = null,
   releaseResolver = resolveLatestOvertureRelease,
@@ -663,13 +666,13 @@ function createOvertureSource({
   function select(records, { lat, lng, requestedIntents = [], walkingTargetBand = null, corroborationRecords = [] } = {}) {
     if (!Array.isArray(records) || records.source_error) return records;
     if (!validCoordinate(lat, lng)) return [];
-    return selectRecords(records, {
+    return attestPublicPlaceRecords(selectRecords(records, {
       anchor: { lat, lng },
       requestedIntents,
       walkingTargetBand,
       corroborationRecords,
       limit: boundedLimit,
-    });
+    }), 'overture');
   }
 
   const loadOvertureAround = async function loadOvertureAround(request = {}) {
@@ -687,6 +690,17 @@ function createOvertureSource({
       || !validAssets(receipt?.assets, receipt?.release)) return false;
     const query = sampleQuery({ release: receipt.release, parquetPaths: receipt.assets.map(asset => asset.path), lat: pair[0], lng: pair[1] });
     return Boolean(query && receipt.queryHash === hashQuery(query));
+  };
+  // This additive leaf changes the sample, not the facts in its predecessor.
+  // Recognize that one exact SQL contract only for positive outage fallback;
+  // it cannot answer fresh coverage, prove absence or take HEAD-only renewal.
+  loadOvertureAround.validatePreviousReceipt = (receipt, key) => {
+    const pair = String(key).split(':')[0].split(',').map(Number);
+    if (!validCoordinate(pair[0], pair[1]) || cacheKeyFor({ lat: pair[0], lng: pair[1] }) !== key
+      || !validAssets(receipt?.assets, receipt?.release)) return false;
+    const query = sampleQuery({ release: receipt.release, parquetPaths: receipt.assets.map(asset => asset.path), lat: pair[0], lng: pair[1] });
+    const previousQuery = query?.replace(/, 'used_bookstore'/g, '');
+    return Boolean(previousQuery && previousQuery !== query && receipt.queryHash === hashQuery(previousQuery));
   };
   return loadOvertureAround;
 }

@@ -11,8 +11,12 @@ const LAST = 'parranda:anywhere:last';
 const calls = h => h.fetchMock.calls.filter(c => c.url.startsWith('/api/route-recommendations'));
 const button = (h, text) => [...h.container.querySelectorAll('button')].find(b => b.textContent.includes(text));
 const click = (h, element) => h.act(() => element.dispatchEvent(new h.window.MouseEvent('click', { bubbles: true, cancelable: true })));
-const day = (label = 'Previous place', ref = 'r100', receipt = 'previous-receipt') => ({
-  days: [{ date: '2026-10-09', experimental_agnostic_route_applied: true, primary_route: {
+const browserStorage = storage => Object.fromEntries(Array.from({ length: storage.length }, (_, index) => {
+  const key = storage.key(index);
+  return [key, JSON.parse(storage.getItem(key))];
+}));
+const day = (dateIso, label = 'Previous place', ref = 'r100', receipt = 'previous-receipt') => ({
+  days: [{ date: dateIso, experimental_agnostic_route_applied: true, primary_route: {
     id: '__agnostic_compose__', main_stops: [
       { id: 'a', label: 'Place a', lat: 41.9, lng: 12.49, type: 'museum' },
       { id: 'b', label: 'Place b', lat: 41.901, lng: 12.49, type: 'restaurant' },
@@ -28,15 +32,17 @@ const failure = (kind, candidates = []) => ({ days: [], agnostic_route_output_ex
 async function previousDay() {
   const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Previous&lang=en' });
   try {
-    await h.clock.advance(500); await h.fetchMock.respond(calls(h)[0], day()); await h.clock.advance(50);
+    await h.clock.advance(500);
+    const call = calls(h)[0];
+    await h.fetchMock.respond(call, day(call.body.dates[0])); await h.clock.advance(50);
     const saved = h.readStorage(LAST); assert.equal(saved.classification.status, 'composed'); return saved;
   } finally { await h.unmount(); }
 }
 const copyCases = [
-  ['place_ref_not_found', /reference could not be found/i, /platsreferensen kunde inte hittas/i, /right now|later|just nu|senare/],
+  ['place_ref_not_found', /selected place could not be found/i, /valda platsen kunde inte hittas/i, /right now|later|just nu|senare/],
   ['place_ref_unavailable', /could not be checked right now/i, /kunde inte kontrolleras just nu/i, /could not be found|kunde inte hittas/],
-  ['place_ref_unsupported', /geographic type.*not supported/i, /geografisk identitet.*inte stöds/i, /spelling|stavning/],
-  ['place_ref_conflict', /conflicts.*place choices/i, /platsval.*inte överens/i, /spelling|stavning/],
+  ['place_ref_unsupported', /day cannot be planned for this place/i, /inte att planera en dag för den här platsen/i, /spelling|stavning/],
+  ['place_ref_conflict', /place choices do not match/i, /platsval.*inte överens/i, /spelling|stavning/],
 ];
 for (const [kind, en, sv, misleading] of copyCases) for (const lang of ['en', 'sv']) {
   test(`${kind} in ${lang} explains the reference failure without borrowing a saved or unverified name`, async () => {
@@ -84,7 +90,7 @@ test('missing exact ref offers explicit replacements without exposing geolocatio
     const chosen = calls(h)[1];
     assert.equal(chosen.body.place_ref, 'r200');
     assert.equal(chosen.body.place_selection, 'replacement-receipt');
-    await h.fetchMock.respond(chosen, day('Chosen replacement', 'r200', 'replacement-receipt')); await h.clock.advance(50);
+    await h.fetchMock.respond(chosen, day(chosen.body.dates[0], 'Chosen replacement', 'r200', 'replacement-receipt')); await h.clock.advance(50);
     const stored = h.readStorage(LAST);
     assert.equal(stored.inputs.placeLabel, 'Chosen replacement');
     assert.equal(stored.inputs.placeRef, 'r200');
@@ -92,16 +98,27 @@ test('missing exact ref offers explicit replacements without exposing geolocatio
     const addressAfter = new URLSearchParams(h.window.location.search);
     assert.equal(addressAfter.get('place_ref'), 'r200');
     assert.equal(addressAfter.get('place'), 'Chosen replacement');
-    const copied = [];
-    Object.defineProperty(h.window.navigator, 'clipboard', { configurable: true, value: { writeText: async text => copied.push(text) } });
-    await click(h, [...h.container.querySelectorAll('button')].find(b => /^Share/.test(b.getAttribute('aria-label') || b.textContent)));
-    await h.clock.advance(10);
-    assert.equal(new URL(copied[0]).searchParams.get('place_ref'), 'r200');
+    assert.ok(![...h.container.querySelectorAll('button')].some(b => /^Share/.test(b.getAttribute('aria-label') || b.textContent)),
+      'an unissued fixture has no exact Share authority and cannot fall back to input sharing');
+    assert.match(h.text(), /Exact sharing is unavailable/);
     const reloadUrl = `http://localhost/anywhere${h.window.location.search}`;
+    const historyState = structuredClone(h.window.history.state);
+    const storage = browserStorage(h.window.localStorage);
+    const sessionStorage = browserStorage(h.window.sessionStorage);
     await h.unmount();
     mounted = false;
-    const again = await mountPlanner({ url: reloadUrl });
-    try { await again.clock.advance(500); assert.equal(calls(again)[0].body.place_ref, 'r200'); assert.equal(calls(again)[0].body.place_selection, undefined); }
+    const again = await mountPlanner({ url: reloadUrl, historyState, storage, sessionStorage, navigationType: 'reload' });
+    try {
+      await again.clock.advance(500);
+      assert.equal(again.fetchMock.calls.length, 0, 'the accepted view reloads without revalidation or receipt reuse');
+      assert.match(again.text(), /Place a/);
+      assert.equal(new URLSearchParams(again.window.location.search).get('place_ref'), 'r200');
+      await click(again, button(again, 'Adjust'));
+      await click(again, button(again, 'Tomorrow'));
+      await again.clock.advance(500);
+      assert.equal(calls(again)[0].body.place_ref, 'r200', 'an explicit later request still carries the chosen durable identity');
+      assert.equal(calls(again)[0].body.place_selection, undefined, 'private navigation never renews a one-shot receipt');
+    }
     finally { await again.unmount(); }
   } finally { if (mounted) await h.unmount(); }
 });
@@ -124,7 +141,7 @@ test('explicit venue replacement without a durable ref keeps its real server rec
   const resolved = await resolveAgnosticIntake({ placeQuery: chosen.body.place_query, placeRef: chosen.body.place_ref, placeSelection: chosen.body.place_selection, placeResolver: resolver, placeSelectionStore: store });
   assert.deepEqual(resolved.anchor, { lat: venue.lat, lng: venue.lng }, 'offered receipt validates against its query');
   assert.equal(resolved.intake.resolved.label, venue.label);
-  const response = day(venue.label, undefined, chosen.body.place_selection);
+  const response = day(chosen.body.dates[0], venue.label, undefined, chosen.body.place_selection);
   response.agnostic_route_output_experiment.intake = resolved.intake;
   await h.fetchMock.respond(chosen, response); await h.clock.advance(50);
   const stored = h.readStorage(LAST);

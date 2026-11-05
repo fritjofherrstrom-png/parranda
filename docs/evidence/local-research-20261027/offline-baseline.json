@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "evaluation_scope": "offline_source_reading_only",
+  "new_api_calls": 0,
+  "new_api_cost_usd": 0,
+  "corpus_case_count": 8,
+  "baseline": {
+    "true_positive": 5,
+    "false_positive": 0,
+    "false_negative": 3,
+    "useful_events": 3,
+    "duplicate_rows": 0,
+    "precision": 1,
+    "recall": 0.625,
+    "correct_source_count": 2
+  },
+  "candidate": null,
+  "cases": [
+    {
+      "id": "regional-programme",
+      "origin": "captured_reduced",
+      "document_sha256": "137357b4fe16a9ec6f82ebdf7a24ef61cf50eb6c14b2e871043bf0c369dd5cab",
+      "reader_document_sha256": "a35dfbf31f6bc3a4b2c6232c19db1f4d4fd86df4236d48419007e01e1f836b6f",
+      "baseline": {
+        "events": [
+          {
+            "title": "KM Maskin och Björks Matvagn",
+            "date": "2026-10-30",
+            "time": "18:00",
+            "place": "KM Maskin och Björks Matvagn, Borrby",
+            "programme": "Programmet Österlen Lyser 2026"
+          },
+          {
+            "title": "BTK Ajax/Österlen",
+            "date": "2026-10-30",
+            "time": "18:00",
+            "place": "BTK Ajax/Österlen, Borrby",
+            "programme": "Programmet Österlen Lyser 2026"
+          },
+          {
+            "title": "Kiviks Hotell Konferens och Spa",
+            "date": "2026-10-31",
+            "time": "08:00",
+            "place": "Kiviks Hotell Konferens och Spa, Kivik",
+            "programme": "Programmet Österlen Lyser 2026"
+          },
+          {
+            "title": "Kiviks Hotell Konferens och Spa",
+            "date": "2026-11-01",
+            "time": "08:00",
+            "place": "Kiviks Hotell Konferens och Spa, Kivik",
+            "programme": "Programmet Österlen Lyser 2026"
+          }
+        ],
+        "outcomes": [
+          {
+            "adapter": "official_program_article",
+            "status": "ok",
+            "reason": null,
+            "event_rows": 4
+          }
+        ],
+        "fixture_fetch_count": 3,
+        "true_positive": 4,
+        "false_positive": 0,
+        "false_negative": 0,
+        "useful_events": 2,
+        "duplicate_rows": 0
+      }
+    },
+    {
+      "id": "sv-notice",
+      "origin": "authored_control",
+      "document_sha256": "896d05a177532bb6a1816486e50eabd2996f394ca857fe713b86c1ff93bf532e",
+      "reader_document_sha256": "93670c4696913be07470d8528dc08d39d22879350f00c643403eddd6f209afba",
+      "baseline": {
+        "events": [],
+        "outcomes": [],
+        "fixture_fetch_count": 2,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 1,
+        "useful_events": 0,
+        "duplicate_rows": 0
+      }
+    },
+    {
+      "id": "fr-notice",
+      "origin": "authored_control",
+      "document_sha256": "6f2acdff76b1638880e0f8d1dd2ba9b8482df92d6c035d40280e08195167aedd",
+      "reader_document_sha256": "308a8efa7e1af787bfd82461b443360c2a5abd18566fa147c0595bca0c00695b",
+      "baseline": {
+        "events": [],
+        "outcomes": [],
+        "fixture_fetch_count": 2,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 1,
+        "useful_events": 0,
+        "duplicate_rows": 0
+      }
+    },
+    {
+      "id": "es-notice",
+      "origin": "authored_control",
+      "document_sha256": "d6c53b897841d70314a06443f31072891f373da00f288e4cd3eb59010761a34c",
+      "reader_document_sha256": "108a833578419fe9496c18d05ebe8c14e5c00300cd2673f78939405061f59c28",
+      "baseline": {
+        "events": [],
+        "outcomes": [],
+        "fixture_fetch_count": 2,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 1,
+        "useful_events": 0,
+        "duplicate_rows": 0
+      }
+    },
+    {
+      "id": "schema-calendar",
+      "origin": "authored_control",
+      "document_sha256": "45b8ad258cc8ba3b9106868aa156de1275e11669dfcaed11756fa2891d1312e7",
+      "reader_document_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "baseline": {
+        "events": [
+          {
+            "title": "Harbour concert",
+            "date": "2026-10-30",
+            "time": "18:00",
+            "place": "Harbour Hall"
+          }
+        ],
+        "outcomes": [
+          {
+            "adapter": "schema_org_html",
+            "status": "ok",
+            "reason": null,
+            "event_rows": 1
+          }
+        ],
+        "fixture_fetch_count": 3,
+        "true_positive": 1,
+        "false_positive": 0,
+        "false_negative": 0,
+        "useful_events": 1,
+        "duplicate_rows": 0
+      }
+    },
+    {
+      "id": "cancelled",
+      "origin": "authored_control",
+      "document_sha256": "a10e13d4c5b8fe5210bd5143968ae9e35747a072286d5e9969d6aee937498d4d",
+      "reader_document_sha256": "c85dadab2707db02a74b21fc4eb36c270b5e039cf526b1fa11c2b55ca3bab4bd",
+      "baseline": {
+        "events": [],
+        "outcomes": [],
+        "fixture_fetch_count": 2,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 0,
+        "useful_events": 0,
+        "duplicate_rows": 0
+      }
+    },
+    {
+      "id": "missing-year",
+      "origin": "authored_control",
+      "document_sha256": "7d5338b1e2c38e02ec6addf415f3c62de8cb063b2ca6c00bc9d1f373ac88ebb7",
+      "reader_document_sha256": "c9d7da47a133485554e4af12435e385dacb4ef6170b9c1b6a4e7352df66e078d",
+      "baseline": {
+        "events": [],
+        "outcomes": [],
+        "fixture_fetch_count": 2,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 0,
+        "useful_events": 0,
+        "duplicate_rows": 0
+      }
+    },
+    {
+      "id": "injection",
+      "origin": "authored_control",
+      "document_sha256": "595a8913a109e98937e2b20b90819de0dfb81ed4967668ae124c62a4032c24e6",
+      "reader_document_sha256": "bd0ebe778d805ac1a9548645630b04d2444f87d2f7ba1caf3944c1acadc6930f",
+      "baseline": {
+        "events": [],
+        "outcomes": [],
+        "fixture_fetch_count": 2,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 0,
+        "useful_events": 0,
+        "duplicate_rows": 0
+      }
+    }
+  ]
+}

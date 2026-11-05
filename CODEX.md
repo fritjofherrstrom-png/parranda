@@ -1,5 +1,14 @@
 # Parranda Codex Project Context
 
+## Product direction reaffirmed (2026-10-27)
+
+Fritjof wants to consider a cheap model that strengthens the engine, including
+source discovery, difficult source interpretation and a better user experience.
+Carry this open product track into future engine work; model/provider, bounded
+use case, budget and value remain to be evaluated. See the dated entry in
+[`MEMORY.md`](MEMORY.md). This records the direction without activating a paid
+service or changing the current delivery's cost boundary below.
+
 ## Current cost boundary (2026-10-12)
 
 Fritjof requires this Live delivery to use no newly activated paid APIs,

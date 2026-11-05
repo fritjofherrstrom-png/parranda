@@ -1,0 +1,643 @@
+TAP version 13
+# Subtest: a persisted first-page-only Ticketmaster pool cannot bypass the bounded pagination policy
+ok 1 - a persisted first-page-only Ticketmaster pool cannot bypass the bounded pagination policy
+  ---
+  duration_ms: 38.516089
+  type: 'test'
+  ...
+# Subtest: a persisted first-day-only pool cannot suppress newly separated source occurrences
+ok 2 - a persisted first-day-only pool cannot suppress newly separated source occurrences
+  ---
+  duration_ms: 6.170278
+  type: 'test'
+  ...
+# Subtest: a persisted empty pool from the old venue policy cannot suppress a corrected collection
+ok 3 - a persisted empty pool from the old venue policy cannot suppress a corrected collection
+  ---
+  duration_ms: 4.465228
+  type: 'test'
+  ...
+# Subtest: default supply is null unless env-enabled, a function when enabled
+ok 4 - default supply is null unless env-enabled, a function when enabled
+  ---
+  duration_ms: 7.364089
+  type: 'test'
+  ...
+# Subtest: a cold covered anchor returns pending immediately — does not await the slow feed
+ok 5 - a cold covered anchor returns pending immediately — does not await the slow feed
+  ---
+  duration_ms: 83.625511
+  type: 'test'
+  ...
+# Subtest: an uncovered anchor returns honest absence immediately (no warm, no pending)
+ok 6 - an uncovered anchor returns honest absence immediately (no warm, no pending)
+  ---
+  duration_ms: 2.07192
+  type: 'test'
+  ...
+# Subtest: eventCacheKey reuses the same anchor within an hour without sharing bounded geometry
+ok 7 - eventCacheKey reuses the same anchor within an hour without sharing bounded geometry
+  ---
+  duration_ms: 0.787757
+  type: 'test'
+  ...
+# Subtest: eventCacheKey separates different approved source plans
+ok 8 - eventCacheKey separates different approved source plans
+  ---
+  duration_ms: 0.393147
+  type: 'test'
+  ...
+# Subtest: event supply cache keeps healthy empties but retries partial empty acquisition
+ok 9 - event supply cache keeps healthy empties but retries partial empty acquisition
+  ---
+  duration_ms: 0.484425
+  type: 'test'
+  ...
+# Subtest: event supply cache may serve bounded events despite another source failing
+ok 10 - event supply cache may serve bounded events despite another source failing
+  ---
+  duration_ms: 0.463221
+  type: 'test'
+  ...
+# Subtest: eventCacheKey separates collection radii for place and route scopes
+ok 11 - eventCacheKey separates collection radii for place and route scopes
+  ---
+  duration_ms: 0.195036
+  type: 'test'
+  ...
+# Subtest: eventCacheKey separates local radius evidence from trusted regional evidence
+ok 12 - eventCacheKey separates local radius evidence from trusted regional evidence
+  ---
+  duration_ms: 0.661072
+  type: 'test'
+  ...
+# Subtest: default background warm forwards only its trusted regional context to collection
+ok 13 - default background warm forwards only its trusted regional context to collection
+  ---
+  duration_ms: 1.858772
+  type: 'test'
+  ...
+# Subtest: a warm neutral pool is scope-filtered before its six-row surface cap
+ok 14 - a warm neutral pool is scope-filtered before its six-row surface cap
+  ---
+  duration_ms: 1.676032
+  type: 'test'
+  ...
+# Subtest: one neutral warm cache reranks for different preferences without refetching
+ok 15 - one neutral warm cache reranks for different preferences without refetching
+  ---
+  duration_ms: 137.056815
+  type: 'test'
+  ...
+# Subtest: switching active period starts a distinct warm and forwards its lookup priority
+ok 16 - switching active period starts a distinct warm and forwards its lookup priority
+  ---
+  duration_ms: 3.365046
+  type: 'test'
+  ...
+# Subtest: real configured Linked Events factory -> collector -> HTTP completion publishes the original day and public Live facts
+ok 17 - real configured Linked Events factory -> collector -> HTTP completion publishes the original day and public Live facts
+  ---
+  duration_ms: 1151.646582
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses booking query while retaining the actual Live facts
+ok 18 - generic sharing refuses booking query while retaining the actual Live facts
+  ---
+  duration_ms: 610.261393
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses login credentials while retaining the actual Live facts
+ok 19 - generic sharing refuses login credentials while retaining the actual Live facts
+  ---
+  duration_ms: 433.484158
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses private IP while retaining the actual Live facts
+ok 20 - generic sharing refuses private IP while retaining the actual Live facts
+  ---
+  duration_ms: 587.971643
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses loopback while retaining the actual Live facts
+ok 21 - generic sharing refuses loopback while retaining the actual Live facts
+  ---
+  duration_ms: 394.422329
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses private host while retaining the actual Live facts
+ok 22 - generic sharing refuses private host while retaining the actual Live facts
+  ---
+  duration_ms: 323.528354
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses private fragment while retaining the actual Live facts
+ok 23 - generic sharing refuses private fragment while retaining the actual Live facts
+  ---
+  duration_ms: 310.182135
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses private path while retaining the actual Live facts
+ok 24 - generic sharing refuses private path while retaining the actual Live facts
+  ---
+  duration_ms: 655.346888
+  type: 'test'
+  ...
+# Subtest: an actually applied Live route upgrade publishes a new exact snapshot instead of reusing the original route
+ok 25 - an actually applied Live route upgrade publishes a new exact snapshot instead of reusing the original route
+  ---
+  duration_ms: 825.344199
+  type: 'test'
+  ...
+# Subtest: only actual configured catalog/detail collection witnesses exact retained Unicode URL IDs and claims
+ok 26 - only actual configured catalog/detail collection witnesses exact retained Unicode URL IDs and claims
+  ---
+  duration_ms: 113.628033
+  type: 'test'
+  ...
+# Subtest: raw configured endpoint/prefix tokens cannot be repaired into an approved source declaration
+ok 27 - raw configured endpoint/prefix tokens cannot be repaired into an approved source declaration
+  ---
+  duration_ms: 38.750496
+  type: 'test'
+  ...
+# Subtest: normalized duplicate catalog tokens cannot borrow a literal sibling publication witness
+ok 28 - normalized duplicate catalog tokens cannot borrow a literal sibling publication witness
+  ---
+  duration_ms: 21.774954
+  type: 'test'
+  ...
+# Subtest: owned memory/disk reuse revalidates originals without renewing bytes, age, health or acquisition
+ok 29 - owned memory/disk reuse revalidates originals without renewing bytes, age, health or acquisition
+  ---
+  duration_ms: 408.595954
+  type: 'test'
+  ...
+# Subtest: caller JSON replay through an injected cache or fake collector never gains private source proof
+ok 30 - caller JSON replay through an injected cache or fake collector never gains private source proof
+  ---
+  duration_ms: 22.156157
+  type: 'test'
+  ...
+# Subtest: normalized root child token cannot be authorized by another literal child sibling
+ok 31 - normalized root child token cannot be authorized by another literal child sibling
+  ---
+  duration_ms: 15.30438
+  type: 'test'
+  ...
+# Subtest: private provenance and terminal facts share the original retained graph bound, without a Live failure
+ok 32 - private provenance and terminal facts share the original retained graph bound, without a Live failure
+  ---
+  duration_ms: 20.212866
+  type: 'test'
+  ...
+# Subtest: strict literal URL grammar refuses unsupported retained wire facts without repairing them
+    # Subtest: /evenemang-1/a/0
+    ok 1 - /evenemang-1/a/0
+      ---
+      duration_ms: 17.788577
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/a/0001
+    ok 2 - /evenemang-1/a/0001
+      ---
+      duration_ms: 37.384611
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/a/123456789012345678901
+    ok 3 - /evenemang-1/a/123456789012345678901
+      ---
+      duration_ms: 12.875721
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/a/101/
+    ok 4 - /evenemang-1/a/101/
+      ---
+      duration_ms: 21.744361
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/a/101?ticket=secret
+    ok 5 - /evenemang-1/a/101?ticket=secret
+      ---
+      duration_ms: 56.029944
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/a/101\#private
+    ok 6 - /evenemang-1/a/101\#private
+      ---
+      duration_ms: 14.275606
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/a.b/101
+    ok 7 - /evenemang-1/a.b/101
+      ---
+      duration_ms: 12.102113
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/a%2Fb/101
+    ok 8 - /evenemang-1/a%2Fb/101
+      ---
+      duration_ms: 14.138976
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/a%252Fb/101
+    ok 9 - /evenemang-1/a%252Fb/101
+      ---
+      duration_ms: 11.483096
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/%c3%96ppen/101
+    ok 10 - /evenemang-1/%c3%96ppen/101
+      ---
+      duration_ms: 14.774215
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/%41bc/101
+    ok 11 - /evenemang-1/%41bc/101
+      ---
+      duration_ms: 29.680986
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/-abc/101
+    ok 12 - /evenemang-1/-abc/101
+      ---
+      duration_ms: 17.280171
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/a%20b/101
+    ok 13 - /evenemang-1/a%20b/101
+      ---
+      duration_ms: 16.66021
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/a%3Fb/101
+    ok 14 - /evenemang-1/a%3Fb/101
+      ---
+      duration_ms: 12.045149
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/a%23b/101
+    ok 15 - /evenemang-1/a%23b/101
+      ---
+      duration_ms: 14.359809
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/a%00b/101
+    ok 16 - /evenemang-1/a%00b/101
+      ---
+      duration_ms: 11.431041
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/a%5Cb/101
+    ok 17 - /evenemang-1/a%5Cb/101
+      ---
+      duration_ms: 22.096175
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/a%ZZ/101
+    ok 18 - /evenemang-1/a%ZZ/101
+      ---
+      duration_ms: 13.712774
+      type: 'test'
+      ...
+    # Subtest: /evenemang-1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    ok 19 - /evenemang-1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      ---
+      duration_ms: 14.844085
+      type: 'test'
+      ...
+    # Subtest: /private/a/101
+    ok 20 - /private/a/101
+      ---
+      duration_ms: 7.878699
+      type: 'test'
+      ...
+    1..20
+ok 33 - strict literal URL grammar refuses unsupported retained wire facts without repairing them
+  ---
+  duration_ms: 377.383306
+  type: 'test'
+  ...
+# Subtest: userinfo, explicit port, literal Unicode, dot/control/backslash repairs and invalid UTF-8 never witness a retained URL
+ok 34 - userinfo, explicit port, literal Unicode, dot/control/backslash repairs and invalid UTF-8 never witness a retained URL
+  ---
+  duration_ms: 201.457809
+  type: 'test'
+  ...
+# Subtest: a URL-valued identity cannot borrow another approved detail destination from the same frame
+ok 35 - a URL-valued identity cannot borrow another approved detail destination from the same frame
+  ---
+  duration_ms: 78.22175
+  type: 'test'
+  ...
+# Subtest: wrong binding and nonexact completed response refuse proof while keeping ordinary source facts
+ok 36 - wrong binding and nonexact completed response refuse proof while keeping ordinary source facts
+  ---
+  duration_ms: 123.983706
+  type: 'test'
+  ...
+# Subtest: public root urlset can directly publish details without a child sitemap
+ok 37 - public root urlset can directly publish details without a child sitemap
+  ---
+  duration_ms: 23.992225
+  type: 'test'
+  ...
+# Subtest: unsupported same-URL co-contributor cannot be laundered by the approved constructor
+ok 38 - unsupported same-URL co-contributor cannot be laundered by the approved constructor
+  ---
+  duration_ms: 47.201212
+  type: 'test'
+  ...
+# Subtest: browse-only and occurrence-only unsupported claims deny the complete retained projection
+ok 39 - browse-only and occurrence-only unsupported claims deny the complete retained projection
+  ---
+  duration_ms: 49.373705
+  type: 'test'
+  ...
+# Subtest: commented or HTML-embedded lookalike XML is not actual catalog publication
+ok 40 - commented or HTML-embedded lookalike XML is not actual catalog publication
+  ---
+  duration_ms: 52.306715
+  type: 'test'
+  ...
+# Subtest: pure detail/sitemap extractors and standalone configured-looking factories never mint publication proof
+ok 41 - pure detail/sitemap extractors and standalone configured-looking factories never mint publication proof
+  ---
+  duration_ms: 6.382888
+  type: 'test'
+  ...
+# Subtest: owned cache get/peek preserve exact Promise/result/options/receiver and original expiry
+ok 42 - owned cache get/peek preserve exact Promise/result/options/receiver and original expiry
+  ---
+  duration_ms: 103.081212
+  type: 'test'
+  ...
+# Subtest: cache bookkeeping never invokes shadowed Promise constructor, species or then accessors
+ok 43 - cache bookkeeping never invokes shadowed Promise constructor, species or then accessors
+  ---
+  duration_ms: 15.530917
+  type: 'test'
+  ...
+# Subtest: unsupported Proxy values and already-settled arrays gain no proof or extra reflective/then reads
+ok 44 - unsupported Proxy values and already-settled arrays gain no proof or extra reflective/then reads
+  ---
+  duration_ms: 0.470183
+  type: 'test'
+  ...
+# Subtest: original completion A retains its producer and preferences when a newer same-key B exists
+ok 45 - original completion A retains its producer and preferences when a newer same-key B exists
+  ---
+  duration_ms: 93.950425
+  type: 'test'
+  ...
+# Subtest: SPEC-1 terminal reader Set mutation cannot alter privately retained source authority
+ok 46 - SPEC-1 terminal reader Set mutation cannot alter privately retained source authority
+  ---
+  duration_ms: 16.85169
+  type: 'test'
+  ...
+# Subtest: SPEC-1 terminal integrity refuses changed claim graphs without JSON expansion or optional hooks
+ok 47 - SPEC-1 terminal integrity refuses changed claim graphs without JSON expansion or optional hooks
+  ---
+  duration_ms: 160.849208
+  type: 'test'
+  ...
+# Subtest: cache revalidation rejects non-original alias graphs before JSON estimation or cloning
+ok 48 - cache revalidation rejects non-original alias graphs before JSON estimation or cloning
+  ---
+  duration_ms: 14.211569
+  type: 'test'
+  ...
+# Subtest: real configured multi-detail browse retains complete source coverage and refuses an unsupported browse-only URL
+ok 49 - real configured multi-detail browse retains complete source coverage and refuses an unsupported browse-only URL
+  ---
+  duration_ms: 93.223353
+  type: 'test'
+  ...
+# Subtest: actual Overture factory can retain public attribution and website without granting a JSON clone authority
+ok 50 - actual Overture factory can retain public attribution and website without granting a JSON clone authority
+  ---
+  duration_ms: 15.389158
+  type: 'test'
+  ...
+# Subtest: actual OSM transport factory retains its two source links and public website, without upgrading source evidence
+ok 51 - actual OSM transport factory retains its two source links and public website, without upgrading source evidence
+  ---
+  duration_ms: 8.333123
+  type: 'test'
+  ...
+# Subtest: explicit upgrade replays the original engine finalization with a new verified occurrence and no acquisition
+ok 52 - explicit upgrade replays the original engine finalization with a new verified occurrence and no acquisition
+  ---
+  duration_ms: 1783.400763
+  type: 'test'
+  ...
+# (node:74) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: completion retains the same closed-context fact without reacquiring supply
+ok 53 - completion retains the same closed-context fact without reacquiring supply
+  ---
+  duration_ms: 635.481947
+  type: 'test'
+  ...
+# Subtest: a reserved upgrade expires on the original capability deadline even when finalization never resolves
+ok 54 - a reserved upgrade expires on the original capability deadline even when finalization never resolves
+  ---
+  duration_ms: 19.747311
+  type: 'test'
+  ...
+# Subtest: an upgraded immutable reference cannot be retained while a consumer changes the route
+ok 55 - an upgraded immutable reference cannot be retained while a consumer changes the route
+  ---
+  duration_ms: 16.347099
+  type: 'test'
+  ...
+# Subtest: retention bounds include original intent, publication and private candidate metadata, not just candidate rows
+ok 56 - retention bounds include original intent, publication and private candidate metadata, not just candidate rows
+  ---
+  duration_ms: 5.278391
+  type: 'test'
+  ...
+# Subtest: healthy-empty completion cannot request engine upgrade
+ok 57 - healthy-empty completion cannot request engine upgrade
+  ---
+  duration_ms: 335.709467
+  type: 'test'
+  ...
+# Subtest: failed completion cannot request engine upgrade
+ok 58 - failed completion cannot request engine upgrade
+  ---
+  duration_ms: 295.624604
+  type: 'test'
+  ...
+# Subtest: partial completion cannot request engine upgrade
+ok 59 - partial completion cannot request engine upgrade
+  ---
+  duration_ms: 295.229346
+  type: 'test'
+  ...
+# Subtest: uncovered completion cannot request engine upgrade
+ok 60 - uncovered completion cannot request engine upgrade
+  ---
+  duration_ms: 452.985304
+  type: 'test'
+  ...
+# Subtest: future-only completion cannot request engine upgrade
+ok 61 - future-only completion cannot request engine upgrade
+  ---
+  duration_ms: 291.413173
+  type: 'test'
+  ...
+# Subtest: noneligible completion cannot request engine upgrade
+ok 62 - noneligible completion cannot request engine upgrade
+  ---
+  duration_ms: 275.382182
+  type: 'test'
+  ...
+# Subtest: missing-route-attestation completion cannot request engine upgrade
+ok 63 - missing-route-attestation completion cannot request engine upgrade
+  ---
+  duration_ms: 386.635908
+  type: 'test'
+  ...
+# Subtest: administrative completion cannot request engine upgrade
+ok 64 - administrative completion cannot request engine upgrade
+  ---
+  duration_ms: 339.063901
+  type: 'test'
+  ...
+# Subtest: unknown-venue-clock completion cannot request engine upgrade
+ok 65 - unknown-venue-clock completion cannot request engine upgrade
+  ---
+  duration_ms: 361.791186
+  type: 'test'
+  ...
+# Subtest: invalid-geometry completion cannot request engine upgrade
+ok 66 - invalid-geometry completion cannot request engine upgrade
+  ---
+  duration_ms: 357.574568
+  type: 'test'
+  ...
+# Subtest: different-selected-date completion cannot request engine upgrade
+ok 67 - different-selected-date completion cannot request engine upgrade
+  ---
+  duration_ms: 539.671805
+  type: 'test'
+  ...
+# Subtest: outside-original-preferences completion cannot request engine upgrade
+ok 68 - outside-original-preferences completion cannot request engine upgrade
+  ---
+  duration_ms: 246.923045
+  type: 'test'
+  ...
+# Subtest: pending polls and non-opted-in completion tokens cannot cause route upgrade
+ok 69 - pending polls and non-opted-in completion tokens cannot cause route upgrade
+  ---
+  duration_ms: 961.841275
+  type: 'test'
+  ...
+# Subtest: upgrade endpoint rejects public intent, geography, events, stale and cross-app capabilities
+ok 70 - upgrade endpoint rejects public intent, geography, events, stale and cross-app capabilities
+  ---
+  duration_ms: 319.312553
+  type: 'test'
+  ...
+# Subtest: concurrent explicit HTTP upgrades share one reserved finalization and one immutable result
+ok 71 - concurrent explicit HTTP upgrades share one reserved finalization and one immutable result
+  ---
+  duration_ms: 639.612268
+  type: 'test'
+  ...
+# Subtest: failed final walking gate is not retried by concurrent or later HTTP requests
+ok 72 - failed final walking gate is not retried by concurrent or later HTTP requests
+  ---
+  duration_ms: 668.858237
+  type: 'test'
+  ...
+# Subtest: a thrown reserved attempt returns one stable failure and never retries
+ok 73 - a thrown reserved attempt returns one stable failure and never retries
+  ---
+  duration_ms: 14.36742
+  type: 'test'
+  ...
+# Subtest: previously considered selected-day occurrence never requests another finalization
+ok 74 - previously considered selected-day occurrence never requests another finalization
+  ---
+  duration_ms: 363.878105
+  type: 'test'
+  ...
+# Subtest: an updated end time on an already considered occurrence is not a new event
+ok 75 - an updated end time on an already considered occurrence is not a new event
+  ---
+  duration_ms: 422.501153
+  type: 'test'
+  ...
+# Subtest: original pins, exclusions, signed reference and trusted time survive source mutations without new lookups
+ok 76 - original pins, exclusions, signed reference and trusted time survive source mutations without new lookups
+  ---
+  duration_ms: 298.726946
+  type: 'test'
+  ...
+# Subtest: later same-key source refresh cannot replace an original upgrade generation
+ok 77 - later same-key source refresh cannot replace an original upgrade generation
+  ---
+  duration_ms: 1357.021417
+  type: 'test'
+  ...
+# Subtest: real source normalization with fixture transport authorizes only the selected-day verified local occurrence
+ok 78 - real source normalization with fixture transport authorizes only the selected-day verified local occurrence
+  ---
+  duration_ms: 734.358376
+  type: 'test'
+  ...
+# Subtest: an otherwise genuine event beyond the final evening-hop gate cannot publish an upgraded day
+ok 79 - an otherwise genuine event beyond the final evening-hop gate cannot publish an upgraded day
+  ---
+  duration_ms: 518.67446
+  type: 'test'
+  ...
+# Subtest: previous eligible events remain in the completion ranking, so a new losing occurrence cannot replace the day
+ok 80 - previous eligible events remain in the completion ranking, so a new losing occurrence cannot replace the day
+  ---
+  duration_ms: 354.512559
+  type: 'test'
+  ...
+# Subtest: an omitted request date binds upgrade to the original actually published normalized day
+ok 81 - an omitted request date binds upgrade to the original actually published normalized day
+  ---
+  duration_ms: 592.611704
+  type: 'test'
+  ...
+# Subtest: a withheld original engine day never grants route-upgrade authorization
+ok 82 - a withheld original engine day never grants route-upgrade authorization
+  ---
+  duration_ms: 163.66594
+  type: 'test'
+  ...
+# Subtest: persisted pre-integrity event pools cannot bypass corrected Ticketmaster normalization
+ok 83 - persisted pre-integrity event pools cannot bypass corrected Ticketmaster normalization
+  ---
+  duration_ms: 62.355463
+  type: 'test'
+  ...
+# Subtest: invalid Ticketmaster evidence is failure-held for exactly two minutes, never healthy-empty cached
+ok 84 - invalid Ticketmaster evidence is failure-held for exactly two minutes, never healthy-empty cached
+  ---
+  duration_ms: 17.222301
+  type: 'test'
+  ...
+# Subtest: healthy Ticketmaster empty pages retain the twenty-minute persistent cache and never serialize the key
+ok 85 - healthy Ticketmaster empty pages retain the twenty-minute persistent cache and never serialize the key
+  ---
+  duration_ms: 7.300719
+  type: 'test'
+  ...
+1..85
+# tests 105
+# suites 0
+# pass 105
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 24356.940005

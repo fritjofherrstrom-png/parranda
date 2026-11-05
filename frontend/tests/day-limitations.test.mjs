@@ -9,11 +9,11 @@ const sv = (svText) => svText;
 test('partial acquisition describes the published evidence regardless of its historical pending count', () => {
   for (const pending of [0, 1]) {
     const note = contextNote([], en, { sourceCompletion: { status: 'partial', pending } });
-    assert.match(note, /incomplete when the response was produced/);
+    assert.match(note, /place information was incomplete/i);
     assert.match(note, /more places may be missing/);
     assert.doesNotMatch(note, /still fetching|on their way|ongoing|will arrive/i);
   }
-  assert.match(contextNote([], sv, { sourceCompletion: { status: 'partial' } }), /ofullständigt när svaret skapades/);
+  assert.match(contextNote([], sv, { sourceCompletion: { status: 'partial' } }), /platsuppgifterna var ofullständiga/i);
   assert.match(contextNote([], en, { sourceCompletion: { status: 'complete', failed: 1 } }), /One or more place sources failed/);
   assert.equal(contextNote([], en, { sourceCompletion: { status: 'complete', failed: 0 } }), '');
   assert.equal(contextNote([], en), '');

@@ -15,6 +15,7 @@ export interface DistrictArea {
     place_id?: string | null;
     candidate_id?: string | null;
     name?: string | null;
+    type?: string | null;
     lat: number;
     lng: number;
     address?: string | null;
@@ -72,6 +73,8 @@ export interface PulseEvent {
   ends_on?: string;
   time_window?: PulseTimeWindow | null;
   recurrence?: { rule?: string; occurrence_status?: "unconfirmed" } | null;
+  /** Observed dates of the source programme, not continuous opening hours. */
+  programme?: { title: string; source_url: string; starts_on: string; ends_on: string } | null;
   calendar_fact?: { kind: "public_holiday"; scope: "national" | "regional" | "local";
     country_code: string; area: string; temporal_scope: "full_day" | "half_day";
     flags: ("Recommended" | "Provisional" | "OneTime" | "Exception")[] } | null;

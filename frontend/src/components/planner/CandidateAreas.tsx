@@ -10,6 +10,7 @@ import { ExternalIcon, KeepIcon, MinusIcon, PlusIcon } from "../shared/icons";
 import { buttonClass, Eyebrow, panelCard } from "../shared/ui";
 import { INTENT_LABELS, label, type Lang, type Translate } from "./copy";
 import { canCommitTo, type Commitments } from "./commitments";
+import StopCategory, { stopCategoryLabel } from "./StopCategory";
 import type { DistrictArea } from "./types";
 
 export default function CandidateAreas({
@@ -45,22 +46,22 @@ export default function CandidateAreas({
       <div>
         <Eyebrow>{t("Platser i närheten", "Places nearby")}</Eyebrow>
         {structureOnly && matchCount > 0 && (
-          <p className="mt-1.5 text-sm text-parranda-ink/75">
+          <p className="mt-1.5 text-sm text-parranda-ink-muted">
             {t(
-              "Parranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.",
-              "Parranda found place candidates, but not a reliable route yet.",
+              "Parranda hittade platser, men kunde inte bygga en rutt ännu.",
+              "Parranda found places, but couldn't build a route yet.",
             )}
           </p>
         )}
       </div>
 
       {missingIntents.length > 0 && (
-        <p className="text-sm text-parranda-ink/72">
+        <p className="text-sm text-parranda-ink-muted">
           {t("Inga platser för:", "No places for:")} {missingIntents.map((k) => label(INTENT_LABELS, k, lang)).join(", ")}
         </p>
       )}
       {matchCount === 0 && (
-        <p className="text-sm text-parranda-ink/75">
+        <p className="text-sm text-parranda-ink-muted">
           {t("0 matchningar för dina val.", "0 matches for your picks.")}
         </p>
       )}
@@ -69,7 +70,7 @@ export default function CandidateAreas({
 
       <ul className="flex flex-col gap-3">
         {areas.map((area, index) => (
-          <li key={index} className="rounded-parranda border-line border-parranda-ink/12 bg-parranda-paper p-4">
+          <li key={index} className="rounded-parranda border-line border-parranda-line-faint bg-parranda-paper p-4">
             <div className="flex flex-wrap items-center gap-1.5">
               {(area.covers ?? []).map((axis) => (
                 <span key={axis} className="rounded-full bg-parranda-ink px-2.5 py-0.5 text-xs font-bold text-parranda-paper">
@@ -77,11 +78,11 @@ export default function CandidateAreas({
                 </span>
               ))}
               {(area.partial_covers ?? []).map((axis) => (
-                <span key={`partial-${axis}`} className="rounded-full border border-parranda-ink/30 px-2.5 py-0.5 text-xs font-bold text-parranda-ink">
+                <span key={`partial-${axis}`} className="rounded-full border-line border-parranda-line-firm px-2.5 py-0.5 text-xs font-bold text-parranda-ink">
                   {label(INTENT_LABELS, axis, lang)} · {t("delvis", "partial")}
                 </span>
               ))}
-              <span className="type-data ml-auto text-11 text-parranda-ink/68">
+              <span className="type-data ml-auto text-11 text-parranda-ink-meta">
                 {(area.stops?.length ?? area.stop_ids?.length ?? 0)} {t("träffar", "places")}
               </span>
             </div>
@@ -93,11 +94,13 @@ export default function CandidateAreas({
                   if (!name) return null;
                   const candidateKey = `cluster:${index}:${stop.id || stop.candidate_id || stop.place_id || si}`;
                   const candidateId = String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "").trim();
+                  const committable = canCommitTo(stop);
+                  const kindLabel = stopCategoryLabel(stop, lang);
                   const candidatePanelId = `candidate-panel-cluster-${index}-${si}`;
                   const expanded = expandedCandidateKey === candidateKey;
                   const facts = [...new Set([stop.address, stop.area].map((value) => String(value || "").trim()).filter(Boolean))];
                   return (
-                    <li key={stop.id ?? si} className="rounded-parranda-btn border-line border-parranda-ink/10 px-3 py-1">
+                    <li key={stop.id ?? si} className="rounded-parranda-btn border-line border-parranda-line-faint px-3 py-1">
                       <button
                         type="button"
                         aria-expanded={expanded}
@@ -106,11 +109,12 @@ export default function CandidateAreas({
                         className="flex min-h-11 w-full items-center justify-between gap-3 text-left font-bold transition hover:text-parranda-clay"
                       >
                         <span>{name}</span>
-                        {expanded ? <MinusIcon className="h-4 w-4 shrink-0 text-parranda-ember" /> : <PlusIcon className="h-4 w-4 shrink-0 text-parranda-ink/68" />}
+                        {expanded ? <MinusIcon className="h-4 w-4 shrink-0 text-parranda-ember" /> : <PlusIcon className="h-4 w-4 shrink-0 text-parranda-ink-meta" />}
                       </button>
+                      {kindLabel && <div className="pb-1.5"><StopCategory type={stop.type} label={kindLabel} /></div>}
                       {expanded && (
-                        <div id={candidatePanelId} className="border-t border-parranda-ink/12 pb-2 pt-2">
-                          {facts.length > 0 && <p className="text-xs text-parranda-ink/68">{facts.join(" · ")}</p>}
+                        <div id={candidatePanelId} className="border-t-line border-parranda-line-faint pb-2 pt-2">
+                          {facts.length > 0 && <p className="text-xs text-parranda-ink-meta">{facts.join(" · ")}</p>}
                           {url && (
                             <a
                               href={url}
@@ -122,7 +126,7 @@ export default function CandidateAreas({
                               <ExternalIcon />
                             </a>
                           )}
-                          {candidateId && (commitments[candidateId]?.kind === "pin" || canCommitTo(stop)) && (
+                          {candidateId && (commitments[candidateId]?.kind === "pin" || committable) && (
                             <button
                               type="button"
                               onClick={() =>
@@ -133,7 +137,7 @@ export default function CandidateAreas({
                               className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border-line px-4 text-sm font-bold transition sm:ml-2 sm:w-auto ${
                                 commitments[candidateId]?.kind === "pin"
                                   ? "border-parranda-ember/60 bg-parranda-ember/10 text-parranda-ink hover:border-parranda-ember"
-                                  : "border-parranda-ink/20 text-parranda-ink hover:border-parranda-ink/50"
+                                  : "border-parranda-line text-parranda-ink hover:border-parranda-line-strong"
                               }`}
                             >
                               <KeepIcon className="h-4 w-4 text-parranda-ember" />
@@ -141,6 +145,12 @@ export default function CandidateAreas({
                                 ? t("Med i dagen — släpp", "In my day — release")
                                 : t("Lägg till i min dag", "Add to my day")}
                             </button>
+                          )}
+                          {(!candidateId || (commitments[candidateId]?.kind !== "pin" && !committable)) && (
+                            <p className="mt-2 text-xs leading-relaxed text-parranda-ink-meta">
+                              {t("Tips att utforska — platsen kan inte läggas till i den här rutten just nu.",
+                                "A nearby tip — this place can't be added to this route right now.")}
+                            </p>
                           )}
                         </div>
                       )}

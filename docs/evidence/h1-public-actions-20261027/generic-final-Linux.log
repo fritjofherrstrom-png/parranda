@@ -1,0 +1,70 @@
+TAP version 13
+# Subtest: real configured Linked Events factory -> collector -> HTTP completion publishes the original day and public Live facts
+ok 1 - real configured Linked Events factory -> collector -> HTTP completion publishes the original day and public Live facts
+  ---
+  duration_ms: 1226.142491
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses booking query while retaining the actual Live facts
+ok 2 - generic sharing refuses booking query while retaining the actual Live facts
+  ---
+  duration_ms: 635.450503
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses login credentials while retaining the actual Live facts
+ok 3 - generic sharing refuses login credentials while retaining the actual Live facts
+  ---
+  duration_ms: 398.413947
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses private IP while retaining the actual Live facts
+ok 4 - generic sharing refuses private IP while retaining the actual Live facts
+  ---
+  duration_ms: 655.121185
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses loopback while retaining the actual Live facts
+ok 5 - generic sharing refuses loopback while retaining the actual Live facts
+  ---
+  duration_ms: 433.176326
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses private host while retaining the actual Live facts
+ok 6 - generic sharing refuses private host while retaining the actual Live facts
+  ---
+  duration_ms: 291.548264
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses private fragment while retaining the actual Live facts
+ok 7 - generic sharing refuses private fragment while retaining the actual Live facts
+  ---
+  duration_ms: 315.503008
+  type: 'test'
+  ...
+# Subtest: generic sharing refuses private path while retaining the actual Live facts
+ok 8 - generic sharing refuses private path while retaining the actual Live facts
+  ---
+  duration_ms: 523.21691
+  type: 'test'
+  ...
+# Subtest: an actually applied Live route upgrade publishes a new exact snapshot instead of reusing the original route
+ok 9 - an actually applied Live route upgrade publishes a new exact snapshot instead of reusing the original route
+  ---
+  duration_ms: 1173.572665
+  type: 'test'
+  ...
+# Subtest: generic provider authority survives owned disk reuse but not a JSON replay, config change or renewed cache age
+ok 10 - generic provider authority survives owned disk reuse but not a JSON replay, config change or renewed cache age
+  ---
+  duration_ms: 471.725396
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6685.506713

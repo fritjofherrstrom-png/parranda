@@ -12,11 +12,10 @@ import { useLiveClock } from "./useLiveClock";
  * data and one callback that opens the sheet.
  */
 import type { Ref } from "react";
-import { eventTiming } from "../../lib/pulse-view.mjs";
 import { ChevronRightIcon } from "../shared/icons";
 import { buttonClass, Eyebrow } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
-import { liveEventSource } from "./LiveEventSource";
+import LiveEventSummary from "./LiveEventSummary";
 import EventOccurrences from "./EventOccurrences";
 import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
 import type { LiveEvents, PulseEvent } from "./types";
@@ -81,20 +80,20 @@ export default function LiveCard({
           {showDay && dayflow?.weather?.headline && (
             <p className="text-15 font-bold leading-snug text-parranda-ink">
               {dayflow.weather.headline}
-              {dayflow.weather.pitch ? <span className="font-medium text-parranda-ink/75"> — {dayflow.weather.pitch}</span> : null}
+              {dayflow.weather.pitch ? <span className="font-medium text-parranda-ink-muted"> — {dayflow.weather.pitch}</span> : null}
             </p>
           )}
           {clothing && (
             <p className="text-sm text-parranda-ink">
               <span className="font-bold">{clothing.headline}</span>
-              <span className="text-parranda-ink/75"> — {clothing.advice}</span>
+              <span className="text-parranda-ink-muted"> — {clothing.advice}</span>
             </p>
           )}
         </div>
       )}
 
       {wovenNames.length > 0 && (
-        <p className="mt-3 text-13 text-parranda-ink/72">
+        <p className="mt-3 text-13 text-parranda-ink-muted">
           {wovenNames.map((n: string) => `${n} · ${includedInRoute}`).join(" · ")}
         </p>
       )}
@@ -103,25 +102,25 @@ export default function LiveCard({
           pulseHealthState says whether collection actually succeeded. Raw
           backend reason tokens never reach product copy. */}
       {pulseState === "uncovered" && (
-        <p className="mt-3 text-sm text-parranda-ink/75">
-          {t("Ingen live-eventkälla täcker den här platsen än — Parranda hittar inte på en.", "No live-events feed reaches this place yet — Parranda won't invent one.")}
+        <p className="mt-3 text-sm text-parranda-ink-muted">
+          {t("Vi har inga verifierade evenemangskällor för området ännu. Det kan ändå hända saker här.", "We don't have verified event sources for this area yet. There may still be events here.")}
         </p>
       )}
       {pulseState === "pending" && (
-        <p className="mt-3 text-sm text-parranda-ink/75">{t("Kollar kalendrarna — uppdateras automatiskt strax.", "Checking the calendars — updates automatically in a moment.")}</p>
+        <p className="mt-3 text-sm text-parranda-ink-muted">{t("Kollar kalendrarna — uppdateras automatiskt strax.", "Checking the calendars — updates automatically in a moment.")}</p>
       )}
       {pulseState === "soft_empty" && (
-        <p className="mt-3 text-sm text-parranda-ink/75">
+        <p className="mt-3 text-sm text-parranda-ink-muted">
           {t("Källorna svarade men listar inga händelser för perioden.", "The sources responded but list no events for this period.")}
         </p>
       )}
       {pulseState === "rejected_empty" && (
-        <p className="mt-3 text-sm text-parranda-ink/75">
+        <p className="mt-3 text-sm text-parranda-ink-muted">
           {liveRejectedSentence(liveEvents, lang)}
         </p>
       )}
       {pulseState === "unavailable" && (
-        <p className="mt-3 text-sm text-parranda-ink/75">
+        <p className="mt-3 text-sm text-parranda-ink-muted">
           {liveFailure
             ? liveFailureSentence(liveFailure)
             : t("Parranda kunde inte verifiera händelser just nu — försök igen om en stund.", "Parranda couldn't verify events right now — try again shortly.")}
@@ -130,18 +129,11 @@ export default function LiveCard({
 
       {pulseBuckets.tonight.length > 0 && (
         <div className="mt-4">
-          <p className="text-sm font-bold text-parranda-ink">{liveDayLabel}</p>
-          <ul className="mt-2 flex flex-col gap-3">
+          {!liveEvents?.selected_date && <p className="mb-2 text-sm font-bold text-parranda-ink">{liveDayLabel}</p>}
+          <ul className="flex flex-col divide-y divide-parranda-line-faint">
             {pulseBuckets.tonight.slice(0, 4).map((ev: PulseEvent, i: number) => (
-              <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-parranda-ink/85">
-                <span className="type-data max-w-full whitespace-normal break-words text-xs font-semibold text-parranda-live">
-                  {eventTiming(ev, lang, now, liveEvents?.selected_date)}
-                </span>
-                <span className="min-w-0 max-w-full break-words">
-                  <span className="font-bold text-parranda-ink">{ev.title}</span>
-                  {ev.place && <span className="text-parranda-ink/68"> · {ev.place}</span>}
-                  {liveEventSource(ev, lang)}
-                </span>
+              <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 py-3 text-sm leading-relaxed text-parranda-ink-soft first:pt-1">
+                <LiveEventSummary event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} />
                 <EventOccurrences event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} />
               </li>
             ))}
@@ -152,7 +144,7 @@ export default function LiveCard({
           lives in the Live sheet. The count comes from the bucket, never
           from copy. */}
       {pulseBuckets.thisWeek.length > 0 && (
-        <p className="mt-4 border-t border-parranda-live/25 pt-3 text-sm text-parranda-ink/75">
+        <p className="mt-4 border-t-line border-parranda-live/25 pt-3 text-sm text-parranda-ink-muted">
           <span className="font-bold text-parranda-ink">{t("Kommande 7 dagar", "Next 7 days")}</span>
           {" · "}
           {pulseBuckets.thisWeek.length}{" "}
@@ -173,7 +165,7 @@ export default function LiveCard({
         </button>
       )}
       {pulseState === "partial" && (
-        <p className="mt-2 text-xs text-parranda-ink/68">
+        <p className="mt-2 text-xs text-parranda-ink-meta">
           {liveEvents?.acquisition?.source_health?.reasons?.includes("source_collection_truncated")
             ? t("Vissa kalendrar kunde bara läsas delvis — fler händelser kan finnas hos källan.", "Some calendars were only partly read — more events may be listed at the source.")
             : t("Några källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
@@ -181,7 +173,7 @@ export default function LiveCard({
       )}
 
       {pulseSources && (
-        <p className="mt-3 text-xs text-parranda-ink/68">
+        <p className="mt-3 text-xs text-parranda-ink-meta">
           {t("Källa", "Source")}: {pulseSources}
         </p>
       )}

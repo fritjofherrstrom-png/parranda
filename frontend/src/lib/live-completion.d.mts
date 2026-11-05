@@ -1,3 +1,5 @@
+import type { PublishedDayReference } from './published-day.mjs';
+export type LiveDaySnapshot = PublishedDayReference | { version: 1; state: 'unavailable' };
 export declare const LIVE_COMPLETION_ENDPOINT: string;
 export declare const LIVE_ROUTE_UPGRADE_ENDPOINT: string;
 export declare const LIVE_COMPLETION_QUERY: string;
@@ -16,7 +18,7 @@ export type LiveCompletionRead =
   | { kind: "pending" }
   | { kind: "expired" }
   | { kind: "unavailable" }
-  | { kind: "terminal"; liveEvents: any; routeUpgrade: "explicit_request" | "not_supported" };
+  | { kind: "terminal"; liveEvents: any; routeUpgrade: "explicit_request" | "not_supported"; daySnapshot?: LiveDaySnapshot };
 
 export declare function readLiveCompletionResponse(status: number, body: any): LiveCompletionRead;
 
@@ -39,7 +41,7 @@ export interface LiveCompletionOutcome {
 export declare function followLiveCompletion(input: {
   capability: LiveCompletionCapability;
   signal: AbortSignal;
-  onLiveEvents?: (liveEvents: any) => void;
+  onLiveEvents?: (liveEvents: any, daySnapshot?: LiveDaySnapshot) => void;
   fetcher?: (url: string, init: RequestInit) => Promise<{ status: number; json(): Promise<any> }>;
   wait?: (ms: number, signal: AbortSignal) => Promise<void>;
   now?: () => number;

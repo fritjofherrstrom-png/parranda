@@ -27,12 +27,15 @@ const { createDateRangeListingProvider } = require("../pulse-sources/date-range-
 const { createLinkedEventsProvider } = require("../pulse-sources/linked-events-source-provider");
 const { createTicketmasterProvider } = require("../pulse-sources/ticketmaster-source-provider");
 const { groupLiveProgramViews, diversifyLiveHighlights } = require("./live-program-presentation");
-const { createSchemaOrgEventProvider } = require("../pulse-sources/schema-org-event-provider");
+const { createSchemaOrgEventProvider, schemaOrgCollectionLocationScope } = require("../pulse-sources/schema-org-event-provider");
 const { createEventsCalendarProvider } = require("../pulse-sources/events-calendar-source-provider");
 const { createRssAtomEventProvider } = require("../pulse-sources/rss-atom-event-provider");
 const { createHtmlVenueCalendarProvider } = require("../pulse-sources/html-venue-calendar-provider");
 const { createSitevisionCalendarProvider } = require("../pulse-sources/sitevision-calendar-provider");
 const { createWixEventSitemapProvider } = require("../pulse-sources/wix-event-sitemap-provider");
+const { rememberConfiguredEventSource, bindSelectedEventSource, bindConfiguredWixProvider, captureLiveCollectionInputs, bindLiveCollection,
+  bindLiveCacheProducer, carryLiveDestinationEvidence, ownLiveDestinationCache, readLiveDestinationCache,
+  bindConfiguredPublicProvider, attestPublicProviderOutput, retainPublicProviderOutput, restorePublicProviderOutput } = require('./live-source-destination-evidence');
 const { createLocalizedEventsApiProvider } = require("../pulse-sources/localized-events-api-provider");
 const { createMappedEventSourceProvider } = require("../pulse-sources/mapped-event-source-provider");
 const { trustedReviewedVenueResolution } = require("../pulse-sources/reviewed-event-venues");
@@ -69,7 +72,8 @@ const {
 const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
 const { resolveEventVenueGeometry } = require("./event-venue-resolution");
 const { placeAtHostVenue } = require("./host-venue-geometry");
-const { spatialScopeCacheKey } = require("./spatial-scope");
+const { spatialScopeCacheKey, sanitizeTrustedSpatialScope, deriveLocalAnchorSpatialScope,
+  pointWithinTrustedSpatialScope } = require("./spatial-scope");
 const {
   listedOccurrenceDates,
   selectedDateBucket,
@@ -248,7 +252,7 @@ function normalizeEventFeedRow(f, index = 0) {
   if (!f || !endpoint || !adapter || !Array.isArray(f.bbox) || f.bbox.length < 4) return null;
   const bbox = f.bbox.map(Number);
   if (!bbox.every(Number.isFinite)) return null;
-  return {
+  return rememberConfiguredEventSource(f, {
     id: String(f.id || `feed-${index}`),
     label: String(f.label || f.id || "Events"),
     // `base` remains for backward compatibility with the original Linked
@@ -326,7 +330,7 @@ function normalizeEventFeedRow(f, index = 0) {
       f.bbox[0] < f.bbox[2] && f.bbox[1] < f.bbox[3] &&
       /^official_(?:municipal|tourism)_/.test(f.source_family || '')
     ) === true,
-  };
+  });
 }
 
 function feedIdentities(feed) {
@@ -622,6 +626,7 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
     geographic_relevance: event.geographic_relevance || null,
     source_scope_verified: event.source_scope_verified === true,
     local_significance: event.local_significance || null,
+    ...(event.programme ? { programme: event.programme } : {}),
     // The venue-local timezone so the UI shows the real local start time.
     timezone: eventTimezone || feed.timezone || feed.fallback_timezone || null,
   };
@@ -787,7 +792,7 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
       else endedSinceCollection += 1;
     }
   }
-  const { _rankable_events: _internalPool, ...publicResult } = collected;
+  const { _rankable_events: _internalPool, _live_destination_inputs: _privateInputs, ...publicResult } = collected;
   const tonightSurface = buildEventBucketSurface(
     filterEventsForLiveScope(tonightPool, scope),
     preferences,
@@ -818,7 +823,7 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
       accepted_event_count: projectedCount,
       out_of_period_event_count: (Number(baseHealth.out_of_period_event_count) || 0) + endedSinceCollection,
       result: projectedCount > 0 ? "events_found"
-        : requestTimeDiscoveryFailed(collected) ? "unknown"
+        : requestTimeDiscoveryFailed(collected) || baseAcquisition.runtime_readiness?.unavailable_candidate_count > 0 ? "unknown"
         : baseHealth.responding_source_count > 0 ? "empty" : "unknown",
       reasons,
     };
@@ -838,13 +843,13 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
           : {}),
       }
     : null;
-  return {
+  return carryLiveDestinationEvidence(collected, {
     ...publicResult,
     ...(acquisition ? { acquisition } : {}),
     tonight,
     this_week: thisWeek,
     browse: buildEventBrowse(tonightSurface, thisWeekSurface),
-  };
+  });
 }
 
 function buildScopedEventSourcePlan({
@@ -857,6 +862,7 @@ function buildScopedEventSourcePlan({
   maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
   now,
   sourceBounds = null,
+  complementarySourceIds = [],
 } = {}) {
   const sourceCap = Math.max(1, Math.min(Number(maxSources) || DEFAULT_MAX_SOURCES, DEFAULT_MAX_SOURCES));
   const reserveGlobal = globalEnabled && globalSource ? 1 : 0;
@@ -881,14 +887,15 @@ function buildScopedEventSourcePlan({
       globalSource: null,
       globalEnabled: false,
       maxSources: DEFAULT_MAX_SOURCES,
-      maxLocalSources: DEFAULT_MAX_LOCAL_SOURCES,
+      maxLocalSources: localCap,
       coverageBounds: sourceBounds,
+      complementarySourceIds,
     });
     for (const source of localSources) {
       const identity = String(source.id || source.endpoint || source.base || "");
       if (!identity || seen.has(identity)) continue;
       seen.add(identity);
-      selected.push(source);
+      selected.push(bindSelectedEventSource(source, registry.find(row => row.id === source.id)));
       if (selected.length >= localCap) break;
     }
     if (selected.length >= localCap) break;
@@ -896,6 +903,51 @@ function buildScopedEventSourcePlan({
 
   if (reserveGlobal && selected.length < sourceCap) selected.push({ ...globalSource, kind: "global" });
   return selected.slice(0, sourceCap);
+}
+
+// Runtime requirements belong to the adapter and trusted server configuration,
+// not a publisher's readiness claim. This is eligibility, not source approval.
+function planRuntimeReadyEventSources({ datatourismeKey = null, ...options } = {}) {
+  const unavailable = source => normalizeLocalEventAdapter(source.adapter || source.kind) === "datatourisme" &&
+    !String(datatourismeKey || "").trim();
+  const initial = buildScopedEventSourcePlan(options);
+  const unavailableSources = initial.filter(unavailable).map(source => ({
+    ...compactSourceStatus({ source, status: "unavailable", reason: "source_credentials_unavailable", raw: [] }),
+    attempted: false,
+  }));
+  const sourcePlan = unavailableSources.length
+    ? buildScopedEventSourcePlan({ ...options, registry: options.registry.filter(source => !unavailable(source)) })
+    : initial;
+  return { sourcePlan, unavailableSources };
+}
+
+function withRuntimeReadiness(collected, unavailableSources) {
+  if (!unavailableSources.length) return collected;
+  const acquisition = collected.acquisition || {};
+  const health = acquisition.source_health || buildAnchorEventSourceHealth([]);
+  const pending = collected.pending === true || health.status === "pending";
+  const reasons = Array.isArray(health.reasons) ? health.reasons : [];
+  return carryLiveDestinationEvidence(collected, {
+    ...collected,
+    coverage: "covered",
+    acquisition: {
+      ...acquisition,
+      runtime_readiness: {
+        unavailable_candidate_count: unavailableSources.length,
+        unavailable_sources: unavailableSources,
+      },
+      source_health: {
+        ...health,
+        // These candidates made no request and are not selected-source failures.
+        // Keep selected-source counters intact; disclose the prerequisite separately.
+        unavailable_candidate_count: unavailableSources.length,
+        status: pending ? "pending" : health.responding_source_count > 0 ? "partial" : "unavailable",
+        result: health.result === "empty" ? "unknown" : health.result,
+        reasons: [...new Set([...reasons.filter(reason => reason !== "no_current_events_found"),
+          "source_prerequisites_unavailable", "source_credentials_unavailable"])],
+      },
+    },
+  });
 }
 
 /**
@@ -936,6 +988,7 @@ async function collectAnchorEvents({
   globalKey = null,
   maxSources = DEFAULT_MAX_SOURCES,
   maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
+  complementarySourceIds = [],
   venueResolver = null,
   venueResolutionLimit = 4,
   spatialScope = null,
@@ -946,7 +999,7 @@ async function collectAnchorEvents({
     MAX_EVENT_COLLECTION_RADIUS_M,
     Math.max(100, Math.round(radiusM || DEFAULT_RADIUS_M)),
   );
-  const sourcePlan = buildScopedEventSourcePlan({
+  const { sourcePlan, unavailableSources } = planRuntimeReadyEventSources({
     anchor,
     sourceAnchors,
     registry: registry || resolveEventFeedRegistry(),
@@ -955,6 +1008,8 @@ async function collectAnchorEvents({
     globalEnabled: Boolean(globalKey),
     maxSources,
     maxLocalSources,
+    datatourismeKey,
+    complementarySourceIds,
     sourceBounds,
     // The same server-owned instant the rest of this collection reasons with.
     // Without it this plan expired qualifications against the real clock while
@@ -963,7 +1018,7 @@ async function collectAnchorEvents({
     now,
   });
   if (sourcePlan.length === 0) {
-    return {
+    return withRuntimeReadiness({
       coverage: "uncovered",
       ...(selectedDate ? { selected_date: selectedDate } : {}),
       feed: null,
@@ -972,7 +1027,7 @@ async function collectAnchorEvents({
       this_week: [],
       browse: emptyEventBrowse(),
       acquisition: emptyAcquisition(effectiveRadiusM),
-    };
+    }, unavailableSources);
   }
 
   const nowDate = now ? new Date(now) : selectedDate ? new Date() : null;
@@ -1004,6 +1059,9 @@ async function collectAnchorEvents({
     ),
   );
 
+  // Capture accepted AND refused originals before trust/normalization and
+  // geometry/fusion discard raw-record identity. Never infer from labels.
+  const destinationInputs = captureLiveCollectionInputs(collectedSources);
   const normalizedEvidence = [];
   for (const collection of collectedSources) {
     const source = collection.source;
@@ -1026,7 +1084,10 @@ async function collectAnchorEvents({
       sourceEvidence.push(normalized);
     }
     // A source found on a venue's own website places its rows there on evidence.
-    normalizedEvidence.push(...placeAtHostVenue(sourceEvidence, source.host_venue, { placeContext }));
+    normalizedEvidence.push(...placeAtHostVenue(sourceEvidence, source.host_venue, {
+      placeContext,
+      sourceLocationScope: collection.sourceLocationScope,
+    }));
   }
 
   // Only rows that can appear in the requested Live period may use the
@@ -1049,9 +1110,13 @@ async function collectAnchorEvents({
   // Public payload cannot inject this seam; ambiguous, weak or out-of-radius
   // results remain mapless and are rejected by the unchanged fusion gate below.
   // The active Live time bucket gets first use of the bounded lookup budget.
+  // Within it, exact source programme areas matching the trusted locality get
+  // a lookup before other areas; a locality match supplies no venue geometry.
   const venueResolution = await resolveEventVenueGeometry(
     displayableEvidence.filter(event => !event.calendar_fact).sort((left, right) =>
-      periodRank.get(left) - periodRank.get(right) || compareVenueResolutionPriority(left, right)),
+      periodRank.get(left) - periodRank.get(right) ||
+      programmeLocalityLookupPriority(left, placeContext) - programmeLocalityLookupPriority(right, placeContext) ||
+      compareVenueResolutionPriority(left, right)),
     {
       resolver: venueResolver,
       anchor,
@@ -1124,7 +1189,7 @@ async function collectAnchorEvents({
     outOfPeriodEventCount: outOfPeriodCount,
     rejected,
   });
-  return {
+  return withRuntimeReadiness(bindLiveCollection({
     coverage: "covered",
     ...(selectedDate ? { selected_date: selectedDate } : {}),
     feed: feeds[0] || null,
@@ -1154,7 +1219,7 @@ async function collectAnchorEvents({
       venue_resolution: venueResolution.summary,
       geometry_scope: bounded.geometry_scope,
     },
-  };
+  }, destinationInputs), unavailableSources);
 }
 
 // The Live period a row belongs to: the selected (or current) day, the
@@ -1179,6 +1244,16 @@ function boundedDateOnlyRange(startsOn, endsOn, maxDays = MAX_HAPPENING_DAYS) {
   const endOrdinal = dateOnlyOrdinal(endsOn);
   if (startOrdinal == null || endOrdinal == null || endOrdinal < startOrdinal) return false;
   return endOrdinal - startOrdinal <= maxDays;
+}
+
+function programmeLocalityLookupPriority(event, placeContext) {
+  if (!event?.programme) return 1;
+  const fold = value => typeof value === "string"
+    ? value.normalize("NFKD").replace(/\p{M}/gu, "").toLocaleLowerCase("en")
+      .replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+    : "";
+  const locality = fold(placeContext?.locality);
+  return locality && fold(event.area) === locality ? 0 : 1;
 }
 
 function compareVenueResolutionPriority(left, right) {
@@ -1323,9 +1398,12 @@ async function collectEventSource({
   if (!provider) {
     return { source, raw: [], status: "unavailable", reason: "source_adapter_unsupported" };
   }
+  bindConfiguredPublicProvider(provider, source);
 
   try {
-    const collect = () => provider.create({ key: null }).collect({ date: startParam });
+    const collect = async () => retainPublicProviderOutput(provider, source,
+      attestPublicProviderOutput(provider, source,
+        await provider.create({ key: null }).collect({ date: startParam })));
     // Share bounded source snapshots across the two Live period controls.
     // DATAtourisme also binds its date-window/geographic query to the snapshot.
     // The local API has no date/geometry filter. Final gates remain per view.
@@ -1336,6 +1414,7 @@ async function collectEventSource({
           shouldStore: value => ["ok", "empty"].includes(value?.collection_status?.status),
         })
       : await collect();
+    restorePublicProviderOutput(sourceCollectionCache, provider, source, collected);
     const raw = Array.isArray(collected && collected.time_sensitive_events) ? collected.time_sensitive_events : [];
     const outcome = normalizeDirectCollectionOutcome(collected?.collection_status, raw.length);
     return {
@@ -1343,6 +1422,7 @@ async function collectEventSource({
       raw,
       status: outcome.status,
       reason: outcome.reason,
+      sourceLocationScope: schemaOrgCollectionLocationScope(collected),
     };
   } catch (_error) {
     return { source, raw: [], status: "failed", reason: String(_error?.code || "").startsWith("source_redirect_")
@@ -1392,6 +1472,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
     return createSchemaOrgEventProvider({
       ...common,
       format: adapter === "schema_org_html" ? "html" : source.format,
+      timezone: source.timezone || source.fallback_timezone || undefined,
     });
   }
   if (adapter === "events_calendar" || adapter === "ical") {
@@ -1439,7 +1520,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
     });
   }
   if (adapter === "wix_event_sitemap") {
-    return createWixEventSitemapProvider({
+    return bindConfiguredWixProvider(createWixEventSitemapProvider({
       ...common,
       status: "active",
       sitemapUrl: endpoint,
@@ -1450,7 +1531,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
       detailBudget: source.detail_budget || undefined,
       sitemapLimit: source.sitemap_limit || undefined,
       eventPathPrefix: source.event_path_prefix || undefined,
-    });
+    }), source);
   }
   if (adapter === "localized_events_api") {
     return createLocalizedEventsApiProvider({
@@ -1607,6 +1688,7 @@ function eventCacheKey(
   spatialScope = null,
   selectedDate = null,
   time = "tonight",
+  unavailableSources = [],
 ) {
   const lat = Number(anchor.lat).toFixed(5);
   const lng = Number(anchor.lng).toFixed(5);
@@ -1616,8 +1698,11 @@ function eventCacheKey(
     .sort()
     .join(",");
   const radius = Math.min(MAX_EVENT_COLLECTION_RADIUS_M, Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)));
-  return createHash("sha256").update(JSON.stringify([lat, lng, hour, radius,
-    spatialScopeCacheKey(spatialScope), sources, selectedDate || "current", time])).digest("hex");
+  // Selected IDs alone do not identify skipped candidates. Bind their server-
+  // owned identities/reasons as well, never the credential value itself.
+  const unavailable = unavailableSources.map(source => JSON.stringify([source.id, source.adapter, source.reason])).sort();
+  return createHash("sha256").update(JSON.stringify([EVENT_CACHE_NAMESPACE, lat, lng, hour, radius,
+    spatialScopeCacheKey(spatialScope), sources, selectedDate || "current", time, unavailable])).digest("hex");
 }
 
 function sourceIdentityForUrl(value) {
@@ -1685,7 +1770,21 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // discarded ends or merged source-owned occurrence identities. No cache purge.
 // v17 excludes first-page-only global inventory so bounded pagination and its
 // explicit partial outcome are observed without deleting any shared cache.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v17";
+// v18 carries original configured-provider public-destination evidence. Older
+// snapshots remain on disk but cannot be mistaken for newly attested output.
+// v19 rebuilds programme facts and complementary discovery after thin-source
+// pools from v18. Prior files remain intact and expire on their original TTL.
+// v20 revisits broad regional-only pools and reserves bounded complementary
+// acquisition; v19 answers cannot certify that this discovery path ran.
+// v21 rebuilds programme discovery after the dated-link/card-reader changes;
+// old v20 files remain intact but do not certify the corrected acquisition.
+// v22 reselects the bounded complementary source after dedicated programmes
+// gain their own acquisition priority. Earlier v21 pools cannot attest it.
+// v23 cannot reuse v22 selection of programme interfaces whose payload exceeds
+// the adapter's unchanged default byte budget.
+// v24 isolates runtime prerequisite selection and nullable holiday contracts.
+// The namespace also participates in keys for operator-supplied caches.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v25";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read
@@ -1858,17 +1957,17 @@ function resolveDefaultEventSupply(
   const qualifiedRuntimeEnabled = !["disabled", "0", "false", "off", "no"].includes(
     String((env && env.PARRANDA_QUALIFIED_SOURCE_RUNTIME) || "").trim().toLowerCase(),
   );
-  const cache = eventCache || createSourceCache({
+  const cache = eventCache || ownLiveDestinationCache(createSourceCache({
     // v2 excludes transient partial-empty acquisitions that v1 could persist.
     namespace: EVENT_CACHE_NAMESPACE,
     ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
-  });
-  const sourceCollectionCache = createSourceCache({
+  }));
+  const sourceCollectionCache = ownLiveDestinationCache(createSourceCache({
     // Source snapshots also contain normalized atoms, including category tags.
-    namespace: "agnostic-event-source-v2", ttlMs: EVENT_CACHE_TTL_MS,
+    namespace: "agnostic-event-source-v3", ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
-  });
+  }));
   const calendarReferenceCache = createSourceCache({
     namespace: "public-holiday-reference-v1", ttlMs: 86400000,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
@@ -1934,10 +2033,11 @@ function resolveDefaultEventSupply(
       const marketFeed = osmMarketFeedForAnchor(anchor);
       if (marketFeed) appendUniqueEventFeeds(requestRegistry, [marketFeed]);
     }
-    const sourcePlan = buildScopedEventSourcePlan({
+    const { sourcePlan, unavailableSources } = planRuntimeReadyEventSources({
       anchor,
       sourceAnchors,
       registry: requestRegistry,
+      datatourismeKey,
       sourceBounds: scope?.kind === "in_place" ? scope.trusted_place_scope?.bounds : null,
       now,
       globalSource: GLOBAL_FEED_DESCRIPTOR,
@@ -1949,8 +2049,11 @@ function resolveDefaultEventSupply(
     if (!hasApprovedLocalSource) {
       discoveryHealth = await resolveUncoveredDiscoveryHealth(sourceCatalog, anchor);
     }
-    const complementaryDiscoveryNeeded = localSourceMixNeedsDiscovery(sourcePlan) &&
-      placeContext && (discoverySpatialScope || spatialScope);
+    // Discovery geometry never widens event acceptance. Coordinate-only
+    // resolvers can attest a locality without publishing its exact boundary.
+    const discoveryScope = localDiscoveryScope(anchor, discoverySpatialScope || spatialScope);
+    const complementaryDiscoveryNeeded = placeContext && discoveryScope &&
+      localSourceMixNeedsDiscovery(sourcePlan, discoveryScope);
     if (
       (!hasApprovedLocalSource || complementaryDiscoveryNeeded) &&
       sourceCatalog &&
@@ -1962,15 +2065,16 @@ function resolveDefaultEventSupply(
         anchor,
         placeLabel,
         placeContext,
-        spatialScope: discoverySpatialScope || spatialScope,
+        spatialScope: discoveryScope,
       });
       if (!discoveryHealth) discoveryHealth = demandHealth;
     }
-    // A place without its own approved or qualified source looks for one now,
-    // inside the out-of-band collection below; the day never waits for it.
-    const discoverNow = !hasApprovedLocalSource && typeof requestTimeDiscovery === "function";
+    // Complement a thin local mix inside the same out-of-band collection;
+    // one answering calendar does not establish complete local coverage.
+    const discoverNow = (!hasApprovedLocalSource || complementaryDiscoveryNeeded) &&
+      typeof requestTimeDiscovery === "function";
     if (sourcePlan.length === 0 && !discoverNow) {
-      return {
+      return withRuntimeReadiness({
         coverage: "uncovered",
         ...(selectedDate ? { selected_date: selectedDate } : {}),
         feed: null,
@@ -1985,10 +2089,10 @@ function resolveDefaultEventSupply(
             "source_discovery_environment_not_wired",
           ),
         ),
-      };
+      }, unavailableSources);
     }
     const descriptors = sourcePlan.map((source) => compactSourceStatus({ source, status: "pending", raw: [] }));
-    const key = eventCacheKey(
+    const baseKey = eventCacheKey(
       anchor,
       now,
       sourcePlan.map((source) => source.id),
@@ -1996,15 +2100,23 @@ function resolveDefaultEventSupply(
       spatialScope,
       selectedDate,
       time,
+      unavailableSources,
     );
+    // A plain coordinate/calendar warm-up has not performed local research.
+    // Do not let it answer for a later resolver-attested discovery request.
+    const key = discoverNow ? `${baseKey}:discovery:${createHash("sha256")
+      .update(JSON.stringify([placeLabel, placeContext, spatialScopeCacheKey(discoveryScope)]))
+      .digest("hex").slice(0, 20)}` : baseKey;
     // A broad calendar does not erase the existing local-discovery outcome.
     // Keep its current status alongside collection health, including cached
     // views, without allowing one to claim the other's successful coverage.
-    const withDiscoveryHealth = collected => discoveryHealth ? {
+    const withDiscoveryHealth = collected => withRuntimeReadiness(discoveryHealth ? carryLiveDestinationEvidence(collected, {
       ...collected, acquisition: { ...collected.acquisition, discovery_health: discoveryHealth },
-    } : collected;
-    const cached = cache.peek(key);
-    if (cached) return rankCollectedEventsForPreferences(withDiscoveryHealth(cached), preferences, scope, now);
+    }) : collected, unavailableSources);
+    const cacheRead = readLiveDestinationCache(cache, sourcePlan);
+    const cached = cacheRead.peek(key);
+    if (cached) return cacheRead.carry(cached,
+      rankCollectedEventsForPreferences(withDiscoveryHealth(cached), preferences, scope, now));
     const failed = failedRefreshes.read(key);
     if (failed) return rankCollectedEventsForPreferences(withDiscoveryHealth(failed), preferences, scope, now);
     // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
@@ -2012,7 +2124,7 @@ function resolveDefaultEventSupply(
     if (!collection) {
       collection = { result: null, settled: false };
       activeCollections.set(key, collection);
-      cache.warm(key, async () => {
+      cacheRead.warm(key, async () => {
         try {
           let collected;
           const discovery = discoverNow
@@ -2028,6 +2140,7 @@ function resolveDefaultEventSupply(
               selectedDate,
               time,
               registry: discovered.length ? [...requestRegistry, ...discovered] : requestRegistry,
+              complementarySourceIds: discovered.map(source => source.id),
               ...(discovered.length ? { venueResolutionLimit: REQUEST_TIME_VENUE_RESOLUTION_LIMIT } : {}),
               radiusM: effectiveRadiusM,
               timeoutMs: WARM_TIMEOUT_MS,
@@ -2051,7 +2164,8 @@ function resolveDefaultEventSupply(
             failedRefreshes.remember(key, collection.result);
             throw error;
           }
-          collection.result = withDiscoveryHealth(withRequestTimeDiscovery(collected, discovery));
+          collection.result = bindLiveCacheProducer(collected,
+            withDiscoveryHealth(withRequestTimeDiscovery(collected, discovery)));
           if (isFailedEventRefresh(collection.result)) failedRefreshes.remember(key, collection.result);
           else failedRefreshes.forget(key);
           return collection.result;
@@ -2068,7 +2182,7 @@ function resolveDefaultEventSupply(
         shouldStore: shouldCacheEventSupplyResult,
       });
     }
-    const pending = {
+    const pending = withRuntimeReadiness({
       coverage: "covered",
       ...(selectedDate ? { selected_date: selectedDate } : {}),
       feed: descriptors[0] || null,
@@ -2106,7 +2220,7 @@ function resolveDefaultEventSupply(
           reasons: ["background_refresh_pending"],
         },
       },
-    };
+    }, unavailableSources);
     // Capture this producer, not its cache key: a later refresh of the same key
     // must never replace an older planner's completion. Ranking remains frozen
     // to the original request; this reader performs no acquisition or catalog IO.
@@ -2142,8 +2256,31 @@ async function resolveUncoveredDiscoveryHealth(sourceCatalog, anchor) {
   );
 }
 
-function localSourceMixNeedsDiscovery(sourcePlan) {
-  const local = sourcePlan.filter((source) => source?.kind !== "global" && !["national_open", "recurring_map", "calendar_open"].includes(source?.source_family));
+function localDiscoveryScope(anchor, spatialScope) {
+  const scope = sanitizeTrustedSpatialScope(spatialScope);
+  if (scope && pointWithinTrustedSpatialScope(anchor, scope)) return deriveLocalAnchorSpatialScope(scope, anchor);
+  if (!Number.isFinite(anchor?.lat) || !Number.isFinite(anchor?.lng)) return null;
+  const latDelta = DEFAULT_RADIUS_M / 1000 / 111.32;
+  const lngDelta = latDelta / Math.max(0.05, Math.abs(Math.cos(anchor.lat * Math.PI / 180)));
+  return sanitizeTrustedSpatialScope({ source: "trusted_anchor_aperture", kind: "unknown", bounds: {
+    south: Math.max(-90, anchor.lat - latDelta), north: Math.min(90, anchor.lat + latDelta),
+    west: Math.max(-180, anchor.lng - lngDelta), east: Math.min(180, anchor.lng + lngDelta),
+  } });
+}
+
+function localSourceMixNeedsDiscovery(sourcePlan, spatialScope) {
+  const bounds = spatialScope.bounds;
+  const local = sourcePlan.filter((source) => {
+    if (source?.kind === "global" || ["national_open", "recurring_map", "calendar_open"].includes(source?.source_family)) return false;
+    // A regional calendar is useful supply, but two such publishers do not
+    // establish a local source mix. Only coverage within the discovery area
+    // contributes to this conservative stopping heuristic.
+    const bbox = source?.bbox;
+    if (!Array.isArray(bbox) || bbox.length !== 4 || !bbox.every(Number.isFinite)) return false;
+    const [west, south, east, north] = bbox;
+    return west < east && south < north && west >= bounds.west && east <= bounds.east &&
+      south >= bounds.south && north <= bounds.north;
+  });
   const publishers = new Set();
   const families = new Set();
   for (const source of local) {

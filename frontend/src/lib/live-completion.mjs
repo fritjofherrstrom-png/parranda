@@ -17,6 +17,8 @@
  * screen when a result lands.
  */
 
+import { readyPublishedDay } from './published-day.mjs';
+
 export const LIVE_COMPLETION_ENDPOINT = "/api/planner-live-completion";
 export const LIVE_ROUTE_UPGRADE_ENDPOINT = "/api/planner-live-route-upgrade";
 // Sent on every original compose. Legacy servers ignore unknown query flags.
@@ -86,6 +88,7 @@ export function readLiveCompletionResponse(status, body) {
       kind: "terminal",
       liveEvents: body.live_events,
       routeUpgrade: envelope.route_upgrade === "explicit_request" ? "explicit_request" : "not_supported",
+      ...(Object.hasOwn(body, 'day_snapshot') ? { daySnapshot: readyPublishedDay(body.day_snapshot) || { version: 1, state: 'unavailable' } } : {}),
     };
   }
   return { kind: "unavailable" };
@@ -218,7 +221,8 @@ export async function followLiveCompletion({
       terminal = read;
     }
     if (signal.aborted) return cancelled();
-    onLiveEvents(terminal.liveEvents);
+    if (Object.hasOwn(terminal, 'daySnapshot')) onLiveEvents(terminal.liveEvents, terminal.daySnapshot);
+    else onLiveEvents(terminal.liveEvents);
     if (terminal.routeUpgrade !== "explicit_request") return { live: "terminal", upgrade: null };
 
     // Exactly one upgrade request; a pending answer is re-read on the same

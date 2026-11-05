@@ -8,10 +8,10 @@ test("pins stay on their places: a crowded fallback invents no offsets and ancho
   const { screenPinPresentation } = await import("../frontend/src/lib/route-map-presentation.mjs");
   const source = fs.readFileSync(path.join(__dirname, "../frontend/src/components/planner/RouteMap.tsx"), "utf8");
   const body = source.match(/layoutRef\.current = \(\) => \{([\s\S]*?)\n  \};/)[1];
-  const layout = new Function("refs", `const { instanceRef, badgesRef, frameRef, mapRef, setLayoutCrowded, screenPinPresentation, controlBoxes, pinShiftsRef, focusAfterSplitRef, syncGroupPins, fittedZoomRef } = refs; ${body}`);
+  const layout = new Function("refs", `const { instanceRef, badgesRef, frameRef, mapRef, setLayoutCrowded, screenPinPresentation, controlBoxes, pinShiftsRef, focusAfterSplitRef, syncGroupPins, fittedZoomRef, selectedStopRef, groupPinsRef } = refs; ${body}`);
   let visible = null, crowded = false;
   const moves = [], anchors = [];
-  const badge = { lat: 55.6, lng: 13, move: (...args) => moves.push(args), showOrigin: value => { visible = value; }, setGrouped: () => {}, focus: () => {} };
+  const badge = { lat: 55.6, lng: 13, element: { setAttribute() {}, removeAttribute() {} }, move: (...args) => moves.push(args), showOrigin: value => { visible = value; }, setGrouped: () => {}, focus: () => {} };
   const refs = {
     instanceRef: { current: { map: { project: anchor => { anchors.push(anchor); return { x: 100, y: 100 }; } } } },
     badgesRef: { current: [badge] }, frameRef: { current: {} },
@@ -20,6 +20,7 @@ test("pins stay on their places: a crowded fallback invents no offsets and ancho
     // A map control right over the stop: the pin stays on its place.
     controlBoxes: () => [{ left: 80, top: 80, right: 120, bottom: 120 }],
     pinShiftsRef: { current: new Map() }, focusAfterSplitRef: { current: null }, syncGroupPins: () => {}, fittedZoomRef: { current: -Infinity },
+    selectedStopRef: { current: null }, groupPinsRef: { current: new Map() },
   };
   layout(refs);
   assert.equal(crowded, false);

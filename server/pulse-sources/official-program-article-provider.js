@@ -17,7 +17,7 @@ const {
 } = require("./official-program-article-normalizer");
 const {
   MIN_TIMED_ROWS_FOR_SIGNATURE,
-  hasOfficialProgramArticleSignature,
+  hasOfficialProgramArticleSignature: hasProgrammeStructure,
 } = require("./official-program-article-rows");
 const {
   normalizeDateKey,
@@ -36,6 +36,14 @@ const DEFAULT_HORIZON_DAYS = 14;
 const MAX_HORIZON_DAYS = 45;
 const DEFAULT_MAX_REDIRECTS = 3;
 const MAX_REDIRECTS = 5;
+
+function hasOfficialProgramArticleSignature(html) {
+  // Scout pages can be larger than this adapter's ordinary fetch budget.
+  // Do not advertise an interface the default collector cannot read, or let
+  // it displace another usable interface/source inside the existing caps.
+  return typeof html === "string" && Buffer.byteLength(html, "utf8") <= DEFAULT_MAX_BYTES &&
+    hasProgrammeStructure(html);
+}
 
 function createOfficialProgramArticleProvider(providerOptions = {}) {
   const timezone = normalizeIanaTimezone(providerOptions.timezone);
@@ -145,6 +153,8 @@ function buildDescriptor(options = {}) {
       "area",
       "tags",
       "local_significance",
+      "programme",
+      "source_occurrence_id",
     ],
     parrandaOwnedFields: ["intents", "route_role_hint"],
   };

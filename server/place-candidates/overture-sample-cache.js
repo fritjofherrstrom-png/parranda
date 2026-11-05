@@ -40,7 +40,7 @@ function validSample(records, receipt, now = Date.now()) {
 
 // This adapter alone interprets retained Overture evidence. The generic cache
 // does not grant freshness to old values, nor does it know release semantics.
-function createOvertureSampleCache({ cache, validateReceipt = () => true, now = Date.now, maxFallbackAgeMs = MAX_FALLBACK_AGE_MS }) {
+function createOvertureSampleCache({ cache, validateReceipt = () => true, validatePreviousReceipt = () => false, now = Date.now, maxFallbackAgeMs = MAX_FALLBACK_AGE_MS }) {
   const fallbackAgeMs = Math.max(0, Math.min(MAX_FALLBACK_AGE_MS, Number(maxFallbackAgeMs) || 0));
   function valid(value, key, at = now()) {
     try {
@@ -69,7 +69,33 @@ function createOvertureSampleCache({ cache, validateReceipt = () => true, now = 
       return { records: structuredClone(entry.value.records), receipt: structuredClone(entry.value.receipt) };
     },
     async get(key, producer, options = {}) {
-      const value = await cache.get(key, async () => {
+      const previous = cache.inspect(key);
+      const fallback = (value, error) => {
+        options.signal?.throwIfAborted();
+        try {
+          const age = now() - previous?.value?.receipt?.verifiedAt;
+          const expiredAge = Math.max(0, now() - previous?.expiresAt);
+          const prior = previous?.value;
+          if (fallbackAgeMs > 0 && (error || value?.source_error)
+            && Number.isFinite(previous?.expiresAt) && Number.isFinite(age) && age >= 0 && age <= fallbackAgeMs
+            && Number.isFinite(expiredAge) && expiredAge <= fallbackAgeMs
+            && prior?.version === 1 && prior.cacheKey === key && prior.records?.length > 0
+            && validSample(prior.records, prior.receipt, acceptedAt(previous))
+            && validatePreviousReceipt(prior.receipt, key)) {
+            const records = decode(prior);
+            Object.defineProperty(records, 'source_error', { value: 'stale_cache_refresh_failed' });
+            Object.defineProperty(records, 'loader_metadata', { value: { cache: {
+              served_stale: true, stale_age_seconds: Math.floor(age / 1000),
+              refresh_reason: 'stale_cache_refresh_failed', query_contract: 'previous',
+            } } });
+            return records;
+          }
+        } catch (_) { /* malformed predecessor evidence never grants fallback */ }
+        if (error) throw error;
+        return value;
+      };
+      let value;
+      try { value = await cache.get(key, async () => {
         const records = await producer();
         return encode(records, key) || records;
       }, {
@@ -95,8 +121,8 @@ function createOvertureSampleCache({ cache, validateReceipt = () => true, now = 
           } } });
           return records;
         },
-      });
-      return valid(value, key) ? decode(value) : value;
+      }); } catch (error) { return fallback(null, error); }
+      return valid(value, key) ? decode(value) : fallback(value, null);
     },
   };
 }

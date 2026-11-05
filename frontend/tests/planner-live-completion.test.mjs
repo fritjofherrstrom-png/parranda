@@ -158,6 +158,22 @@ async function toUpgrade(t) {
 
 const applied = () => wireBody('upgrade_applied');
 
+test('an applied upgrade shares only its own new publication, never an earlier route reference', async t => {
+  const { h, upgrade } = await toUpgrade(t);
+  const answer = applied();
+  const now = Date.now();
+  answer.result.day_snapshot = { version: 1, state: 'ready', ref: 'e'.repeat(48),
+    created_at: new Date(now - 1000).toISOString(), expires_at: new Date(now + 86400000).toISOString() };
+  const copied = [];
+  Object.defineProperty(h.window.navigator, 'clipboard', { value: { writeText: async value => copied.push(value) } });
+  await h.fetchMock.respond(upgrade, answer);
+  await h.clock.advance(50);
+  assert.ok(button(h, /^Share$/), 'the accepted upgraded answer owns a new publication');
+  await click(h, /^Share$/);
+  assert.deepEqual(copied, [`http://localhost/anywhere?snapshot=${answer.result.day_snapshot.ref}&lang=en`]);
+  assert.equal(routeCalls(h).length, 1, 'sharing the applied answer never recomposes');
+});
+
 test('an applied upgrade replaces the day visibly, and Undo puts the original back', async (t) => {
   const { h, upgrade } = await toUpgrade(t);
   await h.fetchMock.respond(upgrade, applied());
@@ -170,6 +186,7 @@ test('an applied upgrade replaces the day visibly, and Undo puts the original ba
   assert.equal(storedStops.length, 6, 'save and share use the upgraded day');
   assert.equal(storedStops.at(-1).is_live_event, true);
   assert.equal(stored.place, 'Testville', 'the saved identity is the original question, not the event stop');
+  assert.equal(button(h, /^Share$/), undefined, 'an upgrade without its own ref cannot share the earlier route');
   assert.doesNotMatch(JSON.stringify(stored), new RegExp(TOKEN));
 
   await click(h, /^Undo$/);

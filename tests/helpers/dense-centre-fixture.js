@@ -12,7 +12,7 @@
  *   replaced by a generated local Parquet file, as in overture-taxonomy tests.
  * - Overpass is a small evaluator of the loader's own query text: every
  *   `(...)->.cN;.cN out center M;` block is a union of tag/around filters, and
- *   Overpass prints nodes before ways, each ascending by id.
+ *   Overpass prints nodes, ways, then relations, each ascending by id.
  */
 
 const fs = require("node:fs");
@@ -184,11 +184,15 @@ function distanceKm(a, b) {
 
 function createOverpassEmulator(places) {
   const stats = { calls: 0 };
-  const blockPattern = /\(((?:(?:node|way)\["[^"]+"="[^"]+"\]\(around:[^)]*\);)+)\)->\.(c\d+);\.\2 out center (\d+);/g;
-  const filterPattern = /(node|way)\["([^"]+)"="([^"]+)"\]\(around:([\d.]+),(-?[\d.]+),(-?[\d.]+)\);/g;
+  const blockPattern = /\(((?:(?:node|way|relation)(?:\["[^"]+"="[^"]+"\])+\(around:[^)]*\);)+)\)->\.(c\d+);\.\2 out center (\d+);/g;
+  const filterPattern = /(node|way|relation)((?:\["[^"]+"="[^"]+"\])+)\(around:([\d.]+),(-?[\d.]+),(-?[\d.]+)\);/g;
+  const descriptor = (place) => {
+    const [key, value, defaultType] = OSM_TAGS[place.category];
+    return { type: place.osmType || defaultType,
+      tags: { name: place.name, [key]: value, ...place.osmTags } };
+  };
   const element = (place) => {
-    const [key, value, type] = OSM_TAGS[place.category];
-    const tags = { name: place.name, [key]: value };
+    const { type, tags } = descriptor(place);
     return type === "node"
       ? { type, id: place.osmId, lat: place.lat, lon: place.lng, tags }
       : { type, id: place.osmId, center: { lat: place.lat, lon: place.lng }, tags };
@@ -199,16 +203,18 @@ function createOverpassEmulator(places) {
     const elements = [];
     for (const block of query.matchAll(blockPattern)) {
       const matched = new Map();
-      for (const [, type, key, value, radiusM, lat, lng] of block[1].matchAll(filterPattern)) {
+      for (const [, type, selectors, radiusM, lat, lng] of block[1].matchAll(filterPattern)) {
         const centre = { lat: Number(lat), lng: Number(lng) };
+        const conditions = [...selectors.matchAll(/\["([^"]+)"="([^"]+)"\]/g)];
         for (const place of places) {
-          const [placeKey, placeValue, placeType] = OSM_TAGS[place.category];
-          if (placeType !== type || placeKey !== key || placeValue !== value) continue;
+          const mapped = descriptor(place);
+          if (mapped.type !== type || !conditions.every(([, key, value]) => mapped.tags[key] === value)) continue;
           if (distanceKm(centre, place) * 1000 <= Number(radiusM)) matched.set(`${type}/${place.osmId}`, place);
         }
       }
+      const typeOrder = { node: 0, way: 1, relation: 2 };
       const printed = [...matched.values()].sort((a, b) =>
-        (OSM_TAGS[a.category][2] === "node" ? 0 : 1) - (OSM_TAGS[b.category][2] === "node" ? 0 : 1) ||
+        typeOrder[descriptor(a).type] - typeOrder[descriptor(b).type] ||
         a.osmId - b.osmId);
       elements.push(...printed.slice(0, Number(block[3])).map(element));
     }

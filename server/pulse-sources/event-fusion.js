@@ -117,6 +117,7 @@ function buildFusedEvent(members) {
     "source_series_time_window",
     "recurrence",
     "calendar_fact",
+    "programme",
     "route_role_hint",
     "timezone",
     "source_language",

@@ -1,0 +1,32 @@
+
+> parranda@1.0.0 build:frontend
+> npm --prefix frontend run build
+
+
+> @parranda/frontend@0.0.0 build
+> astro build
+
+14:03:02 [types] Generated 38ms
+14:03:02 [build] output: "static"
+14:03:02 [build] mode: "static"
+14:03:02 [build] directory: <repo>/frontend/dist/
+14:03:02 [build] Collecting build info...
+14:03:02 [build] ✓ Completed in 80ms.
+14:03:02 [build] Building static entrypoints...
+14:03:03 [vite] ✓ built in 437ms
+14:03:03 [WARN] [vite] [plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+14:03:03 [vite] ✓ built in 272ms
+14:03:03 [build] Rearranging server assets...
+
+ generating static routes 
+14:03:03   ├─ /anywhere/index.html (+29ms) 
+14:03:03   ├─ /index.html (+4ms) 
+14:03:03 ✓ Completed in 57ms.
+
+14:03:03 [build] ✓ Completed in 790ms.
+14:03:03 [build] 2 page(s) built in 874ms
+14:03:03 [build] Complete!

@@ -5,6 +5,7 @@ const { resolveAgnosticIntake } = require("../planner/agnostic-place-intake");
 const { parsePlaceRef } = require("./place-ref");
 const { normalizeSourceEventDate } = require("../pulse-sources/source-event-time");
 const { withLiveDiscoveryChoices } = require('../planner/live-discovery-choices');
+const { carryLiveDestinationEvidence } = require('./live-source-destination-evidence');
 const { pointWithinTrustedSpatialScope } = require("./spatial-scope");
 const {
   normalizeSourceDiscoveryHealth,
@@ -312,7 +313,7 @@ function shapeCollectedLiveEvents(collected, { scope = null } = {}) {
   };
   const discoveryHealth = normalizeSourceDiscoveryHealth(rawDiscoveryHealth);
   if (discoveryHealth) acquisition.discovery_health = discoveryHealth;
-  return withLiveDiscoveryChoices({
+  return carryLiveDestinationEvidence(collected, withLiveDiscoveryChoices({
     coverage: collected.coverage,
     ...(normalizeSourceEventDate(collected.selected_date) ? { selected_date: collected.selected_date } : {}),
     feed: collected.feed || null,
@@ -322,7 +323,7 @@ function shapeCollectedLiveEvents(collected, { scope = null } = {}) {
     this_week: thisWeek,
     browse,
     ...(collected.pending ? { pending: true } : {}),
-  });
+  }));
 }
 
 function shapeLiveEventBrowse(value, { scope = null } = {}) {

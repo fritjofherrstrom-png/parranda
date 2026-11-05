@@ -52,6 +52,14 @@ function daypartForRole(role) {
   return SLOT_DAYPART[slot] || SLOT_DAYPART[DEFAULT_SLOT];
 }
 
+// The daypart a role keeps whatever the hour, or null. The food anchor is the
+// day's main meal (lunch or dinner) and an unknown role has no daypart of its
+// own, so neither can say a day leads with a daypart already past.
+function fixedDaypartForRole(role) {
+  if (typeof role !== "string" || role === "food_anchor" || !Object.prototype.hasOwnProperty.call(DAYPART_SLOT, role)) return null;
+  return SLOT_DAYPART[DAYPART_SLOT[role]] || null;
+}
+
 // The numeric daypart slot rank for a role (lower = earlier). Shared with the
 // route engine's agnostic_compose daypart post-pass so both order the day by the
 // same generic role→slot vocabulary. Unknown roles → the neutral midday slot.
@@ -257,6 +265,7 @@ module.exports = {
   stableStopId,
   daypartForRole,
   daypartSlotForRole,
+  fixedDaypartForRole,
   SLOT_DAYPART,
   timeBandRank,
 };

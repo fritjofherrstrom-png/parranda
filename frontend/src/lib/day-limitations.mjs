@@ -151,7 +151,7 @@ export function contextNote(limitations, t, { statedElsewhere = [], sourceComple
   const keys = CONTEXT_LIMITATIONS.filter((key) => !skip.has(key));
   const note = sentencesFor(keys, limitations, phrases(null), t, CONTEXT_LIMITATIONS.length);
   const partial = sourceCompletion?.status === 'partial'
-    ? sentence(t('Platsunderlaget var ofullständigt när svaret skapades; fler platser kan saknas', 'The place evidence was incomplete when the response was produced; more places may be missing'))
+    ? sentence(t('Platsuppgifterna var ofullständiga; fler platser kan saknas', 'Place information was incomplete; more places may be missing'))
     : '';
   const failed = sourceFailed || Number(sourceCompletion?.failed) > 0
     ? sentence(t('En eller flera platskällor misslyckades', 'One or more place sources failed'))

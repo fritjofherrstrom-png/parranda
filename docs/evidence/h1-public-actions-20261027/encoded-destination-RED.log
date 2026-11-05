@@ -1,0 +1,135 @@
+TAP version 13
+# Subtest: generic sharing refuses trailing-dot loopback while retaining the actual Live facts
+not ok 1 - generic sharing refuses trailing-dot loopback while retaining the actual Live facts
+  ---
+  duration_ms: 1334.897983
+  type: 'test'
+  location: '/workspace/tests/generic-live-sharing.test.js:38:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'ready'
+    - 'unavailable'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'unavailable'
+  actual: 'ready'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/workspace/tests/generic-live-sharing.test.js:41:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: generic sharing refuses trailing-dot private host while retaining the actual Live facts
+not ok 2 - generic sharing refuses trailing-dot private host while retaining the actual Live facts
+  ---
+  duration_ms: 707.798029
+  type: 'test'
+  location: '/workspace/tests/generic-live-sharing.test.js:38:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'ready'
+    - 'unavailable'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'unavailable'
+  actual: 'ready'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/workspace/tests/generic-live-sharing.test.js:41:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: generic sharing refuses encoded login path while retaining the actual Live facts
+not ok 3 - generic sharing refuses encoded login path while retaining the actual Live facts
+  ---
+  duration_ms: 518.204462
+  type: 'test'
+  location: '/workspace/tests/generic-live-sharing.test.js:38:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'ready'
+    - 'unavailable'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'unavailable'
+  actual: 'ready'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/workspace/tests/generic-live-sharing.test.js:41:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: generic sharing refuses encoded checkout separator while retaining the actual Live facts
+not ok 4 - generic sharing refuses encoded checkout separator while retaining the actual Live facts
+  ---
+  duration_ms: 897.955761
+  type: 'test'
+  location: '/workspace/tests/generic-live-sharing.test.js:38:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'ready'
+    - 'unavailable'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'unavailable'
+  actual: 'ready'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/workspace/tests/generic-live-sharing.test.js:41:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: generic sharing refuses double-encoded login path while retaining the actual Live facts
+not ok 5 - generic sharing refuses double-encoded login path while retaining the actual Live facts
+  ---
+  duration_ms: 451.247902
+  type: 'test'
+  location: '/workspace/tests/generic-live-sharing.test.js:38:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'ready'
+    - 'unavailable'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'unavailable'
+  actual: 'ready'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/workspace/tests/generic-live-sharing.test.js:41:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 0
+# fail 5
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4531.359273

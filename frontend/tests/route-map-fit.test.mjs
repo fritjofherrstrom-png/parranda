@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { controlAwareView, paddingOptions } from "../src/lib/route-map-fit.mjs";
+import { routeDisplayPath } from "../src/lib/route-map-presentation.mjs";
 
 // Web Mercator in world pixels (256px tiles), as Leaflet's default CRS.
 function project({ lat, lng }, zoom) {
@@ -186,6 +187,16 @@ test("the route line's own points only have to stay on the map", () => {
   // Holding the line to the stops' rule would cost zoom.
   const strict = fit(withEnd.map((mark) => ({ ...mark, avoidControls: true })));
   assert.ok(strict.zoom < view.zoom, `${strict.zoom} < ${view.zoom}`);
+});
+
+test("a routed walking path stays in the phone map while stop targets clear controls", () => {
+  const stops = [stop(55.6, 12.98), stop(55.6, 13.02), stop(55.61, 13.02)];
+  const path = [{ lat: 55.6, lng: 12.98 }, { lat: 55.598, lng: 12.99 },
+    { lat: 55.598, lng: 13.015 }, { lat: 55.6, lng: 13.02 }, { lat: 55.61, lng: 13.02 }];
+  const line = routeDisplayPath(path, { geometrySource: "osrm", geometryMode: "walking" })
+    .map((point) => ({ ...point, radius: 0, avoidControls: false }));
+  const marks = [...stops, ...line];
+  assertClear(fit(marks), marks);
 });
 
 test("controls off the map, or without size, are ignored", () => {

@@ -134,7 +134,7 @@ test("a place with no day says so as a status, not silently", async (t) => {
   await h.fetchMock.respond(compose, { days: [], agnostic_route_output_experiment: { promotion: { promote: false, readiness: "non_promotable" } } });
   await h.clock.advance(50);
   const statuses = [...h.container.querySelectorAll('[role="status"]')].map((s) => s.textContent.trim());
-  assert.ok(statuses.some((s) => /couldn't compose a day|couldn't find/.test(s)), JSON.stringify(statuses));
+  assert.ok(statuses.some((s) => /couldn't build a day|couldn't find/.test(s)), JSON.stringify(statuses));
   assert.equal(h.container.querySelectorAll("h1").length, 1, "the page is still named");
 });
 
@@ -142,9 +142,9 @@ test("the pre-mounted status receives final unavailable copy without another fai
   const resolved = { status: "resolved", resolved: { label: "Testville, Region, Country" } };
   const cases = [
     { intake: { status: "unresolved" }, expected: "Parranda couldn't find “Testville”. Try another spelling, or add a city or country." },
-    { intake: resolved, expected: "Parranda couldn't compose a day for Testville yet — nothing is invented in its place." },
+    { intake: resolved, expected: "Parranda couldn't build a day for Testville yet." },
     { intake: resolved, candidate_readiness: { real_place_count: 2 }, readiness_blockers: ["insufficient_geocoded_candidates"], expected: "Parranda found 2 real places near Testville, but not enough for a reliable day yet — nothing is invented in its place." },
-    { intake: resolved, candidate_readiness: { real_place_count: 8 }, readiness_blockers: ["walking_validation_failed"], expected: "Parranda couldn't compose a day for Testville yet — nothing is invented in its place." },
+    { intake: resolved, candidate_readiness: { real_place_count: 8 }, readiness_blockers: ["walking_validation_failed"], expected: "Parranda couldn't build a day for Testville yet." },
   ];
   for (const { expected, ...experiment } of cases) {
     const h = await mountPlanner({ url: PLACE_URL });
@@ -185,7 +185,7 @@ test("choices, service refusals and pending upgrades keep their own truthful sta
       await h.clock.advance(50);
       assert.equal(status.textContent, "", "no final failure or ready announcement replaces the real status");
       assert.ok(h.text().includes(expected), h.text());
-      assert.doesNotMatch(h.text(), /couldn't find|couldn't compose a day/);
+      assert.doesNotMatch(h.text(), /couldn't find|couldn't build a day/);
       assert.ok([...h.container.querySelectorAll('[role="status"]')].some((node) => node !== status && node.textContent === expected), "the original choices/refusal surface still owns its status");
     } finally {
       await h.unmount();
@@ -218,7 +218,7 @@ test("a dayless place-source failure says the sources did not answer and offers 
       "The place sources didn't answer just now, so Parranda couldn't fetch places for Testville — nothing is invented in its place. Try again in a moment.",
     );
     assert.doesNotMatch(h.text(), /with your choices/, "a source outage is not blamed on the reader's picks");
-    assert.doesNotMatch(h.text(), /Reading more from the sources/);
+    assert.doesNotMatch(h.text(), /Looking for more places/);
     await h.clock.advance(60000);
     assert.equal(composeCalls(h).length, 1, "no timer-driven recompose");
 
@@ -266,7 +266,7 @@ test("a resolved place without a day for other reasons keeps the choices advice 
     await h.clock.advance(500);
     await h.fetchMock.respond(composeCalls(h)[0], { days: [], agnostic_route_output_experiment: { intake: { status: "resolved", resolved: { label: "Testville" } }, source_status: { status: "loaded:12" } } });
     await h.clock.advance(50);
-    assert.match(h.text(), /couldn't compose a day for Testville yet/);
+    assert.match(h.text(), /couldn't build a day for Testville yet/);
     assert.match(h.text(), /We could not confirm a walkable day with your choices/);
     assert.doesNotMatch(h.text(), /didn't answer just now/);
     assert.equal(buttonNamed(h, "Try again"), undefined);
@@ -372,6 +372,6 @@ test("how the day was assembled is one closed line beside the map", async (t) =>
   const about = route.querySelectorAll("details");
   assert.equal(about.length, 1);
   assert.equal(about[0].open, false);
-  assert.match(about[0].textContent, /Built from source-backed places/);
+  assert.match(about[0].textContent, /Places come from external sources/);
   assert.doesNotMatch(h.container.querySelector("header").textContent, /source-backed/);
 });

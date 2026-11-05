@@ -231,6 +231,31 @@ export function SunIcon({ className }: IconProps) {
   );
 }
 
+/** Selected-day weather, in the same stroke as the rest of the icon set. */
+export function CloudIcon({ className }: IconProps) {
+  return <Icon className={className}><path d="M7 18h11a4 4 0 0 0 .5-8 6 6 0 0 0-11.7-1A4.5 4.5 0 0 0 7 18Z" /></Icon>;
+}
+
+export function CloudSunIcon({ className }: IconProps) {
+  return <Icon className={className}><path d="M8 3v2M2 9h2M3.8 4.8l1.4 1.4M13.6 4.8l-1.4 1.4M5 11a4 4 0 1 1 7-4" /><path d="M9 20h10a3.5 3.5 0 0 0 .2-7 5 5 0 0 0-9.7-1A4 4 0 0 0 9 20Z" /></Icon>;
+}
+
+export function RainIcon({ className }: IconProps) {
+  return <Icon className={className}><path d="M6 14a4 4 0 0 1-.2-8 5.5 5.5 0 0 1 10.7 1A3.5 3.5 0 0 1 18 14M8 17l-1 3M13 17l-1 3M18 17l-1 3" /></Icon>;
+}
+
+export function SnowIcon({ className }: IconProps) {
+  return <Icon className={className}><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9 5l3 3 3-3M9 19l3-3 3 3M4.5 10.5l4-1-1-4M19.5 13.5l-4 1 1 4M7.5 18.5l1-4-4-1M16.5 5.5l-1 4 4 1" /></Icon>;
+}
+
+export function ThunderstormIcon({ className }: IconProps) {
+  return <Icon className={className}><path d="M5 14a4 4 0 0 1 .8-8 5.5 5.5 0 0 1 10.7 1A3.5 3.5 0 0 1 19 14M13 12l-4 6h4l-2 4 6-7h-4l1-3" /></Icon>;
+}
+
+export function FogIcon({ className }: IconProps) {
+  return <Icon className={className}><path d="M5 11a4 4 0 0 1 .8-8 5.5 5.5 0 0 1 10.7 1A3.5 3.5 0 0 1 19 11M3 15h18M5 19h14" /></Icon>;
+}
+
 /** The night theme. */
 export function MoonIcon({ className }: IconProps) {
   return (

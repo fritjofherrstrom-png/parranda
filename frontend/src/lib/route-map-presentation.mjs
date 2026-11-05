@@ -53,26 +53,23 @@ function connectedComponents(stops, collisionDistanceKm) {
   return [...groups.values()];
 }
 
+/** Unknown geometry remains an overview regardless of point count. */
+export function routePathIsSketch(pathPoints, _stopCount, geometry = {}) {
+  return routeDisplayPath(pathPoints, geometry).length < 2;
+}
+
 /**
- * Is the published route line only a sketch of the stop order?
- *
- * A walking router that follows streets returns more geometry than the route's
- * own waypoints; the heuristic estimate returns exactly the waypoints (at most
- * the stops plus a published start and end), joined by straight lines that can
- * cross water, parks and buildings. Drawing those like a street path would claim
- * a walking line Parranda never computed, so the map draws a sketch dotted.
- *
- * Structural only: the answer comes from point counts, never from a place,
- * provider name or label. Anything unreadable counts as a sketch — the
- * conservative reading.
+ * Draw only a server-validated pedestrian path. Density and composition labels
+ * never establish transport mode, and invalid points must not be removed to
+ * join the remaining fragments into a path that was never computed.
  */
-export function routePathIsSketch(pathPoints, stopCount) {
-  const points = Array.isArray(pathPoints)
-    ? pathPoints.filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng))
-    : [];
-  const stops = Number.isInteger(stopCount) && stopCount > 0 ? stopCount : 0;
-  if (points.length < 2) return true;
-  return points.length <= stops + 2;
+export function routeDisplayPath(pathPoints, { geometrySource = null, geometryMode = null } = {}) {
+  if (geometrySource !== "osrm" || geometryMode !== "walking"
+    || !Array.isArray(pathPoints) || pathPoints.length < 2 || pathPoints.length > 50000) return [];
+  const valid = (point) => point && Number.isFinite(point.lat) && Number.isFinite(point.lng)
+    && Math.abs(point.lat) <= 90 && Math.abs(point.lng) <= 180;
+  if (!pathPoints.every(valid)) return [];
+  return pathPoints.map(({ lat, lng }) => ({ lat, lng }));
 }
 
 /**

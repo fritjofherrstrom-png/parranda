@@ -49,7 +49,7 @@ test('bfcache return from pending clears waiting, rejects a late poll body, and 
   await h.fetchMock.releaseBody(poll);
   await pageTransition(h, 'pageshow');
   await h.clock.advance(61000);
-  assert.doesNotMatch(h.text(), /plan will continue automatically|Composing the day|Trusted museum/i);
+  assert.doesNotMatch(h.text(), /finding places and building your day|Building your day|Trusted museum/i);
   assert.match(h.text(), /paused when you left/i);
   assert.equal(routeCalls(h).length, 1, 'restoration itself never composes');
   assert.equal(h.fetchMock.calls.filter(call => call.url === '/api/planner-status' && call.method === 'POST').length, 1);
@@ -100,7 +100,7 @@ test('bfcache during an updating day cancels once and removes the busy state wit
   await pageTransition(h, 'pageshow');
   await h.clock.advance(61000);
   assert.match(h.text(), /Trusted museum/);
-  assert.doesNotMatch(h.text(), /Updating your day|plan will continue automatically/i);
+  assert.doesNotMatch(h.text(), /Updating your day|finding places and building your day/i);
   assert.equal(h.container.querySelector('[aria-busy="true"]'), null);
   assert.equal(lifecycleDeletes(h).length, 1);
   await click(h, /Continue planning/);
@@ -142,7 +142,7 @@ async function plannerWaitingOnColdSupply(t, token) {
   const initial = h.fetchMock.pending()[0];
   assert.ok(initial, "the initial Planner request exists");
   await h.fetchMock.respond(initial, pendingLifecycle(token), 202);
-  assert.match(h.text(), /plan will continue automatically/i);
+  assert.match(h.text(), /finding places and building your day/i);
   return h;
 }
 

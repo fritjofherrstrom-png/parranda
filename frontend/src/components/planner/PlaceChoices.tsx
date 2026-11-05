@@ -9,16 +9,16 @@ export function PlaceChoices({ intake, pending, locationPending, locationFailed,
   const invalid = intake?.blockers?.includes('place_selection_invalid');
   const credits = [...new Set(choices.filter(c => c.attribution).map(c => `${c.attribution}${c.license ? ` · ${c.license}` : ''}`))];
   if (!choices.length && !invalid) return null;
-  return <section aria-label={t('Välj plats', 'Choose place')} className="flex flex-col gap-3 rounded-2xl border border-parranda-ink/15 p-4">
+  return <section aria-label={t('Välj plats', 'Choose place')} className="flex flex-col gap-3 rounded-2xl border-line border-parranda-line-faint p-4">
     <p role="status">{invalid ? t('Ditt tidigare platsval behöver bekräftas igen.', 'Your previous place choice needs confirming again.') : t('Vilken plats menar du?', 'Which place do you mean?')}</p>
     {choices.map(choice => <button key={choice.selection_id} type="button" {...busyButton(pending || locationPending, () => onChoose(choice))}
-      className="min-h-11 rounded-xl border border-parranda-ink/20 px-4 py-3 text-left hover:bg-parranda-ink/5 aria-disabled:opacity-50 aria-busy:cursor-progress">
+      className="min-h-11 rounded-xl border-line border-parranda-line px-4 py-3 text-left hover:bg-parranda-fill-faint aria-disabled:opacity-50 aria-busy:cursor-progress">
       {choice.title ? <><span className="block text-base font-bold">{choice.title}</span>
-        {choice.context && <span className="block text-sm text-parranda-ink/68">{choice.context}</span>}</> : choice.label}
+        {choice.context && <span className="block text-sm text-parranda-ink-meta">{choice.context}</span>}</> : choice.label}
     </button>)}
-    {credits.map(credit => <p key={credit} className="text-xs text-parranda-ink/68">{credit}</p>)}
+    {credits.map(credit => <p key={credit} className="text-xs text-parranda-ink-meta">{credit}</p>)}
     {onNarrow && <button type="button" {...busyButton(pending || locationPending, onNarrow)}
-      className="min-h-11 rounded-xl border border-parranda-ink/20 px-4 py-3 text-left aria-disabled:opacity-50 aria-busy:cursor-progress">
+      className="min-h-11 rounded-xl border-line border-parranda-line px-4 py-3 text-left aria-disabled:opacity-50 aria-busy:cursor-progress">
       {locationPending ? t('Hämtar position …', 'Getting location …') : t('Använd min position för att avgränsa sökningen', 'Use my location to narrow the search')}
     </button>}
     {onNarrow && locationFailed && <p role="status">{t('Positionen kunde inte hämtas. Välj en plats ovan eller lägg till stad eller region.', 'Your location could not be obtained. Choose a place above or add a city or region.')}</p>}

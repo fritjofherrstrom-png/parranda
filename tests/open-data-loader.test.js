@@ -1104,6 +1104,8 @@ test("a thin regional place may select one richer secondary cluster without merg
   assert.equal(records.loader_metadata.regional_scout.attempted, true);
   assert.equal(records.loader_metadata.regional_scout.selected_anchor, secondary.id);
   assert.equal(records.loader_metadata.selection_reason, "richer_regional_cluster");
+  assert.equal(require('../server/place-candidates/source-url-evidence').publicSourceUrlsForRecords(records).size, records.length,
+    "selected regional OSM rows retain their actual source destinations");
   assert.ok(records.every((record) => Math.abs(record.lat - secondary.lat) < 0.01));
   assert.equal(records.some((record) => Math.abs(record.lat - primary.lat) < 0.01), false, "primary and regional clusters are never merged");
 });

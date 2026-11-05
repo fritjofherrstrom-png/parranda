@@ -112,12 +112,18 @@ function scoreCalendarPageLink({ url, label, title, terms }) {
   const segments = parsed.pathname.split("/").filter(Boolean);
   if (segments.length <= 2) score += 2;
   if (looksLikeEventDetailPath(segments, terms)) return null;
+  // A bounded scout should reach an explicitly dated programme before a
+  // site's unrelated advent/navigation calendar. This is URL/link evidence
+  // for reading order only: it grants no source, date or event authority.
+  const datedProgramme = isDatedProgrammeLink(normalizedPath, normalizedLabel, normalizedTitle);
+  if (datedProgramme) score += 8;
   if (score < 6) return null;
 
   return {
     url,
     score,
     reasons: uniqueStrings([
+      datedProgramme ? "calendar_link_dated_programme" : null,
       matchedTerms.some((term) => normalizedLabel.includes(term))
         ? "calendar_link_label_match"
         : null,
@@ -129,6 +135,15 @@ function scoreCalendarPageLink({ url, label, title, terms }) {
         : null,
     ]),
   };
+}
+
+function isDatedProgrammeLink(path, label, title) {
+  if (!/\b20\d{2}\b/.test(path) ||
+      !/\b(?:program(?:me|ma|a|m|acio|acion|acao)?|timetable)\b/.test(path)) return false;
+  // Submission forms and explicit archives are not the dated event list.
+  return !/\b(?:archives?|archived|arkiv|historik|previous|past|tidigare|form|formular|formulario|formulaire|submission|submit|registration|anmalan|arrangorer)\b/.test(
+    `${path} ${label} ${title}`,
+  );
 }
 
 function mostSpecificTerms(terms) {

@@ -458,3 +458,18 @@ test('normalization and public Live views distinguish date-only uncertainty from
  assert.equal(view.time_window.all_day_explicit,true);
  assert.equal(eventTiming(view,'en'),'Thu 22 Oct · All day');
 });
+
+// Engine review, 25 Oct 2026: a guided walk listed at 10:00 with no end was
+// "now" at 20:00, so Pulse labelled it "Just nu" and Just nu could offer it as
+// happening. A stated start that has passed with no stated end is not evidence
+// that the event is still on; its own day keeps its relevance.
+test("a passed start with no stated end keeps its day's relevance and is never now", () => {
+  const options = { now: NOW, timezone: "Europe/Rome" }; // 20:30 local
+  const relevance = (starts_at) =>
+    normalizeTimeSensitiveSourceEvent(event({ starts_at, ends_at: undefined }), options).timing_relevance;
+  assert.equal(relevance("2026-07-10T08:00:00.000Z"), "today", "started 10:00 today");
+  assert.equal(relevance("2026-07-10T17:00:00.000Z"), "tonight", "started 19:00 this evening");
+  assert.equal(relevance("2026-07-08T08:00:00.000Z"), "unknown", "started on an earlier day");
+  // A stated end around now is evidence: still on now.
+  assert.equal(normalizeTimeSensitiveSourceEvent(event(), options).timing_relevance, "now");
+});

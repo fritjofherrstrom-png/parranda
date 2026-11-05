@@ -1,0 +1,24 @@
+✔ trusted local midday Food-first Full puts the available lunch first and the distinct dinner last (153.969083ms)
+✔ trusted evening Food-first starts with dinner without resurrecting the already closed lunch (58.832416ms)
+✔ a dinner-only source window cannot become a lunch-first stop (57.001542ms)
+✔ unknown hours permit meal proposals without manufacturing current availability or known hours (85.594375ms)
+✔ a future day does not inherit the current hour as lunch urgency (159.5215ms)
+✔ unknown timezone and unranked Food retain the established ordering (150.631958ms)
+✔ a known lunch-only meal is never labelled as an evening meal (78.190917ms)
+✔ time-aware ordering preserves an explicit pin without admitting a closed meal (64.1865ms)
+✔ an explicit retained manual order is not replaced by the meal heuristic (107.447625ms)
+✔ scarce Food-only supply is not duplicated or filled with other interests (3.04525ms)
+✔ meal ordering cannot buy a new walk beyond the existing geometry tolerance (0.367333ms)
+✔ partial Food fit and a coffee-only cafe do not acquire a meal slot (0.099625ms)
+✔ bounded meal selection retains the complementary meal among several lunch-only places (354.005083ms)
+✔ bounded meal selection retains the complementary meal among several dinner-only places (336.63275ms)
+✔ releasing an intentionally empty extent cannot turn missing supply into an intentional empty success (0.766792ms)
+✔ Food as the sole explicit interest also retains the feasible complementary dinner (26.887167ms)
+ℹ tests 16
+ℹ suites 0
+ℹ pass 16
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1810.698291

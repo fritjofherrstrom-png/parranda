@@ -81,7 +81,7 @@ for (const lang of ['en', 'sv']) test(`captured uncovered Live distinguishes mis
       await click(h, button(h, /^(Around Testville|Runt Testville)$/));
       await h.fetchMock.respond(h.fetchMock.pending().find(call => call.url.includes('/api/live-events')), response);
     }
-    assert.match(sheetText(h), lang === 'en' ? /No verified calendar coverage for this area yet/ : /Verifierad kalendertäckning saknas för det här området/);
+    assert.match(sheetText(h), lang === 'en' ? /We don.t have verified event sources for this area yet/ : /Vi har inga verifierade evenemangskällor för området ännu/);
     assert.doesNotMatch(sheetText(h), /Nothing verified|Nothing listed|Inget verifierat|Inget listat|0\/0|no_approved_sources/);
   }
   assert.equal(h.fetchMock.calls.filter(call => call.url.includes('/api/route-recommendations')).length, 1);
@@ -141,8 +141,8 @@ test('a responding empty calendar is stated as what the sources list, not as a q
 // The Linje sheet uses the fuller #554 knowledge-boundary wording, while
 // the compact panel keeps its existing sentence. Assert both exact surfaces.
 const SHEET_UNCOVERED = {
-  en: "No verified calendar coverage for this area yet. We don't know what's on here — that doesn't mean nothing is happening.",
-  sv: 'Verifierad kalendertäckning saknas för det här området. Vi vet därför inte vad som händer här — det betyder inte att inget är på gång.',
+  en: "We don't have verified event sources for this area yet. There may still be events here.",
+  sv: 'Vi har inga verifierade evenemangskällor för området ännu. Det kan ändå hända saker här.',
 };
 const SHEET_UNAVAILABLE = {
   en: "Live information is unavailable right now. We don't know what's on here — that doesn't mean nothing is happening.",
@@ -156,8 +156,8 @@ const EMPTY_STATES = [
   {
     name: 'uncovered',
     events: live({ status: 'uncovered', result: 'unknown' }, { coverage: 'uncovered', feeds: [] }),
-    en: "No live-events feed reaches this place yet — Parranda won't invent one.",
-    sv: 'Ingen live-eventkälla täcker den här platsen än — Parranda hittar inte på en.',
+    en: "We don't have verified event sources for this area yet. There may still be events here.",
+    sv: 'Vi har inga verifierade evenemangskällor för området ännu. Det kan ändå hända saker här.',
   },
   {
     name: 'healthy but every listing rejected',
@@ -362,7 +362,7 @@ test('while waiting, the Live sheet does not print responded counts that read as
   assert.match(h.text(), /Checking the calendars — updates automatically in a moment\./);
   await click(h, button(h, /Explore live/));
   const sheet = sheetText(h);
-  assert.match(sheet, /Refreshing verified sources for this area/);
+  assert.match(sheet, /Looking for events/);
   assert.doesNotMatch(sheet, /Calendars: 0 of 1 responded/);
   assert.doesNotMatch(sheet, /couldn't fetch/);
 });

@@ -32,20 +32,20 @@ export const BASEMAP_PROVIDER = {
 // rest are quiet tints of them, so the route's ember stays the loudest colour.
 export const BASEMAP_PALETTES = {
   day: {
-    paper: "#EEECE7",
+    paper: "#E8E2D7",
     water: "#C9D3D6",
     waterLabel: "#5B727A",
     park: "#DFE2D5",
     wood: "#D9DDCD",
-    building: "#E3E0D9",
-    buildingLine: "#D6D2CA",
-    path: "#F6F4EF",
-    minor: "#FFFFFF",
-    major: "#FFFFFF",
-    casing: "#D6D2CA",
+    building: "#DED8CC",
+    buildingLine: "#C9C1B4",
+    path: "#EFEADF",
+    minor: "#F3EEE5",
+    major: "#F8F3EA",
+    casing: "#CAC2B5",
     rail: "#CBC6BD",
     label: "#57534C",
-    halo: "#EEECE7",
+    halo: "#E8E2D7",
   },
   night: {
     paper: "#111012",

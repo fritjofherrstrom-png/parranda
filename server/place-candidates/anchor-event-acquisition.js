@@ -24,6 +24,7 @@ function buildAnchorEventSourcePlan({
   maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
   now,
   coverageBounds = null,
+  complementarySourceIds = [],
 } = {}) {
   if (!hasCoordinates(anchor)) return [];
 
@@ -40,7 +41,17 @@ function buildAnchorEventSourcePlan({
     clampInteger(maxLocalSources, 0, DEFAULT_MAX_LOCAL_SOURCES),
     Math.max(0, cap - reserveGlobal),
   );
-  const localSources = selectPublisherDiverseFeeds(availableLocalSources, localCap).map((feed) => ({
+  const selectedLocal = selectPublisherDiverseFeeds(availableLocalSources, localCap);
+  const complementaryIds = new Set(complementarySourceIds);
+  if (localCap > 0 && !selectedLocal.some(feed => complementaryIds.has(feed.id))) {
+    // Give one newly discovered independent publisher a bounded collection
+    // opportunity. Eligibility/expiry and geometry were checked above. Keep
+    // the strongest existing selections and the reserved global slot.
+    const complementary = availableLocalSources.find(feed => complementaryIds.has(feed.id) &&
+      !selectedLocal.some(selected => publisherIdentity(selected) === publisherIdentity(feed)));
+    if (complementary) selectedLocal.splice(localCap - 1, 1, complementary);
+  }
+  const localSources = selectedLocal.map((feed) => ({
     ...feed,
     // Legacy rows are Linked Events. Reviewed source manifests can select one
     // of the other allowlisted adapters without adding city branches here.

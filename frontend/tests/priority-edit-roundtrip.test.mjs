@@ -144,6 +144,16 @@ test("later Adjust preserves manual count/removals without permanently pinning o
   assert.equal(saved({ dayEdit: edit({ preserve_retained: true }) }).id, saved({ dayEdit: edit() }).id);
 });
 
+test('released extent preserves its date-bound edit identity through URL, payload and save', () => {
+  const dayEdit = edit({ action: 'remove', target_stop_count: 2, replacement_preference: null,
+    preserve_retained: false, release_extent: true });
+  assert.deepEqual(buildAnywherePayload({ preferences: selected, dayEdit }).day_edit, dayEdit);
+  assert.deepEqual(saved({ dayEdit }).inputs.dayEdit, dayEdit);
+  assert.deepEqual(decodeShareParams(encodeShareParams({ preferences: selected, dayEdit })).dayEdit, dayEdit);
+  const capped = { ...dayEdit }; delete capped.release_extent;
+  assert.notEqual(saved({ dayEdit }).id, saved({ dayEdit: capped }).id);
+});
+
 function committed(inputs) {
   const entry = saved(inputs);
   entry.commitments = buildCommitmentSnapshot({ anchorKey: "place:testville", dayKey: entry.id,

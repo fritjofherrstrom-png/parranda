@@ -52,8 +52,8 @@ export default function AppBar({
    * on a language switch, to hand the day's position to the next page.
    */
   onNavigate?: (target: AppBarTarget) => void;
-  /** Where the link to `option` leads; defaults to this page's query with `lang` swapped. */
-  languageHref?: (option: Lang) => string;
+  /** Null explicitly refuses navigation; never replace it with a fresh query. */
+  languageHref?: (option: Lang) => string | null;
 }) {
   const [search, setSearch] = useState("");
   const [night, setNight] = useState<boolean | undefined>(undefined);
@@ -93,33 +93,42 @@ export default function AppBar({
         <span aria-hidden="true" className="h-[18px] w-[18px] rounded-full border-4 border-parranda-ember transition group-hover:scale-110" />
         <span className="type-display text-15 tracking-[0.02em] min-[360px]:text-17">Parranda</span>
       </a>
+      {/* Drawn 36px tall like the day's pills, each with a 44px touch target
+          (the ::before reaches 4px past the drawn edge). */}
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={toggleTheme}
           aria-pressed={night}
           aria-label={lang === "sv" ? "Kvällsläge" : "Night mode"}
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full border-line border-parranda-ink/18 text-parranda-ink transition hover:border-parranda-ink/50"
+          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border-line border-parranda-line text-parranda-ink transition before:absolute before:-inset-1 before:content-[''] hover:border-parranda-line-strong"
         >
-          <span data-theme-glyph="day"><SunIcon className="h-[18px] w-[18px]" /></span>
-          <span data-theme-glyph="night"><MoonIcon className="h-[18px] w-[18px]" /></span>
+          <span data-theme-glyph="day"><SunIcon className="h-4 w-4" /></span>
+          <span data-theme-glyph="night"><MoonIcon className="h-4 w-4" /></span>
         </button>
         {/* Each end rounds itself: overflow-hidden here would clip the focus ring. */}
-        <div className="flex rounded-full border-line border-parranda-ink/18" role="group" aria-label={languageLabel}>
-          {(["en", "sv"] as const).map((option) => (
+        <div className="flex rounded-full border-line border-parranda-line" role="group" aria-label={languageLabel}>
+          {(["en", "sv"] as const).map((option) => {
+            const href = languageHref ? languageHref(option) : withLang(search, option);
+            return (
             <a
               key={option}
-              href={languageHref ? languageHref(option) : withLang(search, option)}
-              onClick={leaving("language")}
+              href={href ?? undefined}
+              role={href === null ? "link" : undefined}
+              aria-disabled={href === null ? true : undefined}
+              tabIndex={href === null ? -1 : undefined}
+              onClick={href === null ? (event) => event.preventDefault() : leaving("language")}
               aria-current={lang === option ? "true" : undefined}
               className={
-                "type-data inline-flex min-h-11 min-w-11 items-center justify-center px-3 text-xs font-semibold transition first:rounded-l-full last:rounded-r-full " +
-                (lang === option ? "bg-parranda-ink text-parranda-paper" : "text-parranda-ink/72 hover:text-parranda-ink")
+                "type-data relative inline-flex min-h-9 min-w-11 items-center justify-center px-3 text-xs font-semibold transition before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] first:rounded-l-full last:rounded-r-full " +
+                (lang === option ? "bg-parranda-ink text-parranda-paper" : "text-parranda-ink-muted hover:text-parranda-ink") +
+                (href === null ? " cursor-not-allowed opacity-50" : "")
               }
             >
               {option.toUpperCase()}
             </a>
-          ))}
+            );
+          })}
         </div>
       </div>
     </nav>

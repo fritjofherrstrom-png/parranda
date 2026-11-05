@@ -110,7 +110,7 @@ test("without a day on screen, Blitz makes no promise about one", async (t) => {
 test("a typed place Parranda could not pin down says so, offers a way forward, and no Blitz", async (t) => {
   const h = await planner(t, "http://localhost/anywhere?place=Nowhereville&lang=en", unresolved);
   assert.match(h.text(), /Parranda couldn't find “Nowhereville”\. Try another spelling, or add a city or country/);
-  assert.doesNotMatch(h.text(), /couldn't compose a day/);
+  assert.doesNotMatch(h.text(), /couldn't build a day/);
   const another = [...h.container.querySelectorAll("a")].find((a) => a.textContent === "Choose another place");
   assert.ok(another, "the notice offers a way forward");
   assert.equal(another.getAttribute("href"), "/?lang=en");

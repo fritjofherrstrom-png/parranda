@@ -9,6 +9,7 @@
  */
 
 const { GENERIC_PROVIDER_CITY } = require("./provider-registry");
+const { beginWixCatalogCollection, carryWixDetail, rememberWixSitemapLoc, rememberWixSitemapDocument } = require('../place-candidates/live-source-destination-evidence');
 const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
 const {
   normalizeIanaTimezone,
@@ -73,7 +74,7 @@ function createWixEventSitemapProvider(providerOptions = {}) {
     timezone: reviewedTimezone || undefined,
     sourceLanguage: sourceLanguage || undefined,
   });
-  return {
+  const provider = {
     descriptor,
     create(cityConfig, context = {}) {
       const boundDescriptor = { ...descriptor, city: cityConfig?.key || descriptor.city };
@@ -143,6 +144,7 @@ function createWixEventSitemapProvider(providerOptions = {}) {
             eventPathPrefix: reviewedEventPathPrefix,
           });
 
+          const destinationEvidence = beginWixCatalogCollection(provider, rootResponse, root);
           const detailRows = [...root.eventUrls];
           for (const childUrl of root.sitemapUrls.slice(0, sitemapLimit)) {
             const childResponse = await fetchBoundedText(fetcher, childUrl, {
@@ -156,6 +158,7 @@ function createWixEventSitemapProvider(providerOptions = {}) {
               baseOrigin,
               eventPathPrefix: reviewedEventPathPrefix,
             });
+            destinationEvidence?.child(childUrl, childResponse, child.eventUrls);
             detailRows.push(...child.eventUrls);
           }
 
@@ -178,6 +181,7 @@ function createWixEventSitemapProvider(providerOptions = {}) {
             reviewedTimezone,
             sourceLanguage,
             providerOptions,
+            destinationEvidence,
           });
 
           if (!detailOutcome.events.length) {
@@ -191,7 +195,7 @@ function createWixEventSitemapProvider(providerOptions = {}) {
               );
             }
           }
-          const rows = detailOutcome.events.map(compact).filter(Boolean);
+          const rows = detailOutcome.events.map(event => carryWixDetail(event, compact(event))).filter(Boolean);
           return {
             events: [],
             signals: [],
@@ -205,6 +209,7 @@ function createWixEventSitemapProvider(providerOptions = {}) {
       };
     },
   };
+  return provider;
 }
 
 function buildDescriptor(options = {}) {
@@ -273,18 +278,18 @@ function extractWixSitemapDocument(xml, options = {}) {
   const eventPathPrefix = normalizePathPrefix(options.eventPathPrefix);
   const rows = [...source.matchAll(
     /<(?:sitemap|url)>[\s\S]*?<loc>([\s\S]*?)<\/loc>[\s\S]*?(?:<lastmod>([\s\S]*?)<\/lastmod>)?[\s\S]*?<\/(?:sitemap|url)>/gi,
-  )].map((match) => ({
+  )].map((match) => rememberWixSitemapLoc({
     url: normalizeSameOriginUrl(decodeXml(match[1]), baseOrigin),
     lastmod: normalizeDateKey(decodeXml(match[2])),
-  })).filter((row) => row.url);
+  }, match[1])).filter((row) => row.url);
 
   if (/<sitemapindex\b/i.test(source)) {
-    return {
+    return rememberWixSitemapDocument({
       sitemapUrls: rows
         .filter((row) => EVENT_PATH_PATTERN.test(new URL(row.url).pathname))
         .map((row) => row.url),
       eventUrls: [],
-    };
+    }, rows);
   }
   if (/<urlset\b/i.test(source)) {
     return {
@@ -687,6 +692,7 @@ async function collectWixDetailEvents({
   reviewedTimezone,
   sourceLanguage,
   providerOptions,
+  destinationEvidence,
 }) {
   const events = [];
   let timedEventCount = 0;
@@ -720,6 +726,7 @@ async function collectWixDetailEvents({
           return { status: "parse_failed" };
         }
         if (event.freshness === "stale") return { status: "stale" };
+        destinationEvidence?.detail(event, row, response);
         return { status: "accepted", event, timingKind };
       } catch (error) {
         return {
@@ -805,7 +812,8 @@ async function fetchBoundedText(fetcher, url, options = {}) {
       if (Buffer.byteLength(String(text || ""), "utf8") > maxBytes) {
         throw new Error("source_body_too_large");
       }
-      return { text: String(text || ""), url: responseUrl };
+      return { text: String(text || ""), url: responseUrl,
+        originalResponseUrl: typeof response.url === 'string' ? response.url : null };
     }
     throw new Error("source_redirect_limit");
   } catch (error) {
@@ -898,16 +906,17 @@ function dedupeUrls(rows) {
 
 function rankDetailRows(rows) {
   return rows
-    .map((row, index) => ({ ...row, order: index }))
-    .sort((left, right) => {
+    .map((row, order) => ({ row, order }))
+    .sort((a, b) => {
+      const left = a.row, right = b.row;
       if (left.lastmod && right.lastmod && left.lastmod !== right.lastmod) {
         return right.lastmod.localeCompare(left.lastmod);
       }
       if (left.lastmod && !right.lastmod) return -1;
       if (!left.lastmod && right.lastmod) return 1;
-      return left.order - right.order;
+      return a.order - b.order;
     })
-    .map(({ order: _order, ...row }) => row);
+    .map(({ row }) => row);
 }
 
 function hasWixPageSignature(html) {

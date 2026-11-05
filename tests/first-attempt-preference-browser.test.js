@@ -20,7 +20,7 @@ const NOW = '2026-10-16T08:00:00Z';
 const DATE = '2026-10-17';
 const ANCHOR = { lat: 48.5, lng: 8.5 };
 const COMPOSE_PATHS = new Set(['/api/route-recommendations', '/api/planner-status']);
-const pendingCopy = 'Fetching source-backed places for your day. Your plan will continue automatically — no need to try again.';
+const pendingCopy = 'Finding places and building your day …';
 const deferred = () => {
   let resolve, reject;
   const promise = new Promise((done, fail) => { resolve = done; reject = fail; });

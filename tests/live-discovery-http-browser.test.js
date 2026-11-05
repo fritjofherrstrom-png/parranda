@@ -60,6 +60,7 @@ async function assertRenderedDay(page, expectedStops) {
 }
 
 test('ordinary HTTP browser day preserves the second source occurrence through selection, Remove, Undo and reload', { timeout: 45000 }, async t => {
+  const { assertExactNavigation } = await import('../frontend/tests/helpers/exact-navigation-observation.mjs');
   const requests = [], responses = [], liveRequests = [], sourceRequests = [], resolverRequests = [], suggestionRequests = [], errors = [];
   let partialPlaceSupply = false, nativeSuggestion = null, completed = false, coldCompletionToken = null;
   const records = [...rows('culture', 'museum', 7), ...rows('views', 'viewpoint', 2)]
@@ -282,16 +283,15 @@ test('ordinary HTTP browser day preserves the second source occurrence through s
   await capture('undo-exact-six-total');
 
   const postsBeforeReload = requests.length;
-  const reloadedResponse = waitForPublished(page, body => routeStops(body).length > 0 && body.days?.[0]?.date === DATE);
-  await page.reload();
-  const reloaded = await reloadedResponse;
+  const exactReload = await assertExactNavigation({ page, navigate: () => page.reload(), expectedEntry: selectedEntry,
+    readComposeCount: () => requests.length });
+  const reloaded = exactReload.safeResponse;
   assert.equal(await page.evaluate(() => performance.getEntriesByType('navigation')[0]?.type), 'reload',
     'the clock fixture must preserve native reload evidence');
   await assertRenderedDay(page, routeStops(reloaded));
   await capture('ordinary-reload-observed');
-  assert.equal(requests.length, postsBeforeReload + 1, 'ordinary reload composes the same explicit intent once');
-  assert.deepEqual(requests.at(-1).live_event_choices, [{ occurrence_id: chosenId, action: 'keep' }]);
-  assert.deepEqual(requests.at(-1).dates, [DATE]);
+  assert.equal(requests.length, postsBeforeReload, 'ordinary reload restores the exact accepted answer without another compose');
+  assert.deepEqual(exactReload.commitments, selectedEntry.commitments);
   assert.deepEqual(routeStops(reloaded).map(stop => stop.id), selectedStops.map(stop => stop.id));
   await assertRenderedDay(page, selectedStops);
   const restored = await savedDay(page);
@@ -304,8 +304,9 @@ test('ordinary HTTP browser day preserves the second source occurrence through s
   await assertRenderedDay(page, selectedStops); // A late old response must not replace it.
   await capture('ordinary-reload-same-choice');
 
-  // Drop only the private provider caches, as after a server restart. The UI
-  // reload must carry its saved choice into one cold compose, then follow that
+  // Drop only the private provider caches, as after a server restart. An
+  // explicit interest change (not display-only reload) must carry Keep into
+  // one cold HTTP compose, then follow that
   // request's producer capability instead of treating not-yet-collected as a
   // missing event or starting another composition to retry the same question.
   const transportGate = deferred();
@@ -322,7 +323,8 @@ test('ordinary HTTP browser day preserves the second source occurrence through s
     new URL(response.url()).pathname === '/api/planner-live-completion' && response.status() === 202);
   const upgradeResponse = page.waitForResponse(response =>
     new URL(response.url()).pathname === '/api/planner-live-route-upgrade' && response.status() === 200);
-  await page.reload();
+  await anchor.getByRole('button', { name: 'Adjust', exact: true }).click();
+  await anchor.getByRole('button', { name: 'Views', exact: true }).click();
   const cold = await (await coldResponse).json();
   assert.equal(cold.live_events.pending, true);
   assert.equal(cold.live_completion?.route_upgrade, 'explicit_request');
@@ -331,11 +333,13 @@ test('ordinary HTTP browser day preserves the second source occurrence through s
   assert.ok(routeStops(cold).every(stop => !stop.is_live_event), 'pending supply cannot fabricate a live choice before the source answers');
   assert.equal(cold.agnostic_route_output_experiment.live_event_choices.honored_count, 0);
   assert.deepEqual(requests.at(-1).live_event_choices, [{ occurrence_id: chosenId, action: 'keep' }]);
-  assert.deepEqual(requests.at(-1).preference_priority, ['culture']);
+  assert.deepEqual(requests.at(-1).preference_priority, ['culture', 'views'], 'the explicit newly picked interest appends to the retained Culture prefix');
+  assert.deepEqual(requests.at(-1).preferences, ['culture', 'views']);
+  assert.deepEqual(requests.at(-1).dates, [DATE], 'the explicit cold adjustment keeps the restored absolute date');
   await pendingCompletionResponse;
   assert.deepEqual(await savedDay(page), confirmedBeforeColdReload,
     'pending acquisition must leave the exact last confirmed day intact');
-  await capture('cold-reload-original-producer-pending');
+  await capture('cold-explicit-adjustment-original-producer-pending');
   transportGate.resolve();
   const upgraded = await (await upgradeResponse).json();
   assert.equal(upgraded.live_route_upgrade?.state, 'applied');
@@ -345,18 +349,24 @@ test('ordinary HTTP browser day preserves the second source occurrence through s
   assert.equal(upgraded.result.agnostic_route_output_experiment.live_event_choices.honored_count, 1);
   await assertRenderedDay(page, upgradedStops);
   await delay(700);
-  assert.equal(requests.length, postsBeforeColdReload + 1, 'cold choice completion must use the original compose, without another POST');
+  assert.equal(requests.length, postsBeforeColdReload + 1, 'cold explicit choice completion must use the original compose, without another POST');
   assert.equal(sourceRequests.length, sourcesBeforeColdReload + 1, 'one deferred native producer owns the cold collection');
   const coldReads = liveRequests.slice(readsBeforeColdReload);
   assert.ok(coldReads.some(read => read.pathname === '/api/planner-live-completion'));
   assert.equal(coldReads.filter(read => read.pathname === '/api/planner-live-route-upgrade').length, 1);
   assert.ok(coldReads.every(read => read.token === coldCompletionToken), 'every completion and upgrade read must belong to the original producer');
-  await capture('cold-reload-original-upgrade-six-total');
+  await capture('cold-explicit-adjustment-original-upgrade-six-total');
 
   partialPlaceSupply = true;
   const partialResponse = waitForPublished(page, body => body.agnostic_route_output_experiment?.source_status?.collection?.source_completion?.status === 'partial');
-  await page.reload();
+  // Removing Views is another explicit input change. Display-only reload must
+  // not reacquire sources merely because the server's private caches changed.
+  await anchor.getByRole('button', { name: 'Views', exact: true }).click();
   const partial = await partialResponse;
+  assert.deepEqual(requests.at(-1).dates, [DATE]);
+  assert.deepEqual(requests.at(-1).preferences, ['culture']);
+  assert.deepEqual(requests.at(-1).preference_priority, ['culture']);
+  assert.deepEqual(requests.at(-1).live_event_choices, [{ occurrence_id: chosenId, action: 'keep' }]);
   assert.equal(partial.agnostic_route_output_experiment.source_status.collection.source_completion.failed, 1);
   assert.equal(routeStops(partial).length, 6);
   assert.equal(occurrence(routeStops(partial).at(-1)), chosenId);

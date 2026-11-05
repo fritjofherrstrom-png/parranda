@@ -1,0 +1,30 @@
+✔ pending Live is read through the capability; the route is never recomposed and the token never stored (367.5005ms)
+✔ pending Live with no capability says unavailable and does not poll or recompose (56.4955ms)
+✔ cold Live updates its card and details when day composition was unavailable, without reload or storing a failed day (51.656292ms)
+✔ grouped Live details retain every stated occurrence and its individual source link (65.397167ms)
+✔ an expired capability ends as unavailable, never as an empty calendar (53.0145ms)
+✔ an applied upgrade shares only its own new publication, never an earlier route reference (93.333542ms)
+✔ an applied upgrade replaces the day visibly, and Undo puts the original back (85.247541ms)
+✔ an upgrade that lands after the user changed the day is dropped (65.781125ms)
+✔ a new compose cancels the previous day's completion run (69.89325ms)
+✔ real completion before-query preserves explicit selected day and reopen (416.779875ms)
+✔ real completion after-query preserves explicit selected day and reopen (88.574083ms)
+✔ real completion before-query preserves explicit near-route scope, period and reopen (93.994541ms)
+✔ real completion after-query preserves explicit near-route scope, period and reopen (98.371709ms)
+✔ late automatic week query body cannot overwrite a newer explicit selected-day query (78.074292ms)
+✔ real applied upgrade preserves the open manually chosen period (Sun 28 Jun) (90.111542ms)
+✔ real applied upgrade preserves the open manually chosen period (Next 7 days) (87.304042ms)
+✔ same-question upgrade retains Around the place × Sun 28 Jun through reopen and rejects the old geometry body (73.666292ms)
+✔ same-question upgrade retains Around the place × Next 7 days through reopen and rejects the old geometry body (77.331291ms)
+✔ same-question upgrade retains Near the route × Sun 28 Jun through reopen and rejects the old geometry body (80.198875ms)
+✔ same-question upgrade retains Near the route × Next 7 days through reopen and rejects the old geometry body (136.019083ms)
+✔ same-question upgrade retains Near me × Sun 28 Jun through reopen and rejects the old geometry body (127.563ms)
+✔ same-question upgrade retains Near me × Next 7 days through reopen and rejects the old geometry body (104.630334ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2427.506458
