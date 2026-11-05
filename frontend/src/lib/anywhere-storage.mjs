@@ -165,9 +165,12 @@ export function removeSaved(list, id) {
 export function isSavedEntryVersion(saved, current) {
   if (!saved || !current || saved.id !== current.id) return false;
   const version = entry => {
-    const { savedAt, inputs, ...answer } = entry;
-    const { liveSheetSort, ...request } = inputs || {};
-    return { ...answer, inputs: inputs ? request : null };
+    const { savedAt, inputs, safeResponse, ...answer } = entry;
+    // Exact navigation deliberately drops execution handoffs. Their absence
+    // changes neither the accepted facts nor whether that answer was saved.
+    const { liveSheetSort, placeSelection, ...request } = inputs || {};
+    const { live_completion, live_route_upgrade, planner_lifecycle, ...facts } = safeResponse || {};
+    return { ...answer, inputs: inputs ? request : null, safeResponse: facts };
   };
   try {
     return JSON.stringify(version(saved)) === JSON.stringify(version(current));

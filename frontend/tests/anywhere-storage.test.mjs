@@ -57,6 +57,16 @@ test('save time and Live-sheet sorting do not turn the same answer into an unsav
   assert.equal(isSavedEntryVersion(original, saved), true);
 });
 
+test('discarding execution handoffs preserves Saved while source observation facts still matter', () => {
+  const original = entry('Testville', ['culture']);
+  const saved = { ...original, inputs: { ...original.inputs, placeSelection: 'one-shot-receipt' },
+    safeResponse: { ...original.safeResponse, live_completion: { token: 'execution-only' },
+      live_route_upgrade: { token: 'execution-only' }, planner_lifecycle: { token: 'execution-only' } } };
+  assert.equal(isSavedEntryVersion(saved, original), true);
+  assert.equal(isSavedEntryVersion(saved, { ...original, safeResponse: { ...original.safeResponse,
+    weather_summary: { fetched_at: '2026-07-03T12:00:00Z', temperature_max: 20 } } }), false);
+});
+
 test("the id is place + date + sorted preferences (re-saving the same query replaces it)", () => {
   const a = entry("Lyon", ["food", "views"]);
   const b = entry("Lyon", ["views", "food"]); // same set, different order

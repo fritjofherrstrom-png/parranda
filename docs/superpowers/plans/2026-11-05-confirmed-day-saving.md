@@ -29,9 +29,13 @@
 - [x] Add mounted regressions for a rebuilt same-query answer, a rejected Save and rejected removal. Run on unchanged product; expect behavioral failures.
 - [x] Add the version comparison and its focused fact/commitment/time/view controls. Save/removal commit UI state only after successful storage; translated failure permits retry.
 - [x] Run focused tests and related persistence/navigation/Live controls. Expected: all pass; no new compose on save/retry/restore.
-- [ ] Run frontend typecheck, build, dist consistency and diff checks. Expected: PASS; no layout-source changes.
-- [ ] Commit the implementation and run the complete frontend suite under the network guard.
+- [x] Run frontend typecheck, build, dist consistency and diff checks. Expected: PASS; no layout-source changes.
+- [x] Commit the implementation and run the complete local frontend suite under the network guard; Linux exact-head CI remains the full acceptance gate.
 
 ## Delivery gates
 
 Independent whole-branch review; fix any Important/Critical with a regression. Publish a main-targeted PR and obtain exact-head CI. No merge/deploy.
+
+## Verification record
+
+Three original mounted regressions RED→GREEN. A legacy entry and a one-shot-receipt language view were also reproduced RED→GREEN before their fixes. Final affected suite114PASS/0FAIL/0SKIP; final typecheck/build PASS. The broad local pre-final diagnostic had1038PASS/20FAIL: server-publication preconditions expected ready but storage returned unavailable. One such test also fails on an untouched main6a archive; macOS has no /proc/self/fd and the unchanged publication store explicitly requires Linux. This is not a final-head full-suite PASS. Exact-head Linux CI is still required.

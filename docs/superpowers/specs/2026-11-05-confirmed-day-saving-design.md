@@ -8,6 +8,8 @@ The Save indicator describes the accepted version on screen, not merely its plac
 
 Commit the saved-list UI only after localStorage accepts the write. If saving or removal throws, keep the prior list, preserve the displayed day, announce a short translated failure and allow an explicit retry. Do not delete older saved days to make space or retry automatically.
 
+The exact-navigation display intentionally drops one-shot place receipts and execution capabilities. Dropping those fields does not change the saved answer; source observation dates, weather, facts and user choices do. Preserve this distinction across language navigation. Older entries with no persisted request remain displayable and saveable without inventing request inputs.
+
 Alternatives considered by Codex: random durable version IDs would change the saved-list product contract and add unnecessary history; comparing only query IDs is the reproduced defect. Compare the persisted answer fields while retaining current query IDs. This is an implementation choice under the user's existing instruction to build without more design questions.
 
 ## Scope and safeguards

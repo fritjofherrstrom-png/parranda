@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mountPlanner } from './helpers/planner-harness.mjs';
 import { LAST_KEY, SAVED_KEY } from '../src/lib/anywhere-storage.mjs';
+import { NAVIGATION_KEY } from '../src/lib/planner-navigation.mjs';
 
 const calls = h => h.fetchMock.calls.filter(call => call.url.startsWith('/api/route-recommendations'));
 const saveButton = h => h.container.querySelector('button[aria-label="Save this day"]');
@@ -134,4 +135,37 @@ test('an older saved entry without request inputs can still be saved as the disp
   assert.deepEqual(ids(h.readStorage(SAVED_KEY)[0]), ['original-museum', 'original-cafe']);
   assert.ok(savedButton(h), 'view metadata must not prevent confirming a legacy snapshot');
   assert.equal(calls(h).length, 0);
+});
+
+test('an exact language view stays Saved after its one-shot place receipt is removed', async t => {
+  let first = await mountPlanner({
+    url: 'http://localhost/anywhere?place=Testville&planner=open&lang=en',
+    sessionStorage: { 'parranda:place-choice': { place: 'Testville', label: 'Testville',
+      selection: 'one-shot-private-receipt', at: Date.now() } },
+  });
+  let next = null;
+  t.after(async () => { if (next) await next.unmount(); if (first) await first.unmount(); });
+  await first.clock.advance(500);
+  const request = calls(first)[0];
+  await first.fetchMock.respond(request, day(request.body.dates[0]));
+  await first.clock.advance(50);
+  await click(first, saveButton(first));
+  assert.ok(savedButton(first));
+  assert.equal(first.readStorage(SAVED_KEY)[0].inputs.placeSelection, 'one-shot-private-receipt');
+  const link = [...first.container.querySelectorAll('[role="group"] a')].find(node => node.textContent === 'SV');
+  assert.ok(link, 'the product emitted an exact language view');
+  const target = new URL(link.getAttribute('href'), first.window.location.href).href;
+  const snapshot = storage => Object.fromEntries(Array.from({ length: storage.length }, (_, i) => {
+    const key = storage.key(i); return [key, JSON.parse(storage.getItem(key))];
+  }));
+  const storage = snapshot(first.window.localStorage);
+  const sessionStorage = snapshot(first.window.sessionStorage);
+  assert.equal(sessionStorage[NAVIGATION_KEY].records[0].entry.inputs.placeSelection, undefined,
+    'the emitted display record does not persist the private receipt');
+  await first.unmount(); first = null;
+  next = await mountPlanner({ url: target, storage, sessionStorage, props: { lang: 'sv' }, navigationType: 'navigate' });
+  await next.clock.advance(500);
+  assert.match(next.text(), /original museum/);
+  assert.equal(calls(next).length, 0);
+  assert.ok(next.container.querySelector('button[aria-label="Dagen är sparad"]'), 'the same accepted answer is still saved');
 });
