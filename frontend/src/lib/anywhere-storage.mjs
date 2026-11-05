@@ -160,3 +160,18 @@ export function upsertSaved(list, entry) {
 export function removeSaved(list, id) {
   return (Array.isArray(list) ? list : []).filter((e) => e && e.id !== id);
 }
+
+/** Query identity permits replacement; Saved describes this exact answer. */
+export function isSavedEntryVersion(saved, current) {
+  if (!saved || !current || saved.id !== current.id) return false;
+  const version = entry => {
+    const { savedAt, inputs, ...answer } = entry;
+    const { liveSheetSort, ...request } = inputs || {};
+    return { ...answer, inputs: inputs ? request : null };
+  };
+  try {
+    return JSON.stringify(version(saved)) === JSON.stringify(version(current));
+  } catch {
+    return false;
+  }
+}
