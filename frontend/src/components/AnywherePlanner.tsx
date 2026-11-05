@@ -73,6 +73,7 @@ import {
   buildSavedEntry,
   upsertSaved,
   removeSaved,
+  isSavedEntryVersion,
   LAST_KEY,
   SAVED_KEY,
   savedEntryId,
@@ -113,11 +114,13 @@ function readLS<T>(key: string, fallback: T): T {
   }
 }
 
-function writeLS(key: string, value: unknown): void {
+function writeLS(key: string, value: unknown): boolean {
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
+    return true;
   } catch {
     /* private mode / quota — retention is best-effort, never fatal */
+    return false;
   }
 }
 
@@ -290,6 +293,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // nothing keyed to it (the Live sheet's own queries) starts over.
   const [completedLive, setCompletedLive] = useState<{ day: any; liveEvents: LiveEvents; view: any; entry: SavedEntry | null } | null>(null);
   const [savedDays, setSavedDays] = useState<SavedEntry[]>([]);
+  const [savedWriteError, setSavedWriteError] = useState<
+    { action: "save"; entry: SavedEntry } | { action: "remove"; id: string } | null
+  >(null);
   const [restoredAt, setRestoredAt] = useState<string | null>(null); // set when showing a SNAPSHOT
   const [navigationCapturedAt, setNavigationCapturedAt] = useState<string | null>(null);
   const [navigationPublication, setNavigationPublication] = useState<NavigationPublication | null>(null);
@@ -1473,10 +1479,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   function saveDay() {
     const entry = lastEntryRef.current;
     if (!entry) return;
-    const stamped = { ...entry, inputs: { ...entry.inputs, liveSheetSort }, savedAt: new Date().toISOString() };
+    const stamped = { ...entry, inputs: entry.inputs ? { ...entry.inputs, liveSheetSort } : null, savedAt: new Date().toISOString() };
     const next = upsertSaved(savedDays, stamped);
+    if (!writeLS(SAVED_KEY, next)) {
+      setSavedWriteError({ action: "save", entry });
+      return;
+    }
     setSavedDays(next);
-    writeLS(SAVED_KEY, next);
+    setSavedWriteError(null);
     // Saving the live result must not turn it into a restored snapshot. Only
     // restoreEntry() sets restoredAt; otherwise the still-visible adjustment
     // controls would change while auto-recompose remained silently paused.
@@ -1484,8 +1494,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   function removeSavedDay(id: string) {
     const next = removeSaved(savedDays, id);
+    if (!writeLS(SAVED_KEY, next)) {
+      setSavedWriteError({ action: "remove", id });
+      return;
+    }
     setSavedDays(next);
-    writeLS(SAVED_KEY, next);
+    setSavedWriteError(null);
   }
 
   // Share only the immutable reference emitted for this exact accepted entry.
@@ -1515,7 +1529,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   }
   const canShare = Boolean(exactShareHref());
 
-  const isSaved = Boolean(lastEntryRef.current && savedDays.some((e) => e.id === lastEntryRef.current!.id));
+  const isSaved = savedDays.some((entry) => isSavedEntryVersion(entry, lastEntryRef.current));
 
   // "Near me now": the user's real position becomes the trusted anchor (explicit
   // coords win in the agnostic intake). Honest failure — a denied/failed
@@ -3165,6 +3179,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           stale={staleNotice === "updating"}
         />
       )}
+      {savedWriteError?.action === "save" && savedWriteError.entry === lastEntryRef.current && (
+        <p role="status" className="text-sm leading-relaxed text-parranda-ink-muted">
+          {t("Dagen kunde inte sparas på den här enheten. Frigör utrymme eller tillåt lagring och försök igen.", "Couldn't save this day on this device. Free up space or allow storage, then try again.")}
+        </p>
+      )}
 
       {/* Without a primary route, the broader place structure remains useful —
           but it is explicitly candidates, never a second itinerary. */}
@@ -3243,6 +3262,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {savedDays.length > 0 && (
         <SavedDays t={t} lang={lang} savedDays={savedDays} restoreEntry={restoreEntry} removeSavedDay={removeSavedDay} />
+      )}
+      {savedWriteError?.action === "remove" && savedDays.some(entry => entry.id === savedWriteError.id) && (
+        <p role="status" className="text-sm leading-relaxed text-parranda-ink-muted">
+          {t("Den sparade dagen kunde inte tas bort. Försök igen när lagring är tillgänglig.", "Couldn't remove this saved day. Try again when storage is available.")}
+        </p>
       )}
       </main>
 
