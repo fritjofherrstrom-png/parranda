@@ -666,6 +666,9 @@ function createOpenDataLoader({
         selected = combined;
         selectedRadiusKm = widerKm;
         selectionReason = "richer_wider_supply";
+      } else if (combined.loader_error) {
+        // Choosing the useful base rows must not erase a failed wider query.
+        selected = withLoaderStatus([...first], first.loader_status, combined.loader_error);
       }
     }
     return withLoaderMetadata(selected, {
