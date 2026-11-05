@@ -8,6 +8,19 @@ async function type(h,value) {
  await h.act(()=>{const input=h.document.querySelector('#landingCity');Object.getOwnPropertyDescriptor(h.window.HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new h.window.Event('input',{bubbles:true}));});
 }
 async function key(h,key) {await h.act(()=>h.document.querySelector('#landingCity').dispatchEvent(new h.window.KeyboardEvent('keydown',{key,bubbles:true})));}
+test('two-character East Asian search waits for IME completion and keeps the short Latin guard',async()=>{
+ const h=await mount();try {
+  const input=h.document.querySelector('#landingCity');
+  await h.act(()=>input.dispatchEvent(new h.window.CompositionEvent('compositionstart',{bubbles:true})));
+  await type(h,'京都');await h.clock.advance(250);
+  assert.equal(h.fetchMock.calls.length,0,'an unfinished IME must not search');
+  await h.act(()=>input.dispatchEvent(new h.window.CompositionEvent('compositionend',{bubbles:true})));
+  await h.clock.advance(200);assert.equal(h.fetchMock.calls.length,1);assert.equal(h.fetchMock.calls[0].body.query,'京都');
+  await h.fetchMock.respond(h.fetchMock.calls[0],{status:'ready',choices:[choice('京都市','Japan')]});
+  assert.equal(h.document.querySelector('[role=option]').textContent,'京都市Japan');
+  await type(h,'ha');await h.clock.advance(250);assert.equal(h.fetchMock.calls.length,1);
+ }finally{await h.unmount();}
+});
 test('typing debounces suggestions attached to a combobox; keyboard choice fills the field',async()=>{
  const h=await mount({injected:{__PARRANDA_CITIES__:{rome:{key:'rome',label:'Rome'}}}});try {
   assert.equal([...h.document.querySelectorAll('a')].some(link=>new URL(link.href).searchParams.has('city')),false);

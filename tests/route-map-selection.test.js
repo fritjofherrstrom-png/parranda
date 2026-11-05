@@ -30,9 +30,11 @@ const empty=[];
 function Harness(){
   const [expanded,setExpanded]=React.useState(false);
   const [selected,setSelected]=React.useState(null);
+  const [geometry,setGeometry]=React.useState({});
+  window.setMapTestGeometry=setGeometry;
   const [stops,setStops]=React.useState([{id:'a',label:'Stop A',lat:55.595,lng:12.99},{id:'b',label:'Stop B',lat:55.598,lng:12.998},{id:'c',label:'Stop C',lat:55.603,lng:13.01}]);
   window.setMapTestStops=setStops;
-  const route=React.useMemo(()=>({map_path_points:stops}),[stops]);
+  const route=React.useMemo(()=>({map_path_points:stops,...geometry}),[stops,geometry]);
   return <main style={{padding:12,minHeight:1800}}><button onClick={()=>setStops([{id:'new',label:'New day',lat:55.6,lng:13}])}>New day</button><button onClick={()=>setSelected(1)}>Select stop B</button><button onClick={()=>setSelected(null)}>Clear stop</button><output>Selected: {selected ?? 'none'}</output><section aria-label="The route"><RouteMap hasPrimaryRoute={true} routeStops={stops} primaryRoute={route} areas={empty} routeContextSuggestions={empty} showContext={false} sketch={true} selectedStopIndex={selected} onSelectStop={setSelected} mapExpanded={expanded} onToggleExpanded={()=>setExpanded(!expanded)} heightClass={expanded?'h-[420px]':'h-[190px]'} t={(_,en)=>en}/></section><button>Outside map</button></main>;
 } createRoot(document.getElementById('root')).render(<Harness/>);`);
 
@@ -364,4 +366,25 @@ test('a distinct pair at maximum zoom has finite keyboard inspection and dismiss
   await picker.waitFor({ timeout: 2000 });
   await page.getByRole('button', { name: 'Outside map', exact: true }).click();
   await picker.waitFor({ state: 'detached' });
+});
+
+
+test('the real map draws only explicit pedestrian geometry and removes it on fallback', { timeout: 30000 }, async t => {
+  const page = await pageFor(t);
+  const lineData = () => page.evaluate(() => window.mapFixtureInstance.getSource('parranda-route').serialize().data);
+  assert.deepEqual(await lineData(), { type: 'FeatureCollection', features: [] }, 'unknown geometry starts pins-only');
+  const coordinates = [[12.99,55.595], [12.99,55.598], [12.998,55.598], [12.998,55.603], [13.01,55.603]];
+  await page.evaluate(coordinates => window.setMapTestGeometry({ geometry_source:'osrm', geometry_mode:'walking',
+    map_path_points:coordinates.map(([lng,lat])=>({lng,lat})) }), coordinates);
+  await page.waitForFunction(() => window.mapFixtureInstance.getSource('parranda-route').serialize().data.geometry?.type === 'LineString');
+  assert.deepEqual((await lineData()).geometry.coordinates, coordinates, 'the exact router geometry reaches MapLibre');
+  assert.equal((await page.evaluate(() => window.mapFixtureInstance.getPaintProperty('route-line','line-dasharray'))) ?? null, null,
+    'the validated pedestrian route is solid');
+  assert.equal(await page.locator('.route-map-marker').count(), 3, 'real geometry preserves all stop pins');
+  await page.evaluate(() => window.setMapTestGeometry({ geometry_source:'heuristic', geometry_mode:'walking',
+    map_path_points:Array.from({length:20},(_,i)=>({lat:55.595+i*0.0004,lng:12.99+i*0.001})) }));
+  await page.waitForFunction(() => window.mapFixtureInstance.getSource('parranda-route').serialize().data.type === 'FeatureCollection');
+  assert.deepEqual(await lineData(), { type: 'FeatureCollection', features: [] }, 'fallback removes every old line rather than smoothing its own');
+  assert.equal(await page.locator('.route-map-marker').count(), 3, 'pins remain usable without a path');
+  await page.getByText('Stop overview · walking path unavailable', {exact:true}).waitFor();
 });

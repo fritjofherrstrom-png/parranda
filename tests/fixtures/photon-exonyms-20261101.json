@@ -1,0 +1,4100 @@
+{
+  "source": "https://photon.komoot.io/api/",
+  "observed_date": "2026-11-01",
+  "captures": {
+    "Kyoto": {
+      "default": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1268003379,
+              "osm_key": "place",
+              "osm_value": "neighbourhood",
+              "type": "locality",
+              "name": "Kyoto",
+              "district": "Nagrak",
+              "city": "Gunung Putri",
+              "county": "Kab Bogor",
+              "state": "Jawa Barat",
+              "country": "Indonesia",
+              "postcode": "16967",
+              "countrycode": "ID",
+              "extent": [
+                106.9589558,
+                -6.3759423,
+                106.9609675,
+                -6.3803778
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                106.960071,
+                -6.3782734
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 357794,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "city",
+              "name": "京都市",
+              "state": "京都府",
+              "country": "日本",
+              "countrycode": "JP",
+              "extra": {
+                "admin_level": "7"
+              },
+              "extent": [
+                135.559006,
+                35.3212207,
+                135.878442,
+                34.874916
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.7681441,
+                35.0115754
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 2137477,
+              "osm_key": "place",
+              "osm_value": "province",
+              "type": "state",
+              "name": "京都府",
+              "country": "日本",
+              "countrycode": "JP",
+              "extra": {
+                "admin_level": "4"
+              },
+              "extent": [
+                134.8513426,
+                36.1500281,
+                136.055476,
+                34.705754
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.454601,
+                35.242552
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 4686836889,
+              "osm_key": "place",
+              "osm_value": "farm",
+              "type": "locality",
+              "name": "Kyoto Obubu Tea Farms, LLC",
+              "city": "和束町",
+              "county": "相楽郡",
+              "state": "京都府",
+              "country": "日本",
+              "postcode": "619-1205",
+              "countrycode": "JP"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.9129562,
+                34.8071605
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 266257322,
+              "osm_key": "landuse",
+              "osm_value": "residential",
+              "type": "locality",
+              "name": "Kyoto Garden Condominium",
+              "street": "Persiaran Bukit Jaya",
+              "district": "Bukit Antarabangsa",
+              "city": "Ampang",
+              "county": "Gombak",
+              "state": "Selangor",
+              "country": "Malaysia",
+              "postcode": "68000",
+              "countrycode": "MY",
+              "extent": [
+                101.7700711,
+                3.1835444,
+                101.7720603,
+                3.1812408
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                101.7714065,
+                3.1827875
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1335318903,
+              "osm_key": "landuse",
+              "osm_value": "residential",
+              "type": "locality",
+              "name": "KYOTO COCO CITY",
+              "district": "伏見区",
+              "city": "京都市",
+              "state": "京都府",
+              "country": "日本",
+              "countrycode": "JP",
+              "extent": [
+                135.7645851,
+                34.9712146,
+                135.7675932,
+                34.9691002
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.7652302,
+                34.970128
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 2229117939,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Kyotomanyi",
+              "state": "Kassanda",
+              "country": "Uganda",
+              "countrycode": "UG"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                31.683333,
+                0.433333
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 3702925428,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Kyotobakon",
+              "county": "Pegunungan Bintang",
+              "state": "Papua Pegunungan",
+              "country": "Indonesia",
+              "countrycode": "ID"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                140.6547324,
+                -4.6408822
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 223022900,
+              "osm_key": "landuse",
+              "osm_value": "commercial",
+              "type": "locality",
+              "housenumber": "491-499",
+              "name": "京都商業中心 Kyoto Plaza",
+              "street": "駱克道 Lockhart Road",
+              "district": "灣仔區 Wan Chai District",
+              "city": "香港 Hong Kong",
+              "state": "香港 Hong Kong",
+              "country": "中国",
+              "countrycode": "CN",
+              "extent": [
+                114.1828534,
+                22.2808467,
+                114.1831077,
+                22.2806874
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                114.1829895,
+                22.2807668
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 7997841,
+              "osm_key": "place",
+              "osm_value": "neighbourhood",
+              "type": "locality",
+              "name": "京都御苑",
+              "district": "上京区",
+              "city": "京都市",
+              "state": "京都府",
+              "country": "日本",
+              "postcode": "602-0881",
+              "countrycode": "JP",
+              "extra": {
+                "admin_level": "10"
+              },
+              "extent": [
+                135.7593164,
+                35.0291753,
+                135.7675441,
+                35.0173735
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.7632,
+                35.023396
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 3554015,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "district",
+              "name": "江東区",
+              "city": "東京都",
+              "country": "日本",
+              "countrycode": "JP",
+              "extra": {
+                "admin_level": "7"
+              },
+              "extent": [
+                139.7667248,
+                35.7080921,
+                139.8485431,
+                35.5886489
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                139.8169621,
+                35.6727747
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 13041390618,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "district",
+              "name": "肖堆村",
+              "city": "昌都市 ཆབ་མདོ་གྲོང་ཁྱེར།",
+              "state": "西藏自治区 བོད་རང་སྐྱོང་ལྗོངས།",
+              "country": "中国",
+              "countrycode": "CN"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                97.0501327,
+                31.494152
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 8873783996,
+              "osm_key": "place",
+              "osm_value": "neighbourhood",
+              "type": "locality",
+              "name": "京都大学桂",
+              "district": "西京区",
+              "city": "京都市",
+              "state": "京都府",
+              "country": "日本",
+              "postcode": "615-0000",
+              "countrycode": "JP"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.6783927,
+                34.9830786
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 14137253,
+              "osm_key": "landuse",
+              "osm_value": "commercial",
+              "type": "locality",
+              "name": "京都リサーチパーク",
+              "district": "下京区",
+              "city": "京都市",
+              "state": "京都府",
+              "country": "日本",
+              "postcode": "600-8815",
+              "countrycode": "JP",
+              "extent": [
+                135.7359598,
+                34.995904,
+                135.7407196,
+                34.9936453
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.7378166,
+                34.9948267
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 385559768,
+              "osm_key": "landuse",
+              "osm_value": "industrial",
+              "type": "locality",
+              "name": "京都市バス横大路車庫",
+              "district": "伏見区",
+              "city": "京都市",
+              "state": "京都府",
+              "country": "日本",
+              "countrycode": "JP",
+              "extent": [
+                135.743704,
+                34.9265969,
+                135.7445122,
+                34.9248093
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.7440577,
+                34.9256398
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 18270137,
+              "osm_key": "place",
+              "osm_value": "quarter",
+              "type": "locality",
+              "name": "経堂",
+              "district": "世田谷区",
+              "city": "東京都",
+              "country": "日本",
+              "countrycode": "JP",
+              "extra": {
+                "admin_level": "9"
+              },
+              "extent": [
+                139.6245291,
+                35.6556641,
+                139.6399411,
+                35.6450186
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                139.6317129,
+                35.6499894
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 13351473703,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Koto",
+              "county": "Aceh Selatan",
+              "state": "Aceh",
+              "country": "Indonesia",
+              "postcode": "23772",
+              "countrycode": "ID"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                97.3706216,
+                3.2121194
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 1308363914,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Koto",
+              "county": "Nias Selatan",
+              "state": "Sumatera Utara",
+              "country": "Indonesia",
+              "countrycode": "ID"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                98.3345268,
+                -0.0043604
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 4394022239,
+              "osm_key": "place",
+              "osm_value": "town",
+              "type": "city",
+              "name": "Kyolo",
+              "state": "Haut-Lomami",
+              "country": "République démocratique du Congo",
+              "countrycode": "CD"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                27.1242244,
+                -8.0259618
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 2229117932,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Kyoko",
+              "state": "Lwengo",
+              "country": "Uganda",
+              "countrycode": "UG"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                31.583333,
+                -0.35
+              ]
+            }
+          }
+        ]
+      },
+      "en": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 357794,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "city",
+              "name": "Kyoto",
+              "state": "Kyoto Prefecture",
+              "country": "Japan",
+              "countrycode": "JP",
+              "extra": {
+                "admin_level": "7"
+              },
+              "extent": [
+                135.559006,
+                35.3212207,
+                135.878442,
+                34.874916
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.7681441,
+                35.0115754
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 2137477,
+              "osm_key": "place",
+              "osm_value": "province",
+              "type": "state",
+              "name": "Kyoto Prefecture",
+              "country": "Japan",
+              "countrycode": "JP",
+              "extra": {
+                "admin_level": "4"
+              },
+              "extent": [
+                134.8513426,
+                36.1500281,
+                136.055476,
+                34.705754
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.454601,
+                35.242552
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1268003379,
+              "osm_key": "place",
+              "osm_value": "neighbourhood",
+              "type": "locality",
+              "name": "Kyoto",
+              "district": "Nagrak",
+              "city": "Gunung Putri",
+              "county": "Bogor",
+              "state": "West Java",
+              "country": "Indonesia",
+              "postcode": "16967",
+              "countrycode": "ID",
+              "extent": [
+                106.9589558,
+                -6.3759423,
+                106.9609675,
+                -6.3803778
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                106.960071,
+                -6.3782734
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 7997841,
+              "osm_key": "place",
+              "osm_value": "neighbourhood",
+              "type": "locality",
+              "name": "Kyoto-Gyoen",
+              "district": "Kamigyō Ward",
+              "city": "Kyoto",
+              "state": "Kyoto Prefecture",
+              "country": "Japan",
+              "postcode": "602-0881",
+              "countrycode": "JP",
+              "extra": {
+                "admin_level": "10"
+              },
+              "extent": [
+                135.7593164,
+                35.0291753,
+                135.7675441,
+                35.0173735
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.7632,
+                35.023396
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 4686836889,
+              "osm_key": "place",
+              "osm_value": "farm",
+              "type": "locality",
+              "name": "Kyoto Obubu Tea Farms, LLC",
+              "city": "Wazuka",
+              "county": "Soraku County",
+              "state": "Kyoto Prefecture",
+              "country": "Japan",
+              "postcode": "619-1205",
+              "countrycode": "JP"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.9129562,
+                34.8071605
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 266257322,
+              "osm_key": "landuse",
+              "osm_value": "residential",
+              "type": "locality",
+              "name": "Kyoto Garden Condominium",
+              "street": "Persiaran Bukit Jaya",
+              "district": "Bukit Antarabangsa",
+              "city": "Ampang",
+              "county": "Gombak",
+              "state": "Selangor",
+              "country": "Malaysia",
+              "postcode": "68000",
+              "countrycode": "MY",
+              "extent": [
+                101.7700711,
+                3.1835444,
+                101.7720603,
+                3.1812408
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                101.7714065,
+                3.1827875
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 223022900,
+              "osm_key": "landuse",
+              "osm_value": "commercial",
+              "type": "locality",
+              "housenumber": "491-499",
+              "name": "Kyoto Plaza",
+              "street": "駱克道 Lockhart Road",
+              "district": "Wan Chai District",
+              "city": "Hong Kong",
+              "state": "Hong Kong",
+              "country": "China",
+              "countrycode": "CN",
+              "extent": [
+                114.1828534,
+                22.2808467,
+                114.1831077,
+                22.2806874
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                114.1829895,
+                22.2807668
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 14137253,
+              "osm_key": "landuse",
+              "osm_value": "commercial",
+              "type": "locality",
+              "name": "Kyoto Research Park",
+              "district": "Shimogyo Ward",
+              "city": "Kyoto",
+              "state": "Kyoto Prefecture",
+              "country": "Japan",
+              "postcode": "600-8815",
+              "countrycode": "JP",
+              "extent": [
+                135.7359598,
+                34.995904,
+                135.7407196,
+                34.9936453
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.7378166,
+                34.9948267
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1335318903,
+              "osm_key": "landuse",
+              "osm_value": "residential",
+              "type": "locality",
+              "name": "KYOTO COCO CITY",
+              "district": "Fushimi Ward",
+              "city": "Kyoto",
+              "state": "Kyoto Prefecture",
+              "country": "Japan",
+              "countrycode": "JP",
+              "extent": [
+                135.7645851,
+                34.9712146,
+                135.7675932,
+                34.9691002
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.7652302,
+                34.970128
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 385559768,
+              "osm_key": "landuse",
+              "osm_value": "industrial",
+              "type": "locality",
+              "name": "Kyoto city bus Yokooji depot",
+              "district": "Fushimi Ward",
+              "city": "Kyoto",
+              "state": "Kyoto Prefecture",
+              "country": "Japan",
+              "countrycode": "JP",
+              "extent": [
+                135.743704,
+                34.9265969,
+                135.7445122,
+                34.9248093
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.7440577,
+                34.9256398
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 2229117939,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Kyotomanyi",
+              "state": "Kassanda",
+              "country": "Uganda",
+              "countrycode": "UG"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                31.683333,
+                0.433333
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 3702925428,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Kyotobakon",
+              "county": "Pegunungan Bintang",
+              "state": "Papuan Highlands",
+              "country": "Indonesia",
+              "countrycode": "ID"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                140.6547324,
+                -4.6408822
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 8873783996,
+              "osm_key": "place",
+              "osm_value": "neighbourhood",
+              "type": "locality",
+              "name": "Kyotodaigaku-katsura",
+              "district": "Nishikyo Ward",
+              "city": "Kyoto",
+              "state": "Kyoto Prefecture",
+              "country": "Japan",
+              "postcode": "615-0000",
+              "countrycode": "JP"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                135.6783927,
+                34.9830786
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 3554015,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "district",
+              "name": "Koto",
+              "city": "Tokyo",
+              "country": "Japan",
+              "countrycode": "JP",
+              "extra": {
+                "admin_level": "7"
+              },
+              "extent": [
+                139.7667248,
+                35.7080921,
+                139.8485431,
+                35.5886489
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                139.8169621,
+                35.6727747
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 13041390618,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "district",
+              "name": "Gyodoi",
+              "city": "Chamdo",
+              "state": "Xizang Autonomous Region",
+              "country": "China",
+              "countrycode": "CN"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                97.0501327,
+                31.494152
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 18270137,
+              "osm_key": "place",
+              "osm_value": "quarter",
+              "type": "locality",
+              "name": "Kyodo",
+              "district": "Setagaya",
+              "city": "Tokyo",
+              "country": "Japan",
+              "countrycode": "JP",
+              "extra": {
+                "admin_level": "9"
+              },
+              "extent": [
+                139.6245291,
+                35.6556641,
+                139.6399411,
+                35.6450186
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                139.6317129,
+                35.6499894
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 13351473703,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Koto",
+              "county": "Aceh Selatan",
+              "state": "Aceh",
+              "country": "Indonesia",
+              "postcode": "23772",
+              "countrycode": "ID"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                97.3706216,
+                3.2121194
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 1308363914,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Koto",
+              "county": "South Nias",
+              "state": "North Sumatra",
+              "country": "Indonesia",
+              "countrycode": "ID"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                98.3345268,
+                -0.0043604
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 4394022239,
+              "osm_key": "place",
+              "osm_value": "town",
+              "type": "city",
+              "name": "Kyolo",
+              "state": "Haut-Lomami",
+              "country": "Democratic Republic of the Congo",
+              "countrycode": "CD"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                27.1242244,
+                -8.0259618
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 2229117932,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Kyoko",
+              "state": "Lwengo",
+              "country": "Uganda",
+              "countrycode": "UG"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                31.583333,
+                -0.35
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Athens": {
+      "default": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 441183,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "city",
+              "name": "Αθήνα",
+              "county": "Περιφερειακή Ενότητα Κεντρικού Τομέα Αθηνών",
+              "state": "Αποκεντρωμένη Διοίκηση Αττικής",
+              "country": "Ελλάς",
+              "postcode": "105 57",
+              "countrycode": "GR"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                23.7348324,
+                37.9755648
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 119353,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "city",
+              "name": "Athens",
+              "county": "Clarke",
+              "state": "Georgia",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -83.5374696,
+                34.039466,
+                -83.2408342,
+                33.8480209
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -83.376398,
+                33.9597677
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 911269,
+              "osm_key": "place",
+              "osm_value": "county",
+              "type": "county",
+              "name": "Athens",
+              "state": "Ohio",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "6"
+              },
+              "extent": [
+                -82.2984284,
+                39.5563851,
+                -81.7218404,
+                39.1803103
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -82.0609557,
+                39.3575616
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 182845,
+              "osm_key": "place",
+              "osm_value": "town",
+              "type": "city",
+              "name": "Athens",
+              "county": "Athens",
+              "state": "Ohio",
+              "country": "United States",
+              "postcode": "45701",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -82.1427591,
+                39.3603025,
+                -82.0191958,
+                39.2863058
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -82.1012479,
+                39.3289242
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 254007,
+              "osm_key": "place",
+              "osm_value": "town",
+              "type": "city",
+              "name": "Athens",
+              "county": "Henderson",
+              "state": "Texas",
+              "country": "United States",
+              "postcode": "75751",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -95.917199,
+                32.23531,
+                -95.719011,
+                32.156884
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -95.854914,
+                32.2044416
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 110976,
+              "osm_key": "place",
+              "osm_value": "town",
+              "type": "city",
+              "name": "Athens",
+              "county": "Limestone",
+              "state": "Alabama",
+              "country": "United States",
+              "postcode": "35613",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -87.0857293,
+                34.8408571,
+                -86.8637213,
+                34.6857079
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -86.9711698,
+                34.8045487
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 196152,
+              "osm_key": "place",
+              "osm_value": "town",
+              "type": "city",
+              "name": "Athens",
+              "county": "McMinn",
+              "state": "Tennessee",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -84.6560901,
+                35.5200754,
+                -84.5605762,
+                35.419267
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -84.5930113,
+                35.4428864
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 174377,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "district",
+              "name": "Athens",
+              "city": "Athens",
+              "county": "Greene County",
+              "state": "New York",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -73.836844,
+                42.287908,
+                -73.783974,
+                42.248451
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -73.8095707,
+                42.2603648
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 239904,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Mercer",
+              "state": "West Virginia",
+              "country": "United States",
+              "postcode": "24712",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -81.025763,
+                37.429197,
+                -81.005647,
+                37.416243
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -81.0161994,
+                37.4223414
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 150941199,
+              "osm_key": "place",
+              "osm_value": "suburb",
+              "type": "locality",
+              "name": "Athens",
+              "district": "Willowbrook",
+              "county": "Los Angeles",
+              "state": "California",
+              "country": "United States",
+              "postcode": "90061",
+              "countrycode": "US"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -118.279049,
+                33.920407
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 2017801,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Windham County",
+              "state": "Vermont",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -72.6419584,
+                43.1482137,
+                -72.5567544,
+                43.0708805
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -72.5679131,
+                43.1332233
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 12203746,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Somerset",
+              "state": "Maine",
+              "country": "United States",
+              "postcode": "04912",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -69.7454157,
+                45.0109651,
+                -69.5500022,
+                44.8797985
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -69.673233,
+                44.923488
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 251828,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Marathon",
+              "state": "Wisconsin",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -90.0993195,
+                45.0475442,
+                -90.065122,
+                45.01677
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -90.0738874,
+                45.0349745
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 187396,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Bradford",
+              "state": "Pennsylvania",
+              "country": "United States",
+              "postcode": "18810",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -76.5393121,
+                41.9729317,
+                -76.5048517,
+                41.9224122
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -76.5179991,
+                41.9572965
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 3164273,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Greene County",
+              "state": "New York",
+              "country": "United States",
+              "postcode": "12015",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "7"
+              },
+              "extent": [
+                -73.939399,
+                42.326821,
+                -73.781664,
+                42.23553
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -73.8095707,
+                42.2603648
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 126911,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Menard",
+              "state": "Illinois",
+              "country": "United States",
+              "postcode": "62613",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -89.741398,
+                39.973299,
+                -89.704635,
+                39.950827
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -89.7239944,
+                39.9608826
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 134976,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Calhoun",
+              "state": "Michigan",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -85.2454295,
+                42.0939729,
+                -85.2256329,
+                42.0792579
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -85.2347052,
+                42.0886576
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 12268923,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Athens",
+              "city": "Lexington",
+              "county": "Fayette",
+              "state": "Kentucky",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "10"
+              },
+              "extent": [
+                -84.3673678,
+                37.9525613,
+                -84.3607937,
+                37.9472646
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -84.3641005,
+                37.9492453
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 132090,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Claiborne",
+              "state": "Louisiana",
+              "country": "United States",
+              "postcode": "71003",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -93.037951,
+                32.662634,
+                -93.01211,
+                32.639352
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -93.025717,
+                32.6504281
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 7434060,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Leeds and Grenville",
+              "state": "Ontario",
+              "country": "Canada",
+              "postcode": "K0E 1B0",
+              "countrycode": "CA",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -76.0329829,
+                44.7000675,
+                -75.8512829,
+                44.5251407
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -75.952256,
+                44.625942
+              ]
+            }
+          }
+        ]
+      },
+      "en": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 441183,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "city",
+              "name": "Athens",
+              "county": "Regional Unit of Central Athens",
+              "state": "Attica",
+              "country": "Greece",
+              "postcode": "105 57",
+              "countrycode": "GR"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                23.7348324,
+                37.9755648
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 119353,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "city",
+              "name": "Athens",
+              "county": "Clarke",
+              "state": "Georgia",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -83.5374696,
+                34.039466,
+                -83.2408342,
+                33.8480209
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -83.376398,
+                33.9597677
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 911269,
+              "osm_key": "place",
+              "osm_value": "county",
+              "type": "county",
+              "name": "Athens",
+              "state": "Ohio",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "6"
+              },
+              "extent": [
+                -82.2984284,
+                39.5563851,
+                -81.7218404,
+                39.1803103
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -82.0609557,
+                39.3575616
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 182845,
+              "osm_key": "place",
+              "osm_value": "town",
+              "type": "city",
+              "name": "Athens",
+              "county": "Athens",
+              "state": "Ohio",
+              "country": "United States",
+              "postcode": "45701",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -82.1427591,
+                39.3603025,
+                -82.0191958,
+                39.2863058
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -82.1012479,
+                39.3289242
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 254007,
+              "osm_key": "place",
+              "osm_value": "town",
+              "type": "city",
+              "name": "Athens",
+              "county": "Henderson",
+              "state": "Texas",
+              "country": "United States",
+              "postcode": "75751",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -95.917199,
+                32.23531,
+                -95.719011,
+                32.156884
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -95.854914,
+                32.2044416
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 110976,
+              "osm_key": "place",
+              "osm_value": "town",
+              "type": "city",
+              "name": "Athens",
+              "county": "Limestone",
+              "state": "Alabama",
+              "country": "United States",
+              "postcode": "35613",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -87.0857293,
+                34.8408571,
+                -86.8637213,
+                34.6857079
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -86.9711698,
+                34.8045487
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 196152,
+              "osm_key": "place",
+              "osm_value": "town",
+              "type": "city",
+              "name": "Athens",
+              "county": "McMinn",
+              "state": "Tennessee",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -84.6560901,
+                35.5200754,
+                -84.5605762,
+                35.419267
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -84.5930113,
+                35.4428864
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 174377,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "district",
+              "name": "Athens",
+              "city": "Athens",
+              "county": "Greene County",
+              "state": "New York",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -73.836844,
+                42.287908,
+                -73.783974,
+                42.248451
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -73.8095707,
+                42.2603648
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 239904,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Mercer",
+              "state": "West Virginia",
+              "country": "United States",
+              "postcode": "24712",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -81.025763,
+                37.429197,
+                -81.005647,
+                37.416243
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -81.0161994,
+                37.4223414
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 150941199,
+              "osm_key": "place",
+              "osm_value": "suburb",
+              "type": "locality",
+              "name": "Athens",
+              "district": "Willowbrook",
+              "county": "Los Angeles",
+              "state": "California",
+              "country": "United States",
+              "postcode": "90061",
+              "countrycode": "US"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -118.279049,
+                33.920407
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 2017801,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Windham County",
+              "state": "Vermont",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -72.6419584,
+                43.1482137,
+                -72.5567544,
+                43.0708805
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -72.5679131,
+                43.1332233
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 12203746,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Somerset",
+              "state": "Maine",
+              "country": "United States",
+              "postcode": "04912",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -69.7454157,
+                45.0109651,
+                -69.5500022,
+                44.8797985
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -69.673233,
+                44.923488
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 251828,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Marathon",
+              "state": "Wisconsin",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -90.0993195,
+                45.0475442,
+                -90.065122,
+                45.01677
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -90.0738874,
+                45.0349745
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 187396,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Bradford",
+              "state": "Pennsylvania",
+              "country": "United States",
+              "postcode": "18810",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -76.5393121,
+                41.9729317,
+                -76.5048517,
+                41.9224122
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -76.5179991,
+                41.9572965
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 3164273,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Greene County",
+              "state": "New York",
+              "country": "United States",
+              "postcode": "12015",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "7"
+              },
+              "extent": [
+                -73.939399,
+                42.326821,
+                -73.781664,
+                42.23553
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -73.8095707,
+                42.2603648
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 126911,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Menard",
+              "state": "Illinois",
+              "country": "United States",
+              "postcode": "62613",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -89.741398,
+                39.973299,
+                -89.704635,
+                39.950827
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -89.7239944,
+                39.9608826
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 134976,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Calhoun",
+              "state": "Michigan",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -85.2454295,
+                42.0939729,
+                -85.2256329,
+                42.0792579
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -85.2347052,
+                42.0886576
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 12268923,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Athens",
+              "city": "Lexington",
+              "county": "Fayette",
+              "state": "Kentucky",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "10"
+              },
+              "extent": [
+                -84.3673678,
+                37.9525613,
+                -84.3607937,
+                37.9472646
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -84.3641005,
+                37.9492453
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 132090,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Claiborne",
+              "state": "Louisiana",
+              "country": "United States",
+              "postcode": "71003",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -93.037951,
+                32.662634,
+                -93.01211,
+                32.639352
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -93.025717,
+                32.6504281
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 7434060,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Athens",
+              "county": "Leeds and Grenville",
+              "state": "Ontario",
+              "country": "Canada",
+              "postcode": "K0E 1B0",
+              "countrycode": "CA",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -76.0329829,
+                44.7000675,
+                -75.8512829,
+                44.5251407
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -75.952256,
+                44.625942
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Copenhagen": {
+      "default": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 175928,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Copenhagen",
+              "city": "Town of Denmark",
+              "county": "Lewis",
+              "state": "New York",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -75.686912,
+                43.905213,
+                -75.659037,
+                43.881475
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -75.673828,
+                43.893439
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 13707878,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "city",
+              "name": "København",
+              "state": "Region Hovedstaden",
+              "country": "Danmark",
+              "postcode": "1357",
+              "countrycode": "DK"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                12.5700724,
+                55.6867243
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 8032405490,
+              "osm_key": "place",
+              "osm_value": "suburb",
+              "type": "district",
+              "name": "Copenhagen",
+              "city": "Sorriso",
+              "state": "Mato Grosso",
+              "country": "Brasil",
+              "postcode": "78890-245",
+              "countrycode": "BR"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -55.7271273,
+                -12.5228069
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 151714866,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Copenhagen",
+              "county": "Caldwell",
+              "state": "Louisiana",
+              "country": "United States",
+              "countrycode": "US"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -92.0390231,
+                32.0237703
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 1631314376,
+              "osm_key": "place",
+              "osm_value": "locality",
+              "type": "locality",
+              "name": "Copenhagen",
+              "county": "Elgin",
+              "state": "Ontario",
+              "country": "Canada",
+              "postcode": "N5H 2R4",
+              "countrycode": "CA"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -80.9854895,
+                42.6760422
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 153449737,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Copenhagen Beach",
+              "city": "Hiawatha Township",
+              "county": "Schoolcraft",
+              "state": "Michigan",
+              "country": "United States",
+              "postcode": "49854",
+              "countrycode": "US"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -86.294311,
+                45.9835825
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 30746057,
+              "osm_key": "landuse",
+              "osm_value": "industrial",
+              "type": "locality",
+              "name": "Copenhagen Malmö Port",
+              "district": "Nordhavn",
+              "city": "København",
+              "state": "Region Hovedstaden",
+              "country": "Danmark",
+              "countrycode": "DK",
+              "extent": [
+                12.5968819,
+                55.7139739,
+                12.6135881,
+                55.7093514
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                12.607006,
+                55.7114562
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 180994636,
+              "osm_key": "landuse",
+              "osm_value": "farmyard",
+              "type": "locality",
+              "name": "Copenhagen Farm",
+              "district": "Bickleigh",
+              "city": "Mid Devon",
+              "county": "Devon",
+              "state": "England",
+              "country": "United Kingdom",
+              "countrycode": "GB",
+              "extent": [
+                -3.5060247,
+                50.8498675,
+                -3.5049015,
+                50.8491665
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -3.5057236,
+                50.8495462
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 2192363,
+              "osm_key": "boundary",
+              "osm_value": "administrative",
+              "type": "city",
+              "name": "Københavns Kommune",
+              "state": "Region Hovedstaden",
+              "country": "Danmark",
+              "countrycode": "DK",
+              "extra": {
+                "admin_level": "7"
+              },
+              "extent": [
+                12.4529977,
+                55.7327115,
+                12.7342464,
+                55.6128612
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                12.6032048,
+                55.663304
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1248153352,
+              "osm_key": "landuse",
+              "osm_value": "residential",
+              "type": "locality",
+              "housenumber": "743",
+              "name": "Condominio Spazio Copenhagen",
+              "street": "Rua Hermantino Coelho",
+              "district": "Mansões Santo Antônio",
+              "city": "Campinas",
+              "state": "São Paulo",
+              "country": "Brasil",
+              "countrycode": "BR",
+              "extent": [
+                -47.0515307,
+                -22.852801,
+                -47.0508069,
+                -22.8538263
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -47.0511682,
+                -22.8532959
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1052692139,
+              "osm_key": "landuse",
+              "osm_value": "residential",
+              "type": "locality",
+              "name": "Condomínio Copenhagen",
+              "district": "Altos do Calhau",
+              "city": "São Luís",
+              "state": "Maranhão",
+              "country": "Brasil",
+              "countrycode": "BR",
+              "extent": [
+                -44.2507296,
+                -2.4982392,
+                -44.2495038,
+                -2.4995134
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -44.2501243,
+                -2.4989072
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 5925426625,
+              "osm_key": "place",
+              "osm_value": "neighbourhood",
+              "type": "locality",
+              "name": "Copenhaver",
+              "city": "Rockville",
+              "county": "Montgomery",
+              "state": "Maryland",
+              "country": "United States",
+              "postcode": "20850",
+              "countrycode": "US"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -77.1776573,
+                39.0605023
+              ]
+            }
+          }
+        ]
+      },
+      "en": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 13707878,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "city",
+              "name": "Copenhagen",
+              "state": "Capital Region of Denmark",
+              "country": "Denmark",
+              "postcode": "1357",
+              "countrycode": "DK"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                12.5700724,
+                55.6867243
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 175928,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Copenhagen",
+              "city": "Town of Denmark",
+              "county": "Lewis",
+              "state": "New York",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -75.686912,
+                43.905213,
+                -75.659037,
+                43.881475
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -75.673828,
+                43.893439
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 8032405490,
+              "osm_key": "place",
+              "osm_value": "suburb",
+              "type": "district",
+              "name": "Copenhagen",
+              "city": "Sorriso",
+              "state": "Mato Grosso",
+              "country": "Brazil",
+              "postcode": "78890-245",
+              "countrycode": "BR"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -55.7271273,
+                -12.5228069
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 151714866,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Copenhagen",
+              "county": "Caldwell",
+              "state": "Louisiana",
+              "country": "United States",
+              "countrycode": "US"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -92.0390231,
+                32.0237703
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 2192363,
+              "osm_key": "boundary",
+              "osm_value": "administrative",
+              "type": "city",
+              "name": "Copenhagen Municipality",
+              "state": "Capital Region of Denmark",
+              "country": "Denmark",
+              "countrycode": "DK",
+              "extra": {
+                "admin_level": "7"
+              },
+              "extent": [
+                12.4529977,
+                55.7327115,
+                12.7342464,
+                55.6128612
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                12.6032048,
+                55.663304
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 1631314376,
+              "osm_key": "place",
+              "osm_value": "locality",
+              "type": "locality",
+              "name": "Copenhagen",
+              "county": "Elgin",
+              "state": "Ontario",
+              "country": "Canada",
+              "postcode": "N5H 2R4",
+              "countrycode": "CA"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -80.9854895,
+                42.6760422
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 153449737,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Copenhagen Beach",
+              "city": "Hiawatha Township",
+              "county": "Schoolcraft",
+              "state": "Michigan",
+              "country": "United States",
+              "postcode": "49854",
+              "countrycode": "US"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -86.294311,
+                45.9835825
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 30746057,
+              "osm_key": "landuse",
+              "osm_value": "industrial",
+              "type": "locality",
+              "name": "Copenhagen Malmö Port",
+              "district": "Nordhavn",
+              "city": "Copenhagen",
+              "state": "Capital Region of Denmark",
+              "country": "Denmark",
+              "countrycode": "DK",
+              "extent": [
+                12.5968819,
+                55.7139739,
+                12.6135881,
+                55.7093514
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                12.607006,
+                55.7114562
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 180994636,
+              "osm_key": "landuse",
+              "osm_value": "farmyard",
+              "type": "locality",
+              "name": "Copenhagen Farm",
+              "district": "Bickleigh",
+              "city": "Mid Devon",
+              "county": "Devon",
+              "state": "England",
+              "country": "United Kingdom",
+              "countrycode": "GB",
+              "extent": [
+                -3.5060247,
+                50.8498675,
+                -3.5049015,
+                50.8491665
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -3.5057236,
+                50.8495462
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1248153352,
+              "osm_key": "landuse",
+              "osm_value": "residential",
+              "type": "locality",
+              "housenumber": "743",
+              "name": "Condominio Spazio Copenhagen",
+              "street": "Rua Hermantino Coelho",
+              "district": "Mansões Santo Antônio",
+              "city": "Campinas",
+              "state": "São Paulo",
+              "country": "Brazil",
+              "countrycode": "BR",
+              "extent": [
+                -47.0515307,
+                -22.852801,
+                -47.0508069,
+                -22.8538263
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -47.0511682,
+                -22.8532959
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1052692139,
+              "osm_key": "landuse",
+              "osm_value": "residential",
+              "type": "locality",
+              "name": "Condomínio Copenhagen",
+              "district": "Altos do Calhau",
+              "city": "São Luís",
+              "state": "Maranhão",
+              "country": "Brazil",
+              "countrycode": "BR",
+              "extent": [
+                -44.2507296,
+                -2.4982392,
+                -44.2495038,
+                -2.4995134
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -44.2501243,
+                -2.4989072
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 5925426625,
+              "osm_key": "place",
+              "osm_value": "neighbourhood",
+              "type": "locality",
+              "name": "Copenhaver",
+              "city": "Rockville",
+              "county": "Montgomery",
+              "state": "Maryland",
+              "country": "United States",
+              "postcode": "20850",
+              "countrycode": "US"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -77.1776573,
+                39.0605023
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Munich": {
+      "default": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 181652,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Munich",
+              "county": "Cavalier",
+              "state": "North Dakota",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -98.8501343,
+                48.6886682,
+                -98.8241052,
+                48.6596652
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -98.832631,
+                48.669174
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 62428,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "city",
+              "name": "München",
+              "state": "Bayern",
+              "country": "Deutschland",
+              "countrycode": "DE",
+              "extra": {
+                "admin_level": "6"
+              },
+              "extent": [
+                11.360777,
+                48.2481162,
+                11.7229099,
+                48.0616244
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.5753822,
+                48.1371079
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 703508185,
+              "osm_key": "place",
+              "osm_value": "locality",
+              "type": "locality",
+              "name": "Munich",
+              "city": "Sincé",
+              "county": "Sincé",
+              "state": "Sucre",
+              "country": "Colombia",
+              "countrycode": "CO"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -75.111154,
+                9.2216223
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 205896413,
+              "osm_key": "landuse",
+              "osm_value": "industrial",
+              "type": "locality",
+              "name": "Munich",
+              "district": "la Serra",
+              "city": "la Torre de Claramunt",
+              "county": "Anoia",
+              "state": "Catalunya",
+              "country": "España",
+              "countrycode": "ES",
+              "extent": [
+                1.6476285,
+                41.5130108,
+                1.6486879,
+                41.5123356
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                1.6481048,
+                41.5126232
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 2168237,
+              "osm_key": "boundary",
+              "osm_value": "administrative",
+              "type": "locality",
+              "name": "Munich-Trudering-Riem",
+              "district": "Trudering",
+              "city": "München",
+              "state": "Bayern",
+              "country": "Deutschland",
+              "countrycode": "DE",
+              "extra": {
+                "admin_level": "10"
+              },
+              "extent": [
+                11.6536499,
+                48.1591827,
+                11.6975662,
+                48.1184532
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.6740565,
+                48.1388379
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 3021405825,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Munichoco",
+              "state": "Lunda Sul",
+              "country": "Angola",
+              "countrycode": "AO"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                21.1064299,
+                -10.7298247
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 5365415782,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "district",
+              "name": "Munichis",
+              "city": "Yurimaguas",
+              "county": "Alto Amazonas",
+              "state": "Loreto",
+              "country": "Perú",
+              "countrycode": "PE"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -76.2308007,
+                -5.8924998
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 2288886387,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Munichshof",
+              "city": "Walscheid",
+              "county": "Moselle",
+              "state": "Grand Est",
+              "country": "France",
+              "postcode": "57870",
+              "countrycode": "FR"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                7.1422148,
+                48.6438829
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 1725236215,
+              "osm_key": "place",
+              "osm_value": "farm",
+              "type": "locality",
+              "name": "Municher",
+              "district": "Unterinn - Auna di Sotto",
+              "city": "Ritten - Renon",
+              "county": "Bolzano - Bozen",
+              "state": "Trentino-Alto Adige/Südtirol",
+              "country": "Italia",
+              "postcode": "39054",
+              "countrycode": "IT"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.4514176,
+                46.5093531
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 13784338446,
+              "osm_key": "place",
+              "osm_value": "neighbourhood",
+              "type": "locality",
+              "name": "Munichalai",
+              "district": "Anna Nagar",
+              "city": "Madurai",
+              "county": "Madurai South",
+              "state": "Tamil Nadu",
+              "country": "India",
+              "postcode": "625009",
+              "countrycode": "IN"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                78.1344057,
+                9.9181156
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 703236773,
+              "osm_key": "place",
+              "osm_value": "locality",
+              "type": "locality",
+              "name": "Munichique",
+              "city": "Buenos Aires",
+              "county": "Norte",
+              "state": "Cauca",
+              "country": "Colombia",
+              "countrycode": "CO"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -76.6611907,
+                2.9769769
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 554889,
+              "osm_key": "boundary",
+              "osm_value": "administrative",
+              "type": "city",
+              "name": "Münichreith-Laimbach",
+              "county": "Bezirk Melk",
+              "state": "Niederösterreich",
+              "country": "Österreich",
+              "countrycode": "AT",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                15.0733544,
+                48.3512318,
+                15.1786786,
+                48.2412279
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                15.1158931,
+                48.2961304
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 299127444,
+              "osm_key": "place",
+              "osm_value": "locality",
+              "type": "locality",
+              "name": "Mnich",
+              "city": "Nová Bystřice",
+              "county": "okres Jindřichův Hradec",
+              "state": "Jihočeský kraj",
+              "country": "Česko",
+              "postcode": "378 33",
+              "countrycode": "CZ"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                15.0964491,
+                49.0058909
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 52747,
+              "osm_key": "place",
+              "osm_value": "suburb",
+              "type": "district",
+              "name": "Trudering",
+              "city": "München",
+              "state": "Bayern",
+              "country": "Deutschland",
+              "countrycode": "DE",
+              "extra": {
+                "admin_level": "9"
+              },
+              "extent": [
+                11.6436919,
+                48.1591827,
+                11.7229099,
+                48.0935434
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.6640782,
+                48.1231749
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 137716,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "New Munich",
+              "county": "Stearns",
+              "state": "Minnesota",
+              "country": "United States",
+              "postcode": "56356",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -94.7612062,
+                45.6404951,
+                -94.7471312,
+                45.6219247
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -94.7536231,
+                45.6302427
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 346244,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Muñico",
+              "county": "Ávila",
+              "state": "Castilla y León",
+              "country": "España",
+              "countrycode": "ES",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -5.0699914,
+                40.7386387,
+                -5.0013734,
+                40.6866398
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -5.0273381,
+                40.706948
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 5640610,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Mnich",
+              "county": "powiat cieszyński",
+              "state": "województwo śląskie",
+              "country": "Polska",
+              "countrycode": "PL",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                18.772416,
+                49.898602,
+                18.8532505,
+                49.8718056
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                18.8091792,
+                49.8875947
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 127384,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "city",
+              "name": "Muncie",
+              "county": "Delaware",
+              "state": "Indiana",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -85.471021,
+                40.240755,
+                -85.320736,
+                40.149103
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -85.3865271,
+                40.1936892
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 441035,
+              "osm_key": "place",
+              "osm_value": "municipality",
+              "type": "city",
+              "name": "Mnich",
+              "county": "okres Pelhřimov",
+              "state": "Kraj Vysočina",
+              "country": "Česko",
+              "countrycode": "CZ",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                14.9486046,
+                49.3387123,
+                15.02411,
+                49.2750171
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                14.9662777,
+                49.2982286
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 240124182,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "district",
+              "name": "Münichreith",
+              "city": "Kottes-Purk",
+              "county": "Bezirk Zwettl",
+              "state": "Niederösterreich",
+              "country": "Österreich",
+              "postcode": "3623",
+              "countrycode": "AT"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                15.297485,
+                48.3999985
+              ]
+            }
+          }
+        ]
+      },
+      "en": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 62428,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "city",
+              "name": "Munich",
+              "state": "Bavaria",
+              "country": "Germany",
+              "countrycode": "DE",
+              "extra": {
+                "admin_level": "6"
+              },
+              "extent": [
+                11.360777,
+                48.2481162,
+                11.7229099,
+                48.0616244
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.5753822,
+                48.1371079
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 181652,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Munich",
+              "county": "Cavalier",
+              "state": "North Dakota",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -98.8501343,
+                48.6886682,
+                -98.8241052,
+                48.6596652
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -98.832631,
+                48.669174
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 703508185,
+              "osm_key": "place",
+              "osm_value": "locality",
+              "type": "locality",
+              "name": "Munich",
+              "city": "Sincé",
+              "county": "Sincé",
+              "state": "Sucre",
+              "country": "Colombia",
+              "countrycode": "CO"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -75.111154,
+                9.2216223
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 205896413,
+              "osm_key": "landuse",
+              "osm_value": "industrial",
+              "type": "locality",
+              "name": "Munich",
+              "district": "la Serra",
+              "city": "la Torre de Claramunt",
+              "county": "Anoia",
+              "state": "Catalonia",
+              "country": "Spain",
+              "countrycode": "ES",
+              "extent": [
+                1.6476285,
+                41.5130108,
+                1.6486879,
+                41.5123356
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                1.6481048,
+                41.5126232
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 2168237,
+              "osm_key": "boundary",
+              "osm_value": "administrative",
+              "type": "locality",
+              "name": "Munich-Trudering-Riem",
+              "district": "Trudering",
+              "city": "Munich",
+              "state": "Bavaria",
+              "country": "Germany",
+              "countrycode": "DE",
+              "extra": {
+                "admin_level": "10"
+              },
+              "extent": [
+                11.6536499,
+                48.1591827,
+                11.6975662,
+                48.1184532
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.6740565,
+                48.1388379
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 3021405825,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Munichoco",
+              "state": "Lunda Sul Province",
+              "country": "Angola",
+              "countrycode": "AO"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                21.1064299,
+                -10.7298247
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 5365415782,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "district",
+              "name": "Munichis",
+              "city": "Yurimaguas",
+              "county": "Province of Alto Amazonas",
+              "state": "Department of Loreto",
+              "country": "Peru",
+              "countrycode": "PE"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -76.2308007,
+                -5.8924998
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 52747,
+              "osm_key": "place",
+              "osm_value": "suburb",
+              "type": "district",
+              "name": "Trudering",
+              "city": "Munich",
+              "state": "Bavaria",
+              "country": "Germany",
+              "countrycode": "DE",
+              "extra": {
+                "admin_level": "9"
+              },
+              "extent": [
+                11.6436919,
+                48.1591827,
+                11.7229099,
+                48.0935434
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.6640782,
+                48.1231749
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 2288886387,
+              "osm_key": "place",
+              "osm_value": "hamlet",
+              "type": "district",
+              "name": "Munichshof",
+              "city": "Walscheid",
+              "county": "Moselle",
+              "state": "Grand Est",
+              "country": "France",
+              "postcode": "57870",
+              "countrycode": "FR"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                7.1422148,
+                48.6438829
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 1725236215,
+              "osm_key": "place",
+              "osm_value": "farm",
+              "type": "locality",
+              "name": "Municher",
+              "district": "Unterinn - Auna di Sotto",
+              "city": "Ritten - Renon",
+              "county": "South Tyrol",
+              "state": "Trentino – Alto Adige/Südtirol",
+              "country": "Italy",
+              "postcode": "39054",
+              "countrycode": "IT"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.4514176,
+                46.5093531
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 13784338446,
+              "osm_key": "place",
+              "osm_value": "neighbourhood",
+              "type": "locality",
+              "name": "Munichalai",
+              "district": "Anna Nagar",
+              "city": "Madurai",
+              "county": "Madurai South",
+              "state": "Tamil Nadu",
+              "country": "India",
+              "postcode": "625009",
+              "countrycode": "IN"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                78.1344057,
+                9.9181156
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 703236773,
+              "osm_key": "place",
+              "osm_value": "locality",
+              "type": "locality",
+              "name": "Munichique",
+              "city": "Buenos Aires",
+              "county": "Norte",
+              "state": "Cauca",
+              "country": "Colombia",
+              "countrycode": "CO"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -76.6611907,
+                2.9769769
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 554889,
+              "osm_key": "boundary",
+              "osm_value": "administrative",
+              "type": "city",
+              "name": "Münichreith-Laimbach",
+              "county": "Bezirk Melk",
+              "state": "Lower Austria",
+              "country": "Austria",
+              "countrycode": "AT",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                15.0733544,
+                48.3512318,
+                15.1786786,
+                48.2412279
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                15.1158931,
+                48.2961304
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 299127444,
+              "osm_key": "place",
+              "osm_value": "locality",
+              "type": "locality",
+              "name": "Mnich",
+              "city": "Nová Bystřice",
+              "county": "okres Jindřichův Hradec",
+              "state": "South Bohemian Region",
+              "country": "Czechia",
+              "postcode": "378 33",
+              "countrycode": "CZ"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                15.0964491,
+                49.0058909
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 137716,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "New Munich",
+              "county": "Stearns",
+              "state": "Minnesota",
+              "country": "United States",
+              "postcode": "56356",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -94.7612062,
+                45.6404951,
+                -94.7471312,
+                45.6219247
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -94.7536231,
+                45.6302427
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 346244,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Muñico",
+              "county": "Ávila",
+              "state": "Castile and León",
+              "country": "Spain",
+              "countrycode": "ES",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -5.0699914,
+                40.7386387,
+                -5.0013734,
+                40.6866398
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -5.0273381,
+                40.706948
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 5640610,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "city",
+              "name": "Mnich",
+              "county": "Cieszyn County",
+              "state": "Silesian Voivodeship",
+              "country": "Poland",
+              "countrycode": "PL",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                18.772416,
+                49.898602,
+                18.8532505,
+                49.8718056
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                18.8091792,
+                49.8875947
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 127384,
+              "osm_key": "place",
+              "osm_value": "city",
+              "type": "city",
+              "name": "Muncie",
+              "county": "Delaware",
+              "state": "Indiana",
+              "country": "United States",
+              "countrycode": "US",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                -85.471021,
+                40.240755,
+                -85.320736,
+                40.149103
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -85.3865271,
+                40.1936892
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 441035,
+              "osm_key": "place",
+              "osm_value": "municipality",
+              "type": "city",
+              "name": "Mnich",
+              "county": "okres Pelhřimov",
+              "state": "Vysočina Region",
+              "country": "Czechia",
+              "countrycode": "CZ",
+              "extra": {
+                "admin_level": "8"
+              },
+              "extent": [
+                14.9486046,
+                49.3387123,
+                15.02411,
+                49.2750171
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                14.9662777,
+                49.2982286
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 240124182,
+              "osm_key": "place",
+              "osm_value": "village",
+              "type": "district",
+              "name": "Münichreith",
+              "city": "Kottes-Purk",
+              "county": "Bezirk Zwettl",
+              "state": "Lower Austria",
+              "country": "Austria",
+              "postcode": "3623",
+              "countrycode": "AT"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                15.297485,
+                48.3999985
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}
