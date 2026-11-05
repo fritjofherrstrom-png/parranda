@@ -48,7 +48,7 @@ const {
 const { normalizeSelectedHoursCalendar, resolveCandidateDayHours } = require('../place-candidates/opening-hours-calendar');
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
 const { operatorClosureForWindow } = require('../place-candidates/operator-visit-evidence');
-const { buildAgnosticRouteOrdering, daypartForRole, fixedDaypartForRole, timeBandRank } = require("./agnostic-route-ordering");
+const { buildAgnosticRouteOrdering, daypartForRole, knownLastDaypartForRole, timeBandRank } = require("./agnostic-route-ordering");
 const { resolveWalkableMicroBase } = require("./walkable-micro-base");
 const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-route-context");
 const { buildDayflowContext } = require("./dayflow-context");
@@ -784,10 +784,11 @@ function buildRouteDaypartHonesty({
   const currentRank = timeBandRank(currentTimeBand);
   // A balanced day that interleaves bands withholds its arc labels, but its
   // stops still say whether the day leads with dayparts already past (review,
-  // 25 Oct 2026: a museum and a gallery at 20:00 carried no note at all). Only
-  // fixed dayparts count; a meal may be dinner.
+  // 25 Oct 2026: a museum and a gallery at 20:00 carried no note at all). Each
+  // stop is read by the last daypart its role still fits, so a museum at 15:00
+  // or an evening walk at 20:00 is not "past"; an unknown role has no daypart.
   const stopRanks = arc.length ? [] : (Array.isArray(stopRoles) ? stopRoles : [])
-    .map(role => timeBandRank(fixedDaypartForRole(role))).filter(rank => rank !== null);
+    .map(role => timeBandRank(knownLastDaypartForRole(role))).filter(rank => rank !== null);
   const earliestRank = arc.length ? timeBandRank(arc[0]) : stopRanks.length ? Math.min(...stopRanks) : null;
   const caveats = [];
   if (anchoredToLocalTime) caveats.push("day_anchored_to_current_time");
