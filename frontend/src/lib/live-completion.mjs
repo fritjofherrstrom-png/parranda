@@ -210,6 +210,10 @@ export async function followLiveCompletion({
       let read;
       try {
         const { status, body } = await post(LIVE_COMPLETION_ENDPOINT);
+        // A gateway response is an interrupted read, not the producer's
+        // terminal answer. Keep following this same capability and lifetime.
+        // A structured 503 remains an explicit server refusal.
+        if (status === 502 || status === 504 || (status === 503 && body === null)) continue;
         read = readLiveCompletionResponse(status, body);
       } catch {
         if (signal.aborted) return cancelled();
