@@ -187,6 +187,8 @@ for (const lang of ['en', 'sv']) test(`${lang} route event timing keeps the same
     releaseCommitment: () => {}, keepStop: () => {}, dismissStop: () => {}, removeStop: () => {}, commit: () => {},
     eveningEvent: null, selectedDate: '2026-10-27', dayOffset: 0, routeContextSuggestions: [],
     detoursOpen: false, setDetoursOpen: () => {},
+    follow: { supported: false, state: { status: 'idle' }, retry: () => {} },
+    following: false, canFollowToday: false, onToggleFollow: () => {},
   } });
   t.after(() => h.unmount());
   assert.ok(exactParagraph(h.container, PERIOD_NOTE[lang]));
