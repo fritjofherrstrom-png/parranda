@@ -19,13 +19,13 @@ test at tests/nearby-start-order.test.js:17:1
 ✖ equivalent loop geometry prefers the selected stop already at the planning anchor (1.575917ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
   + actual - expected
-  
+
     [
   +   'farther',
       'already-here',
   -   'farther'
     ]
-  
+
       at TestContext.<anonymous> (/Users/fritjof/Developer/parranda-branches/codex-nearby-start-order-20261106/tests/nearby-start-order.test.js:21:10)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1201:25)
@@ -43,10 +43,10 @@ test at tests/nearby-start-order.test.js:59:1
 ✖ real HTTP publishes the nearby bar first without changing source facts or stop identities (69.196875ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
   + actual - expected
-  
+
   + 'north-west'
   - 'z-current'
-  
+
       at TestContext.<anonymous> (/Users/fritjof/Developer/parranda-branches/codex-nearby-start-order-20261106/tests/nearby-start-order.test.js:94:10)
       at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
       at async Test.run (node:internal/test_runner/test:1208:7)

@@ -26,12 +26,19 @@ source facts, distance budgets and search bounds are unchanged.
   witness and the published real-HTTP day put the nearby place in the wrong
   position. Other controls passed. Additional stronger-geometry/manual-order
   controls were strengthened afterward.
-- `GREEN.log`: final affected regression run, **169 PASS, 0 FAIL, 0 skips**.
-  It includes the six maintained nearby-start tests, bounded optimizer,
+- `GREEN.log`: final affected regression run, **170 PASS, 0 FAIL, 0 skips**.
+  It includes the seven maintained nearby-start tests, bounded optimizer,
   daypart/window/meal policies, stop edits, Live Keep/upgrade and route output.
 - `node scripts/check-frontend-dist-drift.js`: PASS. No frontend inputs or
   tracked build output changed.
-- `git diff --check`: PASS.
+- Independent review found that taking ties inside bounded 2-opt could change
+  its later search trajectory. `REVIEW-RED.log` proves the nine-stop regression
+  (**6 PASS, 1 FAIL**); the corrected search cursor stays unchanged and tracks
+  an equivalent preferred return candidate separately. The final GREEN above
+  includes this regression. Search bounds and evaluated-candidate path stay
+  unchanged. See `REVIEW.md` for the finding and disposition.
+- `git diff --check BASE HEAD`: PASS after removing trailing spaces from saved
+  test diagnostics. This whitespace-only normalization does not change results.
 
 The HTTP test uses a real local Express server, the frontend payload builder,
 composition engine and published response. Place inputs, weather and clock are
@@ -44,7 +51,8 @@ uses Node 22 on Ubuntu and is reported separately on the PR.
 
 The public service was observed on `f3f429e4c5c3b7832ae27956ab85f988346fb47e`
 during investigation. This candidate has not been deployed or tested there.
-Independent whole-branch review and exact-head CI are required before landing.
+Independent whole-branch review is recorded in `REVIEW.md`; exact-head full CI
+is still required before landing and is reported on the PR.
 
 Missing/misclassified catalogue records (Thrift Planet / København K),
 persistent visited history and ratings are separate work. This fix cannot add

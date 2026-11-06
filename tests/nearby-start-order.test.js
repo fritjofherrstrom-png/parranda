@@ -60,6 +60,28 @@ test('larger sets keep every identity and bounded deterministic refinement', () 
   assert.ok(Number.isFinite(a.geometry.objective));
 });
 
+test('a near-start tie cannot divert bounded refinement to a worse final geometry', () => {
+  const coordinates = [
+    [55.598327504131014, 13.001174351919907],
+    [55.600490164719524, 13.003790442084428],
+    [55.59797126211692, 12.997435840128455],
+    [55.60415049680509, 12.998055166720878],
+    [55.59874674973544, 12.995964058556128],
+    [55.59692881917581, 12.99509929423919],
+    [55.59510416659061, 12.995254912602249],
+    [55.59575993913226, 12.995044801968616],
+    [55.60135748944711, 12.997482629504521],
+  ];
+  const stops = coordinates.map(([lat, lng], i) => ({ id: String(i), name: String(i), lat, lng }));
+  const run = options => optimizeStopOrder(stops, 'loop', start, start, null, null,
+    6, 'soft_target', 'balanced', 'en', options);
+  const old = run();
+  const enabled = run({ preferNearbyStart: true });
+  assert.equal(old.geometry.objective, 4.28, 'frozen legacy refinement witness');
+  assert.equal(enabled.geometry.objective, old.geometry.objective);
+  assert.deepEqual(new Set(ids(enabled)), new Set(ids(old)));
+});
+
 test('real HTTP publishes the nearby bar first without changing source facts or stop identities', async t => {
   // Frozen field geometry translated to an unrelated fixture anchor. No city
   // names, new provider behavior or product-API response replacement.

@@ -34,9 +34,9 @@
 - Consumes: existing `optimizeStopOrder` positional arguments and its `{orderedStops, geometry}` result.
 - Produces: optional final `{preferNearbyStart: true}` private option; unchanged return shape.
 
-- [ ] Write a generic near-start geometry-tie regression and a real HTTP test showing the published first stop. Add controls for disabled/default option, arcs, stronger geometry, strict edit, source windows/dayparts and bounded larger sets.
-- [ ] Run the new file against unchanged code; expect the enabled-option/published-order regression to fail while controls pass. Keep the observed output.
-- [ ] Add one shared geometry comparison and activate it only at the scoped agnostic caller; use it in exhaustive and bounded refinement comparisons.
-- [ ] Run `node --require ./tests/helpers/no-live-network.js --test tests/nearby-start-order.test.js tests/stop-order-bound.test.js tests/agnostic-compose-daypart-ordering.test.js tests/source-window-ordering.test.js tests/time-aware-meal-ordering.test.js`; expect all pass.
-- [ ] Record controlled HTTP evidence and limitations; run frontend dist guard because tracked build inputs are unchanged. Commit the coherent candidate.
+- [x] Write a generic near-start geometry-tie regression and a real HTTP test showing the published first stop. Add controls for disabled/default option, arcs, stronger geometry, strict edit, source windows/dayparts and bounded larger sets.
+- [x] Run the new file against unchanged code; expect the enabled-option/published-order regression to fail while controls pass. Keep the observed output.
+- [x] Add one shared geometry comparison and activate it only at the scoped agnostic caller; use it in exhaustive comparison and among bounded refinement candidates without changing its search cursor.
+- [x] Run `node --require ./tests/helpers/no-live-network.js --test tests/nearby-start-order.test.js tests/stop-order-bound.test.js tests/agnostic-compose-daypart-ordering.test.js tests/source-window-ordering.test.js tests/time-aware-meal-ordering.test.js`; expect all pass. Final expanded affected run: 170 PASS.
+- [x] Record controlled HTTP evidence and limitations; run frontend dist guard because tracked build inputs are unchanged. Commit the coherent candidate.
 - [ ] Obtain one independent whole-branch review, fix Important findings through RED→GREEN if any, then publish draft and obtain full candidate CI.

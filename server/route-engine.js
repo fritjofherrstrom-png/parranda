@@ -4433,6 +4433,10 @@ function refineStopOrder(selectedStops, start, geometryFor, preferNearbyStart = 
 
   let bestOrder = ordered;
   let bestGeometry = geometryFor(ordered);
+  // Retain the legacy search cursor: accepting a tie there changes which
+  // later improvements bounded 2-opt sees. Track an equivalent return choice
+  // separately, among the candidates this same search already evaluates.
+  let preferred = { orderedStops: bestOrder, geometry: bestGeometry };
   for (let pass = 0; pass < MAX_STOP_ORDER_REFINEMENT_PASSES; pass += 1) {
     let improved = false;
     for (let i = 0; i < bestOrder.length - 1; i += 1) {
@@ -4443,17 +4447,20 @@ function refineStopOrder(selectedStops, start, geometryFor, preferNearbyStart = 
           ...bestOrder.slice(j + 1),
         ];
         const geometry = geometryFor(candidate);
-        if (betterStopOrder(geometry, bestGeometry, preferNearbyStart)) {
+        if (geometry.objective < bestGeometry.objective) {
           bestGeometry = geometry;
           bestOrder = candidate;
           improved = true;
+        }
+        if (preferNearbyStart && betterStopOrder(geometry, preferred.geometry, true)) {
+          preferred = { orderedStops: candidate, geometry };
         }
       }
     }
     if (!improved) break;
   }
 
-  return { orderedStops: bestOrder, geometry: bestGeometry };
+  return preferNearbyStart ? preferred : { orderedStops: bestOrder, geometry: bestGeometry };
 }
 
 // The earliest daypart slot a stop can fill, from its planner role(s). Null when

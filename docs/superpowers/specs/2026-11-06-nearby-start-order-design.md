@@ -11,7 +11,8 @@ This is a tie-break, not a new distance allowance, GPS watch or source rule.
 
 Use a private optimizer option enabled only by agnostic composition with no
 manual day edit. Legacy/template calls and arcs retain their ordering. Apply the
-same comparison inside the already bounded large-stop refinement. Do not
+same comparison to candidates evaluated by the already bounded large-stop
+refinement, keeping its strict-improvement search cursor unchanged. Do not
 increase permutation limits, passes, source work or published distance claims.
 
 Existing later daypart, source-hours, meal, manual-edit, event and final walking
