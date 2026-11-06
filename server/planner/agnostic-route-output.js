@@ -1033,13 +1033,17 @@ function withCandidateHours(composition, snapshot, requestedDate) {
 }
 
 async function composeAgnosticRouteOutput(args) {
+  let searchCandidates = [];
+  if (args.dayPlaceSearch) args = { ...args, onSearchCandidates: value => { searchCandidates = value; } };
+  const finish = (composition, snapshot, date) => ({ ...withCandidateHours(composition, snapshot, date),
+    ...(args.dayPlaceSearch ? { searchCandidates } : {}) });
   if (args.synthesizeVia !== 'engine' || typeof args.openDataLoader?.enrichSelected !== 'function') {
     let retained;
     const composition = await composeAgnosticRouteOutputOnce({ ...args, onRetainComposition: value => {
       retained = value;
       args.onRetainComposition?.(value);
     } });
-    return withCandidateHours(composition, retained, args.date);
+    return finish(composition, retained, args.date);
   }
   let snapshot;
   const initial = await composeAgnosticRouteOutputOnce({ ...args,
@@ -1048,7 +1052,7 @@ async function composeAgnosticRouteOutput(args) {
   const stops = initial.result?.days?.[0]?.primary_route?.main_stops || [];
   if (!snapshot || !stops.length || !Array.isArray(snapshot.records)) {
     if (snapshot) args.onRetainComposition?.(snapshot);
-    return withCandidateHours(initial, snapshot, args.date);
+    return finish(initial, snapshot, args.date);
   }
   // Check only the identities actually selected by the real composer. No new
   // source discovery, source reacquisition, or unbounded retry is permitted.
@@ -1080,7 +1084,7 @@ async function composeAgnosticRouteOutput(args) {
   });
   if (!changed) {
     args.onRetainComposition?.(snapshot);
-    return withCandidateHours(initial, snapshot, args.date);
+    return finish(initial, snapshot, args.date);
   }
   for (const key of ['loader_status', 'loader_error', 'loader_metadata', EXCLUDED_LOADED_IDS]) {
     if (snapshot.records[key] !== undefined) Object.defineProperty(records, key, { value: snapshot.records[key] });
@@ -1091,7 +1095,7 @@ async function composeAgnosticRouteOutput(args) {
   const replayed = await composeAgnosticRouteOutputOnce({ ...args, openDataLoader: async () => records,
     date: snapshot.date, retainedContext: snapshot.context,
   });
-  return withCandidateHours(replayed, { records, context: snapshot.context, date: snapshot.date }, args.date);
+  return finish(replayed, { records, context: snapshot.context, date: snapshot.date }, args.date);
 }
 
 async function composeAgnosticRouteOutputOnce({
@@ -1140,6 +1144,7 @@ async function composeAgnosticRouteOutputOnce({
   // Private server-owned replay context; never populated by HTTP intake.
   retainedContext = undefined,
   onRetainComposition = null,
+  onSearchCandidates = null,
 }) {
   const normalizedEdit = normalizeDayEdit(dayEdit);
   if (dayEdit != null && !normalizedEdit) {
@@ -1285,6 +1290,7 @@ async function composeAgnosticRouteOutputOnce({
   const selectionBaseHelpers = {
     ...helpers,
     ...availabilityHelpers,
+    ...(onSearchCandidates ? { onSearchCandidates } : {}),
     ...(candidateReachPolicy ? { candidateReachPolicy } : {}),
     walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
     walkingFitSelection: synthesizeVia === "engine",

@@ -45,6 +45,8 @@ const {
 } = require("./planner/pinned-candidates");
 const { parseRequestedDates } = require("./planner/requested-dates");
 const { normalizeDayEdit, normalizePreferencePriority } = require('../shared/planner-intent.mjs');
+const { normalizeDayPlaceSearch } = require('../shared/day-place-search.mjs');
+const { searchDayPlaces } = require('./planner/day-place-search');
 const { dayEditOutcome } = require('./planner/day-composition-policy');
 const { createPlannerLifecycle, lifecycleLoader } = require('./planner/cold-lifecycle');
 const { createPlannerSnapshotAssessor, memoizePlannerWeather } = require('./planner/source-snapshot-readiness');
@@ -2012,6 +2014,12 @@ function buildApp({
       // Explicit edit presence is intent. Never turn a malformed shortening
       // into an ordinary full-day request by silently dropping its fields.
       const hasDayEdit = Object.hasOwn(request.body ?? {}, 'day_edit');
+      const hasDayPlaceSearch = Object.hasOwn(request.body ?? {}, 'day_place_search');
+      const dayPlaceSearch = hasDayPlaceSearch ? normalizeDayPlaceSearch(request.body.day_place_search) : null;
+      if (hasDayPlaceSearch && !dayPlaceSearch) {
+        response.status(400).json({ error: 'invalid_day_place_search' });
+        return;
+      }
       const dayEdit = hasDayEdit ? normalizeDayEdit(request.body.day_edit) : null;
       if (hasDayEdit && !dayEdit) {
         response.status(400).json({ error: 'invalid_day_edit' });
@@ -2535,6 +2543,7 @@ function buildApp({
       let retainedComposition = null;
       const upgradeRequested = Boolean(liveCompletionIdentity && request.query?.include_live_route_upgrade === '1' && useEngineCompose);
       const compositionArgs = {
+        dayPlaceSearch,
         coords: anchor,
         baselineResult: baselineBody,
         externalRequested: isExternalCandidatesRequested(request),
@@ -2600,7 +2609,7 @@ function buildApp({
       // route stays in the diagnostic experiment block.
       if (useEngineCompose) {
         // Original publication and authorized replay share the identical gates.
-        async function publishComposition({ result: experimentResult, experiment, eventWeave, pinnedRefusals, precompositionPinnedRefusals, commitmentEligibleIds, candidateHours }, wovenPlaceStructure, liveEventsSidecar) {
+        async function publishComposition({ result: experimentResult, experiment, eventWeave, pinnedRefusals, precompositionPinnedRefusals, commitmentEligibleIds, candidateHours, searchCandidates }, wovenPlaceStructure, liveEventsSidecar) {
           experiment.intake = intake;
           const strongAnchor =
             intake.resolved?.confidence === "explicit" ||
@@ -2718,6 +2727,10 @@ function buildApp({
           }
           return {
             ...engineWoven.result,
+            ...(dayPlaceSearch ? { day_place_search: searchDayPlaces({ query: dayPlaceSearch.query,
+              candidates: searchCandidates, excludedIds: excludedCandidateIds,
+              visibleIds: (engineWoven.result?.days?.[0]?.primary_route?.main_stops || []).map(stop => stop.id),
+              eligibleIds: publishedEligibleIds({ promotionPromote: promotion.promote, commitmentEligibleIds }), candidateHours }) } : {}),
             ...(publishedPlaceStructure ? { place_structure: publishedPlaceStructure } : {}),
             ...(engineWoven.interrupt ? { pulse_route_interrupt: engineWoven.interrupt } : {}),
             ...liveEventsSidecar,
