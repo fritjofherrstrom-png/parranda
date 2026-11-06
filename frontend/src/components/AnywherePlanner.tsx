@@ -351,6 +351,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // and looking entirely legitimate. A response has to match both generations
   // to be allowed on screen.
   const intentSequenceRef = useRef(0);
+  const installedResponseIntentRef = useRef<number | null>(null);
+  function installResponse(response: any) {
+    // Installation, restore and Undo own the current intent even for legacy
+    // entries without inputs or a response that could not compose a route.
+    installedResponseIntentRef.current = intentSequenceRef.current;
+    setSafeResponse(response);
+  }
   const activeRequestRef = useRef<AbortController | null>(null);
   const activePublicReadRef = useRef<AbortController | null>(null);
   const activeLifecycleCancelRef = useRef<(() => void) | null>(null);
@@ -386,6 +393,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [liveSheetSort, setLiveSheetSort] = useState<"for_you" | "by_time">("for_you");
   const [liveSheetScope, setLiveSheetScope] = useState<LiveEventScope>("around_place");
   const [liveQueryEvents, setLiveQueryEvents] = useState<LiveEvents | null>(null);
+  // A matching explicit lookup may refresh the overview, but never the
+  // composed/saved day or its publication and route-upgrade authority.
+  const [liveCardObservation, setLiveCardObservation] = useState<{ day: any; intentId: number; events: LiveEvents } | null>(null);
   const [liveQueryPending, setLiveQueryPending] = useState(false);
   const [liveQueryError, setLiveQueryError] = useState<string | null>(null);
   const [liveQueryGeoHint, setLiveQueryGeoHint] = useState<string | null>(null);
@@ -413,6 +423,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     liveQueryAbortRef.current?.abort();
     liveQueryAbortRef.current = null;
     setLiveQueryEvents(null);
+    setLiveCardObservation(null);
     setLiveQueryPending(false);
     setLiveQueryError(null);
     setLiveQueryGeoHint(null);
@@ -552,7 +563,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setDayChange(null);
       if (!retention.keepPrevious) {
         setClassification(null);
-        setSafeResponse(null);
+        installResponse(null);
         displayedAnchorKeyRef.current = null;
       }
       setServiceRefusal(null);
@@ -689,7 +700,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         setDayChange(null);
         setServiceRefusal(refusal);
         setClassification(null);
-        setSafeResponse(null);
+        installResponse(null);
         displayedAnchorKeyRef.current = null;
         // A transport or capacity refusal composed no day at all, so there is
         // no evidence that any commitment could not be met. Reporting one here
@@ -745,7 +756,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           setDayIsStale(true);
         } else {
           setClassification({ status: "unavailable", hasStructure: false, placeLabel: fallbackLabel });
-          setSafeResponse({ ...safe, days: [] });
+          installResponse({ ...safe, days: [] });
           displayedAnchorKeyRef.current = null;
         }
         setPhase("done");
@@ -781,7 +792,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // Atomic replacement. If the new verdict is structure_only/unavailable,
       // the held day disappears here — it no longer answers the request.
       setClassification(cls);
-      setSafeResponse(safe);
+      installResponse(safe);
       setAnsweredIntentMode(payload.intent_mode ?? null);
       displayedAnchorKeyRef.current = anchorKey(anchor);
       // This day answered exactly the pins this request carried. Recording them
@@ -1042,7 +1053,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     liveResponseRef.current = safe;
     liveSheetUpgradeResponseRef.current = safe;
     setClassification(cls);
-    setSafeResponse(safe);
+    installResponse(safe);
     const unhonored = result?.agnostic_route_output_experiment?.pinned_candidates?.unhonored;
     setAppliedRefusals([...(Array.isArray(unhonored) ? unhonored : []), ...(Array.isArray(result?.agnostic_route_output_experiment?.live_event_choices?.unhonored) ? result.agnostic_route_output_experiment.live_event_choices.unhonored : [])]);
     setExpandedStopKey(null);
@@ -1190,7 +1201,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const storedSort = restoreViewFromStorage ? readLS<{ sort?: string }>("parranda:live:sort", {}).sort : entry.inputs?.liveSheetSort;
     setLiveSheetSort(storedSort === "by_time" ? "by_time" : "for_you");
     setClassification(entry.classification);
-    setSafeResponse(entry.safeResponse);
+    installResponse(entry.safeResponse);
     setAppliedPins([]);
     // A restored snapshot owns the screen outright; it is labelled by
     // restoredAt, never by the recompose "updating" state.
@@ -1304,7 +1315,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     lastEntryRef.current = previous;
     writeLS(LAST_KEY, previous);
     setClassification(previous.classification);
-    setSafeResponse(previous.safeResponse);
+    installResponse(previous.safeResponse);
     setDayIsStale(false);
     setServiceRefusal(null);
     setExpandedStopKey(null);
@@ -1929,6 +1940,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const day = structure?.district_day;
   const liveEvents: LiveEvents | null =
     (completedLive && completedLive.day === safeResponse ? completedLive.liveEvents : safeResponse?.live_events) ?? null;
+  const cardLiveEvents = liveCardObservation?.day === safeResponse &&
+    liveCardObservation?.intentId === intentSequenceRef.current ? liveCardObservation.events : liveEvents;
   const liveDayLabel = liveDateLabel(liveEvents?.selected_date, lang);
   const routeStops = useMemo(() => primaryRouteStops(safeResponse), [safeResponse]);
   const hasPrimaryRoute = routeStops.length > 0;
@@ -1960,15 +1973,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // FULL stop order — the woven event is genuinely part of the walking route.
   const split = useMemo(() => splitRouteStops(routeStops), [routeStops]);
   const pulseBuckets = useMemo(
-    () => pulseEventBuckets(liveEvents, wovenEventIds(routeStops)),
-    [liveEvents, routeStops],
+    () => pulseEventBuckets(cardLiveEvents, wovenEventIds(routeStops)),
+    [cardLiveEvents, routeStops],
   );
   const pulseState = useMemo(
     () =>
-      liveEvents?.pending && !liveFollowing ? "unavailable" : pulseHealthState(liveEvents, pulseBuckets, split.woven),
-    [liveEvents, pulseBuckets, split.woven, liveFollowing],
+      cardLiveEvents?.pending && !liveFollowing ? "unavailable" : pulseHealthState(cardLiveEvents, pulseBuckets, split.woven),
+    [cardLiveEvents, pulseBuckets, split.woven, liveFollowing],
   );
-  const liveFailure = useMemo(() => liveSourceFailure(liveEvents, pulseBuckets), [liveEvents, pulseBuckets]);
+  const liveFailure = useMemo(() => liveSourceFailure(cardLiveEvents, pulseBuckets), [cardLiveEvents, pulseBuckets]);
   // A failed source is neither "still loading" nor an empty calendar: say
   // which share of the selected sources could not be fetched.
   const liveFailureSentence = (failure: { selected: number; responding: number }) => {
@@ -1997,7 +2010,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     () => clothingAdvice(dayflow?.weather?.provenance?.observed, lang),
     [dayflow, lang],
   );
-  const pulseSources = useMemo(() => pulseSourceLine(liveEvents), [liveEvents]);
+  const pulseSources = useMemo(() => pulseSourceLine(cardLiveEvents), [cardLiveEvents]);
   const sheetLiveEvents = liveQueryEvents ?? liveEvents;
   const sheetBuckets = useMemo(
     () => pulseEventBuckets(sheetLiveEvents, wovenEventIds(routeStops)),
@@ -2103,9 +2116,25 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         const body = await response.json();
         if (controller.signal.aborted || queryIntentId !== intentSequenceRef.current || safeResponse !== liveResponseRef.current) return;
         if (!response.ok && body?.error === "place_scope_unavailable") throw new Error("place_scope_unavailable");
-        const accepted = response.ok ? acceptedLiveEventQuery(body) : null;
+        const accepted = response.ok ? acceptedLiveEventQuery(body) as LiveEvents | null : null;
         if (!accepted) throw new Error("live_event_query_contract_rejected");
         setLiveQueryEvents(accepted as LiveEvents);
+        // Only the selected day's local area answers this overview. A week,
+        // route/GPS/region query stays in the sheet that names its own scope.
+        // Controls change before the debounce marks a held day stale. Only
+        // the intent that installed this response may refresh its overview.
+        // An HTTP200 source failure is not a successful observation and must
+        // not hide a useful original completion that arrives afterwards.
+        const observationState = pulseHealthState(accepted, pulseEventBuckets(accepted));
+        if (["ok", "partial", "soft_empty"].includes(observationState) && !dayIsStale && phase === "done" &&
+            installedResponseIntentRef.current === queryIntentId &&
+            nextScope === "around_place" && nextTime === "tonight" &&
+            typeof payload.selected_date === "string" && accepted.selected_date === payload.selected_date &&
+            body.query?.scope === nextScope && body.query?.time === "tonight" &&
+            body.query?.selected_date === payload.selected_date &&
+            body.query?.discovery_scope === "local" && body.query?.radius_m === 3000) {
+          setLiveCardObservation({ day: safeResponse, intentId: queryIntentId, events: accepted as LiveEvents });
+        }
         if (!(accepted as LiveEvents).pending) break;
       }
     } catch (error) {
@@ -3284,7 +3313,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           lang={lang}
           mode={mode}
           anchorLabel={anchorLabel}
-          liveEvents={liveEvents}
+          liveEvents={cardLiveEvents}
           liveDayLabel={liveDayLabel}
           showDay={showDay}
           dayflow={dayflow}
