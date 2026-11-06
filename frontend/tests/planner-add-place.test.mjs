@@ -161,7 +161,7 @@ test('saved and position snapshots require rebuilding/position consent before a 
     if (nearMe) entry.inputs.mode = 'near_me';
     const restored = await mountPlanner({ url: 'http://localhost/anywhere?restore=last&lang=en', storage: { [LAST]: entry } });
     const input = restored.container.querySelector('form[aria-label="Add a place"] input');
-    assert.ok(input?.disabled, 'a source snapshot cannot grant permission for a new request');
+    assert.ok(input?.readOnly && input.getAttribute('aria-disabled') === 'true', 'a source snapshot cannot grant permission for a new request');
     assert.equal(calls(restored).length, 0);
     await restored.unmount();
   }

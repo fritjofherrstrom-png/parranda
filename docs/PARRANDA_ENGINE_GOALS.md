@@ -1,5 +1,32 @@
 # Parranda Engine Goals and Roadmap
 
+## Source-backed day place search — prepared 2026-11-06
+
+The existing day can explicitly search the current trusted local reservoir by
+venue name, source address, supported category or factual cuisine (for example
+`indiskt`). Search uses the existing acquisition aperture and admission verdict,
+not a global coverage promise or another provider. Public payload labels,
+coordinates and facets never establish source evidence. Cuisine is retained
+only from OSM cuisine tags or exact supported Overture primary categories.
+
+An exact chosen identity can be previewed as one added stop, or as replacement
+of an explicitly selected unpinned meal. All other retained identities,
+preferences, absolute date, exclusions, pins and Live occurrences remain
+obligations; normal source/time/geography and final walking gates can refuse
+atomically. Six stops is the cap. Missing hours remain unknown, not open-now.
+
+Search and preview do not replace the visible answer or write its saved record.
+Confirmation adopts the already validated generation, including its publication
+reference and commitment snapshot; Undo restores the previous exact answer.
+Saved/public position geometry never grants fresh position consent. Ordinary
+requests without the opt-in keep their previous behavior. Full upfront place
+anchoring and timed scheduling are separate future work.
+
+Candidate branch: `codex/add-place-search-20261106`, based on main `f3f429e4`.
+Offline fixture/browser validation is recorded in
+`docs/qa/2026-11-06-add-place-search.md`; source merge and deployment remain
+separate from this prepared feature.
+
 ## Live supply policy (2026-10-05)
 
 Machine verification, not per-source human approval, is the normal activation

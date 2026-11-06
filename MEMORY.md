@@ -1,5 +1,18 @@
 # Parranda — gemensam arbetshistorik
 
+## Lägg till en plats — kandidat 2026-11-06
+
+- Fritjof godkände att bygga sökning i den befintliga dagen med ”ok kör”.
+  Gren `codex/add-place-search-20261106`, bas main `f3f429e4`, ägare Codex.
+- Namn, källadress, stödd platstyp och källbelagd kökstyp kan sökas bland det
+  redan godkända lokala underlaget. Sökning ger inget löfte om full täckning.
+- Förhandsvisning av ett exakt tillägg eller måltidsbyte behåller övriga stopp,
+  datum, intressen och användarval. Bekräftelse använder samma kontrollerade
+  svar; Ångra återställer föregående dag. Okända öppettider visas som okända.
+- Ingen ny provider, modell, betaltjänst, merge eller driftsättning ingår.
+  Evidens och återstående gränser: `docs/qa/2026-11-06-add-place-search.md`.
+
+
 ## Produktprioritet bekräftad av Fritjof — 2026-11-05
 
 - Localhost-layouten i PR #677 avvisades: den ska inte ersätta den publika Linje-vyn. PR:n är stängd utan merge/deploy; gren och bevis bevaras.

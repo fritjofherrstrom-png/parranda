@@ -1,6 +1,6 @@
 # Lägg till en plats i min dag
 
-Status: konkretisering av förslaget som Fritjof godkände med ”ok kör” den 6 november 2026. Genomförandeplanen behöver granskas innan produktkod ändras enligt writing-plans-färdigheten.
+Status: konkretisering av förslaget som Fritjof godkände med ”ok kör” den 6 november 2026. Genomförandeplanen granskades mot befintliga käll-, redigerings- och publiceringskontrakt före implementation. Genomförande sker i isolerad gren; slutgranskning och verifiering dokumenteras i QA-underlaget.
 
 ## Nytta och scope
 

@@ -573,7 +573,7 @@ test("grouped controls never clip the focus ring that sits outside them", () => 
   assert.doesNotMatch(componentSource("planner/AnchorCard.tsx"), /className=\{`overflow-hidden \$\{panelCard\}`\}/);
 });
 
-test("adjustments collapse to a summary and re-compose themselves — no submit past the landing", () => {
+test("adjustments re-compose themselves while adding a place uses explicit search", () => {
   // Collapsed summary (mood · day · length) with an aria-expanded toggle; with
   // a day on screen the summary stays above the open panel, Done in Adjust's place...
   assert.match(anywherePlannerSource, /\(compact \|\| !adjustOpen\) && \(/);
@@ -591,7 +591,8 @@ test("adjustments collapse to a summary and re-compose themselves — no submit 
   assert.match(anywherePlannerSource, /\}, 400\);/);
   // The panel says so where it starts: there is nothing to submit.
   assert.match(anywherePlannerSource, /t\("Dagen byggs om direkt när du ändrar\.", "The day rebuilds as you change it\."\)/);
-  assert.equal((anywherePlannerSource.match(/type="submit"/g) || []).length, 0, "no second entry submit, even without an anchor");
+  const adjustments = anywherePlannerSource.replace(componentSource("planner/AddPlace.tsx"), "");
+  assert.equal((adjustments.match(/type="submit"/g) || []).length, 0, "only the explicit place search submits; adjustments do not");
 });
 
 test("saving a live day does not freeze its adjustment controls as a restored snapshot", () => {
