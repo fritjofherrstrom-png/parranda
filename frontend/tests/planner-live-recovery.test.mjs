@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
 import {mountPlanner} from './helpers/planner-harness.mjs';
-import {LAST_KEY} from '../src/lib/anywhere-storage.mjs';
+import {LAST_KEY,buildSavedEntry} from '../src/lib/anywhere-storage.mjs';
+
+const {unavailableLiveEvents}=createRequire(import.meta.url)('../../server/place-candidates/live-event-query.js');
 
 const DATE='2026-11-06',TOKEN='original-capability';
 const event={id:'recovered',title:'Recovered workshop',starts_at:DATE+'T15:00:00Z',timezone:'Europe/Copenhagen',source_label:'Source calendar',source_url:'https://calendar.example/event',route_eligible:false};
@@ -123,4 +126,49 @@ test('a new query for changed picks cannot relabel the old held day as recovered
  const h=await arrive(t);await click(h,'Adjust');await click(h,'Tomorrow');
  const request=await selectedQuery(h);await h.fetchMock.respond(request,query(live()));await close(h);
  assert.doesNotMatch(card(h).textContent,/Recovered workshop/);assert.equal(routes(h).length,1);
+});
+
+for(const walkKey of ['balanced','short','long',null])test(`restored ${walkKey??'missing-inputs'} day can refresh its matching overview without changing storage`,async t=>{
+ t.mock.timers.enable({apis:['Date'],now:new Date(2026,10,6,12).getTime()});
+ const entry=buildSavedEntry({place:'Testville',dateIso:DATE,savedAt:DATE+'T10:00:00Z',safeResponse:day(live({pending:true})),
+  classification:{status:'composed_limited',placeLabel:'Testville',limitations:[]},
+  inputs:walkKey?{place:'Testville',mode:'typed',selected:['food','culture','views'],walkKey,dayOffset:0}:null});
+ const h=await mountPlanner({url:'http://localhost/anywhere?restore=last&lang=en',storage:{[LAST_KEY]:entry}});t.after(()=>h.unmount());
+ const request=await selectedQuery(h);assert.equal(request.body.selected_date,DATE);assert.equal(request.body.scope,'around_place');
+ await h.fetchMock.respond(request,query(live()));await close(h);
+ assert.match(card(h).textContent,/Recovered workshop/);assert.deepEqual(h.readStorage(LAST_KEY),entry);assert.equal(routes(h).length,0);
+});
+
+test('matching dated Live can recover even when no route could be composed',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:new Date(2026,10,6,12).getTime()});
+ const h=await mountPlanner({url:'http://localhost/anywhere?place=Testville&lang=en'});t.after(()=>h.unmount());await h.clock.advance(500);
+ const response=day(live({pending:true}));response.days=[];response.agnostic_route_output_experiment.promotion={promote:false};
+ response.agnostic_route_output_experiment.intake.resolved={label:'Testville',lat:55.68,lng:12.57};
+ await h.fetchMock.respond(routes(h)[0],response);await h.clock.advance(50);
+ await h.fetchMock.respond(await selectedQuery(h),query(live()));await close(h);
+ assert.match(card(h).textContent,/Recovered workshop/);assert.equal(routes(h).length,1);assert.equal(h.readStorage(LAST_KEY),null);
+});
+
+test('a source-failed HTTP200 lookup cannot mask a later successful original completion',async t=>{
+ const h=await arrive(t,true),failure={...unavailableLiveEvents('event_supply_failed','failed'),selected_date:DATE};
+ await h.fetchMock.respond(await selectedQuery(h),query(failure));await close(h);
+ await h.clock.advance(2000);await h.fetchMock.respond(reads(h)[0],terminal(live({status:'healthy'})));
+ assert.match(h.readStorage(LAST_KEY).safeResponse.live_events.tonight[0].title,/Recovered workshop/);
+ assert.match(card(h).textContent,/Recovered workshop/);assert.equal(routes(h).length,1);
+});
+
+test('a successful healthy-empty observation still takes precedence over later original completion',async t=>{
+ const h=await arrive(t,true);await h.fetchMock.respond(await selectedQuery(h),query(live({status:'healthy',rows:[]})));await close(h);
+ await h.clock.advance(2000);await h.fetchMock.respond(reads(h)[0],terminal(live({status:'healthy'})));
+ assert.match(card(h).textContent,/sources responded but list no events/i);assert.doesNotMatch(card(h).textContent,/Recovered workshop/);
+ assert.equal(h.readStorage(LAST_KEY).safeResponse.live_events.tonight.length,1);
+});
+
+test('Undo restores ownership for a new read-only lookup without composing again',async t=>{
+ const h=await arrive(t);await click(h,'Adjust');await click(h,'Tomorrow');await h.clock.advance(500);
+ const replacement=day(live({pending:true,date:'2026-11-07'}));replacement.days[0].date='2026-11-07';
+ await h.fetchMock.respond(routes(h)[1],replacement);await h.clock.advance(50);await click(h,'Undo');
+ const before=structuredClone(h.readStorage(LAST_KEY));
+ await h.fetchMock.respond(await selectedQuery(h),query(live()));await close(h);
+ assert.match(card(h).textContent,/Recovered workshop/);assert.equal(routes(h).length,2);assert.deepEqual(h.readStorage(LAST_KEY),before);
 });

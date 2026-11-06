@@ -38,10 +38,10 @@
 
 - [x] Add mounted partial/healthy-empty recovery and mismatched/pending/late-body cases; matching-card cases failed before the fix.
 - [x] Admit only a terminal accepted reply with exact around_place/tonight/date match, bind to day+generation, and derive existing card buckets/health/source from it. Original response/sheet/publication/route storage ownership stays separate.
-- [x] Verify relevant Live/navigation/storage controls, typecheck and build. The existing published-day input ownership check also closes the before-debounce held-day gap, demonstrated RED then GREEN.
+- [x] Verify relevant Live/navigation/storage controls, typecheck and build. The displayed response's installed intent closes the before-debounce held-day gap while supporting legacy saved entries and route-less views. Source-failed query envelopes cannot mask successful original completion. Review findings were reproduced RED then corrected GREEN, including a healthy-empty precedence control and Undo.
 - [ ] Verify committed dist, independent review and exact-head Linux CI.
 
-Local verification: 30 new regressions and 141 affected existing checks pass; typecheck and build pass. One existing real-publication test fails on macOS both here and on an untouched f3f429e archive (Linux publication-store dependency); it remains a CI observation limit, not a passing local check.
+Local verification after review corrections: 38 new regressions and 149 affected existing checks pass; typecheck and frontend rebuild pass. Committed dist, review correction readback and exact-head Linux CI remain. One existing real-publication test fails on macOS both here and on an untouched f3f429e archive (Linux publication-store dependency); it remains a CI observation limit, not a passing local check.
 
 ## Delivery
 

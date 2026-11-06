@@ -335,6 +335,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // and looking entirely legitimate. A response has to match both generations
   // to be allowed on screen.
   const intentSequenceRef = useRef(0);
+  const installedResponseIntentRef = useRef<number | null>(null);
+  function installResponse(response: any) {
+    // Installation, restore and Undo own the current intent even for legacy
+    // entries without inputs or a response that could not compose a route.
+    installedResponseIntentRef.current = intentSequenceRef.current;
+    setSafeResponse(response);
+  }
   const activeRequestRef = useRef<AbortController | null>(null);
   const activePublicReadRef = useRef<AbortController | null>(null);
   const activeLifecycleCancelRef = useRef<(() => void) | null>(null);
@@ -540,7 +547,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setDayChange(null);
       if (!retention.keepPrevious) {
         setClassification(null);
-        setSafeResponse(null);
+        installResponse(null);
         displayedAnchorKeyRef.current = null;
       }
       setServiceRefusal(null);
@@ -676,7 +683,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         setDayChange(null);
         setServiceRefusal(refusal);
         setClassification(null);
-        setSafeResponse(null);
+        installResponse(null);
         displayedAnchorKeyRef.current = null;
         // A transport or capacity refusal composed no day at all, so there is
         // no evidence that any commitment could not be met. Reporting one here
@@ -732,7 +739,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           setDayIsStale(true);
         } else {
           setClassification({ status: "unavailable", hasStructure: false, placeLabel: fallbackLabel });
-          setSafeResponse({ ...safe, days: [] });
+          installResponse({ ...safe, days: [] });
           displayedAnchorKeyRef.current = null;
         }
         setPhase("done");
@@ -768,7 +775,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // Atomic replacement. If the new verdict is structure_only/unavailable,
       // the held day disappears here — it no longer answers the request.
       setClassification(cls);
-      setSafeResponse(safe);
+      installResponse(safe);
       displayedAnchorKeyRef.current = anchorKey(anchor);
       // This day answered exactly the pins this request carried. Recording them
       // here — beside the classification, not beside the click — is what ties
@@ -1028,7 +1035,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     liveResponseRef.current = safe;
     liveSheetUpgradeResponseRef.current = safe;
     setClassification(cls);
-    setSafeResponse(safe);
+    installResponse(safe);
     const unhonored = result?.agnostic_route_output_experiment?.pinned_candidates?.unhonored;
     setAppliedRefusals([...(Array.isArray(unhonored) ? unhonored : []), ...(Array.isArray(result?.agnostic_route_output_experiment?.live_event_choices?.unhonored) ? result.agnostic_route_output_experiment.live_event_choices.unhonored : [])]);
     setExpandedStopKey(null);
@@ -1174,7 +1181,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const storedSort = restoreViewFromStorage ? readLS<{ sort?: string }>("parranda:live:sort", {}).sort : entry.inputs?.liveSheetSort;
     setLiveSheetSort(storedSort === "by_time" ? "by_time" : "for_you");
     setClassification(entry.classification);
-    setSafeResponse(entry.safeResponse);
+    installResponse(entry.safeResponse);
     setAppliedPins([]);
     // A restored snapshot owns the screen outright; it is labelled by
     // restoredAt, never by the recompose "updating" state.
@@ -1285,7 +1292,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     lastEntryRef.current = previous;
     writeLS(LAST_KEY, previous);
     setClassification(previous.classification);
-    setSafeResponse(previous.safeResponse);
+    installResponse(previous.safeResponse);
     setDayIsStale(false);
     setServiceRefusal(null);
     setExpandedStopKey(null);
@@ -2089,9 +2096,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         setLiveQueryEvents(accepted as LiveEvents);
         // Only the selected day's local area answers this overview. A week,
         // route/GPS/region query stays in the sheet that names its own scope.
-        // Picks change before the debounce marks a held day stale; use the
-        // published day's existing ownership check in that interval as well.
-        if (!accepted.pending && !dayIsStale && phase === "done" && feedbackMatchesIntent &&
+        // Controls change before the debounce marks a held day stale. Only
+        // the intent that installed this response may refresh its overview.
+        // An HTTP200 source failure is not a successful observation and must
+        // not hide a useful original completion that arrives afterwards.
+        const observationState = pulseHealthState(accepted, pulseEventBuckets(accepted));
+        if (["ok", "partial", "soft_empty"].includes(observationState) && !dayIsStale && phase === "done" &&
+            installedResponseIntentRef.current === queryIntentId &&
             nextScope === "around_place" && nextTime === "tonight" &&
             typeof payload.selected_date === "string" && accepted.selected_date === payload.selected_date &&
             body.query?.scope === nextScope && body.query?.time === "tonight" &&
