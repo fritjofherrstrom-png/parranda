@@ -37,6 +37,9 @@ import { BASEMAP_PROVIDER, basemapPaint, basemapStyle, type BasemapTheme } from 
 import type { RouteContextSuggestion } from "../../lib/route-context-view.mjs";
 import type { DistrictArea } from "./types";
 import type { Translate } from "./copy";
+import type { PositionSession } from "./useFollowPosition";
+import { LocationIcon } from "../shared/icons";
+import { busyButton } from "../shared/ui";
 
 // Footprints the fit keeps clear of the controls, in px. A route marker's
 // visible disc is 30px (tailwind.css: the 44px `.route-map-marker`, its
@@ -198,6 +201,11 @@ export default function RouteMap({
   heightClass,
   regionLabel,
   still = false,
+  positionSession,
+  positionEnabled = false,
+  positionCentreRequest = 0,
+  onLocate,
+  onStopLocation,
   t,
 }: {
   hasPrimaryRoute: boolean;
@@ -228,6 +236,11 @@ export default function RouteMap({
    * page. Its stops still open on a tap; Expand gives the full map.
    */
   still?: boolean;
+  positionSession?: PositionSession;
+  positionEnabled?: boolean;
+  positionCentreRequest?: number;
+  onLocate?: () => void;
+  onStopLocation?: () => void;
   t: Translate;
 }) {
   const walkingPath = useMemo(() => routeDisplayPath(primaryRoute?.map_path_points, {
@@ -254,6 +267,8 @@ export default function RouteMap({
   const [mapFailed, setMapFailed] = useState(false);
   const [tilesFailed, setTilesFailed] = useState(false);
   const [layoutCrowded, setLayoutCrowded] = useState(false);
+  const position = positionEnabled && positionSession?.state.status === "tracking" ? positionSession.state.position : null;
+  const centredRequestRef = useRef(0);
   const [tip, setTip] = useState<Tip>(null);
   const [groupPicker, setGroupPicker] = useState<{ key: string; members: number[] } | null>(null);
   const groupPickerRef = useRef<HTMLDivElement | null>(null);
@@ -855,20 +870,73 @@ export default function RouteMap({
     [],
   );
 
+  // Current position is a separate display marker: it never enters the route
+  // source, its fit bounds, the stop list or the Maps handoff.
+  useEffect(() => {
+    const instance = instanceRef.current;
+    if (!position || !mapDrawn || mapFailed || !instance) return;
+    const { ml, map } = instance;
+    const accuracy = document.createElement("div");
+    accuracy.className = "route-map-position-accuracy";
+    accuracy.setAttribute("aria-hidden", "true");
+    const dot = document.createElement("div");
+    dot.className = "route-map-current-position";
+    dot.setAttribute("data-current-position", "");
+    dot.setAttribute("role", "img");
+    dot.setAttribute("aria-label", t("Din nuvarande position", "Your current position"));
+    const at: [number, number] = [position.lng, position.lat];
+    const ring = new ml.Marker({ element: accuracy, anchor: "center" }).setLngLat(at).addTo(map);
+    const marker = new ml.Marker({ element: dot, anchor: "center" }).setLngLat(at).addTo(map);
+    const sizeAccuracy = () => {
+      const centre = new ml.LngLat(position.lng, position.lat);
+      const pixel = map.project(at);
+      const metresPerPixel = centre.distanceTo(map.unproject([pixel.x + 100, pixel.y])) / 100;
+      const diameter = 2 * position.accuracy / metresPerPixel;
+      accuracy.style.display = Number.isFinite(diameter) && diameter >= 0 ? "" : "none";
+      accuracy.style.width = accuracy.style.height = `${diameter}px`;
+    };
+    map.on("zoom", sizeAccuracy);
+    sizeAccuracy();
+    if (positionCentreRequest > centredRequestRef.current) {
+      centredRequestRef.current = positionCentreRequest;
+      map.jumpTo({ center: at });
+    }
+    layoutRef.current();
+    return () => { map.off("zoom", sizeAccuracy); marker.remove(); ring.remove(); };
+  }, [position, mapDrawn, mapFailed, positionCentreRequest]);
+
+  const locationState = positionSession?.state;
+  const locationStatus = positionEnabled && locationState && (
+    <div className="mt-1 flex min-h-11 flex-wrap items-center gap-x-3 text-xs text-parranda-ink-meta">
+      <span role="status">{locationState.status === "tracking"
+        ? t("Din position visas", "Your location is shown")
+        : locationState.status === "paused"
+          ? t("Positionsvisningen är pausad", "Location is paused")
+          : locationState.status === "denied"
+            ? t("Tillåt platsdelning för att visa din position.", "Allow location sharing to show your position.")
+            : locationState.status === "unavailable"
+              ? t("Positionen kunde inte hämtas. Försök igen.", "Location couldn't be found. Try again.")
+              : t("Hämtar din position …", "Finding your position …")}</span>
+      {position && <span aria-live="off">± {Math.max(1, Math.ceil(position.accuracy))} m</span>}
+      <button type="button" onClick={onStopLocation} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">
+        {t("Stäng av position", "Stop location")}
+      </button>
+    </div>
+  );
   if (mapFailed) {
     return (
-      <p role="status" className="rounded-parranda border-line border-parranda-line-faint px-4 py-3 text-sm text-parranda-ink-muted">
+      <><p role="status" className="rounded-parranda border-line border-parranda-line-faint px-4 py-3 text-sm text-parranda-ink-muted">
         {t(
           "Kartan kan inte visas i den här webbläsaren. Stoppen och Maps-rutten fungerar som vanligt.",
           "The map can't be shown in this browser. The stops and the Maps route work as usual.",
         )}
-      </p>
+      </p>{locationStatus}</>
     );
   }
 
   return (
-    <>
-    <div ref={frameRef} data-route-map="" data-still={still || undefined} className={`route-map-frame relative w-full overflow-hidden rounded-parranda border-line border-parranda-line-faint transition-all ${heightClass}`}>
+    <div className={heightClass === "h-full" ? "flex h-full min-h-0 flex-col" : undefined}>
+    <div ref={frameRef} data-route-map="" data-still={still || undefined} className={`route-map-frame relative w-full overflow-hidden rounded-parranda border-line border-parranda-line-faint transition-all ${heightClass === "h-full" ? "min-h-0 flex-1" : heightClass}`}>
       {/* Screen layout keeps each numbered touch footprint independently visible. */}
       <div ref={mapRef} className="h-full w-full" />
       {groupPicker && (
@@ -933,6 +1001,18 @@ export default function RouteMap({
         </button>
       )}
     </div>
+      <div className="flex shrink-0 flex-wrap gap-2 py-1">
+        {positionSession?.supported && onLocate && <button type="button" {...busyButton(!mapDrawn, onLocate)}
+          aria-label={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-full border-line border-parranda-line bg-parranda-paper px-3 text-13 font-bold text-parranda-ink shadow-control hover:border-parranda-line-strong">
+          <LocationIcon className="h-4 w-4" />{t("Min position", "My location")}
+        </button>}
+        <button type="button" {...busyButton(!mapDrawn, () => refitRef.current())}
+          className="inline-flex min-h-11 items-center rounded-full border-line border-parranda-line bg-parranda-paper px-3 text-13 font-bold text-parranda-ink shadow-control hover:border-parranda-line-strong">
+          {hasPrimaryRoute ? t("Visa rutten", "Show route") : t("Visa platserna", "Show places")}
+        </button>
+      </div>
+    {locationStatus}
     {hasPrimaryRoute && (
       <p className="mt-1 break-words text-xs leading-relaxed text-parranda-ink-meta">
         {hasWalkingPath
@@ -952,6 +1032,6 @@ export default function RouteMap({
       </p>
     )}
     {layoutCrowded && <p role="status" className="mt-1 text-xs text-parranda-ink-meta">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}
-    </>
+    </div>
   );
 }
