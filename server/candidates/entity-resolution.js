@@ -436,6 +436,18 @@ function reconcileFields(canonical, duplicate) {
   }
 
   const canHas = hasCoords(canonical);
+  const { normalizePlaceSearchFacets } = require('../place-candidates/place-search-facets');
+  const currentFacets = normalizePlaceSearchFacets(canonical.search_facets);
+  const incomingFacets = normalizePlaceSearchFacets(duplicate.search_facets);
+  if (incomingFacets) {
+    const combined = normalizePlaceSearchFacets({ cuisines: [...new Set([
+      ...(currentFacets?.cuisines || []), ...incomingFacets.cuisines,
+    ])].slice(0, 12) });
+    if (JSON.stringify(combined) !== JSON.stringify(currentFacets)) {
+      patch.search_facets = combined;
+      filled.push('search_facets');
+    }
+  }
   const dupHas = hasCoords(duplicate);
 
   if (!canHas && dupHas) {
