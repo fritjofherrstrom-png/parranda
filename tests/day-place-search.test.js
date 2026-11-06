@@ -10,6 +10,7 @@ test('names and source addresses match; supported cuisine/category aliases use f
   assert.equal(run('river').items[0].id, 'a');
   assert.equal(run('INDISKT').items[0].match_kind, 'cuisine');
   assert.equal(run('indian restaurant').items[0].match_kind, 'cuisine');
+  assert.equal(run('Indian food').items[0].match_kind, 'cuisine');
   assert.equal(run('restaurang').items[0].match_kind, 'category');
   assert.equal(run('park', [place('p', { type: 'park', search_facets: undefined })]).items[0].id, 'p');
   assert.equal(run('Strandgatan', [place('a', { place_details: { kind: 'restaurant', address: 'Strandgatan 2' } })]).items[0].match_kind, 'address');

@@ -29,7 +29,7 @@ function searchDayPlaces({ query, candidates = [], excludedIds = [], visibleIds 
   const result = { query: intent?.query || '', items: [], coverage: 'available_supply' };
   if (!intent || !(eligibleIds instanceof Set)) return result;
   const text = fold(intent.query);
-  const cuisine = findAlias(cuisineAliases, text.replace(/\s+(restaurant|restaurang)$/, ''));
+  const cuisine = findAlias(cuisineAliases, text.replace(/\s+(restaurant|restaurang|food)$/, ''));
   const category = findAlias(categories, text);
   const seen = new Set([...excludedIds, ...visibleIds].map(String));
   const matches = [];
