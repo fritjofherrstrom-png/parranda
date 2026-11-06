@@ -27,15 +27,17 @@
 **Files:** modify frontend/src/components/planner/useFollowPosition.ts, AnywherePlanner.tsx, planner/StopLine.tsx; add frontend/tests/planner-map-location.test.mjs; update planner-line-facts.test.mjs to exercise the shared owner and actual Position shape.
 **Interface:** useFollowPosition(enabled) returns supported/state/retry; tracking includes lat/lng/accuracy/timestamp. StopLine receives the controller, following and onToggleFollow. Parent scope is the displayed place/date plus current date choice; mismatched scope is immediately inactive and then cleared.
 
-- [ ] Add mounted tests for no automatic request, one shared watch, stop/error/retry, hidden/resume, stale/invalid/late fixes, date changes/return, future-day orientation and immutable storage/URLs/compose count. Observe RED.
-- [ ] Lift ownership and implement generation-guarded lifecycle/fix validation. Keep list progress today-only, suppress precise progress for accuracy>120m. Run tests GREEN.
+- [x] Add mounted tests for no automatic request, one shared watch, stop/error/retry, hidden/resume, stale/invalid/late fixes, date changes/return, future-day orientation and immutable storage/URLs/compose count. Observe RED.
+- [x] Lift ownership and implement generation-guarded lifecycle/fix validation. Keep list progress today-only, suppress precise progress for accuracy>120m. Run tests GREEN.
 
 ### Task 2: Render and control the map position
 
 **Files:** modify planner/RouteMap.tsx and styles/tailwind.css; add/update focused real-map fixture acceptance using existing tests/helpers patterns.
 **Interface:** RouteMap receives current fix/status/enabled/supported, an explicit centre revision, onLocate and onStopLocation. Draw a location marker/accuracy radius separately from route facts. Return-to-route uses the existing control-aware refit.
 
-- [ ] Add tests proving the dot/radius follows accepted fixes, disappears on stop/error, camera moves only on explicit centring and Show route restores all stops; retain 44px targets/control keepouts. Observe RED.
-- [ ] Implement map controls, read-only markers and status. Clarify published near-me endpoint labels as starting point. Verify map and endpoint regression controls.
-- [ ] Typecheck/build/dist; inspect screenshots with controlled coordinates in IAB. User photo is private audit input; do not commit it or send it externally. Record screenshot-only findings and live-flow limits.
+- [x] Add tests proving the dot/radius follows accepted fixes, disappears on stop/error, camera moves only on explicit centring and Show route restores all stops; retain 44px targets/control keepouts. Observe RED.
+- [x] Implement map controls, read-only markers and status. Clarify published near-me endpoint labels as starting point. Verify map and endpoint regression controls.
+- [x] Typecheck/build/dist; inspect screenshots with controlled coordinates in IAB. User photo is private audit input; do not commit it or send it externally. Record screenshot-only findings and live-flow limits.
 - [ ] Independent review, fix Important/Critical with RED/GREEN, push main-target PR and obtain exact-head Linux CI. No merge/deploy inferred for this new feature.
+
+Review ruling: one shared GPS watch does not mean shared Follow intent. The first review caught My location silently enabling progress. Explicit followScope is now independent; a320px browser assertion failed before the fix and passes afterward. Stopping Follow preserves an explicit map request; Stop location ends both. Existing Follow-only stop/start still releases/reacquires the watch.

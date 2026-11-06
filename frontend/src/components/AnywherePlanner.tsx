@@ -361,20 +361,31 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [mapExpanded, setMapExpanded] = useState(false);
   // One explicit, memory-only location session feeds map and line together.
   const [positionScope, setPositionScope] = useState<string | null>(null);
+  const [followScope, setFollowScope] = useState<string | null>(null);
   const [positionCentreRequest, setPositionCentreRequest] = useState(0);
   const displayedDate = safeResponse?.days?.[0]?.date ?? safeResponse?.live_events?.selected_date;
   const locationScope = JSON.stringify([mode, mode === "near_me" ? routeAnchorCoords : [placeRef, place],
     dayOffset, displayedDate ?? null, freezeComposeDateIso({ dayOffset })]);
-  const positionEnabled = positionScope === locationScope;
+  const positionEnabled = positionScope === locationScope || followScope === locationScope;
   const positionSession = useFollowPosition(positionEnabled);
   const followDayIsToday = dayOffset === 0 && displayedDate === freezeComposeDateIso();
   useEffect(() => {
     if (positionScope && positionScope !== locationScope) setPositionScope(null);
-  }, [positionScope, locationScope]);
+    if (followScope && followScope !== locationScope) setFollowScope(null);
+  }, [positionScope, followScope, locationScope]);
   const locateOnMap = () => {
-    if (!positionEnabled) setPositionScope(locationScope);
-    else if (positionSession.state.status !== "tracking") positionSession.retry();
+    setPositionScope(locationScope);
+    if (positionEnabled && positionSession.state.status !== "tracking") positionSession.retry();
     setPositionCentreRequest(value => value + 1);
+  };
+  const stopLocation = () => { setPositionScope(null); setFollowScope(null); };
+  const toggleFollow = () => {
+    if (followScope === locationScope) setFollowScope(null);
+    else {
+      setFollowScope(locationScope);
+      if (positionEnabled && positionSession.state.status !== "tracking") positionSession.retry();
+      setPositionCentreRequest(value => value + 1);
+    }
   };
   const [detoursOpen, setDetoursOpen] = useState(false);
   // A tapped stop expands an inline panel (why it's here, the walk, hours when
@@ -2721,7 +2732,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       positionEnabled={positionEnabled}
       positionCentreRequest={positionCentreRequest}
       onLocate={locateOnMap}
-      onStopLocation={() => setPositionScope(null)}
+      onStopLocation={stopLocation}
       t={t}
     />
   ) : null;
@@ -3202,9 +3213,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           selectedDate={liveEvents?.selected_date}
           dayOffset={dayOffset}
           follow={positionSession}
-          following={positionEnabled && followDayIsToday}
+          following={followScope === locationScope && followDayIsToday}
           canFollowToday={followDayIsToday}
-          onToggleFollow={() => { if (positionEnabled) setPositionScope(null); else locateOnMap(); }}
+          onToggleFollow={toggleFollow}
           routeContextSuggestions={routeContextSuggestions}
           detoursOpen={detoursOpen}
           setDetoursOpen={setDetoursOpen}
@@ -3269,7 +3280,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               positionEnabled={positionEnabled}
               positionCentreRequest={positionCentreRequest}
               onLocate={locateOnMap}
-              onStopLocation={() => setPositionScope(null)}
+              onStopLocation={stopLocation}
               heightClass="h-64 sm:h-72"
               t={t}
             />

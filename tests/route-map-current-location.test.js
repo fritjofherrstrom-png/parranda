@@ -58,7 +58,15 @@ for(const width of [320,390])test(`current map position shares one opt-in sessio
  await page.evaluate(()=>window.__gps.fix(55.599,12.987));
  await point(page).waitFor();await settle(page);
  assert.equal(await page.evaluate(()=>window.__gps.calls.length),1);
+ if(width===320){
+  assert.equal(await page.getByRole('button',{name:'Stop following',exact:true}).count(),0,'map orientation must not enable progress');
+  await page.getByRole('button',{name:'Follow the day',exact:true}).click();
+ }else await page.getByRole('button',{name:'Center on my location',exact:true}).click();
  await page.getByRole('button',{name:'Stop following',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Stop following',exact:true}).click();
+ await page.getByRole('button',{name:'Follow the day',exact:true}).waitFor();
+ assert.equal(await point(page).count(),1,'stopping progress preserves explicitly requested map location');
+ assert.equal(await page.evaluate(()=>window.__gps.calls.length),1,'Follow shares the map watch');
  const before=await markers(page);
  await page.evaluate(()=>window.__gps.fix(55.6002,12.988));
  // Marker propagation/layout uses one animation frame; wait for its accessible value.
