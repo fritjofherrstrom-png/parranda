@@ -2104,8 +2104,10 @@ function resolveDefaultEventSupply(
     );
     // A plain coordinate/calendar warm-up has not performed local research.
     // Do not let it answer for a later resolver-attested discovery request.
+    // Old derived pools also cannot attest topic-aware source selection;
+    // isolate only the discovery lane and preserve non-discovery cache keys.
     const key = discoverNow ? `${baseKey}:discovery:${createHash("sha256")
-      .update(JSON.stringify([placeLabel, placeContext, spatialScopeCacheKey(discoveryScope)]))
+      .update(JSON.stringify(["event-topic-prefix-v1", placeLabel, placeContext, spatialScopeCacheKey(discoveryScope)]))
       .digest("hex").slice(0, 20)}` : baseKey;
     // A broad calendar does not erase the existing local-discovery outcome.
     // Keep its current status alongside collection health, including cached
