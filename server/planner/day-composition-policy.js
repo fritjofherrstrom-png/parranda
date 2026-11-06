@@ -131,6 +131,10 @@ function orderBalancedDay({ stops, geometry, geometryFor, chainKm, preferences =
   const unchanged = { stops, geometry, changed: false };
   if (stops.length > 6) return unchanged;
   const strictEdit = dayEdit && (dayEdit.action === 'replace' || dayEdit.preserve_retained !== false);
+  const exactChoice = dayEdit?.action === 'add' || Boolean(dayEdit?.replacement_candidate_id);
+  const retainsOrder = candidate => !exactChoice ||
+    candidate.filter(stop => dayEdit.retained_candidate_ids.includes(stop.id))
+      .every((stop, index) => stop.id === dayEdit.retained_candidate_ids[index]);
   const meals = !strictEdit && canonicalPriority(preferencePriority, preferences)[0] === 'food'
     ? createMealOrderPolicy(stops, mealContext) : null;
   const sourceWindows = !strictEdit ? createSourceWindowOrderPolicy(stops) : null;
@@ -152,17 +156,19 @@ function orderBalancedDay({ stops, geometry, geometryFor, chainKm, preferences =
       -chainKm(candidate),
     ];
   };
-  let best = { ...unchanged, score: score(stops) };
+  let best = retainsOrder(stops) ? { ...unchanged, score: score(stops) } : null;
   for (const candidate of orders(stops)) {
+    if (!retainsOrder(candidate)) continue;
     const km = chainKm(candidate);
-    if (km > Math.max(baseKm * 1.08, baseKm + 0.25)) continue;
+    if (!exactChoice && km > Math.max(baseKm * 1.08, baseKm + 0.25)) continue;
     const nextScore = score(candidate);
-    if (compare(nextScore, best.score) <= 0) continue;
+    if (best && compare(nextScore, best.score) <= 0) continue;
     const nextGeometry = geometryFor(candidate);
-    if (nextGeometry.estimatedKm > Math.max(geometry.estimatedKm * 1.08, geometry.estimatedKm + 0.25)) continue;
+    if (!exactChoice && nextGeometry.estimatedKm > Math.max(geometry.estimatedKm * 1.08, geometry.estimatedKm + 0.25)) continue;
     best = { stops: candidate, geometry: nextGeometry,
       changed: candidate.some((stop, index) => stop !== stops[index]), score: nextScore };
   }
+  if (!best) return unchanged;
   if (!meals) return best;
   const planned = meals.annotate(best.stops);
   return { ...best, stops: planned, changed: best.changed || planned.some((stop, i) => stop !== best.stops[i]) };

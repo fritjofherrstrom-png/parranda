@@ -15,11 +15,13 @@ its immutable sharing reference. Missing source hours remain unknown.
 
 ## Evidence scope
 
-- Deterministic source-facet tests: 139 passed in Task 1's affected source set.
+- Deterministic source-facet tests: 117 passed in Task 1's affected source set.
 - Search/intake/admission tests: 62 passed; English `Indian food` also covered.
 - Exact edit/retention/publication/privacy/pin/Live tests: 92 passed.
 - UI edit/commitment/navigation/lifecycle set: 110 passed, including accept,
   cancellation, midnight, choice/date/place changes, late Live and exact Undo.
+- A winding retained-order regression was reproduced and fixed: exact edits
+  preserve the existing order before the final walking validation.
 - TypeScript passes. Built desktop/mobile preview inspected at 1280×900 and
   390×844; no horizontal overflow. Existing Linje tokens and focus behavior
   remain authoritative. The explicit search form is the only new submit.

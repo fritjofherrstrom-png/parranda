@@ -60,3 +60,12 @@ test('new edit still measures and refuses the final walking chain', async () => 
   assert.equal(output.experiment.day_edit?.status, 'refused');
   assert.equal(output.experiment.route_mutation, false);
 });
+
+test('an exact addition preserves a deliberately winding retained order before final walking validation', async () => {
+  const records = [...rows('museum', 'museum', 5).map((row, i) => ({ ...row, lat: 55.6 + i * .003 })), record('chosen', 'restaurant', 2)];
+  const retained = ['museum-0', 'museum-4', 'museum-1', 'museum-3'];
+  const output = await compose(records, ['culture'], { dayEdit: added(retained), anchorMode: 'place' });
+  assert.equal(output.experiment.day_edit.status, 'applied');
+  assert.deepEqual(output.stops.filter(stop => stop.id !== 'chosen').map(stop => stop.id), retained,
+    'an optimized preview must not silently reverse or reorder the day it promises to retain');
+});
