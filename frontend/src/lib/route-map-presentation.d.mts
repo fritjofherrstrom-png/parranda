@@ -12,12 +12,13 @@ export interface RouteMarkerPresentation {
 export function routePathIsSketch(
   pathPoints: RouteMapPoint[] | null | undefined,
   stopCount: number | null | undefined,
+  geometry?: { geometrySource?: string | null; geometryMode?: string | null },
 ): boolean;
 
-/** Display-only arcs. Pass the sketch classification of the original path. */
+/** Exact validated pedestrian geometry, or no connector for a pins-only overview. */
 export function routeDisplayPath(
   pathPoints: RouteMapPoint[] | null | undefined,
-  options?: { sketch?: boolean; routingSource?: string | null },
+  options?: { geometrySource?: string | null; geometryMode?: string | null },
 ): Array<{ lat: number; lng: number }>;
 
 export function routeMarkerPresentation(

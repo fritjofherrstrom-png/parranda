@@ -79,9 +79,15 @@ const fields = {
     source: n('StopSource'), trust: n('Trust'), provisional: o('bool'), origin: n('string'), website: n('shortUrl'),
     place_details: n('PlaceDetails'), selected_day_hours: n('SelectedHours'), provenance: n('Provenance') },
   Leg: { from_label: n('string'), to_label: n('string'), distance_km: n('nonnegative'), estimated_walk_minutes: n('nonnegative') },
+  // Fixed public operator links need no place-source URL witness. The general
+  // URL policy remains closed to arbitrary router-provided destinations.
+  GeometryAttribution: { label: r(enumeration('FOSSGIS routing')),
+    url: r(enumeration('https://routing.openstreetmap.de/about.html')),
+    fixMapUrl: r(enumeration('https://www.openstreetmap.org/fixthemap')) },
   PrimaryRoute: { id: n('string'), main_stops: r(array('Stop',1)), map_route_points: r(array('RoutePoint')),
     map_path_points: r(array('Point')), legs: r(array('Leg')), estimated_km: rule('nonnegative',true,true),
-    routing_source: n('string'), geometry_source: n('string'), route_shape: n('string'), public_route_scope: n('string'), caveats: n(array('string')),
+    routing_source: n('string'), geometry_source: n('string'), geometry_mode: n(enumeration('walking')),
+    geometry_attribution: n('GeometryAttribution'), route_shape: n('string'), public_route_scope: n('string'), caveats: n(array('string')),
     anchored_to_local_time: o('bool'), trust_summary: n('TrustSummary'), credibility_tier: n('string') },
   WeatherObserved: { condition: n('string'), max_temp: n('number'), apparent_temp_max: n('number'), precipitation_probability_max: n('number'),
     precipitation_sum: n('number'), wind_speed_max: n('number') },
@@ -263,6 +269,8 @@ function budget(privacy) {
 }
 function validateObject(type,value) {
   const refuse = () => { throw new Error('correlated '+type); };
+  if (type === 'PrimaryRoute' && ((value.geometry_mode === 'walking' && value.geometry_source !== 'osrm') ||
+      (value.geometry_attribution && value.geometry_mode !== 'walking'))) refuse();
   if (type === 'Promotion') {
     const readiness = value.promote ? value.qualifying_caps.length ? 'promotable_limited' : 'promotable' : 'non_promotable';
     if (value.readiness !== readiness || !isDeepStrictEqual(value.blocked_caps,value.disqualifying_caps) ||

@@ -18,7 +18,7 @@ function createScheduledEventCardProvider(options = {}) {
     sourceUrl: options.endpoint, supportedLanguages: language ? [language] : [],
     trust: { source_tier: options.sourceTier || "inferred", confidence: options.confidence || "low", human_verified: false, freshness: "fresh" },
     cachePolicy: { kind: "memory", ttlSeconds: 1200 },
-    sourceOwnedFields: ["title", "starts_on", "ends_on", "time_window", "address", "city", "country", "place_context", "source_url"],
+    sourceOwnedFields: ["title", "starts_on", "ends_on", "time_window", "address", "city", "country", "place_context", "lat", "lng", "source_url"],
     parrandaOwnedFields: ["intents", "route_role_hint"],
   };
   return { descriptor, create(cityConfig, context = {}) {
@@ -111,6 +111,10 @@ async function collectBounded({ endpoint, fetcher, signal, date, timezone, langu
   const rows = [];
   // This is an explicitly bounded sample, not exhaustive calendar coverage.
   for (const card of current.slice(0, clamp(options.detailLimit, 1, 8, 4))) {
+    if (card.contact) {
+      rows.push(scheduledCardEvent(card, card.contact, { timezone, sourceLanguage: language, listingUrl: listing.url }));
+      continue;
+    }
     const detail = await request(card.url);
     const inspection = inspectScheduledEventContact(detail.body, card);
     if (inspection.status === "failed") throw failure(inspection.reason);
