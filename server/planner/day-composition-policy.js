@@ -170,7 +170,8 @@ function orderBalancedDay({ stops, geometry, geometryFor, chainKm, preferences =
 
 function selectEditedDay({ rankedCandidates = [], selected = [], dayEdit, pinnedIds = [],
   preferences = [], ...context } = {}) {
-  const excluded = new Set([dayEdit.candidate_id, ...dayEdit.removed_candidate_ids]);
+  const chosenId = dayEdit.action === 'add' ? dayEdit.candidate_id : dayEdit.replacement_candidate_id;
+  const excluded = new Set([...(dayEdit.action === 'add' ? [] : [dayEdit.candidate_id]), ...dayEdit.removed_candidate_ids]);
   const byId = new Map(rankedCandidates.map(({ item }) => [item.id, item]));
   const refused = reason => ({ selected: [], reason });
   if (dayEdit.action === 'remove' && dayEdit.preserve_retained === false) {
@@ -181,9 +182,15 @@ function selectEditedDay({ rankedCandidates = [], selected = [], dayEdit, pinned
   }
   const retained = dayEdit.retained_candidate_ids.map(id => byId.get(id))
     .filter(item => item && !excluded.has(item.id));
-  if (pinnedIds.some(id => !retained.some(item => item.id === id))) return refused('pin_conflict');
+  if (pinnedIds.some(id => id !== chosenId && !retained.some(item => item.id === id))) return refused('pin_conflict');
   if (dayEdit.action === 'remove') return { selected: retained, reason: null };
   if (retained.length !== dayEdit.retained_candidate_ids.length) return refused('retained_candidates_unavailable');
+  if (chosenId) {
+    const chosen = byId.get(chosenId);
+    if (!chosen || excluded.has(chosenId)) return refused('chosen_candidate_unavailable');
+    if (retained.length + 1 > 6) return refused('day_capacity');
+    return { selected: [...retained, chosen], reason: null };
+  }
   const requested = normalizeUserIntents(preferences).intents;
   const intent = dayEdit.replacement_preference
     ? normalizeUserIntents([dayEdit.replacement_preference]).intents[0]
@@ -212,7 +219,7 @@ function dayEditOutcome(dayEdit, stops = [], reason = null) {
   const ids = stops.map(stop => stop.id);
   const retained = dayEdit.release_extent ? ids : dayEdit.retained_candidate_ids.filter(id => ids.includes(id));
   return { version: 1, action: dayEdit.action, status: reason ? 'refused' : 'applied',
-    reason: reason || (dayEdit.release_extent ? 'recomposed_with_rhythm' : dayEdit.action === 'replace' ? 'replaced' : dayEdit.preserve_retained === false ? 'recomposed_with_cap' : 'removed'), candidate_id: dayEdit.candidate_id,
+    reason: reason || (dayEdit.release_extent ? 'recomposed_with_rhythm' : dayEdit.action === 'add' ? 'added' : dayEdit.action === 'replace' ? 'replaced' : dayEdit.preserve_retained === false ? 'recomposed_with_cap' : 'removed'), candidate_id: dayEdit.candidate_id,
     target_stop_count: dayEdit.release_extent ? ids.length : dayEdit.target_stop_count, actual_stop_count: ids.length,
     retained_candidate_ids: retained,
     unavailable_retained_candidate_ids: dayEdit.release_extent ? [] : dayEdit.retained_candidate_ids.filter(id => !ids.includes(id)),

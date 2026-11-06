@@ -69,10 +69,12 @@ function projectPublishedDay(input = {}) {
       const command = normalizeDayEdit(intent.dayEdit);
       const stops = day.primary_route?.main_stops || [];
       const finalIds = stops.map(stop => stop.id);
+      const removed = [...(command.action === 'add' ? [] : [command.candidate_id]), ...command.removed_candidate_ids];
       if (!isDeepStrictEqual(experiment.day_edit,dayEditOutcome(command,stops)) ||
-          finalIds.includes(command.candidate_id) || command.removed_candidate_ids.some(id=>finalIds.includes(id)) ||
-          ![command.candidate_id,...command.removed_candidate_ids].every(id=>intent.excludedCandidateIds.includes(id))) return null;
-      const applied = normalizeDayEdit({ version:1, action:'remove', candidate_id:command.candidate_id,
+          removed.some(id=>finalIds.includes(id)) || !removed.every(id=>intent.excludedCandidateIds.includes(id)) ||
+          (command.action === 'add' && !finalIds.includes(command.candidate_id)) ||
+          (command.replacement_candidate_id && !finalIds.includes(command.replacement_candidate_id))) return null;
+      const applied = command.action === 'add' ? command : normalizeDayEdit({ version:1, action:'remove', candidate_id:command.candidate_id,
         retained_candidate_ids:finalIds, target_stop_count:finalIds.length, slot_index:command.slot_index,
         replacement_preference:null, removed_candidate_ids:command.removed_candidate_ids,
         ...(command.preserve_retained === false ? {preserve_retained:false} : {}),

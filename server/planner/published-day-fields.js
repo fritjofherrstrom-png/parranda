@@ -27,7 +27,7 @@ const array = (item, min = 0, max = Infinity) => ({ item, min, max });
 const enumeration = (...values) => ({ values });
 const fields = {
   LiveChoice: { occurrence_id: r('liveId'), action: r(enumeration('keep','remove','replace')) },
-  RequestEdit: { version: r(enumeration(1)), action: r(enumeration('remove','replace')), candidate_id: r('editId'),
+  RequestEdit: { version: r(enumeration(1)), action: r(enumeration('remove','replace','add')), candidate_id: r('editId'), replacement_candidate_id: o('editId'),
     retained_candidate_ids: r(array('editId',0,6)), target_stop_count: r('count'), slot_index: r('count'),
     replacement_preference: rule(enumeration('food','culture','views','fika','nightlife','green','second_hand'),true,true),
     removed_candidate_ids: r(array('editId',0,12)), preserve_retained: o('bool'), release_extent: o('bool') },
@@ -122,7 +122,7 @@ const fields = {
   PinnedOutcome: { requested_count: r('count'), honored_count: r('count'), unhonored_count: r('count'), unhonored: r(array('PinRefusal',0,12)) },
   LiveChoiceOutcome: { requested_count: r('count'), ignored_other_day_count: r('count'), honored_count: r('count'), remove_requested: r('bool'),
     unhonored: r(array('PinRefusal',0,52)) },
-  EditOutcome: { version: r(enumeration(1)), action: r(enumeration('replace','remove')), status: r(enumeration('applied','refused')), reason: r('string'),
+  EditOutcome: { version: r(enumeration(1)), action: r(enumeration('replace','remove','add')), status: r(enumeration('applied','refused')), reason: r('string'),
     candidate_id: r('editId'), target_stop_count: r('count'), actual_stop_count: r('count'), retained_candidate_ids: r(array('editId',0,6)),
     unavailable_retained_candidate_ids: r(array('editId',0,6)), replacement_candidate_id: rule('editId',true,true), result_candidate_ids: r(array('editId',0,6)) },
   Experiment: { synthesized_via: r(enumeration('agnostic_compose_engine')), route_mutation: r('bool'), manual_edit_published: o('bool'),

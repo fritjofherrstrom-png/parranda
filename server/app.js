@@ -2060,7 +2060,7 @@ function buildApp({
       const liveEventChoices = parsedLiveChoices.choices;
       const excludedCandidateIds = [...new Set([...parseExcludedCandidateIds(
         request.body?.excluded_candidate_ids ?? request.body?.excludedCandidateIds,
-      ), ...(dayEdit ? [dayEdit.candidate_id, ...dayEdit.removed_candidate_ids] : [])])];
+      ), ...(dayEdit ? [...(dayEdit.action === 'add' ? [] : [dayEdit.candidate_id]), ...dayEdit.removed_candidate_ids] : [])])];
       let snapshotTimezone = null;
       const scopedWeatherProvider = lifecycle && requestedRhythm
         ? memoizePlannerWeather(weatherProvider || defaultWeatherProvider) : weatherProvider;
@@ -2634,6 +2634,7 @@ function buildApp({
             // original source/availability/walking gates still ran above, and
             // a replacement outside this list still needs requested relevance.
             pinnedIds: [...pinnedCandidateIds,
+              ...(dayEdit?.action === 'add' ? [dayEdit.candidate_id] : dayEdit?.replacement_candidate_id ? [dayEdit.replacement_candidate_id] : []),
               ...(experiment.day_edit?.status === 'applied' && dayEdit &&
                 (dayEdit.action === 'replace' || dayEdit.preserve_retained !== false)
                 ? dayEdit.retained_candidate_ids : []),

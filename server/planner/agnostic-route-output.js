@@ -1157,7 +1157,9 @@ async function composeAgnosticRouteOutputOnce({
   dayEdit = normalizedEdit;
   const retainedSelectionIds = dayEdit && (dayEdit.action === 'replace' || dayEdit.preserve_retained !== false)
     ? dayEdit.retained_candidate_ids : [];
-  const selectionRequestIds = [...new Set([...(Array.isArray(pinnedStopIds) ? pinnedStopIds : []), ...retainedSelectionIds])];
+  const chosenId = dayEdit?.action === 'add' ? dayEdit.candidate_id : dayEdit?.replacement_candidate_id;
+  const explicitSelectionIds = [...retainedSelectionIds, ...(chosenId ? [chosenId] : [])];
+  const selectionRequestIds = [...new Set([...(Array.isArray(pinnedStopIds) ? pinnedStopIds : []), ...explicitSelectionIds])];
   const agnosticLabel = safeAgnosticPlaceLabel(placeLabel);
   const agnosticContext = buildAgnosticCityContext({
     lat: coords.lat,
@@ -1344,7 +1346,7 @@ async function composeAgnosticRouteOutputOnce({
         dayRhythm,
         includeCapacityFrontier: false,
         pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
-        retainedIds: retainedSelectionIds,
+        retainedIds: explicitSelectionIds,
       })
     : null;
   const capacitySourceCandidates = synthesizeVia === "engine"
@@ -1360,7 +1362,7 @@ async function composeAgnosticRouteOutputOnce({
         // pins here, repair composes from a reservoir that never saw them and
         // the replacement silently drops what the user kept.
         pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
-        retainedIds: retainedSelectionIds,
+        retainedIds: explicitSelectionIds,
       })
     : null;
 
@@ -1699,7 +1701,9 @@ async function composeAgnosticRouteViaEngine({
 }) {
   const retainedSelectionIds = dayEdit && (dayEdit.action === 'replace' || dayEdit.preserve_retained !== false)
     ? dayEdit.retained_candidate_ids : [];
-  const selectionRequestIds = [...new Set([...(pinnedStopIds || []), ...retainedSelectionIds])];
+  const chosenId = dayEdit?.action === 'add' ? dayEdit.candidate_id : dayEdit?.replacement_candidate_id;
+  const explicitSelectionIds = [...retainedSelectionIds, ...(chosenId ? [chosenId] : [])];
+  const selectionRequestIds = [...new Set([...(pinnedStopIds || []), ...explicitSelectionIds])];
   const sourceCandidates = Array.isArray(suppliedSourceCandidates)
     ? suppliedSourceCandidates
     : mapPlannerReservoirToSourceCandidates({
@@ -1710,7 +1714,7 @@ async function composeAgnosticRouteViaEngine({
         dayRhythm,
         includeCapacityFrontier: false,
         pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
-        retainedIds: retainedSelectionIds,
+        retainedIds: explicitSelectionIds,
       });
   const capacitySourceCandidates = Array.isArray(suppliedCapacitySourceCandidates)
     ? suppliedCapacitySourceCandidates
@@ -1722,7 +1726,7 @@ async function composeAgnosticRouteViaEngine({
         dayRhythm,
         includeCapacityFrontier: true,
         pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
-        retainedIds: retainedSelectionIds,
+        retainedIds: explicitSelectionIds,
       });
   const timeAnchoring = Number.isInteger(currentTimeBandRank)
     ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, selectionRequestIds, preferences, Boolean(dayRhythm))

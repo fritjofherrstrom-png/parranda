@@ -48,7 +48,7 @@ export function parsePublishedDay(value, { ref, decision, now = Date.now() } = {
     requireValue(keys(i,[...required,'preferencePriority','dayEdit'],required) && i.mode === 'typed' && realDate(i.dateIso) && string(i.place,500) && i.place === i.placeLabel && typeof i.placeRef === 'string' && validPlaceRef(i.placeRef) === i.placeRef);
     requireValue(list(i.selected,7,p => PREFS.includes(p)) && ['calm','balanced','full','free'].includes(i.walkKey));
     requireValue(i.preferencePriority === undefined || (Array.isArray(i.preferencePriority) && i.preferencePriority.length > 0 && same(normalizePreferencePriority(i.preferencePriority,i.selected),i.preferencePriority)));
-    requireValue(i.dayEdit === undefined || (i.dayEdit?.action === 'remove' && same(normalizeDayEdit(i.dayEdit),i.dayEdit)));
+    requireValue(i.dayEdit === undefined || (['remove','add'].includes(i.dayEdit?.action) && same(normalizeDayEdit(i.dayEdit),i.dayEdit)));
     requireValue(list(i.pinnedCandidateIds,12,id => string(id,64) && /^[a-z0-9][a-z0-9_:.-]*$/i.test(id) && !id.startsWith('live:')) && list(i.excludedCandidateIds,53,id => string(id) && !id.startsWith('live:')));
     requireValue(Array.isArray(i.liveEventChoices) && i.liveEventChoices.length <= 52 && new Set(i.liveEventChoices.map(c => c?.occurrence_id)).size === i.liveEventChoices.length && i.liveEventChoices.every(c => keys(c,['occurrence_id','action']) && isLiveOccurrenceId(c.occurrence_id) && ['keep','remove','replace'].includes(c.action)));
     requireValue(keys(r,['days','place_structure','live_events','agnostic_route_output_experiment'],['days','agnostic_route_output_experiment']) && Array.isArray(r.days) && r.days.length === 1 && r.days[0].date === i.dateIso);
@@ -63,6 +63,16 @@ export function parsePublishedDay(value, { ref, decision, now = Date.now() } = {
     else requireValue(stops.length > 0 && e.promotion?.promote === true && !day.manual_empty_day);
     if (i.dayEdit) {
       const edit = e.day_edit;
+      if (i.dayEdit.action === 'add') {
+        const ids = stops.map(s => s.id), command = i.dayEdit;
+        requireValue(edit?.version === 1 && edit.action === 'add' && edit.status === 'applied' && edit.reason === 'added' &&
+          edit.candidate_id === command.candidate_id && ids.includes(command.candidate_id) &&
+          edit.target_stop_count === ids.length && edit.actual_stop_count === ids.length && command.target_stop_count === ids.length &&
+          same(edit.result_candidate_ids,ids) && same(edit.retained_candidate_ids,command.retained_candidate_ids) &&
+          same(ids.filter(id => id !== command.candidate_id),command.retained_candidate_ids) &&
+          same(edit.unavailable_retained_candidate_ids,[]) && edit.replacement_candidate_id === null &&
+          command.removed_candidate_ids.every(id=>i.excludedCandidateIds.includes(id) && !ids.includes(id)));
+      } else {
       requireValue(edit?.version === 1 && ['remove','replace'].includes(edit.action) && edit.status === 'applied' &&
         edit.candidate_id === i.dayEdit.candidate_id && edit.target_stop_count === stops.length &&
         edit.actual_stop_count === stops.length && same(edit.result_candidate_ids,stops.map(s => s.id)) &&
@@ -72,6 +82,7 @@ export function parsePublishedDay(value, { ref, decision, now = Date.now() } = {
         (edit.action === 'remove' ? edit.replacement_candidate_id === null : stops.some(s=>s.id===edit.replacement_candidate_id)) &&
         [i.dayEdit.candidate_id,...i.dayEdit.removed_candidate_ids].every(id=>i.excludedCandidateIds.includes(id)) &&
         !stops.some(s => [i.dayEdit.candidate_id,...i.dayEdit.removed_candidate_ids].includes(s.id)));
+      }
     } else requireValue(!e.day_edit);
     const entries = Object.create(null), labels = new Map();
     const remember = (row,label) => { for (const id of [row.id,row.place_id,row.candidate_id,row.live_occurrence_id]) if (id && !labels.has(id)) labels.set(id,label); };

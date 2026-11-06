@@ -14,13 +14,14 @@ export declare function togglePreferenceSelection(state: {
 
 export interface DayEdit {
   version: 1;
-  action: "replace" | "remove";
+  action: "replace" | "remove" | "add";
   candidate_id: string;
   retained_candidate_ids: string[];
   target_stop_count: number;
   slot_index: number;
   replacement_preference: PlannerPreferenceKey | null;
   removed_candidate_ids: string[];
+  replacement_candidate_id?: string;
   /** Only false is emitted canonically; absence/true preserves retained venues. */
   preserve_retained?: boolean;
   release_extent?: true;

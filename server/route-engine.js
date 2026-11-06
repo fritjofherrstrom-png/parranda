@@ -5281,8 +5281,9 @@ function buildRouteFromTemplate(
   const dayEdit = template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID
     ? options.dayEdit || getActiveCityConfig().__dayEdit || null : null;
   const retainedIds = dayEdit?.preserve_retained !== false ? dayEdit?.retained_candidate_ids || [] : [];
-  const selectionIds = [...(options.pinnedStopIds || []), ...retainedIds];
-  const editExclusions = new Set(dayEdit ? [dayEdit.candidate_id, ...dayEdit.removed_candidate_ids] : []);
+  const chosenId = dayEdit?.action === 'add' ? dayEdit.candidate_id : dayEdit?.replacement_candidate_id;
+  const selectionIds = [...(options.pinnedStopIds || []), ...retainedIds, ...(chosenId ? [chosenId] : [])];
+  const editExclusions = new Set(dayEdit ? [...(dayEdit.action === 'add' ? [] : [dayEdit.candidate_id]), ...dayEdit.removed_candidate_ids] : []);
   const withinFocus = (item) => template.id !== AGNOSTIC_COMPOSE_TEMPLATE_ID ||
     (!editExclusions.has(item.id) && matchesPreferenceFocus(item, preferences, selectionIds));
   const sortedPool = rawPool
