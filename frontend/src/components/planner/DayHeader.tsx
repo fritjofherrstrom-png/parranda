@@ -9,7 +9,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
-import { walkingDistanceLabel } from "../../lib/route-context-view.mjs";
+import { routeUnconfirmedTonightPicks, walkingDistanceLabel } from "../../lib/route-context-view.mjs";
 import { CheckIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, MinusIcon, RainIcon, SearchIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
 import { busyButton, buttonClass, compactPillTarget, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
@@ -192,6 +192,7 @@ export function dayAssemblyNotes(t: Translate, { sourceBackedDay, timeAnchoring 
   // doable midday plan. Quietly note the trimmed variant too.
   if (timeAnchoring === "full_arc_not_now") notes.push(t("En hel dags båge — inte förankrad till klockan just nu.", "A full-day arc — not anchored to right now."));
   if (timeAnchoring === "anchored_trimmed") notes.push(t("Förankrad till nu — tidigare dagdelar borttagna.", "Anchored to now — earlier dayparts trimmed."));
+  if (timeAnchoring === "evening_plan") notes.push(t("Planerad för kvällen. För några av dina val är öppettiderna i kväll okända.", "Planned for the evening. For some of your picks, tonight's opening hours are unknown."));
   return notes;
 }
 
@@ -261,6 +262,13 @@ export default function DayHeader({
   const distance = Number.isFinite(primaryRoute?.estimated_km)
     ? `≈ ${walkingDistanceLabel(primaryRoute.estimated_km, lang)} ${t("till fots", "on foot")}`
     : null;
+  // Picks an evening plan keeps although only places whose kind usually fits
+  // the daytime serve them. Said the same way for one pick or several; the day
+  // never moves them to another date.
+  const unconfirmedTonight = routeUnconfirmedTonightPicks(primaryRoute).map((key) => pickLabel(key, lang));
+  const unconfirmedList = unconfirmedTonight.length > 1
+    ? `${unconfirmedTonight.slice(0, -1).join(", ")} ${t("och", "and")} ${unconfirmedTonight[unconfirmedTonight.length - 1]}`
+    : unconfirmedTonight[0] || "";
   const stops = `${coreCount} ${coreCount === 1 ? t("stopp", "stop") : t("stopp", "stops")}` +
     (wovenCount > 0 ? ` + ${wovenCount} live${lang === "en" ? " event" : "-event"}` : "");
   const displayedDate = selectedDate(date);
@@ -422,6 +430,12 @@ export default function DayHeader({
                   `Your first choice ${pickLabel(priorityShortfall.key, lang)} is only partly represented in this day.`)
               : t(`Ditt förstaval ${pickLabel(priorityShortfall.key, lang)} finns inte med i den här dagen.`,
                   `Your first choice ${pickLabel(priorityShortfall.key, lang)} is not represented in this day.`)}
+          </p>
+        )}
+        {unconfirmedTonight.length > 0 && (
+          <p className="text-13 leading-relaxed text-parranda-ink-muted" role="status">
+            {t(`${unconfirmedList}: öppettiderna i kväll är okända – kontrollera innan du går.`,
+              `${unconfirmedList}: tonight's opening hours are unknown — check before you go.`)}
           </p>
         )}
         {/* Source limitations describe this published answer, never a live job:

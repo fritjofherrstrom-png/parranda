@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildRouteContextSuggestions,
+  routeUnconfirmedTonightPicks,
   routePreferenceCoverage,
   routeTimeAnchoring,
   walkingDistanceLabel,
@@ -203,4 +204,18 @@ test("routeTimeAnchoring maps the #429 caveat vocabulary and nothing else", () =
   assert.equal(routeTimeAnchoring({ caveats: [] }), null);
   assert.equal(routeTimeAnchoring({}), null);
   assert.equal(routeTimeAnchoring(null), null);
+});
+
+// An evening plan keeps picks whose hours tonight are unconfirmed (engine
+// caveat picks_unconfirmed_tonight). Only an anchored evening that says so
+// yields them, in the planner's own pick vocabulary.
+test("an anchored evening plan names the picks whose hours tonight are unconfirmed", () => {
+  const evening = { anchored_to_local_time: true, unconfirmed_tonight_preferences: ["museums", "museums", "second_hand"],
+    caveats: ["day_anchored_to_current_time", "picks_unconfirmed_tonight"] };
+  assert.equal(routeTimeAnchoring(evening), "evening_plan");
+  assert.deepEqual(routeUnconfirmedTonightPicks(evening), ["culture", "second_hand"]);
+  // Values without the caveat, or on a day that is not anchored, are not read.
+  assert.deepEqual(routeUnconfirmedTonightPicks({ ...evening, caveats: ["day_anchored_to_current_time"] }), []);
+  assert.deepEqual(routeUnconfirmedTonightPicks({ unconfirmed_tonight_preferences: ["museums"], caveats: ["picks_unconfirmed_tonight"] }), []);
+  assert.deepEqual(routeUnconfirmedTonightPicks(null), []);
 });
