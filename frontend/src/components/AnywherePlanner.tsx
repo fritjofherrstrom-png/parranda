@@ -96,6 +96,7 @@ import CandidateAreas from "./planner/CandidateAreas";
 import DayHeader, { DayActions, DayWhen, dayAssemblyNotes } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
+import { useFollowPosition } from "./planner/useFollowPosition";
 import DayPlaceholder, { DayMapPlaceholder } from "./planner/DayPlaceholder";
 import { RingMark } from "./shared/RingMark";
 import LiveSheet from "./planner/LiveSheet";
@@ -358,6 +359,23 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // detours are collapsed by default — optional ideas must never read as part
   // of the route.
   const [mapExpanded, setMapExpanded] = useState(false);
+  // One explicit, memory-only location session feeds map and line together.
+  const [positionScope, setPositionScope] = useState<string | null>(null);
+  const [positionCentreRequest, setPositionCentreRequest] = useState(0);
+  const displayedDate = safeResponse?.days?.[0]?.date ?? safeResponse?.live_events?.selected_date;
+  const locationScope = JSON.stringify([mode, mode === "near_me" ? routeAnchorCoords : [placeRef, place],
+    dayOffset, displayedDate ?? null, freezeComposeDateIso({ dayOffset })]);
+  const positionEnabled = positionScope === locationScope;
+  const positionSession = useFollowPosition(positionEnabled);
+  const followDayIsToday = dayOffset === 0 && displayedDate === freezeComposeDateIso();
+  useEffect(() => {
+    if (positionScope && positionScope !== locationScope) setPositionScope(null);
+  }, [positionScope, locationScope]);
+  const locateOnMap = () => {
+    if (!positionEnabled) setPositionScope(locationScope);
+    else if (positionSession.state.status !== "tracking") positionSession.retry();
+    setPositionCentreRequest(value => value + 1);
+  };
   const [detoursOpen, setDetoursOpen] = useState(false);
   // A tapped stop expands an inline panel (why it's here, the walk, hours when
   // known, an explicit Maps action) instead of ejecting straight to Google Maps.
@@ -2144,7 +2162,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const km = Number.isFinite(leg.distance_km) ? leg.distance_km : null;
     const minutes = Number.isFinite(leg.estimated_walk_minutes) ? leg.estimated_walk_minutes : null;
     if (km === null && minutes === null) return null;
-    const label = anchorIsPosition ? t("Din position", "Your position") : pointLabel;
+    const label = anchorIsPosition ? t("din startpunkt", "your starting point") : pointLabel;
     return { km, minutes, label };
   };
   const startLeg = endpointLeg(publishedStart, routeStops[0], true);
@@ -2699,6 +2717,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       heightClass={splitLayout ? "h-full" : mapExpanded ? "h-[min(70vh,36rem)]" : "h-52"}
       still={!splitLayout && !mapExpanded}
       regionLabel={splitLayout ? t("Interaktiv karta", "Interactive map") : undefined}
+      positionSession={positionSession}
+      positionEnabled={positionEnabled}
+      positionCentreRequest={positionCentreRequest}
+      onLocate={locateOnMap}
+      onStopLocation={() => setPositionScope(null)}
       t={t}
     />
   ) : null;
@@ -3178,6 +3201,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           eveningEvent={eveningEvent}
           selectedDate={liveEvents?.selected_date}
           dayOffset={dayOffset}
+          follow={positionSession}
+          following={positionEnabled && followDayIsToday}
+          canFollowToday={followDayIsToday}
+          onToggleFollow={() => { if (positionEnabled) setPositionScope(null); else locateOnMap(); }}
           routeContextSuggestions={routeContextSuggestions}
           detoursOpen={detoursOpen}
           setDetoursOpen={setDetoursOpen}
@@ -3238,6 +3265,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               routeContextSuggestions={routeContextSuggestions}
               showContext={false}
               sketch={false}
+              positionSession={positionSession}
+              positionEnabled={positionEnabled}
+              positionCentreRequest={positionCentreRequest}
+              onLocate={locateOnMap}
+              onStopLocation={() => setPositionScope(null)}
               heightClass="h-64 sm:h-72"
               t={t}
             />

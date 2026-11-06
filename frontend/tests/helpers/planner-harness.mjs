@@ -182,6 +182,7 @@ async function buildComponent(entry) {
           export const Marker = chain;
           export const NavigationControl = chain;
           export const AttributionControl = chain;
+          export const LngLat = chain;
           export const setWorkerUrl = chain;
         `,
         loader: "js",
@@ -208,7 +209,7 @@ async function buildComponent(entry) {
 /**
  * @returns {Promise<{ window, document, clock, fetchMock, container, unmount, act }>}
  */
-export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", storage = {}, sessionStorage = {}, entry = "components/AnywherePlanner.tsx", props = { lang: "en" }, injected = {}, navigationType, historyState } = {}) {
+export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", storage = {}, sessionStorage = {}, entry = "components/AnywherePlanner.tsx", props = { lang: "en" }, injected = {}, navigationType, historyState, geolocation, visibilityState } = {}) {
   const code = await buildComponent(entry);
   bundleGeneration += 1;
 
@@ -217,6 +218,8 @@ export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", 
     pretendToBeVisual: false,
   });
   const { window } = dom;
+  if (geolocation) Object.defineProperty(window.navigator, "geolocation", { value: geolocation, configurable: true });
+  if (visibilityState) Object.defineProperty(window.document, "visibilityState", { value: visibilityState, configurable: true });
   if (historyState !== undefined) window.history.replaceState(historyState, "", window.location.href);
   Object.assign(window, injected);
   // jsdom does not expose browser Navigation Timing. Model only this external
