@@ -135,6 +135,19 @@ export function partialPreferenceLabels(stop: any, selected: string[], lang: Lan
  * guesses. A row without an established reason gets no line at all. Picks are
  * named exactly as their chips read.
  */
+/** The heading of a Live time-state group (pulse-view liveTimeState). */
+export function liveTimeGroupLabel(state: string, t: Translate): string {
+  switch (state) {
+    case "now": return t("Pågår nu", "On now");
+    case "later": return t("Senare i dag", "Later today");
+    case "timed": return t("Med klockslag", "At set times");
+    case "day": return t("Under dagen", "During the day");
+    case "started": return t("Började tidigare", "Started earlier");
+    case "ended": return t("Tidigare i dag", "Earlier today");
+    default: return t("Tid ej angiven", "Time not stated");
+  }
+}
+
 export function liveRelevanceSentence(
   relevance: LiveEventRelevance | null,
   lang: Lang,

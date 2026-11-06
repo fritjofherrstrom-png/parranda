@@ -106,9 +106,11 @@
   text-transform: uppercase;
 }
 
+/* Section labels: 12px (0.75rem). At 11px in tracked capitals they were the
+   smallest reading text on the page. */
 @utility type-eyebrow {
   font-family: var(--p-font-mono), ui-monospace, Menlo, monospace;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.14em;
   line-height: 1.3;

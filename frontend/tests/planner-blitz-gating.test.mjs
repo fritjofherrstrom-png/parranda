@@ -55,7 +55,8 @@ const resolvedButEmpty = {
   },
 };
 
-const blitzButton = (h) => [...h.container.querySelectorAll("button")].find((b) => /Blitz/.test(b.textContent));
+// The reader-facing name is "Right now / Just nu"; the button says what it does.
+const blitzButton = (h) => [...h.container.querySelectorAll("button")].find((b) => /^(Show an idea|Visa ett förslag)$/.test(b.textContent.trim()));
 const click = (h, element) =>
   h.act(() => {
     element.dispatchEvent(new h.window.MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
@@ -150,3 +151,14 @@ test("a working Blitz button keeps keyboard focus and ignores a second press", a
   await click(h, working);
   assert.equal(h.fetchMock.calls.filter((c) => c.url.includes("/api/blitz")).length, 1, "the second press does nothing");
 });
+
+for (const [lang, heading, label] of [["en", "Right now", "Show an idea"], ["sv", "Just nu", "Visa ett förslag"]]) {
+  test(`the reader sees "${heading}", with a button that says what it does, never "Blitz" (${lang})`, async (t) => {
+    const h = await planner(t, `http://localhost/anywhere?place=Testville&lang=${lang}`, composedDay());
+    const section = [...h.container.querySelectorAll("section")].find((s) => s.querySelector("h2")?.textContent.trim() === heading);
+    assert.ok(section, `a "${heading}" section heads the idea`);
+    assert.equal(blitzButton(h)?.textContent.trim(), label);
+    assert.ok(section.contains(blitzButton(h)));
+    assert.doesNotMatch(h.text(), /Blitz/, "the internal name is not shown");
+  });
+}
