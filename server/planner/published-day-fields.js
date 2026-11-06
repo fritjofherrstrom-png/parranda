@@ -9,6 +9,7 @@ const { occurrenceDate, liveOccurrenceId } = require('./live-occurrence-choice')
 const { eventOccurrenceForDate } = require('../candidates/evening-event-weave');
 const { parsePlaceRef } = require('../place-candidates/place-ref');
 const { venueMentionsMatchPlace } = require('../place-candidates/venue-mentions');
+const { isApprovedVenueArticleUrl } = require('../place-candidates/venue-mention-policy');
 const MAX_BYTES = 1048576;
 // Additional projector policy, NOT source cardinality caps. Refuse, never cut.
 const MAX_NODES = 100000;
@@ -57,7 +58,7 @@ const fields = {
   VenueMentionEvidence: { document_sha256: r('string'), locator: r('string') },
   VenueMention: { venue_id: r('id200'), venue_binding: r('VenueMentionBinding'), article_id: r('id200'),
     publisher_id: r('string'), publisher: r('string'), publisher_group: rule('string',true,true),
-    article_url: r('shortUrl'), article_title: r('label500'), relation_kind: r(enumeration('mentioned','listed','recommended')),
+    article_url: r('venueArticleUrl'), article_title: r('label500'), relation_kind: r(enumeration('mentioned','listed','recommended')),
     published_on: rule('date',true,true), updated_on: rule('date',true,true), verified_at: r('instant'), source_evidence: r('VenueMentionEvidence'),
     independence: r(enumeration('independent','not_independent','unknown')), sponsorship: r(enumeration('sponsored','not_sponsored','unknown')) },
   Provenance: { attribution: o(array('Attribution')), venue_mentions: o(array('VenueMention',0,8)) },
@@ -269,6 +270,12 @@ function budget(privacy) {
     if (type === 'instant' && (!/^\d{4}-\d\d-\d\dT(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d)$/i.test(value) || !isRealIsoDate(value.slice(0,10)) || !Number.isFinite(Date.parse(value)))) throw new Error('instant');
     if (type === 'localDateTime' && (!/^\d{4}-\d\d-\d\dT(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(value) || !isRealIsoDate(value.slice(0,10)))) throw new Error('local datetime');
     if (['clock','closingClock'].includes(type) && !/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(value) && !(type === 'closingClock' && value === '24:00')) throw new Error('clock');
+    // This exact reviewed policy applies only to article_url. Do not enlarge
+    // the retained route/source witness bag or attest unrelated website URLs.
+    if (type === 'venueArticleUrl') {
+      if (value.length > 2048 || !isApprovedVenueArticleUrl(value)) throw new Error('unattested article url');
+      return value;
+    }
     if (type === 'shortUrl' && value.length > 2048) throw new Error('short url');
     if (type === 'url' || type === 'shortUrl' || /^(?:[a-z][a-z0-9+.-]*:\/\/|https?:|ftp:|file:|data:|javascript:|\/\/)/i.test(value)) url(value);
     return value;

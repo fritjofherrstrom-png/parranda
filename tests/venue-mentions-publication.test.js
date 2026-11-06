@@ -25,6 +25,19 @@ test('the closed public Stop projection retains the real reviewed article relati
   assert.deepEqual(projected.provenance.venue_mentions, stop.provenance.venue_mentions);
 });
 
+test('article destinations use only their field-specific independent policy, not the general source witness bag', () => {
+  const stop = actualStop();
+  const privacy = { publicSourceUrls: new Set() };
+  const projected = budget(privacy).copy('Stop', stop);
+  assert.deepEqual(projected.provenance.venue_mentions, stop.provenance.venue_mentions);
+  assert.equal(privacy.publicSourceUrls.size, 0, 'article policy must not enlarge the retained source witness bag');
+  const unrelated = actualStop();
+  delete unrelated.provenance.venue_mentions;
+  unrelated.website = stop.provenance.venue_mentions[0].article_url;
+  assert.throws(() => budget(privacy).copy('Stop', unrelated), /unattested url/,
+    'a reviewed article destination is not generic website/source authority');
+});
+
 for (const [name, mutate] of [
   ['changed title', stop => { stop.provenance.venue_mentions[0].article_title = 'Unreviewed praise'; }],
   ['recommended-by escalation', stop => { stop.provenance.venue_mentions[0].relation_kind = 'recommended'; }],
