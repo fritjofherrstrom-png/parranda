@@ -4333,7 +4333,17 @@ function summarizeArcGeometry(orderedStops, start, end, startProfile, endProfile
 }
 
 
-function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing = "balanced", lang = "sv") {
+function betterStopOrder(geometry, bestGeometry, preferNearbyStart) {
+  if (!bestGeometry || geometry.objective < bestGeometry.objective) return true;
+  // Equivalent loops can put a place at the reader's anchor last simply
+  // because that permutation was encountered first. Keep the original
+  // geometry objective primary; proximity only resolves an exact tie.
+  return preferNearbyStart && geometry.objective === bestGeometry.objective &&
+    geometry.firstGap < bestGeometry.firstGap;
+}
+
+function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing = "balanced", lang = "sv", orderOptions = null) {
+  const preferNearbyStart = shape === "loop" && orderOptions?.preferNearbyStart === true;
   if (selectedStops.length <= 1) {
     const summary =
       shape === "loop"
@@ -4371,10 +4381,10 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
           lang,
         );
 
-  // Same objective either way — only the SEARCH changes. Inside the safe range
-  // the exhaustive order is byte-identical to before.
+  // Same objective either way — only the SEARCH changes. Without the private
+  // near-start opt-in, the exhaustive order stays byte-identical to before.
   if (selectedStops.length > MAX_EXHAUSTIVE_STOP_ORDER) {
-    return refineStopOrder(selectedStops, start, geometryFor);
+    return refineStopOrder(selectedStops, start, geometryFor, preferNearbyStart);
   }
 
   let bestOrder = selectedStops;
@@ -4383,7 +4393,7 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
   permuteStops(selectedStops).forEach((candidate) => {
     const geometry = geometryFor(candidate);
 
-    if (!bestGeometry || geometry.objective < bestGeometry.objective) {
+    if (betterStopOrder(geometry, bestGeometry, preferNearbyStart)) {
       bestGeometry = geometry;
       bestOrder = candidate;
     }
@@ -4401,7 +4411,7 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
 // the same day. It drops nothing — every stop handed in comes back out, so an
 // oversized day stays honest about its own size instead of quietly shrinking to
 // fit the optimizer.
-function refineStopOrder(selectedStops, start, geometryFor) {
+function refineStopOrder(selectedStops, start, geometryFor, preferNearbyStart = false) {
   const remaining = [...selectedStops];
   const ordered = [];
   let cursor = start;
@@ -4433,7 +4443,7 @@ function refineStopOrder(selectedStops, start, geometryFor) {
           ...bestOrder.slice(j + 1),
         ];
         const geometry = geometryFor(candidate);
-        if (geometry.objective < bestGeometry.objective) {
+        if (betterStopOrder(geometry, bestGeometry, preferNearbyStart)) {
           bestGeometry = geometry;
           bestOrder = candidate;
           improved = true;
@@ -5513,6 +5523,7 @@ function buildRouteFromTemplate(
     distanceMode,
     legPacing,
     lang,
+    { preferNearbyStart: template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID && !dayEdit },
   );
 
   // Agnostic_compose daypart post-pass (gated). Reorder the geometry-optimal
