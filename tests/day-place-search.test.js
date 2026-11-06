@@ -34,5 +34,7 @@ test('safe projection does not export private/raw source fields or fabricate hou
 test('shared intent bounds and rejects extra public evidence fields', () => {
   const { normalizeDayPlaceSearch } = require('../shared/day-place-search.mjs');
   assert.deepEqual(normalizeDayPlaceSearch({ query: '  indiskt  ' }), { query: 'indiskt' });
+  assert.deepEqual(normalizeDayPlaceSearch({ query: 'indiskt', visible_candidate_ids: ['one', 'two'] }), { query: 'indiskt', visible_candidate_ids: ['one', 'two'] });
+  for (const ids of ['one', ['one', 'one'], ['bad\u0000id'], ['x'.repeat(201)], Array.from({ length: 7 }, (_, i) => String(i))]) assert.equal(normalizeDayPlaceSearch({ query: 'indiskt', visible_candidate_ids: ids }), null);
   for (const value of [null, [], 'indiskt', { query: 'a'.repeat(81) }, { query: '  ' }, { query: 'a', lat: 1 }, { query: 'a\u0000b' }]) assert.equal(normalizeDayPlaceSearch(value), null);
 });

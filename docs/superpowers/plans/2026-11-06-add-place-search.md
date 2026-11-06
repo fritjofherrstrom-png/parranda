@@ -47,7 +47,7 @@
 
 **Files:** Create `server/planner/day-place-search.js`, `shared/day-place-search.mjs` and its `.d.mts`; modify `server/app.js` and `server/planner/agnostic-route-output.js`; test `tests/day-place-search.test.js` and `tests/day-place-search-api.test.js`.
 
-**Interfaces:** Shared `normalizeDayPlaceSearch(value) -> { query: string } | null`, max 80 characters. Server `searchDayPlaces({ query, candidates, excludedIds, visibleIds, eligibleIds }) -> { query, items, coverage: 'available_supply' }`, max 6. Planner accepts optional `day_place_search` as search intent and emits a bounded safe `day_place_search` sidecar; no client-provided labels, coordinates, facets or URLs are evidence.
+**Interfaces:** Shared `normalizeDayPlaceSearch(value) -> { query: string, visible_candidate_ids?: string[] } | null`, max 80 characters and six optional visible IDs (subtraction only). Server `searchDayPlaces({ query, candidates, excludedIds, visibleIds, eligibleIds }) -> { query, items, coverage: 'available_supply' }`, max 6. Planner accepts optional `day_place_search` as search intent and emits a bounded safe `day_place_search` sidecar; no client-provided labels, coordinates, facets or URLs are evidence.
 
 - [ ] Write failing tests for exact/partial names, source address, Swedish/English supported category/cuisine aliases, no matches, duplicate/visible/excluded IDs, no fallback city, closed/inactive/ineligible candidates, oversized/malformed input, output field whitelist and injected source facts.
 - [ ] Run both new files with the network guard; Expected: missing implementation failures.

@@ -226,3 +226,98 @@ test('a late Live completion from the former day cannot overwrite an accepted ad
   assert.ok(!saved.includes('Obsolete event'));
   assert.ok(!saved.includes('live_completion'));
 });
+
+async function acceptedAddition(t) {
+  const h = await ready(t);
+  await search(h); await click(h, 'Preview change');
+  const request = calls(h).at(-1);
+  await h.act(() => h.fetchMock.respond(request, body([...stops, chosen], request.body.day_edit)));
+  await click(h, 'Confirm addition');
+  return h;
+}
+test('changing rhythm after an accepted addition preserves its pin without excluding the same identity', async t => {
+  const h = await acceptedAddition(t);
+  t.mock.timers.setTime(Date.parse('2026-10-17T10:00:00Z'));
+  await click(h, 'Adjust'); await click(h, 'Relaxed');
+  await h.act(() => h.clock.advance(400));
+  const request = calls(h).at(-1);
+  assert.equal(request.body.day_rhythm, 'calm');
+  assert.deepEqual(request.body.dates, [DATE], 'the accepted absolute day survives midnight');
+  assert.ok(request.body.pinned_candidate_ids.includes('chosen'));
+  assert.ok(!request.body.excluded_candidate_ids?.includes('chosen'));
+  assert.notEqual(request.body.day_edit?.candidate_id, 'chosen');
+});
+test('releasing an added place removes its Keep obligation from both pin and edit intent', async t => {
+  const h = await acceptedAddition(t);
+  t.mock.timers.setTime(Date.parse('2026-10-17T10:00:00Z'));
+  const disclosure = [...h.container.querySelectorAll('button[aria-controls]')].find(b => b.textContent.includes('River Kitchen'));
+  await h.act(() => disclosure.dispatchEvent(new h.window.MouseEvent('click', { bubbles: true })));
+  await click(h, 'Kept — release');
+  await h.act(() => h.clock.advance(400));
+  const request = calls(h).at(-1);
+  assert.ok(!request.body.pinned_candidate_ids?.includes('chosen'));
+  assert.deepEqual(request.body.dates, [DATE], 'Release does not select another date');
+  assert.notEqual(request.body.day_edit?.action, 'add');
+  assert.ok(!request.body.excluded_candidate_ids?.includes('chosen'), 'Release is not Not this');
+});
+
+for (const upgrade of [false, true]) test(`the preview's own pending Live finishes privately before confirmation (${upgrade ? 'applied upgrade' : 'events only'})`, async t => {
+  const h = await ready(t), original = h.window.localStorage.getItem(LAST);
+  await search(h); await click(h, 'Preview change');
+  const request = calls(h).at(-1), preview = body([...stops, chosen], request.body.day_edit);
+  preview.live_events.pending = true;
+  preview.live_completion = { version: 1, token: 'd'.repeat(48), expires_in_ms: 120000, route_upgrade: upgrade ? 'explicit_request' : 'not_supported' };
+  await h.act(() => h.fetchMock.respond(request, preview));
+  assert.ok(!button(h, 'Confirm addition'), 'an unfinished generation is not yet confirmable');
+  assert.equal(h.window.localStorage.getItem(LAST), original);
+  await h.act(() => h.clock.advance(2000));
+  const completion = h.fetchMock.calls.find(call => call.url === '/api/planner-live-completion' && call.body.token === 'd'.repeat(48));
+  assert.ok(completion, 'the preview follows its own capability');
+  const reference = { version: 1, state: 'ready', ref: 'd'.repeat(48), created_at: `${DATE}T09:00:00Z`, expires_at: '2026-10-18T09:00:00Z' };
+  await h.act(() => h.fetchMock.respond(completion, { live_events: { ...preview.live_events, pending: false }, day_snapshot: reference,
+    live_completion: { version: 1, state: 'ready', route_upgrade: upgrade ? 'explicit_request' : 'not_supported' } }));
+  if (upgrade) {
+    const call = h.fetchMock.calls.find(call => call.url === '/api/planner-live-route-upgrade');
+    assert.ok(call);
+    await h.act(() => h.fetchMock.respond(call, { live_route_upgrade: { version: 1, state: 'applied' }, result: { ...body([...stops, chosen], request.body.day_edit), day_snapshot: reference } }));
+  }
+  assert.ok(button(h, 'Confirm addition'));
+  const before = calls(h).length;
+  await click(h, 'Confirm addition');
+  const accepted = JSON.parse(h.window.localStorage.getItem(LAST));
+  assert.equal(accepted.safeResponse.live_events.pending, false);
+  assert.equal(accepted.safeResponse.day_snapshot.ref, reference.ref);
+  assert.ok(!JSON.stringify(accepted).includes('live_completion'));
+  assert.equal(calls(h).length, before);
+  assert.ok(button(h, 'Share this day'));
+});
+
+test('expired preview Live leaves the current day unchanged and cannot be confirmed', async t => {
+  const h = await ready(t), original = h.window.localStorage.getItem(LAST);
+  await search(h); await click(h, 'Preview change');
+  const request = calls(h).at(-1), preview = body([...stops, chosen], request.body.day_edit);
+  preview.live_events.pending = true; preview.live_completion = { version: 1, token: 'd'.repeat(48), expires_in_ms: 120000 };
+  await h.act(() => h.fetchMock.respond(request, preview));
+  await h.act(() => h.clock.advance(2000));
+  const completion = h.fetchMock.calls.find(call => call.url === '/api/planner-live-completion');
+  assert.ok(completion);
+  await h.act(() => h.fetchMock.respond(completion, {}, 410));
+  assert.ok(!button(h, 'Confirm addition'));
+  assert.equal(h.window.localStorage.getItem(LAST), original);
+});
+
+test('cancelling the preview cancels its own Live read and rejects a late terminal body', async t => {
+  const h = await ready(t), original = h.window.localStorage.getItem(LAST);
+  await search(h); await click(h, 'Preview change');
+  const request = calls(h).at(-1), preview = body([...stops, chosen], request.body.day_edit);
+  preview.live_events.pending = true; preview.live_completion = { version: 1, token: 'd'.repeat(48), expires_in_ms: 120000 };
+  await h.act(() => h.fetchMock.respond(request, preview));
+  await h.act(() => h.clock.advance(2000));
+  const completion = h.fetchMock.calls.find(call => call.url === '/api/planner-live-completion');
+  assert.ok(completion);
+  await click(h, 'Cancel');
+  assert.equal(completion.aborted, true);
+  await h.act(() => h.fetchMock.respond(completion, { live_events: { ...preview.live_events, pending: false }, live_completion: { version: 1, state: 'ready', route_upgrade: 'not_supported' } }));
+  assert.ok(!button(h, 'Confirm addition'));
+  assert.equal(h.window.localStorage.getItem(LAST), original);
+});

@@ -14,7 +14,7 @@ import type { Commitments } from "./planner/commitments";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { normalizeDayEdit, normalizePreferencePriority, togglePreferenceSelection, type DayEdit } from "../../../shared/planner-intent.mjs";
 import { fetchPlannerLifecycle } from '../lib/planner-lifecycle.mjs';
-import { buildDayPlacePayload, requestDayPlace, validDayPlacePreview, type DayPlaceAnswer } from '../lib/day-place-preview.mjs';
+import { buildDayPlacePayload, requestDayPlace, validDayPlacePreview, releaseAddedDayEdit, type DayPlaceAnswer } from '../lib/day-place-preview.mjs';
 import type { DayPlaceSearchItem } from '../../../shared/day-place-search.mjs';
 import {
   buildAnywherePayload,
@@ -2427,6 +2427,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     undoBaselineRef.current = { entry, anchorKey: displayedAnchorKeyRef.current };
     commitmentAnchorKeyRef.current = displayedAnchorKeyRef.current;
     adoptedInputsRef.current = true;
+    // The edit accepted this absolute day. Subsequent Keep/rhythm changes may
+    // not turn it into another calendar day when midnight passes.
+    navigationDateIsoRef.current = entry.dateIso;
     setCommitments(prepared.commitments);
     setDayEdit(prepared.edit);
     dayEditScopeRef.current = { anchorKey: displayedAnchorKeyRef.current, dateIso: entry.dateIso };
@@ -2443,6 +2446,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // Releasing a Live pin is a new selection intent, not an obligation to
     // retain that old occurrence. Keep the shorter extent and removed places.
     if (isLiveOccurrenceId(identity) && commitments[identity]?.kind === "pin") relaxDayEditForAdjustment();
+    if (dayEdit?.action === 'add' && dayEdit.candidate_id === identity && commitments[identity]?.kind === 'pin') {
+      const nextEdit = releaseAddedDayEdit(dayEdit, routeStops.map(stop => String(stop.id)));
+      setDayEdit(nextEdit);
+      if (!nextEdit) dayEditScopeRef.current = null;
+    }
     const next = { ...commitments };
     delete next[identity];
     setCommitments(next);
@@ -2702,7 +2710,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (dayEdit && scope?.anchorKey === anchorKey(lastRequestedAnchorRef.current) &&
         scope?.dateIso === lastComposeDateIsoRef.current) {
       const applied = dayEdit;
-      setDayEdit(normalizeDayEdit({ ...applied, action: "remove", replacement_preference: null,
+      if (applied.action === 'add') {
+        const nextEdit = releaseAddedDayEdit(applied, routeStops.map(stop => String(stop.id)), true);
+        setDayEdit(nextEdit);
+        if (!nextEdit) dayEditScopeRef.current = null;
+      } else setDayEdit(normalizeDayEdit({ ...applied, action: "remove", replacement_preference: null,
         target_stop_count: applied.retained_candidate_ids.length, preserve_retained: false, release_extent: true }));
     } else { dayEditScopeRef.current = null; setDayEdit(null); }
     pendingStopEditRef.current = null;

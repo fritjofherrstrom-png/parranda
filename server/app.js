@@ -2730,7 +2730,9 @@ function buildApp({
             ...engineWoven.result,
             ...(dayPlaceSearch ? { day_place_search: searchDayPlaces({ query: dayPlaceSearch.query,
               candidates: searchCandidates, excludedIds: excludedCandidateIds,
-              visibleIds: (engineWoven.result?.days?.[0]?.primary_route?.main_stops || []).map(stop => stop.id),
+              // Visibility belongs to the frozen answer on screen. The search
+              // frame is never installed and cannot attest what is visible.
+              visibleIds: dayPlaceSearch.visible_candidate_ids || [],
               eligibleIds: publishedEligibleIds({ promotionPromote: promotion.promote, commitmentEligibleIds }), candidateHours }) } : {}),
             ...(publishedPlaceStructure ? { place_structure: publishedPlaceStructure } : {}),
             ...(engineWoven.interrupt ? { pulse_route_interrupt: engineWoven.interrupt } : {}),

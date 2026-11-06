@@ -3,7 +3,7 @@ import { normalizeDayPlaceSearch } from '../../../shared/day-place-search.mjs';
 import { buildAnywherePayload } from './anywhere-payload.mjs';
 import { scopeLiveChoices } from './live-stop-choice.mjs';
 import { fetchPlannerLifecycle } from './planner-lifecycle.mjs';
-import { takeLiveCompletion } from './live-completion.mjs';
+import { takeLiveCompletion, followLiveCompletion, LIVE_COMPLETION_QUERY } from './live-completion.mjs';
 import { primaryRouteStops } from './maps-links.mjs';
 
 // Work on copies of the frozen answer. Only IDs return to the trusted composer.
@@ -32,7 +32,7 @@ export function buildDayPlacePayload({ anchor, entry, commitments = {}, query, c
     preferences: entry.inputs.selected, preferencePriority: entry.inputs.preferencePriority, dayRhythm: entry.inputs.walkKey,
     dayEdit: edit, excludedCandidateIds: excluded, pinnedCandidateIds: ledger.pinnedIds, liveEventChoices: ledger.liveEventChoices });
   if (query !== undefined) {
-    const search = normalizeDayPlaceSearch({ query });
+    const search = normalizeDayPlaceSearch({ query, visible_candidate_ids: ids });
     if (!search) throw new Error('invalid_day_place_search');
     payload.day_place_search = search;
   }
@@ -40,9 +40,31 @@ export function buildDayPlacePayload({ anchor, entry, commitments = {}, query, c
 }
 
 export async function requestDayPlace({ payload, lang, signal, onCancellationReady, onPending, fetcher }) {
-  const result = await fetchPlannerLifecycle(`/api/route-recommendations?lang=${lang === 'sv' ? 'sv' : 'en'}${Number.isFinite(payload.lat) ? '' : '&include_day_snapshot=1'}`,
+  const result = await fetchPlannerLifecycle(`/api/route-recommendations?lang=${lang === 'sv' ? 'sv' : 'en'}&${LIVE_COMPLETION_QUERY}${Number.isFinite(payload.lat) ? '' : '&include_day_snapshot=1'}`,
     { payload, signal, onCancellationReady, onPending, ...(fetcher ? { fetcher } : {}) });
-  return { ...result, body: takeLiveCompletion(result.body).body };
+  let { body, capability } = takeLiveCompletion(result.body);
+  if (body?.live_events?.pending === true) {
+    if (!capability) throw new Error('day_place_live_unavailable');
+    let liveEvents = null, daySnapshot;
+    const completion = await followLiveCompletion({ capability, signal, ...(fetcher ? { fetcher } : {}),
+      onLiveEvents: (live, snapshot) => { liveEvents = live; daySnapshot = snapshot; } });
+    if (completion.live !== 'terminal' || !liveEvents || liveEvents.pending === true) throw new Error('day_place_live_unavailable');
+    body = completion.upgrade?.kind === 'applied' ? takeLiveCompletion(completion.upgrade.result).body
+      : { ...body, live_events: liveEvents, day_snapshot: daySnapshot || { version: 1, state: 'unavailable' } };
+    if (body?.live_events?.pending === true) throw new Error('day_place_live_unavailable');
+  }
+  return { ...result, body };
+}
+
+// Releasing Add is not a rejection of that venue. Only actual earlier removals
+// can form a durable remove/cap command; otherwise ordinary rhythm owns depth.
+export function releaseAddedDayEdit(edit, currentIds, releaseExtent = false) {
+  if (edit?.action !== 'add' || !edit.removed_candidate_ids.length) return null;
+  const retained = currentIds.filter(id => !edit.removed_candidate_ids.includes(id));
+  return normalizeDayEdit({ version: 1, action: 'remove', candidate_id: edit.removed_candidate_ids[0],
+    retained_candidate_ids: retained, target_stop_count: retained.length, slot_index: Math.min(5, edit.slot_index),
+    replacement_preference: null, removed_candidate_ids: edit.removed_candidate_ids,
+    preserve_retained: false, ...(releaseExtent ? { release_extent: true } : {}) });
 }
 
 export function validDayPlacePreview(body, { edit, dateIso }) {

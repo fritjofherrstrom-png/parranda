@@ -32,3 +32,17 @@ test('preview transport uses lifecycle and strips capabilities before returning 
   assert.equal(call.init.headers.Prefer, 'respond-async');
   assert.equal(result.body.live_completion, undefined);
 });
+
+test('releasing add preserves actual prior removals without turning the added identity into a rejection', async () => {
+  const { releaseAddedDayEdit } = await moduleUnderTest();
+  const command = { version: 1, action: 'add', candidate_id: 'chosen', retained_candidate_ids: ['museum', 'lunch'],
+    target_stop_count: 3, slot_index: 2, replacement_preference: null, removed_candidate_ids: ['removed-before'] };
+  const cap = releaseAddedDayEdit(command, ['museum', 'chosen', 'lunch']);
+  assert.equal(cap.candidate_id, 'removed-before');
+  assert.equal(cap.action, 'remove');
+  assert.deepEqual(cap.retained_candidate_ids, ['museum', 'chosen', 'lunch']);
+  assert.equal(cap.preserve_retained, false);
+  assert.equal(cap.target_stop_count, 3);
+  assert.equal(releaseAddedDayEdit(command, ['museum', 'chosen', 'lunch'], true).release_extent, true);
+  assert.equal(releaseAddedDayEdit({ ...command, removed_candidate_ids: [] }, ['museum', 'chosen', 'lunch']), null);
+});

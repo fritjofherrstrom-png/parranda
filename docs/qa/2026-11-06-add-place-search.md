@@ -34,12 +34,47 @@ real HTTP, composition and publication projection; resolver/weather/Overpass
 responses and immutable storage are controlled. It does not assert Linux file
 storage, real provider coverage, deployed runtime or physical Safari acceptance.
 
-The whole local suites, baseline comparison and final review are recorded below
-when completed. macOS cannot establish Linux's descriptor-relative file-store
+The full frontend run at the pre-review UI head ran 1,075 tests: 1,055 passed
+and 20 failed. The same 20 named failures reproduce on unchanged main f3f429e4.
+The complete root run ran 5,812 tests: 5,716 passed, 92 failed and four skipped.
+Of its failures, 87 reproduce on unchanged main (20 frontend and 67 root storage/
+publication cases). Three UI contract findings were corrected; transient uncommitted
+bundle-name failures disappeared after the generated assets were committed, and
+all seven autocomplete browser cases pass in isolation. The final Linux CI is
+the authoritative whole-runtime gate; no green macOS full-suite claim is made.
+
+The independent read-only review found four Important issues: rhythm after Add,
+releasing its pin, subtracting the wrong visible source frame, and abandoning the
+new preview's pending Live completion. Each has a reproducing RED test and a
+GREEN fix. Search now accepts at most six frozen visible IDs strictly as a
+subtractive filter. Preview follows its own Live completion privately and waits
+for terminal facts or the admitted upgrade before it can be confirmed; expiry
+or cancellation preserves the original answer. Actual prior removals survive
+releasing Add without converting the new identity into a rejection.
+
+One Minor finding is deferred: richer search-row presentation of the source
+place type, match explanation and actual known opening windows. Current rows
+show the name, optional address/source link and an explicit unknown-hours notice.
+
+Implementation decisions: optional visible IDs cannot establish source facts;
+an incorrect supplied list can hide suggestions but cannot admit a place. Waiting
+for the preview's existing Live producer preserves exact publication at the cost
+of its bounded completion latency. No new provider or acquisition is added.
+
+macOS cannot establish Linux's descriptor-relative file-store
 acceptance. A failing local baseline is distinguished from feature regressions.
 
 ## Delivery status
 
-Prepared candidate; no merge or deployment. Current CI and final candidate/QA
+Independent review is complete. Four Important findings were fixed with RED →
+GREEN regressions (202/202 affected tests; then 113/113 calendar, interaction,
+navigation and UI-contract tests). The pre-fix candidate 31c8899b passed the entire
+[Linux CI workflow](https://github.com/fritjofherrstrom-png/parranda/actions/runs/42190893826),
+including root/frontend tests, typecheck, build/drift and Docker/Source Catalog
+smoke checks. That run does not cover the subsequent four fixes; the current
+PR head has its own CI gate.
+
+Prepared [PR #686](https://github.com/fritjofherrstrom-png/parranda/pull/686);
+no merge or deployment. Current CI and final candidate/QA
 head are reported in the PR/handoff after the checks finish. Next owner is Codex
-for remaining verification/review; integration remains gated on that evidence.
+to observe the final CI; integration remains gated on that evidence and a separate integration decision.
