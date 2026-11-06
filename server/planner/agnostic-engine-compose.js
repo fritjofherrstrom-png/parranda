@@ -29,6 +29,7 @@
 const { buildAgnosticCityContext } = require("../candidates/agnostic-context");
 const { normalizeSelectedDayHoursFact } = require("../place-candidates/opening-hours");
 const { normalizeSourceWebsite } = require("../lib/source-website");
+const { copyReviewedVenueMentions } = require("../place-candidates/venue-mentions");
 const { plannerUsableOptionsForRole } = require("./candidate-combination");
 const { isIndividuallyAdmitted, explicitAdmissionByIdentity } = require("./explicit-selection-admission");
 const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
@@ -247,6 +248,13 @@ function toSourceCandidate({
       : [];
   const selectedDayHours = normalizeSelectedDayHoursFact(rich?.availability?.selected_day_hours);
   const website = normalizeSourceWebsite(rich?.website);
+  const venueMentions = copyReviewedVenueMentions({
+    id: pick.candidate_id,
+    label: (rich && rich.label) || pick.label || pick.candidate_id,
+    lat: coords.lat, lng: coords.lng,
+    source_address: rich?.source_address,
+    address: rich?.place_details?.address,
+  }, provenance.venue_mentions);
   return {
     id: pick.candidate_id,
     city,
@@ -319,6 +327,7 @@ function toSourceCandidate({
       provider_id: provenance.provider_id || null,
       attribution,
       corroborated_by_external: provenance.corroborated_by_external === true,
+      ...(venueMentions.length ? { venue_mentions: venueMentions } : {}),
       ...(provenance.trusted_source ? { trusted_source: { ...provenance.trusted_source } } : {}),
       weatherTags: [],
     },

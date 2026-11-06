@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "policy_revision": "reviewed-venue-articles-v1",
+  "venues": [
+    {
+      "id": "venue:roscioli-salumeria",
+      "catalog_binding": {
+        "city": "rome",
+        "id": "roscioli-salumeria",
+        "source_id": "rome-catalog"
+      },
+      "label": "Roscioli Salumeria con Cucina",
+      "aliases": [
+        "Salumeria Roscioli",
+        "Roscioli Ristorante Salumeria"
+      ],
+      "lat": 41.894501,
+      "lng": 12.473962,
+      "address": {
+        "street": "Via dei Giubbonari",
+        "house_number": "21"
+      },
+      "articles": [
+        {
+          "article_id": "eater:rome-restaurants",
+          "publisher_id": "eater",
+          "publisher": "Eater",
+          "publisher_group": null,
+          "article_url": "https://www.eater.com/maps/best-restaurants-rome-italy",
+          "article_title": "The 38 Best Restaurants in Rome, According to a Best-Selling Local Cookbook Author",
+          "relation_kind": "listed",
+          "published_on": "2016-05-25",
+          "updated_on": "2026-10-12",
+          "verified_at": "2026-11-06T10:08:06.023Z",
+          "source_evidence": {
+            "document_sha256": "bd4bd394c99273e467ad20a05856e80321e55dcc6feff4e0d118389276f06fbf",
+            "locator": "/props/pageProps/hydration/responses/3/data/node/mapPoints/10"
+          },
+          "independence": "unknown",
+          "sponsorship": "unknown"
+        },
+        {
+          "article_id": "cntraveller:rome-restaurants",
+          "publisher_id": "cntraveller",
+          "publisher": "Condé Nast Traveller",
+          "publisher_group": null,
+          "article_url": "https://www.cntraveller.com/gallery/best-restaurants-in-rome",
+          "article_title": "42 best restaurants in Rome for the tastiest trip",
+          "relation_kind": "listed",
+          "published_on": "2025-04-22",
+          "updated_on": null,
+          "verified_at": "2026-11-06T10:08:06.023Z",
+          "source_evidence": {
+            "document_sha256": "ca71baa7e2b277009870055f883a8476415ca3b424bcc5a3db577d4b6a115b8a",
+            "locator": "Roscioli; Address: Via dei Giubbonari, 21, 00186 Roma RM"
+          },
+          "independence": "unknown",
+          "sponsorship": "unknown"
+        }
+      ]
+    }
+  ]
+}
