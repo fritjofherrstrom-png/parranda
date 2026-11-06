@@ -85,3 +85,20 @@ Prepared [PR #686](https://github.com/fritjofherrstrom-png/parranda/pull/686);
 no merge or deployment. Current CI and final candidate/QA
 head are reported in the PR/handoff after the checks finish. Next owner is Fritjof for the separate integration decision after the final
 head CI. Code and QA preparation are complete.
+
+
+## Follow-up integration with main
+
+The follow-up initially had no CI run because PR #686 conflicted with newer
+main c8cae52c (landed PRs #685 Live recovery and #687 verified venue mentions).
+Main was merged into the feature branch with ancestry preserved. Only generated
+HTML conflicted; rebuilding dist resolved it. The automatic source merge retains
+both the Live recovery installation guards and exact Add/Undo/publication logic.
+
+After integration: 120/120 affected UI/hours/Live-recovery/reference tests pass;
+91/92 affected server tests pass. The single actual disk-publication failure
+reproduces identically on unchanged c8cae52c on macOS. The native-source real-HTTP
+Chrome journey passes, including known source hours, closure refusal and exact
+Save/Undo/reload/share. TypeScript/build pass. Current-head Linux CI remains the
+merge gate. Owner: Codex for this feature branch; no change has been merged into
+main or deployed by this task.

@@ -223,7 +223,7 @@ test("Pulse section: place-titled, dedup-aware, honest states, no jargon", () =>
   // hidden without data (clothing && ...); attribution via the plural feeds line.
   assert.match(anywherePlannerSource, /clothingAdvice\(dayflow\?\.weather\?\.provenance\?\.observed/);
   assert.match(anywherePlannerSource, /\{clothing && \(/);
-  assert.match(anywherePlannerSource, /pulseSourceLine\(liveEvents\)/);
+  assert.match(anywherePlannerSource, /pulseSourceLine\(cardLiveEvents\)/);
   // No jargon on the surface.
   assert.doesNotMatch(anywherePlannerSource, /Live Pulse|dogfood|citypack/i);
 });
@@ -672,7 +672,7 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.match(anywherePlannerSource, /LIVE_QUERY_REFRESH_DELAYS_MS = \[1500, 3000, 5000,/);
   assert.match(anywherePlannerSource, /attempt <= LIVE_QUERY_REFRESH_DELAYS_MS\.length/);
   assert.match(anywherePlannerSource, /sheetPulseState === "pending"/);
-  const dayMutators = /resolveAndRun|execute\(|setSafeResponse|setClassification|setPlace|setMode|storeAnchorCoords|consumeAnchorCoords|setSelected|setCommitments/;
+  const dayMutators = /resolveAndRun|execute\(|setSafeResponse|installResponse|setClassification|setPlace|setMode|storeAnchorCoords|consumeAnchorCoords|setSelected|setCommitments/;
   const sheetBlock = componentSource("planner/LiveSheet.tsx");
   assert.match(sheetBlock, /THE LIVE SHEET/, "live sheet component present");
   assert.doesNotMatch(sheetBlock, dayMutators, "the sheet must not recompose, replace route data or move the day anchor");

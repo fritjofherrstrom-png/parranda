@@ -4,6 +4,7 @@ import { buildCommitmentSnapshot, readCommitmentSnapshot } from './commitment-sn
 import { normalizeDayEdit, normalizePreferencePriority } from '../../../shared/planner-intent.mjs';
 import { isLiveOccurrenceId } from './live-stop-choice.mjs';
 import { validPlaceRef } from './anywhere-share.mjs';
+import { readVenueMentions } from '../../../shared/venue-mentions.mjs';
 
 export const MAX_PUBLISHED_DAY_BYTES = 1048576;
 const REF = /^[a-f0-9]{48}$/;
@@ -59,6 +60,10 @@ export function parsePublishedDay(value, { ref, decision, now = Date.now() } = {
     requireValue(decision.isComposedStatus(cls.status) || cls.status === 'edited_empty');
     const stops = day.primary_route?.main_stops || [];
     requireValue(Array.isArray(stops) && new Set(stops.map(s => s.id)).size === stops.length && stops.every(s => string(s.id) && string(s.label,500) && typeof s.lat === 'number' && Number.isFinite(s.lat) && Math.abs(s.lat) <= 90 && typeof s.lng === 'number' && Number.isFinite(s.lng) && Math.abs(s.lng) <= 180 && !i.excludedCandidateIds.includes(s.id)));
+    for (const stop of stops) if (stop.provenance && Object.hasOwn(stop.provenance,'venue_mentions')) {
+      const mentions = stop.provenance.venue_mentions;
+      requireValue(Array.isArray(mentions) && readVenueMentions(mentions,stop).length === mentions.length);
+    }
     if (cls.status === 'edited_empty') requireValue(i.dayEdit?.target_stop_count === 0 && day.primary_route === null && day.manual_empty_day === true && e.manual_edit_published === true);
     else requireValue(stops.length > 0 && e.promotion?.promote === true && !day.manual_empty_day);
     if (i.dayEdit) {
