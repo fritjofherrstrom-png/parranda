@@ -3275,7 +3275,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </p>
       )}
       {dayWithRoute && (
-        <AddPlace t={t} unavailable={phase !== 'done' || dayIsStale || stopEditPending || Boolean(restoredAt) || (mode === 'near_me' && !nearMeCoords)}
+        <AddPlace t={t} lang={lang} unavailable={phase !== 'done' || dayIsStale || stopEditPending || Boolean(restoredAt) || (mode === 'near_me' && !nearMeCoords)}
           disabledReason={restoredAt ? t('Bygg om den sparade dagen innan du lägger till en plats.', 'Rebuild the saved day before adding a place.') : mode === 'near_me' && !nearMeCoords ? t('Bekräfta din position igen för att lägga till en plats.', 'Confirm your position again to add a place.') : undefined}
           busy={placeSearchBusy} searched={placeSearchDone} items={placeSearchItems} error={placeSearchError} preview={placePreview}
           stops={routeStops.map((stop: any) => ({ ...stop, id: String(stop.id), label: String(stop.label || ''), type: stop.type ?? undefined, covered_preferences: stop.covered_preferences ?? undefined }))} pinnedIds={Object.entries(commitments).filter(([, value]) => value.kind === 'pin').map(([id]) => id)}

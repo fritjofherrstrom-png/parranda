@@ -29,8 +29,8 @@ async function ready(t, options = {}) {
   await h.act(() => h.fetchMock.respond(calls(h)[0], publishedResponse ?? body()));
   return h;
 }
-async function search(h, query = 'indiskt') {
-  const form = h.container.querySelector('form[aria-label="Add a place"]');
+async function search(h, query = 'indiskt', items = [{ ...chosen, hours_status: 'unknown', match_kind: 'cuisine' }]) {
+  const form = h.container.querySelector('form[aria-label="Add a place"], form[aria-label="Lägg till en plats"]');
   assert.ok(form, 'search sits alongside the real published day');
   const input = form.querySelector('input');
   await h.act(() => {
@@ -40,8 +40,47 @@ async function search(h, query = 'indiskt') {
   });
   const request = calls(h).at(-1);
   assert.equal(request.body.day_place_search.query, query);
-  await h.act(() => h.fetchMock.respond(request, { ...body(), day_place_search: { query, coverage: 'available_supply', items: [{ ...chosen, hours_status: 'unknown', match_kind: 'cuisine' }] } }));
+  await h.act(() => h.fetchMock.respond(request, { ...body(), day_place_search: { query, coverage: 'available_supply', items } }));
 }
+
+for (const lang of ['en', 'sv']) test(`search results show localized place type, match reason and selected-day hours (${lang})`, async t => {
+  const h = await ready(t, { url: `http://localhost/anywhere?place=Fixture%20Town&lang=${lang}`, props: { lang } });
+  await search(h, 'River Kitchen', [{ ...chosen, hours_status: 'known', match_kind: 'cuisine',
+    selected_day_hours: { status: 'known', all_day: false, windows: [{ opens: '11:00', closes: '14:00' }, { opens: '17:00', closes: '22:00' }] } }]);
+  const row = h.container.querySelector('form').closest('section').querySelector('ul li').textContent;
+  assert.match(row, lang === 'sv' ? /Restaurang/ : /Restaurant/);
+  assert.match(row, lang === 'sv' ? /Matchar kökstypen/ : /Cuisine match/);
+  assert.match(row, lang === 'sv' ? /Källans tider för vald dag: 11:00–14:00, 17:00–22:00/ : /Source hours for selected day: 11:00–14:00, 17:00–22:00/);
+  assert.doesNotMatch(row, /open now|öppet nu|Opening hours unknown|Öppettider saknas/i);
+});
+
+test('search results explain each supported match without exposing unknown engine types', async t => {
+  const h = await ready(t);
+  await search(h, 'Museum', ['name', 'address', 'category'].map((kind, i) => ({ ...chosen, id: `result-${i}`,
+    label: `Result ${i}`, type: i === 2 ? 'unmapped_engine_type' : 'museum', match_kind: kind, hours_status: 'unknown' })));
+  const rows = [...h.container.querySelector('form').closest('section').querySelectorAll('ul li')].map(row => row.textContent);
+  assert.match(rows[0], /Museum.*Name match/);
+  assert.match(rows[1], /Museum.*Address match/);
+  assert.match(rows[2], /Place type match/);
+  assert.ok(rows.every(row => /Opening hours unknown/.test(row)));
+  assert.ok(rows.every(row => !row.includes('unmapped_engine_type')));
+});
+
+test('conditional and malformed source hours keep their uncertainty in search results', async t => {
+  const h = await ready(t);
+  await search(h, 'River Kitchen', [
+    { ...chosen, id: 'conditional', label: 'Conditional hours', hours_status: 'unknown', match_kind: 'name',
+      selected_day_hours: { status: 'unknown', all_day: false, windows: [], ordinary_status: 'known', ordinary_windows: [{ opens: '11:00', closes: '22:00' }],
+        uncertainty: 'holiday_exceptions', date: DATE, timezone: 'Europe/Stockholm', source_url: 'https://kitchen.example/hours', observed_at: `${DATE}T08:00:00.000Z` } },
+    { ...chosen, id: 'malformed', label: 'Malformed hours', hours_status: 'known', match_kind: 'name',
+      selected_day_hours: { status: 'known', all_day: false, windows: [{ opens: 'not-a-time', closes: '22:00' }] } },
+  ]);
+  const rows = [...h.container.querySelector('form').closest('section').querySelectorAll('ul li')].map(row => row.textContent);
+  assert.match(rows[0], /Regular hours: 11:00–22:00 · Holiday hours unconfirmed/);
+  assert.doesNotMatch(rows[0], /Source hours for selected day/);
+  assert.match(rows[1], /Opening hours unknown/);
+  assert.doesNotMatch(rows[1], /not-a-time|Hours available|open now/);
+});
 test('search and preview leave route and storage unchanged; confirm adopts once and Undo restores exact day', async t => {
   const h = await ready(t), original = h.window.localStorage.getItem(LAST);
   await search(h);

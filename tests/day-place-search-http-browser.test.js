@@ -19,7 +19,7 @@ test('built day search → exact preview/refusal → confirm → Undo → Save/r
     fetcher: async () => { loads++; return { ok: true, status: 200, json: async () => ({ elements: [
       ...Array.from({ length: 8 }, (_, i) => ({ type: 'node', id: 1001 + i, lat: 55.6 + i * .00015, lon: 13,
         tags: { name: `Harbour Collection ${i + 1}`, tourism: 'museum', wikidata: `Q${1001 + i}` } })),
-      { type: 'node', id: 1009, lat: 55.6015, lon: 13.001, tags: { name: 'River Kitchen', amenity: 'restaurant', cuisine: 'indian', wikidata: 'Q1009', ...(closed ? { opening_hours: 'Mo-Su off' } : {}) } },
+      { type: 'node', id: 1009, lat: 55.6015, lon: 13.001, tags: { name: 'River Kitchen', amenity: 'restaurant', cuisine: 'indian', wikidata: 'Q1009', opening_hours: closed ? 'Mo-Su off' : 'Mo-Su 09:00-23:00' } },
       { type: 'node', id: 1010, lat: 55.6016, lon: 13.001, tags: { name: 'Other Food', amenity: 'restaurant', wikidata: 'Q1010' } },
     ] }) }; } });
   // This tests publisher/recipient correlation without claiming Linux's
@@ -61,6 +61,16 @@ test('built day search → exact preview/refusal → confirm → Undo → Save/r
   await panel.getByRole('searchbox').fill('indiskt');
   await panel.getByRole('searchbox').press('Enter');
   await panel.getByText('River Kitchen', { exact: true }).waitFor();
+  await panel.getByText('Restaurant · Cuisine match', { exact: true }).waitFor();
+  await panel.getByText(/Source hours for selected day: 09:00–23:00/).waitFor();
+  if (process.env.PARRANDA_PLACE_QA_DIR) {
+    await mkdir(process.env.PARRANDA_PLACE_QA_DIR, { recursive: true });
+    await panel.screenshot({ path: `${process.env.PARRANDA_PLACE_QA_DIR}/mobile-results.png` });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await panel.screenshot({ path: `${process.env.PARRANDA_PLACE_QA_DIR}/desktop-results.png` });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth, undefined, { timeout: 3000 });
+  }
   await panel.getByRole('button', { name: 'Preview change', exact: true }).click();
   await panel.getByRole('button', { name: 'Confirm addition', exact: true }).waitFor();
   assert.deepEqual(await current(page), original, 'preview never writes LAST or changes the visible day');

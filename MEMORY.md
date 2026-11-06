@@ -10,7 +10,9 @@
   datum, intressen och användarval. Bekräftelse använder samma kontrollerade
   svar; Ångra återställer föregående dag. Okända öppettider visas som okända.
 - Ingen ny provider, modell, betaltjänst, merge eller driftsättning ingår.
-  Granskad i PR #686; källrevision cce5da7e har grön Linux-CI.
+  Granskad i PR #686; revision 0ec17e2b har grön Linux-CI.
+  Den uppskjutna detaljvisningen är därefter rättad på Fritjofs begäran:
+  platstyp, matchförklaring och källans kända/ovissa tider visas i sökträffarna.
   Evidens och återstående gränser: `docs/qa/2026-11-06-add-place-search.md`.
 
 

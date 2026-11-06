@@ -1,26 +1,38 @@
 import { useId, useState } from 'react';
 import type { DayPlaceSearchItem } from '../../../../shared/day-place-search.mjs';
+import { selectedDayHoursLabel } from '../../lib/selected-day-hours.mjs';
 import { busyButton, buttonClass } from '../shared/ui';
-import type { Translate } from './copy';
+import { typeLabel, type Lang, type Translate } from './copy';
 
 export type PlacePreview = { label: string; replacing: boolean; stops: Array<{ id: string; label: string }>;
   beforeKm: number | null; afterKm: number | null };
-type Props = { t: Translate; unavailable: boolean; disabledReason?: string; busy: boolean; searched: boolean;
+type Props = { t: Translate; lang: Lang; unavailable: boolean; disabledReason?: string; busy: boolean; searched: boolean;
   items: DayPlaceSearchItem[]; error: string | null; preview: PlacePreview | null;
   stops: Array<{ id: string; label: string; type?: string; covered_preferences?: string[] }>;
   pinnedIds: string[]; onSearch: (query: string) => void; onPreview: (id: string, replaceId?: string) => void;
   onConfirm: () => void; onCancel: () => void };
 
-function PlaceResult({ item, t, stops, pinnedIds, unavailable, onPreview }: Pick<Props, 't' | 'stops' | 'pinnedIds' | 'onPreview'> & { item: DayPlaceSearchItem; unavailable: boolean }) {
+function matchLabel(kind: DayPlaceSearchItem['match_kind'], t: Translate): string {
+  switch (kind) {
+    case 'name': return t('Matchar platsnamnet', 'Name match');
+    case 'address': return t('Matchar adressen', 'Address match');
+    case 'cuisine': return t('Matchar kökstypen', 'Cuisine match');
+    case 'category': return t('Matchar platstypen', 'Place type match');
+    default: return '';
+  }
+}
+
+function PlaceResult({ item, t, lang, stops, pinnedIds, unavailable, onPreview }: Pick<Props, 't' | 'lang' | 'stops' | 'pinnedIds' | 'onPreview'> & { item: DayPlaceSearchItem; unavailable: boolean }) {
   const meals = stops.filter(stop => !pinnedIds.includes(stop.id) && (stop.covered_preferences?.includes('food') || ['restaurant', 'pizza', 'fast-food'].includes(stop.type || '')));
   const canAdd = stops.length < 6;
   const [placement, setPlacement] = useState(canAdd ? '' : meals[0]?.id || '');
+  const description = [typeLabel(item.type, lang), matchLabel(item.match_kind, t)].filter(Boolean).join(' · ');
+  const hours = selectedDayHoursLabel(item.selected_day_hours, lang);
   return <li className="border-b-line border-parranda-line py-4 last:border-b-0">
     <p className="font-semibold text-parranda-ink">{item.label}</p>
+    {description && <p className="mt-1 text-sm text-parranda-ink-muted">{description}</p>}
     {item.address && <p className="mt-1 text-sm text-parranda-ink-muted">{item.address}</p>}
-    <p className="mt-1 text-sm text-parranda-ink-muted">{item.hours_status === 'unknown'
-      ? t('Öppettider saknas – kontrollera före besöket.', 'Opening hours unknown — check before visiting.')
-      : t('Öppettider finns för vald dag. Besökstiden är inte bokad.', 'Hours available for the selected day. A visit time is not reserved.')}
+    <p className="mt-1 text-sm text-parranda-ink-muted">{hours || t('Öppettider saknas – kontrollera före besöket.', 'Opening hours unknown — check before visiting.')}
       {item.source_url && <> <a href={item.source_url} target="_blank" rel="noreferrer" className="underline underline-offset-2">{t('Visa källa', 'View source')}</a></>}
     </p>
     <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -35,7 +47,7 @@ function PlaceResult({ item, t, stops, pinnedIds, unavailable, onPreview }: Pick
   </li>;
 }
 
-export default function AddPlace({ t, unavailable, disabledReason, busy, searched, items, error, preview, stops, pinnedIds, onSearch, onPreview, onConfirm, onCancel }: Props) {
+export default function AddPlace({ t, lang, unavailable, disabledReason, busy, searched, items, error, preview, stops, pinnedIds, onSearch, onPreview, onConfirm, onCancel }: Props) {
   const id = useId();
   return <section aria-labelledby={`${id}-heading`} className="mt-8 border-t-line border-parranda-line pt-6">
     <h2 id={`${id}-heading`} className="text-xl font-semibold text-parranda-ink">{t('Lägg till en plats', 'Add a place')}</h2>
@@ -52,7 +64,7 @@ export default function AddPlace({ t, unavailable, disabledReason, busy, searche
       {busy ? t('Kontrollerar platser och promenaden …', 'Checking places and the walk …') : error ? error : searched && !items.length ? t('Inga träffar i vårt underlag här. Prova ett annat namn eller en annan typ av plats.', 'No matches in our available places here. Try another name or type of place.') : null}
     </div>
     {busy && <button type="button" className={buttonClass('quiet', 'min-h-11 px-4 text-sm')} onClick={onCancel}>{t('Avbryt', 'Cancel')}</button>}
-    {!preview && items.length > 0 && <ul className="mt-1">{items.map(item => <PlaceResult key={item.id} item={item} t={t} stops={stops} pinnedIds={pinnedIds} unavailable={unavailable || busy} onPreview={onPreview} />)}</ul>}
+    {!preview && items.length > 0 && <ul className="mt-1">{items.map(item => <PlaceResult key={item.id} item={item} t={t} lang={lang} stops={stops} pinnedIds={pinnedIds} unavailable={unavailable || busy} onPreview={onPreview} />)}</ul>}
     {preview && <div aria-label={t('Förhandsvisa ändring av dagen', 'Preview day change')} className="mt-4 rounded-xl bg-parranda-fill p-4">
       <h3 className="font-semibold text-parranda-ink">{t('Förhandsvisning', 'Preview')}: {preview.label}</h3>
       <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-parranda-ink">{preview.stops.map(stop => <li key={stop.id}>{stop.label}</li>)}</ol>

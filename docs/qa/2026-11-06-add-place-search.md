@@ -52,9 +52,15 @@ for terminal facts or the admitted upgrade before it can be confirmed; expiry
 or cancellation preserves the original answer. Actual prior removals survive
 releasing Add without converting the new identity into a rejection.
 
-One Minor finding is deferred: richer search-row presentation of the source
-place type, match explanation and actual known opening windows. Current rows
-show the name, optional address/source link and an explicit unknown-hours notice.
+The previously deferred Minor was completed on Fritjof's follow-up request.
+Search rows now show localized source place type and match reason, and reuse the
+existing selected-day hours renderer for opening windows, all-day schedules and
+conditional holiday uncertainty. Missing/malformed facts retain the unknown-hours
+notice; raw unknown engine types stay hidden. Four mounted regressions were
+observed RED then GREEN in English/Swedish. The 70-test affected UI/hours/contract
+set, TypeScript, build and real-HTTP Chrome journey pass. Desktop/mobile search
+rows were inspected together; the browser fixture now proves native OSM hours
+reach the search row before preview/confirm. Admission and search are unchanged.
 
 Implementation decisions: optional visible IDs cannot establish source facts;
 an incorrect supplied list can hide suggestions but cannot admit a place. Waiting
@@ -71,8 +77,9 @@ GREEN regressions (202/202 affected tests; then 113/113 calendar, interaction,
 navigation and UI-contract tests). The reviewed/fixed source candidate cce5da7e passed the entire
 [Linux CI workflow](https://github.com/fritjofherrstrom-png/parranda/actions/runs/42193241962),
 including root/frontend tests, typecheck, build/drift and Docker/Source Catalog
-smoke checks. That run covers all four fixes. The final evidence/test-only revision
-records settled viewport QA and has its own PR CI gate.
+smoke checks. That run covers all four fixes. The evidence/test-only revision 0ec17e2b also
+passed its complete [Linux CI](https://github.com/fritjofherrstrom-png/parranda/actions/runs/42228968961).
+The follow-up display change has its own current-head CI gate.
 
 Prepared [PR #686](https://github.com/fritjofherrstrom-png/parranda/pull/686);
 no merge or deployment. Current CI and final candidate/QA
