@@ -34,7 +34,7 @@ real HTTP, composition and publication projection; resolver/weather/Overpass
 responses and immutable storage are controlled. It does not assert Linux file
 storage, real provider coverage, deployed runtime or physical Safari acceptance.
 
-The full frontend run at the pre-review UI head ran 1,075 tests: 1,055 passed
+The final full frontend run at cce5da7e ran 1,082 tests: 1,062 passed
 and 20 failed. The same 20 named failures reproduce on unchanged main f3f429e4.
 The complete root run ran 5,812 tests: 5,716 passed, 92 failed and four skipped.
 Of its failures, 87 reproduce on unchanged main (20 frontend and 67 root storage/
@@ -68,13 +68,13 @@ acceptance. A failing local baseline is distinguished from feature regressions.
 
 Independent review is complete. Four Important findings were fixed with RED →
 GREEN regressions (202/202 affected tests; then 113/113 calendar, interaction,
-navigation and UI-contract tests). The pre-fix candidate 31c8899b passed the entire
-[Linux CI workflow](https://github.com/fritjofherrstrom-png/parranda/actions/runs/42190893826),
+navigation and UI-contract tests). The reviewed/fixed source candidate cce5da7e passed the entire
+[Linux CI workflow](https://github.com/fritjofherrstrom-png/parranda/actions/runs/42193241962),
 including root/frontend tests, typecheck, build/drift and Docker/Source Catalog
-smoke checks. That run does not cover the subsequent four fixes; the current
-PR head has its own CI gate.
+smoke checks. That run covers all four fixes. The final evidence/test-only revision
+records settled viewport QA and has its own PR CI gate.
 
 Prepared [PR #686](https://github.com/fritjofherrstrom-png/parranda/pull/686);
 no merge or deployment. Current CI and final candidate/QA
-head are reported in the PR/handoff after the checks finish. Next owner is Codex
-to observe the final CI; integration remains gated on that evidence and a separate integration decision.
+head are reported in the PR/handoff after the checks finish. Next owner is Fritjof for the separate integration decision after the final
+head CI. Code and QA preparation are complete.

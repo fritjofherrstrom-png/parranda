@@ -1,6 +1,6 @@
 # Add Place Search Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Let a person search for a source-backed place or intent, preview adding it or replacing one meal, and accept or undo without losing the current day.
 
@@ -37,11 +37,11 @@
 
 **Interfaces:** Produce `normalizePlaceSearchFacets(value) -> { cuisines: string[] } | null`, `overturePlaceSearchFacets(primaryCategory)` and `osmPlaceSearchFacets(tags)`. Only source mappers create these facts; external provider retains them; exact identity merges union compatible source-backed facets. Public request fields do not populate them.
 
-- [ ] Write failing tests for explicit Indian cuisine and multiple semicolon cuisine tags, exact Overture primaries, unsupported facets, name-only non-evidence, conflicting/unmerged branches and persistence through external normalization/entity resolution.
-- [ ] Run `node --require ./tests/helpers/no-live-network.js --test tests/place-search-facets.test.js`; Expected: failures for missing exports/retention.
-- [ ] Implement the bounded source-facet normalizer and carry facts without changing candidate types, evidence strength or default source acquisition.
-- [ ] Run that file plus existing Overture/external-provider/entity-resolution tests identified by `rg --files tests`; Expected: all affected tests pass.
-- [ ] Commit `feat: preserve factual place search facets`.
+- [x] Write failing tests for explicit Indian cuisine and multiple semicolon cuisine tags, exact Overture primaries, unsupported facets, name-only non-evidence, conflicting/unmerged branches and persistence through external normalization/entity resolution.
+- [x] Run `node --require ./tests/helpers/no-live-network.js --test tests/place-search-facets.test.js`; Expected: failures for missing exports/retention.
+- [x] Implement the bounded source-facet normalizer and carry facts without changing candidate types, evidence strength or default source acquisition.
+- [x] Run that file plus existing Overture/external-provider/entity-resolution tests identified by `rg --files tests`; Expected: all affected tests pass.
+- [x] Commit `feat: preserve factual place search facets`.
 
 ### Task 2: Bound search to the existing trusted planner context
 
@@ -49,11 +49,11 @@
 
 **Interfaces:** Shared `normalizeDayPlaceSearch(value) -> { query: string, visible_candidate_ids?: string[] } | null`, max 80 characters and six optional visible IDs (subtraction only). Server `searchDayPlaces({ query, candidates, excludedIds, visibleIds, eligibleIds }) -> { query, items, coverage: 'available_supply' }`, max 6. Planner accepts optional `day_place_search` as search intent and emits a bounded safe `day_place_search` sidecar; no client-provided labels, coordinates, facets or URLs are evidence.
 
-- [ ] Write failing tests for exact/partial names, source address, Swedish/English supported category/cuisine aliases, no matches, duplicate/visible/excluded IDs, no fallback city, closed/inactive/ineligible candidates, oversized/malformed input, output field whitelist and injected source facts.
-- [ ] Run both new files with the network guard; Expected: missing implementation failures.
-- [ ] Implement pure matching and integration with the retained trusted composition reservoir and existing eligibility. Keep acquisition/time budgets unchanged and do not expose raw records.
-- [ ] Run both files and affected intake/source/admission API tests; Expected: search works and legacy request output is unchanged without the new intent.
-- [ ] Commit `feat: search trusted places for the current day`.
+- [x] Write failing tests for exact/partial names, source address, Swedish/English supported category/cuisine aliases, no matches, duplicate/visible/excluded IDs, no fallback city, closed/inactive/ineligible candidates, oversized/malformed input, output field whitelist and injected source facts.
+- [x] Run both new files with the network guard; Expected: missing implementation failures.
+- [x] Implement pure matching and integration with the retained trusted composition reservoir and existing eligibility. Keep acquisition/time budgets unchanged and do not expose raw records.
+- [x] Run both files and affected intake/source/admission API tests; Expected: search works and legacy request output is unchanged without the new intent.
+- [x] Commit `feat: search trusted places for the current day`.
 
 ### Task 3: Exact add and chosen replacement through normal day editing
 
@@ -61,11 +61,11 @@
 
 **Interfaces:** Extend version-1 DayEdit with action `add` (candidate_id is the chosen new ID) and optional `replacement_candidate_id` only for an exact `replace`. Add has target count retained count + 1, max 6; replacement preserves the existing target count/slot. Legacy remove/automatic replace serializations and validation remain byte-compatible when new fields are absent. `dayEditOutcome` reports the chosen added/replacement identity and source/publication refusal atomically.
 
-- [ ] Write failing cases for exact insertion, exact food replacement, pinned target refusal, retained pins outside current preferences, six-stop cap, absent/closed chosen identity, wrong geography, retained Live disappearance, walking failure and publication roundtrip of new intent.
-- [ ] Run the edit/publication files; Expected: new intent or chosen identity is currently refused/not preserved.
-- [ ] Implement the input evolution, retained/excluded/pinned selection, whole-day walking validation and publication fields using the ordinary admission pipeline. Do not inject a public candidate or use another matching restaurant when the exact choice is unavailable.
-- [ ] Run new/affected edit, pin, Live-retention, projection/privacy tests; Expected: exact accepted results and unchanged legacy behavior.
-- [ ] Commit `feat: add and replace an exact chosen day place`.
+- [x] Write failing cases for exact insertion, exact food replacement, pinned target refusal, retained pins outside current preferences, six-stop cap, absent/closed chosen identity, wrong geography, retained Live disappearance, walking failure and publication roundtrip of new intent.
+- [x] Run the edit/publication files; Expected: new intent or chosen identity is currently refused/not preserved.
+- [x] Implement the input evolution, retained/excluded/pinned selection, whole-day walking validation and publication fields using the ordinary admission pipeline. Do not inject a public candidate or use another matching restaurant when the exact choice is unavailable.
+- [x] Run new/affected edit, pin, Live-retention, projection/privacy tests; Expected: exact accepted results and unchanged legacy behavior.
+- [x] Commit `feat: add and replace an exact chosen day place`.
 
 ### Task 4: Search and preview without mutating the visible day
 
@@ -73,12 +73,12 @@
 
 **Interfaces:** Preview helper builds search/edit payloads from frozen current intent and uses `fetchPlannerLifecycle`. It returns `{ response, body }` plus cancellation, never writes storage or the visible result. `AddPlace` receives current scope, typed result/preview states and callbacks `onSearch(query)`, `onPreview(candidateId, replaceId?)`, `onConfirm()` and `onCancel()`. Parent adoption is guarded by the same current scope/generation and updates the accepted input/result/commitment snapshot together with an exact Undo baseline.
 
-- [ ] Write failing mounted tests for Enter/search, named/cuisine results, choosing add versus a named replace target, unknown hours, preview order/walking delta, cancellation, source refusal and no current-day/localStorage mutation before confirmation.
-- [ ] Add races for late search/preview, midnight, place/date/preference change, existing pin/remove, saved/public/near-me restoration and late Live completion. Cover accept without a second compose, exact Undo and accepted reload/share serialization.
-- [ ] Run both new UI test files; Expected: missing field/actions/helper failures.
-- [ ] Implement within the existing Linje layout and components. Use real server result geometry for the preview delta; preserve position consent and strip capabilities with existing helpers. UI copy is Swedish/English; results and errors are accessible, keyboard reachable, and announced.
-- [ ] Run new UI tests plus existing stop-edit/commitment/publication/lifecycle race suites and TypeScript; Expected: all relevant tests pass.
-- [ ] Commit `feat: preview and confirm places added to a day`.
+- [x] Write failing mounted tests for Enter/search, named/cuisine results, choosing add versus a named replace target, unknown hours, preview order/walking delta, cancellation, source refusal and no current-day/localStorage mutation before confirmation.
+- [x] Add races for late search/preview, midnight, place/date/preference change, existing pin/remove, saved/public/near-me restoration and late Live completion. Cover accept without a second compose, exact Undo and accepted reload/share serialization.
+- [x] Run both new UI test files; Expected: missing field/actions/helper failures.
+- [x] Implement within the existing Linje layout and components. Use real server result geometry for the preview delta; preserve position consent and strip capabilities with existing helpers. UI copy is Swedish/English; results and errors are accessible, keyboard reachable, and announced.
+- [x] Run new UI tests plus existing stop-edit/commitment/publication/lifecycle race suites and TypeScript; Expected: all relevant tests pass.
+- [x] Commit `feat: preview and confirm places added to a day`.
 
 ### Task 5: Verify the integrated capability and hand off
 
@@ -86,8 +86,8 @@
 
 **Interfaces:** Existing Express + mounted browser fixture proves search → exact preview → confirm → save/share/reload → Undo; no external providers. Default request control remains identical without explicit search/edit intent.
 
-- [ ] Write and run an initially failing HTTP/browser integration for the complete journey, including a source/walking refusal and explicit choice outside baseline interests without unrelated filler; Expected: failure until integration is complete.
-- [ ] Complete any integration wiring needed by that fixture and run it with network guard; Expected: PASS.
-- [ ] Run root affected tests, frontend suite, `npm run check:frontend`, `npm run build:frontend`, `node scripts/check-frontend-dist-drift.js`, `git diff --check`; Expected: passing affected checks; pre-existing/platform-specific failures must be identified against baseline rather than hidden.
-- [ ] Inspect desktop and mobile fixture journeys together in one visual pass; fix material issues in one batch and confirm once. Record fixture scope, no real-provider or physical-Safari claim.
-- [ ] Commit changes; obtain one independent whole-branch review under executing-plans and fix Important/Critical findings with RED/GREEN evidence. Prepare the reviewable branch/draft PR handoff, with actual CI if published; do not merge or deploy.
+- [x] Write and run an initially failing HTTP/browser integration for the complete journey, including a source/walking refusal and explicit choice outside baseline interests without unrelated filler; Expected: failure until integration is complete.
+- [x] Complete any integration wiring needed by that fixture and run it with network guard; Expected: PASS.
+- [x] Run root affected tests, frontend suite, `npm run check:frontend`, `npm run build:frontend`, `node scripts/check-frontend-dist-drift.js`, `git diff --check`; Expected: passing affected checks; pre-existing/platform-specific failures must be identified against baseline rather than hidden.
+- [x] Inspect desktop and mobile fixture journeys together in one visual pass; fix material issues in one batch and confirm once. Record fixture scope, no real-provider or physical-Safari claim.
+- [x] Commit changes; obtain one independent whole-branch review under executing-plans and fix Important/Critical findings with RED/GREEN evidence. Prepare the reviewable branch/draft PR handoff, with actual CI if published; do not merge or deploy.

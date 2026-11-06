@@ -71,6 +71,14 @@ test('built day search → exact preview/refusal → confirm → Undo → Save/r
     await panel.screenshot({ path: `${process.env.PARRANDA_PLACE_QA_DIR}/desktop-preview.png` });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'desktop has no horizontal overflow');
     await page.setViewportSize({ width: 390, height: 844 });
+    if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) {
+      t.diagnostic(JSON.stringify(await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth,
+        overflow: [...document.querySelectorAll('body *')].filter(el => el.getBoundingClientRect().right > innerWidth + 1)
+          .slice(0, 8).map(el => ({ tag: el.tagName, className: String(el.className), width: el.getBoundingClientRect().width })) }))));
+    }
+    // The map observes a viewport shrink asynchronously. Judge the settled
+    // layout, rather than the previous desktop canvas in its resize turn.
+    await page.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth, undefined, { timeout: 3000 });
   }
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'mobile has no horizontal overflow');
   await panel.getByRole('button', { name: 'Cancel preview', exact: true }).click();
