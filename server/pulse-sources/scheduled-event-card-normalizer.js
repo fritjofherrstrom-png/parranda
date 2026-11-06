@@ -5,6 +5,7 @@ const { normalizeSourceEventDate } = require("./source-event-time");
 const { parseDateRange } = require("./official-program-article-time");
 const { boundedDocument, attribute, hasClass, ownedBy, within, cleanText, sameOriginUrl, recordCardClaim } = require("./scheduled-event-document");
 const { extractMappedEventCards } = require("./mapped-event-card-reader");
+const { extractTransferStateEventCards } = require("./transfer-state-event-card-reader");
 
 function explicitSingleDate(value) {
   const text = cleanText(value);
@@ -20,15 +21,17 @@ function explicitSingleDate(value) {
 }
 
 function extractScheduledEventCards(html, { sourceUrl } = {}) {
-  if (!/\b(?:node--type-event|flip-container)\b/.test(String(html || ""))) return { recognized: false, cards: [] };
+  if (!/\b(?:node--type-event|flip-container|event-card)\b/.test(String(html || ""))) return { recognized: false, cards: [] };
   if (!sameOriginUrl(sourceUrl, sourceUrl)) return { recognized: false, cards: [] };
   const doc = boundedDocument(html);
   if (!doc) return { recognized: false, cards: [] };
   const articles = doc.nodes.filter((node) => node.tagName === "article" && hasClass(node, "node--type-event"));
   const mappedOwners = doc.nodes.filter((node) => node.tagName === "div" && hasClass(node, "flip-container"));
-  if (articles.length > 200 || mappedOwners.length > 200) return { recognized: false, cards: [] };
+  const transferOwners = doc.nodes.filter((node) => node.tagName === "div" && hasClass(node, "card") && hasClass(node, "event-card"));
+  if (articles.length + mappedOwners.length + transferOwners.length > 200) return { recognized: false, cards: [] };
   const claims = new Map();
   const cards = extractMappedEventCards(doc, { sourceUrl, explicitSingleDate, claims });
+  cards.push(...extractTransferStateEventCards(doc, { sourceUrl, explicitSingleDate, claims }));
   for (const article of articles) {
     const own = doc.nodes.filter((node) => doc.articleOwners.get(node) === article);
     const headings = own.filter((node) => /^h[1-6]$/.test(node.tagName) && hasClass(node, "node--title"));
