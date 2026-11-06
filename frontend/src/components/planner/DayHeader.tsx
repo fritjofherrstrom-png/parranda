@@ -9,7 +9,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
-import { walkingDistanceLabel } from "../../lib/route-context-view.mjs";
+import { routeDeferredPicks, walkingDistanceLabel } from "../../lib/route-context-view.mjs";
 import { CheckIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, MinusIcon, RainIcon, SearchIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
 import { busyButton, buttonClass, compactPillTarget, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
@@ -192,6 +192,7 @@ export function dayAssemblyNotes(t: Translate, { sourceBackedDay, timeAnchoring 
   // doable midday plan. Quietly note the trimmed variant too.
   if (timeAnchoring === "full_arc_not_now") notes.push(t("En hel dags båge — inte förankrad till klockan just nu.", "A full-day arc — not anchored to right now."));
   if (timeAnchoring === "anchored_trimmed") notes.push(t("Förankrad till nu — tidigare dagdelar borttagna.", "Anchored to now — earlier dayparts trimmed."));
+  if (timeAnchoring === "evening_plan") notes.push(t("Planerad för kvällen. Val som bara passar dagtid väntar till i morgon.", "Planned for the evening. Picks that only suit the daytime wait until tomorrow."));
   return notes;
 }
 
@@ -261,6 +262,9 @@ export default function DayHeader({
   const distance = Number.isFinite(primaryRoute?.estimated_km)
     ? `≈ ${walkingDistanceLabel(primaryRoute.estimated_km, lang)} ${t("till fots", "on foot")}`
     : null;
+  // An evening plan names the picks it left for tomorrow. They are not missing
+  // from what the reader can do; they wait for the daytime.
+  const deferredPicks = routeDeferredPicks(primaryRoute);
   const stops = `${coreCount} ${coreCount === 1 ? t("stopp", "stop") : t("stopp", "stops")}` +
     (wovenCount > 0 ? ` + ${wovenCount} live${lang === "en" ? " event" : "-event"}` : "");
   const displayedDate = selectedDate(date);
@@ -389,7 +393,9 @@ export default function DayHeader({
             the facts row above says so in one chip instead. */}
         {pickCoverage.length > 0 && !allPicksCovered && (
           <ul className="flex flex-wrap gap-2" aria-label={t("Dina val i dagen", "Your picks in this day")}>
-            {pickCoverage.map(({ key, state }) => (
+            {pickCoverage.map(({ key, state }) => {
+              const tomorrow = state === "missing" && deferredPicks.includes(key);
+              return (
               // Status, not selection: covered and partial are labels like the
               // facts row (an ink fill would read as a chosen chip, as in Adjust).
               // Missing keeps the dashed tone, which means "not in the day".
@@ -403,16 +409,17 @@ export default function DayHeader({
               >
                 {state === "covered" && <CheckIcon className="h-3 w-3 text-parranda-ember" />}
                 {state === "partial" && <HalfCircleIcon className="h-3 w-3 text-parranda-glow" />}
-                {state === "missing" && <MinusIcon className="h-3 w-3" />}
+                {state === "missing" && !tomorrow && <MinusIcon className="h-3 w-3" />}
                 {state === "pending" && <RingMark className="h-3 w-3" />}
                 <span>{pickLabel(key, lang)}</span>
                 {state === "covered" && <span className="sr-only">{t(" — med i dagen", " — in this day")}</span>}
                 {state === "partial" && <span className="text-parranda-ink-meta">{t(" · delvis", " · partly")}</span>}
-                {state === "missing" && <span>{t(" · inte med", " · not in this day")}</span>}
+                {state === "missing" && <span>{tomorrow ? t(" · i morgon", " · tomorrow") : t(" · inte med", " · not in this day")}</span>}
                 {state === "pending" && <span className="text-parranda-ink-meta">{t(" · letar platser …", " · finding places …")}</span>}
                 {state === "unanswered" && <span className="text-parranda-ink-meta">{t(" · ännu inte bedömt", " · not assessed yet")}</span>}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
         {priorityShortfall && (
@@ -420,8 +427,11 @@ export default function DayHeader({
             {priorityShortfall.state === "partial"
               ? t(`Ditt förstaval ${pickLabel(priorityShortfall.key, lang)} finns bara delvis med i den här dagen.`,
                   `Your first choice ${pickLabel(priorityShortfall.key, lang)} is only partly represented in this day.`)
-              : t(`Ditt förstaval ${pickLabel(priorityShortfall.key, lang)} finns inte med i den här dagen.`,
-                  `Your first choice ${pickLabel(priorityShortfall.key, lang)} is not represented in this day.`)}
+              : deferredPicks.includes(priorityShortfall.key)
+                ? t(`Ditt förstaval ${pickLabel(priorityShortfall.key, lang)} passar dagtid och väntar till i morgon.`,
+                    `Your first choice ${pickLabel(priorityShortfall.key, lang)} suits the daytime and waits until tomorrow.`)
+                : t(`Ditt förstaval ${pickLabel(priorityShortfall.key, lang)} finns inte med i den här dagen.`,
+                    `Your first choice ${pickLabel(priorityShortfall.key, lang)} is not represented in this day.`)}
           </p>
         )}
         {/* Source limitations describe this published answer, never a live job:

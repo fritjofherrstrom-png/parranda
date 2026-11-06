@@ -32,7 +32,7 @@ const DINNER_AND_BARS = [
   place('bistro', 'restaurant', ['restaurant'], 3),
 ];
 
-async function compose({ clock, preferences, records, date = DATE }) {
+async function compose({ clock, preferences, records, date = DATE, pins = [] }) {
   const server = buildApp({
     openDataLoader: makeLoader(records),
     weatherProvider: async () => null,
@@ -45,6 +45,7 @@ async function compose({ clock, preferences, records, date = DATE }) {
       place: 'Fixture place', dates: [date], preferences, day_rhythm: 'balanced', leg_pacing: 'balanced',
       distance_mode: 'no_limit', start: { type: 'auto' }, end: { type: 'auto' }, home_base: { type: 'auto' },
       experimental_agnostic_route_output: 1, include_external_candidates: 1, agnostic_engine_compose: 1,
+      ...(pins.length ? { pinned_candidate_ids: pins } : {}),
     } });
     assert.equal(response.status, 200);
     const route = response.body.days[0]?.primary_route;
@@ -55,8 +56,10 @@ async function compose({ clock, preferences, records, date = DATE }) {
   }
 }
 
+// A pinned museum keeps the day's daytime stops in the evening (an evening
+// plan never drops a pin), so the day says it is not anchored to now.
 test('an evening day that keeps daytime stops says it is not anchored to now', async () => {
-  const route = await compose({ clock: EVENING, preferences: DAYTIME_PREFERENCES, records: DAYTIME_DAY });
+  const route = await compose({ clock: EVENING, preferences: DAYTIME_PREFERENCES, records: DAYTIME_DAY, pins: ['museum'] });
   assert.ok(route.main_stops.some(stop => stop.role === 'culture_stop'), JSON.stringify(route.main_stops.map(s => s.role)));
   // The labels stay withheld: an interleaved day must not print a backwards arc.
   assert.deepEqual(route.daypart_arc, []);

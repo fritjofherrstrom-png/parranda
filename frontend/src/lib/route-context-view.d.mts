@@ -59,8 +59,13 @@ export declare function routePreferenceCoverage(
   requestedPreferences: string[] | null | undefined,
 ): RoutePreferenceCoverage;
 
-export type RouteTimeAnchoring = "full_arc_not_now" | "anchored_trimmed" | null;
+export type RouteTimeAnchoring = "full_arc_not_now" | "anchored_trimmed" | "evening_plan" | null;
 
 export declare function routeTimeAnchoring(
   primaryRoute: { caveats?: string[]; anchored_to_local_time?: boolean } | null | undefined,
 ): RouteTimeAnchoring;
+
+/** Picks an anchored evening plan left for tomorrow, as planner pick keys. */
+export declare function routeDeferredPicks(
+  primaryRoute: { caveats?: string[]; anchored_to_local_time?: boolean; deferred_preferences?: string[] } | null | undefined,
+): string[];

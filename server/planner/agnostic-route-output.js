@@ -733,18 +733,30 @@ function anchorAdaptedBodyToCurrentBand(adaptedBody, currentRank) {
 // band. An explicitly requested experience with unknown hours keeps the full
 // unanchored arc rather than being discarded on typical timing alone. With fewer than two retained
 // candidates, keep the full arc and its explicit not-anchored caveat.
+//
+// An evening plan for today is the exception, for a day with a rhythm. A role
+// whose kind of experience fits the evening (a meal, a view) is planned for
+// tonight, and its hours stay unknown and say so. A requested daytime
+// experience with unknown hours (a museum, a market) is not kept in tonight's
+// plan: it is returned as deferred, to be offered for tomorrow. This applies
+// only when tonight still serves at least one requested interest and keeps two
+// stops; otherwise the full arc and its caveat stand. Pins and known closures
+// keep their own rules.
 function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinnedIds = [], preferences = [], preserveRequestedUnknownTime = false) {
   const candidates = Array.isArray(sourceCandidates) ? sourceCandidates : [];
   const requested = normalizeUserIntents(preferences).intents;
   const currentBand = ["morning", "midday", "afternoon", "evening"][currentRank];
+  const eveningPlan = currentBand === "evening" && preserveRequestedUnknownTime;
   // An explicit "keep this" outranks the typical-timing heuristic. Trimming a
   // pinned place because its role usually happens earlier in the day would drop
   // exactly what the user asked to keep.
   const pins = new Set(Array.isArray(pinnedIds) ? pinnedIds : []);
   const kept = [];
   const trimmedDayparts = [];
+  const deferred = [];
   let retimed = false;
   let retainedUnknownRequestedTime = false;
+  const unchanged = { anchored: false, candidates, trimmedDayparts: [], deferredIntents: [] };
   for (const candidate of candidates) {
     const role = candidate?.role || (Array.isArray(candidate?.route_roles) ? candidate.route_roles[0] : null);
     const daypart = daypartForRole(role || null);
@@ -753,24 +765,39 @@ function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinn
       candidate.availability.status === "available_in_window";
     const requestedExperience = Array.isArray(candidate?.covered_preferences) &&
       requested.some(intent => candidate.covered_preferences.includes(intent));
-    if (rank !== null && rank < currentRank && currentBand && sourceAvailable && requestedExperience) {
+    const notKnownClosed = candidate?.availability?.eligible !== false;
+    const passed = rank !== null && rank < currentRank;
+    if (passed && currentBand && sourceAvailable && requestedExperience) {
       kept.push({ ...candidate, anchored_daypart: currentBand });
       retimed = true;
-    } else if (preserveRequestedUnknownTime && rank !== null && rank < currentRank && requestedExperience && candidate?.availability?.eligible !== false) {
+    } else if (eveningPlan && passed && notKnownClosed && knownLastDaypartForRole(role || null) === "evening") {
+      kept.push({ ...candidate, anchored_daypart: "evening" });
+      retimed = true;
+    } else if (eveningPlan && passed && requestedExperience && notKnownClosed && !pins.has(String(candidate?.id ?? ""))) {
+      deferred.push(candidate);
+      if (!trimmedDayparts.includes(daypart)) trimmedDayparts.push(daypart);
+    } else if (preserveRequestedUnknownTime && passed && requestedExperience && notKnownClosed) {
       // Typical timing is not a source closure. Keep the explicit experience
       // with unknown hours, but do not claim this full arc is anchored to now.
       kept.push(candidate);
       retainedUnknownRequestedTime = true;
-    } else if (rank !== null && rank < currentRank && !pins.has(String(candidate?.id ?? ""))) {
+    } else if (passed && !pins.has(String(candidate?.id ?? ""))) {
       if (!trimmedDayparts.includes(daypart)) trimmedDayparts.push(daypart);
     } else {
       kept.push(candidate);
     }
   }
   if (kept.length < 2 || retainedUnknownRequestedTime || (kept.length === candidates.length && !retimed)) {
-    return { anchored: false, candidates, trimmedDayparts: [] };
+    return unchanged;
   }
-  return { anchored: true, candidates: kept, trimmedDayparts };
+  const coveredTonight = new Set(kept.flatMap(candidate =>
+    Array.isArray(candidate?.covered_preferences) ? candidate.covered_preferences : []));
+  // Tonight must serve something the reader asked for; an evening of places
+  // they did not choose is not a plan for their interests.
+  if (deferred.length && !requested.some(intent => coveredTonight.has(intent))) return unchanged;
+  const deferredIntents = [...new Set(deferred.flatMap(candidate => candidate.covered_preferences))]
+    .filter(intent => requested.includes(intent) && !coveredTonight.has(intent)).sort();
+  return { anchored: true, candidates: kept, trimmedDayparts, deferredIntents };
 }
 
 function buildRouteDaypartHonesty({
@@ -778,9 +805,15 @@ function buildRouteDaypartHonesty({
   currentTimeBand = null,
   anchoredToLocalTime = false,
   trimmedDayparts = [],
+  deferredPreferences = [],
   stopRoles = [],
 } = {}) {
   const arc = (Array.isArray(daypartArc) ? daypartArc : []).filter(Boolean);
+  // Requested daytime experiences an evening plan left for tomorrow, in the
+  // stops' own preference vocabulary. Only an anchored evening carries them.
+  const deferred = anchoredToLocalTime && Array.isArray(deferredPreferences)
+    ? [...new Set(deferredPreferences.filter(value => typeof value === "string" && value))]
+    : [];
   const currentRank = timeBandRank(currentTimeBand);
   // A balanced day that interleaves bands withholds its arc labels, but its
   // stops still say whether the day leads with dayparts already past (review,
@@ -795,11 +828,13 @@ function buildRouteDaypartHonesty({
   if (!anchoredToLocalTime && currentRank !== null && earliestRank !== null && earliestRank < currentRank) {
     caveats.push("daypart_arc_precedes_local_time");
   }
+  if (deferred.length) caveats.push("daytime_picks_left_for_tomorrow");
   return {
     daypart_arc: arc,
     current_local_time_band: currentRank !== null ? currentTimeBand : null,
     anchored_to_local_time: Boolean(anchoredToLocalTime),
     trimmed_dayparts: Array.isArray(trimmedDayparts) ? [...new Set(trimmedDayparts.filter(Boolean))] : [],
+    ...(deferred.length ? { deferred_preferences: deferred } : {}),
     caveats,
   };
 }
@@ -1804,6 +1839,7 @@ async function composeAgnosticRouteViaEngine({
   async function finalize(pins) {
     let anchored = timeAnchoring.anchored;
     let trimmed = timeAnchoring.trimmedDayparts;
+    let deferred = timeAnchoring.deferredIntents || [];
     let repairApplied = false;
     let day = await runEngine(timeAnchoring.candidates, pins);
     let route = (day && day.primary_route) || null;
@@ -1815,6 +1851,7 @@ async function composeAgnosticRouteViaEngine({
       route = (day && day.primary_route) || null;
       anchored = false;
       trimmed = [];
+      deferred = [];
     }
 
     if (
@@ -1842,6 +1879,7 @@ async function composeAgnosticRouteViaEngine({
         route = repairedRoute;
         anchored = capacityAnchoring.anchored;
         trimmed = capacityAnchoring.trimmedDayparts;
+        deferred = capacityAnchoring.deferredIntents || [];
         repairApplied = true;
       }
     }
@@ -1870,6 +1908,7 @@ async function composeAgnosticRouteViaEngine({
             preservesReplacementQuality(route,trialRoute,preferences)) {
           day = trialDay;
           route = trialRoute;
+          if (anchored) deferred = trialAnchoring.deferredIntents || [];
           repairApplied = true;
         }
         if (!shouldTryCapacityRepair(route,walkingKmTarget)) break;
@@ -1887,6 +1926,7 @@ async function composeAgnosticRouteViaEngine({
       route: weave.route,
       anchored,
       trimmed,
+      deferred,
       repairApplied,
       weave: weave.outcome,
     };
@@ -1942,6 +1982,7 @@ async function composeAgnosticRouteViaEngine({
   let engineRoute = finalized.route;
   let anchoredToLocalTime = finalized.anchored;
   let trimmedDayparts = finalized.trimmed;
+  const deferredPreferences = finalized.deferred || [];
   const capacityRepairApplied = finalized.repairApplied;
   // WHY each unmet commitment went unmet, named at the only layer that can tell
   // the causes apart: the reservoir, what reached the composer, and what the
@@ -2020,6 +2061,7 @@ async function composeAgnosticRouteViaEngine({
       currentTimeBand,
       anchoredToLocalTime,
       trimmedDayparts,
+      deferredPreferences,
       stopRoles: (Array.isArray(engineRoute.main_stops) ? engineRoute.main_stops : []).map(stop => stop?.role),
     });
     Object.assign(engineRoute, daypartHonesty, {
