@@ -1,10 +1,9 @@
 /**
  * The planner's map. It follows the same authority hierarchy as the copy:
  *
- *   - a composed day gets numbered primary-route markers joined in order. The
- *     line is solid only when the route carries walking geometry; a line made of
- *     the stops' own coordinates is drawn dotted, because straight segments
- *     crossing water and buildings are not a walking path Parranda computed;
+ *   - a composed day gets numbered primary-route markers. A solid line appears
+ *     only for explicitly validated pedestrian geometry; unknown or heuristic
+ *     geometry leaves the numbered stops without a fabricated connector;
  *   - optional detour ideas are muted dots, drawn only while the detour list is
  *     open, so a mark on the map is never left without its explanation;
  *   - without a route (candidates only) there is no connecting line and no
@@ -30,7 +29,7 @@
  * Displaced badges retain a dot at their authoritative geographic coordinate.
  * Stops, their order, route geometry and the Maps handoff remain unchanged.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { pinGroupLabel, routeDisplayPath, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
 import { controlAwareView, type FitMark, type MapBox } from "../../lib/route-map-fit.mjs";
@@ -171,6 +170,20 @@ const pointCollection = (points: Array<{ lat: number; lng: number; name?: string
   })),
 });
 
+/** Attribution URLs arrive as data, including when a stored day is restored. */
+function walkingAttribution(value: any): { label: string; url: string; fixMapUrl: string | null } | null {
+  const https = (input: unknown): string | null => {
+    if (typeof input !== "string" || input.length > 2048) return null;
+    try {
+      const url = new URL(input);
+      return url.protocol === "https:" && !url.username && !url.password ? url.href : null;
+    } catch { return null; }
+  };
+  const url = https(value?.url);
+  if (!url || typeof value?.label !== "string" || !value.label.trim() || value.label.length > 120) return null;
+  return { label: value.label.trim(), url, fixMapUrl: https(value.fixMapUrl) };
+}
+
 export default function RouteMap({
   hasPrimaryRoute,
   routeStops,
@@ -178,7 +191,6 @@ export default function RouteMap({
   areas,
   routeContextSuggestions,
   showContext,
-  sketch,
   selectedStopIndex,
   onSelectStop,
   mapExpanded,
@@ -195,7 +207,7 @@ export default function RouteMap({
   routeContextSuggestions: RouteContextSuggestion[];
   /** Draw the optional detour ideas (the detour list is open). */
   showContext: boolean;
-  /** The route line joins the stops' own coordinates — draw it dotted. */
+  /** Legacy overview classification; explicit geometry metadata owns drawing. */
   sketch: boolean;
   /** The open list stop, in route order, if one is selected. */
   selectedStopIndex?: number | null;
@@ -218,6 +230,12 @@ export default function RouteMap({
   still?: boolean;
   t: Translate;
 }) {
+  const walkingPath = useMemo(() => routeDisplayPath(primaryRoute?.map_path_points, {
+    geometrySource: primaryRoute?.geometry_source,
+    geometryMode: primaryRoute?.geometry_mode,
+  }), [primaryRoute?.map_path_points, primaryRoute?.geometry_source, primaryRoute?.geometry_mode]);
+  const hasWalkingPath = hasPrimaryRoute && walkingPath.length > 1;
+  const geometryAttribution = hasWalkingPath ? walkingAttribution(primaryRoute?.geometry_attribution) : null;
   const mapTitle = regionLabel || t("Karta över dagen", "Map of the day");
   const mapTitleRef = useRef(mapTitle);
   mapTitleRef.current = mapTitle;
@@ -602,19 +620,9 @@ export default function RouteMap({
       let contextDots: any = emptyCollection;
       let candidateDots: any = emptyCollection;
       if (hasPrimaryRoute) {
-        const enginePath: Array<{ lat: number; lng: number }> = (Array.isArray(primaryRoute?.map_path_points) ? primaryRoute.map_path_points : [])
-          .filter((point: any) => point && Number.isFinite(point.lat) && Number.isFinite(point.lng))
-          .map((point: any) => ({ lat: point.lat, lng: point.lng }));
-        const geometrySource = primaryRoute && Object.hasOwn(primaryRoute, "geometry_source")
-          ? primaryRoute.geometry_source : primaryRoute?.routing_source;
-        // `sketch` describes the original engine geometry, never these added
-        // presentation points. Detailed walking paths pass through unchanged.
-        const routePath = routeDisplayPath(enginePath.length > 1
-          ? enginePath
-          : drawableRouteStops.map((stop: any) => ({ lat: stop.lat, lng: stop.lng })), {
-          sketch,
-          routingSource: enginePath.length > 1 ? geometrySource : "heuristic",
-        });
+        // No coordinate interpolation or point-count inference: only the
+        // explicit server-validated pedestrian path is drawable as a line.
+        const routePath = walkingPath;
         if (routePath.length > 1) {
           routeLine = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: routePath.map(({ lat, lng }) => [lng, lat]) } };
           routePath.forEach(({ lat, lng }) => marks.push({ lat, lng, avoidControls: false }));
@@ -754,8 +762,8 @@ export default function RouteMap({
       map.getSource(ROUTE_SOURCE)?.setData(routeLine);
       map.getSource(CONTEXT_SOURCE)?.setData(contextDots);
       map.getSource(CANDIDATE_SOURCE)?.setData(candidateDots);
-      // Dotted when the line only joins the stops' own coordinates.
-      map.setPaintProperty("route-line", "line-dasharray", sketch ? [0.2, 2.2] : null);
+      // Unknown geometry has no line; every drawn route is real walking geometry.
+      map.setPaintProperty("route-line", "line-dasharray", null);
       marksRef.current = marks;
       map.resize();
       // A new view starts from no remembered nudges, so the same view always
@@ -771,7 +779,7 @@ export default function RouteMap({
     return () => {
       cancelled = true;
     };
-  }, [areas, primaryRoute, hasPrimaryRoute, routeStops, routeContextSuggestions, showContext, sketch]);
+  }, [areas, primaryRoute, hasPrimaryRoute, routeStops, routeContextSuggestions, showContext, walkingPath]);
 
   // Updating a disclosure should not rebuild or refit the map.
   useEffect(() => { layoutRef.current(); }, [selectedStopIndex]);
@@ -925,11 +933,17 @@ export default function RouteMap({
         </button>
       )}
     </div>
-    {/* The still overview is a picture of the day; how to read its line is
-        said once the map is opened to be read (and in "About this day"). */}
-    {hasPrimaryRoute && sketch && !still && (
-      <p className="mt-1 text-xs leading-relaxed text-parranda-ink-meta">
-        {t("Ruttöversikt · linjen visar stoppens ordning, inte gångvägen.", "Route overview · the line shows stop order, not walking directions.")}
+    {hasPrimaryRoute && (
+      <p className="mt-1 break-words text-xs leading-relaxed text-parranda-ink-meta">
+        {hasWalkingPath
+          ? t("Gångväg", "Walking route")
+          : t("Stoppöversikt · gångväg saknas", "Stop overview · walking path unavailable")}
+        {geometryAttribution && <>
+          {" · "}<a href={geometryAttribution.url} target="_blank" rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-parranda-ink focus-visible:outline-2 focus-visible:outline-parranda-ember">{geometryAttribution.label}</a>
+          {geometryAttribution.fixMapUrl && <>{" · "}<a href={geometryAttribution.fixMapUrl} target="_blank" rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-parranda-ink focus-visible:outline-2 focus-visible:outline-parranda-ember">{t("Rätta kartan", "Fix the map")}</a></>}
+        </>}
       </p>
     )}
     {tilesFailed && (

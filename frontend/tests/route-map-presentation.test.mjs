@@ -3,65 +3,46 @@ import test from "node:test";
 
 import { routeDisplayPath, routeMarkerPresentation, routePathIsSketch } from "../src/lib/route-map-presentation.mjs";
 
-test("an overview connects the original stops in order with shallow display curves", () => {
+const walkingGeometry = { geometrySource: "osrm", geometryMode: "walking" };
+
+test("heuristic and unidentified geometry leave an overview with pins only", () => {
   const stops = [{ lat: 0, lng: 0 }, { lat: 0, lng: 0.01 }, { lat: 0.01, lng: 0.01 }];
   const before = structuredClone(stops);
-  const displayed = routeDisplayPath(stops, { sketch: true, routingSource: "heuristic" });
-
-  assert.ok(Array.isArray(displayed) && displayed.length > stops.length, "overview needs a curved display path");
-  let lastIndex = -1;
-  for (const stop of stops) {
-    const index = displayed.findIndex((point, pointIndex) => pointIndex > lastIndex && point.lat === stop.lat && point.lng === stop.lng);
-    assert.ok(index > lastIndex, "every original stop remains an exact endpoint in route order");
-    lastIndex = index;
+  for (const options of [undefined, { sketch: true, routingSource: "heuristic" },
+    { geometrySource: "heuristic", geometryMode: "walking" }, { geometrySource: "osrm" },
+    { geometrySource: "agnostic_compose", geometryMode: "walking" }]) {
+    assert.deepEqual(routeDisplayPath(stops, options), [], "no display-only connector may imply a walking path");
   }
-  assert.deepEqual(displayed[0], stops[0]);
-  assert.deepEqual(displayed.at(-1), stops.at(-1));
-  const firstLeg = displayed.slice(0, displayed.findIndex((point) => point.lat === stops[1].lat && point.lng === stops[1].lng) + 1);
-  assert.ok(firstLeg.some((point) => Math.abs(point.lat) > 0.0001), "the line between stops is not ruler straight");
-  assert.ok(firstLeg.every((point) => point.lng >= 0 && point.lng <= 0.01 && Math.abs(point.lat) <= 0.0013), "the bow stays local and does not backtrack");
-  assert.deepEqual(stops, before, "display curves must not rewrite route data");
-  assert.deepEqual(displayed, routeDisplayPath(stops, { sketch: true, routingSource: "heuristic" }), "same input gives same sketch");
+  assert.deepEqual(stops, before, "pins-only fallback preserves source coordinates");
 });
 
-test("street walking geometry remains exactly as supplied", () => {
-  const streets = Array.from({ length: 20 }, (_, i) => ({ lat: 55.6 + i * 0.0002, lng: 13 + (i % 2) * 0.0004 }));
-  assert.deepEqual(routeDisplayPath(streets, { sketch: false }), streets);
-  assert.deepEqual(routeDisplayPath(streets), streets, "smoothing requires an explicit sketch classification");
+test("dense geometry without an explicit walking mode cannot become a street line", () => {
+  const dense = Array.from({ length: 20 }, (_, i) => ({ lat: 55.6 + i * 0.0002, lng: 13 + (i % 2) * 0.0004 }));
+  assert.deepEqual(routeDisplayPath(dense), []);
+  assert.deepEqual(routeDisplayPath(dense, { geometrySource: "osrm", geometryMode: "driving" }), []);
+  assert.deepEqual(routeDisplayPath(dense, { geometrySource: "osrm", geometryMode: null }), []);
 });
 
-test('sparse real or unidentified geometry is never bowed by the conservative sketch classifier', () => {
-  const sparse = [{lat:55.6,lng:13}, {lat:55.6002,lng:13.0001}, {lat:55.6002,lng:13.0005}, {lat:55.6005,lng:13.0005}, {lat:55.6007,lng:13.0007}];
-  const sketch = routePathIsSketch(sparse, 3);
-  assert.equal(sketch, true, 'the conservative point-count classifier is not enough evidence to curve a path');
-  for (const routingSource of ['osrm', 'another-street-provider', undefined]) {
-    assert.deepEqual(routeDisplayPath(sparse, {sketch, routingSource}), sparse);
+test("explicit pedestrian geometry retains every coordinate without smoothing", () => {
+  const streets = [{ lat: 55.6, lng: 13 }, { lat: 55.6002, lng: 13 },
+    { lat: 55.6002, lng: 13.001 }, { lat: 55.601, lng: 13.001 }];
+  const before = structuredClone(streets);
+  assert.deepEqual(routeDisplayPath(streets, walkingGeometry), streets);
+  assert.deepEqual(streets, before);
+});
+
+test("a short explicit walking segment is real geometry even with only two points", () => {
+  const short = [{ lat: 55.6, lng: 13 }, { lat: 55.6002, lng: 13 }];
+  assert.deepEqual(routeDisplayPath(short, walkingGeometry), short);
+});
+
+test("malformed pedestrian geometry never joins the remaining valid points", () => {
+  const valid = [{ lat: 55.6, lng: 13 }, { lat: 55.6002, lng: 13 }];
+  for (const bad of [null, { lat: NaN, lng: 12 }, { lat: "55", lng: 12 },
+    { lat: 91, lng: 0 }, { lat: 0, lng: 181 }]) {
+    assert.deepEqual(routeDisplayPath([valid[0], bad, valid[1]], walkingGeometry), []);
   }
-});
-
-test("display paths safely handle empty, invalid and duplicate coordinates", () => {
-  assert.deepEqual(routeDisplayPath(null, { sketch: true, routingSource: "heuristic" }), []);
-  const same = [{ lat: 59.3, lng: 18.1 }, { lat: 59.3, lng: 18.1 }];
-  assert.deepEqual(routeDisplayPath(same, { sketch: true, routingSource: "heuristic" }), same);
-  const displayed = routeDisplayPath([
-    null, { lat: NaN, lng: 12 }, { lat: "55", lng: 12 }, { lat: 91, lng: 0 }, { lat: 0, lng: 181 },
-    { lat: 0, lng: 0 }, { lat: 0, lng: 0.01 },
-  ], { sketch: true, routingSource: "heuristic" });
-  assert.ok(Array.isArray(displayed) && displayed.length > 2);
-  assert.ok(displayed.every((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng) && Math.abs(point.lat) <= 90 && Math.abs(point.lng) <= 180));
-});
-
-test("smoothing is bounded and leaves dateline and polar legs alone", () => {
-  for (const points of [
-    [{ lat: 0, lng: 179.9 }, { lat: 0, lng: -179.9 }],
-    [{ lat: 0, lng: 179.999 }, { lat: -0.1, lng: 179.999 }],
-    [{ lat: 86, lng: 0 }, { lat: 86, lng: 0.01 }],
-    [{ lat: 0, lng: 0 }, { lat: 50, lng: 60 }],
-    Array.from({ length: 150 }, (_, i) => ({ lat: 0, lng: i * 0.001 })),
-  ]) assert.deepEqual(routeDisplayPath(points, { sketch: true, routingSource: "heuristic" }), points);
-  const points = Array.from({ length: 128 }, (_, i) => ({ lat: 0, lng: i * 0.001 }));
-  const displayed = routeDisplayPath(points, { sketch: true, routingSource: "heuristic" });
-  assert.ok(Array.isArray(displayed) && displayed.length <= 2048, "a sketch must not create unbounded map geometry");
+  for (const points of [null, [], [valid[0]]]) assert.deepEqual(routeDisplayPath(points, walkingGeometry), []);
 });
 
 test("a path made only of the route's own waypoints is a sketch, not a street line", () => {
@@ -74,10 +55,12 @@ test("a path made only of the route's own waypoints is a sketch, not a street li
   assert.equal(routePathIsSketch(stops, 3), true);
   // A published start and end are waypoints too.
   assert.equal(routePathIsSketch([{ lat: 55.6, lng: 13 }, ...stops, { lat: 55.6, lng: 13 }], 3), true);
-  // Street geometry carries the turns between the stops.
+  // Extra points alone never establish a pedestrian path.
   const streets = [];
   for (let i = 0; i < 12; i += 1) streets.push({ lat: 55.6 + i * 0.0005, lng: 13 - i * 0.0004 });
-  assert.equal(routePathIsSketch(streets, 3), false);
+  assert.equal(routePathIsSketch(streets, 3), true);
+  assert.equal(routePathIsSketch(streets, 3, walkingGeometry), false);
+  assert.equal(routePathIsSketch(stops.slice(0, 2), 3, walkingGeometry), false);
 });
 
 test("an unreadable or missing path reads as a sketch — never as street geometry", () => {

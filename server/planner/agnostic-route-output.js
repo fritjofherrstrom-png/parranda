@@ -2158,7 +2158,8 @@ async function composeAgnosticRouteViaEngine({
   // final (post-selection, post-weave, public) stop chain with the SAME safety
   // budgets used by agnostic walking validation. Never validate the unordered
   // reservoir or invent a compactness label for the seed.
-  const deferredWalking = (dayEdit || eligibility.checks?.geometry_validation === "engine_walk_pending")
+  const deferredWalking = (dayEdit || eligibility.checks?.geometry_validation === "engine_walk_pending"
+    || (walkingConfig?.defaultProvider === "osrm" && walkingConfig?.transportMode === "foot"))
     ? await validateAgnosticWalkingOrder({
         stops: engineRoute.map_route_points,
         walkingRouter,
@@ -2194,6 +2195,8 @@ async function composeAgnosticRouteViaEngine({
       legs: deferredWalking.result.legs,
       map_path_points: deferredWalking.result.pathPoints,
       geometry_source: deferredWalking.result.source || null,
+      geometry_mode: deferredWalking.result.mode === "walking" ? "walking" : null,
+      geometry_attribution: deferredWalking.result.attribution || null,
       longest_leg_km: metrics.longestLegKm,
       longest_leg_minutes: Math.max(...legMinutes),
       average_leg_minutes: Math.round(legMinutes.reduce((sum, value) => sum + value, 0) / legMinutes.length),
@@ -2206,6 +2209,8 @@ async function composeAgnosticRouteViaEngine({
     eligibility.checks.geometry_validation = "engine_walk_validated";
     if (deferredWalking.checks.walking_source === "heuristic" || deferredWalking.checks.fallback_used) {
       eligibility.caveats = dedupe([...eligibility.caveats, "heuristic_walking_estimate"]);
+      engineRoute.caveats = dedupe([...(engineRoute.caveats || []), "heuristic_walking_estimate",
+        ...(deferredWalking.checks.fallback_used ? ["walking_router_fallback_used"] : [])]);
     }
   }
 

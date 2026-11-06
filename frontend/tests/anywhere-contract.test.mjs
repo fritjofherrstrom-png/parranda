@@ -280,10 +280,8 @@ test("map hierarchy mirrors route authority instead of numbering two competing p
   // mark on the map is left without its explanation.
   assert.match(routeMapSource, /if \(showContext\) \{\s*const shown = routeContextSuggestions\.filter/);
   assert.match(componentSource("AnywherePlanner.tsx"), /showContext=\{detoursOpen\}/);
-  // A line joining the stops' own coordinates is drawn as a sketch (dotted),
-  // never as a street path Parranda did not compute.
-  assert.match(routeMapSource, /"line-dasharray", sketch \? \[[\d., ]+\] : null/);
-  assert.match(componentSource("AnywherePlanner.tsx"), /routePathIsSketch\(primaryRoute\?\.map_path_points, routeStops\.length\)/);
+  // Real geometry versus pins-only fallback is exercised in the presentation
+  // and rendered walking-map tests; point count does not establish mode.
 });
 
 test("map controls preserve provider attribution space", () => {

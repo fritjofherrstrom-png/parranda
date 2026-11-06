@@ -71,3 +71,5 @@ export declare function buildSavedEntry(options?: {
 export declare function upsertSaved(list: SavedEntry[] | null | undefined, entry: SavedEntry): SavedEntry[];
 
 export declare function removeSaved(list: SavedEntry[] | null | undefined, id: string): SavedEntry[];
+
+export declare function isSavedEntryVersion(saved: SavedEntry | null | undefined, current: SavedEntry | null | undefined): boolean;
