@@ -161,6 +161,7 @@ function createSearxngSourceSearch({
           endpointOrigin,
           language,
           perQueryLimit,
+          topicTerms: eventSearchTopicTerms(item, place),
           fetcher,
           timeoutMs,
           maxBytes,
@@ -277,6 +278,7 @@ async function executeSourceSearchQuery({
   endpointOrigin,
   language,
   perQueryLimit,
+  topicTerms,
   fetcher,
   timeoutMs,
   maxBytes,
@@ -288,13 +290,14 @@ async function executeSourceSearchQuery({
   cache,
 }) {
   const query = item.query;
-  const key = searchCacheKey(normalizedEndpoint, query, language, perQueryLimit);
+  const key = searchCacheKey(normalizedEndpoint, query, language, perQueryLimit, topicTerms);
   const producer = () => runQueryWithRetry({
     signal,
     endpoint: normalizedEndpoint,
     endpointOrigin,
     query,
     language,
+    topicTerms,
     fetcher,
     timeoutMs,
     maxBytes,
@@ -381,6 +384,27 @@ function compactPlanToken(value, fallback) {
   return /^[a-z0-9_]{1,40}$/.test(token) ? token : fallback;
 }
 
+function eventSearchTopicTerms(item, place) {
+  if (!["local_discovery", "local_rhythm", "generic_events", "generic_calendar", "generic_festival"].includes(item.query_family)) return [];
+  return uniqueStrings([
+    ...(Array.isArray(place?.local_discovery_terms) ? place.local_discovery_terms.slice(0, 8) : []),
+    ...(Array.isArray(place?.local_rhythm_discovery_terms) ? place.local_rhythm_discovery_terms.slice(0, 2) : []),
+    "events", "calendar", "festival",
+  ]).map(term => normalizeTopicText(term.slice(0, 80))).filter(Boolean).sort();
+}
+
+function normalizeTopicText(value) {
+  return value.replace(/<[^>]*>/g, " ").normalize("NFKD").replace(/\p{M}/gu, "")
+    .toLocaleLowerCase("en-US").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+function hasEventSearchHint(row, terms) {
+  if (!row || !terms.length) return false;
+  const text = ` ${normalizeTopicText([row.url, row.title, row.content]
+    .map(value => typeof value === "string" ? value.slice(0, 2000) : "").join(" "))} `;
+  return terms.some(term => [term, `${term}s`, `${term}es`].some(word => text.includes(` ${word} `)));
+}
+
 // One bounded retry for provider trouble a later attempt may resolve. This is
 // not a polling loop: the real recovery for a degraded provider is the scout
 // target's own bounded retry, minutes later.
@@ -417,6 +441,7 @@ async function fetchSearxngQuery({
   endpointOrigin,
   query,
   language,
+  topicTerms,
   fetcher,
   timeoutMs,
   maxBytes,
@@ -456,10 +481,15 @@ async function fetchSearxngQuery({
   const engineFailureCount = unresponsiveEngineCount(payload.unresponsive_engines);
   const engineNames = unresponsiveEngineNames(payload.unresponsive_engines);
   const rawResultCount = payload.results.length;
+  // Search snippets are inspection hints only, never event facts or authority.
+  // Within the existing per-query cap, prefer explicit programme hints over
+  // generic place guides. Keep provider order for ties and non-event queries.
   const results = payload.results
-    .map((row) => normalizeSearchResult(row))
-    .filter(Boolean)
-    .slice(0, limit);
+    .map((row, index) => ({ result: normalizeSearchResult(row), index, relevant: hasEventSearchHint(row, topicTerms) }))
+    .filter(row => row.result)
+    .sort((a, b) => Number(b.relevant) - Number(a.relevant) || a.index - b.index)
+    .slice(0, limit)
+    .map(row => row.result);
 
   // Four distinct truths, deliberately not collapsed:
   //   results + healthy engines        -> ok
@@ -784,12 +814,14 @@ function normalizeSearchFailure(value) {
   return "source_search_failed";
 }
 
-function searchCacheKey(endpoint, query, language, limit) {
+function searchCacheKey(endpoint, query, language, limit, topicTerms) {
   // Key on the request Parranda actually sends. The raw hint and the
   // normalized language differ ("cs-CZ" vs "cs-cz"), and a raised per-query
-  // limit is a different request, not a cache hit.
+  // limit is a different request, not a cache hit. Topic policy/terms also
+  // determine the retained prefix; legacy or different-context answers cannot
+  // attest that selection, even when the external request is unchanged.
   return createHash("sha256")
-    .update(`${endpoint}|${normalizeSearchLanguage(language)}|${limit}|${query.trim().toLowerCase()}`)
+    .update(JSON.stringify(["event-topic-prefix-v1", endpoint, normalizeSearchLanguage(language), limit, query.trim().toLowerCase(), topicTerms]))
     .digest("hex");
 }
 

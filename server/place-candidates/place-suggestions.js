@@ -93,7 +93,7 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
  const jobs=new Map();
  const budgetMs=Math.max(1,Math.min(5000,Number(timeoutMs)||5000));
  let pending=0,lastStarted=-Infinity,tail=Promise.resolve();
- async function acquire(query,context,ownerSignal,deadline) {
+ async function acquire(query,context,ownerSignal,deadline,rememberFallback) {
   if(pending>=4)return {status:'busy',choices:[],retry_after_ms:1000};
   pending++;
   let started=false,released=false;
@@ -106,10 +106,10 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
    try {
     let canonical=[];
     for(const language of [null,'en']) {
-     if(ownerSignal.aborted || performance.now()>=deadline)return {status:'unavailable',choices:[]};
+     if(ownerSignal.aborted || performance.now()>=deadline)return fallback||{status:'unavailable',choices:[]};
      const wait=Math.max(0,lastStarted+minIntervalMs-performance.now());
      if(wait)await untilAbort(sleep(wait),ownerSignal);
-     if(ownerSignal.aborted || performance.now()>=deadline)return {status:'unavailable',choices:[]};
+     if(ownerSignal.aborted || performance.now()>=deadline)return fallback||{status:'unavailable',choices:[]};
      lastStarted=performance.now();
      const url=new URL(endpoint);url.searchParams.set('q',query);url.searchParams.set('limit',String(PROVIDER_LIMIT));
      LAYERS.forEach(layer=>url.searchParams.append('layer',layer));
@@ -123,7 +123,7 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
      if(response.status===429)return fallback||{status:'busy',choices:[],retry_after_ms:1000};
      if(!response.ok)return fallback||{status:'unavailable',choices:[]};
      const data=await untilAbort(response.json(),ownerSignal);
-     if(ownerSignal.aborted || performance.now()>=deadline)return {status:'unavailable',choices:[]};
+     if(ownerSignal.aborted || performance.now()>=deadline)return fallback||{status:'unavailable',choices:[]};
      if(!Array.isArray(data?.features))return fallback||{status:'unavailable',choices:[]};
      const seen=new Set();const choices=[];
      for(const feature of data.features.slice(0,30)) {
@@ -133,7 +133,10 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
      if(language)return {status:'ready',choices:rankChoices(joinMatchingNames(canonical,choices),query)};
      canonical=choices;
      if(needsEnglishNames(choices,query)) {
-      fallback={status:'ready',choices:rankChoices(choices,query),cacheable:false};
+      // Without matching names the native city may appear fuzzy. Keep Photon
+      // order instead of hiding it behind five exact-name smaller places.
+      fallback={status:'ready',choices:choices.slice(0,VISIBLE_LIMIT),cacheable:false};
+      rememberFallback(fallback);
      } else return {status:'ready',choices:rankChoices(choices,query)};
     }
    }catch(_){return !ownerSignal.aborted&&fallback?fallback:{status:'unavailable',choices:[]};}finally{
@@ -158,14 +161,20 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
   if(!job){
    const controller=new AbortController();
    const deadline=performance.now()+budgetMs;
-   const timer=setTimeout(()=>controller.abort(),budgetMs);
-   job={controller,owners:new Set(),done:false,promise:null};
+   const timer=setTimeout(()=>controller.abort('suggestions_deadline'),budgetMs);
+   job={controller,owners:new Set(),done:false,promise:null,fallback:null};
    jobs.set(key,job);
-   const produced=cache.get(key,()=>acquire(query,context,controller.signal,deadline),{
+   const currentJob=job;
+   const produced=cache.get(key,()=>acquire(query,context,controller.signal,deadline,value=>{currentJob.fallback=value;}),{
     shouldStore:value=>value.status==='ready' && value.cacheable!==false && performance.now()<deadline,signal:controller.signal,
    });
    job.promise=untilAbort(produced,controller.signal)
-   .then(value=>{job.done=true;return value;},()=>{job.done=true;return {status:'unavailable',choices:[]};}).finally(()=>{
+   .then(value=>{job.done=true;return value;},()=>{
+    job.done=true;
+    // Only our deadline may retain a completed page. Explicitly abandoned
+    // owners still settle unavailable and never populate the ready cache.
+    return controller.signal.reason==='suggestions_deadline'&&job.fallback?job.fallback:{status:'unavailable',choices:[]};
+   }).finally(()=>{
     clearTimeout(timer);
     if(jobs.get(key)===job)jobs.delete(key);
    });
