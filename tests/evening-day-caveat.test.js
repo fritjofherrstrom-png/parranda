@@ -56,16 +56,16 @@ async function compose({ clock, preferences, records, date = DATE, pins = [] }) 
   }
 }
 
-// A pinned museum keeps the day's daytime stops in the evening (an evening
-// plan never drops a pin), so the day says it is not anchored to now.
-test('an evening day that keeps daytime stops says it is not anchored to now', async () => {
-  const route = await compose({ clock: EVENING, preferences: DAYTIME_PREFERENCES, records: DAYTIME_DAY, pins: ['museum'] });
+// An evening plan keeps the daytime stops the reader asked for and says their
+// hours tonight are unconfirmed, instead of calling the day not anchored.
+test('an evening day that keeps daytime stops names them as unconfirmed tonight', async () => {
+  const route = await compose({ clock: EVENING, preferences: DAYTIME_PREFERENCES, records: DAYTIME_DAY });
   assert.ok(route.main_stops.some(stop => stop.role === 'culture_stop'), JSON.stringify(route.main_stops.map(s => s.role)));
-  // The labels stay withheld: an interleaved day must not print a backwards arc.
-  assert.deepEqual(route.daypart_arc, []);
+  // No backwards arc: every stop in tonight's plan reads as evening.
+  assert.ok(route.daypart_arc.every(daypart => daypart === 'evening'), JSON.stringify(route.daypart_arc));
   assert.equal(route.current_local_time_band, 'evening');
-  assert.equal(route.anchored_to_local_time, false);
-  assert.ok(route.caveats.includes('daypart_arc_precedes_local_time'), JSON.stringify(route.caveats));
+  assert.ok(route.caveats.includes('picks_unconfirmed_tonight'), JSON.stringify(route.caveats));
+  assert.ok(!route.caveats.includes('daypart_arc_precedes_local_time'), JSON.stringify(route.caveats));
 });
 
 test('dinner and bars in the evening carry no such note; a meal may be dinner', async () => {

@@ -89,8 +89,8 @@ test('dinner and a view at 20:30 read as tonight, not as a day already past', as
   assert.ok(!route.caveats.includes('daypart_arc_precedes_local_time'), JSON.stringify({ roles, caveats: route.caveats }));
 });
 
-test('a museum requested at 20:30 with unknown hours still says the day is not anchored', async () => {
+test('a museum requested at 20:30 with unknown hours is not presented as fitting tonight', async () => {
   const route = await compose({ clock: EVENING, preferences: ['culture'], records: DAYTIME_DAY });
-  assert.equal(route.anchored_to_local_time, false);
-  assert.ok(route.caveats.includes('daypart_arc_precedes_local_time'), JSON.stringify(route.caveats));
+  assert.ok(route.caveats.includes('picks_unconfirmed_tonight'), JSON.stringify(route.caveats));
+  assert.deepEqual(route.unconfirmed_tonight_preferences, ['museums']);
 });

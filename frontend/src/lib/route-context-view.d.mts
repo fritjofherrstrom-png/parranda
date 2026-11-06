@@ -65,7 +65,7 @@ export declare function routeTimeAnchoring(
   primaryRoute: { caveats?: string[]; anchored_to_local_time?: boolean } | null | undefined,
 ): RouteTimeAnchoring;
 
-/** Picks an anchored evening plan left for tomorrow, as planner pick keys. */
-export declare function routeDeferredPicks(
-  primaryRoute: { caveats?: string[]; anchored_to_local_time?: boolean; deferred_preferences?: string[] } | null | undefined,
+/** Picks an anchored evening plan keeps with unconfirmed hours tonight, as planner pick keys. */
+export declare function routeUnconfirmedTonightPicks(
+  primaryRoute: { caveats?: string[]; anchored_to_local_time?: boolean; unconfirmed_tonight_preferences?: string[] } | null | undefined,
 ): string[];

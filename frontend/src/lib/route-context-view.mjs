@@ -204,8 +204,8 @@ export function routePreferenceCoverage(routeStops, requestedPreferences) {
  *                         trusted local time (caveat daypart_arc_precedes_local_time)
  *   "anchored_trimmed"  → the day was anchored to now and already-past dayparts
  *                         were dropped (caveat day_anchored_to_current_time)
- *   "evening_plan"      → an anchored evening that left requested daytime picks
- *                         for tomorrow (caveat daytime_picks_left_for_tomorrow)
+ *   "evening_plan"      → an anchored evening that keeps picks whose hours
+ *                         tonight are unconfirmed (caveat picks_unconfirmed_tonight)
  *   null                → no time-anchoring claim (unknown timezone, future
  *                         plan, or no caveat) — render nothing, never guess.
  * Only these known caveat tokens are consulted; anything else is ignored so
@@ -215,19 +215,19 @@ export function routeTimeAnchoring(primaryRoute) {
   const caveats = Array.isArray(primaryRoute && primaryRoute.caveats) ? primaryRoute.caveats : [];
   if (caveats.includes("daypart_arc_precedes_local_time")) return "full_arc_not_now";
   if (caveats.includes("day_anchored_to_current_time") || primaryRoute?.anchored_to_local_time === true) {
-    return caveats.includes("daytime_picks_left_for_tomorrow") ? "evening_plan" : "anchored_trimmed";
+    return caveats.includes("picks_unconfirmed_tonight") ? "evening_plan" : "anchored_trimmed";
   }
   return null;
 }
 
 /**
- * The reader's picks an evening plan left for tomorrow, in the planner's own
- * pick vocabulary. Read only from an anchored evening that says so; anything
- * else gives none.
+ * The reader's picks an evening plan keeps although their hours tonight are
+ * unconfirmed, in the planner's own pick vocabulary. Read only from an anchored
+ * evening that says so; anything else gives none.
  */
-export function routeDeferredPicks(primaryRoute) {
+export function routeUnconfirmedTonightPicks(primaryRoute) {
   if (routeTimeAnchoring(primaryRoute) !== "evening_plan") return [];
-  const values = Array.isArray(primaryRoute?.deferred_preferences) ? primaryRoute.deferred_preferences : [];
+  const values = Array.isArray(primaryRoute?.unconfirmed_tonight_preferences) ? primaryRoute.unconfirmed_tonight_preferences : [];
   const picks = [];
   for (const value of values) {
     const key = text(value);

@@ -233,12 +233,12 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 - **#276** makes the daypart rhythm **active**: a today-dated request with a trusted timezone is *anchored to now* — already-past dayparts are dropped so the day starts at the current local band instead of always at the morning (`anchored_to_local_time` + `trimmed_dayparts` + a `day_anchored_to_current_time` caveat). A future-dated request is a plan and keeps the full arc untouched (this also fixes the #275 caveat so a future morning is no longer flagged as "already past"). Conservative: anchoring never thins the day below two stops — if it would, the full arc is kept and the #275 not-anchored caveat stands. Only the trusted, timezone-resolved band drives this; tz unknown → positional arc. Flag-gated; default Planner / citypack untouched. No fabricated clock times — daypart bands only.
 
   **An evening plan for today** applies to a day with a rhythm (the planner always sends one).
-  - Roles whose kind of experience fits the evening (a meal, a view) are planned for tonight. Their daypart becomes `evening`, and their hours stay unknown and say so.
-  - A requested daytime experience with unknown hours (a museum, a market) is not kept in tonight's plan. It is published as `deferred_preferences` (the stops' preference vocabulary) with a `daytime_picks_left_for_tomorrow` caveat, and the day is anchored (`day_anchored_to_current_time`).
-  - Known closures are never planned for tonight, and a pinned place is never deferred.
-  - If tonight would serve none of the reader's requested interests, or would keep fewer than two stops, the full arc and its #275 caveat stand.
-  - The client shows a deferred pick as "tomorrow", not "not in this day".
-  - The decision is a heuristic about kinds of experience. It claims no opening hours.
+  - Roles whose kind of experience fits the evening (a meal, a view) are planned for tonight. Requested picks are never moved to another date.
+  - A requested pick served only by places whose kind usually fits the daytime (a museum, a market) stays in tonight's plan, because unknown hours do not mean "daytime only". A place that serves the pick only partly still serves it. The pick is published as `unconfirmed_tonight_preferences` (the stops' preference vocabulary) with a `picks_unconfirmed_tonight` caveat. The client says "<pick>: tonight's opening hours are unknown — check before you go", the same way for one pick or several.
+  - Every stop in tonight's plan reads as `evening`, and the day is anchored (`day_anchored_to_current_time`).
+  - Non-requested daytime places are trimmed as at any band. Known closures are never planned for tonight. A plan that would keep fewer than two stops keeps the full arc and its #275 caveat.
+  - Planning tomorrow instead is the reader's explicit choice, not the engine's.
+  - The kind-of-experience reading is a heuristic. It ranks and explains; it claims no opening hours.
 
 - **#277** adds the first **composition-richness** role: a daytime `culture_stop` (museum / gallery). The `museums` intent and museum/gallery loader types already existed, so a requested "museums"/"culture" preference used to be silently dropped (no role to fill); now it fills an honest midday cultural stop (or surfaces as an unresolved role). The role lives in an experiment-only spec gated on the same seam as #270/#272 — it never appears in the shared planner-role enumeration, so citypack/default inspect sidecars are byte-identical.
 
