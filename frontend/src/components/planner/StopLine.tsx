@@ -19,6 +19,7 @@ import { stopIdentity as changeStopIdentity } from "../../lib/day-change.mjs";
 import { lineProgress } from "../../lib/line-progress.mjs";
 import { eventSourceLink } from "../../lib/pulse-view.mjs";
 import LiveEventTiming from "./LiveEventTiming";
+import VenueMentions from "./VenueMentions";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { selectedDayHoursLabel } from "../../lib/selected-day-hours.mjs";
 import { stopHoursUnknown, stopWebsiteUrl, stopMatchedPreferences, stopPlaceDetails } from "../../lib/stop-card-facts.mjs";
@@ -480,6 +481,7 @@ export default function StopLine({
                       </p>
                     </details>
                   )}
+                  <VenueMentions stop={stop} t={t} lang={lang} />
                 </div>
               )}
             </li>
