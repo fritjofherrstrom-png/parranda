@@ -149,7 +149,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
             }
             if (shown && active >= 0 && event.key === "Enter") { event.preventDefault(); choose(choices[active]); }
           }}
-          placeholder={t("T.ex. Lyon eller Kyoto", "e.g. Lyon or Kyoto")} autoComplete="off"
+          autoComplete="off"
           className="min-w-0 flex-1 bg-transparent text-lg text-parranda-ink outline-hidden placeholder:text-parranda-ink-meta focus-visible:outline-hidden sm:text-xl" />
       </div>
       {selected && selectedOverflows && <span aria-hidden="true" className="mt-2 block text-sm leading-snug text-parranda-ink-muted [overflow-wrap:anywhere] sm:hidden">{value}</span>}
