@@ -186,6 +186,8 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   );
   const commitmentAdmissibleIds = [...commitmentAdmission]
     .filter(([, allowed]) => allowed).map(([id]) => id);
+  // Private opt-in projection before the role cut; never publish raw rows.
+  helpers.onSearchCandidates?.(roleCandidatePool.pool.map(entry => entry.candidate));
 
   // Collected across roles and returned as a SIBLING of `roles`, never on a
   // role entry: buildPlannerCandidateInspectSidecar emits `roles` verbatim, so

@@ -300,6 +300,7 @@ function mapOvertureRow(row, { minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
   const brand = String(row.brand || "").trim() || null;
   const website = firstHttpUrl(row.websites);
   const details = normalizePlaceDetails({ kind: OVERTURE_KINDS[row.category] }, mapping.type);
+  const searchFacets = require('./place-search-facets').overturePlaceSearchFacets(row.category);
   return {
     id: `overture-${id}`,
     name,
@@ -320,6 +321,7 @@ function mapOvertureRow(row, { minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
     operational_reasons: operational.reasons,
     ...(website ? { website } : {}),
     ...(details ? { place_details: details } : {}),
+    ...(searchFacets ? { search_facets: searchFacets } : {}),
   };
 }
 

@@ -72,6 +72,30 @@ test('projects a real final promoted typed publication, not its diagnostic trial
   captureEvidence('ordinary',published,projected,intent(),privacy());
 });
 
+for (const action of ['add', 'replace']) test(`exact ${action} survives authoritative publication and portable hydration`, async () => {
+  const baseline = await publication();
+  const original = baseline.days[0].primary_route.main_stops;
+  const chosen = records().find(row => row.type === 'restaurant' && !original.some(stop => stop.id === row.id)).id;
+  const target = original.find(stop => stop.type === 'restaurant') || original[0];
+  const retained = original.filter(stop => action === 'add' || stop.id !== target.id).map(stop => stop.id);
+  const command = { version: 1, action, candidate_id: action === 'add' ? chosen : target.id,
+    retained_candidate_ids: retained, target_stop_count: retained.length + 1,
+    slot_index: Math.min(5, action === 'add' ? original.length : original.indexOf(target)),
+    replacement_preference: null, removed_candidate_ids: action === 'add' ? [] : [target.id],
+    ...(action === 'replace' ? { replacement_candidate_id: chosen } : {}) };
+  const excluded = command.removed_candidate_ids;
+  const published = await publication({ day_edit: command, excluded_candidate_ids: excluded, pinned_candidate_ids: [chosen] });
+  assert.equal(published.agnostic_route_output_experiment.day_edit.status, 'applied');
+  const projected = projectPublishedDay({ published, intent: { ...intent(), dayEdit: command,
+    excludedCandidateIds: excluded, pinnedCandidateIds: [chosen] }, privacy: privacy(), language: 'en' });
+  assert.ok(projected, 'an exact chosen day must remain publishable');
+  const { parsePublishedDay } = await import('../frontend/src/lib/published-day.mjs');
+  const now = Date.parse(`${DATE}T10:00:00Z`), ref = 'a'.repeat(48);
+  const snapshot = { version: 1, ref, created_at: new Date(now).toISOString(), expires_at: new Date(now + 60000).toISOString(), ...projected };
+  assert.ok(parsePublishedDay(snapshot, { ref, decision: require('../anywhere-render-decision'), now }), 'the client accepts the same immutable edited generation');
+  assert.deepEqual(projected.result.days[0].primary_route.main_stops.map(stop => stop.id), published.days[0].primary_route.main_stops.map(stop => stop.id));
+});
+
 test('the trusted selected-day forecast survives exact public-day projection with ordinary weather', async () => {
   const published = await publication({ weather: { maxTemp: 99, rawCode: 95 } }, {
     weatherProvider: async () => ({ maxTemp: 21, rawCode: 3, condition: 'clouds', source: 'controlled-provider', stale: false,

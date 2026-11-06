@@ -14,6 +14,8 @@ import type { Commitments } from "./planner/commitments";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { normalizeDayEdit, normalizePreferencePriority, togglePreferenceSelection, type DayEdit } from "../../../shared/planner-intent.mjs";
 import { fetchPlannerLifecycle } from '../lib/planner-lifecycle.mjs';
+import { buildDayPlacePayload, requestDayPlace, validDayPlacePreview, releaseAddedDayEdit, type DayPlaceAnswer } from '../lib/day-place-preview.mjs';
+import type { DayPlaceSearchItem } from '../../../shared/day-place-search.mjs';
 import {
   buildAnywherePayload,
   ANYWHERE_PREFERENCES,
@@ -102,6 +104,7 @@ import LiveSheet from "./planner/LiveSheet";
 import { selectedDayEmpty, useLiveFallback } from "./planner/useLiveFallback";
 import SavedDays from "./planner/SavedDays";
 import StopLine from "./planner/StopLine";
+import AddPlace, { type PlacePreview } from './planner/AddPlace';
 import { pickLabel, unkeptReasonSentence, type Lang } from "./planner/copy";
 import type { LiveEvents, PlaceStructure, PulseEvent } from "./planner/types";
 
@@ -423,6 +426,31 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setLiveSheetScope("around_place");
   }, [safeResponse]);
   const lastEntryRef = useRef<SavedEntry | null>(null); // the latest composed day, for "save"
+  const [placeSearchItems, setPlaceSearchItems] = useState<DayPlaceSearchItem[]>([]);
+  const [placeSearchDone, setPlaceSearchDone] = useState(false);
+  const [placeSearchBusy, setPlaceSearchBusy] = useState(false);
+  const [placeSearchError, setPlaceSearchError] = useState<string | null>(null);
+  const [placePreview, setPlacePreview] = useState<PlacePreview | null>(null);
+  const placeRequestRef = useRef<AbortController | null>(null);
+  const placeCancelRef = useRef<(() => void) | null>(null);
+  const placeRequestSequenceRef = useRef(0);
+  const placeContextRef = useRef('');
+  placeContextRef.current = JSON.stringify([selected, preferencePriority, dayOffset, walkKey, commitments, dayEdit, mode, place, placeSelection, restoredAt, lang]);
+  const placePreviewRef = useRef<{ current: () => boolean; anchor: Anchor; entry: SavedEntry;
+    prepared: ReturnType<typeof buildDayPlacePayload>; answer: DayPlaceAnswer } | null>(null);
+
+  function cancelPlaceSearch(clearItems = false) {
+    placeCancelRef.current?.(); placeCancelRef.current = null;
+    placeRequestRef.current?.abort(); placeRequestRef.current = null;
+    placeRequestSequenceRef.current++;
+    placePreviewRef.current = null;
+    setPlaceSearchBusy(false); setPlacePreview(null); setPlaceSearchError(null);
+    if (clearItems) { setPlaceSearchItems([]); setPlaceSearchDone(false); }
+  }
+  useEffect(() => {
+    cancelPlaceSearch(true);
+    return () => { placeCancelRef.current?.(); placeRequestRef.current?.abort(); };
+  }, [safeResponse, completedLive, selected, preferencePriority, dayOffset, walkKey, commitments, dayEdit, restoredAt, lang, mode, place]);
 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
   const typedPlaceLabel = place.trim();
@@ -473,6 +501,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       excludedOverride,
       pinnedOverride,
       commitmentsOverride,
+      acceptedPreview,
     }: {
       silent?: boolean;
       langOverride?: Lang;
@@ -485,6 +514,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       excludedOverride?: string[];
       pinnedOverride?: string[];
       commitmentsOverride?: Commitments;
+      acceptedPreview?: DayPlaceAnswer;
     } = {},
   ) {
     if (navigationSuspendedRef.current) return;
@@ -624,12 +654,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         dayRhythm: rhythm.key,
         excludedCandidateIds: [...new Set([
           ...(excludedOverride ?? activeLedger.excludedIds),
-          ...(effectiveDayEdit ? [effectiveDayEdit.candidate_id, ...effectiveDayEdit.removed_candidate_ids] : []),
+          ...(effectiveDayEdit ? [...(effectiveDayEdit.action === 'add' ? [] : [effectiveDayEdit.candidate_id]), ...effectiveDayEdit.removed_candidate_ids] : []),
         ])].filter(id => !id.startsWith("live:")),
         pinnedCandidateIds: sentPinIds.filter(id => !id.startsWith("live:")),
         liveEventChoices: activeLedger.liveEventChoices,
       });
-      const { response, body: rawBody } = await fetchPlannerLifecycle(`/api/route-recommendations?lang=${langOverride ?? lang}&${LIVE_COMPLETION_QUERY}${anchor.coords ? "" : "&include_day_snapshot=1"}`, {
+      const { response, body: rawBody } = acceptedPreview ?? await fetchPlannerLifecycle(`/api/route-recommendations?lang=${langOverride ?? lang}&${LIVE_COMPLETION_QUERY}${anchor.coords ? "" : "&include_day_snapshot=1"}`, {
         payload,
         signal: controller.signal,
         onCancellationReady: (cancel) => {
@@ -791,14 +821,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       if (effectiveDayEdit && (composedNow || acceptedEditedEmpty) && body?.agnostic_route_output_experiment?.day_edit?.status === "applied") {
         const publishedIds = primaryRouteStops(safe)
           .map((stop: any) => String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? ""));
-        persistedDayEdit = normalizeDayEdit({ ...effectiveDayEdit, action: "remove",
+        const { replacement_candidate_id: _chosen, ...replayEdit } = effectiveDayEdit;
+        persistedDayEdit = effectiveDayEdit.action === 'add' ? effectiveDayEdit : normalizeDayEdit({ ...replayEdit, action: "remove",
           retained_candidate_ids: publishedIds, target_stop_count: publishedIds.length, replacement_preference: null });
         dayEditScopeRef.current = { anchorKey: anchorKey(anchor), dateIso: effectiveDateIso };
         if (JSON.stringify(persistedDayEdit) !== JSON.stringify(dayEdit)) {
           adoptedInputsRef.current = true;
           setDayEdit(persistedDayEdit);
         }
-        if (pendingStopEditRef.current) setStopEditFeedback(pendingStopEditRef.current.action);
+        if (pendingStopEditRef.current && pendingStopEditRef.current.action !== 'add') setStopEditFeedback(pendingStopEditRef.current.action);
       }
       const refusalsNow: Array<{ id: string; reason: string | null }> = composedNow ? [
         ...(Array.isArray(body?.agnostic_route_output_experiment?.pinned_candidates?.unhonored) ? body.agnostic_route_output_experiment.pinned_candidates.unhonored : []),
@@ -1046,6 +1077,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   }
 
   const cancelActivePlannerForNavigation = () => {
+    cancelPlaceSearch(true);
     livePlanPendingRef.current = null;
     setLivePlanPending(false);
     navigationSuspendedRef.current = true;
@@ -1290,6 +1322,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setAppliedRefusals(ledger.applies ? ledger.refusals : []);
 
     lastEntryRef.current = previous;
+    const previousPublication = readyPublishedDay(previous.safeResponse?.day_snapshot);
+    setSharePublication(previousPublication ? { entry: previous, publication: previousPublication } : null);
     writeLS(LAST_KEY, previous);
     setClassification(previous.classification);
     installResponse(previous.safeResponse);
@@ -2202,6 +2236,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // in the day" — reached from two places. Writing the map by key is what makes
   // exclude and pin unable to contradict each other: the newest action wins.
   const invalidateCommitmentIntent = () => {
+    cancelPlaceSearch(true);
     // A deliberate typed edit authorizes rebuilding this public day, on its
     // frozen calendar date. Do not queue work behind read-only suppression.
     if (publicReference && lastRequestedAnchorRef.current && lastComposeDateIsoRef.current) setRestoredAt(null);
@@ -2363,6 +2398,76 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   };
   const dismissStop = (identity: string, stopLabel: string) => editStop(identity, stopLabel, "replace");
   const removeStop = (identity: string, stopLabel: string) => editStop(identity, stopLabel, "remove");
+  async function runPlaceSearch(query?: string, candidateId?: string, replaceId?: string) {
+    const entry = lastEntryRef.current, anchor = lastRequestedAnchorRef.current;
+    if (!entry?.dateIso || !anchor || phase !== 'done' || dayIsStale || stopEditPending || restoredAt ||
+        (mode === 'near_me' && !nearMeCoords)) return;
+    const candidate = candidateId ? placeSearchItems.find(item => item.id === candidateId) : undefined;
+    if (candidateId && !candidate) return;
+    cancelPlaceSearch();
+    const controller = new AbortController(); placeRequestRef.current = controller;
+    const sequence = placeRequestSequenceRef.current, intent = intentSequenceRef.current;
+    const request = requestSequenceRef.current, context = placeContextRef.current;
+    const answerOnScreen = liveResponseRef.current, today = freezeComposeDateIso({ dayOffset: 0 });
+    const current = () => !controller.signal.aborted && placeRequestSequenceRef.current === sequence &&
+      intentSequenceRef.current === intent && requestSequenceRef.current === request &&
+      placeContextRef.current === context && liveResponseRef.current === answerOnScreen && lastEntryRef.current === entry &&
+      !navigationSuspendedRef.current && freezeComposeDateIso({ dayOffset: 0 }) === today;
+    setPlaceSearchBusy(true); setPlaceSearchError(null);
+    try {
+      const prepared = buildDayPlacePayload({ anchor, entry, commitments, query, candidate, replaceId });
+      const answer = await requestDayPlace({ payload: prepared.payload, lang, signal: controller.signal,
+        onCancellationReady: cancel => { if (current()) placeCancelRef.current = cancel; else cancel(); } });
+      if (!current()) return;
+      if (!answer.response.ok) throw new Error('day_place_refused');
+      if (query !== undefined) {
+        const visible = new Set(primaryRouteStops(entry.safeResponse).map(stop => stop.id));
+        const items = answer.body?.day_place_search?.items;
+        if (!Array.isArray(items)) throw new Error('day_place_search_unavailable');
+        setPlaceSearchItems(items.filter((item: any) => typeof item.id === 'string' && typeof item.label === 'string' && !visible.has(item.id)).slice(0, 6));
+        setPlaceSearchDone(true);
+      } else if (candidate && prepared.edit) {
+        const cls = anywhereDecision().classifyAnywhereResult(answer.body, { place: anchor.place || '' });
+        if (!anywhereDecision().isComposedStatus(cls.status) || !validDayPlacePreview(answer.body, { edit: prepared.edit, dateIso: entry.dateIso })) throw new Error('day_place_refused');
+        const km = (value: any) => Number.isFinite(value?.days?.[0]?.primary_route?.estimated_km) ? value.days[0].primary_route.estimated_km : null;
+        placePreviewRef.current = { current, anchor: { ...anchor }, entry, prepared, answer };
+        setPlacePreview({ label: candidate.label, replacing: Boolean(replaceId), stops: primaryRouteStops(answer.body).map(stop => ({ id: String(stop.id), label: String(stop.label || '') })), beforeKm: km(entry.safeResponse), afterKm: km(answer.body) });
+      }
+    } catch {
+      if (current()) setPlaceSearchError(query !== undefined
+        ? t('Sökningen kunde inte slutföras. Prova igen. Dagen är oförändrad.', 'Search could not finish. Try again. Your day is unchanged.')
+        : t('Vi kunde inte lägga till den här platsen och behålla dagen. Prova ett annat val. Dagen är oförändrad.', 'We could not add this place while keeping the day. Try another choice. Your day is unchanged.'));
+    } finally {
+      if (placeRequestSequenceRef.current === sequence) setPlaceSearchBusy(false);
+    }
+  }
+  function confirmPlacePreview() {
+    const preview = placePreviewRef.current;
+    if (!preview?.current()) {
+      cancelPlaceSearch(true);
+      setPlaceSearchError(t('Dagen har ändrats. Sök igen för en ny förhandsvisning.', 'The day has changed. Search again for a new preview.'));
+      return;
+    }
+    const { prepared, answer, anchor, entry } = preview;
+    cancelPlaceSearch(true);
+    // The accepted preview already passed the ordinary composer. Install it
+    // through the same publication/storage path, with no second acquisition.
+    intentSequenceRef.current++;
+    undoBaselineRef.current = { entry, anchorKey: displayedAnchorKeyRef.current };
+    commitmentAnchorKeyRef.current = displayedAnchorKeyRef.current;
+    adoptedInputsRef.current = true;
+    // The edit accepted this absolute day. Subsequent Keep/rhythm changes may
+    // not turn it into another calendar day when midnight passes.
+    navigationDateIsoRef.current = entry.dateIso;
+    setCommitments(prepared.commitments);
+    setDayEdit(prepared.edit);
+    dayEditScopeRef.current = { anchorKey: displayedAnchorKeyRef.current, dateIso: entry.dateIso };
+    execute(anchor, { acceptedPreview: answer, dateIsoOverride: entry.dateIso!,
+      preferencesOverride: entry.inputs?.selected ?? selected, preferencePriorityOverride: entry.inputs?.preferencePriority ?? preferencePriority,
+      dayEditOverride: prepared.edit, walkKeyOverride: entry.inputs?.walkKey ?? walkKey,
+      commitmentsOverride: prepared.commitments, excludedOverride: prepared.payload.excluded_candidate_ids || [],
+      pinnedOverride: prepared.payload.pinned_candidate_ids || [] }).catch(() => {});
+  }
   const keepStop = (identity: string, stopLabel: string) => commit(identity, "pin", stopLabel);
   const releaseCommitment = (identity: string) => {
     if (!identity || !commitments[identity]) return;
@@ -2370,6 +2475,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // Releasing a Live pin is a new selection intent, not an obligation to
     // retain that old occurrence. Keep the shorter extent and removed places.
     if (isLiveOccurrenceId(identity) && commitments[identity]?.kind === "pin") relaxDayEditForAdjustment();
+    if (dayEdit?.action === 'add' && dayEdit.candidate_id === identity && commitments[identity]?.kind === 'pin') {
+      const nextEdit = releaseAddedDayEdit(dayEdit, routeStops.map(stop => String(stop.id)));
+      setDayEdit(nextEdit);
+      if (!nextEdit) dayEditScopeRef.current = null;
+    }
     const next = { ...commitments };
     delete next[identity];
     setCommitments(next);
@@ -2594,7 +2704,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // first invalidates whatever is in flight for the old intent.
   const relaxDayEditForAdjustment = () => {
     const applied = dayEdit?.action === "replace" ? normalizeDayEdit(lastEntryRef.current?.inputs?.dayEdit) : dayEdit;
-    setDayEdit(applied ? normalizeDayEdit({ ...applied, preserve_retained: false }) : null);
+    setDayEdit(applied?.action === 'add' ? null : applied ? normalizeDayEdit({ ...applied, preserve_retained: false }) : null);
   };
   const toggleMood = (key: string) => {
     invalidateCommitmentIntent();
@@ -2629,7 +2739,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (dayEdit && scope?.anchorKey === anchorKey(lastRequestedAnchorRef.current) &&
         scope?.dateIso === lastComposeDateIsoRef.current) {
       const applied = dayEdit;
-      setDayEdit(normalizeDayEdit({ ...applied, action: "remove", replacement_preference: null,
+      if (applied.action === 'add') {
+        const nextEdit = releaseAddedDayEdit(applied, routeStops.map(stop => String(stop.id)), true);
+        setDayEdit(nextEdit);
+        if (!nextEdit) dayEditScopeRef.current = null;
+      } else setDayEdit(normalizeDayEdit({ ...applied, action: "remove", replacement_preference: null,
         target_stop_count: applied.retained_candidate_ids.length, preserve_retained: false, release_extent: true }));
     } else { dayEditScopeRef.current = null; setDayEdit(null); }
     pendingStopEditRef.current = null;
@@ -3189,6 +3303,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           {t("Exakt delning är inte tillgänglig för den här dagen. Dagen och dina andra val finns kvar.", "Exact sharing is unavailable for this day. Your day and other actions remain available.")}
         </p>
       )}
+      {dayWithRoute && (
+        <AddPlace t={t} lang={lang} unavailable={phase !== 'done' || dayIsStale || stopEditPending || Boolean(restoredAt) || (mode === 'near_me' && !nearMeCoords)}
+          disabledReason={restoredAt ? t('Bygg om den sparade dagen innan du lägger till en plats.', 'Rebuild the saved day before adding a place.') : mode === 'near_me' && !nearMeCoords ? t('Bekräfta din position igen för att lägga till en plats.', 'Confirm your position again to add a place.') : undefined}
+          busy={placeSearchBusy} searched={placeSearchDone} items={placeSearchItems} error={placeSearchError} preview={placePreview}
+          stops={routeStops.map((stop: any) => ({ ...stop, id: String(stop.id), label: String(stop.label || ''), type: stop.type ?? undefined, covered_preferences: stop.covered_preferences ?? undefined }))} pinnedIds={Object.entries(commitments).filter(([, value]) => value.kind === 'pin').map(([id]) => id)}
+          onSearch={query => { runPlaceSearch(query).catch(() => {}); }} onPreview={(id, replaceId) => { runPlaceSearch(undefined, id, replaceId).catch(() => {}); }}
+          onConfirm={confirmPlacePreview} onCancel={() => cancelPlaceSearch()} />
+      )}
+
       {dayWithRoute && (
         <DayActions
           t={t}

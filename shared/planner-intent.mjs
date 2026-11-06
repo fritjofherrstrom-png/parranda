@@ -57,7 +57,7 @@ export function normalizeDayEdit(value) {
   const fields = ["version", "action", "candidate_id", "retained_candidate_ids", "target_stop_count",
     "slot_index", "replacement_preference", "removed_candidate_ids"];
   if (fields.some(key => !Object.hasOwn(value, key))) return null;
-  if (value.version !== 1 || !["replace", "remove"].includes(value.action) ||
+  if (value.version !== 1 || !["replace", "remove", "add"].includes(value.action) ||
       !validCandidateId(value.candidate_id) || !validCandidateIds(value.retained_candidate_ids, 6) ||
       !validCandidateIds(value.removed_candidate_ids, 12) ||
       !Number.isInteger(value.target_stop_count) || value.target_stop_count < 0 || value.target_stop_count > 6 ||
@@ -67,8 +67,13 @@ export function normalizeDayEdit(value) {
       (Object.hasOwn(value, "release_extent") && (value.release_extent !== true ||
         value.action !== "remove" || value.preserve_retained !== false))) return null;
   const retained = value.retained_candidate_ids;
+  if ((Object.hasOwn(value, 'replacement_candidate_id') && (value.action !== 'replace' ||
+      !validCandidateId(value.replacement_candidate_id) || value.replacement_candidate_id === value.candidate_id ||
+      retained.includes(value.replacement_candidate_id) || value.removed_candidate_ids.includes(value.replacement_candidate_id))) ||
+      ((value.action === 'add' || value.replacement_candidate_id) && value.preserve_retained === false) ||
+      (value.action === 'add' && value.removed_candidate_ids.includes(value.candidate_id))) return null;
   if (retained.includes(value.candidate_id) || value.removed_candidate_ids.some(id => retained.includes(id)) ||
-      value.target_stop_count !== retained.length + (value.action === "replace" ? 1 : 0)) return null;
+      value.target_stop_count !== retained.length + (value.action !== "remove" ? 1 : 0)) return null;
   return {
     version: 1,
     action: value.action,
@@ -78,6 +83,7 @@ export function normalizeDayEdit(value) {
     slot_index: value.slot_index,
     replacement_preference: value.replacement_preference,
     removed_candidate_ids: [...value.removed_candidate_ids].sort(),
+    ...(value.replacement_candidate_id ? { replacement_candidate_id: value.replacement_candidate_id } : {}),
     ...(value.preserve_retained === false ? { preserve_retained: false } : {}),
     ...(value.release_extent === true ? { release_extent: true } : {}),
   };

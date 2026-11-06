@@ -1484,6 +1484,7 @@ function mapOsmElement(element) {
     : tags.leisure === 'nature_reserve' ? 'nature_reserve'
     : tags.leisure === 'garden' && tags['garden:type'] === 'botanical' ? 'botanical_garden' : null;
   const details = require('./place-details').normalizePlaceDetails({ kind: detailKind }, mapping.type);
+  const searchFacets = require('./place-search-facets').osmPlaceSearchFacets(tags);
 
   return {
     id: `osm-${elementType}-${osmId}`,
@@ -1503,6 +1504,7 @@ function mapOsmElement(element) {
     ...(website ? { website } : {}),
     ...(sourceAddress ? { source_address: sourceAddress } : {}),
     ...(details ? { place_details: details } : {}),
+    ...(searchFacets ? { search_facets: searchFacets } : {}),
     ...(sourceNameAliases.length ? { source_name_aliases: sourceNameAliases } : {}),
     ...(openingHours ? { opening_hours: openingHours } : {}),
     ...(tags.amenity === "marketplace" ? {

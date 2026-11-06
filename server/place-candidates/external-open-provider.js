@@ -147,6 +147,8 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
   base.evidence = evidence;
   const details = require('./place-details').sourcePlaceDetails(record, type);
   if (details) base.place_details = details;
+  const searchFacets = require('./place-search-facets').normalizePlaceSearchFacets(record.search_facets);
+  if (searchFacets) base.search_facets = searchFacets;
   base.candidate_origin = CANDIDATE_ORIGIN;
   base.provider_id = EXTERNAL_OPEN_PROVIDER_META.provider_id;
   base.source_family = primaryFamily;
