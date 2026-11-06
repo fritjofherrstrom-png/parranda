@@ -23,6 +23,7 @@ const {
   operationalViabilityRank,
 } = require("../place-candidates/operational-viability");
 const { normalizeSelectedDayHoursFact } = require("../place-candidates/opening-hours");
+const { reviewedVenueMentionsForPlace } = require("../place-candidates/venue-mentions");
 
 // Curated/verified Parranda candidates keep priority when fit is comparable.
 const CURATED_SOURCE_PRIORITY = 100;
@@ -274,6 +275,7 @@ function candidateOrigin(candidate) {
 
 function candidateProvenance(candidate, derived) {
   const curated = candidate.city_pack_owned === true;
+  const venueMentions = reviewedVenueMentionsForPlace(candidate);
   const trustedSource = candidate.operator_reviewed_source === true && candidate.trusted_source
     ? { ...candidate.trusted_source }
     : null;
@@ -290,6 +292,7 @@ function candidateProvenance(candidate, derived) {
     merged_from: Array.isArray(candidate.merged_from) ? candidate.merged_from : [],
     reconciliation: candidate.reconciliation || null,
     ...(trustedSource ? { trusted_source: trustedSource } : {}),
+    ...(venueMentions.length ? { venue_mentions: venueMentions } : {}),
   };
 }
 

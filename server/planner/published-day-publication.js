@@ -2,6 +2,7 @@
 const { capturePublishedDayPrivacy } = require('./published-day-privacy');
 const { projectPublishedDay } = require('./published-day-projection');
 const { publicSourceUrlsForRecords } = require('../place-candidates/source-url-evidence');
+const { publicVenueMentionUrls } = require('../place-candidates/venue-mentions');
 const { SOURCE_COMPLETION } = require('../place-candidates/background-source');
 const { retainLivePublication } = require('./live-completion');
 const { publicLiveSourceUrls, liveDestinationRetention } = require('../place-candidates/live-source-destination-evidence');
@@ -53,9 +54,14 @@ function createDayPublication(request, isCurrent) {
         // composer can ignore them. Refuse sharing rather than cloning them.
         if (preferences.length > 7 || preferences.some(value => typeof value !== 'string')) return;
         // Collect producer witnesses before retainComposition/JSON destroys identity.
+        // These article destinations come from the independent reviewed source
+        // policy, never from snapshot/result fields. The closed Stop projector
+        // additionally checks the complete article/physical-venue relation.
+        const publicSourceUrls = publicSourceUrlsForRecords(snapshot.records);
+        for (const url of publicVenueMentionUrls()) publicSourceUrls.add(url);
         retained = { intent: structuredClone({ ...intent, preferences, dateIso: snapshot.date }),
           pendingSources: pendingSources || hasPendingSources(snapshot.records),
-          privacy: { ...privacy, publicSourceUrls: publicSourceUrlsForRecords(snapshot.records) } };
+          privacy: { ...privacy, publicSourceUrls } };
       } catch (_) {
         // Optional sharing may fail closed without throwing through composition.
         retained = null;

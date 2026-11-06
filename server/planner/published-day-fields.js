@@ -8,6 +8,7 @@ const { normalizeSelectedDayHoursFact } = require('../place-candidates/opening-h
 const { occurrenceDate, liveOccurrenceId } = require('./live-occurrence-choice');
 const { eventOccurrenceForDate } = require('../candidates/evening-event-weave');
 const { parsePlaceRef } = require('../place-candidates/place-ref');
+const { venueMentionsMatchPlace } = require('../place-candidates/venue-mentions');
 const MAX_BYTES = 1048576;
 // Additional projector policy, NOT source cardinality caps. Refuse, never cut.
 const MAX_NODES = 100000;
@@ -52,7 +53,14 @@ const fields = {
   StopSource: { kind: n('string'), label: n('string'), category: n('string'), url: n('url'),
     link_kind: n(enumeration('page','site_home')), link_host: n('string') },
   Attribution: { label: n('string'), url: n('url'), license: n('string') },
-  Provenance: { attribution: o(array('Attribution')) },
+  VenueMentionBinding: { label: r('label500'), lat: r('lat'), lng: r('lng') },
+  VenueMentionEvidence: { document_sha256: r('string'), locator: r('string') },
+  VenueMention: { venue_id: r('id200'), venue_binding: r('VenueMentionBinding'), article_id: r('id200'),
+    publisher_id: r('string'), publisher: r('string'), publisher_group: rule('string',true,true),
+    article_url: r('shortUrl'), article_title: r('label500'), relation_kind: r(enumeration('mentioned','listed','recommended')),
+    published_on: rule('date',true,true), updated_on: rule('date',true,true), verified_at: r('instant'), source_evidence: r('VenueMentionEvidence'),
+    independence: r(enumeration('independent','not_independent','unknown')), sponsorship: r(enumeration('sponsored','not_sponsored','unknown')) },
+  Provenance: { attribution: o(array('Attribution')), venue_mentions: o(array('VenueMention',0,8)) },
   TimeWindow: { label: o('string'), kind: r(enumeration('daily','continuous','all_day','occurrences','period')), starts_at: n('instant'), ends_at: n('instant'),
     starts_on: n('date'), ends_on: n('date'), local_start: n('clock'), local_end: n('clock'), timezone: n('string'),
     dates: o(array('date',0,60)), all_day_explicit: o('bool'), spans_midnight: o('bool') },
@@ -269,6 +277,8 @@ function budget(privacy) {
 }
 function validateObject(type,value) {
   const refuse = () => { throw new Error('correlated '+type); };
+  if (type === 'Stop' && value.provenance?.venue_mentions &&
+      !venueMentionsMatchPlace(value,value.provenance.venue_mentions)) refuse();
   if (type === 'PrimaryRoute' && ((value.geometry_mode === 'walking' && value.geometry_source !== 'osrm') ||
       (value.geometry_attribution && value.geometry_mode !== 'walking'))) refuse();
   if (type === 'Promotion') {
