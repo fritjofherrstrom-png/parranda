@@ -31,9 +31,9 @@ function foundCache(values) {
   };
 }
 
-test("a legacy found-source answer cannot bypass topical discovery, including an injected cache", async () => {
+for (const revision of [9, 10]) test(`found-source cache v${revision} cannot bypass current publisher diversity`, async () => {
   const bucket = createHash("sha256").update(`${Math.round(ANCHOR.lat * 100)}:${Math.round(ANCHOR.lng * 100)}`).digest("hex").slice(0, 16);
-  const key = `rt-discovery-v9:${bucket}`;
+  const key = `rt-discovery-v${revision}:${bucket}`;
   const legacy = { status: "found", reason: null, feeds: [{ id: "legacy-prefix" }] };
   const bytes = JSON.stringify(legacy);
   const values = new Map([[key, legacy]]);
@@ -53,10 +53,12 @@ test("a legacy found-source answer cannot bypass topical discovery, including an
   assert.equal(JSON.stringify(values.get(key)), bytes);
 });
 
-test("a legacy derived Live pool cannot bypass the new discovery policy", async () => {
+for (const policy of [null, "event-topic-prefix-v1"]) test(`derived Live pool from ${policy || "unranked discovery"} cannot bypass the new selection`, async () => {
   const scope = deriveLocalAnchorSpatialScope(SCOPE, ANCHOR);
   assert.ok(scope, "valid resolver-owned fixture scope");
-  const oldSuffix = createHash("sha256").update(JSON.stringify([LABEL, CONTEXT, spatialScopeCacheKey(scope)])).digest("hex").slice(0, 20);
+  const oldSuffix = createHash("sha256").update(JSON.stringify([
+    ...(policy ? [policy] : []), LABEL, CONTEXT, spatialScopeCacheKey(scope),
+  ])).digest("hex").slice(0, 20);
   const legacy = { coverage: "covered", tonight: [], this_week: [], acquisition: { source_health: { status: "healthy", result: "empty" } } };
   const legacyBytes = JSON.stringify(legacy);
   const values = new Map();

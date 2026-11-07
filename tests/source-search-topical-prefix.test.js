@@ -54,6 +54,46 @@ async function searchRows(rows, { place = PLACE, plan = eventPlan(place), cache 
   return { result: await search(input), calls, search, input };
 }
 
+test("same-publisher event results cannot hide another calendar before the unchanged result cap", async () => {
+  for (const calendar of [
+    "https://municipal.example/eventkalender",
+    "https://destination.example/events",
+    "https://municipal.example/eventkalender/evening-show",
+  ]) {
+    const rows = [
+      ...Array.from({ length: 5 }, (_, index) => ({
+        url: `https://listing.example/events/${index}`, title: "Events calendar",
+      })),
+      { url: calendar, title: "Events calendar" },
+    ];
+    const { result, calls } = await searchRows(rows);
+    assert.ok(result.seeds.some(seed => seed.url === calendar),
+      "an already fetched second publisher must survive before the five-result cap");
+    assert.equal(calls.length, 2);
+    assert.equal(result.result_count, 10);
+    assert.deepEqual(result.seeds.map(seed => seed.url), [
+      rows[0].url, calendar, rows[1].url,
+    ]);
+    assert.ok(result.seeds.every(seed => seed.trust_tier === "unknown" && seed.family === "unknown_source_family"));
+    assert.equal(result.activation_performed, false);
+  }
+});
+
+test("www aliases share publisher rounds without losing distinct publishers or exact URLs", async () => {
+  const rows = [
+    "https://www.listing.example/events/one",
+    "https://listing.example/events/two",
+    "https://second.example/events/one",
+    "https://www.listing.example/events/three",
+    "https://third.example/events/one",
+  ].map(url => ({ url, title: "Events calendar" }));
+  const { result, calls } = await searchRows(rows);
+  assert.deepEqual(result.seeds.map(seed => seed.url), [rows[0].url, rows[2].url, rows[4].url, rows[1].url]);
+  assert.equal(calls.length, 2);
+  assert.equal(result.result_count, 10);
+  assert.equal(result.activation_performed, false);
+});
+
 test("explicit local programme hints survive the unchanged five-result search prefix", async () => {
   const programmeUrl = "https://destination.example/";
   const rows = [
@@ -83,6 +123,30 @@ function memoryCache(values = new Map()) {
     },
   };
 }
+
+test("a cached topical prefix without publisher diversity cannot mask a second calendar", async () => {
+  const { createHash } = require("node:crypto");
+  const plan = [eventPlan()[0]];
+  const oldTerms = ["agenda", "calendar", "concert", "evenements", "events", "festival", "marche"];
+  const key = createHash("sha256").update(JSON.stringify([
+    "event-topic-prefix-v1", ENDPOINT, "fr", 5, plan[0].query.toLowerCase(), oldTerms,
+  ])).digest("hex");
+  const rows = Array.from({ length: 5 }, (_, index) => ({
+    url: `https://listing.example/events/${index}`, title: "Events calendar",
+  }));
+  const legacy = { status: "ok", results: rows };
+  const before = JSON.stringify(legacy);
+  const values = new Map([[key, legacy]]);
+  const calendar = "https://other-publisher.example/calendar";
+  const current = await searchRows([...rows, { url: calendar, title: "Events calendar" }], {
+    plan, cache: memoryCache(values),
+  });
+  assert.ok(current.result.seeds.some(seed => seed.url === calendar));
+  assert.equal(current.calls.length, 1, "legacy prefix must be refreshed once, within the same query budget");
+  await current.search(current.input);
+  assert.equal(current.calls.length, 1, "current-policy answers remain reusable");
+  assert.equal(JSON.stringify(values.get(key)), before, "old evidence is preserved, not relabelled");
+});
 
 test("query caches isolate topic policy and reuse only the current hint context", async () => {
   const url = "https://destination.example/";
