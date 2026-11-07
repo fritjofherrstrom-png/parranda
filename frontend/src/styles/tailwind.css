@@ -407,6 +407,36 @@
   display: none;
 }
 
+/* Current GPS is distinct from route stops; neither marker takes a tap. */
+.route-map-current-position {
+  width: 42px;
+  height: 42px;
+  border: var(--p-line) solid rgb(var(--p-color-location));
+  border-radius: 50%;
+  background: rgb(var(--p-color-location) / 0.12);
+  pointer-events: none;
+  z-index: calc(var(--p-z-map-control) - 1);
+}
+.route-map-current-position::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  border: var(--p-line) solid rgb(var(--p-color-on-location));
+  border-radius: 50%;
+  background: rgb(var(--p-color-location));
+  box-shadow: 0 0 0 var(--p-line) rgb(var(--p-color-location));
+}
+.route-map-position-accuracy {
+  border: var(--p-line) solid rgb(var(--p-color-location));
+  border-radius: 50%;
+  background: rgb(var(--p-color-location) / 0.12);
+  pointer-events: none;
+}
+
 /* A clustered stop's disc is drawn beside its coordinate; this dot marks the
    coordinate. */
 .route-map-marker-origin {
