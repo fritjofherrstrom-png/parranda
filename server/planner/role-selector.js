@@ -18,6 +18,7 @@ const { explicitAdmissionByIdentity } = require("./explicit-selection-admission"
 const { createMealOrderPolicy } = require('./meal-ordering');
 const { retainWalkingFitAlternatives } = require("./walking-fit-selection");
 const { scoreCandidateFit } = require("../candidates/fit-scorer");
+const { STABLE_PLACE_INTEREST_ROLES, exactInterestRepresentatives } = require("../candidates/intent-vocabulary");
 const { calibrateSource } = require("../candidates/source-calibration");
 const { normalizeWalkingTargetBand } = require("../place-candidates/day-capacity");
 const { normalizeSourceWebsite } = require("../lib/source-website");
@@ -167,6 +168,14 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   // Experiment-only roles (#277) join the set ONLY on the agnostic experiment
   // path; every other caller sees exactly the shared ROLE_SPEC.
   const activeRoleSpec = localFeelActive ? { ...ROLE_SPEC, ...EXPERIMENT_ROLE_SPEC } : ROLE_SPEC;
+  if (localFeelActive) {
+    for (const [role, spec] of Object.entries(activeRoleSpec)) {
+      const exact = [...requestedIntents].filter(intent => STABLE_PLACE_INTEREST_ROLES[intent] === role);
+      if (!exact.length) continue;
+      activeRoleSpec[role] = { ...spec, intents: [...spec.intents, ...exact],
+        focusIntents: [...spec.intents.filter(intent => requestedIntents.has(intent)), ...exact] };
+    }
+  }
   const activeRoleOrder = Object.keys(activeRoleSpec);
 
   const roleEntries = {};
@@ -193,10 +202,11 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   const rescuableByRole = [];
   const roles = activeRoleOrder.map((role) => {
     const spec = activeRoleSpec[role];
-    const entries = spec.intents.includes('food')
+    const ranked = spec.intents.includes('food')
       ? retainMealPeriods(roleEntries[role], limitPerRole, pinnedIds,
         entry => formatRoleCandidate(entry, role, roleEntries, activeRoleSpec), helpers.mealContext)
       : roleEntries[role];
+    const entries = spec.focusIntents ? retainRoleInterestRepresentatives(ranked, spec.focusIntents) : ranked;
     const candidates = keepPinnedEntriesInRole(entries, limitPerRole, pinnedIds).map((entry) =>
       formatRoleCandidate(entry, role, roleEntries, activeRoleSpec),
     );
@@ -218,6 +228,7 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
       slot: spec.slot,
       gate: spec.gate,
       requested: spec.intents.some((intent) => requestedIntents.has(intent)),
+      ...(spec.focusIntents ? { focus_intents: spec.focusIntents } : {}),
       status,
       planner_usable: status === "filled" || status === "partial",
       candidates,
@@ -291,6 +302,15 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
       ? { capacity_frontier_candidates: capacityFrontierCandidates }
       : {}),
   };
+}
+
+function retainRoleInterestRepresentatives(entries, focusIntents) {
+  const covered = (entry, intent) => entry.fit.covered_preferences.includes(intent);
+  const usable = entries.filter(entry => entry.candidate_status !== "fallback");
+  const exact = exactInterestRepresentatives(usable, focusIntents, covered);
+  const onFocus = usable.filter(entry => [...entry.fit.covered_preferences, ...entry.fit.partial_preferences]
+    .some(intent => focusIntents.includes(intent)));
+  return [...new Set([...exact, ...onFocus, ...entries])];
 }
 
 // The public role lists remain strict top-N by status and shared ranking. For
@@ -817,7 +837,8 @@ function intentsForRole(role) {
   const key = typeof role === "string" ? role.trim() : "";
   if (!key) return [];
   const spec = ROLE_SPEC[key] || EXPERIMENT_ROLE_SPEC[key];
-  return Array.isArray(spec?.intents) ? [...spec.intents] : [];
+  return spec ? [...spec.intents, ...Object.keys(STABLE_PLACE_INTEREST_ROLES)
+    .filter(intent => STABLE_PLACE_INTEREST_ROLES[intent] === key)] : [];
 }
 
 module.exports = {

@@ -422,8 +422,9 @@ function reconcileFields(canonical, duplicate) {
     filled.push("source_address");
   }
 
-  // These bounded display facts belong to the already matched physical place.
-  // They do not alter its canonical type, preference coverage or source trust.
+  // Type-compatible details belong to the already matched physical place.
+  // They can inform narrow preference fit while canonical type and trust stay
+  // governed by the identity and evidence rules.
   const { sourcePlaceDetails } = require('../place-candidates/place-details');
   const currentDetails = sourcePlaceDetails(canonical, canonical.type);
   const incomingDetails = sourcePlaceDetails(duplicate, canonical.type);
