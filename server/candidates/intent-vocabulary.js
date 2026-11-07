@@ -28,7 +28,7 @@ const STABLE_PLACE_INTERESTS = {
   brunch: { role: "food_anchor", kinds: ["brunch"] },
   cafes: { role: "coffee_fika_stop", kinds: ["cafe", "coffee_shop"], curatedTypes: ["cafe", "coffee", "coffee_shop", "coffeehouse"] },
   bakeries: { role: "coffee_fika_stop", types: ["bakery"], kinds: ["bakery"] },
-  cheap_eats: { role: "food_anchor", types: ["restaurant", "pizza", "street_food", "trattoria", "taverna", "tavern", "osteria", "bistro", "fast_food"], price: "$" },
+  cheap_eats: { role: "food_anchor", types: ["restaurant", "pizza", "street_food", "trattoria", "taverna", "tavern", "osteria", "bistro", "fast_food"], excludedKinds: ["food_establishment"], price: "$" },
   art_museums: { role: "culture_stop", kinds: ["art_museum"] },
   history_museums: { role: "culture_stop", kinds: ["history_museum"] },
   art_galleries: { role: "culture_stop", kinds: ["art_gallery"], curatedTypes: ["gallery"] },

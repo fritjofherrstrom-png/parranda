@@ -83,6 +83,13 @@ test('cheap eats requires the trusted lowest food price level', () => {
     ['strong', 'none', 'none', 'strong', 'none', 'none', 'none', 'none', 'none', 'none', 'none', 'none']);
 });
 
+test('a generic food establishment needs a concrete meal category for Cheap eats', () => {
+  const generic = schema('FoodEstablishment', '$');
+  const restaurant = schema(['FoodEstablishment', 'Restaurant'], '$');
+  assert.equal(matchCandidateToIntent(generic, 'cheap_eats').level, 'none');
+  assert.equal(matchCandidateToIntent(restaurant, 'cheap_eats').level, 'strong');
+});
+
 test('a music venue does not satisfy the dated Live music interest', () => {
   assert.deepEqual(normalizeUserIntents(['live_music']).intents, ['live_music']);
   assert.equal(matchCandidateToIntent(directory('piano_bar'), 'live_music').level, 'none');
