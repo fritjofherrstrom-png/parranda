@@ -613,7 +613,7 @@ test("latest compose wins and cancels stale network work", () => {
 });
 
 test("composed coverage comes from the route, never the broader district structure", () => {
-  assert.match(anywherePlannerSource, /routePreferenceCoverage\(routeStops, selected\)/);
+  assert.match(anywherePlannerSource, /routePreferenceCoverage\(routeStops, shownInterests\)/);
   assert.match(anywherePlannerSource, /routeCoverage\.partial_preferences/);
   assert.match(anywherePlannerSource, /routeCoverage\.missing_preferences/);
   const composedRouteBlock = anywherePlannerSource.split("Without a primary route")[0] ?? "";
