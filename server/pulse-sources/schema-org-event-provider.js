@@ -344,6 +344,8 @@ function mapSchemaOrgEventToRaw(event) {
   if (!event || typeof event !== "object") return null;
   const coords = extractCoordinates(event);
   const url = firstString(event.url, event["@id"], event.identifier);
+  const types = [event["@type"] || event.type].flat();
+  const musicEvent = types.some(type => typeof type === "string" && /^(?:https?:\/\/schema\.org\/|schema:)?MusicEvent$/.test(type));
   return compact({
     id: firstString(event["@id"], event.identifier, event.url),
     title: localizedString(event.name),
@@ -355,6 +357,7 @@ function mapSchemaOrgEventToRaw(event) {
     lat: coords.lat,
     lng: coords.lng,
     tags: stringList(event.keywords),
+    intents: musicEvent ? ["live_music"] : null,
     // event_status maps schema.org EventCancelled → freshness signal the
     // normalizer reads; never claim "now" for a cancelled event.
     freshness: isCancelled(event) ? "stale" : null,

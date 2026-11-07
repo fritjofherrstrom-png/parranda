@@ -159,6 +159,7 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
     // Preserve classified experience evidence through final promotion; do not
     // manufacture a stable-place type for an ephemeral event.
     cultural_tier: event.cultural_tier || null,
+    ...(event.covered_preferences?.includes("live_music") ? { covered_preferences: ["live_music"] } : {}),
     event_id: event.id || null,
     live_occurrence_id: event.live_occurrence_id || null,
     live_choice_eligible: event.live_choice_eligible === true,

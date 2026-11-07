@@ -1,6 +1,7 @@
 "use strict";
 
 const { weaveEveningEvent, selectedDayCandidates } = require('../candidates/evening-event-weave');
+const { normalizeUserIntents } = require('../candidates/intent-vocabulary');
 const { matchesPreferenceFocus } = require('./preference-focus');
 const { activeLiveChoices } = require('./live-occurrence-choice');
 const { composeAgnosticRouteOutput } = require('./agnostic-route-output');
@@ -97,7 +98,7 @@ function occurrenceKey(event) {
 }
 
 function createRouteUpgrade({ args, retained, structure, initialLive, published, publish }) {
-  if (!retained || !structure) return null;
+  if (!retained || (!structure && !normalizeUserIntents(args?.preferences).intents.includes('live_music'))) return null;
   if (!contextFits({ args, retained, structure, initialLive, published })) return null;
   const selectedDate = published?.days?.[0]?.date || args?.date;
   const blockers = published?.agnostic_route_output_experiment?.eligibility?.blockers;
@@ -124,6 +125,7 @@ function createRouteUpgrade({ args, retained, structure, initialLive, published,
   savedArgs.clock = null;
   savedArgs.todayIsoDate = savedArgs.date;
   const savedStructure = cloneTrusted(structure);
+  const weaveOptions = { selectedDate: savedArgs.date, liveEventChoices: savedArgs.liveEventChoices, preferences: savedArgs.preferences };
   const original = cloneTrusted(published);
   // Every occurrence already considered by the original selected-day weave,
   // even when it lost salience or walking gates, remains previous evidence.
@@ -133,7 +135,7 @@ function createRouteUpgrade({ args, retained, structure, initialLive, published,
   const pools = selectedDayCandidates;
   const originalRows = cloneTrusted(pools(initialLive));
   for (const row of originalRows) {
-    const woven = weaveEveningEvent(savedStructure, { tonight: [row] }, { selectedDate: savedArgs.date, liveEventChoices: savedArgs.liveEventChoices || [] });
+    const woven = weaveEveningEvent(savedStructure, { tonight: [row] }, weaveOptions);
     const event = woven?.district_day?.evening_event;
     if (event) previous.add(occurrenceKey(event));
   }
@@ -147,7 +149,7 @@ function createRouteUpgrade({ args, retained, structure, initialLive, published,
       // Source-normalized explicit route eligibility is mandatory for this new
       // capability. The existing weaker legacy fixture fallback is not proof.
       if (row?.route_eligible !== true) return false;
-      const woven = weaveEveningEvent(savedStructure, { tonight: [row] }, { selectedDate: savedArgs.date, liveEventChoices: savedArgs.liveEventChoices || [] });
+      const woven = weaveEveningEvent(savedStructure, { tonight: [row] }, weaveOptions);
       const event = woven?.district_day?.evening_event;
       const eligible = event && !previous.has(occurrenceKey(event)) &&
         (event.explicit_live_choice === true || matchesPreferenceFocus(event, savedArgs.preferences));
@@ -160,7 +162,7 @@ function createRouteUpgrade({ args, retained, structure, initialLive, published,
     // an unchanged higher-ranked original anchor with a losing newcomer.
     const replayLive = cloneTrusted(live);
     replayLive.this_week = [...(replayLive.this_week || []), ...originalRows];
-    const nextStructure = weaveEveningEvent(savedStructure, replayLive, { selectedDate: savedArgs.date, liveEventChoices: savedArgs.liveEventChoices || [] });
+    const nextStructure = weaveEveningEvent(savedStructure, replayLive, weaveOptions);
     if (!newKeys.has(occurrenceKey(nextStructure?.district_day?.evening_event))) return no('not_eligible');
     const composed = await composeAgnosticRouteOutput({
       ...cloneTrusted(savedArgs),

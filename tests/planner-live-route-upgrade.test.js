@@ -30,6 +30,22 @@ async function setup(t,options={},supplyOptions={}) {
   t.after(async()=>{work.resolve(collection([]));await new Promise(r=>server.close(r));});
   return {server,work,records,calls:()=>calls,loaderCalls:()=>loaderCalls,weatherCalls:()=>weatherCalls};
 }
+
+test('a dated Live music match from the original pending source can extend a focused day', async t => {
+  const h = await setup(t);
+  const initial = await post(h.server, routePath, { ...routeBody, preferences: ['food', 'live_music'] });
+  assert.equal(initial.body.live_events.pending, true);
+  assert.deepEqual(initial.body.agnostic_route_output_experiment.constraint_negotiation.preference_coverage.missing_preferences, ['live_music']);
+  const token = initial.body.live_completion.token;
+  h.work.resolve(collection([{ ...event, title: 'Harbour Quartet', intents: ['live_music'] }]));
+  await new Promise(resolve => setImmediate(resolve));
+  const read = await post(h.server, readPath, { token });
+  assert.deepEqual(read.body.live_events.tonight[0].matched_preferences, ['live_music']);
+  const upgraded = await post(h.server, upgradePath, { token });
+  assert.equal(upgraded.body.live_route_upgrade.state, 'applied');
+  assert.equal(upgraded.body.result.days[0].primary_route.main_stops.at(-1).event_id, event.id);
+  assert.deepEqual(upgraded.body.result.agnostic_route_output_experiment.constraint_negotiation.preference_coverage.covered_preferences, ['food', 'live_music']);
+});
 test('explicit upgrade replays the original engine finalization with a new verified occurrence and no acquisition',async t=>{
   const h=await setup(t);
   const initial=await post(h.server,routePath,routeBody);
