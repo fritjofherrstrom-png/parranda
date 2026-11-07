@@ -106,6 +106,9 @@ import StopLine from "./planner/StopLine";
 import { pickLabel, unkeptReasonSentence, type Lang } from "./planner/copy";
 import type { LiveEvents, PlaceStructure, PulseEvent } from "./planner/types";
 
+type SharePublication = { entry: SavedEntry; publication: PublishedDayReference };
+type UndoShare = SharePublication & { publicRestoredAt?: string };
+
 const quickPreferenceKeys = new Set(ANYWHERE_PREFERENCES.map(({ key }) => key));
 
 function hasSelectedDayMusic(events: LiveEvents | null) {
@@ -223,7 +226,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [navigationRestoreUnavailable, setNavigationRestoreUnavailable] = useState(false);
   const [publicReference, setPublicReference] = useState<string | null>(null);
   const [publicReadState, setPublicReadState] = useState<"loading" | "unavailable" | null>(null);
-  const [sharePublication, setSharePublication] = useState<{ entry: SavedEntry; publication: PublishedDayReference } | null>(null);
+  const [sharePublication, setSharePublication] = useState<SharePublication | null>(null);
   // False in the static HTML and the hydration render: until the arrival
   // effect has read the URL, nothing is known about the link's place.
   const [arrivalRead, setArrivalRead] = useState(false);
@@ -321,11 +324,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // recomposes on its own, so the replacement is never silent: it says what
   // moved, and the day before it can be put back with one tap until the next
   // change, a new place or a saved day takes over.
-  const [dayChange, setDayChange] = useState<{ previous: SavedEntry; summary: DayChange } | null>(null);
+  const [dayChange, setDayChange] = useState<{ previous: SavedEntry; summary: DayChange; previousShare?: UndoShare } | null>(null);
   // The day on screen when an adjustment left for the server — the one "Undo"
   // returns to. Taken from the live day, never from a request still in flight,
   // and only while the anchor it belongs to is the one being recomposed.
-  const undoBaselineRef = useRef<{ entry: SavedEntry; anchorKey: string | null; trigger?: "recheck" } | null>(null);
+  const undoBaselineRef = useRef<{ entry: SavedEntry; anchorKey: string | null; trigger?: "recheck"; share?: UndoShare } | null>(null);
   // The reader asked to look for more places; cleared when that answer lands.
   const [recheckPending, setRecheckPending] = useState(false);
   // Undo installs the previous inputs without composing. This is the input
@@ -590,7 +593,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const baseline = undoBaselineRef.current;
       undoBaselineRef.current = null;
       if (retention.keepPrevious && baseline) {
-        setDayChange({ previous: baseline.entry, summary: describeDayChange(baseline.entry, baseline.entry) });
+        setDayChange({ previous: baseline.entry, previousShare: baseline.share, summary: describeDayChange(baseline.entry, baseline.entry) });
         setDayIsStale(true);
       }
       setUpgradePending(false);
@@ -692,7 +695,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         // keep their existing no-day policy.
         if (effectiveDayEdit && retention.keepPrevious) {
           const baseline = undoBaselineRef.current;
-          if (baseline) setDayChange({ previous: baseline.entry, summary: describeDayChange(baseline.entry, baseline.entry) });
+          if (baseline) setDayChange({ previous: baseline.entry, previousShare: baseline.share, summary: describeDayChange(baseline.entry, baseline.entry) });
           setStopEditError("not_confirmed");
           setStopEditFeedback(null);
           setServiceRefusal(refusal);
@@ -786,7 +789,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         const baseline = undoBaselineRef.current;
         undoBaselineRef.current = null;
         if (retention.keepPrevious && baseline) {
-          setDayChange({ previous: baseline.entry, summary: describeDayChange(baseline.entry, baseline.entry) });
+          setDayChange({ previous: baseline.entry, previousShare: baseline.share, summary: describeDayChange(baseline.entry, baseline.entry) });
           setDayIsStale(true);
         } else {
           setClassification({ status: "unavailable", hasStructure: false, placeLabel: fallbackLabel });
@@ -835,7 +838,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           // Undo even when the route is identical and only the inputs changed.
           const baseline = undoBaselineRef.current;
           undoBaselineRef.current = null;
-          if (baseline) setDayChange({ previous: baseline.entry, summary: describeDayChange(baseline.entry, baseline.entry) });
+          if (baseline) setDayChange({ previous: baseline.entry, previousShare: baseline.share, summary: describeDayChange(baseline.entry, baseline.entry) });
           setUpgradePending(false);
           setLiveFollowing(false);
           setPhase("done");
@@ -948,7 +951,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           undoBaselineRef.current = null;
           setDayChange(
             baseline && baseline.anchorKey !== null && baseline.anchorKey === anchorKey(anchor)
-              ? { previous: baseline.entry, summary: describeDayChange(baseline.entry, entry, { trigger: baseline.trigger ?? null }) }
+              ? { previous: baseline.entry, previousShare: baseline.share, summary: describeDayChange(baseline.entry, entry, { trigger: baseline.trigger ?? null }) }
               : null,
           );
         } else {
@@ -1369,6 +1372,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setAppliedPins(ledger.applies ? ledger.appliedPins : []);
     setAppliedRefusals(ledger.applies ? ledger.refusals : []);
 
+    // The receipt was bound to this exact view before the grouped rebuild.
+    // Check its lifetime again before using it for Share or a public address.
+    const share = change.previousShare?.entry === previous ? change.previousShare : null;
+    const publication = readyPublishedDay(share?.publication);
+    setSharePublication(publication ? { entry: previous, publication } : null);
+    setShareCopied(false);
+    if (share?.publicRestoredAt) {
+      setRestoredAt(share.publicRestoredAt);
+      const href = publication && publishedDayHref(publication.ref, lang);
+      if (href) {
+        try {
+          const state = { ...window.history.state };
+          delete state[NAVIGATION_STATE_KEY];
+          window.history.replaceState(state, "", href + window.location.hash);
+          setPublicReference(publication.ref);
+        } catch {
+          // The browser may block history writes. The local Undo still works.
+        }
+      }
+    }
     lastEntryRef.current = previous;
     writeLS(LAST_KEY, previous);
     setClassification(previous.classification);
@@ -1593,9 +1616,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setSavedWriteError(null);
   }
 
-  // Share only the immutable reference emitted for this exact accepted entry.
-  // Revalidate expiry at click time too; never fall back to an input-only URL.
-  const exactShareHref = () => {
+  // Bind a server receipt only to the exact accepted entry and visible facts.
+  const matchingSharePublication = () => {
     const entry = lastEntryRef.current;
     const completed = completedLive?.day === safeResponse ? completedLive : null;
     const view = completed
@@ -1604,7 +1626,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       : safeResponse;
     return view && sharePublication?.entry === entry && sharePublication.entry.safeResponse === view
       && readyPublishedDay(sharePublication.publication)
-        ? publishedDayHref(sharePublication.publication.ref, lang) : null;
+        ? sharePublication : null;
+  };
+  const exactShareHref = () => {
+    const share = matchingSharePublication();
+    return share ? publishedDayHref(share.publication.ref, lang) : null;
   };
   async function shareDay() {
     const href = exactShareHref();
@@ -2686,6 +2712,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setPreferencePriority(next.preferencePriority);
   };
   const applyInterests = (draft: InterestSelection) => {
+    const share = matchingSharePublication();
+    const previousShare = undoBaselineRef.current?.share ?? dayChange?.previousShare;
+    const publicRestoredAt = share && (publicReference === share.publication.ref
+      ? restoredAt ?? undefined
+      : previousShare?.entry === share.entry && previousShare.publication.ref === share.publication.ref
+        ? previousShare.publicRestoredAt : undefined);
     invalidateCommitmentIntent();
     const onScreen = lastEntryRef.current;
     const nextEdit = relaxedDayEdit();
@@ -2693,7 +2725,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       (onScreen?.inputs?.dayOffset === dayOffset ? onScreen.dateIso : null);
     if (date) navigationDateIsoRef.current = date;
     undoBaselineRef.current = isUndoableDay(onScreen)
-      ? { entry: onScreen, anchorKey: displayedAnchorKeyRef.current }
+      ? {
+        entry: onScreen,
+        anchorKey: displayedAnchorKeyRef.current,
+        share: share ? { ...share, publicRestoredAt: publicRestoredAt || undefined } : undefined,
+      }
       : null;
     adoptedInputsRef.current = true;
     setDayEdit(nextEdit);

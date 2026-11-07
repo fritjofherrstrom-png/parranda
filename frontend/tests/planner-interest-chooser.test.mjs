@@ -178,3 +178,72 @@ test("an interest compose waits for its own Live upgrade before deciding whether
   assert.equal(compose(h).length, 2);
   assert.deepEqual(h.readStorage(LAST).inputs.selected, ["live_music"]);
 });
+
+const FIRST_REF = "a".repeat(48);
+const UPDATED_REF = "b".repeat(48);
+const ready = (ref, expiry = "2026-11-08T10:00:00Z") => ({
+  version: 1, state: "ready", ref, created_at: DATE + "T09:00:00Z", expires_at: expiry,
+});
+
+async function applyShareableInterest(h) {
+  const editor = await open(h);
+  await click(h, "Clear selection", editor);
+  await click(h, "Cafés", editor);
+  await click(h, "Update day", editor);
+  await h.fetchMock.respond(compose(h).at(-1), day("New café", ["cafes"], { day_snapshot: ready(UPDATED_REF) }));
+  assert.match(route(h), /New café/);
+}
+
+test("grouped Undo restores the exact Share link for the prior published day", async t => {
+  const h = await start(t, undefined, { response: day("Previous stop", ["food"], { day_snapshot: ready(FIRST_REF) }) });
+  const copied = [];
+  Object.defineProperty(h.window.navigator, "clipboard", { value: { writeText: async href => copied.push(href) } });
+  await applyShareableInterest(h);
+  await click(h, "Share this day");
+  assert.equal(new URL(copied.at(-1)).searchParams.get("snapshot"), UPDATED_REF);
+  await click(h, "Undo this change");
+  await h.clock.advance(2500);
+  assert.match(route(h), /Previous stop/);
+  await click(h, "Share this day");
+  assert.equal(new URL(copied.at(-1)).searchParams.get("snapshot"), FIRST_REF);
+  assert.equal(compose(h).length, 2, "undo and sharing do not compose again");
+});
+
+test("grouped Undo offers no Share if the previous publication expired after apply", async t => {
+  const h = await start(t, undefined, { response: day("Previous stop", ["food"], { day_snapshot: ready(FIRST_REF, DATE + "T10:01:00Z") }) });
+  await applyShareableInterest(h);
+  assert.ok(button(h.container, "Share this day"), "the new day has a valid publication");
+  t.mock.timers.setTime(Date.parse(DATE + "T10:02:00Z"));
+  await click(h, "Undo this change");
+  assert.match(route(h), /Previous stop/);
+  assert.equal(button(h.container, "Share this day"), undefined);
+});
+
+test("grouped Undo of a public day returns to the original read-only publication", async t => {
+  const h = await start(t, `snapshot=${FIRST_REF}`, { response: null });
+  const original = day("Previous stop", ["food"], {
+    agnostic_route_output_experiment: {
+      synthesized_via: "agnostic_compose_engine", route_mutation: true, eligibility: { eligible: true },
+      intake: { ...intake, mode: "place", resolved: { ...intake.resolved, place_ref: "r123", confidence: "high" } },
+      promotion: { promote: true },
+      pinned_candidates: { requested_count: 0, honored_count: 0, unhonored_count: 0, unhonored: [] },
+    },
+  });
+  const { version, ref, created_at, expires_at } = ready(FIRST_REF);
+  await h.fetchMock.respond(h.fetchMock.calls[0], {
+    version, ref, created_at, expires_at, language: "en",
+    intent: { dateIso: DATE, place: "Testville", placeLabel: "Testville", placeRef: "r123", mode: "typed",
+      selected: ["food", "culture"], walkKey: "balanced", excludedCandidateIds: [], pinnedCandidateIds: [], liveEventChoices: [] },
+    result: original,
+  });
+  assert.match(route(h), /Previous stop/);
+  assert.match(h.text(), /Saved day/);
+  await applyShareableInterest(h);
+  assert.equal(new URL(h.window.location.href).searchParams.get("snapshot"), null);
+  await click(h, "Undo this change");
+  assert.match(route(h), /Previous stop/);
+  assert.match(h.text(), /Saved day/);
+  assert.equal(new URL(h.window.location.href).searchParams.get("snapshot"), FIRST_REF);
+  assert.ok(button(h.container, "Share this day"));
+  assert.equal(compose(h).length, 1);
+});
