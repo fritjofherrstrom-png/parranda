@@ -5,6 +5,7 @@ const { normalizeUserIntents } = require('../candidates/intent-vocabulary');
 const { matchesPreferenceFocus } = require('./preference-focus');
 const { activeLiveChoices } = require('./live-occurrence-choice');
 const { composeAgnosticRouteOutput } = require('./agnostic-route-output');
+const { REQUESTED_INTENT_UNMET_CAP } = require('./agnostic-promotion-gate');
 const MAX_CONTEXT_BYTES = 2 * 1024 * 1024;
 
 // Preserve private descriptors and aliases without expanding a DAG into a tree.
@@ -98,27 +99,38 @@ function occurrenceKey(event) {
 }
 
 function createRouteUpgrade({ args, retained, structure, initialLive, published, publish }) {
-  if (!retained || (!structure && !normalizeUserIntents(args?.preferences).intents.includes('live_music'))) return null;
+  const requestsLiveMusic = normalizeUserIntents(args?.preferences).intents.includes('live_music');
+  if (!retained || (!structure && !requestsLiveMusic)) return null;
   if (!contextFits({ args, retained, structure, initialLive, published })) return null;
-  const selectedDate = published?.days?.[0]?.date || args?.date;
-  const blockers = published?.agnostic_route_output_experiment?.eligibility?.blockers;
-  const edit = published?.agnostic_route_output_experiment?.day_edit;
+  const selectedDate = published?.days?.[0]?.date || retained.date || args?.date;
+  const experiment = published?.agnostic_route_output_experiment;
+  const { eligibility, day_edit: edit, promotion } = experiment || {};
+  const blockers = eligibility?.blockers;
+  const pendingSelectedDay = args?.liveSelectionPending === true && initialLive?.pending === true &&
+    initialLive.selected_date === selectedDate;
   // A strict saved edit can contain an ephemeral ID absent only because its
-  // original producer is still running. Keep that preliminary answer withheld,
-  // but allow THIS producer to finish it. Every terminal replay still runs the
-  // unchanged composition/publication gates below. Other withheld days never
-  // acquire this capability.
+  // original producer is still running. Allow that producer to finish it
+  // through the same composition and publication gates.
   const keeps = activeLiveChoices(args?.liveEventChoices, selectedDate).filter(choice => choice.action === 'keep');
-  const deferredLiveChoice = args?.liveSelectionPending === true && initialLive?.pending === true &&
-    initialLive.selected_date === selectedDate && keeps.length === 1 &&
+  const deferredLiveChoice = pendingSelectedDay && keeps.length === 1 &&
     args.dayEdit?.preserve_retained !== false &&
     args.dayEdit?.retained_candidate_ids?.some(id => id.startsWith('live-event-')) &&
     edit?.status === 'refused' && edit.reason === 'retained_live_not_preserved' &&
     Array.isArray(blockers) && blockers.length === 1 && blockers[0] === 'retained_live_not_preserved';
-  if (!published?.agnostic_route_output_experiment?.promotion?.promote && !deferredLiveChoice) return null;
+  // A day around eligible pinned places can already have a validated route
+  // and still wait for the only experience that could satisfy its intent.
+  // Reserve replay only when missing intent is the sole promotion blocker.
+  const deferredLiveMusic = pendingSelectedDay && requestsLiveMusic && !args.dayEdit &&
+    eligibility?.eligible === true && blockers?.length === 0 && experiment.route_mutation === true &&
+    experiment.walking_validation?.valid === true &&
+    experiment.experimental_route?.main_stops?.filter(stop => stop.is_live_event !== true).length >= 2 &&
+    promotion?.promote === false && promotion.disqualifying_caps?.length === 1 &&
+    promotion.disqualifying_caps[0] === REQUESTED_INTENT_UNMET_CAP &&
+    promotion.unmet_requested_intents?.includes('live_music');
+  if (!promotion?.promote && !deferredLiveChoice && !deferredLiveMusic) return null;
   const savedArgs = cloneTrusted(args);
   // Omitted dates were normalized by composition, not by the public request.
-  savedArgs.date = published?.days?.[0]?.date || savedArgs.date;
+  savedArgs.date = selectedDate;
   // The replay cannot retain or invoke acquisition/context dependencies.
   savedArgs.openDataLoader = null;
   savedArgs.weatherProvider = null;
@@ -152,7 +164,8 @@ function createRouteUpgrade({ args, retained, structure, initialLive, published,
       const woven = weaveEveningEvent(savedStructure, { tonight: [row] }, weaveOptions);
       const event = woven?.district_day?.evening_event;
       const eligible = event && !previous.has(occurrenceKey(event)) &&
-        (event.explicit_live_choice === true || matchesPreferenceFocus(event, savedArgs.preferences));
+        (deferredLiveMusic ? event.covered_preferences?.includes('live_music')
+          : event.explicit_live_choice === true || matchesPreferenceFocus(event, savedArgs.preferences));
       if (eligible) newKeys.add(occurrenceKey(event));
       return eligible;
     });
@@ -177,6 +190,7 @@ function createRouteUpgrade({ args, retained, structure, initialLive, published,
     // Never let response fallback weaving promote a withheld engine trial.
     const finalEvent = result?.days?.[0]?.primary_route?.main_stops?.find(stop => stop.event_id === nextStructure.district_day.evening_event?.id);
     if (!composed.eventWeave?.applied || !result?.agnostic_route_output_experiment?.promotion?.promote || !finalEvent ||
+        (deferredLiveMusic && !finalEvent.covered_preferences?.includes('live_music')) ||
         JSON.stringify(result.days) === JSON.stringify(original.days)) return no('rejected');
     return { live_route_upgrade: { version: 1, state: 'applied' }, result };
   };

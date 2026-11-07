@@ -135,6 +135,39 @@ function assertLiveFacts(actual, terminal) {
 }
 module.exports = { setup, request, originalBody, accepted, assertLiveFacts, eventRows, ROUTE, deferred, turn, WIX_ROOT, WIX_CHILD, WIX_EVENT, wixTransport };
 if (require.main === module) {
+test('the original Live producer can publish a shareable day after an exact music match arrives', async t => {
+  const date = '2026-11-07';
+  const sourceUrl = 'https://www.hel.fi/en/events/harbour-concert';
+  const stored = [];
+  const h = await setup(t, {
+    rows: options => eventRows(options).map(row => ({ ...row, info_url: { en: sourceUrl } })),
+    appOptions: { clock: { now: () => `${date}T10:00:00Z` } },
+    put: async value => {
+      stored.push(value);
+      return { state: 'ready', snapshot: { ref: 'test-ref', created_at: `${date}T10:00:00Z`, expires_at: '2026-11-08T10:00:00Z' } };
+    },
+  });
+  const food = await request(h.server, { url: ROUTE, body: { ...originalBody(date), preferences: ['food'] } });
+  accepted(food.body);
+  const pins = food.body.days[0].primary_route.main_stops.slice(0, 2).map(stop => stop.id);
+  assert.equal(pins.length, 2);
+  const initial = await request(h.server, { body: { ...originalBody(date), preferences: ['live_music'], pinned_candidate_ids: pins } });
+  assert.deepEqual(initial.body.days, []);
+  assert.equal(initial.body.live_events.pending, true);
+  assert.equal(initial.body.day_snapshot, undefined);
+  await h.complete();
+  const terminal = await request(h.server, { url: '/api/planner-live-completion', body: { token: initial.body.live_completion.token } });
+  assert.deepEqual(terminal.body.live_events.tonight[0]?.matched_preferences, ['live_music'], JSON.stringify(terminal.body.live_events));
+  const result = await request(h.server, { url: '/api/planner-live-route-upgrade', body: { token: initial.body.live_completion.token } });
+  assert.equal(result.body.live_route_upgrade?.state, 'applied', JSON.stringify(result.body));
+  assert.equal(result.body.result.day_snapshot?.state, 'ready');
+  assert.equal(stored.length, 1);
+  assert.deepEqual(stored[0].intent.selected, ['live_music']);
+  assert.deepEqual(stored[0].intent.pinnedCandidateIds, pins);
+  assert.deepEqual(stored[0].result.days[0].primary_route.main_stops.at(-1).covered_preferences, ['live_music']);
+  assert.equal(stored[0].result.live_events.tonight[0].source_url, sourceUrl);
+});
+
 test('publication capture bounds the complete private frame before cloning or serialization', async t => {
   const { createDayPublication } = require('../server/planner/published-day-publication');
   const { createLiveCompletionStore, LIVE_COLLECTION_READ } = require('../server/planner/live-completion');
