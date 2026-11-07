@@ -231,8 +231,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [dayEdit, setDayEdit] = useState<DayEdit | null>(null);
   const dayEditScopeRef = useRef<{ anchorKey: string | null; dateIso: string | null } | null>(null);
   const [stopEditPending, setStopEditPending] = useState(false);
-  const pendingStopEditRef = useRef<DayEdit | null>(null);
-  const [stopEditFeedback, setStopEditFeedback] = useState<"remove" | "replace" | null>(null);
+  const pendingStopEditRef = useRef<{ action: DayEdit["action"]; originalLabel: string } | null>(null);
+  const [stopEditFeedback, setStopEditFeedback] = useState<{
+    action: DayEdit["action"];
+    originalLabel: string;
+    replacementLabel: string;
+  } | null>(null);
   const [stopEditError, setStopEditError] = useState<"no_safe_replacement" | "not_confirmed" | "unsupported" | "rebuild_required" | "live_not_preserved" | null>(null);
   const livePlanPendingRef = useRef<string | null>(null);
   const [livePlanPending, setLivePlanPending] = useState(false);
@@ -775,8 +779,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         refuseLivePlan();
         return;
       }
-      if (effectiveDayEdit && body?.agnostic_route_output_experiment?.day_edit?.status !== "applied") {
-        setStopEditError(body?.agnostic_route_output_experiment?.day_edit?.reason === "no_safe_replacement"
+      const dayEditOutcome = body?.agnostic_route_output_experiment?.day_edit;
+      if (effectiveDayEdit && dayEditOutcome?.status !== "applied") {
+        setStopEditError(dayEditOutcome?.reason === "no_safe_replacement"
           ? "no_safe_replacement" : "not_confirmed");
         const baseline = undoBaselineRef.current;
         undoBaselineRef.current = null;
@@ -835,8 +840,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // Persist the applied selection, never a one-shot replacement command.
       // Reload asks to retain this result instead of replacing the slot again.
       let persistedDayEdit = effectiveDayEdit;
-      if (effectiveDayEdit && (composedNow || acceptedEditedEmpty) && body?.agnostic_route_output_experiment?.day_edit?.status === "applied") {
-        const publishedIds = primaryRouteStops(safe)
+      if (effectiveDayEdit && (composedNow || acceptedEditedEmpty) && dayEditOutcome?.status === "applied") {
+        const publishedStops = primaryRouteStops(safe);
+        const publishedIds = publishedStops
           .map((stop: any) => String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? ""));
         persistedDayEdit = normalizeDayEdit({ ...effectiveDayEdit, action: "remove",
           retained_candidate_ids: publishedIds, target_stop_count: publishedIds.length, replacement_preference: null });
@@ -845,7 +851,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           adoptedInputsRef.current = true;
           setDayEdit(persistedDayEdit);
         }
-        if (pendingStopEditRef.current) setStopEditFeedback(pendingStopEditRef.current.action);
+        const pendingEdit = pendingStopEditRef.current;
+        if (pendingEdit) {
+          const replacementId = dayEditOutcome.replacement_candidate_id;
+          const replacement = pendingEdit.action === "replace" && typeof replacementId === "string" && replacementId
+            ? publishedStops[publishedIds.indexOf(replacementId)] : undefined;
+          setStopEditFeedback({ ...pendingEdit, replacementLabel: String(replacement?.label || replacement?.name || "").trim() });
+        }
       }
       const refusalsNow: Array<{ id: string; reason: string | null }> = composedNow ? [
         ...(Array.isArray(body?.agnostic_route_output_experiment?.pinned_candidates?.unhonored) ? body.agnostic_route_output_experiment.pinned_candidates.unhonored : []),
@@ -2410,7 +2422,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (action === "replace") nextCommitments[identity] = { kind: "exclude", label: stopLabel };
     setCommitments(nextCommitments);
     dayEditScopeRef.current = { anchorKey: displayedAnchorKeyRef.current, dateIso: lastEntryRef.current?.dateIso ?? null };
-    pendingStopEditRef.current = edit;
+    pendingStopEditRef.current = { action, originalLabel: stopLabel };
     setStopEditPending(true);
     setDayEdit(edit);
     setExpandedStopKey(null);
@@ -2601,6 +2613,17 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     : stopEditError === "rebuild_required"
     ? t("Uppdatera den sparade dagen eller välj en ny startpunkt innan du ändrar stopp.", "Rebuild this saved day or choose a new starting point before editing stops.")
     : stopEditError ? t("Ändringen kunde inte bekräftas.", "The change could not be confirmed.") : "";
+  let stopEditFeedbackMessage = "";
+  if (stopEditFeedback) {
+    const { action, originalLabel, replacementLabel } = stopEditFeedback;
+    if (action === "remove") {
+      stopEditFeedbackMessage = t(`Tog bort ${originalLabel}`, `Removed ${originalLabel}`);
+    } else if (replacementLabel) {
+      stopEditFeedbackMessage = t(`Bytte ut ${originalLabel} mot ${replacementLabel}`, `Replaced ${originalLabel} with ${replacementLabel}`);
+    } else {
+      stopEditFeedbackMessage = t(`Bytte ut ${originalLabel}`, `Replaced ${originalLabel}`);
+    }
+  }
   const [dayChangeLine, dayRouteChange] = useMemo(() => {
     if (!dayChange) return [[], []];
     const options = {
@@ -3157,8 +3180,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           role="status"
           className="flex items-center gap-x-2 rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint py-0.5 pl-4 pr-1"
         >
-          <p className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink-muted">
-            {stopEditError ? stopEditErrorMessage : stopEditFeedback ? t(stopEditFeedback === "remove" ? "Borttaget" : "Bytt", stopEditFeedback === "remove" ? "Removed" : "Replaced") : <>
+          <p className="min-w-0 flex-1 break-words text-13 leading-snug text-parranda-ink-muted">
+            {stopEditError ? stopEditErrorMessage : stopEditFeedback ? stopEditFeedbackMessage : <>
               <span className="font-bold text-parranda-ink">
                 {dayChange.summary.trigger === "recheck" ? t("Letade efter fler platser", "Looked for more places") : t("Ändrat", "Changed")}:{" "}
               </span>

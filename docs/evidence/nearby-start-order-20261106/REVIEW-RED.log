@@ -1,0 +1,38 @@
+✔ equivalent loop geometry prefers the selected stop already at the planning anchor (1.173584ms)
+✔ legacy/default and explicit opt-out retain their established order (0.3365ms)
+✔ the private loop option cannot alter an arc with an explicit destination (0.344333ms)
+✔ the geometry objective still wins over a shorter first leg (5.282792ms)
+✔ larger sets keep every identity and bounded deterministic refinement (5.404458ms)
+✖ a near-start tie cannot divert bounded refinement to a worse final geometry (6.189458ms)
+✔ real HTTP publishes the nearby bar first without changing source facts or stop identities (106.294834ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 6
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 257.532667
+
+✖ failing tests:
+
+test at tests/nearby-start-order.test.js:63:1
+✖ a near-start tie cannot divert bounded refinement to a worse final geometry (6.189458ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  4.3 !== 4.28
+
+      at TestContext.<anonymous> (/Users/fritjof/Developer/parranda-branches/codex-nearby-start-order-20261106/tests/nearby-start-order.test.js:81:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 4.3,
+    expected: 4.28,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
