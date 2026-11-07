@@ -122,14 +122,18 @@ test('built free-text day publishes a compact Relaxed route, useful source facts
   await firstRow.click();
   const panel = page.locator('#' + await firstRow.getAttribute('aria-controls'));
   assert.equal((await list.innerText()).match(/Opening hours unavailable/g)?.length, 1);
-  assert.match(await panel.innerText(), /Second-hand clothing/);
+  assert.equal((await firstRow.locator('[data-stop-category]').innerText()).trim(), 'Second-hand clothing',
+    'the row badge names the source kind');
+  assert.doesNotMatch(await panel.innerText(), /Second-hand clothing/, 'the opened place does not repeat the row badge');
   assert.match(await panel.innerText(), /Source Street 10/);
   assert.match(await panel.innerText(), /Matches your picks: Second hand/);
   const group = panel.getByRole('group', { name: 'Edit stop', exact: true });
   assert.deepEqual(await group.getByRole('button').allTextContents(), ['Keep this one', 'Replace', 'Remove']);
   assert.equal(await panel.locator('details[open]').count(), 0);
   await panel.locator('summary').click();
-  assert.match(await panel.locator('details').innerText(), /overture|OSM|osm/);
+  const evidenceText = await panel.locator('details').innerText();
+  assert.match(evidenceText, /Source: (Overture Maps|OpenStreetMap)/, 'the source is named, never hidden');
+  assert.doesNotMatch(evidenceText, /Source: (overture|osm)\b/, 'a raw provider token reads as its name');
   await panel.locator('summary').click();
   if (evidenceDir) {
     fs.mkdirSync(evidenceDir, { recursive: true });
