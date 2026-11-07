@@ -208,9 +208,9 @@ test('route list includes published start and return estimates already counted i
   const h = await mountPlanner({ url: 'http://localhost/anywhere?anchor=near&lang=en', sessionStorage: { 'parranda:anchor:coords': P1 } });
   t.after(() => h.unmount()); await h.fetchMock.respond(routes(h)[0], response());
   const route = h.container.querySelector('section[aria-label="The route"]');
-  assert.match(route.textContent, /From Your position/);
+  assert.match(route.textContent, /From your starting point/);
   assert.match(route.textContent, /2 min · (?:100 m|0.1 km)/);
-  assert.match(route.textContent, /Return to Your position/);
+  assert.match(route.textContent, /Return to your starting point/);
   assert.match(route.textContent, /8 min · (?:600 m|0.6 km)/);
 });
 
