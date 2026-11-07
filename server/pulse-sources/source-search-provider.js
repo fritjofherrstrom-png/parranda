@@ -483,11 +483,13 @@ async function fetchSearxngQuery({
   const rawResultCount = payload.results.length;
   // Search snippets are inspection hints only, never event facts or authority.
   // Within the existing per-query cap, prefer explicit programme hints over
-  // generic place guides. Keep provider order for ties and non-event queries.
-  const results = payload.results
+  // generic place guides. Different publishers within each hint tier must
+  // survive before the cap, not only at the later seed-diversity boundary.
+  const ranked = payload.results
     .map((row, index) => ({ result: normalizeSearchResult(row), index, relevant: hasEventSearchHint(row, topicTerms) }))
     .filter(row => row.result)
-    .sort((a, b) => Number(b.relevant) - Number(a.relevant) || a.index - b.index)
+    .sort((a, b) => Number(b.relevant) - Number(a.relevant) || a.index - b.index);
+  const results = (topicTerms.length ? sourceDiverseEventResults(ranked, endpointOrigin) : ranked)
     .slice(0, limit)
     .map(row => row.result);
 
@@ -508,6 +510,28 @@ async function fetchSearxngQuery({
     raw_result_count: rawResultCount,
     results,
   };
+}
+
+// Linear-time, stable round-robin within each existing relevance tier. The
+// identity is exactly the hostname policy used by the later seed boundary;
+// neither an event hint nor an earlier inspection slot grants source trust.
+function sourceDiverseEventResults(rows, endpointOrigin) {
+  const out = [];
+  for (const relevant of [true, false]) {
+    const counts = new Map();
+    const rounds = [];
+    for (const row of rows) {
+      if (row.relevant !== relevant) continue;
+      const identity = sourceIdentityForResult(row.result, endpointOrigin);
+      if (!identity) continue;
+      const round = counts.get(identity) || 0;
+      counts.set(identity, round + 1);
+      if (!rounds[round]) rounds[round] = [];
+      rounds[round].push(row);
+    }
+    for (const round of rounds) out.push(...round);
+  }
+  return out;
 }
 
 function unresponsiveEngineNames(value) {
@@ -821,7 +845,8 @@ function searchCacheKey(endpoint, query, language, limit, topicTerms) {
   // determine the retained prefix; legacy or different-context answers cannot
   // attest that selection, even when the external request is unchanged.
   return createHash("sha256")
-    .update(JSON.stringify(["event-topic-prefix-v1", endpoint, normalizeSearchLanguage(language), limit, query.trim().toLowerCase(), topicTerms]))
+    .update(JSON.stringify([topicTerms.length ? "event-topic-prefix-v2" : "event-topic-prefix-v1",
+      endpoint, normalizeSearchLanguage(language), limit, query.trim().toLowerCase(), topicTerms]))
     .digest("hex");
 }
 

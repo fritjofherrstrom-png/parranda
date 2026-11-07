@@ -1,0 +1,23 @@
+{
+  "@type": "Event",
+  "name": "J-dag 2026",
+  "url": "https://visitorservice.kk.dk/eventkalender/j-dag-2026",
+  "startDate": "2026-11-06T19:59:00",
+  "endDate": "2026-11-06T22:59:00",
+  "location": {
+    "@type": "Place",
+    "name": "København",
+    "address": {
+      "@type": "PostalAddress",
+      "addressCountry": "DK"
+    }
+  },
+  "eventSchedule": {
+    "@type": "Schedule",
+    "startDate": "2026-11-06",
+    "endDate": "2026-11-06",
+    "startTime": "20:59",
+    "endTime": "23:59",
+    "scheduleTimezone": "Europe/Copenhagen"
+  }
+}

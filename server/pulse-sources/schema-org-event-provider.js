@@ -344,11 +344,11 @@ function mapSchemaOrgEventToRaw(event) {
   if (!event || typeof event !== "object") return null;
   const coords = extractCoordinates(event);
   const url = firstString(event.url, event["@id"], event.identifier);
+  const timing = schemaOrgEventTiming(event);
   return compact({
     id: firstString(event["@id"], event.identifier, event.url),
     title: localizedString(event.name),
-    starts_at: firstString(event.startDate, event.start_date, event["schema:startDate"]),
-    ends_at: firstString(event.endDate, event.end_date, event["schema:endDate"]),
+    ...timing,
     source_url: url,
     place_context: localizedString(event.location && event.location.name),
     area: localizedString(event.location && event.location.address && event.location.address.addressLocality),
@@ -359,6 +359,55 @@ function mapSchemaOrgEventToRaw(event) {
     // normalizer reads; never claim "now" for a cancelled event.
     freshness: isCancelled(event) ? "stale" : null,
   });
+}
+
+// A Schedule can supply one explicit local session, not daily occurrences
+// across a range. Its source-owned timezone resolves floating Event fields;
+// recurring, ambiguous, incomplete or DST-invalid schedules retain the old
+// uncertain Event atoms for the ordinary downstream gates.
+function schemaOrgEventTiming(event) {
+  const direct = {
+    starts_at: firstString(event.startDate, event.start_date, event["schema:startDate"]),
+    ends_at: firstString(event.endDate, event.end_date, event["schema:endDate"]),
+  };
+  const schedules = Array.isArray(event.eventSchedule) ? event.eventSchedule : [event.eventSchedule];
+  if (schedules.length !== 1) return direct;
+  const schedule = schedules[0];
+  if (!schedule || typeof schedule !== "object") return direct;
+  const types = Array.isArray(schedule["@type"]) ? schedule["@type"] : [schedule["@type"]];
+  if (!types.includes("Schedule")) return direct;
+  if (["repeatFrequency", "repeatCount", "byDay", "byMonth", "byMonthDay", "byMonthWeek", "exceptDate"]
+    .some(key => Object.hasOwn(schedule, key))) return direct;
+  const day = normalizeSourceEventDate(schedule.startDate);
+  // Intl also accepts numeric offset identifiers in modern Node. Only named
+  // IANA zones/aliases may promote this new Schedule lane; other adapters keep
+  // their existing timezone policy.
+  const zoneName = firstString(schedule.scheduleTimezone);
+  const timezone = zoneName && /^[a-z][a-z0-9_.+-]*(?:\/[a-z0-9_.+-]+)*$/i.test(zoneName)
+    ? normalizeIanaTimezone(zoneName) : null;
+  if (!day || day !== normalizeSourceEventDate(schedule.endDate) || !timezone) return direct;
+  const clock = /^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
+  if (typeof schedule.startTime !== "string" || typeof schedule.endTime !== "string" ||
+      !clock.test(schedule.startTime) || !clock.test(schedule.endTime)) return direct;
+  const starts_at = normalizeSourceEventDateTime(`${day}T${schedule.startTime}`, { timezone });
+  const ends_at = normalizeSourceEventDateTime(`${day}T${schedule.endTime}`, { timezone });
+  if (!starts_at || !ends_at || Date.parse(ends_at) <= Date.parse(starts_at)) return direct;
+  // An explicit source offset is stronger than a timezone guess. Contradicting
+  // explicit instants/dates must not be silently overwritten by the Schedule.
+  if (!eventTimeAgreesWithSchedule(direct.starts_at, starts_at, day, timezone) ||
+      !eventTimeAgreesWithSchedule(direct.ends_at, ends_at, day, timezone)) return {};
+  return { starts_at, ends_at, timezone };
+}
+
+function eventTimeAgreesWithSchedule(value, scheduled, day, timezone) {
+  if (!value) return true;
+  const literalDay = normalizeSourceEventDate(value.slice(0, 10));
+  if (!literalDay) return false;
+  const instant = sourceInstant(value, timezone);
+  if (/(?:z|[+-]\d{2}:?\d{2})$/i.test(value)) {
+    return instant !== null && instant === Date.parse(scheduled);
+  }
+  return literalDay === day && (value === literalDay || instant !== null);
 }
 
 function extractCoordinates(event) {

@@ -2092,7 +2092,7 @@ function resolveDefaultEventSupply(
       }, unavailableSources);
     }
     const descriptors = sourcePlan.map((source) => compactSourceStatus({ source, status: "pending", raw: [] }));
-    const baseKey = eventCacheKey(
+    const poolKey = eventCacheKey(
       anchor,
       now,
       sourcePlan.map((source) => source.id),
@@ -2102,12 +2102,20 @@ function resolveDefaultEventSupply(
       time,
       unavailableSources,
     );
+    // Only Schema.org pools contain the old floating Event/Schedule atoms.
+    // Preserve other adapters' valid pools and all historical cache evidence.
+    const timingKey = sourcePlan.some(source =>
+      ["schema_org", "schema_org_html"].includes(normalizeLocalEventAdapter(source.adapter)))
+      ? `${poolKey}:schema-schedule-v1` : poolKey;
+    // Old resolver-backed pools may contain an administrative center mistaken
+    // for a physical venue. Preserve unaffected no-resolver pools unchanged.
+    const baseKey = typeof venueResolver === "function" ? `${timingKey}:venue-point-v1` : timingKey;
     // A plain coordinate/calendar warm-up has not performed local research.
     // Do not let it answer for a later resolver-attested discovery request.
-    // Old derived pools also cannot attest topic-aware source selection;
+    // Old derived pools also cannot attest publisher-diverse source selection;
     // isolate only the discovery lane and preserve non-discovery cache keys.
     const key = discoverNow ? `${baseKey}:discovery:${createHash("sha256")
-      .update(JSON.stringify(["event-topic-prefix-v1", placeLabel, placeContext, spatialScopeCacheKey(discoveryScope)]))
+      .update(JSON.stringify(["event-topic-prefix-v2", placeLabel, placeContext, spatialScopeCacheKey(discoveryScope)]))
       .digest("hex").slice(0, 20)}` : baseKey;
     // A broad calendar does not erase the existing local-discovery outcome.
     // Keep its current status alongside collection health, including cached

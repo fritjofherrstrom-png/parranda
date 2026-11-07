@@ -13,6 +13,13 @@ const MAX_QUERY_LENGTH = 200;
 
 function buildEventVenueQuery(event, { placeContext = null } = {}) {
   if (!event || typeof event !== "object" || ["municipality", "virtual"].includes(event.source_location_scope)) return null;
+  const areaNames = new Set([event.city, placeContext?.locality, placeContext?.municipality,
+    placeContext?.region, placeContext?.country].map(normalizeVenueName).filter(Boolean));
+  const placeName = normalizeVenueName(event.place_context || event.area || event.city);
+  const address = normalizeVenueName(event.address);
+  // The source's bare town is area context, not a particular venue. A real
+  // source address can still disambiguate a venue named after its town.
+  if (placeName && areaNames.has(placeName) && (!address || areaNames.has(address))) return null;
   const sourceParts = uniqueStrings([
     event.address,
     event.place_context,
@@ -224,7 +231,11 @@ async function resolveEventVenueGeometry(
 async function resolveVenueQuery(query, { resolver, anchor, radiusKm, regionalScope, venueNames = [] }) {
   try {
     const candidates = await resolver(query, { purpose: "event_venue" });
-    const located = (Array.isArray(candidates) ? candidates : []).filter(hasCoordinates);
+    // Resolver-attested administrative bounds locate an area, not the event's
+    // physical venue. Never promote its representative/center point to a stop.
+    const areaKinds = new Set(["settlement", "district", "municipality", "region", "country"]);
+    const located = (Array.isArray(candidates) ? candidates : [])
+      .filter(candidate => hasCoordinates(candidate) && !areaKinds.has(candidate?.spatial_scope?.kind));
     const inArea = (candidate) => regionalScope
       ? pointWithinTrustedSpatialScope(candidate, regionalScope)
       : haversineKm(anchor, candidate) <= radiusKm;
