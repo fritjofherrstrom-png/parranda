@@ -23,7 +23,7 @@ import LiveEventTiming from "./LiveEventTiming";
 import VenueMentions from "./VenueMentions";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { selectedDayHoursLabel } from "../../lib/selected-day-hours.mjs";
-import { stopHoursUnknown, stopWebsiteUrl, stopMatchedPreferences, stopPlaceDetails } from "../../lib/stop-card-facts.mjs";
+import { stopHoursUnknown, stopWebsiteUrl, stopMatchedPreferences, stopPlaceDetails, stopRowKindLabel, stopSourceLabel } from "../../lib/stop-card-facts.mjs";
 import { walkingDistanceLabel, type RouteContextSuggestion } from "../../lib/route-context-view.mjs";
 import {
   CheckIcon,
@@ -280,9 +280,9 @@ export default function StopLine({
           const placeDetails = stopPlaceDetails(stop, lang);
           const partialLabels = partialPreferenceLabels(stop, selected, lang);
           const matchedLabels = stopMatchedPreferences(stop, selected).map((key) => pickLabel(key, lang));
-          const stopKindLabel = stopCategoryLabel(stop, lang);
+          const stopKindLabel = stopRowKindLabel(stop, stopCategoryLabel(stop, lang), lang);
           const hoursUnknown = stopHoursUnknown(stop);
-          const sourceLabel = String(stop?.source?.label || "").trim();
+          const sourceLabel = stopSourceLabel(stop);
           const behind = currentIndex != null && i < currentIndex;
           const isCurrent = currentIndex === i;
           const station = stale
@@ -382,7 +382,9 @@ export default function StopLine({
                   {/* Facts only. The schedule row is a bounded source fact
                       for the selected local day, never an "open now" claim. */}
                   <div className="flex flex-col gap-1.5 text-13 leading-snug text-parranda-ink-muted">
-                    {placeDetails.kindLabel && <span className="font-semibold text-parranda-ink">{placeDetails.kindLabel}</span>}
+                    {placeDetails.kindLabel && placeDetails.kindLabel !== stopKindLabel && (
+                      <span className="font-semibold text-parranda-ink">{placeDetails.kindLabel}</span>
+                    )}
                     {placeDetails.address && <span>{placeDetails.address}</span>}
                     {leg && (leg.minutes != null || leg.km != null) && (
                       <span>

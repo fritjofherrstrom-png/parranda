@@ -4,7 +4,7 @@ export interface StopCardFactsInput {
   type?: string | null;
   covered_preferences?: string[] | null;
   partial_preferences?: string[] | null;
-  source?: { category?: string | null } | null;
+  source?: { category?: string | null; label?: string | null } | null;
   website?: string | null;
   address?: string | null;
   place_details?: { kind?: string | null; address?: string | null } | null;
@@ -18,3 +18,5 @@ export function stopWebsiteUrl(stop: StopCardFactsInput | null | undefined): str
 export function stopMatchedPreferences(stop: StopCardFactsInput | null | undefined, selected: string[] | null | undefined): string[];
 
 export function stopPlaceDetails(stop: StopCardFactsInput | null | undefined, lang?: "sv" | "en"): { kindLabel: string | null; address: string | null };
+export function stopRowKindLabel(stop: StopCardFactsInput | null | undefined, broadLabel: string | null | undefined, lang?: "sv" | "en"): string;
+export function stopSourceLabel(stop: StopCardFactsInput | null | undefined): string;
