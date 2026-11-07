@@ -54,6 +54,9 @@
   --p-radius-button: 14px;
   /* The weight of every hairline frame: cards, pills, segments, notices. */
   --p-line: 1.5px;
+  /* Live device position is distinct from route and event colours. */
+  --p-color-location: 37 99 235;
+  --p-color-on-location: 255 255 255;
   /* Elevation, low to high. Theme-independent: a shadow is darkness. */
   --p-shadow-control: 0 1px 4px rgb(0 0 0 / 0.18);
   --p-shadow-marker: 0 2px 8px rgb(0 0 0 / 0.28);
