@@ -16,7 +16,6 @@ import { stopIdentity as changeStopIdentity } from "../../lib/day-change.mjs";
  *   - daypart headings come from stop.daypart only, never by reordering;
  *   - detours are collapsed, dashed, and explicitly not the route.
  */
-import { useEffect, useState } from "react";
 import { lineProgress } from "../../lib/line-progress.mjs";
 import { eventSourceLink } from "../../lib/pulse-view.mjs";
 import LiveEventTiming from "./LiveEventTiming";
@@ -43,7 +42,7 @@ import { busyButton, buttonClass, compactPillTarget, dataLine, Eyebrow, External
 import { DAYPART_LABELS, label, partialPreferenceLabels, pickLabel, type Lang, type Translate } from "./copy";
 import { canCommitTo, type Commitments } from "./commitments";
 import StopCategory, { stopCategoryLabel } from "./StopCategory";
-import { useFollowPosition } from "./useFollowPosition";
+import type { PositionSession } from "./useFollowPosition";
 
 type Leg = { km: number | null; minutes: number | null };
 
@@ -107,6 +106,10 @@ export default function StopLine({
   eveningEvent,
   selectedDate,
   dayOffset,
+  follow,
+  following,
+  canFollowToday,
+  onToggleFollow,
   routeContextSuggestions,
   detoursOpen,
   setDetoursOpen,
@@ -143,6 +146,10 @@ export default function StopLine({
   eveningEvent: any;
   selectedDate: string | null | undefined;
   dayOffset: 0 | 1;
+  follow: PositionSession;
+  following: boolean;
+  canFollowToday: boolean;
+  onToggleFollow: () => void;
   routeContextSuggestions: RouteContextSuggestion[];
   detoursOpen: boolean;
   setDetoursOpen: (update: (cur: boolean) => boolean) => void;
@@ -154,22 +161,10 @@ export default function StopLine({
     `${leg.minutes != null ? `${leg.minutes} min` : ""}${leg.minutes != null && leg.km != null ? " · " : ""}${leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}`;
   const lastCoreIndex = split.core.length - 1;
 
-  // "YOU ARE HERE". Today only, and only after an explicit tap: the reader's
-  // live position is read against the stations in route order. Stations
-  // behind the reader are muted, the next one is marked. The position never
-  // leaves this component, and nothing about the day changes.
-  // Following belongs to today's line. When the chosen day stops being today,
-  // the watch ends in the same render (`following` is derived, not just
-  // reset by the effect) and the choice is cleared, so returning to today
-  // asks for a new tap rather than resuming location on its own.
-  const [followRequested, setFollowRequested] = useState(false);
-  const following = followRequested && dayOffset === 0;
-  useEffect(() => {
-    if (dayOffset !== 0) setFollowRequested(false);
-  }, [dayOffset]);
-  const follow = useFollowPosition(following);
-  const canFollow = follow.supported && dayOffset === 0;
-  const progress = following && follow.state.status === "tracking"
+  // The orchestrator owns one opt-in location session. This line only reads
+  // it for today's stations; the map can also orient a future-day reader.
+  const canFollow = follow.supported && canFollowToday;
+  const progress = following && follow.state.status === "tracking" && follow.state.position.accuracy <= 120
     ? lineProgress(split.core, follow.state.position)
     : null;
   const currentIndex = progress?.state === "at" ? progress.index : progress?.state === "toward" ? progress.next : null;
@@ -180,8 +175,12 @@ export default function StopLine({
       ? t("Hämtar din position …", "Finding your position …")
       : follow.state.status === "denied"
         ? t("Positionen blockerades. Tillåt platsdelning för att följa dagen.", "Location was blocked. Allow location sharing to follow the day.")
+        : follow.state.status === "paused"
+          ? t("Positionsvisningen är pausad medan sidan är i bakgrunden.", "Location is paused while the page is in the background.")
         : follow.state.status === "unavailable"
           ? t("Din position kunde inte hämtas just nu.", "Your position couldn't be found right now.")
+          : follow.state.status === "tracking" && follow.state.position.accuracy > 120
+            ? t("Positionen är ungefärlig — kan inte avgöra vilket stopp du är vid.", "Your position is approximate — can't tell which stop you're at.")
           : progress?.state === "at"
             ? t(`Du är vid ${coreName(progress.index)}`, `You're at ${coreName(progress.index)}`)
             : progress?.state === "toward"
@@ -218,7 +217,7 @@ export default function StopLine({
           <button
             type="button"
             aria-pressed={following}
-            onClick={() => setFollowRequested((cur) => !cur)}
+            onClick={onToggleFollow}
             className={
               `${compactPillTarget} gap-1.5 px-3.5 font-bold ` +
               (following
