@@ -118,11 +118,14 @@ function buildCandidateCombination(plannerRoles = {}, dayflowHonesty = {}, optio
 // Combination chooses from this tier. Modern requested-role rhythm depth may
 // repeat it on the remainder, preserving tier order without upgrading trust.
 function plannerUsableOptionsForRole(role = {}) {
+  const focus = Array.isArray(role.focus_intents) ? role.focus_intents : [];
   const usableAll = (Array.isArray(role.candidates) ? role.candidates : []).filter(
     (candidate) =>
       candidate.planner_usable === true &&
       candidate.candidate_status !== "fallback" &&
-      candidate.availability?.eligible !== false,
+      candidate.availability?.eligible !== false &&
+      (!focus.length || [...(candidate.covered_preferences || []), ...(candidate.partial_preferences || [])]
+        .some(intent => focus.includes(intent))),
   );
   const gatePassing = usableAll.filter(
     (candidate) => !(candidate.experimental_admission && candidate.experimental_admission.allowed === true),

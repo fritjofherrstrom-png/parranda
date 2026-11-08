@@ -931,3 +931,18 @@ for (const kind of ['daily', 'occurrences']) {
       'a different occurrence date cannot keep the old occurrence identity');
   });
 }
+
+test('a real typed day with a grouped interest preserves its saved priority across projection and reopen', async () => {
+  const inputs = { ...intent(), preferences: ['restaurants', 'fika', 'views'], preferencePriority: ['restaurants', 'views'] };
+  const published = await publication({ preferences: inputs.preferences, preference_priority: inputs.preferencePriority });
+  const projected = projectPublishedDay({ published, intent: inputs, privacy: privacy(), language: 'en' });
+  assert.ok(projected, 'the publisher accepts the same closed interest and order as the composer');
+  const { parsePublishedDay } = await import('../frontend/src/lib/published-day.mjs');
+  const now = Date.parse(`${DATE}T10:00:00Z`), ref = 'a'.repeat(48);
+  const reopened = parsePublishedDay({ version: 1, ref, created_at: new Date(now).toISOString(),
+    expires_at: new Date(now + 60000).toISOString(), ...projected }, { ref, decision: require('../anywhere-render-decision'), now });
+  assert.deepEqual(reopened?.entry.inputs.selected, ['restaurants', 'fika', 'views']);
+  assert.deepEqual(reopened?.entry.inputs.preferencePriority, ['restaurants', 'views']);
+  assert.ok(reopened.entry.safeResponse.days[0].primary_route.main_stops
+    .some(stop => stop.covered_preferences?.includes('restaurants')), 'the exact match also survives');
+});

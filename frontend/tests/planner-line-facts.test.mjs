@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mountPlanner } from "./helpers/planner-harness.mjs";
 import { componentSource } from "./helpers/planner-source.mjs";
+import { freezeComposeDateIso } from "../src/lib/anywhere-payload.mjs";
 
 function day(types) {
   const stops = types.map((type, i) => ({
@@ -13,7 +14,7 @@ function day(types) {
     provenance: { attribution: [{ provider_id: "osm", label: "OSM" }] },
   }));
   return {
-    days: [{ experimental_agnostic_route_applied: true, primary_route: {
+    days: [{ date: freezeComposeDateIso(), experimental_agnostic_route_applied: true, primary_route: {
       id: "__agnostic_compose__", title: "Published day", main_stops: stops,
       estimated_km: 2, map_path_points: [], legs: [], confidence: "low",
     }, alternatives: [] }],
@@ -44,31 +45,30 @@ test("following the day asks for the position only on a tap, and keeps it nowher
   const hook = componentSource("planner/useFollowPosition.ts");
   // The watch starts only while following and is always cleared.
   assert.match(hook, /if \(!following\) \{[\s\S]{0,80}return;/);
-  assert.match(hook, /return \(\) => geolocation\.clearWatch\(id\);/);
+  assert.match(hook, /if \(watchId !== undefined\) geo\.clearWatch\(watchId\);/);
+  assert.match(hook, /return \(\) => \{\s*disposed = true;\s*stop\(\);/);
   assert.doesNotMatch(hook, /localStorage|sessionStorage|fetch\(|URLSearchParams/);
   // Offered only for today's day, from an explicit pressed button.
   const line = componentSource("planner/StopLine.tsx");
-  assert.match(line, /const canFollow = follow\.supported && dayOffset === 0;/);
+  assert.match(line, /const canFollow = follow\.supported && canFollowToday;/);
+  assert.match(componentSource("AnywherePlanner.tsx"), /const followDayIsToday = dayOffset === 0/);
   assert.match(line, /aria-pressed=\{following\}/);
 });
 
 test("following ends when the chosen day is no longer today", async (t) => {
-  const h = await mountPlanner({ url: "http://localhost/anywhere?place=Testville&lang=en" });
-  t.after(() => h.unmount());
   const watches = [];
   const clears = [];
-  Object.defineProperty(h.window.navigator, "geolocation", {
-    configurable: true,
-    value: {
+  const geolocation = {
       watchPosition(onPosition) {
         const id = 40 + watches.length;
         watches.push(id);
-        onPosition({ coords: { latitude: 50, longitude: 10 } });
+        onPosition({ coords: { latitude: 50, longitude: 10, accuracy: 10 }, timestamp: Date.now() });
         return id;
       },
       clearWatch(id) { clears.push(id); },
-    },
-  });
+  };
+  const h = await mountPlanner({ url: "http://localhost/anywhere?place=Testville&lang=en", geolocation, visibilityState: "visible" });
+  t.after(() => h.unmount());
   await h.clock.advance(500);
   await h.fetchMock.respond(h.fetchMock.pending()[0], day(["museum", "park", "park"]));
   await h.clock.advance(50);

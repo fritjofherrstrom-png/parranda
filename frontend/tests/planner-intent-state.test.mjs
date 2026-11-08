@@ -6,7 +6,10 @@ import { ANYWHERE_PREFERENCES } from "../src/lib/anywhere-payload.mjs";
 const defaults = ["food", "culture", "views"];
 
 test("priority normalization preserves neutral legacy defaults and only known selected keys", () => {
-  assert.deepEqual(intent.PLANNER_PREFERENCE_KEYS, ANYWHERE_PREFERENCES.map(({ key }) => key));
+  const quick = ANYWHERE_PREFERENCES.map(({ key }) => key);
+  const grouped = intent.PLANNER_INTEREST_GROUPS.flatMap(({ options }) => options.map(({ key }) => key));
+  assert.equal(new Set(grouped).size, 21);
+  assert.deepEqual(new Set(intent.PLANNER_PREFERENCE_KEYS), new Set([...quick, ...grouped]));
   for (const value of [undefined, null, [], "food,culture,views", ["unknown"], ["fika"]]) {
     assert.deepEqual(intent.normalizePreferencePriority(value, defaults), []);
   }
@@ -138,4 +141,15 @@ test("day-edit preserves only explicit false for later Adjust", () => {
   assert.deepEqual(intent.normalizeDayEdit(edit({ preserve_retained: false })), edit({ preserve_retained: false }));
   assert.deepEqual(intent.normalizeDayEdit(edit({ preserve_retained: true })), edit());
   assert.deepEqual(intent.normalizeDayEdit(edit()), edit());
+});
+
+test('new interest keys retain order and can be swapped at the seven-choice boundary', () => {
+  const selected = ["food", "culture", "fika", "live_music", "brunch", "parks_gardens", "cheap_eats"];
+  const state = { selected, preferencePriority: ["cheap_eats", "live_music"] };
+  assert.deepEqual(intent.togglePreferenceSelection(state, "bakeries"), state, "an eighth choice cannot be added");
+  const swapped = intent.togglePreferenceSelection(intent.togglePreferenceSelection(state, "live_music"), "bakeries");
+  assert.deepEqual(swapped, {
+    selected: ["food", "culture", "fika", "brunch", "parks_gardens", "cheap_eats", "bakeries"],
+    preferencePriority: ["cheap_eats", "bakeries"],
+  });
 });

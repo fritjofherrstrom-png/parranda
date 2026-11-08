@@ -2,6 +2,7 @@
 
 // Closed, source-derived constructions; deliberately not a copy of a producer
 // graph and not an interpreter for discovery/ALLOWLIST.json.
+const { PLANNER_PREFERENCE_KEYS, MAX_PLANNER_PREFERENCES } = require('../../shared/planner-intent.mjs');
 const { isRealIsoDate } = require('./requested-dates');
 const { isDeepStrictEqual, types: { isProxy } } = require('node:util');
 const { normalizeSelectedDayHoursFact } = require('../place-candidates/opening-hours');
@@ -27,6 +28,8 @@ const o = type => rule(type);
 const n = type => rule(type, false, true);
 const array = (item, min = 0, max = Infinity) => ({ item, min, max });
 const enumeration = (...values) => ({ values });
+const preference = enumeration(...PLANNER_PREFERENCE_KEYS);
+const preferences = array(preference, 0, MAX_PLANNER_PREFERENCES);
 // The engine's closed per-stop vocabularies: candidateStatusForRole
 // (role-selector.js) and scoreWeather (fit-scorer.js). A value outside them
 // refuses the share, never disappears from it.
@@ -37,15 +40,15 @@ const fields = {
   LiveChoice: { occurrence_id: r('liveId'), action: r(enumeration('keep','remove','replace')) },
   RequestEdit: { version: r(enumeration(1)), action: r(enumeration('remove','replace')), candidate_id: r('editId'),
     retained_candidate_ids: r(array('editId',0,6)), target_stop_count: r('count'), slot_index: r('count'),
-    replacement_preference: rule(enumeration('food','culture','views','fika','nightlife','green','second_hand'),true,true),
+    replacement_preference: rule(preference,true,true),
     removed_candidate_ids: r(array('editId',0,12)), preserve_retained: o('bool'), release_extent: o('bool') },
   AcknowledgedIntent: { dateIso: r('date'), place: r('label500'), placeLabel: r('label500'), placeRef: r('placeRef'), mode: r(enumeration('typed')),
-    selected: r(array(enumeration('food','culture','views','fika','nightlife','green','second_hand'),0,7)),
-    preferencePriority: o(array(enumeration('food','culture','views','fika','nightlife','green','second_hand'),0,7)),
+    selected: r(preferences),
+    preferencePriority: o(preferences),
     walkKey: r(enumeration('calm','balanced','full','free')), dayEdit: o('RequestEdit'), excludedCandidateIds: r(array('editId',0,53)),
     pinnedCandidateIds: r(array('candidateInputId',0,12)), liveEventChoices: r(array('LiveChoice',0,52)) },
-  InputIntent: { dateIso: r('date'), preferences: r(array(enumeration('food','culture','views','fika','nightlife','green','second_hand'),0,7)),
-    preferencePriority: r(array(enumeration('food','culture','views','fika','nightlife','green','second_hand'),0,7)),
+  InputIntent: { dateIso: r('date'), preferences: r(preferences),
+    preferencePriority: r(preferences),
     dayRhythm: r(enumeration('calm','balanced','full','free')), excludedCandidateIds: r(array('editId',0,53)),
     pinnedCandidateIds: r(array('candidateInputId',0,12)), liveEventChoices: r(array('LiveChoice',0,52)), dayEdit: rule('RequestEdit',true,true) },
   Point: { lat: r('lat'), lng: r('lng') },
