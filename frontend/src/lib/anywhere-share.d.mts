@@ -22,5 +22,5 @@ export declare function shareablePlace(inputs?: { place?: string | null; placeLa
 
 export declare function decodeShareParams(
   search: string | URLSearchParams,
-  allowedPrefKeys?: string[] | null,
-): { city: string | null; place: string; placeRef: string | null; invalidPlaceRef: boolean; preferences: string[]; preferencePriority?: PlannerPreferenceKey[]; dayEdit?: DayEdit | null; invalidDayEdit?: boolean; dayOffset: 0 | 1; walkKey: string; lang: "sv" | "en" | null };
+  allowedPrefKeys?: readonly string[] | null,
+): { city: string | null; place: string; placeRef: string | null; invalidPlaceRef: boolean; preferences: string[]; explicitEmptyPreferences?: boolean; preferencePriority?: PlannerPreferenceKey[]; dayEdit?: DayEdit | null; invalidDayEdit?: boolean; dayOffset: 0 | 1; walkKey: string; lang: "sv" | "en" | null };

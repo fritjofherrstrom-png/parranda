@@ -30,6 +30,87 @@ async function setup(t,options={},supplyOptions={}) {
   t.after(async()=>{work.resolve(collection([]));await new Promise(r=>server.close(r));});
   return {server,work,records,calls:()=>calls,loaderCalls:()=>loaderCalls,weatherCalls:()=>weatherCalls};
 }
+
+test('a dated Live music match from the original pending source can extend a focused day', async t => {
+  const h = await setup(t);
+  const initial = await post(h.server, routePath, { ...routeBody, preferences: ['food', 'live_music'] });
+  assert.equal(initial.body.live_events.pending, true);
+  assert.deepEqual(initial.body.agnostic_route_output_experiment.constraint_negotiation.preference_coverage.missing_preferences, ['live_music']);
+  const token = initial.body.live_completion.token;
+  h.work.resolve(collection([{ ...event, title: 'Harbour Quartet', intents: ['live_music'] }]));
+  await new Promise(resolve => setImmediate(resolve));
+  const read = await post(h.server, readPath, { token });
+  assert.deepEqual(read.body.live_events.tonight[0].matched_preferences, ['live_music']);
+  const upgraded = await post(h.server, upgradePath, { token });
+  assert.equal(upgraded.body.live_route_upgrade.state, 'applied');
+  assert.equal(upgraded.body.result.days[0].primary_route.main_stops.at(-1).event_id, event.id);
+  assert.deepEqual(upgraded.body.result.agnostic_route_output_experiment.constraint_negotiation.preference_coverage.covered_preferences, ['food', 'live_music']);
+});
+
+test('a late verified concert can publish a withheld Live music day around two eligible pinned stops', async t => {
+  const h = await setup(t);
+  const pins = h.records.slice(0, 2).map(record => record.id);
+  const initial = await post(h.server, routePath, { ...routeBody, preferences: ['live_music'], pinned_candidate_ids: pins });
+  const experiment = initial.body.agnostic_route_output_experiment;
+  assert.equal(initial.status, 200);
+  assert.equal(initial.body.live_events.pending, true);
+  assert.deepEqual(initial.body.days, []);
+  assert.deepEqual(experiment.eligibility.blockers, []);
+  assert.deepEqual(experiment.promotion.reasons, ['requested_intent_unmet:live_music', 'no_requested_intent_covered']);
+  const token = initial.body.live_completion.token;
+  const loaderCalls = h.loaderCalls(), weatherCalls = h.weatherCalls();
+  h.work.resolve(collection([{ ...event, title: 'Harbour Quartet', intents: ['live_music'] }]));
+  await new Promise(resolve => setImmediate(resolve));
+  const completed = await post(h.server, readPath, { token });
+  assert.equal(completed.body.days, undefined);
+  assert.deepEqual(completed.body.live_events.tonight[0].matched_preferences, ['live_music']);
+  const upgraded = await post(h.server, upgradePath, { token });
+  assert.equal(upgraded.status, 200, JSON.stringify(upgraded.body));
+  assert.equal(upgraded.body.live_route_upgrade.state, 'applied');
+  assert.equal(initial.body.live_completion.route_upgrade, 'explicit_request');
+  assert.equal(completed.body.live_completion.route_upgrade, 'explicit_request');
+  const result = upgraded.body.result;
+  const stops = result.days[0].primary_route.main_stops;
+  assert.deepEqual(stops.slice(0, -1).map(stop => stop.id).sort(), pins.toSorted());
+  assert.equal(stops.at(-1).event_id, event.id);
+  assert.deepEqual(result.agnostic_route_output_experiment.constraint_negotiation.preference_coverage.covered_preferences, ['live_music']);
+  assert.equal(result.agnostic_route_output_experiment.pinned_candidates.honored_count, 2);
+  assert.equal(h.loaderCalls(), loaderCalls);
+  assert.equal(h.weatherCalls(), weatherCalls);
+  assert.equal(h.calls(), 1);
+});
+
+test('a pending concert cannot grant replay when the Live music request has no viable base route', async t => {
+  const h = await setup(t);
+  const initial = await post(h.server, routePath, { ...routeBody, preferences: ['live_music'] });
+  assert.equal(initial.body.live_events.pending, true);
+  assert.deepEqual(initial.body.days, []);
+  assert.ok(initial.body.agnostic_route_output_experiment.eligibility.blockers.length > 0);
+  const token = initial.body.live_completion.token;
+  h.work.resolve(collection());
+  await new Promise(resolve => setImmediate(resolve));
+  const read = await post(h.server, readPath, { token });
+  assert.deepEqual(read.body.live_events.tonight[0].matched_preferences, ['live_music']);
+  assert.equal((await post(h.server, upgradePath, { token })).status, 409);
+});
+
+for (const [label, ineligible] of [
+  ['an unrelated event', { ...event, title: 'Concert poster exhibition', tags: ['music'] }],
+  ['a concert without route attestation', { ...event, route_eligible: false }],
+]) test(`a withheld Live music day cannot publish after ${label}`, async t => {
+  const h = await setup(t);
+  const pins = h.records.slice(0, 2).map(record => record.id);
+  const initial = await post(h.server, routePath, { ...routeBody, preferences: ['live_music'], pinned_candidate_ids: pins });
+  assert.deepEqual(initial.body.days, []);
+  const token = initial.body.live_completion.token;
+  h.work.resolve(collection([ineligible]));
+  await new Promise(resolve => setImmediate(resolve));
+  const upgraded = await post(h.server, upgradePath, { token });
+  assert.equal(upgraded.status, 200);
+  assert.equal(upgraded.body.live_route_upgrade.state, 'not_eligible');
+  assert.equal(upgraded.body.result, undefined);
+});
+
 test('explicit upgrade replays the original engine finalization with a new verified occurrence and no acquisition',async t=>{
   const h=await setup(t);
   const initial=await post(h.server,routePath,routeBody);

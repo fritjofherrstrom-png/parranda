@@ -12,6 +12,56 @@ const {
 
 const normalize = (value) => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
+const musicDate = "2026-07-12";
+const musicContext = { selectedDate: musicDate, now: "2026-07-12T11:00:00Z" };
+const musicOccurrence = {
+  title: "Harbour Quartet",
+  tags: ["music_event"],
+  source_url: "https://calendar.example/events/harbour-quartet",
+  timezone: "Europe/Stockholm",
+  starts_at: "2026-07-12T17:00:00Z",
+  ends_at: "2026-07-12T19:00:00Z",
+};
+
+test("dated Live music accepts a structured music occurrence or an explicit performance title", () => {
+  for (const event of [musicOccurrence, ...["Jazzkonsert på kajen", "Brass concert at City Hall", "Live music: Harbour Quartet"]
+    .map(title => ({ ...musicOccurrence, title, tags: [] }))]) {
+    const fit = scoreEventPreferenceFit(event, ["live_music"], musicContext);
+    assert.deepEqual(fit.matched_preferences, ["live_music"], event.title);
+    assert.deepEqual(fit.missing_preferences, [], event.title);
+  }
+});
+
+test("a music venue, adjacent programme or different date supplies no Live music fit", () => {
+  const cases = [
+    { ...musicOccurrence, title: "Concert poster exhibition", tags: ["music"] },
+    { ...musicOccurrence, title: "Local jazz programme", tags: ["music", "culture"] },
+    { ...musicOccurrence, title: "Concert Hall", tags: ["music_venue"], route_role_hint: "evening_anchor" },
+    { ...musicOccurrence, title: "Concert photography awards", tags: [] },
+    { ...musicOccurrence, title: "Cancelled concert" },
+    { ...musicOccurrence, title: "Local history exhibition", tags: ["culture"], place: "Jazz and Concert Hall" },
+    { ...musicOccurrence, title: "Harbour concert", source_url: null },
+    { ...musicOccurrence, starts_at: null, ends_at: null },
+    { ...musicOccurrence, starts_at: "2026-07-13T17:00:00Z", ends_at: "2026-07-13T19:00:00Z" },
+    { ...musicOccurrence, recurrence: { occurrence_status: "unconfirmed" } },
+    { ...musicOccurrence, timing_relevance: "stale" },
+    { ...musicOccurrence, time_window: { kind: "period", starts_on: musicDate, ends_on: "2026-07-14" } },
+  ];
+  for (const event of cases) {
+    const fit = scoreEventPreferenceFit(event, ["live_music"], musicContext);
+    assert.deepEqual(fit.matched_preferences, [], event.title);
+    assert.deepEqual(fit.partial_preferences, [], event.title);
+    assert.deepEqual(fit.missing_preferences, ["live_music"], event.title);
+  }
+});
+
+test("a source music classification does not change the broad nightlife preference", () => {
+  const fit = scoreEventPreferenceFit({ ...musicOccurrence, tags: [], intents: ["live_music"] }, ["nightlife"], musicContext);
+  assert.deepEqual(fit.matched_preferences, []);
+  assert.deepEqual(fit.partial_preferences, []);
+  assert.deepEqual(scoreEventPreferenceFit({ ...musicOccurrence, tags: ["live_music"] }, ["nightlife"], musicContext).matched_preferences, ["bars"]);
+});
+
 test("structured provider semantics match canonical planner preferences", () => {
   const fit = scoreEventPreferenceFit(
     {

@@ -6,6 +6,7 @@
  * not state. A token without a mapping falls back to itself in `label`, and a
  * reason this build does not know falls back to the plain sentence.
  */
+import { PLANNER_INTEREST_GROUPS } from "../../../../shared/planner-intent.mjs";
 import { ANYWHERE_PREFERENCES } from "../../lib/anywhere-payload.mjs";
 import type { LiveEventRelevance } from "../../lib/pulse-view.mjs";
 
@@ -101,9 +102,14 @@ export const PLANNER_INTENT_ALIASES: Record<string, string> = {
   vintage: "second_hand",
 };
 
+const PICK_LABELS = new Map([
+  ...ANYWHERE_PREFERENCES,
+  ...PLANNER_INTEREST_GROUPS.flatMap(({ options }) => options),
+].map(option => [option.key, option]));
+
 /** The pick exactly as its chip reads ("Food & drink"), or the intent label. */
 export function pickLabel(key: string, lang: Lang): string {
-  const chip = ANYWHERE_PREFERENCES.find((pref: { key: string }) => pref.key === key);
+  const chip = PICK_LABELS.get(key);
   return chip ? (lang === "en" ? chip.en : chip.sv) : label(INTENT_LABELS, key, lang);
 }
 
@@ -125,7 +131,7 @@ export function partialPreferenceLabels(stop: any, selected: string[], lang: Lan
     (Array.isArray(stop?.partial_preferences) ? stop.partial_preferences : [])
       .map((value: string) => PLANNER_INTENT_ALIASES[value] || value)
       .filter((value: string) => requested.has(value))
-      .map((value: string) => label(INTENT_LABELS, value, lang));
+      .map((value: string) => INTENT_LABELS[value]?.[lang] ?? pickLabel(value, lang));
   return [...new Set<string>(labels)];
 }
 
