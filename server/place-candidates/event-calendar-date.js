@@ -24,11 +24,13 @@ function eventOccursOnDate(event, date, now) {
   if (!normalizeSourceEventDate(date) || event?.freshness === "stale" || event?.timing_relevance === "stale") return false;
   const window = event?.time_window;
   const timezone = normalizeIanaTimezone(event?.timezone || window?.timezone);
-  const instant = new Date(now);
-  if (!Number.isFinite(instant.getTime())) return false;
+  // Callers with already time-gated Live rows can check the calendar fact
+  // again without claiming that a new observation happened.
+  const instant = now === undefined ? null : new Date(now);
+  if (instant && !Number.isFinite(instant.getTime())) return false;
   // Without a venue timezone, only expire dates already past everywhere. This
   // is a conservative bound, not a claim that the venue is in UTC-12.
-  const today = localCalendarDate(instant, timezone || "Etc/GMT+12");
+  const today = instant ? localCalendarDate(instant, timezone || "Etc/GMT+12") : null;
   if (today && date < today) return false;
 
   // A source range without stated occurrence days never claims a date.
@@ -56,7 +58,7 @@ function eventOccursOnDate(event, date, now) {
   if (!event?.starts_at || !Number.isFinite(start.getTime())) return false;
   if (!event.ends_at) return localCalendarDate(start, timezone) === date;
   const end = new Date(event.ends_at);
-  if (!Number.isFinite(end.getTime()) || end <= start || end <= instant) return false;
+  if (!Number.isFinite(end.getTime()) || end <= start || (instant && end <= instant)) return false;
   return intervalOverlapsDates(start.getTime(), end.getTime(), date, date, timezone);
 }
 
@@ -64,7 +66,7 @@ function localSessionStillOpen(window, date, timezone, instant) {
   const endDate = window.local_end <= window.local_start ? addCalendarDays(date, 1) : date;
   const startsAt = normalizeSourceEventDateTime(`${date}T${window.local_start}`, { timezone });
   const endsAt = normalizeSourceEventDateTime(`${endDate}T${window.local_end}`, { timezone });
-  return Boolean(startsAt && endsAt && new Date(endsAt) > instant && new Date(endsAt) > new Date(startsAt));
+  return Boolean(startsAt && endsAt && (!instant || new Date(endsAt) > instant) && new Date(endsAt) > new Date(startsAt));
 }
 
 function listedOccurrenceDates(window) {

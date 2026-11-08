@@ -58,3 +58,12 @@ test('wire bound covers chunked UTF-8 streams, wrong lengths, malformed JSON and
   const pending=readPublishedDay(response,{...options,signal:signal.signal});
   signal.abort();release(mockEnvelope());await assert.rejects(pending);
 });
+
+test('mixed grouped interests and explicit first choice survive reopening a shared day', () => {
+  const envelope = mockEnvelope();
+  envelope.intent.selected = ['culture', 'cheap_eats', 'waterside', 'live_music'];
+  envelope.intent.preferencePriority = ['cheap_eats', 'live_music'];
+  const restored = parsePublishedDay(envelope, options);
+  assert.deepEqual(restored?.entry.inputs.selected, ['culture', 'cheap_eats', 'waterside', 'live_music']);
+  assert.deepEqual(restored?.entry.inputs.preferencePriority, ['cheap_eats', 'live_music']);
+});

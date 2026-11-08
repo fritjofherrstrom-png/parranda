@@ -19,6 +19,36 @@
  * Pure / side-effect free.
  */
 
+const { normalizePlaceDetails } = require("../place-candidates/place-details");
+
+// Planner's grouped interests use exact source classifications. The existing
+// quick choices below still allow the same broader and adjacent matches.
+const STABLE_PLACE_INTERESTS = {
+  restaurants: { role: "food_anchor", types: ["restaurant", "pizza", "trattoria", "taverna", "tavern", "osteria", "bistro"], excludedKinds: ["food_establishment"] },
+  brunch: { role: "food_anchor", kinds: ["brunch"] },
+  cafes: { role: "coffee_fika_stop", kinds: ["cafe", "coffee_shop"], curatedTypes: ["cafe", "coffee", "coffee_shop", "coffeehouse"] },
+  bakeries: { role: "coffee_fika_stop", types: ["bakery"], kinds: ["bakery"] },
+  cheap_eats: { role: "food_anchor", types: ["restaurant", "pizza", "street_food", "trattoria", "taverna", "tavern", "osteria", "bistro", "fast_food"], excludedKinds: ["food_establishment"], price: "$" },
+  art_museums: { role: "culture_stop", kinds: ["art_museum"] },
+  history_museums: { role: "culture_stop", kinds: ["history_museum"] },
+  art_galleries: { role: "culture_stop", kinds: ["art_gallery"], curatedTypes: ["gallery"] },
+  historic_sites: { role: "culture_stop", types: ["historic_site", "castle", "monument"] },
+  viewpoint_places: { role: "scenic_anchor", types: ["viewpoint", "lookout", "overlook"] },
+  parks_gardens: { role: "green_walk_stop", types: ["park", "garden"], excludedKinds: ["nature_reserve"] },
+  waterside: { role: "green_walk_stop", types: ["beach", "bathing_spot", "swimming_area", "marina", "pier"], taggedTypes: { promenade: ["waterfront"] } },
+  bathing_places: { role: "swimming_coast_option", types: ["bathing_spot", "swimming_area"], kinds: ["bathing_place"] },
+  marketplaces: { role: "market_stop", kinds: ["marketplace", "farmers_market", "flea_market"], curatedTypes: ["market"] },
+  flea_markets: { role: "market_stop", kinds: ["flea_market"] },
+  antique_shops: { role: "vintage_second_hand_option", types: ["antiques_shop"], kinds: ["antiques"] },
+  wine_bars: { role: "evening_bar_option", types: ["wine_bar"], kinds: ["wine_bar"] },
+  cocktail_bars: { role: "evening_bar_option", types: ["cocktail_bar"], kinds: ["cocktail_bar"] },
+  beer_places: { role: "evening_bar_option", types: ["brewery", "beer_bar", "beer_garden", "biergarten", "taproom"], kinds: ["beer_place"] },
+};
+
+const STABLE_PLACE_INTEREST_ROLES = Object.freeze(Object.fromEntries(
+  Object.entries(STABLE_PLACE_INTERESTS).map(([key, { role }]) => [key, role]),
+));
+
 // Canonical user intents. Each carries the catalog types/tags that strongly or
 // weakly satisfy it. "strong" → the candidate clearly serves the intent; "weak"
 // → adjacent/supporting only.
@@ -139,6 +169,10 @@ const CANONICAL_INTENTS = {
     weak_tags: ["lokalt", "local"],
     aliases: ["low_energy", "low-energy", "low energy", "low-key", "lowkey", "relax", "chill", "calm", "lugnt", "easy"],
   },
+  ...Object.fromEntries(Object.entries(STABLE_PLACE_INTERESTS).map(([key, definition]) => [
+    key, { label: key.replaceAll("_", " "), aliases: [], exact_place: definition },
+  ])),
+  live_music: { label: "live music", aliases: [] },
 };
 
 // Context modifiers — they TILT scoring, they are never intents themselves.
@@ -167,7 +201,7 @@ const WEAK_MATCH = 0.6;
 
 // Build a fast alias → canonical-intent index once.
 const INTENT_BY_ALIAS = (() => {
-  const index = {};
+  const index = Object.create(null);
   for (const [intent, def] of Object.entries(CANONICAL_INTENTS)) {
     for (const alias of def.aliases) {
       index[slug(alias)] = intent;
@@ -234,6 +268,7 @@ function matchCandidateToIntent(candidate, intent) {
   if (!def) return { strength: 0, level: "none", reason: null };
 
   const type = slug(candidate?.type);
+  if (def.exact_place) return matchExactPlace(candidate, type, def.exact_place);
   const tagSlugs = slugSet(candidate?.tags);
 
   const strongTypeHit = (def.strong_types || []).map(slug).includes(type);
@@ -259,6 +294,38 @@ function matchCandidateToIntent(candidate, intent) {
   }
 
   return { strength: 0, level: "none", reason: null };
+}
+
+function matchExactPlace(candidate, type, definition) {
+  const kind = normalizePlaceDetails(candidate?.place_details, candidate?.type)?.kind;
+  if (!definition.excludedKinds?.includes(kind) &&
+      (!definition.price || candidate?.source_price_level === definition.price)) {
+    const kindHit = definition.kinds?.includes(kind);
+    const requiredTags = Object.hasOwn(definition.taggedTypes || {}, type) ? definition.taggedTypes[type] : [];
+    const typeHit = definition.types?.includes(type) ||
+      (!kind && candidate?.city_pack_owned === true && definition.curatedTypes?.includes(type)) ||
+      requiredTags.some(tag => slugSet(candidate?.tags).has(tag));
+    if (kindHit || typeHit) {
+      const reason = definition.price ? "source_price_level:lowest" : kindHit ? "source_kind:" + kind : "type:" + type;
+      return { strength: STRONG_MATCH, level: "strong", reason };
+    }
+  }
+  return { strength: 0, level: "none", reason: null };
+}
+
+// Give each represented interest one seat before a bounded depth cut. The
+// caller supplies its ranked, eligible tier so this cannot admit new supply.
+function exactInterestRepresentatives(entries, intents, covers) {
+  const covered = new Set();
+  const representatives = [];
+  for (const intent of intents) {
+    if (covered.has(intent)) continue;
+    const match = entries.find(entry => covers(entry, intent));
+    if (!match) continue;
+    representatives.push(match);
+    for (const key of intents) if (covers(match, key)) covered.add(key);
+  }
+  return representatives;
 }
 
 /**
@@ -308,11 +375,13 @@ function slug(value) {
 
 module.exports = {
   CANONICAL_INTENTS,
+  STABLE_PLACE_INTEREST_ROLES,
   MODIFIERS,
   STRONG_MATCH,
   WEAK_MATCH,
   normalizeUserIntents,
   matchCandidateToIntent,
+  exactInterestRepresentatives,
   candidateModifiers,
   isViewpointAnchor,
 };

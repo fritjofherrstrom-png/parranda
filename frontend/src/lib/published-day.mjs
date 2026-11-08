@@ -1,14 +1,13 @@
 import { buildSavedEntry } from './anywhere-storage.mjs';
 import { anchorKey } from './recompose-retention.mjs';
 import { buildCommitmentSnapshot, readCommitmentSnapshot } from './commitment-snapshot.mjs';
-import { normalizeDayEdit, normalizePreferencePriority } from '../../../shared/planner-intent.mjs';
+import { MAX_PLANNER_PREFERENCES, PLANNER_PREFERENCE_KEYS, normalizeDayEdit, normalizePreferencePriority } from '../../../shared/planner-intent.mjs';
 import { isLiveOccurrenceId } from './live-stop-choice.mjs';
 import { validPlaceRef } from './anywhere-share.mjs';
 import { readVenueMentions } from '../../../shared/venue-mentions.mjs';
 
 export const MAX_PUBLISHED_DAY_BYTES = 1048576;
 const REF = /^[a-f0-9]{48}$/;
-const PREFS = ['food','culture','views','fika','nightlife','green','second_hand'];
 const object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
 const requireValue = condition => { if (!condition) throw new Error('published_day_unavailable'); };
@@ -47,7 +46,7 @@ export function parsePublishedDay(value, { ref, decision, now = Date.now() } = {
     const i = value.intent, r = value.result;
     const required = ['dateIso','place','placeLabel','placeRef','mode','selected','walkKey','excludedCandidateIds','pinnedCandidateIds','liveEventChoices'];
     requireValue(keys(i,[...required,'preferencePriority','dayEdit'],required) && i.mode === 'typed' && realDate(i.dateIso) && string(i.place,500) && i.place === i.placeLabel && typeof i.placeRef === 'string' && validPlaceRef(i.placeRef) === i.placeRef);
-    requireValue(list(i.selected,7,p => PREFS.includes(p)) && ['calm','balanced','full','free'].includes(i.walkKey));
+    requireValue(list(i.selected,MAX_PLANNER_PREFERENCES,p => PLANNER_PREFERENCE_KEYS.includes(p)) && ['calm','balanced','full','free'].includes(i.walkKey));
     requireValue(i.preferencePriority === undefined || (Array.isArray(i.preferencePriority) && i.preferencePriority.length > 0 && same(normalizePreferencePriority(i.preferencePriority,i.selected),i.preferencePriority)));
     requireValue(i.dayEdit === undefined || (i.dayEdit?.action === 'remove' && same(normalizeDayEdit(i.dayEdit),i.dayEdit)));
     requireValue(list(i.pinnedCandidateIds,12,id => string(id,64) && /^[a-z0-9][a-z0-9_:.-]*$/i.test(id) && !id.startsWith('live:')) && list(i.excludedCandidateIds,53,id => string(id) && !id.startsWith('live:')));

@@ -61,6 +61,7 @@ const {
 } = require("../pulse-sources/source-event-time");
 const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensitive-events");
 const { scoreEventPreferenceFit } = require("../pulse-engine/event-preference-fit");
+const { normalizeUserIntents } = require("../candidates/intent-vocabulary");
 const { createSourceCache } = require("./source-cache");
 const { LIVE_COLLECTION_READ } = require('../planner/live-completion');
 const {
@@ -632,13 +633,13 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
   };
 }
 
-function rankEventViews(views, preferences = []) {
+function rankEventViews(views, preferences = [], context = {}) {
   return dedupeViews(
     views
     .filter(Boolean)
     // Every served row, fresh or from a pool cached before the link
     // classification existed, carries it — derived from its own source_url.
-    .map((view) => withEventPreferenceFit(withEventSourceLink(view), preferences))
+    .map((view) => withEventPreferenceFit(withEventSourceLink(view), preferences, context))
     .sort(
       (a, b) =>
         eventRankingScore(b) - eventRankingScore(a) ||
@@ -649,11 +650,14 @@ function rankEventViews(views, preferences = []) {
   );
 }
 
-function buildEventBucketSurface(views, preferences = []) {
+function buildEventBucketSurface(views, preferences = [], context = {}) {
   let evidenceRank = 0;
-  const evidence = rankEventViews(groupSourceOccurrences(views), preferences).map(view => {
+  const evidence = rankEventViews(groupSourceOccurrences(views), preferences, context).map(view => {
     if (view.occurrences?.length) return { ...view, live_evidence_rank: evidenceRank,
-      occurrences: view.occurrences.map(slot => ({ ...slot, live_evidence_rank: evidenceRank++ })) };
+      occurrences: view.occurrences.map(slot => ({
+        ...(view.requested_preferences?.includes("live_music") ? withEventPreferenceFit(slot, preferences, context) : slot),
+        live_evidence_rank: evidenceRank++,
+      })) };
     return { ...view, live_evidence_rank: evidenceRank++ };
   });
   const ranked = groupLiveProgramViews(evidence);
@@ -754,8 +758,8 @@ function buildEventBrowse(tonightSurface, thisWeekSurface) {
   };
 }
 
-function withEventPreferenceFit(view, preferences = []) {
-  const fit = scoreEventPreferenceFit(view, preferences);
+function withEventPreferenceFit(view, preferences = [], context = {}) {
+  const fit = scoreEventPreferenceFit(view, preferences, context);
   if (fit.requested_preferences.length === 0) return view;
   return {
     ...view,
@@ -793,13 +797,16 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
     }
   }
   const { _rankable_events: _internalPool, _live_destination_inputs: _privateInputs, ...publicResult } = collected;
+  const context = { selectedDate: collected.selected_date, now: now ?? undefined };
   const tonightSurface = buildEventBucketSurface(
     filterEventsForLiveScope(tonightPool, scope),
     preferences,
+    context,
   );
   const thisWeekSurface = buildEventBucketSurface(
     filterEventsForLiveScope(thisWeekPool, scope),
     preferences,
+    context,
   );
   const tonight = tonightSurface.highlights;
   const thisWeek = thisWeekSurface.highlights;
@@ -1174,10 +1181,12 @@ async function collectAnchorEvents({
   const tonightSurface = buildEventBucketSurface(
     filterEventsForLiveScope(tonight, scope),
     preferences,
+    { selectedDate, now: nowDate },
   );
   const thisWeekSurface = buildEventBucketSurface(
     filterEventsForLiveScope(thisWeek, scope),
     preferences,
+    { selectedDate, now: nowDate },
   );
   const rankedTonight = tonightSurface.highlights;
   const rankedThisWeek = thisWeekSurface.highlights;
@@ -2092,6 +2101,9 @@ function resolveDefaultEventSupply(
       }, unavailableSources);
     }
     const descriptors = sourcePlan.map((source) => compactSourceStatus({ source, status: "pending", raw: [] }));
+    // Earlier aggregate pools lack source-owned music classification and
+    // status. Keep ordinary warm reads and re-collect for this exact intent.
+    const requestsLiveMusic = Array.isArray(preferences) && normalizeUserIntents(preferences).intents.includes("live_music");
     const baseKey = eventCacheKey(
       anchor,
       now,
@@ -2101,7 +2113,7 @@ function resolveDefaultEventSupply(
       selectedDate,
       time,
       unavailableSources,
-    );
+    ) + (requestsLiveMusic ? ":live-music-v1" : "");
     // A plain coordinate/calendar warm-up has not performed local research.
     // Do not let it answer for a later resolver-attested discovery request.
     // Old derived pools also cannot attest topic-aware source selection;

@@ -1,6 +1,8 @@
 "use strict";
 
 const { normalizeUserIntents } = require("../candidates/intent-vocabulary");
+const { eventOccursOnDate } = require("../place-candidates/event-calendar-date");
+const { classifyEventSourceLink } = require("../pulse-sources/event-source-link");
 
 const STRONG_MATCH_SCORE = 3;
 const PARTIAL_MATCH_SCORE = 1;
@@ -134,6 +136,56 @@ const MATCHABLE_CUES = Object.freeze(Object.fromEntries(
   }]),
 ));
 
+const LIVE_MUSIC_PERFORMANCE_CUES = matchableCues([
+  "concert", "live music", "live concert", "jazz night", "music recital", "konsert", "livemusik", "levande musik",
+  "koncert", "konzert", "konsertti", "concierto", "concerto", "musique live", "συναυλία",
+]);
+const LIVE_MUSIC_EVENT_TAGS = normalizedSet([
+  ...LIVE_MUSIC_PERFORMANCE_CUES.words, "music_event", "musicevent", "music performance",
+]);
+const NON_PERFORMANCE_TITLE_CUES = [
+  "concert series", "programme", "program", "guide", "poster", "posters",
+  "exhibition", "screening", "workshop", "lecture", "talk", "rehearsal", "audition", "livestream", "live stream",
+  "konserthus", "konsertlokal", "konsertserie", "utstallning", "foredrag", "repetition", "provspelning",
+];
+const CANCELLED_MUSIC_TITLE_CUES = ["cancelled", "canceled", "postponed", "installd", "installt", "uppskjuten"];
+const PERFORMANCE_TITLE_CONNECTOR = / (?:at|in|with|for|by|from|pa|i|med|av|kl|klockan|mit|im|de|di|con|avec|en) /;
+
+function liveMusicTitleMatch(title) {
+  // A performance cue must close a title or a distinct part of it. In
+  // "Concert at City Hall" the performance is the subject. In "Concert Hall"
+  // or "Concert photography awards", the word only modifies another noun.
+  const subjects = title.split(/[:–—]|\s-\s/u).flatMap(part => {
+    const fragment = normalizeSearchText(part);
+    return [fragment, fragment.split(PERFORMANCE_TITLE_CONNECTOR)[0]];
+  });
+  const { words } = LIVE_MUSIC_PERFORMANCE_CUES;
+  if (subjects.some(subject => words.some(cue => subject === cue || subject.endsWith(` ${cue}`)))) return "cue";
+  if (subjects.some(subject => hasCompoundCue(subject.split(" ").at(-1), LIVE_MUSIC_PERFORMANCE_CUES))) return "compound_cue";
+  return null;
+}
+
+function liveMusicMatch(event, { selectedDate, now } = {}) {
+  if (event?.calendar_fact || event?.recurrence?.occurrence_status === "unconfirmed" ||
+      event?.pulse_display_eligible === false || event?.fusion_status === "conflict") return null;
+  if (!classifyEventSourceLink(event?.source_url).source_link_kind) return null;
+  const window = event.time_window;
+  if (window?.kind === "all_day") {
+    const start = event.starts_on || window.starts_on;
+    if ((event.ends_on || window.ends_on || start) !== start) return null;
+  }
+  const title = event.title || event.name;
+  if (typeof title !== "string") return null;
+  const text = normalizeSearchText(title);
+  if (!text || hasCue(text, CANCELLED_MUSIC_TITLE_CUES) || !eventOccursOnDate(event, selectedDate, now)) return null;
+  if (Array.isArray(event.intents) && event.intents.includes("live_music")) return "structured";
+  // Publisher keywords can describe a subject, such as a concert poster
+  // exhibition. The title veto applies to keyword and title inference alike.
+  if (hasCue(text, NON_PERFORMANCE_TITLE_CUES)) return null;
+  if (Array.isArray(event.tags) && event.tags.some(tag => LIVE_MUSIC_EVENT_TAGS.has(normalizeSearchText(tag)))) return "structured";
+  return title.length <= 180 ? liveMusicTitleMatch(title) : null;
+}
+
 const ROLE_INTENTS = Object.freeze({
   market_stop: ["markets"],
   culture_stop: ["museums"],
@@ -146,7 +198,7 @@ const ROLE_INTENTS = Object.freeze({
   evening_anchor: ["bars"],
 });
 
-function scoreEventPreferenceFit(event, preferences = []) {
+function scoreEventPreferenceFit(event, preferences = [], context = {}) {
   // A holiday's name does not prove a venue programme matching the user's
   // culture/food/nightlife picks, even if it contains "festival" or "market".
   if (event?.calendar_fact?.kind === "public_holiday") event = null;
@@ -168,6 +220,14 @@ function scoreEventPreferenceFit(event, preferences = []) {
   const partial = [];
   const reasons = [];
   for (const intent of requested) {
+    if (intent === "live_music") {
+      const match = liveMusicMatch(event, context);
+      if (match) {
+        matched.push(intent);
+        reasons.push(`preference_live_music_${match}`);
+      }
+      continue;
+    }
     if (directIntents.has(intent)) {
       matched.push(intent);
       reasons.push(`preference_${intent}_structured`);
@@ -206,9 +266,12 @@ function scoreEventPreferenceFit(event, preferences = []) {
 }
 
 function eventSemanticAtoms(event) {
+  // The internal provider-mapped classification belongs to the dated rule.
+  // Existing raw tags retain their broader culture and nightlife semantics.
+  const intents = Array.isArray(event?.intents) ? event.intents.filter(intent => intent !== "live_music") : [];
   return [
     ...(Array.isArray(event?.tags) ? event.tags : []),
-    ...(Array.isArray(event?.intents) ? event.intents : []),
+    ...intents,
     event?.route_role_hint,
   ]
     .map((value) => String(value || "").trim())

@@ -12,10 +12,9 @@ const { chromium } = require('playwright-core');
 const { DuckDBInstance } = require('@duckdb/node-api');
 const { buildApp } = require('../server/app');
 const { createOpenDataLoader, resolveDefaultOpenDataLoader } = require('../server/place-candidates/open-data-loader');
-const { createOvertureSource, buildOvertureQuery, mapOvertureRow } = require('../server/place-candidates/overture-source');
+const { createOvertureSource, mapOvertureRow } = require('../server/place-candidates/overture-source');
 const { createSourceCache } = require('../server/place-candidates/source-cache');
 const { digest } = require('../server/place-candidates/overture-sample-cache');
-const { createHash } = require('node:crypto');
 
 const anchor = { lat: 44.8178, lng: 20.4569 };
 const clock = () => new Date('2026-10-25T09:00:00Z');
@@ -41,12 +40,14 @@ async function makeLoader(t, kind) {
       category: 'coffee_shop', category_hierarchy: ['coffee_shop'], confidence: .99,
       operating_status: null, licenses: ['CC0-1.0'], lat: anchor.lat + i * .0008, lng: anchor.lng + (i % 2) * .001,
     }));
-    const priorSql = buildOvertureQuery({ release, parquetPaths: [asset.path], ...anchor }).replace(/, 'used_bookstore'/g, '');
+    // Hash of the e4021a8 query for this anchor, release and asset, from before
+    // both the used-bookstore leaf and the subtype strata were added.
     const receipt = { version: 1, release, assets: [asset], acquiredAt: verifiedAt, verifiedAt, recordsHash: digest(records),
-      queryHash: createHash('sha256').update('overture-v6:normalizer-1\0').update(priorSql).digest('hex') };
-    const raw = createSourceCache({ dir, namespace: 'overture-v6', ttlMs: 100, now: () => verifiedAt });
-    raw.set(key, { version: 1, cacheKey: key, records, receipt });
-    const before = raw.inspect(key);
+      queryHash: 'c7d92fe8d5867ee60f3dbbbc806d9e75005b409fd2d4e6ca7041403b563b2a5e' };
+    const cacheOptions = { dir, namespace: 'overture-v6', ttlMs: 100, now: () => verifiedAt };
+    createSourceCache(cacheOptions).set(key, { version: 1, cacheKey: key, records, receipt });
+    const readStored = () => createSourceCache(cacheOptions).inspect(key);
+    const before = readStored();
     t.mock.method(globalThis, 'fetch', async () => { state.calls++; return { ok: false, status: 503 }; });
     const loader = resolveDefaultOpenDataLoader({ PARRANDA_OPEN_DATA_LOADER: 'enabled', PARRANDA_OVERTURE_SOURCE: 'enabled',
       PARRANDA_CACHE_DIR: dir, PARRANDA_SOURCE_CACHE_TTL_MS: '100', PARRANDA_OVERPASS_ENDPOINTS: 'https://controlled.example/overpass' });
@@ -54,7 +55,7 @@ async function makeLoader(t, kind) {
       const rows = await loader(request); state.inputs = rows;
       assert.equal(rows.loader_metadata.cache.served_stale, true);
       assert.equal(rows.loader_metadata.cache.query_contract, 'previous');
-      assert.deepEqual(raw.inspect(key), before, 'HTTP composition must not renew the predecessor envelope');
+      assert.deepEqual(readStored(), before, 'HTTP composition must not renew the predecessor envelope');
       return rows;
     } };
   }

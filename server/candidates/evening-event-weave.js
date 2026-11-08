@@ -23,6 +23,8 @@ const {
   normalizeSourceEventDateTime,
 } = require("../pulse-sources/source-event-time");
 const { listedOccurrenceDates } = require("../place-candidates/event-calendar-date");
+const { normalizeUserIntents } = require("./intent-vocabulary");
+const { scoreEventPreferenceFit } = require("../pulse-engine/event-preference-fit");
 
 const { liveOccurrenceId, activeLiveChoices } = require("../planner/live-occurrence-choice");
 const EVENING_START_HOUR = 17;
@@ -205,10 +207,10 @@ function eventOccurrenceForDate(event, selectedDate) {
   return materializeContinuousOccurrence(event, date);
 }
 
-function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null, liveEventChoices = [] } = {}) {
-  if (!placeStructure || typeof placeStructure !== "object" || !placeStructure.district_day) {
-    return placeStructure;
-  }
+function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null, liveEventChoices = [], preferences = [] } = {}) {
+  const requested = normalizeUserIntents(preferences).intents;
+  const requestsMusic = requested.includes("live_music");
+  if (!placeStructure?.district_day && !requestsMusic) return placeStructure;
   const requestedDate = normalizeSourceEventDate(selectedDate);
   const tonight = requestedDate
     ? selectedDayCandidates(liveEvents)
@@ -220,17 +222,29 @@ function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null, li
   // notices can stay in Pulse/source inspect, but must not become an evening
   // anchor just because they are timed and geocoded.
   const choices = activeLiveChoices(liveEventChoices, requestedDate);
-  const clearEvent = () => ({ ...placeStructure, district_day: { ...placeStructure.district_day, evening_event: null } });
+  const clearEvent = () => placeStructure?.district_day
+    ? { ...placeStructure, district_day: { ...placeStructure.district_day, evening_event: null } }
+    : placeStructure;
   // Removal is deliberately subtractive, even if its old source disappeared.
   // It cannot vouch for or add an event; completion must not refill the slot.
   if (choices.some(choice => choice.action === "remove")) return clearEvent();
   const excluded = new Set(choices.filter(x => x.action === "replace").map(x => x.occurrence_id));
   const pins = new Set(choices.filter(x => x.action === "keep").map(x => x.occurrence_id));
   const eligible = tonight.filter(isEligibleEveningAnchor).filter(row => !excluded.has(liveOccurrenceId(row)));
+  const matchesMusic = row => requestsMusic && row?.route_eligible === true &&
+    scoreEventPreferenceFit(row, ["live_music"], { selectedDate: requestedDate }).level === "strong";
+  const music = eligible.find(matchesMusic);
   const event = pins.size
     ? eligible.find(row => row.route_eligible === true && pins.has(liveOccurrenceId(row)))
-    : eligible[0];
+    : music || (requested.length === 1 && requestsMusic ? null : eligible[0]);
   if (!event) return choices.length ? clearEvent() : placeStructure;
+  const exactMusic = event === music || (pins.size > 0 && matchesMusic(event));
+  if (!placeStructure?.district_day) {
+    if (!exactMusic && !pins.size) return placeStructure;
+    // Two admitted stops can form a route even when there is too little
+    // place supply for district clustering. Keep the ordinary Live stop gate.
+    placeStructure = { provenance: "agnostic_anchor", area_count: 0, district_day: { areas: [] } };
+  }
   const occurrenceId = liveOccurrenceId(event);
 
   const areas = Array.isArray(placeStructure.district_day.areas) ? placeStructure.district_day.areas : [];
@@ -265,6 +279,7 @@ function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null, li
     ...classifyEventSourceLink(event.source_url),
     license: event.license || null,
     cultural_tier: event.cultural_tier || null,
+    ...(exactMusic ? { covered_preferences: ["live_music"] } : {}),
     salience_score: Number.isFinite(event.salience_score) ? event.salience_score : null,
     // Venue-local timezone rides along (same contract as the event views) so a
     // "tonight at 19:00" renders in the VENUE's clock wherever it is shown.

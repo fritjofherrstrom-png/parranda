@@ -22,6 +22,50 @@ const {
 
 const ORIGINAL_FETCH = global.fetch;
 const { createSourceCache } = require("../server/place-candidates/source-cache");
+const { LIVE_COLLECTION_READ } = require('../server/planner/live-completion');
+
+test('Live music refreshes a warm pool that predates performance and status evidence', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'parranda-live-music-pool-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const request = { anchor: { lat: 55.6, lng: 13 }, now: '2026-07-12T09:00:00Z', selectedDate: '2026-07-12' };
+  const feed = { id: 'municipal-program', adapter: 'schema_org', endpoint: 'https://municipality.example/calendar',
+    timezone: 'Europe/Stockholm', bbox: [12.9, 55.5, 13.1, 55.7], source_tier: 'official', confidence: 'medium' };
+  const old = { id: 'postponed', title: 'Harbour concert', lat: 55.6, lng: 13, timezone: feed.timezone,
+    starts_at: '2026-07-12T17:00:00Z', ends_at: '2026-07-12T19:00:00Z',
+    source_url: 'https://municipality.example/postponed', route_eligible: true };
+  const neutralKey = eventCacheKey(request.anchor, request.now, [feed.id], 3000, null, request.selectedDate);
+  await createSourceCache({ namespace: 'agnostic-events-v25', dir }).get(neutralKey, async () => ({
+    coverage: 'covered', selected_date: request.selectedDate, tonight: [old], this_week: [],
+    acquisition: { source_health: { status: 'healthy', result: 'events_found' } },
+  }));
+  const sourceEvent = (id, name, fields = {}) => ({ '@type': 'MusicEvent', '@id': id, name,
+    url: `https://municipality.example/${id}`, startDate: old.starts_at, endDate: old.ends_at,
+    location: { name: 'Harbour Hall', geo: { latitude: 55.6, longitude: 13 } }, ...fields });
+  let collection, fetchCount = 0;
+  const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: 'enabled', PARRANDA_CACHE_DIR: dir,
+    PARRANDA_EVENT_FEEDS: JSON.stringify([feed]) }, {
+    requestTimeDiscovery: null,
+    collectEvents: input => (collection = collectAnchorEvents({ ...input, fetcher: async () => {
+      fetchCount++;
+      return { ok: true, json: async () => ({ '@graph': [
+        sourceEvent('postponed', old.title, { eventStatus: 'https://schema.org/EventPostponed' }),
+        sourceEvent('quartet', 'Harbour Quartet'),
+      ] }) };
+    } })),
+  });
+
+  assert.equal((await supply(request)).tonight[0]?.id, old.id);
+  assert.equal(fetchCount, 0, 'ordinary requests retain their existing warm pool');
+  const pending = await supply({ ...request, preferences: ['live_music'] });
+  assert.equal(pending.pending, true);
+  assert.deepEqual(pending.tonight, []);
+  await collection;
+  await new Promise(resolve => setImmediate(resolve));
+  const ready = pending[LIVE_COLLECTION_READ]();
+  assert.deepEqual(ready.tonight.map(row => [row.id, row.matched_preferences]), [['quartet', ['live_music']]]);
+  assert.equal((await supply({ ...request, preferences: ['food', 'live_music'] })).tonight[0]?.id, 'quartet');
+  assert.equal(fetchCount, 1, 'the refreshed evidence can be reranked without a second fetch');
+});
 
 test("a persisted v19 regional-only pool cannot answer for bounded local discovery", async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-regional-pool-"));

@@ -649,14 +649,15 @@ async function weaveEventStopFailSoft({ result, placeStructure, walkingRouter, w
   }
 }
 
-function reconcileConstraintAfterEventWeave({ experiment, woven, walkingKmTarget }) {
-  if (!woven?.applied || !experiment?.constraint_negotiation) return;
-  const finalRoute = woven.result?.days?.[0]?.primary_route || null;
+function reconcileConstraintAfterEventWeave({ experiment, woven, walkingKmTarget, routePublished = true }) {
+  const negotiation = experiment?.constraint_negotiation;
+  if (!negotiation || (!woven?.applied && (routePublished || !negotiation.preference_coverage?.covered_preferences?.includes("live_music")))) return;
+  const finalRoute = routePublished ? woven.result?.days?.[0]?.primary_route : null;
   experiment.constraint_negotiation = reconcileAgnosticConstraintNegotiation({
-    negotiation: experiment.constraint_negotiation,
+    negotiation,
     experimentalRoute: finalRoute,
     walkingKmTarget,
-    walkingValidated: true,
+    walkingValidated: Boolean(woven?.applied && routePublished),
   });
 }
 
@@ -2519,6 +2520,7 @@ function buildApp({
         wovenPlaceStructure = weaveEveningEvent(agnosticPlaceStructure, liveEvents, {
           selectedDate: selectedRouteDate,
           liveEventChoices,
+          preferences,
         });
       } catch (_error) {
         wovenPlaceStructure = agnosticPlaceStructure;
@@ -2700,6 +2702,7 @@ function buildApp({
             experiment,
             woven: engineWoven,
             walkingKmTarget: requestedRhythm ? null : payload.walkingKmTarget,
+            routePublished: promotion.promote,
           });
           // The eligibility verdict belongs to the candidate context that was
           // actually PUBLISHED. When the gate withholds the engine's day, the
@@ -2768,6 +2771,7 @@ function buildApp({
       });
       const legacyWoven = await weaveEventStopFailSoft({
         result: publicResult,
+        ...(normalizeUserIntents(preferences).intents.includes("live_music") ? { requestedPreferences: preferences } : {}),
         placeStructure: wovenPlaceStructure,
         walkingRouter,
         walkingConfig,
