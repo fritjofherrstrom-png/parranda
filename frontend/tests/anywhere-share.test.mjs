@@ -34,7 +34,7 @@ test("a curated city share preserves its bounded citypack identity", () => {
 });
 
 test("defaults are omitted from the URL and restored on decode", () => {
-  const qs = encodeShareParams({ place: "Porto", preferences: [], dayOffset: 0, walkKey: "balanced", lang: "en" });
+  const qs = encodeShareParams({ place: "Porto", dayOffset: 0, walkKey: "balanced", lang: "en" });
   assert.ok(!qs.includes("day="), "today is the default → no day param");
   assert.ok(!qs.includes("km="), "balanced is the default → no km param");
   assert.ok(!qs.includes("prefs="), "no prefs → no prefs param");

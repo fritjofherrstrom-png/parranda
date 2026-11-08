@@ -145,8 +145,11 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
 
   // Spine extras (validatePlaceCandidate tolerates additional fields).
   base.evidence = evidence;
-  const details = require('./place-details').sourcePlaceDetails(record, type);
+  const { sourcePlaceDetails, normalizeSourcePriceLevel } = require('./place-details');
+  const details = sourcePlaceDetails(record, type);
   if (details) base.place_details = details;
+  const priceLevel = normalizeSourcePriceLevel(record.source_price_level);
+  if (priceLevel) base.source_price_level = priceLevel;
   base.candidate_origin = CANDIDATE_ORIGIN;
   base.provider_id = EXTERNAL_OPEN_PROVIDER_META.provider_id;
   base.source_family = primaryFamily;

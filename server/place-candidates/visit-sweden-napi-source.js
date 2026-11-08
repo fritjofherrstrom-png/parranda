@@ -20,6 +20,7 @@
  */
 
 const { createHash } = require("node:crypto");
+const { normalizeSourcePriceLevel } = require("./place-details");
 
 const VISIT_SWEDEN_NAPI_SEARCH_ENDPOINT = "https://data.visitsweden.com/store/search";
 const VISIT_SWEDEN_NAPI_ATTRIBUTION_URL = "https://docs.visitsweden.com/en/api/";
@@ -42,7 +43,7 @@ const LONGITUDE_FIELD = `metadata.predicate.literal_s.${predicateHash(LONGITUDE_
 
 const PLACE_ADDITIONAL_TYPE_MAP = new Map([
   ["Museum", { type: "museum", tags: ["kultur", "museum"] }],
-  ["ArtGallery", { type: "gallery", tags: ["kultur"] }],
+  ["ArtGallery", { type: "gallery", tags: ["kultur"], detailKind: "art_gallery" }],
   ["Park", { type: "park", tags: ["park", "green"] }],
   ["Garden", { type: "garden", tags: ["garden", "green"] }],
   ["BotanicalGarden", { type: "garden", tags: ["garden", "green"] }],
@@ -55,7 +56,7 @@ const PLACE_ADDITIONAL_TYPE_MAP = new Map([
 
 const FOOD_ADDITIONAL_TYPE_MAP = new Map([
   ["Restaurant", { type: "restaurant", tags: ["mat"] }],
-  ["CafeOrCoffeeShop", { type: "cafe", tags: ["kaffe", "fika"] }],
+  ["CafeOrCoffeeShop", { type: "cafe", tags: ["kaffe", "fika"], detailKind: "cafe" }],
   ["Bakery", { type: "bakery", tags: ["bakverk"] }],
   ["BarOrPub", { type: "bar", tags: ["nattliv"] }],
 ]);
@@ -286,11 +287,12 @@ function mapVisitSwedenEntry(entry, request) {
 
   const mapping = isFood
     ? (root["schema:additionalType"] == null
-      ? { type: "restaurant", tags: ["mat"] }
+      ? { type: "restaurant", tags: ["mat"], detailKind: "food_establishment" }
       : exactMapping(root["schema:additionalType"], FOOD_ADDITIONAL_TYPE_MAP))
     : exactPlaceMapping(root["schema:additionalType"]);
   if (!mapping) return null;
   const website = safeHttpId(root["schema:url"]);
+  const priceLevel = mapping.type === "restaurant" ? normalizeSourcePriceLevel(root["schema:priceRange"]) : null;
   return {
     id: `visit-sweden-napi-${contextId}-${entryId}`,
     name,
@@ -310,6 +312,8 @@ function mapVisitSwedenEntry(entry, request) {
     chain: false,
     operational_status: "unknown",
     operational_reasons: [],
+    ...(mapping.detailKind ? { place_details: { kind: mapping.detailKind } } : {}),
+    ...(priceLevel ? { source_price_level: priceLevel } : {}),
     ...(website ? { website } : {}),
   };
 }

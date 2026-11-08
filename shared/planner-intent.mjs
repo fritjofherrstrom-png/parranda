@@ -1,7 +1,44 @@
 /** Shared input intent only: no ranking, routing, source facts or authority. */
-export const PLANNER_PREFERENCE_KEYS = Object.freeze([
-  "food", "culture", "views", "fika", "nightlife", "green", "second_hand",
+export const MAX_PLANNER_PREFERENCES = 7;
+
+export const PLANNER_INTEREST_GROUPS = Object.freeze([
+  { key: "food_fika", sv: "Mat & fika", en: "Food & coffee", options: [
+    { key: "restaurants", sv: "Restauranger", en: "Restaurants" },
+    { key: "brunch", sv: "Frukost & brunch", en: "Breakfast & brunch" },
+    { key: "cafes", sv: "Kaféer", en: "Cafés" },
+    { key: "bakeries", sv: "Bagerier", en: "Bakeries" },
+    { key: "cheap_eats", sv: "Billig mat", en: "Cheap eats" },
+  ] },
+  { key: "culture_history", sv: "Konst & historia", en: "Art & history", options: [
+    { key: "art_museums", sv: "Konstmuseer", en: "Art museums" },
+    { key: "history_museums", sv: "Historiska museer", en: "History museums" },
+    { key: "art_galleries", sv: "Konstgallerier", en: "Art galleries" },
+    { key: "historic_sites", sv: "Historiska platser", en: "Historic sites" },
+  ] },
+  { key: "outdoors", sv: "Ute & vid vattnet", en: "Outdoors & by the water", options: [
+    { key: "viewpoint_places", sv: "Utsiktsplatser", en: "Viewpoints" },
+    { key: "parks_gardens", sv: "Parker & trädgårdar", en: "Parks & gardens" },
+    { key: "waterside", sv: "Vid vattnet", en: "By the water" },
+    { key: "bathing_places", sv: "Badplatser", en: "Swimming spots" },
+  ] },
+  { key: "markets_finds", sv: "Marknader & fynd", en: "Markets & finds", options: [
+    { key: "marketplaces", sv: "Marknader", en: "Markets" },
+    { key: "flea_markets", sv: "Loppmarknader", en: "Flea markets" },
+    { key: "second_hand", sv: "Second hand", en: "Second hand" },
+    { key: "antique_shops", sv: "Antikbutiker", en: "Antique shops" },
+  ] },
+  { key: "evening_live", sv: "Kväll & live", en: "Evening & live", options: [
+    { key: "wine_bars", sv: "Vinbarer", en: "Wine bars" },
+    { key: "cocktail_bars", sv: "Cocktailbarer", en: "Cocktail bars" },
+    { key: "beer_places", sv: "Bryggerier & öl", en: "Breweries & beer" },
+    { key: "live_music", sv: "Livemusik", en: "Live music" },
+  ] },
 ]);
+
+export const PLANNER_PREFERENCE_KEYS = Object.freeze([...new Set([
+  "food", "culture", "views", "fika", "nightlife", "green", "second_hand",
+  ...PLANNER_INTEREST_GROUPS.flatMap(({ options }) => options.map(({ key }) => key)),
+])]);
 const preferenceKeys = new Set(PLANNER_PREFERENCE_KEYS);
 
 function selectedPreferences(value) {
@@ -32,6 +69,7 @@ export function togglePreferenceSelection(state, key) {
     selected: selected.filter(value => value !== key),
     preferencePriority: preferencePriority.filter(value => value !== key),
   };
+  if (selected.length >= MAX_PLANNER_PREFERENCES) return { selected, preferencePriority };
   return { selected: [...selected, key], preferencePriority: [...preferencePriority, key] };
 }
 
