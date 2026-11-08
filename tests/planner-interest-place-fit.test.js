@@ -8,6 +8,7 @@ const { mapOsmElement, mapOverpassResponse } = require('../server/place-candidat
 const { buildCuratedCatalogPlaceCandidates } = require('../server/place-candidates/curated-catalog-provider');
 const { mapSchemaOrgPlaceToRecord } = require('../server/place-candidates/schema-org-place-source');
 const { mapRecordToCandidate } = require('../server/place-candidates/external-open-provider');
+const { resolveCandidateIdentity } = require('../server/candidates/entity-resolution');
 const { canonicalPriority } = require('../server/planner/day-composition-policy');
 const { selectPlannerRoleCandidates } = require('../server/planner/role-selector');
 
@@ -88,6 +89,28 @@ test('a generic food establishment needs a concrete meal category for Cheap eats
   const restaurant = schema(['FoodEstablishment', 'Restaurant'], '$');
   assert.equal(matchCandidateToIntent(generic, 'cheap_eats').level, 'none');
   assert.equal(matchCandidateToIntent(restaurant, 'cheap_eats').level, 'strong');
+});
+
+test('the canonical restaurant retains a same-place official price through deduplication', () => {
+  const [curated] = buildCuratedCatalogPlaceCandidates({ ...city, catalog: { allItems: [
+    { id: 'curated-venue', name: 'Publisher venue', kind: 'restaurant', ...origin },
+  ] } });
+  const { candidates } = resolveCandidateIdentity([curated, schema('Restaurant', '$')]);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].id, curated.id);
+  assert.equal(matchCandidateToIntent(candidates[0], 'cheap_eats').level, 'strong');
+  assert.equal(matchCandidateToIntent(curated, 'cheap_eats').level, 'none');
+});
+
+test('conflicting price evidence stays unknown despite another duplicate with a low price', () => {
+  const low = schema('Restaurant', '$', { url: 'https://official.example/low' });
+  const high = schema('Restaurant', '$$', { url: 'https://official.example/high' });
+  const laterLow = schema('Restaurant', '$', { url: 'https://official.example/later-low' });
+  for (const sources of [[low, high, laterLow], [high, low, laterLow]]) {
+    const { candidates } = resolveCandidateIdentity(sources);
+    assert.equal(candidates.length, 1);
+    assert.equal(matchCandidateToIntent(candidates[0], 'cheap_eats').level, 'none');
+  }
 });
 
 test('a music venue does not satisfy the dated Live music interest', () => {

@@ -61,6 +61,7 @@ const {
 } = require("../pulse-sources/source-event-time");
 const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensitive-events");
 const { scoreEventPreferenceFit } = require("../pulse-engine/event-preference-fit");
+const { normalizeUserIntents } = require("../candidates/intent-vocabulary");
 const { createSourceCache } = require("./source-cache");
 const { LIVE_COLLECTION_READ } = require('../planner/live-completion');
 const {
@@ -2100,6 +2101,9 @@ function resolveDefaultEventSupply(
       }, unavailableSources);
     }
     const descriptors = sourcePlan.map((source) => compactSourceStatus({ source, status: "pending", raw: [] }));
+    // Earlier aggregate pools lack source-owned music classification and
+    // status. Keep ordinary warm reads and re-collect for this exact intent.
+    const requestsLiveMusic = Array.isArray(preferences) && normalizeUserIntents(preferences).intents.includes("live_music");
     const baseKey = eventCacheKey(
       anchor,
       now,
@@ -2109,7 +2113,7 @@ function resolveDefaultEventSupply(
       selectedDate,
       time,
       unavailableSources,
-    );
+    ) + (requestsLiveMusic ? ":live-music-v1" : "");
     // A plain coordinate/calendar warm-up has not performed local research.
     // Do not let it answer for a later resolver-attested discovery request.
     // Old derived pools also cannot attest topic-aware source selection;

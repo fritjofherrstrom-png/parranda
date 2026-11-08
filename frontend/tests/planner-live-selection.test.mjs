@@ -41,6 +41,32 @@ test('Live occurrence selection closes modal, focuses day status and composes on
     assert.deepEqual(h.readStorage(LAST).commitments, before.commitments);
     assert.doesNotMatch(routeText(h), /Evening concert/);
 });
+test("an existing Live keep does not let a grouped update replace the day with zero interest matches", async t => {
+    const h = await start(t);
+    await open(h);
+    await click(h, 'Plan with this event');
+    await h.clock.advance(400);
+    await h.fetchMock.respond(routes(h).at(-1), day({ chosen: ID }));
+    assert.match(routeText(h), /Fixture Museum/);
+    const kept = h.readStorage(LAST);
+
+    await click(h, 'Adjust');
+    await click(h, 'All interests');
+    await click(h, 'Clear selection');
+    await click(h, 'Swimming spots');
+    await click(h, 'Update day');
+    const update = routes(h).at(-1);
+    assert.deepEqual(update.body.live_event_choices, [{ occurrence_id: ID, action: 'keep' }]);
+    assert.deepEqual(update.body.preferences, ['bathing_places']);
+    const stops = [{ ...stable[0], label: 'Generic replacement museum' }, stable[1]];
+    await h.fetchMock.respond(update, day({ chosen: ID, stops }));
+
+    assert.match(routeText(h), /Fixture Museum/);
+    assert.doesNotMatch(routeText(h), /Generic replacement museum/);
+    assert.match(h.text(), /couldn’t confirm a walkable day with these interests/i);
+    assert.deepEqual(h.readStorage(LAST), kept);
+});
+
 // Parent series and weak/other-day metadata may not manufacture a selectable slot.
 test('series selects exact source slot in both sort modes and hides missing/false/other-day choices', async (t) => {
     const slots = [event(), event({ id: 'second', live_occurrence_id: OTHER, starts_at: `${DATE}T20:00:00Z` })];

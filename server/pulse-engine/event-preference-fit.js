@@ -152,8 +152,6 @@ const CANCELLED_MUSIC_TITLE_CUES = ["cancelled", "canceled", "postponed", "insta
 const PERFORMANCE_TITLE_CONNECTOR = / (?:at|in|with|for|by|from|pa|i|med|av|kl|klockan|mit|im|de|di|con|avec|en) /;
 
 function liveMusicTitleMatch(title) {
-  const text = normalizeSearchText(title);
-  if (!text || hasCue(text, NON_PERFORMANCE_TITLE_CUES)) return null;
   // A performance cue must close a title or a distinct part of it. In
   // "Concert at City Hall" the performance is the subject. In "Concert Hall"
   // or "Concert photography awards", the word only modifies another noun.
@@ -177,13 +175,15 @@ function liveMusicMatch(event, { selectedDate, now } = {}) {
     if ((event.ends_on || window.ends_on || start) !== start) return null;
   }
   const title = event.title || event.name;
-  if (typeof title !== "string" || !title.trim() || hasCue(normalizeSearchText(title), CANCELLED_MUSIC_TITLE_CUES)) return null;
-  // Only specific event tags or a provider's mapped music classification
-  // count here. Generic music keywords, venue types and broad culture roles do not.
-  const structured = (Array.isArray(event.intents) && event.intents.includes("live_music")) ||
-    (Array.isArray(event.tags) && event.tags.some(tag => LIVE_MUSIC_EVENT_TAGS.has(normalizeSearchText(tag))));
-  const match = structured ? "structured" : title.length <= 180 ? liveMusicTitleMatch(title) : null;
-  return match && eventOccursOnDate(event, selectedDate, now) ? match : null;
+  if (typeof title !== "string") return null;
+  const text = normalizeSearchText(title);
+  if (!text || hasCue(text, CANCELLED_MUSIC_TITLE_CUES) || !eventOccursOnDate(event, selectedDate, now)) return null;
+  if (Array.isArray(event.intents) && event.intents.includes("live_music")) return "structured";
+  // Publisher keywords can describe a subject, such as a concert poster
+  // exhibition. The title veto applies to keyword and title inference alike.
+  if (hasCue(text, NON_PERFORMANCE_TITLE_CUES)) return null;
+  if (Array.isArray(event.tags) && event.tags.some(tag => LIVE_MUSIC_EVENT_TAGS.has(normalizeSearchText(tag)))) return "structured";
+  return title.length <= 180 ? liveMusicTitleMatch(title) : null;
 }
 
 const ROLE_INTENTS = Object.freeze({

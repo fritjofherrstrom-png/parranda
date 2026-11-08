@@ -80,6 +80,28 @@ test("the day stays honest when only a same-day exhibition, a venue and an off-d
   assert.deepEqual(body.live_events.this_week.find(row => row.id === "off-date").matched_preferences, []);
 });
 
+for (const [type, title] of [
+  ["ExhibitionEvent", "Concert poster exhibition"],
+  ["ScreeningEvent", "Film screening of the Queen concert"],
+]) test(`${type} about a concert remains in Live without satisfying Live music`, async t => {
+  const body = await plan(t, { events: [sourceEvent("about-a-concert", title, type, { keywords: ["concert"] })] });
+  const listing = body.live_events.tonight.find(row => row.id === "about-a-concert");
+  assert.deepEqual(listing?.matched_preferences, []);
+  assert.ok(body.days[0].primary_route.main_stops.every(stop => !stop.is_live_event));
+  assert.deepEqual(dayCoverage(body).missing_preferences, ["live_music"]);
+});
+
+for (const [label, fields] of [
+  ["postponed", { eventStatus: { "@id": "https://schema.org/EventPostponed" } }],
+  ["moved online", { eventStatus: "https://schema.org/EventMovedOnline" }],
+  ["online only", { eventAttendanceMode: "schema:OnlineEventAttendanceMode" }],
+]) test(`${label} MusicEvent with a physical address cannot extend the day`, async t => {
+  const body = await plan(t, { events: [sourceEvent("unavailable-concert", "Harbour Quartet", "MusicEvent", fields)] });
+  assert.ok(body.live_events.tonight.every(row => row.id !== "unavailable-concert"));
+  assert.ok(body.days[0].primary_route.main_stops.every(stop => !stop.is_live_event));
+  assert.deepEqual(dayCoverage(body).missing_preferences, ["live_music"]);
+});
+
 test("a dated performance is still a Live match with insufficient place supply for a day", async t => {
   const body = await plan(t, { events: [concert], places: [], preferences: ["live_music"] });
   assert.equal(body.agnostic_route_output_experiment.promotion.promote, false);

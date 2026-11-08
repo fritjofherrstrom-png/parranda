@@ -346,6 +346,9 @@ function mapSchemaOrgEventToRaw(event) {
   const url = firstString(event.url, event["@id"], event.identifier);
   const types = [event["@type"] || event.type].flat();
   const musicEvent = types.some(type => typeof type === "string" && /^(?:https?:\/\/schema\.org\/|schema:)?MusicEvent$/.test(type));
+  const status = schemaIdentifier(event.eventStatus) || schemaIdentifier(event["schema:eventStatus"]);
+  const attendance = schemaIdentifier(event.eventAttendanceMode) || schemaIdentifier(event["schema:eventAttendanceMode"]);
+  const onlineOnly = status === "EventMovedOnline" || attendance === "OnlineEventAttendanceMode";
   return compact({
     id: firstString(event["@id"], event.identifier, event.url),
     title: localizedString(event.name),
@@ -353,14 +356,14 @@ function mapSchemaOrgEventToRaw(event) {
     ends_at: firstString(event.endDate, event.end_date, event["schema:endDate"]),
     source_url: url,
     place_context: localizedString(event.location && event.location.name),
+    source_location_scope: onlineOnly ? "virtual" : null,
     area: localizedString(event.location && event.location.address && event.location.address.addressLocality),
     lat: coords.lat,
     lng: coords.lng,
     tags: stringList(event.keywords),
     intents: musicEvent ? ["live_music"] : null,
-    // event_status maps schema.org EventCancelled → freshness signal the
-    // normalizer reads; never claim "now" for a cancelled event.
-    freshness: isCancelled(event) ? "stale" : null,
+    // The stated dates are no longer live for cancelled or postponed events.
+    freshness: /cancel|postpon/i.test(status || "") ? "stale" : null,
   });
 }
 
@@ -374,9 +377,8 @@ function extractCoordinates(event) {
   return { lat: null, lng: null };
 }
 
-function isCancelled(event) {
-  const status = firstString(event.eventStatus, event["schema:eventStatus"]);
-  return typeof status === "string" && /cancel/i.test(status);
+function schemaIdentifier(value) {
+  return firstString(value, value?.["@id"])?.replace(/^(?:https?:\/\/schema\.org\/|schema:)/, "");
 }
 
 // schema.org name can be a plain string or a language map / array of language

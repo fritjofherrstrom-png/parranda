@@ -140,10 +140,99 @@ test("a direct grouped choice without a day offers editing and exposes verified 
   assert.equal(button(chooser(h), "Live music").getAttribute("aria-pressed"), "true");
 });
 
+test("a grouped update keeps an explicit Today date selected after midnight", async t => {
+  const h = await start(t);
+  const editor = await open(h);
+  await click(h, "Cafés", editor);
+  await click(h, "Update day", editor);
+  await h.fetchMock.respond(compose(h).at(-1), day("Previous date café", ["cafes"]));
+  assert.match(route(h), /Previous date café/);
+
+  const nextDate = "2026-11-08";
+  t.mock.timers.setTime(Date.parse(nextDate + "T10:00:00Z"));
+  await click(h, "Today");
+  await h.clock.advance(400);
+  const today = compose(h).at(-1);
+  assert.deepEqual(today.body.dates, [nextDate]);
+
+  const nextEditor = await open(h);
+  await click(h, "Wine bars", nextEditor);
+  await click(h, "Update day", nextEditor);
+  const update = compose(h).at(-1);
+  assert.notEqual(update, today);
+  assert.equal(today.aborted, true);
+  assert.deepEqual(update.body.dates, [nextDate]);
+  assert.deepEqual(update.body.preferences, ["food", "culture", "cafes", "wine_bars"]);
+  await h.clock.advance(1000);
+  assert.equal(compose(h).length, 4);
+});
+
 test("an explicitly empty URL selection composes empty, and does not restore the legacy defaults", async t => {
   const query = encodeShareParams({ place: "Testville", preferences: [] });
   const h = await start(t, query, { response: null });
   assert.deepEqual(compose(h)[0].body.preferences, []);
+});
+
+test("a no-match grouped arrival shows the verified events from its Live completion", async t => {
+  const h = await start(t, "place=Testville&prefs=bathing_places", { response: day("Generic route", ["food"], {
+    live_events: { coverage: "covered", selected_date: DATE, pending: true },
+    live_completion: { version: 1, token: "no-match-live", expires_in_ms: 120000, route_upgrade: "not_supported" },
+  }) });
+  assert.equal(route(h), "");
+  assert.match(h.text(), /couldn’t confirm a walkable day with these interests/i);
+  await h.clock.advance(2000);
+  const completion = h.fetchMock.pending().find(call => call.url === "/api/planner-live-completion");
+  assert.ok(completion);
+  await h.fetchMock.respond(completion, {
+    live_events: { coverage: "covered", selected_date: DATE, tonight: [
+      { id: "verified", title: "Verified concert", starts_at: DATE + "T18:00:00Z", occurrence_date: DATE,
+        source_url: "https://example.org/concert", tags: ["music"] },
+    ] },
+    live_completion: { version: 1, state: "ready", route_upgrade: "not_supported" },
+  });
+  assert.match(h.text(), /Verified concert/);
+  assert.doesNotMatch(h.text(), /couldn't verify events right now/i);
+  assert.equal(route(h), "");
+  assert.equal(compose(h).length, 1);
+});
+
+test("a first matching day announces the result when the interest trigger unmounts", async t => {
+  const h = await start(t, "place=Testville&prefs=bathing_places", {
+    response: day("Generic route", ["food"]),
+  });
+  assert.equal(route(h), "");
+  await click(h, "Edit interests");
+  const editor = chooser(h);
+  assert.ok(editor);
+  await click(h, "Clear selection", editor);
+  await click(h, "Cafés", editor);
+  await click(h, "Update day", editor);
+  await h.clock.advance(32);
+  assert.equal(h.window.document.activeElement, button(h.container, "All interests"));
+  await h.fetchMock.respond(compose(h).at(-1), day("Matching café", ["cafes"]));
+  assert.match(route(h), /Matching café/);
+  assert.match(h.window.document.activeElement.textContent, /^A day in Testville is ready: 2 stops\.$/);
+});
+
+test("a no-match grouped update with pending Live keeps the retained day's verified events visible", async t => {
+  const h = await start(t, undefined, { response: day("Previous stop", ["food"], {
+    live_events: { coverage: "covered", selected_date: DATE, tonight: [
+      { id: "retained", title: "Previously verified concert", starts_at: DATE + "T18:00:00Z", occurrence_date: DATE,
+        source_url: "https://example.org/retained", tags: ["music"] },
+    ] },
+  }) });
+  assert.match(h.text(), /Previously verified concert/);
+  const editor = await open(h);
+  await click(h, "Clear selection", editor);
+  await click(h, "Swimming spots", editor);
+  await click(h, "Update day", editor);
+  await h.fetchMock.respond(compose(h).at(-1), day("Generic route", ["food"], {
+    live_events: { coverage: "covered", selected_date: DATE, pending: true },
+    live_completion: { version: 1, token: "retained-day-live", expires_in_ms: 120000, route_upgrade: "not_supported" },
+  }));
+  assert.match(route(h), /Previous stop/);
+  assert.match(h.text(), /couldn’t confirm a walkable day with these interests/i);
+  assert.match(h.text(), /Previously verified concert/);
 });
 
 test("an interest compose waits for its own Live upgrade before deciding whether music fits", async t => {
@@ -183,6 +272,70 @@ const FIRST_REF = "a".repeat(48);
 const UPDATED_REF = "b".repeat(48);
 const ready = (ref, expiry = "2026-11-08T10:00:00Z") => ({
   version: 1, state: "ready", ref, created_at: DATE + "T09:00:00Z", expires_at: expiry,
+});
+
+test("a busy quick-only grouped update retries the same day and retains Undo", async t => {
+  const h = await start(t);
+  const previous = h.readStorage(LAST);
+  const editor = await open(h);
+  await click(h, "Clear selection", editor);
+  await click(h, "Second hand", editor);
+  await click(h, "Update day", editor);
+  const first = compose(h).at(-1);
+  await h.fetchMock.respond(first, { error: "busy", retry_after_seconds: 3 }, 429);
+  assert.match(route(h), /Previous stop/);
+  t.mock.timers.setTime(Date.parse("2026-11-08T12:00:00Z"));
+  await h.clock.advance(3500);
+  assert.equal(compose(h).length, 2);
+  await click(h, "Try updating again");
+  const retry = compose(h).at(-1);
+  assert.notEqual(retry, first);
+  assert.deepEqual(retry.body.dates, [DATE]);
+  assert.deepEqual(retry.body.preferences, ["second_hand"]);
+  await h.fetchMock.respond(retry, { error: "busy", retry_after_seconds: 3 }, 429);
+  assert.match(route(h), /Previous stop/);
+  await click(h, "Undo this change");
+  assert.deepEqual(h.readStorage(LAST), previous);
+  assert.doesNotMatch(h.text(), /Parranda is busy right now/);
+});
+
+test("a late Live upgrade preserves the grouped edit's original day and exact Share for Undo", async t => {
+  const h = await start(t, undefined, { response: day("Previous stop", ["food"], { day_snapshot: ready(FIRST_REF) }) });
+  const previous = h.readStorage(LAST);
+  const copied = [];
+  Object.defineProperty(h.window.navigator, "clipboard", { value: { writeText: async href => copied.push(href) } });
+  const editor = await open(h);
+  await click(h, "Clear selection", editor);
+  await click(h, "Cafés", editor);
+  await click(h, "Live music", editor);
+  await click(h, "Update day", editor);
+  await h.fetchMock.respond(compose(h).at(-1), day("Provisional café", ["cafes"], {
+    live_events: { coverage: "covered", selected_date: DATE, pending: true },
+    live_completion: { version: 1, token: "late-live-interest", expires_in_ms: 120000, route_upgrade: "explicit_request" },
+  }));
+  assert.match(route(h), /Provisional café/);
+  await h.clock.advance(2000);
+  const completion = h.fetchMock.pending().find(call => call.url === "/api/planner-live-completion");
+  assert.ok(completion);
+  const liveEvents = { coverage: "covered", selected_date: DATE, tonight: [
+    { id: "verified", title: "Verified concert", starts_at: DATE + "T18:00:00Z", matched_preferences: ["live_music"] },
+  ] };
+  await h.fetchMock.respond(completion, {
+    live_events: liveEvents, live_completion: { version: 1, state: "ready", route_upgrade: "explicit_request" },
+  });
+  const upgrade = h.fetchMock.pending().find(call => call.url === "/api/planner-live-route-upgrade");
+  assert.ok(upgrade);
+  await h.fetchMock.respond(upgrade, {
+    live_route_upgrade: { version: 1, state: "applied" },
+    result: day("Café and concert", ["cafes", "live_music"], { live_events: liveEvents, day_snapshot: ready(UPDATED_REF) }),
+  });
+  assert.match(route(h), /Café and concert/);
+  await click(h, "Undo this change");
+  assert.match(route(h), /Previous stop/);
+  assert.deepEqual(h.readStorage(LAST), previous);
+  await click(h, "Share this day");
+  assert.equal(new URL(copied.at(-1)).searchParams.get("snapshot"), FIRST_REF);
+  assert.equal(compose(h).length, 2);
 });
 
 async function applyShareableInterest(h) {
