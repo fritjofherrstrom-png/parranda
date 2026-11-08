@@ -21,7 +21,7 @@
  *   - injectable release/query seams keep tests deterministic and offline.
  *
  * Sampling posture: the 600 query rows are a stratified sample of the whole
- * window — fixed walking-reach distance rings x route type — not the 600 rows
+ * window — fixed walking-reach distance rings x route type/subtype — not the 600 rows
  * nearest the anchor. In a dense centre the nearest 600 travel places lie
  * within a few hundred metres, so a nearest-N window cannot describe a 6-9 km
  * day however it is selected afterwards. The sample is independent of
@@ -33,7 +33,8 @@ const { createBoundedOvertureQuery } = require('./bounded-overture-query');
 const { createOvertureAssetResolver } = require('./overture-stac-assets');
 const { createHash } = require('node:crypto');
 const { validSample, validAssets, digest } = require('./overture-sample-cache');
-const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
+const { normalizeUserIntents, matchCandidateToIntent, STABLE_PLACE_INTEREST_ROLES,
+  exactInterestRepresentatives } = require("../candidates/intent-vocabulary");
 const { mapRecordToCandidate } = require('./external-open-provider');
 const { normalizePlaceDetails, OVERTURE_KINDS } = require('./place-details');
 const { resolveCandidateIdentity, matchIdentity } = require('../candidates/entity-resolution');
@@ -220,6 +221,15 @@ const ROUTE_TYPE_SQL = `CASE ${[...ROUTE_TYPE_PRIMARIES]
   .map(([type, labels]) => `WHEN category IN (${labels.map((label) => `'${label}'`).join(", ")}) THEN '${type}'`)
   .join(" ")} END`;
 
+// Share the one universal sample across preferences while making room for
+// narrow primary categories that would disappear in dense broad-type strata.
+const SUBTYPE_STRATUM_SQL = ", CASE WHEN category IN (" + [
+  "breakfast_and_brunch_restaurant", "cafe", "coffee_shop", "bakery",
+  "art_museum", "modern_art_museum", "history_museum", "nature_reserve",
+  "farmers_market", "flea_market", "public_market", "antique_store",
+  "wine_bar", "cocktail_bar", "brewery", "beer_bar", "beer_garden",
+].map(category => "'" + category + "'").join(", ") + ") THEN category ELSE route_type END";
+
 function clamp(value, min, max, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
@@ -394,7 +404,7 @@ function buildOvertureQuery({ release, lat, lng, radiusKm = DEFAULT_RADIUS_KM, r
   WHERE distance_km <= ${radius.toFixed(3)}
 ), ranked AS (
   SELECT *, row_number() OVER (
-    PARTITION BY reach_ring, route_type ORDER BY brand IS NOT NULL, distance_km, id
+    PARTITION BY reach_ring, route_type${SUBTYPE_STRATUM_SQL} ORDER BY brand IS NOT NULL, distance_km, id
   ) AS stratum_rank
   FROM strata
 )
@@ -510,6 +520,14 @@ function selectRecords(records, { anchor, requestedIntents = [], walkingTargetBa
   const selected = [];
   const taken = new Set();
   const seenTypes = new Set();
+  const representatives = exactInterestRepresentatives(ranked,
+    intents.filter(intent => STABLE_PLACE_INTEREST_ROLES[intent]),
+    (entry, intent) => matchCandidateToIntent(entry.record, intent).level === 'strong');
+  for (const entry of representatives.slice(0, limit)) {
+    seenTypes.add(entry.record.type);
+    taken.add(entry);
+    selected.push(entry.record);
+  }
   for (const entry of ranked) {
     if (selected.length >= limit) return selected;
     if (seenTypes.has(entry.record.type)) continue;
@@ -691,16 +709,17 @@ function createOvertureSource({
     const query = sampleQuery({ release: receipt.release, parquetPaths: receipt.assets.map(asset => asset.path), lat: pair[0], lng: pair[1] });
     return Boolean(query && receipt.queryHash === hashQuery(query));
   };
-  // This additive leaf changes the sample, not the facts in its predecessor.
-  // Recognize that one exact SQL contract only for positive outage fallback;
-  // it cannot answer fresh coverage, prove absence or take HEAD-only renewal.
+  // Older sample contracts are evidence only during a bounded positive
+  // outage fallback. They cannot establish fresh absence or renew by HEAD.
   loadOvertureAround.validatePreviousReceipt = (receipt, key) => {
     const pair = String(key).split(':')[0].split(',').map(Number);
     if (!validCoordinate(pair[0], pair[1]) || cacheKeyFor({ lat: pair[0], lng: pair[1] }) !== key
       || !validAssets(receipt?.assets, receipt?.release)) return false;
     const query = sampleQuery({ release: receipt.release, parquetPaths: receipt.assets.map(asset => asset.path), lat: pair[0], lng: pair[1] });
-    const previousQuery = query?.replace(/, 'used_bookstore'/g, '');
-    return Boolean(previousQuery && previousQuery !== query && receipt.queryHash === hashQuery(previousQuery));
+    const previousQuery = query?.replace(SUBTYPE_STRATUM_SQL, '');
+    return Boolean(previousQuery && previousQuery !== query &&
+      [previousQuery, previousQuery.replace(/, 'used_bookstore'/g, '')]
+        .some(previous => receipt.queryHash === hashQuery(previous)));
   };
   return loadOvertureAround;
 }

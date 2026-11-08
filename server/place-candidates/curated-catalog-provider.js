@@ -72,6 +72,12 @@ function normalizeCatalogItem(cityConfig, item = {}) {
     candidate.known_place_id = knownId;
   }
 
+  const { sourcePlaceDetails, normalizeSourcePriceLevel } = require('./place-details');
+  const details = sourcePlaceDetails(item, candidate.type);
+  if (details) candidate.place_details = details;
+  const priceLevel = normalizeSourcePriceLevel(item.priceLevel);
+  if (priceLevel) candidate.source_price_level = priceLevel;
+
   return candidate;
 }
 

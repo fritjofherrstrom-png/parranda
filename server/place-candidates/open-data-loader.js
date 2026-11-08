@@ -41,7 +41,9 @@ const {
   createVisitSwedenNapiSource,
 } = require("./visit-sweden-napi-source");
 const { normalizeOpeningHours, evaluateOpeningHoursForWindow } = require("./opening-hours");
-const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
+const { normalizeUserIntents, matchCandidateToIntent, STABLE_PLACE_INTEREST_ROLES,
+  exactInterestRepresentatives } = require("../candidates/intent-vocabulary");
+const { normalizePlaceDetails } = require("./place-details");
 const {
   sanitizeTrustedSpatialScope,
   deriveSecondaryAnchors,
@@ -167,7 +169,9 @@ const LOADER_SUPPORTED_INTENTS = new Set([
   "museums",
   "swimming",
   "second_hand",
+  ...Object.keys(STABLE_PLACE_INTEREST_ROLES),
 ]);
+const OSM_UNSUPPORTED_INTERESTS = new Set(["brunch", "cheap_eats", "flea_markets", "wine_bars", "cocktail_bars"]);
 
 // Small, intent-mapped OSM tag → Parranda type table. Kept conservative so
 // every entry maps cleanly into the canonical intent vocabulary. Add lines
@@ -227,6 +231,14 @@ const OSM_TAG_MAP = [
   { key: "amenity", value: "arts_centre", type: "gallery", tags: ["kultur"] },
 ];
 
+// These refinements of already admitted categories get their own bounded
+// output only when requested. They do not change the underlying mapping.
+const OSM_QUERY_QUALIFIERS = [
+  { key: "tourism", value: "museum", and: { museum: "art" }, type: "museum" },
+  { key: "tourism", value: "museum", and: { museum: "history" }, type: "museum" },
+  { key: "natural", value: "beach", and: { swimming: "yes" }, type: "beach" },
+];
+
 // Distinct place TYPES in a record set — a proxy for how varied a day can be.
 function distinctCategoryCount(records) {
   const cats = new Set();
@@ -236,9 +248,10 @@ function distinctCategoryCount(records) {
   return cats.size;
 }
 
-function normalizeRequestedIntents(values = []) {
+function normalizeRequestedIntents(values = [], { osmOnly = false } = {}) {
   const normalized = normalizeUserIntents(Array.isArray(values) ? values : []);
-  return [...new Set(normalized.intents.filter((intent) => LOADER_SUPPORTED_INTENTS.has(intent)))].sort();
+  return normalized.intents.filter(intent => LOADER_SUPPORTED_INTENTS.has(intent) &&
+    (!osmOnly || !OSM_UNSUPPORTED_INTERESTS.has(intent))).sort();
 }
 
 function supplyProfile(records, requestedIntents = []) {
@@ -482,6 +495,7 @@ function createOpenDataLoader({
       radiusM,
       limit: fetchBreadth,
       mappings: mappingsForRequestedIntents(queryIntents),
+      focusedIntents: queryIntents.length ? queryIntents : requestedIntents,
     });
     // Try each mirror in order; fail over ONLY on a transport/parse error — a
     // genuine 200 (even with zero elements) is a real answer, not a failure.
@@ -513,6 +527,7 @@ function createOpenDataLoader({
       radiusM,
       limit: fetchBreadth,
       mappings: OSM_TAG_MAP,
+      focusedIntents: requestedIntents,
     });
     let last = { status: "error_failed_closed", error: "no_endpoint" };
     for (const targetEndpoint of resolvedEndpoints) {
@@ -567,11 +582,12 @@ function createOpenDataLoader({
   } = {}, { onAnsweredPass = null } = {}) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return withLoaderStatus([], "loaded:0", null);
 
-    const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents);
+    const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents, { osmOnly: true });
     // Preserve already-acquired requested experiences before the bounded map
     // cut. Modern rhythm owns density; unrelated category variety must not
-    // consume its supply. Query, factual gates and provider caps stay unchanged.
-    const selectionIntents = dayRhythm ? normalizedRequestedIntents : [];
+    // consume its supply. Focused selectors share the existing provider cap.
+    const selectionIntents = dayRhythm || normalizedRequestedIntents.some(intent => STABLE_PLACE_INTEREST_ROLES[intent])
+      ? normalizedRequestedIntents : [];
     const normalizedWalkingTargetBand = normalizeWalkingTargetBand(walkingTargetBand);
     const normalizedWindow = normalizeAvailabilityWindow(availabilityWindow);
     const origin = { lat, lng };
@@ -725,7 +741,8 @@ function createOpenDataLoader({
     }
 
     const secondaryAnchors = deriveSecondaryAnchors(scope, { lat: request.lat, lng: request.lng });
-    const selectedProfile = primaryMetadata?.selected_profile || supplyProfile(primary, normalizeRequestedIntents(request.requestedIntents));
+    const selectedProfile = primaryMetadata?.selected_profile || supplyProfile(primary,
+      normalizeRequestedIntents(request.requestedIntents, { osmOnly: true }));
     const hasRequestedGap = selectedProfile.requested_intents_covered.length < selectedProfile.requested_intent_count;
     const needsRegionalScout =
       scope.collection_mode === "regional_bounded" &&
@@ -752,9 +769,9 @@ function createOpenDataLoader({
       ));
     }
     const regional = await fetchAcrossAnchors(secondaryAnchors, REGIONAL_CLUSTER_RADIUS_KM * 1000, {
-      requestedIntents: request.dayRhythm ? normalizeRequestedIntents(request.requestedIntents) : [],
+      requestedIntents: request.dayRhythm ? normalizeRequestedIntents(request.requestedIntents, { osmOnly: true }) : [],
     });
-    const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
+    const requestedIntents = normalizeRequestedIntents(request.requestedIntents, { osmOnly: true });
     let selected = primary;
     let selectedAnchor = { id: "primary", lat: request.lat, lng: request.lng };
     let bestScore = supplyScore(primary, requestedIntents);
@@ -815,7 +832,7 @@ function createOpenDataLoader({
     const band = normalizeWalkingTargetBand(request.walkingTargetBand);
     const radiusKm = pinnedRadiusKm ?? rhythmAwareRadiusKm(band, request.dayRhythm);
     const anchorKey = `${request.lat.toFixed(3)},${request.lng.toFixed(3)}`;
-    const shape = `l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:i${normalizeRequestedIntents(request.requestedIntents).join(".") || "all"}`;
+    const shape = `l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:i${normalizeRequestedIntents(request.requestedIntents, { osmOnly: true }).join(".") || "all"}`;
     const scopeKey = spatialScopeCacheKey(request.spatialScope ?? null);
     const window = normalizeAvailabilityWindow(request.availabilityWindow);
     const windowKey = window ? `${window.weekday}.${window.startMinute}.${window.endMinute}` : "none";
@@ -1010,16 +1027,17 @@ function createOpenDataLoader({
   return cachedLoader;
 }
 
-function buildOverpassQuery({ lat, lng, radiusM, limit, mappings = OSM_TAG_MAP }) {
+function buildOverpassQuery({ lat, lng, radiusM, limit, mappings = OSM_TAG_MAP, focusedIntents = [] }) {
   return buildOverpassQueryForAnchors({
     anchors: [{ lat, lng }],
     radiusM,
     limit,
     mappings,
+    focusedIntents,
   });
 }
 
-function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_TAG_MAP }) {
+function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_TAG_MAP, focusedIntents = [] }) {
   // Per-category `out` budgets. Overpass outputs nodes before ways, so a single
   // combined `out center N` lets food/bar/cafe NODES exhaust N before park/
   // castle WAYS are ever emitted — scarce area-typed scenic places vanished
@@ -1031,7 +1049,17 @@ function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_
     if (!groups.has(category)) groups.set(category, []);
     groups.get(category).push({ key, value, and });
   }
-  const perCategory = Math.max(6, Math.ceil(limit / groups.size));
+  const broadGroupCount = groups.size;
+  for (const intent of focusedIntents.filter(intent => STABLE_PLACE_INTEREST_ROLES[intent])) {
+    const selectors = [...OSM_TAG_MAP, ...OSM_QUERY_QUALIFIERS].filter(mapping => {
+      const rawTags = { [mapping.key]: mapping.value, ...mapping.and };
+      return matchCandidateToIntent({ type: mapping.type, tags: mapping.tags,
+        place_details: osmPlaceDetails(rawTags, mapping.type) }, intent).level === "strong";
+    });
+    if (selectors.length) groups.set(intent, selectors);
+  }
+  const perCategory = groups.size === broadGroupCount ? Math.max(6, Math.ceil(limit / groups.size))
+    : Math.max(1, Math.floor(limit / groups.size));
   const blocks = [];
   let i = 0;
   for (const [category, entries] of groups) {
@@ -1072,6 +1100,8 @@ function balanceMappedRecords(mapped, limit, origin, { requestedIntents = [], wa
 
   const intents = normalizeRequestedIntents(requestedIntents);
   if (intents.length) {
+    const exactIntents = intents.filter(intent => STABLE_PLACE_INTEREST_ROLES[intent]);
+    const covers = (record, intent) => matchCandidateToIntent(record, intent).level === 'strong';
     const level = record => intents.some(intent => matchCandidateToIntent(record, intent).level === 'strong') ? 2
       : intents.some(intent => matchCandidateToIntent(record, intent).level === 'weak') ? 1 : 0;
     const window = normalizeAvailabilityWindow(availabilityWindow);
@@ -1081,11 +1111,15 @@ function balanceMappedRecords(mapped, limit, origin, { requestedIntents = [], wa
     for (const tier of [5, 4, 3, 2, 1, 0]) {
       if (selected.length >= limit) break;
       const group = ranked.filter(record => level(record) + (usable(record) ? 3 : 0) === tier);
+      const representatives = exactInterestRepresentatives(group,
+        exactIntents.filter(intent => !selected.some(record => covers(record, intent))), covers);
+      selected.push(...representatives.slice(0, limit - selected.length));
       // Reuse the category/reach balancing within the requested union. This
       // preserves minority interests as well as repeated same-interest depth.
       // Known closed/inactive matches cannot consume the positive quota; their
       // source facts remain available behind viable options, never reopened.
-      selected.push(...balanceMappedRecords(group, limit - selected.length, origin, { walkingTargetBand, availabilityWindow }));
+      selected.push(...balanceMappedRecords(group.filter(record => !representatives.includes(record)),
+        limit - selected.length, origin, { walkingTargetBand, availabilityWindow }));
     }
     return selected;
   }
@@ -1477,13 +1511,7 @@ function mapOsmElement(element) {
       .flatMap((value) => value.split(";")),
   ).filter((value) => value !== name);
   const operational = extractOsmOperationalMetadata(tags, { website, openingHours });
-  const detailKind = tags.shop === 'antiques' ? 'antiques'
-    : tags.shop === 'bakery' ? 'bakery'
-    : tags.tourism === 'museum' && tags.museum === 'art' ? 'art_museum'
-    : tags.tourism === 'museum' && tags.museum === 'history' ? 'history_museum'
-    : tags.leisure === 'nature_reserve' ? 'nature_reserve'
-    : tags.leisure === 'garden' && tags['garden:type'] === 'botanical' ? 'botanical_garden' : null;
-  const details = require('./place-details').normalizePlaceDetails({ kind: detailKind }, mapping.type);
+  const details = osmPlaceDetails(tags, mapping.type);
 
   return {
     id: `osm-${elementType}-${osmId}`,
@@ -1510,6 +1538,21 @@ function mapOsmElement(element) {
       osm_market_hall: tags.building === "marketplace" || tags.indoor === "yes",
     } : {}),
   };
+}
+
+function osmPlaceDetails(tags, type) {
+  const kind = tags.shop === 'antiques' ? 'antiques'
+    : tags.shop === 'bakery' ? 'bakery'
+    : tags.amenity === 'cafe' ? 'cafe'
+    : tags.tourism === 'museum' && tags.museum === 'art' ? 'art_museum'
+    : tags.tourism === 'museum' && tags.museum === 'history' ? 'history_museum'
+    : tags.tourism === 'gallery' ? 'art_gallery'
+    : tags.leisure === 'nature_reserve' ? 'nature_reserve'
+    : tags.leisure === 'garden' && tags['garden:type'] === 'botanical' ? 'botanical_garden'
+    : tags.leisure === 'swimming_area' || (tags.natural === 'beach' && tags.swimming === 'yes') ? 'bathing_place'
+    : tags.amenity === 'marketplace' ? 'marketplace'
+    : tags.amenity === 'biergarten' ? 'beer_place' : null;
+  return normalizePlaceDetails({ kind }, type);
 }
 
 function extractOsmOperationalMetadata(tags, { website = null, openingHours = null } = {}) {
