@@ -1,0 +1,16 @@
+{
+  "result": "PASS",
+  "evidence": "retained full sample through real receipt validation, attested cache and background selection",
+  "file_sha256": "1bf3893ab8defa52bfe85fdb7b7a1d02a6c3d5358bcd81b857ef8f057e5e57eb",
+  "records_hash": "d35e13cf226d7fe89e81d69025b8c01cf2fc97498b4b1c32f4d6a262f1a2c31d",
+  "record_count": 600,
+  "selected_count": 80,
+  "filtered": [
+    {
+      "id": "overture-17df6255-580f-4267-9521-c597efcce03e",
+      "name": "Elvis Presley Statue"
+    }
+  ],
+  "new_acquisitions": 0,
+  "sample_and_receipt_unchanged": true
+}
