@@ -100,3 +100,23 @@ test("a pick of the reader's own ends the mode", async (t) => {
   assert.deepEqual(next.body.preferences, ["views"]);
   assert.equal("intent_mode" in next.body, false);
 });
+
+test("interests applied from All interests are the reader's own: the mode ends and no intent_mode is sent", async (t) => {
+  const h = await arrive(t, "&parranda_chooses=1");
+  await click(h, named(h, /^Let Parranda choose the day$/));
+  await h.clock.advance(450);
+  await h.fetchMock.respond(composeCalls(h)[1], day(["r1", "b1"], { parranda_chooses: choice }));
+  await h.clock.advance(50);
+  if (!named(h, /^All interests$/)) await click(h, named(h, /^Adjust/));
+  await click(h, named(h, /^All interests$/));
+  const editor = h.container.querySelector('[aria-label="All interests"]');
+  assert.ok(editor, "the grouped editor is open");
+  const inEditor = (name) => [...editor.querySelectorAll("button")].find((b) => (b.getAttribute("aria-label") || b.textContent.trim()) === name);
+  await click(h, inEditor("Cafés"));
+  await click(h, inEditor("Update day"));
+  await h.clock.advance(1000);
+  const sent = composeCalls(h).at(-1);
+  assert.deepEqual(sent.body.preferences, ["cafes"]);
+  assert.equal("intent_mode" in sent.body, false);
+  assert.ok(named(h, /^Let Parranda choose the day$/), "the offer is back once the reader chose");
+});
