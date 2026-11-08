@@ -422,9 +422,10 @@ function reconcileFields(canonical, duplicate) {
     filled.push("source_address");
   }
 
-  // These bounded display facts belong to the already matched physical place.
-  // They do not alter its canonical type, preference coverage or source trust.
-  const { sourcePlaceDetails } = require('../place-candidates/place-details');
+  // Type-compatible details belong to the already matched physical place.
+  // They can inform narrow preference fit while canonical type and trust stay
+  // governed by the identity and evidence rules.
+  const { normalizeSourcePriceLevel, sourcePlaceDetails } = require('../place-candidates/place-details');
   const currentDetails = sourcePlaceDetails(canonical, canonical.type);
   const incomingDetails = sourcePlaceDetails(duplicate, canonical.type);
   if (incomingDetails) {
@@ -432,6 +433,23 @@ function reconcileFields(canonical, duplicate) {
     if (JSON.stringify(details) !== JSON.stringify(currentDetails)) {
       patch.place_details = details;
       filled.push('place_details');
+    }
+  }
+
+  // Carry explicit prices only across an already resolved, same-type place.
+  // Remember disagreement even if another duplicate becomes canonical later.
+  const priceField = 'source_price_level';
+  const hasPriceConflict = candidate => candidate.reconciliation?.conflicts?.some(conflict => conflict.field === priceField);
+  if (canonical.type === duplicate.type && !hasPriceConflict(canonical)) {
+    const currentPrice = normalizeSourcePriceLevel(canonical.source_price_level);
+    const incomingPrice = duplicate.trust?.freshness === 'fresh' && incomingDetails?.kind !== 'food_establishment'
+      ? normalizeSourcePriceLevel(duplicate.source_price_level) : null;
+    if (hasPriceConflict(duplicate) || (currentPrice && incomingPrice && currentPrice !== incomingPrice)) {
+      patch.source_price_level = null;
+      conflicts.push({ field: priceField, kept: null });
+    } else if (!currentPrice && incomingPrice) {
+      patch.source_price_level = incomingPrice;
+      filled.push(priceField);
     }
   }
 

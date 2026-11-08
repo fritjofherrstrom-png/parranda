@@ -13,7 +13,7 @@ const UI_BY_INTENT = Object.freeze({ food: 'food', museums: 'culture', scenic: '
   coffee: 'fika', bars: 'nightlife', green: 'green', second_hand: 'second_hand' });
 
 function canonicalPriority(value, preferences) {
-  const selected = normalizeUserIntents(preferences).intents.map(intent => UI_BY_INTENT[intent]).filter(Boolean);
+  const selected = normalizeUserIntents(preferences).intents.map(intent => UI_BY_INTENT[intent] || intent);
   return normalizeUserIntents(normalizePreferencePriority(value, selected)).intents;
 }
 
