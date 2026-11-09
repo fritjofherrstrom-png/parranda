@@ -162,3 +162,112 @@ test('an interest the place cannot serve exactly takes no rank and lends no weig
   assert.ok(viewsFirst.stops.some(stop => stop.type === 'park' && stop.partial_preferences.includes('scenic')),
     'the park is still there as a partial view');
 });
+
+const EXACT_PICKS = ['restaurants', 'history_museums', 'viewpoint_places', 'cafes',
+  'wine_bars', 'parks_gardens', 'second_hand'];
+const PARK_FIRST = { preferencePriority: ['parks_gardens'] };
+
+function spacedInterests() {
+  return [
+    ['meal-house', 'restaurant', 55.5934, 13.0014],
+    ['story-museum', 'museum', 55.5928, 12.9997, 'history_museum'],
+    ['high-view', 'viewpoint', 55.6029, 12.9957],
+    ['corner-cafe', 'cafe', 55.6035, 12.9883, 'cafe'],
+    ['evening-hall', 'bar', 55.6032, 13.0078, 'wine_bar'],
+    ['river-park', 'park', 55.6066, 12.9981],
+    ['vinyl-corner', 'vintage-shop', 55.5951, 12.9990],
+  ].map(([id, type, lat, lng, kind]) => record(id, type, 0,
+    { lat, lng, ...(kind ? { place_details: { kind } } : {}) }));
+}
+
+test('a comparable walk with one fewer stop can cover the exact first choice', async () => {
+  const normal = await compose(spacedInterests(), EXACT_PICKS);
+  assert.equal(normal.stops.length, 6);
+  assert.ok(!normal.stops.some(stop => stop.id === 'river-park'));
+  const preferred = await compose(spacedInterests(), EXACT_PICKS, PARK_FIRST);
+  assert.ok(preferred.stops.some(stop => stop.covered_preferences.includes('parks_gardens')),
+    'the exact first choice is included');
+  assert.equal(preferred.stops.length, 5);
+  assert.ok(preferred.route.estimated_km <= normal.route.estimated_km + 0.5);
+  assert.equal(preferred.experiment.walking_validation.valid, true);
+});
+
+test('a preferred route rejected by the pedestrian router falls back to the ordinary chain', async () => {
+  const { routeWalkingPath } = require('../server/walking-router');
+  const calls = [];
+  const preferred = await compose(spacedInterests(), EXACT_PICKS, {
+    ...PARK_FIRST,
+    walkingConfig: { defaultProvider: 'osrm', transportMode: 'foot' },
+    walkingRouter: async points => {
+      const park = points.findIndex(point => point.label === 'river-park');
+      calls.push(park >= 0 ? 'preferred' : 'ordinary');
+      const walk = await routeWalkingPath(points);
+      if (park >= 0) walk.legs[park > 0 ? park - 1 : 0].distance_km = 6.1;
+      return { pathPoints: points, legs: walk.legs, source: 'osrm', mode: 'walking' };
+    },
+  });
+  assert.deepEqual(calls, ['ordinary', 'preferred']);
+  assert.equal(preferred.stops.length, 6);
+  assert.ok(!preferred.stops.some(stop => stop.id === 'river-park'));
+  assert.equal(preferred.experiment.walking_validation.valid, true);
+});
+
+test('a closed exact first choice does not displace the ordinary route', async () => {
+  const supply = spacedInterests();
+  supply.find(row => row.id === 'river-park').opening_hours = 'Mo-Su off';
+  const preferred = await compose(supply, EXACT_PICKS, PARK_FIRST);
+  assert.equal(preferred.stops.length, 6);
+  assert.ok(!preferred.stops.some(stop => stop.id === 'river-park'));
+});
+
+for (const [description, ordinaryKm, preferredKm, expectPark] of [
+  ['equally long pedestrian chains keep the exact first choice', 7.4, 7.4, true],
+  ['a material pedestrian detour keeps the ordinary chain', 4.7, 6.5, false],
+]) {
+  test(description, async () => {
+    const calls = [];
+    const output = await compose(spacedInterests(), EXACT_PICKS, {
+      ...PARK_FIRST,
+      walkingConfig: { defaultProvider: 'osrm', transportMode: 'foot' },
+      walkingRouter: async points => {
+        const preferred = points.some(point => point.label === 'river-park');
+        calls.push(preferred ? 'preferred' : 'ordinary');
+        const km = preferred ? preferredKm : ordinaryKm;
+        return { source: 'osrm', mode: 'walking', estimatedKm: km, pathPoints: points,
+          legs: points.slice(1).map(() => ({ distance_km: km / (points.length - 1), estimated_walk_minutes: 12 })) };
+      },
+    });
+    assert.deepEqual(calls, ['ordinary', 'preferred']);
+    assert.equal(output.stops.some(stop => stop.id === 'river-park'), expectPark);
+    assert.equal(output.route.estimated_km, expectPark ? preferredKm : ordinaryKm);
+  });
+}
+
+test('an unrelated Live suggestion does not displace the exact first choice', async () => {
+  const output = await compose(spacedInterests(), EXACT_PICKS, {
+    ...PARK_FIRST,
+    eveningEventStructure: { district_day: { evening_event: { id: 'unclassified-event', title: 'Unclassified event',
+      lat: 55.604, lng: 12.989, starts_at: '2026-10-22T19:00:00+02:00', occurrence_date: '2026-10-22',
+      timezone: 'Europe/Stockholm', live_choice_eligible: true } } },
+  });
+  assert.ok(output.eventWeave.blockers.includes('event_outside_preference_focus'));
+  assert.ok(output.stops.some(stop => stop.id === 'river-park'));
+});
+
+test('a measured refusal cannot be bypassed by a rate-limited priority estimate', async () => {
+  const { routeWalkingPath } = require('../server/walking-router');
+  let calls = 0;
+  const output = await compose(spacedInterests(), EXACT_PICKS, {
+    ...PARK_FIRST,
+    walkingConfig: { defaultProvider: 'osrm', transportMode: 'foot' },
+    walkingRouter: async points => {
+      const walk = await routeWalkingPath(points);
+      if (++calls > 1) return { ...walk, fallbackUsed: true };
+      walk.legs[0].distance_km = 6.1;
+      return { pathPoints: points, legs: walk.legs, source: 'osrm', mode: 'walking' };
+    },
+  });
+  assert.equal(calls, 2);
+  assert.equal(output.stops.length, 0);
+  assert.ok(output.experiment.walking_validation.blockers.includes('walking_leg_budget_exceeded'));
+});

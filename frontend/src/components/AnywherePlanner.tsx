@@ -44,6 +44,7 @@ import {
   buildRouteContextSuggestions,
   routePreferenceCoverage,
   routeTimeAnchoring,
+  walkingDistanceLabel,
 } from "../lib/route-context-view.mjs";
 import {
   splitRouteStops,
@@ -56,7 +57,7 @@ import {
   pulseHealthState,
 } from "../lib/pulse-view.mjs";
 import { planComposeFollowup } from "../lib/compose-followup.mjs";
-import { LIVE_COMPLETION_QUERY, followLiveCompletion, takeLiveCompletion, type LiveCompletionCapability } from "../lib/live-completion.mjs";
+import { LIVE_COMPLETION_QUERY, followLiveCompletion, takeLiveCompletion, type LiveCompletionCapability, type LiveDaySnapshot } from "../lib/live-completion.mjs";
 import { composeServiceRefusal, type ComposeServiceRefusal } from "../lib/compose-service-refusal.mjs";
 import plannerEntry from "../../../planner-entry.js";
 import { publishedDayHref, readPublishedDay, readyPublishedDay, type PublishedDayReference } from "../lib/published-day.mjs";
@@ -199,6 +200,18 @@ function isUndoableDay(entry: SavedEntry | null): entry is SavedEntry {
   return status === "composed" || status === "composed_limited" || status === "edited_empty";
 }
 
+function longerFirstChoiceFallback(previous: any, next: any, firstChoice?: string) {
+  const before = previous?.days?.[0];
+  const after = next?.days?.[0];
+  if (!firstChoice || !before?.date || before.date !== after?.date) return null;
+  const beforeKm = before.primary_route?.estimated_km;
+  const afterKm = after.primary_route?.estimated_km;
+  if (!Number.isFinite(beforeKm) || beforeKm < 0 || !Number.isFinite(afterKm) ||
+      afterKm < Math.max(beforeKm + 1, beforeKm * 1.25) ||
+      routePreferenceCoverage(primaryRouteStops(next), [firstChoice]).covered_preferences.length) return null;
+  return { firstChoice, beforeKm, afterKm };
+}
+
 // This only detects an old bounded ledger for an explanatory notice. It does
 // not authorize recovery: urlEntryCommitments still checks the actual context.
 function hasStoredChoices(entry: SavedEntry | null): boolean {
@@ -270,7 +283,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [dayIsStale, setDayIsStale] = useState(false);
   // Failed interest attempts have their own Live evidence. They never change
   // the remembered route, its coverage, or its exact share.
-  const [interestFailure, setInterestFailure] = useState<{ liveEvents: LiveEvents | null } | null>(null);
+  const [interestFailure, setInterestFailure] = useState<{
+    liveEvents: LiveEvents | null;
+    offer?: { firstChoice: string; beforeKm: number; afterKm: number; accept: () => void; current: () => boolean };
+  } | null>(null);
   // "Not this" — the day's commitment ledger, v1. One verb: the user can remove
   // a place from consideration. Held here and sent with the next compose.
   // ONE ledger: candidate id -> the single commitment that applies to it. A
@@ -548,8 +564,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const effectivePreferences = preferencesOverride ?? selected;
     const interestRequest = interestEdit || effectivePreferences.some(key => !quickPreferenceKeys.has(key));
     activePublicReadRef.current = null;
-    setPublicReference(null);
-    setPublicReadState(null);
+    if (!interestEdit || !publicReference || publicReadState) {
+      setPublicReference(null);
+      setPublicReadState(null);
+    }
     if (!interestRequest) setSharePublication(null);
     lastRequestedAnchorRef.current = anchor;
     // An explicit choice already carries the current preferences. An older
@@ -647,6 +665,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       });
       lastComposeDateIsoRef.current = effectiveDateIso;
       const effectivePriority = normalizePreferencePriority(preferencePriorityOverride ?? preferencePriority, effectivePreferences);
+      const firstChoice = effectivePriority[0];
+      const baseline = undoBaselineRef.current;
+      const interestBaseline = interestEdit && !silent && retention.keepPrevious && baseline &&
+        baseline.entry === lastEntryRef.current && baseline.anchorKey === nextAnchorKey &&
+        baseline.entry.dateIso === effectiveDateIso ? baseline : null;
       const editScope = dayEditScopeRef.current;
       const effectiveDayEdit = dayEditOverride !== undefined ? normalizeDayEdit(dayEditOverride)
         : editScope?.anchorKey === nextAnchorKey && editScope.dateIso === effectiveDateIso ? normalizeDayEdit(dayEdit) : null;
@@ -786,24 +809,28 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         liveCapability = null;
       }
       const decision = anywhereDecision();
-      if (!requestedLiveKeep && effectivePreferences.includes("live_music") && liveCapability &&
+      if (!requestedLiveKeep && (effectivePreferences.includes("live_music") || interestBaseline) && liveCapability &&
           body?.live_events?.pending === true) {
         const preliminary = decision.classifyAnywhereResult(body);
-        if (!decision.isComposedStatus(preliminary.status) ||
-            routePreferenceCoverage(primaryRouteStops(body), effectivePreferences).covered_preferences.length === 0) {
-          // Await this request's own dated evidence before deciding that no
-          // interest can be confirmed. No second route compose is needed.
+        const composed = decision.isComposedStatus(preliminary.status);
+        if ((effectivePreferences.includes("live_music") && (!composed ||
+              routePreferenceCoverage(primaryRouteStops(body), effectivePreferences).covered_preferences.length === 0)) ||
+            (composed && longerFirstChoiceFallback(interestBaseline?.entry.safeResponse, body, firstChoice))) {
+          // Finish this request's own Live evidence before deciding or asking.
+          // A pending decision can outlive the original Live capability.
           setLiveFollowing(true);
           let terminalLive = null;
+          let terminalSnapshot: LiveDaySnapshot | undefined;
           const completion = await followLiveCompletion({
             capability: liveCapability, signal: controller.signal,
-            onLiveEvents: events => { terminalLive = events; },
+            onLiveEvents: (events, snapshot) => { terminalLive = events; terminalSnapshot = snapshot; },
           });
           if (controller.signal.aborted || requestId !== requestSequenceRef.current || intentId !== intentSequenceRef.current) return;
           setLiveFollowing(false);
           body = completion.upgrade?.kind === "applied"
             ? takeLiveCompletion(completion.upgrade.result).body
-            : { ...body, live_events: terminalLive ?? { ...body.live_events, pending: false, coverage: "unavailable" } };
+            : { ...body, day_snapshot: terminalSnapshot,
+              live_events: terminalLive ?? { ...body.live_events, pending: false, coverage: "unavailable" } };
           liveCapability = null;
         }
       }
@@ -894,6 +921,31 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       }
       // Atomically replace the previous answer with the current verdict.
       const composedNow = decision.isComposedStatus(cls.status);
+      const tradeoff = composedNow ? longerFirstChoiceFallback(interestBaseline?.entry.safeResponse, safe, firstChoice) : null;
+      if (tradeoff && interestBaseline) {
+        // Approval adopts the already finished reply through the same path.
+        // New inputs and navigation invalidate both buttons immediately.
+        const current = () => !controller.signal.aborted && requestId === requestSequenceRef.current &&
+          intentId === intentSequenceRef.current;
+        const accepted = await new Promise<boolean>(resolve => {
+          const cancel = () => resolve(false);
+          controller.signal.addEventListener("abort", cancel, { once: true });
+          const accept = () => {
+            controller.signal.removeEventListener("abort", cancel);
+            resolve(current());
+          };
+          setInterestFailure({ liveEvents: null, offer: { ...tradeoff, accept, current } });
+          const previous = interestBaseline.entry;
+          setDayChange({ previous, previousShare: interestBaseline.share, summary: describeDayChange(previous, previous) });
+          setPhase("done");
+        });
+        if (!accepted || !current()) return;
+        setInterestFailure(null);
+      }
+      if (interestEdit) {
+        setPublicReference(null);
+        setPublicReadState(null);
+      }
       if (interestEdit && composedNow) focusBeforeInterestResultRef.current = document.activeElement;
       setClassification(cls);
       installResponse(safe);
@@ -1012,7 +1064,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       }
       // Pending Live is read through the original compose's own capability,
       // never by recomposing the route.
-      if (liveCapability && safe) startLiveCompletion(liveCapability, requestId, intentId, safe, interestEdit);
+      if (liveCapability && safe) startLiveCompletion(liveCapability, requestId, intentId, safe, interestEdit,
+        tradeoff ? safe : interestBaseline?.entry.safeResponse);
       else setLiveFollowing(false);
       // A bounded silent re-ask covers cold-start honesty gaps. The POLICY —
       // which composes re-ask, and with what delay — is the pure, unit-tested
@@ -1094,7 +1147,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // authorized and applied one, replaces that day only while its generation is
   // still the current one and it is still the day on screen. The route is
   // never recomposed here.
-  function startLiveCompletion(capability: LiveCompletionCapability, requestId: number, intentId: number, installed: any, preserveInterestUndo = false) {
+  function startLiveCompletion(capability: LiveCompletionCapability, requestId: number, intentId: number, installed: any,
+    preserveInterestUndo = false, interestBaseline?: any) {
     abortLiveCompletion();
     const controller = new AbortController();
     liveCompletionAbortRef.current = controller;
@@ -1132,7 +1186,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         if (!current()) return;
         setLiveFollowing(false);
         if (outcome.upgrade?.kind === "applied" && entry && lastEntryRef.current === entry) {
-          installLiveUpgrade(outcome.upgrade.result, entry, preserveInterestUndo);
+          installLiveUpgrade(outcome.upgrade.result, entry, preserveInterestUndo, interestBaseline);
         }
       })
       .catch(() => {});
@@ -1141,11 +1195,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Called only while the run's generation is current: every adjustment,
   // commitment, restore, undo and compose bumps the generation first, so a
   // newer question always wins over this answer.
-  function installLiveUpgrade(result: any, previous: SavedEntry, preserveInterestUndo = false) {
+  function installLiveUpgrade(result: any, previous: SavedEntry, preserveInterestUndo = false, interestBaseline?: any) {
     const decision = anywhereDecision();
     const cls = decision.classifyAnywhereResult(result, { place: previous.place ?? "" });
     if (!decision.isComposedStatus(cls.status)) return;
     const safe = decision.safeResponseFor(result, cls);
+    if (interestBaseline) {
+      const firstChoice = normalizePreferencePriority(previous.inputs?.preferencePriority, previous.inputs?.selected)[0];
+      if (longerFirstChoiceFallback(interestBaseline, safe, firstChoice)) return;
+    }
     const ledger = readCommitmentSnapshot(previous.commitments, { anchorKey: displayedAnchorKeyRef.current, dayKey: previous.id });
     const choices = scopeLiveChoices(ledger.applies ? ledger.entries : {}, previous.dateIso ?? "").liveEventChoices;
     if (choices.some(choice => choice.action === "keep" && !primaryRouteStops(safe).some((stop: any) =>
@@ -1362,7 +1420,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // it is not labelled as one and adjusting it keeps recomposing as usual.
   function undoDayChange() {
     const change = dayChange;
-    if (!change) return;
+    if (!change || (interestFailure?.offer && !interestFailure.offer.current())) return;
     livePlanPendingRef.current = null;
     setLivePlanPending(false);
     resetBlitz();
@@ -2370,6 +2428,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setChoicesNotCarried(false);
     setStopEditFeedback(null);
     setStopEditError(null);
+    setInterestFailure(current => current?.offer ? null : current);
     intentSequenceRef.current += 1;
     // The day's completion read answers the old intent: stop it now, not when
     // the adjustment's debounce sends the next compose.
@@ -2932,6 +2991,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // today's: a saved day from yesterday keeps the offset it was composed with.
   const shownDate = safeResponse?.days?.[0]?.date;
   const shownDay = typeof shownDate === "string" ? navigationDayPresentation(shownDate, lang) : null;
+  const longerInterestOffer = interestFailure?.offer;
+  const longerInterestMessage = longerInterestOffer && (() => {
+    const { firstChoice, beforeKm, afterKm } = longerInterestOffer;
+    const label = pickLabel(firstChoice, lang);
+    const before = walkingDistanceLabel(beforeKm, lang);
+    const after = walkingDistanceLabel(afterKm, lang);
+    return t(`Förslaget saknar ditt förstaval ${label}. Gångsträckan ökar från ${before} till ${after}.`,
+      `The suggested day misses your first choice ${label}. The walk goes from ${before} to ${after}.`);
+  })();
   const anchorCard = hasAnchor ? (
     <AnchorCard
       t={t}
@@ -2953,14 +3021,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setInterestChooserOpen={setInterestChooserOpen}
       onApplyInterests={canUpdateSaved ? applyInterests : undefined}
       interestFailure={interestFailure && phase === "done" ? {
-        message: [
+        message: longerInterestMessage || [
           t("Vi kunde inte bekräfta en gångbar dag med de här intressena.", "We couldn’t confirm a walkable day with these interests."),
           retainedInterestDay && t("Din tidigare dag visas fortfarande.", "Your previous day is still shown."),
           selected.includes("live_music") && hasSelectedDayMusic(interestFailure.liveEvents) &&
             t("Livemusik finns i Live.", "Live music is listed in Live."),
         ].filter(Boolean).join(" "),
-        attemptedLabels: retainedInterestDay ? selected.map(key => pickLabel(key, lang)).join(" · ") : undefined,
+        attemptedLabels: retainedInterestDay && !longerInterestOffer ? selected.map(key => pickLabel(key, lang)).join(" · ") : undefined,
         onUndo: retainedInterestDay && dayChange ? undoDayChange : undefined,
+        onUseSuggestion: longerInterestOffer?.accept,
       } : undefined}
       onSetDay={chooseDay}
       rhythms={DAY_RHYTHMS}

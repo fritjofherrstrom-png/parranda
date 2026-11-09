@@ -372,7 +372,7 @@ test("grouped Undo offers no Share if the previous publication expired after app
   assert.equal(button(h.container, "Share this day"), undefined);
 });
 
-test("grouped Undo of a public day returns to the original read-only publication", async t => {
+async function openPublicDay(t) {
   const h = await start(t, `snapshot=${FIRST_REF}`, { response: null });
   const original = day("Previous stop", ["food"], {
     agnostic_route_output_experiment: {
@@ -391,6 +391,11 @@ test("grouped Undo of a public day returns to the original read-only publication
   });
   assert.match(route(h), /Previous stop/);
   assert.match(h.text(), /Saved day/);
+  return h;
+}
+
+test("grouped Undo of a public day returns to the original read-only publication", async t => {
+  const h = await openPublicDay(t);
   await applyShareableInterest(h);
   assert.equal(new URL(h.window.location.href).searchParams.get("snapshot"), null);
   await click(h, "Undo this change");
@@ -399,4 +404,105 @@ test("grouped Undo of a public day returns to the original read-only publication
   assert.equal(new URL(h.window.location.href).searchParams.get("snapshot"), FIRST_REF);
   assert.ok(button(h.container, "Share this day"));
   assert.equal(compose(h).length, 1);
+});
+
+async function askForWaterAndParks(h) {
+  const editor = await open(h);
+  await click(h, "Clear selection", editor);
+  await click(h, "By the water", editor);
+  await click(h, "Parks & gardens", editor);
+  await click(h, "Update day", editor);
+  return compose(h).at(-1);
+}
+
+function parkDay(name, km, extra) {
+  const result = day(name, ["parks_gardens"], extra);
+  result.days[0].primary_route.estimated_km = km;
+  return result;
+}
+
+test("waiting for a longer alternative retains the original public address and share", async t => {
+  const h = await openPublicDay(t);
+  const original = h.window.location.href;
+  const previous = h.readStorage(LAST);
+  const call = await askForWaterAndParks(h);
+  await h.fetchMock.respond(call, parkDay("Long park route", 4, { day_snapshot: ready(UPDATED_REF) }));
+  assert.ok(button(h.container, "Use suggested day"));
+  assert.equal(h.window.location.href, original);
+  assert.deepEqual(h.readStorage(LAST), previous);
+  await click(h, "Use suggested day");
+  assert.match(route(h), /Long park route/);
+  assert.equal(new URL(h.window.location.href).searchParams.get("snapshot"), null);
+  await click(h, "Undo this change");
+  assert.equal(h.window.location.href, original);
+  assert.deepEqual(h.readStorage(LAST), previous);
+});
+
+test("a date change immediately removes an older longer alternative", async t => {
+  const h = await start(t);
+  const call = await askForWaterAndParks(h);
+  await h.fetchMock.respond(call, parkDay("Long park route", 4));
+  assert.ok(button(h.container, "Keep current day"));
+  await click(h, "Tomorrow");
+  assert.equal(button(h.container, "Keep current day"), undefined);
+  await h.clock.advance(500);
+  assert.deepEqual(compose(h).at(-1).body.dates, ["2026-11-08"]);
+});
+
+test("background Live stays in Live when its upgrade would silently install the longer fallback", async t => {
+  const h = await start(t);
+  const call = await askForWaterAndParks(h);
+  await h.fetchMock.respond(call, parkDay("Short park route", 1.1, {
+    live_events: { coverage: "covered", selected_date: DATE, pending: true },
+    live_completion: { version: 1, token: "late-live-interest", expires_in_ms: 120000, route_upgrade: "explicit_request" },
+  }));
+  assert.match(route(h), /Short park route/);
+  await h.clock.advance(2000);
+  const liveEvents = { coverage: "covered", selected_date: DATE, tonight: [
+    { id: "verified", title: "Verified concert", starts_at: DATE + "T18:00:00Z", matched_preferences: ["live_music"] },
+  ] };
+  const completion = h.fetchMock.pending().find(request => request.url === "/api/planner-live-completion");
+  assert.ok(completion);
+  await h.fetchMock.respond(completion, {
+    live_events: liveEvents, live_completion: { version: 1, state: "ready", route_upgrade: "explicit_request" },
+  });
+  const upgrade = h.fetchMock.pending().find(request => request.url === "/api/planner-live-route-upgrade");
+  assert.ok(upgrade);
+  await h.fetchMock.respond(upgrade, {
+    live_route_upgrade: { version: 1, state: "applied" },
+    result: parkDay("Long park route", 4, { live_events: liveEvents }),
+  });
+  assert.match(route(h), /Short park route/);
+  assert.equal(h.readStorage(LAST).safeResponse.days[0].primary_route.estimated_km, 1.1);
+  assert.match(h.text(), /Verified concert/);
+});
+
+test("a longer alternative retains terminal Live while waiting for the user's decision", async t => {
+  const h = await start(t);
+  const call = await askForWaterAndParks(h);
+  await h.fetchMock.respond(call, parkDay("Long park route", 4, {
+    live_events: { coverage: "covered", selected_date: DATE, pending: true },
+    live_completion: { version: 1, token: "late-live-interest", expires_in_ms: 120000, route_upgrade: "not_supported" },
+  }));
+  assert.match(route(h), /Previous stop/);
+  assert.equal(button(h.container, "Use suggested day"), undefined);
+  await h.clock.advance(2000);
+  const completion = h.fetchMock.pending().find(request => request.url === "/api/planner-live-completion");
+  assert.ok(completion);
+  const liveEvents = { coverage: "covered", selected_date: DATE, tonight: [
+    { id: "verified", title: "Verified concert", starts_at: DATE + "T18:00:00Z", matched_preferences: ["live_music"] },
+  ] };
+  await h.fetchMock.respond(completion, {
+    live_events: liveEvents, live_completion: { version: 1, state: "ready", route_upgrade: "not_supported" },
+    day_snapshot: ready(UPDATED_REF),
+  });
+  assert.ok(button(h.container, "Use suggested day"));
+  t.mock.timers.setTime(Date.parse(DATE + "T10:03:00Z"));
+  await h.clock.advance(180000);
+  await click(h, "Use suggested day");
+  assert.match(route(h), /Long park route/);
+  assert.match(h.text(), /Verified concert/);
+  assert.ok(button(h.container, "Share this day"));
+  assert.equal(h.fetchMock.calls.filter(request => request.url === "/api/planner-live-completion").length, 1);
+  assert.equal(compose(h).length, 2);
 });

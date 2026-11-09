@@ -71,7 +71,7 @@ export default function AnchorCard({
   interestChooserOpen?: boolean;
   setInterestChooserOpen?: (open: boolean) => void;
   onApplyInterests?: (selection: InterestSelection) => void;
-  interestFailure?: { message: string; attemptedLabels?: string; onUndo?: () => void };
+  interestFailure?: { message: string; attemptedLabels?: string; onUndo?: () => void; onUseSuggestion?: () => void };
   onSetDay: (offset: 0 | 1) => void;
   rhythms: RhythmOption[];
   walkKey: string;
@@ -91,6 +91,11 @@ export default function AnchorCard({
   const priorityHelpId = useId();
   const allInterestsButton = useRef<HTMLButtonElement>(null);
   const retryInterestsButton = useRef<HTMLButtonElement>(null);
+  const interestNotice = useRef<HTMLParagraphElement>(null);
+  const hasInterestSuggestion = Boolean(interestFailure?.onUseSuggestion);
+  useEffect(() => {
+    if (hasInterestSuggestion && document.activeElement === allInterestsButton.current) interestNotice.current?.focus();
+  }, [hasInterestSuggestion]);
   const interestTrigger = useRef<HTMLButtonElement | null>(null);
   const returnInterestFocus = useRef(false);
   useEffect(() => {
@@ -208,10 +213,10 @@ export default function AnchorCard({
 
       {interestFailure && (
         <div className={`mt-2 flex flex-col items-start gap-2 ${noticeCard}`}>
-          <p role="status">{interestFailure.message}</p>
+          <p role="status" ref={interestNotice} tabIndex={hasInterestSuggestion ? -1 : undefined}>{interestFailure.message}</p>
           {interestFailure.attemptedLabels && <p className="text-xs text-parranda-ink-muted">{interestFailure.attemptedLabels}</p>}
           <div className="flex flex-wrap gap-2">
-            {onApplyInterests && setInterestChooserOpen && (
+            {!hasInterestSuggestion && onApplyInterests && setInterestChooserOpen && (
               <button type="button" ref={retryInterestsButton} aria-expanded={interestChooserOpen} onClick={() => {
                 interestTrigger.current = retryInterestsButton.current;
                 setAdjustOpen(true);
@@ -221,10 +226,16 @@ export default function AnchorCard({
               </button>
             )}
             {interestFailure.onUndo && (
-              <button type="button" onClick={interestFailure.onUndo} aria-label={t("Ångra ändringen", "Undo this change")}
+              <button type="button" onClick={interestFailure.onUndo}
+                aria-label={hasInterestSuggestion ? undefined : t("Ångra ändringen", "Undo this change")}
                 className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
-                <UndoIcon className="h-3.5 w-3.5" />
-                {t("Ångra", "Undo")}
+                {!hasInterestSuggestion && <UndoIcon className="h-3.5 w-3.5" />}
+                {hasInterestSuggestion ? t("Behåll min dag", "Keep current day") : t("Ångra", "Undo")}
+              </button>
+            )}
+            {interestFailure.onUseSuggestion && (
+              <button type="button" onClick={interestFailure.onUseSuggestion} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                {t("Använd förslaget", "Use suggested day")}
               </button>
             )}
           </div>
