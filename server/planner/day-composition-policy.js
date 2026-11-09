@@ -35,8 +35,13 @@ function isMeal(candidate) {
   return preferenceFit(candidate).coveredPreferences.includes('food');
 }
 
+function isComparableWalk(route, baseline) {
+  return route.estimated_km <= Math.max(baseline.estimated_km * 1.25, baseline.estimated_km + 0.5) &&
+    route.longest_leg_km <= Math.max(baseline.longest_leg_km, 1.5);
+}
+
 function selectBalancedDay({ rankedCandidates = [], selected = [], preferences = [],
-  preferencePriority = [], pinnedIds = [], mealContext = null, ...context } = {}) {
+  preferencePriority = [], pinnedIds = [], mealContext = null, preferFirstChoice = false, ...context } = {}) {
   const requested = normalizeUserIntents(preferences).intents;
   const priority = canonicalPriority(preferencePriority, preferences);
   const timedFood = priority[0] === 'food' && createMealOrderPolicy(rankedCandidates.map(({ item }) => item), mealContext);
@@ -77,14 +82,12 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
     for (let hit = 0; hit < hitsOf(intent, entries); hit += 1) utility += weightOf(intent) / (hit + 1);
     return utility;
   }, 0);
-  const evaluated = [];
-  for (const entries of subsets(pool, count)) {
-    if (required.some(id => !entries.some(({ item }) => item.id === id))) continue;
+  const evaluate = entries => {
+    if (required.some(id => !entries.some(({ item }) => item.id === id))) return null;
     const diagnostics = describe(entries);
     // A content preference is never permission for a large new detour. The
     // existing final engine/walking checks remain authoritative after this.
-    if (diagnostics.estimated_km > Math.max(baseline.estimated_km * 1.25, baseline.estimated_km + 0.5)) continue;
-    if (diagnostics.longest_leg_km > Math.max(baseline.longest_leg_km, 1.5)) continue;
+    if (!isComparableWalk(diagnostics, baseline)) return null;
     const meals = entries.filter(({ item }) => isMeal(item)).length;
     // An internal approximate loop target must not trade exact requested
     // coverage for partial fit. Final independent walking gates still decide.
@@ -93,9 +96,10 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
     const tail = [diagnostics.local_quality, diagnostics.operational_quality, diagnostics.trust_quality,
       diagnostics.within_target_band ? 1 : 0, -diagnostics.target_distance_km,
       diagnostics.unique_family_count, diagnostics.individual_score];
-    evaluated.push({ entries, diagnostics, lead, tail, key: entries.map(({ item }) => item.id).sort().join('|') });
-  }
-  const pick = scoreOf => evaluated.reduce((best, entry) => {
+    return { entries, diagnostics, lead, tail, key: entries.map(({ item }) => item.id).sort().join('|') };
+  };
+  const evaluated = Array.from(subsets(pool, count), evaluate).filter(Boolean);
+  const pick = (scoreOf, candidates = evaluated) => candidates.reduce((best, entry) => {
     const score = scoreOf(entry);
     return !best || compare(score, best.score) > 0 || (compare(score, best.score) === 0 && entry.key < best.key)
       ? { entries: entry.entries, score, key: entry.key } : best;
@@ -113,10 +117,24 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
   const unranked = requested.includes('food') ? pick(neutral)?.entries
     : selected.map(item => unique.get(item.id) || { item, score: 0 });
   const floor = unranked && ranked.length ? hitsOf(ranked[0], unranked) : 0;
-  const best = pick(({ lead, tail, entries, diagnostics }) => [lead[0],
+  const score = ({ lead, tail, entries, diagnostics }) => [lead[0],
     !ranked.length || hitsOf(ranked[0], entries) >= floor ? 1 : 0, ...lead.slice(1),
     ...(meals ? meals.scoreSet(entries.map(({ item }) => item)) : []),
-    utilityOf(entries, intent => weights.get(intent)), diagnostics.spine_role_count, ...tail]);
+    utilityOf(entries, intent => weights.get(intent)), diagnostics.spine_role_count, ...tail];
+  const best = pick(score);
+  if (preferFirstChoice && ranked.includes(priority[0])) {
+    const coversFirst = entries => hitsOf(priority[0], entries) > 0;
+    const minimumCoverage = (best?.score[0] ?? baseline.exact_preference_count) - 1;
+    const eligible = entry => entry && entry.diagnostics.within_budget &&
+      entry.diagnostics.exact_preference_count >= minimumCoverage && coversFirst(entry.entries);
+    const sameSize = pick(score, evaluated.filter(eligible));
+    if (sameSize) return sameSize.entries.map(({ item }) => item);
+    if (count > 2) {
+      const fewer = Array.from(subsets(pool, count - 1), entries => coversFirst(entries) ? evaluate(entries) : null);
+      const shorter = pick(score, fewer.filter(eligible));
+      if (shorter) return shorter.entries.map(({ item }) => item);
+    }
+  }
   return best ? best.entries.map(({ item }) => item) : selected;
 }
 
@@ -221,4 +239,4 @@ function dayEditOutcome(dayEdit, stops = [], reason = null) {
     result_candidate_ids: ids };
 }
 
-module.exports = { canonicalPriority, isMeal, selectBalancedDay, orderBalancedDay, selectEditedDay, dayEditOutcome, normalizeDayEdit };
+module.exports = { canonicalPriority, isComparableWalk, isMeal, selectBalancedDay, orderBalancedDay, selectEditedDay, dayEditOutcome, normalizeDayEdit };

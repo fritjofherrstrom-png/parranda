@@ -92,6 +92,7 @@ function buildAgnosticEngineCityConfig({
   key = AGNOSTIC_ENGINE_CITY_KEY,
   dayProfile = null,
   preferencePriority = [],
+  preferFirstChoice = false,
   dayEdit = null,
   reservedLiveStopCount = 0,
   mealContext = null,
@@ -137,6 +138,7 @@ function buildAgnosticEngineCityConfig({
     // not the public request payload, so callers cannot promote their own route.
     __agnosticDayProfile: ["light", "variation", "peak"].includes(dayProfile) ? dayProfile : null,
     __preferencePriority: Array.isArray(preferencePriority) ? [...preferencePriority] : [],
+    __preferFirstChoice: preferFirstChoice === true,
     __dayEdit: dayEdit ? structuredClone(dayEdit) : null,
     // Trusted server-local date/time only; the public request cannot set it.
     __mealContext: mealContext ? { date: mealContext.date, nowLocalIso: mealContext.nowLocalIso,

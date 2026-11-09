@@ -32,10 +32,11 @@ function places() {
   }));
 }
 
-async function serve(t) {
+async function serve(t, { records = places(), walkingRouter, walkingConfig } = {}) {
   const server = buildApp({
-    openDataLoader: makeLoader(places()), placeSuggestions: null, eventSupply: null,
+    openDataLoader: makeLoader(records), placeSuggestions: null, eventSupply: null,
     sourceCatalog: null, reviewedPlaceSource: null, publishedDayStore: null, clock,
+    walkingRouter, walkingConfig,
     placeResolver: async () => [{
       ...anchor, label: 'Controlled neighbourhood', confidence: 'high', provenance: 'offline_fixture',
       timezone: 'Europe/Belgrade', osm_class: 'place', osm_ref: 'relation/123456',
@@ -135,4 +136,104 @@ test('built chooser applies one mixed selection on desktop and mobile', { timeou
       await context.close();
     }
   }
+});
+
+test('a longer proposal missing the first choice waits for approval on mobile', { timeout: 45000 }, async t => {
+  const cafes = Array.from({ length: 4 }, (_, index) => mapOsmElement({
+    type: 'node', id: 5000 + index, lat: anchor.lat + index * .0008, lon: anchor.lng,
+    tags: { amenity: 'cafe', name: `Cafe ${index + 1}`, wikidata: `Q${5000 + index}` },
+  }));
+  const server = await serve(t, {
+    records: [...places(), ...cafes],
+    walkingConfig: { defaultProvider: 'osrm', transportMode: 'foot' },
+    walkingRouter: async points => {
+      const km = points.some(point => /^Park /.test(point.label)) ? 7.7 : 2.7;
+      return { source: 'osrm', mode: 'walking', estimatedKm: km, pathPoints: points,
+        legs: points.slice(1).map((point, index) => ({
+          from_label: points[index].label, to_label: point.label,
+          distance_km: km / (points.length - 1), estimated_walk_minutes: Math.round(km * 12 / (points.length - 1)),
+        })) };
+    },
+  });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const browser = await chromium.launch({ headless: true,
+    ...(process.env.PARRANDA_TEST_CHROMIUM ? { executablePath: process.env.PARRANDA_TEST_CHROMIUM } : {}),
+    args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  });
+  t.after(() => browser.close());
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Europe/Belgrade',
+    isMobile: true, hasTouch: true });
+  await context.route(url => url.origin !== origin, route => route.abort());
+  const page = await context.newPage();
+  const posts = [], errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === routePath) posts.push(request.postDataJSON());
+  });
+  await page.clock.setFixedTime(clock());
+  await page.goto(`${origin}/anywhere?place=Controlled%20neighbourhood&prefs=cafes&prio=cafes&day=1&lang=en`);
+  const list = page.getByRole('list', { name: 'The stops, in order', exact: true });
+  const maps = page.getByRole('link', { name: 'Open route in Maps' });
+  const lastDay = 'parranda:anywhere:last';
+  const stored = () => page.evaluate(key => localStorage.getItem(key), lastDay);
+  await list.waitFor();
+  const { NAVIGATION_STATE_KEY } = await import('../frontend/src/lib/planner-navigation.mjs');
+  await page.waitForFunction(key => history.state?.[key]?.reference, NAVIGATION_STATE_KEY);
+  const before = await stored();
+  assert.equal(JSON.parse(before).safeResponse.days[0].primary_route.estimated_km, 2.7);
+  const beforeText = await list.textContent();
+  const beforeMaps = await maps.getAttribute('href');
+  const beforeUrl = page.url();
+  const startPosts = posts.length;
+
+  const propose = async () => {
+    const adjust = page.getByRole('button', { name: 'Adjust', exact: true });
+    if (await adjust.isVisible()) await adjust.click();
+    await page.getByRole('button', { name: 'All interests', exact: true }).click();
+    const chooser = page.getByRole('region', { name: 'All interests', exact: true });
+    await chooser.getByRole('button', { name: 'Clear selection', exact: true }).click();
+    await chooser.getByRole('button', { name: 'By the water', exact: true }).click();
+    await chooser.getByRole('button', { name: 'Parks & gardens', exact: true }).click();
+    const previousPosts = posts.length;
+    const [response] = await Promise.all([
+      page.waitForResponse(async response => {
+        if (!response.ok() || ![routePath, '/api/planner-status'].includes(new URL(response.url()).pathname)) return false;
+        const body = await response.json();
+        return body.days?.[0]?.primary_route?.estimated_km === 7.7;
+      }),
+      chooser.getByRole('button', { name: 'Update day', exact: true }).click(),
+    ]);
+    const route = (await response.json()).days[0].primary_route;
+    assert.ok(route.main_stops.every(stop => stop.covered_preferences.includes('parks_gardens') &&
+      !stop.covered_preferences.includes('waterside')));
+    assert.deepEqual(posts.at(-1).preference_priority, ['waterside', 'parks_gardens']);
+    const note = page.getByRole('status').filter({ hasText: /first choice By the water.*2\.7 km.*7\.7 km/i });
+    await note.waitFor({ timeout: 6000 });
+    assert.equal(posts.length, previousPosts + 1);
+    assert.equal(await list.textContent(), beforeText);
+    assert.equal(await stored(), before);
+    assert.equal(await maps.getAttribute('href'), beforeMaps);
+    assert.equal(page.url(), beforeUrl);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    const dir = process.env.PARRANDA_QA_ARTIFACT_DIR;
+    if (dir) {
+      fs.mkdirSync(dir, { recursive: true });
+      await page.screenshot({ path: path.join(dir, 'longer-proposal-mobile.png'), animations: 'disabled' });
+    }
+  };
+
+  await propose();
+  await page.getByRole('button', { name: 'Keep current day', exact: true }).click();
+  await page.getByRole('button', { name: 'Use suggested day', exact: true }).waitFor({ state: 'hidden' });
+  assert.equal(await stored(), before);
+  assert.equal(page.url(), beforeUrl);
+
+  await propose();
+  await page.getByRole('button', { name: 'Use suggested day', exact: true }).click();
+  await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).safeResponse.days[0].primary_route.estimated_km === 7.7, lastDay);
+  await page.getByRole('button', { name: 'Undo this change', exact: true }).click();
+  await page.waitForFunction(({ key, entry }) => localStorage.getItem(key) === entry, { key: lastDay, entry: before });
+  assert.equal(await list.textContent(), beforeText);
+  assert.equal(posts.length, startPosts + 2, 'approval, keeping the day, and Undo issue no compose');
+  assert.deepEqual(errors, []);
 });
