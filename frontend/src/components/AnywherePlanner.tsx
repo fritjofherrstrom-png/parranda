@@ -3454,14 +3454,17 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           but it is explicitly candidates, never a second itinerary. */}
       {/* The no-day notice already says why there is no route, so the list
           adds only places — and, with none, nothing at all. "No places for"
-          names only picks the loader did not find places for. */}
+          names only picks the loader did not find places for, and only when
+          every place source answered: an absence read from partial evidence
+          is not stated as a fact. */}
       {showStructure && structure && !hasPrimaryRoute && !(noDay && candidateMatchCount(day?.areas) === 0) && (
         <CandidateAreas
           t={t}
           lang={lang}
           structureOnly={classification?.status === "structure_only" && !noDay}
           areas={day?.areas ?? []}
-          missingIntents={evidencedMissingIntents(day?.missing_intents, safeResponse?.agnostic_route_output_experiment?.source_status)}
+          missingIntents={incompletePlaceSources ? []
+            : evidencedMissingIntents(day?.missing_intents, safeResponse?.agnostic_route_output_experiment?.source_status)}
           mapsPlaceContext={mapsPlaceContext}
           expandedCandidateKey={expandedCandidateKey}
           setExpandedCandidateKey={setExpandedCandidateKey}

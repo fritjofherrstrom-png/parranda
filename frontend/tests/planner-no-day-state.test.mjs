@@ -172,21 +172,34 @@ function structureOnly({ prefs, covers, missing, profile, error = null }) {
   };
 }
 
+const copenhagenLike = (error) => structureOnly({
+  prefs: ["bathing_places", "waterside"], covers: ["waterside"], missing: ["waterside", "bathing_places"],
+  profile: { record_count: 101, requested_intents_covered: ["waterside"], requested_intents_partial: [], requested_intents_missing: ["bathing_places"] },
+  error,
+});
+const nearbySection = (h) => [...h.container.querySelectorAll("section")].find((s) => s.textContent.startsWith("Places nearby"));
+
 test("an interest the loader found places for is never listed as having none", async (t) => {
-  const response = structureOnly({
-    prefs: ["bathing_places", "waterside"], covers: ["waterside"], missing: ["waterside", "bathing_places"],
-    profile: { record_count: 101, requested_intents_covered: ["waterside"], requested_intents_partial: [], requested_intents_missing: ["bathing_places"] },
-    error: "http_non_200",
-  });
-  const h = await plan(t, { prefs: "waterside,bathing_places", response });
+  const h = await plan(t, { prefs: "waterside,bathing_places", response: copenhagenLike(null) });
   assertOneNotice(h, "en", { message: COPY.en.interests, action: "edit" });
-  const nearby = [...h.container.querySelectorAll("section")].find((s) => s.textContent.startsWith("Places nearby"));
+  const nearby = nearbySection(h);
   assert.ok(nearby, "the matching places stay listed");
   assert.match(nearby.textContent, /Fixture Quay/);
   const missingLine = [...nearby.querySelectorAll("p")].find((p) => p.textContent.startsWith("No places for:"));
   assert.equal(missingLine?.textContent, "No places for: Swimming spots", "only the pick the loader did not find");
   assert.doesNotMatch(nearby.textContent, /couldn't build a route yet/, "the notice already says it");
   assert.doesNotMatch(h.text(), /Places found — no route yet|waterside|bathing_places/);
+});
+
+test("with a place source failed, no interest is stated as having no places", async (t) => {
+  // As on staging: the loader did not find bathing places, but one source
+  // returned http_non_200 — partial evidence, not a fact about the place.
+  const h = await plan(t, { prefs: "waterside,bathing_places", response: copenhagenLike("http_non_200") });
+  assertOneNotice(h, "en", { message: COPY.en.interests, action: "edit" });
+  const nearby = nearbySection(h);
+  assert.ok(nearby, "the places that did load stay listed");
+  assert.match(nearby.textContent, /Fixture Quay/);
+  assert.doesNotMatch(h.text(), /No places for|0 matches/);
 });
 
 test("places without a route, with nothing else wrong, are one supply notice above the places", async (t) => {
@@ -239,7 +252,6 @@ for (const lang of ["en", "sv"]) {
       const response = structureOnly({
         prefs: picks, covers: serverKeys, missing: serverKeys,
         profile: { record_count: 3, requested_intents_covered: [], requested_intents_partial: [], requested_intents_missing: picks },
-        error: "provider_unavailable",
       });
       response.place_structure.district_day.areas[0].partial_covers = serverKeys;
       const h = await plan(null, { prefs: picks.join(","), lang, response });
