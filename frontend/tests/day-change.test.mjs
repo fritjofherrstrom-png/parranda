@@ -225,3 +225,32 @@ test("looking for more places is said as the reader's own act, and what it broug
   assert.deepEqual(dayChangeSegments(unchanged, labels("en")), ["same stops and distance"], "finding nothing is an answer too");
   assert.equal(describeDayChange(before, after).trigger, null, "an ordinary change has no trigger");
 });
+
+// Staging QA 12 Nov 2026: a Keep read "Live: event added · +1 stop" and never
+// named the stop that was kept. A kept stop is named on its own.
+const withPins = (base, pins) => ({ ...base, commitments: { appliedPins: pins.map(([id, label]) => ({ id, kind: "pin", label })) } });
+
+test("a stop kept on a day that stayed as it was is the whole change", () => {
+  const stops = [stop("a", "Place a"), stop("b", "Place b")];
+  const before = entry({ stops, km: 1.2 });
+  const change = describeDayChange(before, withPins(before, [["a", "Place a"]]));
+  assert.deepEqual(change.pinned, ["Place a"]);
+  assert.equal(change.routeChanged, false);
+  assert.deepEqual(dayChangeSegments(change, labels("en")), [], "no 'same stops and distance' beside a Keep");
+});
+
+test("a kept stop is named beside every other change, never instead of it", () => {
+  const before = entry({ stops: [stop("a", "Place a"), stop("b", "Place b")], km: 1.2 });
+  const after = withPins(entry({ stops: [stop("a", "Place a"), stop("b", "Place b"), stop("c", "Place c")], km: 2.0, walkKey: "full" }), [["a", "Kept label"]]);
+  const change = describeDayChange(before, after);
+  assert.deepEqual(change.pinned, ["Place a"], "the stop's own name, as the day shows it");
+  assert.equal(dayChangeSegments(change, labels("en")).join(" · "), "Balanced → Full · +1 stop · 1.2 → 2 km");
+});
+
+test("only pins the new day answers and the old one did not are named", () => {
+  const stops = [stop("a", "Place a"), stop("b", "Place b")];
+  const before = withPins(entry({ stops }), [["a", "Place a"]]);
+  const after = withPins(entry({ stops, walkKey: "full" }), [["a", "Place a"], ["gone", "Not in the day"], ["live:2026-10-14:" + "c".repeat(32), "Concert"]]);
+  assert.deepEqual(describeDayChange(before, after).pinned, [], "held before, unmet, or a Live choice: none is a new Keep");
+  assert.deepEqual(describeDayChange(null, null).pinned, []);
+});
