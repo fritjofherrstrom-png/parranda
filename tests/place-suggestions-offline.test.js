@@ -161,6 +161,19 @@ test('after the cooldown one query probes in the background, and a healthy answe
   assert.equal(provider.calls.length, 4);
 });
 
+test('a reader’s own retry asks the provider even while the circuit rests', async () => {
+  const provider = photon(call => (call <= 2 ? 503 : [feature('Malmö', 1)]));
+  const suggest = createPlaceSuggestions({ fetcher: provider.fetcher, minIntervalMs: 0, offlinePlaces: offline() });
+  await suggest('Malmo', {});
+  await suggest('Malmoe', {});
+  assert.equal((await suggest('Malm', {})).choices[0].candidate.provenance, 'geonames');
+  assert.equal(provider.calls.length, 2, 'an automatic lookup does not reach a resting provider');
+  const retried = await suggest('Malm', { explicit: true });
+  assert.equal(retried.choices[0].candidate.provenance, 'photon_osm');
+  assert.equal(provider.calls.length, 3);
+  assert.equal((await suggest('Malmö', {})).choices[0].candidate.provenance, 'photon_osm', 'its healthy answer closes the circuit');
+});
+
 test('an earlier answer to the same query outranks the register, within its age limit', async () => {
   let clock = 0;
   const provider = photon(call => (call === 1 ? [feature('Malmö', 1)] : 503));

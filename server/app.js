@@ -1579,7 +1579,7 @@ function buildApp({
     request.once('aborted', cancel);
     response.once('close', cancel);
     try {
-      const result = await placeSuggestions(query, { language: normalizeLanguage(request.query?.lang), signal: controller.signal, ...(previous ? { near: { lat: previous.lat, lng: previous.lng } } : {}) });
+      const result = await placeSuggestions(query, { language: normalizeLanguage(request.query?.lang), signal: controller.signal, ...(previous ? { near: { lat: previous.lat, lng: previous.lng } } : {}), ...(request.body?.retry === true ? { explicit: true } : {}) });
       if (controller.signal.aborted) return;
       const registry = buildLandingCityRegistry(normalizeLanguage(request.query?.lang));
       const choices = (result.choices || []).slice(0, 5).flatMap(choice => {

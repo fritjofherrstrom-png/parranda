@@ -44,6 +44,8 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
   const listRef = useRef<HTMLUListElement>(null);
   const dismissed = useRef(false);
   const sequence = useRef(0);
+  // Set by the reader's own Try again; the server then asks its provider even if it is resting.
+  const explicitRetry = useRef(false);
   const t = (sv: string, en: string) => lang === "sv" ? sv : en;
   // A region and its city can share a name and country; settlements stay unmarked.
   const kindLabel = (kind?: PlaceSuggestion["kind"]) =>
@@ -56,6 +58,8 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
     setChoices([]); setActive(-1); setOpen(false); setStatus("idle");
     if (selected || composing || !isPlaceSearchQueryEligible(query)) return;
     const controller = new AbortController();
+    const explicit = explicitRetry.current;
+    explicitRetry.current = false;
     let timer: ReturnType<typeof setTimeout>;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const current = () => generation === sequence.current && !controller.signal.aborted;
@@ -67,7 +71,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
       try {
         const response = await fetch(`/api/place-suggestions?lang=${lang}`, {
           method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
-          body: JSON.stringify({ query, context_selection: previousSelection() }),
+          body: JSON.stringify({ query, context_selection: previousSelection(), ...(explicit && !retried ? { retry: true } : {}) }),
         });
         const data = await response.json();
         if (!current()) return;
@@ -176,7 +180,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
         {status === "loading" ? t("Söker platser …", "Finding places …") : status === "unavailable" ? t("Förslag saknas just nu. Du kan ändå söka med Bygg min dag.", "Suggestions are unavailable. You can still search with Build my day.") : ""}
       </span>
       {status === "unavailable" && <button type="button"
-        onClick={() => { setRetryGeneration(generation => generation + 1); inputRef.current?.focus(); }}
+        onClick={() => { explicitRetry.current = true; setRetryGeneration(generation => generation + 1); inputRef.current?.focus(); }}
         className="mt-1 text-xs font-semibold text-parranda-ink underline underline-offset-2">
         {t("Försök igen", "Try again")}
       </button>}

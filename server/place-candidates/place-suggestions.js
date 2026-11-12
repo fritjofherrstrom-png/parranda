@@ -198,7 +198,7 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
   });
   tail=work.then(()=>{},()=>{});return work;
  }
- return async function suggestions(raw,{language,near,signal}={}) {
+ return async function suggestions(raw,{language,near,signal,explicit=false}={}) {
   if(signal?.aborted)return {status:'unavailable',choices:[]};
   const query=typeof raw==='string'?raw.trim().replace(/\s+/g,' '):'';
   if(!isPlaceSearchQueryEligible(query))return {status:'ready',choices:[]};
@@ -208,7 +208,8 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
   if(!job){
    const cached=cache.peek(key);
    if(cached)return cached;
-   const state=circuit();
+   // A reader's own retry asks the provider even while the circuit rests.
+   const state=explicit===true?'closed':circuit();
    const closed={status:'unavailable',choices:[],retryable:false};
    if(state==='open')return degraded(key,query,context,closed);
    if(state==='probe')probing=true;

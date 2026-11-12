@@ -77,6 +77,7 @@ test('persistent failure stops automatic retries and offers a same-query retry w
   await type(h,'har');await h.clock.advance(200);
   await h.fetchMock.respond(h.fetchMock.calls[0],{status:'unavailable',choices:[]});
   await h.clock.advance(1000);assert.equal(h.fetchMock.calls.length,2);
+  assert.equal(h.fetchMock.calls[1].body.retry,undefined,'an automatic retry does not claim to be the reader');
   await h.fetchMock.respond(h.fetchMock.calls[1],{status:'unavailable',choices:[]});
   await h.clock.advance(10000);assert.equal(h.fetchMock.calls.length,2);
   const retry=[...h.document.querySelectorAll('button')].find(b=>b.textContent==='Try again');
@@ -85,6 +86,7 @@ test('persistent failure stops automatic retries and offers a same-query retry w
   await h.act(()=>retry.click());await h.clock.advance(200);
   assert.equal(h.fetchMock.calls.length,3);assert.equal(h.fetchMock.calls[2].body.query,'har');
   assert.equal(h.fetchMock.calls[2].body.context_selection,'previous-receipt');
+  assert.equal(h.fetchMock.calls[2].body.retry,true,'the reader’s own retry asks even a resting provider');
   assert.equal(h.document.activeElement.id,'landingCity');
   await h.fetchMock.respond(h.fetchMock.calls[2],{status:'ready',choices:[choice()]});
   assert.equal(h.document.querySelectorAll('[role=option]').length,1);
