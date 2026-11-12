@@ -93,7 +93,7 @@ import { useMediaQuery } from "./shared/useMediaQuery";
 import AnchorCard, { ChangePlaceLink, type AdjustRebuild } from "./planner/AnchorCard";
 import type { InterestSelection } from "./planner/InterestChooser";
 import BlitzCard from "./planner/BlitzCard";
-import CandidateAreas from "./planner/CandidateAreas";
+import CandidateAreas, { candidateMatchCount } from "./planner/CandidateAreas";
 import DayHeader, { DayActions, DayWhen, dayAssemblyNotes } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
@@ -104,7 +104,8 @@ import LiveSheet from "./planner/LiveSheet";
 import { selectedDayEmpty, useLiveFallback } from "./planner/useLiveFallback";
 import SavedDays from "./planner/SavedDays";
 import StopLine from "./planner/StopLine";
-import { pickLabel, unkeptReasonSentence, type Lang } from "./planner/copy";
+import { noDayMessage, pickLabel, unkeptReasonSentence, type Lang } from "./planner/copy";
+import { evidencedMissingIntents, noDayState } from "../lib/no-day-state.mjs";
 import type { LiveEvents, PlaceStructure, PulseEvent } from "./planner/types";
 
 type SharePublication = { entry: SavedEntry; publication: PublishedDayReference };
@@ -2628,31 +2629,38 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const sourcePartlyUnavailable = phase === "done" && classification?.status === "unavailable" && !anchorUnresolved
     && !sourceUnavailable && !terminalSourceIssue && typeof loadedSourceStatus?.error === "string" && loadedSourceStatus.error.trim() !== ""
     && loadedSourceStatus?.collection?.selection_reason === "loader_error";
-  // Preserve the classifier's absences; choices announce themselves, and an
-  // outstanding upgrade or service refusal is not a final no-day verdict.
-  const unavailableMessage = (!interestFailure || terminalSourceIssue) && phase === "done" && (classification?.status === "unavailable" || terminalSourceIssue) && !upgradePending && !serviceRefusal && !unavailableHasChoices
-    ? anchorUnresolved
-      ? placeRef ? referenceFailureMessage : t(
-          `Parranda hittade inte ”${typedPlaceLabel}”. Prova en annan stavning, eller lägg till stad eller land.`,
-          `Parranda couldn't find “${typedPlaceLabel}”. Try another spelling, or add a city or country.`,
-        )
-      : terminalSourceIssue
-        ? `${t("Parranda kunde inte bygga en dag här just nu.", "Parranda couldn't build a day here right now.")} ${sourceEvidenceNote}`
-      : sourceUnavailable
-        ? t(
-            `Platskällorna svarade inte just nu, så Parranda kunde inte hämta platser ${anchorIsPosition ? "nära dig" : `för ${placeName}`} — inget hittas på. Försök igen om en stund.`,
-            `The place sources didn't answer just now, so Parranda couldn't fetch places ${anchorIsPosition ? "near you" : `for ${placeName}`} — nothing is invented in its place. Try again in a moment.`,
-          )
-      : classification?.unavailableReason === "sparse_supply" && classification.realPlaceCount
-        ? t(
-            `Parranda hittade ${classification.realPlaceCount === 1 ? "1 riktig plats" : `${classification.realPlaceCount} riktiga platser`} ${anchorIsPosition ? "nära dig" : `nära ${placeName}`}, men inte tillräckligt för en pålitlig dag ännu — inget hittas på.`,
-            `Parranda found ${classification.realPlaceCount === 1 ? "1 real place" : `${classification.realPlaceCount} real places`} ${anchorIsPosition ? "near you" : `near ${placeName}`}, but not enough for a reliable day yet — nothing is invented in its place.`,
-          )
-        : t(
-            `Parranda kunde inte bygga en dag ${anchorIsPosition ? "nära dig" : `för ${placeName}`} ännu.`,
-            `Parranda couldn't build a day ${anchorIsPosition ? "near you" : `for ${placeName}`} yet.`,
-          )
+  // A typed place Parranda could not pin down. Choices announce themselves,
+  // and an outstanding upgrade or service refusal is not a final verdict. A
+  // resolved place without a day says so through `noDay` below instead.
+  const unavailableMessage = anchorUnresolved && phase === "done" && !upgradePending && !serviceRefusal && !unavailableHasChoices
+    ? placeRef ? referenceFailureMessage : t(
+        `Parranda hittade inte ”${typedPlaceLabel}”. Prova en annan stavning, eller lägg till stad eller land.`,
+        `Parranda couldn't find “${typedPlaceLabel}”. Try another spelling, or add a city or country.`,
+      )
     : "";
+  // ONE STATE for a resolved place that ended without a day. The verdicts
+  // above can all hold at once (picks unconfirmed, a source failed, thin
+  // supply); the page states one cause and offers one next step. Unresolved
+  // places, choices, refusals and pending upgrades keep their own surfaces.
+  const noDay = noDayState({
+    settled: phase === "done" && hasAnchor && !anchorUnresolved && !dayOnScreen && !retainedInterestDay &&
+      !upgradePending && !serviceRefusal && !livePlanPending &&
+      (classification?.status === "unavailable" || classification?.status === "structure_only" || terminalSourceIssue),
+    interestsUnconfirmed: interestFailure !== null,
+    sourcesUnanswered: sourceUnavailable,
+    sourceFailed: terminalSourceIssue || sourcePartlyUnavailable,
+    canRebuild: canUpdateSaved,
+    hasPicks: selected.length > 0,
+  });
+  const noDayText = noDay ? noDayMessage({
+    cause: noDay.cause,
+    sourcesUnanswered: sourceUnavailable,
+    sourceNote: sourceEvidenceNote,
+    sparseCount: classification?.status === "unavailable" && classification.unavailableReason === "sparse_supply"
+      ? classification.realPlaceCount : null,
+    placesWithoutRoute: classification?.status === "structure_only",
+    liveMusicListed: selected.includes("live_music") && hasSelectedDayMusic(interestFailure?.liveEvents ?? null),
+  }, { position: anchorIsPosition, place: placeName }, t) : "";
   const dayContextNote = contextNote(dayLimitations, t, {
     // The header states source limitations; the map keeps its own facts.
     sourceCompletion: incompletePlaceSources ? null : sourceCompletion,
@@ -2952,15 +2960,24 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       interestChooserOpen={interestChooserOpen}
       setInterestChooserOpen={setInterestChooserOpen}
       onApplyInterests={canUpdateSaved ? applyInterests : undefined}
-      interestFailure={interestFailure && phase === "done" ? {
+      notice={noDay ? {
+        // The page's result region announces this one; the card only shows it.
+        message: noDayText,
+        action: noDay.action,
+        onRetry: () => retryPlan({ sameDate: true }),
+        restartHref: `/?lang=${lang}`,
+      } : interestFailure && phase === "done" ? {
+        // New picks found no day while the previous one stays on screen.
         message: [
           t("Vi kunde inte bekräfta en gångbar dag med de här intressena.", "We couldn’t confirm a walkable day with these interests."),
           retainedInterestDay && t("Din tidigare dag visas fortfarande.", "Your previous day is still shown."),
           selected.includes("live_music") && hasSelectedDayMusic(interestFailure.liveEvents) &&
             t("Livemusik finns i Live.", "Live music is listed in Live."),
         ].filter(Boolean).join(" "),
+        action: "edit_interests",
         attemptedLabels: retainedInterestDay ? selected.map(key => pickLabel(key, lang)).join(" · ") : undefined,
         onUndo: retainedInterestDay && dayChange ? undoDayChange : undefined,
+        announce: true,
       } : undefined}
       onSetDay={chooseDay}
       rhythms={DAY_RHYTHMS}
@@ -3056,7 +3073,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {/* One permanently mounted result region: ready or final unavailable.
           Cleared while composing; PlaceChoices carries its own status. */}
       <p ref={resultStatusRef} tabIndex={-1} role="status" className="sr-only">
-        {!interestFailure && (livePlanPending ? t("Planerar dagen med det valda evenemanget.", "Planning the day with the chosen event.") : phase === "done" && dayWithRoute && staleNotice !== "updating"
+        {noDay ? noDayText : !interestFailure && (livePlanPending ? t("Planerar dagen med det valda evenemanget.", "Planning the day with the chosen event.") : phase === "done" && dayWithRoute && staleNotice !== "updating"
           ? t(
               `En dag ${anchorIsPosition ? "nära dig" : `i ${anchorLabel}`} är klar: ${routeStops.length} stopp.`,
               `A day ${anchorIsPosition ? "near you" : `in ${anchorLabel}`} is ready: ${routeStops.length} ${routeStops.length === 1 ? "stop" : "stops"}.`,
@@ -3211,17 +3228,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </p>
       )}
 
-      {phase === "done" && (classification?.status === "unavailable" || terminalSourceIssue) &&
+      {phase === "done" && !noDay && (classification?.status === "unavailable" || terminalSourceIssue) &&
         (!interestFailure || terminalSourceIssue) && (
         !upgradePending &&
         <div className={`flex flex-col items-start gap-3 ${noticeCard}`}>
-          {/* Three honestly different absences: a typed place Parranda could
-              not pin down (nothing to compose around — say that, and how to
-              fix it), a resolved place whose trusted sources hold real places
-              but too few for a reliable day, and a resolved place that did not
-              compose. The count comes from the classifier's trusted-loader
-              evidence, never from copy. The label follows the pill rule:
-              primary locality, not the resolver's full admin chain. */}
+          {/* A typed place Parranda could not pin down: nothing to compose
+              around, so say that and how to fix it. A resolved place without
+              a day is the anchor card's one no-day notice instead. The label
+              follows the pill rule: primary locality, not the resolver's full
+              admin chain. */}
           {/* Plain visible copy is announced by the permanent result region;
               PlaceChoices instead owns its interactive status. */}
           <div className="text-15 text-parranda-ink">
@@ -3240,23 +3255,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 }} />
             ) : unavailableMessage}
           </div>
-          {sourcePartlyUnavailable && (
-            <p>{t(
-              "Alla platser kunde inte hämtas. Försök igen om en stund.",
-              "Some places could not be loaded. Try again in a moment.",
-            )}</p>
-          )}
-          {canUpdateSaved && (sourceUnavailable || sourcePartlyUnavailable || terminalSourceIssue) && (
-            <button type="button" onClick={() => retryPlan({ sameDate: true })} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
-              {t("Försök igen", "Try again")}
-            </button>
-          )}
-          {!anchorUnresolved && !sourceUnavailable && !sourcePartlyUnavailable && !terminalSourceIssue && selected.length > 0 && (
-            <p>{t(
-              "Vi kunde inte bekräfta en gångbar dag med dina val. Andra intressen läggs inte till automatiskt. Du kan ändra datum, dagens rytm eller själv välja fler intressen.",
-              "We could not confirm a walkable day with your choices. Other interests are not added automatically. You can change the date, day rhythm or choose more interests yourself.",
-            )}</p>
-          )}
           {restoredAt && !canUpdateSaved && (
             <p>{t("Den sparade dagen kan inte uppdateras säkert. ", "We cannot safely update this saved day. ")}
               <a href={`/?lang=${lang}`} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">
@@ -3337,7 +3335,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {/* Without a composed day, this card carries provenance only. Save/share
           remain route actions: offering them here would call an unsequenced
           candidate surface a day. */}
-      {showStructure && structure && !(showDay && routeStops.length > 0) && (
+      {/* With the one no-day notice up, it is the only state and the only
+          next step: no second headline, no second rebuild action. */}
+      {showStructure && structure && !(showDay && routeStops.length > 0) && !noDay &&
+        (structure.provenance === "agnostic_anchor" || restoredAt) && (
         <section className="rounded-parranda border-line border-parranda-glow/40 bg-parranda-glow/8 p-4">
           <div className="min-w-0 flex-1">
             {structure.provenance === "agnostic_anchor" && (
@@ -3451,13 +3452,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {/* Without a primary route, the broader place structure remains useful —
           but it is explicitly candidates, never a second itinerary. */}
-      {showStructure && structure && !hasPrimaryRoute && (
+      {/* The no-day notice already says why there is no route, so the list
+          adds only places — and, with none, nothing at all. "No places for"
+          names only picks the loader did not find places for, and only when
+          every place source answered: an absence read from partial evidence
+          is not stated as a fact. */}
+      {showStructure && structure && !hasPrimaryRoute && !(noDay && candidateMatchCount(day?.areas) === 0) && (
         <CandidateAreas
           t={t}
           lang={lang}
-          structureOnly={classification?.status === "structure_only"}
+          structureOnly={classification?.status === "structure_only" && !noDay}
           areas={day?.areas ?? []}
-          missingIntents={day?.missing_intents ?? []}
+          missingIntents={incompletePlaceSources ? []
+            : evidencedMissingIntents(day?.missing_intents, safeResponse?.agnostic_route_output_experiment?.source_status)}
           mapsPlaceContext={mapsPlaceContext}
           expandedCandidateKey={expandedCandidateKey}
           setExpandedCandidateKey={setExpandedCandidateKey}
