@@ -1798,6 +1798,15 @@ async function composeAgnosticRouteViaEngine({
     retained_candidate_ids: dayEdit.retained_candidate_ids.filter(id => id !== currentLiveId),
     target_stop_count: Math.max(0, dayEdit.target_stop_count - 1),
   } : dayEdit;
+  const validateFinalWalking = (dayEdit || eligibility.checks?.geometry_validation === "engine_walk_pending"
+    || (walkingConfig?.defaultProvider === "osrm" && walkingConfig?.transportMode === "foot"))
+    ? stops => validateAgnosticWalkingOrder({
+        stops,
+        walkingRouter,
+        walkingConfig: walkingConfig || {},
+        targetKm: distanceMode === "no_limit" ? null : walkingKmTarget,
+      })
+    : null;
 
   async function runEngine(candidates, pins = pinnedStopIds) {
     const engineCityConfig = buildAgnosticEngineCityConfig({
@@ -1957,6 +1966,7 @@ async function composeAgnosticRouteViaEngine({
         requestedPreferences: preferences,
         walkingRouter: typeof walkingRouter === "function" ? walkingRouter : undefined,
         walkingConfig: walkingConfig || undefined,
+        validateFinalWalking,
       });
     } catch (_error) {
       return { day, route, outcome: null };
@@ -2107,15 +2117,8 @@ async function composeAgnosticRouteViaEngine({
   // final (post-selection, post-weave, public) stop chain with the SAME safety
   // budgets used by agnostic walking validation. Never validate the unordered
   // reservoir or invent a compactness label for the seed.
-  const deferredWalking = (dayEdit || eligibility.checks?.geometry_validation === "engine_walk_pending"
-    || (walkingConfig?.defaultProvider === "osrm" && walkingConfig?.transportMode === "foot"))
-    ? await validateAgnosticWalkingOrder({
-        stops: engineRoute.map_route_points,
-        walkingRouter,
-        walkingConfig: walkingConfig || {},
-        targetKm: distanceMode === "no_limit" ? null : walkingKmTarget,
-      })
-    : null;
+  const deferredWalking = eventWeave?.finalWalkingValidation ??
+    (validateFinalWalking ? await validateFinalWalking(engineRoute.map_route_points) : null);
   if (deferredWalking && !deferredWalking.valid) {
     const rejectedEligibility = {
       ...eligibility,

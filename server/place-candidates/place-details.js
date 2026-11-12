@@ -7,9 +7,10 @@ const KINDS = Object.freeze({
   cafe: 'cafe', coffee_shop: 'cafe', bakery: 'cafe', tea_room: 'cafe',
   brunch: 'restaurant', food_establishment: 'restaurant',
   art_museum: 'museum', history_museum: 'museum',
+  childrens_museum: 'museum', biographical_museum: 'museum',
   art_gallery: 'gallery',
   botanical_garden: 'garden', nature_reserve: 'park',
-  bathing_place: 'beach',
+  bathing_place: 'beach', swimming_prohibited: 'beach',
   marketplace: 'market', farmers_market: 'market', flea_market: 'market',
   wine_bar: 'bar', cocktail_bar: 'bar', beer_place: 'bar',
 });

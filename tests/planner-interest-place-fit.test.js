@@ -25,10 +25,13 @@ function directory(category, id = 1, extra = {}) {
     name: `Directory place ${id}`, lat: origin.lat + id * 0.00001, lng: origin.lng,
     confidence: 0.99, licenses: ['CC0-1.0'], category, category_hierarchy: [category], ...extra });
 }
-function schema(type, priceRange, extra = {}) {
-  const record = mapSchemaOrgPlaceToRecord({ '@type': type, name: 'Publisher venue',
+function schemaRecord(type, priceRange, extra = {}) {
+  return mapSchemaOrgPlaceToRecord({ '@type': type, name: 'Publisher venue',
     url: 'https://official.example/place', geo: { latitude: origin.lat, longitude: origin.lng },
     priceRange, ...extra }, { id: 'official', evidence_family: 'official', source_tier: 'official' });
+}
+function schema(type, priceRange, extra = {}) {
+  const record = schemaRecord(type, priceRange, extra);
   return record && mapRecordToCandidate(city, record, null, 0);
 }
 
@@ -89,6 +92,68 @@ test('a generic food establishment needs a concrete meal category for Cheap eats
   const restaurant = schema(['FoodEstablishment', 'Restaurant'], '$');
   assert.equal(matchCandidateToIntent(generic, 'cheap_eats').level, 'none');
   assert.equal(matchCandidateToIntent(restaurant, 'cheap_eats').level, 'strong');
+});
+
+test('reviewed fast-food venues reach a Cheap eats route only with the explicit lowest tier', async () => {
+  const { composeAgnosticRouteOutput } = require('../server/planner/agnostic-route-output');
+  const rows = [
+    ['Evergreen', 'FastFoodRestaurant', '$'],
+    ['Walnut', ['FoodEstablishment', 'FastFoodRestaurant'], '$'],
+    ['Juniper', 'Restaurant', '$'],
+    ['Oak', 'FastFoodRestaurant', '$$'],
+    ['Willow', 'FastFoodRestaurant', null],
+  ].map(([name, type, price], i) => schemaRecord(type, price, {
+    name, url: 'https://official.example/place/' + i,
+    geo: { latitude: origin.lat + i * .003, longitude: origin.lng },
+    openingHours: 'Mo-Su 09:00-18:00',
+  })).filter(Boolean);
+  const { result } = await composeAgnosticRouteOutput({
+    coords: origin, baselineResult: { days: [] }, externalRequested: true,
+    openDataLoader: async () => rows, preferences: ['cheap_eats'],
+    date: '2026-10-22', todayIsoDate: '2026-10-14',
+    trustedTimezone: 'Europe/Stockholm', timezone: 'Europe/Stockholm',
+    clock: () => new Date('2026-10-14T08:00:00Z'), synthesizeVia: 'engine',
+    distanceMode: 'no_limit', dayRhythm: 'balanced',
+    weatherProvider: async () => ({ condition: 'sun', source: 'controlled', stale: false }),
+  });
+  const stops = result.days[0]?.primary_route?.main_stops ?? [];
+  assert.deepEqual(stops.map(stop => stop.label).sort(), ['Evergreen', 'Juniper', 'Walnut']);
+  assert.ok(stops.every(stop => stop.covered_preferences.includes('cheap_eats')));
+});
+
+test('directory fast-food classification does not discard a price from the same reviewed venue', () => {
+  const listed = mapRecordToCandidate(city, directory('fast_food_restaurant', 1, { name: 'Publisher venue' }), null, 0);
+  const reviewed = schema('FastFoodRestaurant', '$');
+  const { candidates } = resolveCandidateIdentity([listed, reviewed]);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].id, listed.id);
+  assert.equal(matchCandidateToIntent(candidates[0], 'cheap_eats').level, 'strong');
+
+  const generic = schema('FoodEstablishment', '$', { url: 'https://official.example/generic' });
+  const noPrice = schema('FastFoodRestaurant', null);
+  const { candidates: genericOnly } = resolveCandidateIdentity([noPrice, generic]);
+  assert.equal(genericOnly.length, 1);
+  assert.equal(genericOnly[0].id, noPrice.id);
+  assert.equal(matchCandidateToIntent(genericOnly[0], 'cheap_eats').level, 'none');
+});
+
+test('the Rome catalog display estimate does not contradict a fresh explicit price', () => {
+  const catalog = require('../server/catalog');
+  const item = catalog.allItems.find(item => item.id === 'retrobottega');
+  assert.equal(item.priceLevel, '$$', 'the legacy display still has an estimate');
+  const [curated] = buildCuratedCatalogPlaceCandidates({ ...city, catalog: { allItems: [item] } });
+  assert.equal(curated.source_price_level, undefined);
+  // Synthetic publisher record for the same identity, exercising reconciliation.
+  const published = schema('Restaurant', '$', {
+    name: item.name, geo: { latitude: item.lat, longitude: item.lng },
+  });
+  const { candidates } = resolveCandidateIdentity([curated, published]);
+  assert.equal(candidates.length, 1);
+  assert.equal(matchCandidateToIntent(candidates[0], 'cheap_eats').level, 'strong');
+
+  const explicit = catalog.allItems.find(item => item.id === 'trapizzino-testaccio');
+  const [explicitCandidate] = buildCuratedCatalogPlaceCandidates({ ...city, catalog: { allItems: [explicit] } });
+  assert.equal(explicitCandidate.source_price_level, '$');
 });
 
 test('the canonical restaurant retains a same-place official price through deduplication', () => {

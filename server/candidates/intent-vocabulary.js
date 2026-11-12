@@ -268,6 +268,9 @@ function matchCandidateToIntent(candidate, intent) {
   if (!def) return { strength: 0, level: "none", reason: null };
 
   const type = slug(candidate?.type);
+  if (intent === 'swimming' && normalizePlaceDetails(candidate?.place_details, candidate?.type)?.kind === 'swimming_prohibited') {
+    return { strength: 0, level: 'none', reason: null };
+  }
   if (def.exact_place) return matchExactPlace(candidate, type, def.exact_place);
   const tagSlugs = slugSet(candidate?.tags);
 
