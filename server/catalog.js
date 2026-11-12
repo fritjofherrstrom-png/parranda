@@ -1521,6 +1521,7 @@ function enrichItem(item) {
   return {
     ...item,
     priceLevel: meta.priceLevel || inferPriceLevel(item),
+    priceLevelInferred: !meta.priceLevel,
     bestTime: meta.bestTime || inferBestTime(item),
     vibe: meta.vibe || inferVibe(item),
     groupSize: meta.groupSize || "2-4 personer",

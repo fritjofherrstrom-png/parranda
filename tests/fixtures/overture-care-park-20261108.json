@@ -1,0 +1,88 @@
+{
+  "provenance": {
+    "kind": "captured normalized Overture v6 sample; NOT raw Parquet rows",
+    "release": "2026-10-21.0",
+    "observed_date": "2026-11-08",
+    "license": "CDLA-Permissive-2.0",
+    "source_attribution": "https://overturemaps.org/",
+    "confirmation": [
+      "https://norlandiacare.se/norlandia-trygghetsboende/narlunda-park-norlandia-trygghetsboende",
+      "https://helsingborg.se/omsorg-och-stod/aldre/boende/trygghetsboende/?readable=1"
+    ]
+  },
+  "records": [
+    {
+      "id": "overture-9d4240e6-326f-4fac-b1f3-814cb0092c1d",
+      "name": "Slottsparken Helsingborg",
+      "type": "park",
+      "lat": 56.04999923706055,
+      "lng": 12.699999809265137,
+      "tags": [
+        "park",
+        "green"
+      ],
+      "sources": [
+        {
+          "provider": "overture",
+          "family": "open_directory",
+          "tier": "inferred",
+          "url": "https://overturemaps.org/",
+          "license": "CDLA-Permissive-2.0"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "unknown",
+      "operational_reasons": []
+    },
+    {
+      "id": "overture-480815c4-9281-4ca5-a4f8-5e826dad719c",
+      "name": "Öresundsparken",
+      "type": "park",
+      "lat": 56.05205154418945,
+      "lng": 12.693951606750488,
+      "tags": [
+        "park",
+        "green"
+      ],
+      "sources": [
+        {
+          "provider": "overture",
+          "family": "open_directory",
+          "tier": "inferred",
+          "url": "https://overturemaps.org/",
+          "license": "CDLA-Permissive-2.0"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "unknown",
+      "operational_reasons": []
+    },
+    {
+      "id": "overture-03180bb8-9976-4418-9407-7d577b535378",
+      "name": "Norlandia Närlunda Park",
+      "type": "park",
+      "lat": 56.03244400024414,
+      "lng": 12.720999717712402,
+      "tags": [
+        "park",
+        "green"
+      ],
+      "sources": [
+        {
+          "provider": "overture",
+          "family": "open_directory",
+          "tier": "inferred",
+          "url": "https://overturemaps.org/",
+          "license": "CDLA-Permissive-2.0"
+        }
+      ],
+      "chain": false,
+      "brand": null,
+      "operational_status": "unknown",
+      "operational_reasons": [],
+      "website": "http://www.norlandia.se/sv/aldreomsorg/narlunda-park"
+    }
+  ]
+}
