@@ -6,6 +6,7 @@ const {createSourceCache}=require('./source-cache');
 const {sanitizeTrustedSpatialScope}=require('./spatial-scope');
 const {isValidCoordinate}=require('../planner/agnostic-place-intake');
 const {isPlaceSearchQueryEligible}=require('../../shared/place-search-query.mjs');
+const {createLazyGazetteer,defaultGazetteerFile}=require('./place-gazetteer');
 const DEFAULT_ENDPOINT='https://photon.komoot.io/api/';
 const LAYERS=['city','district','locality','county','state','country'];
 const KINDS={city:'settlement',district:'district',locality:'settlement',county:'region',state:'region',country:'region'};
@@ -88,11 +89,49 @@ function untilAbort(work,signal) {
  });
 }
 
-function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fetch,now=()=>Date.now(),sleep=ms=>new Promise(r=>setTimeout(r,ms)),minIntervalMs=750,timeoutMs=5000}={}) {
+// When Photon cannot answer, an earlier answer to the same query comes first,
+// then the offline register (`offlinePlaces`). Neither ever replaces a healthy
+// empty answer, and neither is cached as Photon's. Consecutive provider
+// failures open a circuit (one failure still lets the next query try): for a
+// cooldown no query is sent and readers get the offline answer at once; then
+// one query probes Photon in the background while its reader also gets the
+// offline answer. A reader who moves on is never a provider failure.
+const CIRCUIT_THRESHOLD=2;
+const CIRCUIT_COOLDOWN_MS=30*1000;
+const STALE_MS=7*24*60*60*1000;
+const LAST_GOOD_LIMIT=256;
+const WARM_AFTER_MS=1500;
+function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fetch,now=()=>Date.now(),sleep=ms=>new Promise(r=>setTimeout(r,ms)),minIntervalMs=750,timeoutMs=5000,offlinePlaces=null,circuitThreshold=CIRCUIT_THRESHOLD,circuitCooldownMs=CIRCUIT_COOLDOWN_MS,staleMs=STALE_MS}={}) {
  const cache=createSourceCache({namespace:'place-suggestions-v4',ttlMs:60*60*1000,maxEntries:256,now});
  const jobs=new Map();
  const budgetMs=Math.max(1,Math.min(5000,Number(timeoutMs)||5000));
  let pending=0,lastStarted=-Infinity,tail=Promise.resolve();
+ let failures=0,openUntil=0,probing=false;
+ const lastGood=new Map();
+ const providerFailed=()=>{failures++;if(failures>=circuitThreshold)openUntil=now()+circuitCooldownMs;};
+ const providerAnswered=()=>{failures=0;openUntil=0;};
+ // closed: ask Photon. open: do not. probe: this one request may ask.
+ function circuit() {
+  if(failures<circuitThreshold)return 'closed';
+  if(probing||now()<openUntil)return 'open';
+  return 'probe';
+ }
+ function remember(key,value) {
+  if(value?.status!=='ready'||value.cacheable===false)return;
+  lastGood.delete(key);lastGood.set(key,{value,at:now()});
+  while(lastGood.size>LAST_GOOD_LIMIT)lastGood.delete(lastGood.keys().next().value);
+ }
+ async function degraded(key,query,context,original) {
+  const stale=lastGood.get(key);
+  if(stale&&now()-stale.at<=staleMs)return {...stale.value,cacheable:false};
+  if(typeof offlinePlaces==='function') {
+   try {
+    const choices=await offlinePlaces(query,context);
+    if(Array.isArray(choices)&&choices.length)return {status:'ready',choices,cacheable:false};
+   }catch(_){/* the register is optional; Photon's own answer stands */}
+  }
+  return original;
+ }
  async function acquire(query,context,ownerSignal,deadline,rememberFallback) {
   if(pending>=4)return {status:'busy',choices:[],retry_after_ms:1000};
   pending++;
@@ -102,7 +141,7 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
   ownerSignal.addEventListener('abort',cancelQueued,{once:true});
   if(ownerSignal.aborted)cancelQueued();
   const work=tail.catch(()=>{}).then(async()=>{
-   started=true;let transport=null,response=null,fallback=null;
+   started=true;let transport=null,response=null,fallback=null,awaiting=false;
    try {
     let canonical=[];
     for(const language of [null,'en']) {
@@ -116,15 +155,18 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
      // Never force the UI language on the canonical page (Göteborg != Gothenburg).
      if(language)url.searchParams.set('lang',language);
      if(context.near){url.searchParams.set('lat',String(context.near.lat));url.searchParams.set('lon',String(context.near.lng));url.searchParams.set('zoom','12');}
+     awaiting=true;
      transport=Promise.resolve().then(()=>fetcher(url.toString(),{
       headers:{'User-Agent':'Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)'},signal:ownerSignal,
      }));
      response=await untilAbort(transport,ownerSignal);
      if(response.status===429)return fallback||{status:'busy',choices:[],retry_after_ms:1000};
-     if(!response.ok)return fallback||{status:'unavailable',choices:[]};
+     if(!response.ok){awaiting=false;if(response.status>=500)providerFailed();return fallback||{status:'unavailable',choices:[]};}
      const data=await untilAbort(response.json(),ownerSignal);
+     awaiting=false;
+     if(!Array.isArray(data?.features)){providerFailed();return fallback||{status:'unavailable',choices:[]};}
+     providerAnswered();
      if(ownerSignal.aborted || performance.now()>=deadline)return fallback||{status:'unavailable',choices:[]};
-     if(!Array.isArray(data?.features))return fallback||{status:'unavailable',choices:[]};
      const seen=new Set();const choices=[];
      for(const feature of data.features.slice(0,30)) {
       const choice=mapFeature(feature,context.language);if(!choice||seen.has(choice.candidate.osm_ref))continue;
@@ -139,7 +181,12 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
       rememberFallback(fallback);
      } else return {status:'ready',choices:rankChoices(choices,query)};
     }
-   }catch(_){return !ownerSignal.aborted&&fallback?fallback:{status:'unavailable',choices:[]};}finally{
+   }catch(_){
+    // A transport that failed or outlived the deadline is a provider failure;
+    // a reader who moved on is not.
+    if(awaiting&&(!ownerSignal.aborted||ownerSignal.reason==='suggestions_deadline'))providerFailed();
+    return !ownerSignal.aborted&&fallback?fallback:{status:'unavailable',choices:[]};
+   }finally{
     if(ownerSignal.aborted && response?.body){
      try{Promise.resolve(response.body.cancel()).catch(()=>{});}catch{}
     }
@@ -159,9 +206,17 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
   const key=createHash('sha256').update(JSON.stringify([endpoint,query.toLowerCase(),context])).digest('hex');
   let job=jobs.get(key);
   if(!job){
+   const cached=cache.peek(key);
+   if(cached)return cached;
+   const state=circuit();
+   const closed={status:'unavailable',choices:[],retryable:false};
+   if(state==='open')return degraded(key,query,context,closed);
+   if(state==='probe')probing=true;
    const controller=new AbortController();
    const deadline=performance.now()+budgetMs;
    const timer=setTimeout(()=>controller.abort('suggestions_deadline'),budgetMs);
+   // A slow provider is the first sign of an outage: have the register ready.
+   const warmer=typeof offlinePlaces?.warm==='function'?setTimeout(()=>offlinePlaces.warm(),Math.min(WARM_AFTER_MS,budgetMs/2)):null;
    job={controller,owners:new Set(),done:false,promise:null,fallback:null};
    jobs.set(key,job);
    const currentJob=job;
@@ -175,11 +230,15 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
     // owners still settle unavailable and never populate the ready cache.
     return controller.signal.reason==='suggestions_deadline'&&job.fallback?job.fallback:{status:'unavailable',choices:[]};
    }).finally(()=>{
-    clearTimeout(timer);
+    clearTimeout(timer);clearTimeout(warmer);
+    if(state==='probe')probing=false;
     if(jobs.get(key)===job)jobs.delete(key);
    });
+   job.promise.then(value=>remember(key,value));
+   // The probe has no reader waiting on it; it only decides the circuit.
+   if(state==='probe')return degraded(key,query,context,closed);
   }
-  return new Promise(resolve=>{
+  const result=await new Promise(resolve=>{
    const owner={};let settled=false;
    const finish=value=>{
     if(settled)return;settled=true;
@@ -196,10 +255,12 @@ function createPlaceSuggestions({endpoint=DEFAULT_ENDPOINT,fetcher=globalThis.fe
    if(signal?.aborted)cancel();
    job.promise.then(finish);
   });
+  if(result.status!=='unavailable'||signal?.aborted)return result;
+  return degraded(key,query,context,circuit()==='open'?{...result,retryable:false}:result);
  };
 }
 function resolveDefaultPlaceSuggestions(env=process.env) {
  if(['disabled','0','false'].includes(String(env.PARRANDA_PLACE_SUGGESTIONS||'').toLowerCase()))return null;
- return createPlaceSuggestions({endpoint:env.PARRANDA_PLACE_SUGGESTIONS_ENDPOINT||DEFAULT_ENDPOINT});
+ return createPlaceSuggestions({endpoint:env.PARRANDA_PLACE_SUGGESTIONS_ENDPOINT||DEFAULT_ENDPOINT,offlinePlaces:createLazyGazetteer(defaultGazetteerFile(env))});
 }
 module.exports={createPlaceSuggestions,resolveDefaultPlaceSuggestions,mapFeature,matchTier};

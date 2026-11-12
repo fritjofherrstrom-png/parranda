@@ -92,6 +92,26 @@ test('persistent failure stops automatic retries and offers a same-query retry w
  }finally{await h.unmount();}
 });
 
+test('a resting provider is not retried automatically, yet the reader can still try again',async()=>{
+ const h=await mount();try{
+  await type(h,'har');await h.clock.advance(200);
+  await h.fetchMock.respond(h.fetchMock.calls[0],{status:'unavailable',choices:[],retryable:false});
+  await h.clock.advance(5000);assert.equal(h.fetchMock.calls.length,1,'the server said a retry cannot help');
+  assert.match(h.text(),/Suggestions are unavailable/);
+  assert.ok([...h.document.querySelectorAll('button')].find(b=>b.textContent==='Try again'));
+ }finally{await h.unmount();}
+});
+
+test('rows from the offline register credit GeoNames, not OpenStreetMap',async()=>{
+ const h=await mount();try{
+  await type(h,'har');await h.clock.advance(200);
+  await h.fetchMock.respond(h.fetchMock.calls[0],{status:'ready',choices:[{...choice(),attribution:'GeoNames',license:'CC-BY-4.0'}]});
+  const footer=h.document.querySelector('a[href="https://www.geonames.org/"]');
+  assert.equal(footer?.textContent,'GeoNames (CC BY 4.0)');
+  assert.equal(h.document.querySelector('a[href="https://www.openstreetmap.org/copyright"]'),null);
+ }finally{await h.unmount();}
+});
+
 test('changing the query cancels its scheduled retry and a late retry body cannot publish stale choices',async()=>{
  const h=await mount();try{
   await type(h,'old');await h.clock.advance(200);

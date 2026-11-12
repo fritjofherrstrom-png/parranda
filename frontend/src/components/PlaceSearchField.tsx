@@ -74,7 +74,8 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
         clearTimeout(timeout);
         // A provider deadline is a transient unavailable response too. Retry
         // once for this query; repeated failures stay explicit and actionable.
-        if ((data.status === "busy" || response.status === 429 || (response.ok && data.status === "unavailable")) && !retried) {
+        // The server says when a retry cannot help (its provider is resting).
+        if ((data.status === "busy" || response.status === 429 || (response.ok && data.status === "unavailable" && data.retryable !== false)) && !retried) {
           timer = setTimeout(() => search(true), Math.max(500, Math.min(2000, Number(data.retry_after_ms) || 1000)));
           return;
         }
@@ -165,7 +166,10 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
           </li>)}
         </ul>
         {choices.some(choice => choice.attribution) && <div className="border-t-line border-parranda-line-faint px-5 py-1.5 text-11 text-parranda-ink-meta">
-          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
+          {[...new Set(choices.map(choice => choice.attribution === "GeoNames" ? "geonames" : choice.attribution ? "osm" : null).filter(Boolean))].map((source, index) =>
+            <span key={source}>{index > 0 && " · "}{source === "geonames"
+              ? <a href="https://www.geonames.org/" target="_blank" rel="noreferrer">GeoNames (CC BY 4.0)</a>
+              : <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>}</span>)}
         </div>}
       </div>}
       <span role="status" className={status === "unavailable" ? "mt-1 block text-xs text-parranda-ink-meta" : "sr-only"}>

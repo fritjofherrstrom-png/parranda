@@ -1592,7 +1592,7 @@ function buildApp({
         const placeRef = toPlaceRef(point.osm_ref);
         return [{ title: choice.title, context: choice.context, query: choice.query, kind: choice.kind, ...(placeRef ? { place_ref: placeRef } : {}), selection_id: selection, attribution: point.attribution, license: point.license, ...(cityKey ? { city_key: cityKey } : {}) }];
       });
-      response.json({ status: result.status, choices, ...(result.retry_after_ms ? { retry_after_ms: result.retry_after_ms } : {}) });
+      response.json({ status: result.status, choices, ...(result.retry_after_ms ? { retry_after_ms: result.retry_after_ms } : {}), ...(result.retryable === false ? { retryable: false } : {}) });
     } catch (_) {
       if (!controller.signal.aborted) response.json({ status: 'unavailable', choices: [] });
     } finally {
