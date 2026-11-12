@@ -3335,11 +3335,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {/* Without a composed day, this card carries provenance only. Save/share
           remain route actions: offering them here would call an unsequenced
           candidate surface a day. */}
-      {showStructure && structure && !(showDay && routeStops.length > 0) &&
-        ((structure.provenance === "agnostic_anchor" && !noDay) || restoredAt) && (
+      {/* With the one no-day notice up, it is the only state and the only
+          next step: no second headline, no second rebuild action. */}
+      {showStructure && structure && !(showDay && routeStops.length > 0) && !noDay &&
+        (structure.provenance === "agnostic_anchor" || restoredAt) && (
         <section className="rounded-parranda border-line border-parranda-glow/40 bg-parranda-glow/8 p-4">
           <div className="min-w-0 flex-1">
-            {structure.provenance === "agnostic_anchor" && !noDay && (
+            {structure.provenance === "agnostic_anchor" && (
               <p className="text-sm font-bold text-parranda-clay">
                 {t(
                   "Hittade platser — ingen rutt ännu",
