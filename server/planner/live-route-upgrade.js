@@ -1,6 +1,6 @@
 "use strict";
 
-const { weaveEveningEvent, selectedDayCandidates } = require('../candidates/evening-event-weave');
+const { MUSIC_ROUTE_ALTERNATIVES, weaveEveningEvent, selectedDayCandidates } = require('../candidates/evening-event-weave');
 const { normalizeUserIntents } = require('../candidates/intent-vocabulary');
 const { matchesPreferenceFocus } = require('./preference-focus');
 const { activeLiveChoices } = require('./live-occurrence-choice');
@@ -98,6 +98,12 @@ function occurrenceKey(event) {
   return JSON.stringify([event?.id || event?.source_url || event?.title, event?.occurrence_date, event?.starts_at]);
 }
 
+function matchesWovenOccurrence(stop, event) {
+  return stop.is_live_event === true && stop.event_id === event.id &&
+    stop.occurrence_date === event.occurrence_date && stop.starts_at === event.starts_at &&
+    stop.live_occurrence_id === event.live_occurrence_id;
+}
+
 function createRouteUpgrade({ args, retained, structure, initialLive, published, publish }) {
   const requestsLiveMusic = normalizeUserIntents(args?.preferences).intents.includes('live_music');
   if (!retained || (!structure && !requestsLiveMusic)) return null;
@@ -176,7 +182,13 @@ function createRouteUpgrade({ args, retained, structure, initialLive, published,
     const replayLive = cloneTrusted(live);
     replayLive.this_week = [...(replayLive.this_week || []), ...originalRows];
     const nextStructure = weaveEveningEvent(savedStructure, replayLive, weaveOptions);
-    if (!newKeys.has(occurrenceKey(nextStructure?.district_day?.evening_event))) return no('not_eligible');
+    const leadingEvent = nextStructure?.district_day?.evening_event;
+    if (!newKeys.has(occurrenceKey(leadingEvent))) {
+      const alternatives = nextStructure?.[MUSIC_ROUTE_ALTERNATIVES] || [];
+      const publishedStops = original?.days?.[0]?.primary_route?.main_stops || [];
+      if (!alternatives.some(event => newKeys.has(occurrenceKey(event))) ||
+          publishedStops.some(stop => matchesWovenOccurrence(stop, leadingEvent))) return no('not_eligible');
+    }
     const composed = await composeAgnosticRouteOutput({
       ...cloneTrusted(savedArgs),
       openDataLoader: async () => cloneTrusted(retained.records),
@@ -185,11 +197,14 @@ function createRouteUpgrade({ args, retained, structure, initialLive, published,
       liveSelectionPending: false,
       eveningEventStructure: nextStructure,
     });
+    const chosen = composed.eventWeave?.placeStructure?.district_day?.evening_event;
+    if (!composed.eventWeave?.applied || !chosen) return no('rejected');
+    if (!newKeys.has(occurrenceKey(chosen))) return no('not_eligible');
     const result = await publish(composed, nextStructure, { live_events: live });
     // A real final engine weave AND the unchanged publication gate must agree.
     // Never let response fallback weaving promote a withheld engine trial.
-    const finalEvent = result?.days?.[0]?.primary_route?.main_stops?.find(stop => stop.event_id === nextStructure.district_day.evening_event?.id);
-    if (!composed.eventWeave?.applied || !result?.agnostic_route_output_experiment?.promotion?.promote || !finalEvent ||
+    const finalEvent = result?.days?.[0]?.primary_route?.main_stops?.find(stop => matchesWovenOccurrence(stop, chosen));
+    if (!result?.agnostic_route_output_experiment?.promotion?.promote || !finalEvent ||
         (deferredLiveMusic && !finalEvent.covered_preferences?.includes('live_music')) ||
         JSON.stringify(result.days) === JSON.stringify(original.days)) return no('rejected');
     return { live_route_upgrade: { version: 1, state: 'applied' }, result };

@@ -38,6 +38,7 @@ const PLACE_TYPE_MAP = Object.freeze({
   garden: "garden",
   botanicalgarden: "garden",
   restaurant: "restaurant",
+  fastfoodrestaurant: "street-food",
   foodestablishment: "restaurant",
   cafeorcoffeeshop: "cafe",
   barorpub: "bar",
@@ -479,7 +480,10 @@ function parseJsonLdPayloadsFromHtml(html) {
 
 function mapSchemaOrgPlaceToRecord(place, feed) {
   const keys = placeTypeKeys(place);
-  const type = PLACE_TYPE_MAP[keys[0]];
+  const key = keys[0] === "foodestablishment" && keys.includes("fastfoodrestaurant")
+    ? "fastfoodrestaurant"
+    : keys[0];
+  const type = PLACE_TYPE_MAP[key];
   const name = localizedString(place?.name);
   const coords = extractCoordinates(place);
   if (!type || !name || !coords) return null;
@@ -495,7 +499,7 @@ function mapSchemaOrgPlaceToRecord(place, feed) {
     detailKind: type === "gallery" && keys.includes("artgallery") ? "art_gallery"
       : type === "cafe" && keys.includes("cafeorcoffeeshop") ? "cafe"
       : type === "restaurant" && !keys.includes("restaurant") ? "food_establishment" : null,
-    sourcePriceLevel: type === "restaurant" ? normalizeSourcePriceLevel(place.priceRange) : null,
+    sourcePriceLevel: type === "restaurant" || type === "street-food" ? normalizeSourcePriceLevel(place.priceRange) : null,
   }, feed);
 }
 
