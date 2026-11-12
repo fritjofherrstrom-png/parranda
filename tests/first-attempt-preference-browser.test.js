@@ -199,7 +199,7 @@ test('built UI keeps the original cold job pending past 8s, then publishes its f
 
 // Catches padding a terminal Second hand result with museums, claiming active
 // fetching after completion, or silently retrying instead of awaiting the user.
-test('built UI shows zero matches for terminal museum-only Second hand, then explicit retry recovers the same choices', { timeout: 35000 }, async t => {
+test('built UI shows one source-failure state for terminal museum-only Second hand, then explicit retry recovers the same choices', { timeout: 35000 }, async t => {
   const firstWork = deferred();
   t.after(() => firstWork.resolve([]));
   const f = await fixture(t, { knowledgeCount: 12, directoryLoad: attempt => attempt === 1
