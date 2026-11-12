@@ -23,6 +23,12 @@ const terminal = JSON.parse(readFileSync(new URL("./fixtures/captured-terminal-p
 const compose = (h) => h.fetchMock.calls.filter((call) => call.url.startsWith("/api/route-recommendations"));
 const buttons = (h, name) => [...h.container.querySelectorAll("button")].filter((b) => b.textContent.trim() === name);
 const resultRegion = (h) => h.container.querySelector('p[role="status"].sr-only');
+/** What a sighted reader sees: the page's text without its screen-reader-only copy. */
+function visibleText(h) {
+  const copy = h.container.cloneNode(true);
+  for (const node of copy.querySelectorAll(".sr-only")) node.remove();
+  return copy.textContent || "";
+}
 const COPY = {
   en: {
     interests: "We couldn’t confirm a walkable day with these interests.",
@@ -54,7 +60,7 @@ function assertOneNotice(h, lang, { message, action }) {
   const card = h.container.querySelector('section[aria-label="Your day\'s starting point"], section[aria-label="Dagens utgångspunkt"]');
   assert.ok(card, "the anchor card holds the notice");
   assert.ok(card.textContent.includes(message), `notice in the anchor card: ${card.textContent}`);
-  assert.equal(h.text().split(message).length - 1, 1, "the message is shown once");
+  assert.equal(visibleText(h).split(message).length - 1, 1, "the message is shown once");
   assert.equal(resultRegion(h).textContent, message, "the page's result region announces exactly that message");
   const live = [...h.container.querySelectorAll('[role="status"], [aria-live], [role="alert"]')]
     .filter((node) => node.textContent.includes(message));
@@ -215,11 +221,14 @@ test("missing intents drop anything the loader covered, in either vocabulary", (
 
 // CONTRACT: no interest key the server can echo back — every pick, plus the
 // loader's own vocabulary and a key this build has never seen — renders raw on
-// the no-day surface, in either language. A key whose own label contains it
-// ("brunch" in "Breakfast & brunch") cannot be told apart and is skipped.
+// the no-day surface, in either language. Chip labels are removed first, so a
+// key inside a real label ("brunch" in "Breakfast & brunch", "museums" in
+// "Art museums") is not mistaken for a raw one.
 const LOADER_KEYS = ["scenic", "museums", "coffee", "bars", "vintage", "markets"];
 const UNKNOWN_KEY = "sauna_spots";
-const labelFor = new Map([...ANYWHERE_PREFERENCES, ...PLANNER_INTEREST_GROUPS.flatMap(({ options }) => options)].map((o) => [o.key, o]));
+const PICK_OPTIONS = [...ANYWHERE_PREFERENCES, ...PLANNER_INTEREST_GROUPS.flatMap(({ options }) => options)];
+const withoutLabels = (text, lang) => PICK_OPTIONS.map((o) => o[lang]).sort((a, b) => b.length - a.length)
+  .reduce((rest, name) => rest.split(name).join("·"), text);
 const chunks = [];
 for (let i = 0; i < PLANNER_PREFERENCE_KEYS.length; i += MAX_PLANNER_PREFERENCES) chunks.push(PLANNER_PREFERENCE_KEYS.slice(i, i + MAX_PLANNER_PREFERENCES));
 
@@ -237,11 +246,8 @@ for (const lang of ["en", "sv"]) {
       const text = h.text();
       assert.ok(text.includes(COPY[lang].nearby), "the candidate list rendered the server's keys");
       assert.ok(text.includes(COPY[lang].noPlaces), "the missing line rendered");
-      for (const key of serverKeys) {
-        const own = labelFor.get(key)?.[lang] ?? "";
-        if (own.includes(key)) continue;
-        assert.ok(!text.includes(key), `raw key "${key}" rendered in ${lang}: ${text}`);
-      }
+      const rest = withoutLabels(text, lang);
+      for (const key of serverKeys) assert.ok(!rest.includes(key), `raw key "${key}" rendered in ${lang}: ${rest}`);
       await h.unmount();
     }
   });
