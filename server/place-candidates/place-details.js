@@ -1,21 +1,35 @@
 'use strict';
 
-// Display facts only. A source category cannot add preference coverage, raise
-// trust, or stand in for a description of a particular business's assortment.
+// Closed, type-compatible facts from place sources. Classification can inform
+// preference fit independently of source trust and admission.
 const KINDS = Object.freeze({
   antiques: 'vintage-shop', second_hand_clothing: 'vintage-shop',
-  coffee_shop: 'cafe', bakery: 'cafe', tea_room: 'cafe',
+  cafe: 'cafe', coffee_shop: 'cafe', bakery: 'cafe', tea_room: 'cafe',
+  brunch: 'restaurant', food_establishment: 'restaurant',
   art_museum: 'museum', history_museum: 'museum',
+  childrens_museum: 'museum', biographical_museum: 'museum',
+  art_gallery: 'gallery',
   botanical_garden: 'garden', nature_reserve: 'park',
-  farmers_market: 'market', flea_market: 'market',
+  bathing_place: 'beach', swimming_prohibited: 'beach',
+  marketplace: 'market', farmers_market: 'market', flea_market: 'market',
+  wine_bar: 'bar', cocktail_bar: 'bar', beer_place: 'bar',
 });
 const OVERTURE_KINDS = Object.freeze({
   antique_store: 'antiques', second_hand_clothing_store: 'second_hand_clothing',
-  coffee_shop: 'coffee_shop', bakery: 'bakery', tea_room: 'tea_room',
+  cafe: 'cafe', coffee_shop: 'coffee_shop', bakery: 'bakery', tea_room: 'tea_room',
+  breakfast_and_brunch_restaurant: 'brunch',
   art_museum: 'art_museum', modern_art_museum: 'art_museum',
+  asian_art_museum: 'art_museum', contemporary_art_museum: 'art_museum', decorative_arts_museum: 'art_museum',
+  art_gallery: 'art_gallery',
   history_museum: 'history_museum', botanical_garden: 'botanical_garden',
   nature_reserve: 'nature_reserve', farmers_market: 'farmers_market', flea_market: 'flea_market',
+  market: 'marketplace', public_market: 'marketplace', seafood_market: 'marketplace', flower_market: 'marketplace',
+  wine_bar: 'wine_bar', cocktail_bar: 'cocktail_bar', brewery: 'beer_place', beer_bar: 'beer_place', beer_garden: 'beer_place',
 });
+
+function normalizeSourcePriceLevel(value) {
+  return typeof value === 'string' && /^[$]{1,4}$/.test(value.trim()) ? value.trim() : null;
+}
 
 function normalizePlaceDetails(value, type) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -37,4 +51,4 @@ function sourcePlaceDetails(record, type) {
   return normalizePlaceDetails(value, type);
 }
 
-module.exports = { normalizePlaceDetails, sourcePlaceDetails, OVERTURE_KINDS };
+module.exports = { normalizePlaceDetails, normalizeSourcePriceLevel, sourcePlaceDetails, OVERTURE_KINDS };

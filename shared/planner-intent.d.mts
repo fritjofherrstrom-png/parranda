@@ -1,4 +1,17 @@
-export type PlannerPreferenceKey = "food" | "culture" | "views" | "fika" | "nightlife" | "green" | "second_hand";
+export type PlannerPreferenceKey =
+  | "food" | "culture" | "views" | "fika" | "nightlife" | "green" | "second_hand"
+  | "restaurants" | "brunch" | "cafes" | "bakeries" | "cheap_eats"
+  | "art_museums" | "history_museums" | "art_galleries" | "historic_sites"
+  | "viewpoint_places" | "parks_gardens" | "waterside" | "bathing_places"
+  | "marketplaces" | "flea_markets" | "antique_shops"
+  | "wine_bars" | "cocktail_bars" | "beer_places" | "live_music";
+export declare const MAX_PLANNER_PREFERENCES: 7;
+export declare const PLANNER_INTEREST_GROUPS: readonly {
+  key: string;
+  sv: string;
+  en: string;
+  options: readonly { key: PlannerPreferenceKey; sv: string; en: string }[];
+}[];
 export declare const PLANNER_PREFERENCE_KEYS: readonly PlannerPreferenceKey[];
 /** Ranked prefix of the selection in pick order, or [] when nothing is ranked. */
 export declare function normalizePreferencePriority(value: unknown, selected: unknown): PlannerPreferenceKey[];

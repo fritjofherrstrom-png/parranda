@@ -1,4 +1,6 @@
 'use strict';
+
+const { MAX_PLANNER_PREFERENCES } = require('../../shared/planner-intent.mjs');
 const { capturePublishedDayPrivacy } = require('./published-day-privacy');
 const { projectPublishedDay } = require('./published-day-projection');
 const { publicSourceUrlsForRecords } = require('../place-candidates/source-url-evidence');
@@ -51,7 +53,7 @@ function createDayPublication(request, isCurrent) {
         const preferences = [...new Set(intent.preferences)];
         // Foreign JSON elements are not portable intent, even if the ordinary
         // composer can ignore them. Refuse sharing rather than cloning them.
-        if (preferences.length > 7 || preferences.some(value => typeof value !== 'string')) return;
+        if (preferences.length > MAX_PLANNER_PREFERENCES || preferences.some(value => typeof value !== 'string')) return;
         // Collect producer witnesses before retainComposition/JSON destroys identity.
         retained = { intent: structuredClone({ ...intent, preferences, dateIso: snapshot.date }),
           pendingSources: pendingSources || hasPendingSources(snapshot.records),

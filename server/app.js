@@ -55,6 +55,7 @@ const { createPublishedDayReadHandler } = require('./planner/published-day-http'
 const { createDayPublication, publishTerminalDay } = require('./planner/published-day-publication');
 const { publicLiveSourceUrls } = require('./place-candidates/live-source-destination-evidence');
 const { retainComposition, createRouteUpgrade } = require('./planner/live-route-upgrade');
+const { MUSIC_ROUTE_ALTERNATIVES, weaveEveningEvent } = require("./candidates/evening-event-weave");
 const { nearbyCuratedSupply } = require('./planner/nearby-curated-supply');
 const { createPlaceSelectionStore, placeResolutionInputs } = require('./place-candidates/place-selection');
 const { toPlaceRef } = require('./place-candidates/place-ref');
@@ -649,14 +650,15 @@ async function weaveEventStopFailSoft({ result, placeStructure, walkingRouter, w
   }
 }
 
-function reconcileConstraintAfterEventWeave({ experiment, woven, walkingKmTarget }) {
-  if (!woven?.applied || !experiment?.constraint_negotiation) return;
-  const finalRoute = woven.result?.days?.[0]?.primary_route || null;
+function reconcileConstraintAfterEventWeave({ experiment, woven, walkingKmTarget, routePublished = true }) {
+  const negotiation = experiment?.constraint_negotiation;
+  if (!negotiation || (!woven?.applied && (routePublished || !negotiation.preference_coverage?.covered_preferences?.includes("live_music")))) return;
+  const finalRoute = routePublished ? woven.result?.days?.[0]?.primary_route : null;
   experiment.constraint_negotiation = reconcileAgnosticConstraintNegotiation({
-    negotiation: experiment.constraint_negotiation,
+    negotiation,
     experimentalRoute: finalRoute,
     walkingKmTarget,
-    walkingValidated: true,
+    walkingValidated: Boolean(woven?.applied && routePublished),
   });
 }
 
@@ -1491,7 +1493,10 @@ function blockPrivateRepoPaths(request, response, next) {
 }
 
 function selectPublishedEventWeave({ promotionPromote, eventWeave, publicResult }) {
-  if (!promotionPromote || !eventWeave?.applied) return null;
+  if (!promotionPromote || !eventWeave) return null;
+  // The promoted engine day already tried its music shortlist. Repeating a
+  // refusal here could reroute the published day outside finalization.
+  if (!eventWeave.applied && !eventWeave.placeStructure?.[MUSIC_ROUTE_ALTERNATIVES]) return null;
   return { ...eventWeave, result: publicResult };
 }
 
@@ -2514,11 +2519,11 @@ function buildApp({
       // Additive + fail-soft: no suitable event → the day is unchanged.
       let wovenPlaceStructure = agnosticPlaceStructure;
       try {
-        const { weaveEveningEvent } = require("./candidates/evening-event-weave");
         const selectedRouteDate = resolveSelectedRouteDate(payload, baselineBody, cityConfig);
         wovenPlaceStructure = weaveEveningEvent(agnosticPlaceStructure, liveEvents, {
           selectedDate: selectedRouteDate,
           liveEventChoices,
+          preferences,
         });
       } catch (_error) {
         wovenPlaceStructure = agnosticPlaceStructure;
@@ -2700,6 +2705,7 @@ function buildApp({
             experiment,
             woven: engineWoven,
             walkingKmTarget: requestedRhythm ? null : payload.walkingKmTarget,
+            routePublished: promotion.promote,
           });
           // The eligibility verdict belongs to the candidate context that was
           // actually PUBLISHED. When the gate withholds the engine's day, the
@@ -2768,6 +2774,7 @@ function buildApp({
       });
       const legacyWoven = await weaveEventStopFailSoft({
         result: publicResult,
+        ...(normalizeUserIntents(preferences).intents.includes("live_music") ? { requestedPreferences: preferences } : {}),
         placeStructure: wovenPlaceStructure,
         walkingRouter,
         walkingConfig,

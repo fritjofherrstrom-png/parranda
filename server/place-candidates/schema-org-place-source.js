@@ -3,6 +3,7 @@
 const { createHash } = require("node:crypto");
 const { createSourceCache } = require("./source-cache");
 const { normalizeSchemaOrgOpeningHours } = require("./schema-org-opening-hours");
+const { normalizePlaceDetails, normalizeSourcePriceLevel } = require("./place-details");
 const {
   resolveReviewedPlaceSourceProfileFeeds,
 } = require("./reviewed-place-source-profile");
@@ -37,6 +38,7 @@ const PLACE_TYPE_MAP = Object.freeze({
   garden: "garden",
   botanicalgarden: "garden",
   restaurant: "restaurant",
+  fastfoodrestaurant: "street-food",
   foodestablishment: "restaurant",
   cafeorcoffeeshop: "cafe",
   barorpub: "bar",
@@ -431,7 +433,7 @@ function extractSchemaOrgPlaces(payload) {
       continue;
     }
     if (!value || typeof value !== "object") continue;
-    if (placeType(value)) places.push(value);
+    if (placeTypeKeys(value).length) places.push(value);
     for (const key of ["@graph", "items", "itemListElement"]) {
       if (Array.isArray(value[key])) {
         queue.push(...value[key].slice(0, Math.max(0, MAX_JSON_LD_NODES - visited - queue.length)));
@@ -477,7 +479,11 @@ function parseJsonLdPayloadsFromHtml(html) {
 }
 
 function mapSchemaOrgPlaceToRecord(place, feed) {
-  const type = placeType(place);
+  const keys = placeTypeKeys(place);
+  const key = keys[0] === "foodestablishment" && keys.includes("fastfoodrestaurant")
+    ? "fastfoodrestaurant"
+    : keys[0];
+  const type = PLACE_TYPE_MAP[key];
   const name = localizedString(place?.name);
   const coords = extractCoordinates(place);
   if (!type || !name || !coords) return null;
@@ -490,6 +496,10 @@ function mapSchemaOrgPlaceToRecord(place, feed) {
     ...coords,
     website: safeHttpUrl(firstString(place.url, place["@id"])),
     openingHours: normalizeSchemaOrgOpeningHours(place),
+    detailKind: type === "gallery" && keys.includes("artgallery") ? "art_gallery"
+      : type === "cafe" && keys.includes("cafeorcoffeeshop") ? "cafe"
+      : type === "restaurant" && !keys.includes("restaurant") ? "food_establishment" : null,
+    sourcePriceLevel: type === "restaurant" || type === "street-food" ? normalizeSourcePriceLevel(place.priceRange) : null,
   }, feed);
 }
 
@@ -514,6 +524,8 @@ function mapPlaceAtomToRecord(atom, feed) {
     lng,
     website,
     opening_hours: boundedString(atom.openingHours, 512),
+    place_details: normalizePlaceDetails({ kind: atom.detailKind }, type),
+    source_price_level: atom.sourcePriceLevel || undefined,
     freshness: "fresh",
     operator_reviewed_source: true,
     source_policy: "reviewed_profile_bounded_refresh",
@@ -756,15 +768,12 @@ function pointInBounds(point, bbox) {
   return point.lng >= west && point.lng <= east && point.lat >= south && point.lat <= north;
 }
 
-function placeType(place) {
+function placeTypeKeys(place) {
   const values = Array.isArray(place?.["@type"])
     ? place["@type"]
     : [place?.["@type"] || place?.type];
-  for (const value of values) {
-    const key = String(value || "").split(/[\/#:]/).pop().replace(/[^a-z]/gi, "").toLowerCase();
-    if (PLACE_TYPE_MAP[key]) return PLACE_TYPE_MAP[key];
-  }
-  return null;
+  return values.map(value => String(value || "").split(/[\/#:]/).pop().replace(/[^a-z]/gi, "").toLowerCase())
+    .filter(key => Object.hasOwn(PLACE_TYPE_MAP, key));
 }
 
 function extractCoordinates(place) {
