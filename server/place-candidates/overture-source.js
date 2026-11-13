@@ -37,6 +37,7 @@ const { normalizeUserIntents, matchCandidateToIntent, STABLE_PLACE_INTEREST_ROLE
   exactInterestRepresentatives } = require("../candidates/intent-vocabulary");
 const { mapRecordToCandidate } = require('./external-open-provider');
 const { normalizePlaceDetails, OVERTURE_KINDS } = require('./place-details');
+const { hasGreenspaceCareFacilityConflict } = require('./overture-greenspace-consistency');
 const { resolveCandidateIdentity, matchIdentity } = require('../candidates/entity-resolution');
 const {
   WALKING_REACH_RING_EDGES_KM,
@@ -310,7 +311,7 @@ function mapOvertureRow(row, { minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
   const brand = String(row.brand || "").trim() || null;
   const website = firstHttpUrl(row.websites);
   const details = normalizePlaceDetails({ kind: OVERTURE_KINDS[row.category] }, mapping.type);
-  return {
+  const record = {
     id: `overture-${id}`,
     name,
     type: mapping.type,
@@ -331,6 +332,7 @@ function mapOvertureRow(row, { minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
     ...(website ? { website } : {}),
     ...(details ? { place_details: details } : {}),
   };
+  return hasGreenspaceCareFacilityConflict(record) ? null : record;
 }
 
 function longitudeClause(lng, delta) {
@@ -503,6 +505,9 @@ function spreadAcrossWalkingReach(entries, { band }) {
 }
 
 function selectRecords(records, { anchor, requestedIntents = [], walkingTargetBand = null, corroborationRecords = [], limit = DEFAULT_LIMIT } = {}) {
+  // Apply the same negative consistency gate to retained samples before they
+  // can rank or lend corroboration. Keep stored facts and receipts unchanged.
+  records = records.filter(record => !hasGreenspaceCareFacilityConflict(record));
   const { retained, ambiguous } = corroborationSelection(records, corroborationRecords);
   const intents = normalizeUserIntents(requestedIntents).intents;
   const entries = records.filter(record => !ambiguous.has(record.id)).map((record) => ({

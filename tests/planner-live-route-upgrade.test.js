@@ -47,6 +47,27 @@ test('a dated Live music match from the original pending source can extend a foc
   assert.deepEqual(upgraded.body.result.agnostic_route_output_experiment.constraint_negotiation.preference_coverage.covered_preferences, ['food', 'live_music']);
 });
 
+test('a newly completed walkable performance can upgrade a day whose earlier higher-ranked occurrence did not fit', async t => {
+  const distant = { ...event, title: 'Harbour Concert', lng: 24.993 };
+  const nearby = { ...distant, lng: event.lng, starts_at: '2026-06-28T19:00:00Z' };
+  const pending = collection([distant], { pending: true });
+  Object.defineProperty(pending, LIVE_COLLECTION_READ, { value: () => collection([distant, nearby]) });
+  const h = await setup(t, { eventSupply: async () => pending });
+  const initial = await post(h.server, routePath, { ...routeBody, preferences: ['food', 'live_music'] });
+  assert.equal(initial.body.live_events.pending, true);
+  assert.equal(initial.body.place_structure.district_day.evening_event.starts_at, distant.starts_at);
+  assert.ok(initial.body.days[0].primary_route.main_stops.every(stop => !stop.is_live_event));
+  const token = initial.body.live_completion.token;
+  const upgraded = await post(h.server, upgradePath, { token });
+  assert.equal(upgraded.body.live_route_upgrade.state, 'applied');
+  const result = upgraded.body.result;
+  const stop = result.days[0].primary_route.main_stops.at(-1);
+  assert.equal(stop.event_id, event.id);
+  assert.equal(stop.starts_at, '2026-06-28T19:00:00Z');
+  assert.equal(stop.live_occurrence_id, result.place_structure.district_day.evening_event.live_occurrence_id);
+  assert.deepEqual(result.agnostic_route_output_experiment.constraint_negotiation.preference_coverage.covered_preferences, ['food', 'live_music']);
+});
+
 test('a late verified concert can publish a withheld Live music day around two eligible pinned stops', async t => {
   const h = await setup(t);
   const pins = h.records.slice(0, 2).map(record => record.id);

@@ -184,8 +184,8 @@ function distanceKm(a, b) {
 
 function createOverpassEmulator(places) {
   const stats = { calls: 0 };
-  const blockPattern = /\(((?:(?:node|way|relation)(?:\["[^"]+"="[^"]+"\])+\(around:[^)]*\);)+)\)->\.(c\d+);\.\2 out center (\d+);/g;
-  const filterPattern = /(node|way|relation)((?:\["[^"]+"="[^"]+"\])+)\(around:([\d.]+),(-?[\d.]+),(-?[\d.]+)\);/g;
+  const blockPattern = /\(((?:(?:node|way|relation)(?:\["[^"]+"(?:="[^"]+")?\])+\(around:[^)]*\);)+)\)->\.(c\d+);\.\2 out center (\d+);/g;
+  const filterPattern = /(node|way|relation)((?:\["[^"]+"(?:="[^"]+")?\])+)\(around:([\d.]+),(-?[\d.]+),(-?[\d.]+)\);/g;
   const descriptor = (place) => {
     const [key, value, defaultType] = OSM_TAGS[place.category];
     return { type: place.osmType || defaultType,
@@ -205,10 +205,11 @@ function createOverpassEmulator(places) {
       const matched = new Map();
       for (const [, type, selectors, radiusM, lat, lng] of block[1].matchAll(filterPattern)) {
         const centre = { lat: Number(lat), lng: Number(lng) };
-        const conditions = [...selectors.matchAll(/\["([^"]+)"="([^"]+)"\]/g)];
+        const conditions = [...selectors.matchAll(/\["([^"]+)"(?:="([^"]+)")?\]/g)];
         for (const place of places) {
           const mapped = descriptor(place);
-          if (mapped.type !== type || !conditions.every(([, key, value]) => mapped.tags[key] === value)) continue;
+          if (mapped.type !== type || !conditions.every(([, key, value]) => value === undefined
+            ? mapped.tags[key] !== undefined : mapped.tags[key] === value)) continue;
           if (distanceKm(centre, place) * 1000 <= Number(radiusM)) matched.set(`${type}/${place.osmId}`, place);
         }
       }

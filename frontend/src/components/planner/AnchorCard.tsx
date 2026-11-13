@@ -41,7 +41,7 @@ export default function AnchorCard({
   interestChooserOpen = false,
   setInterestChooserOpen,
   onApplyInterests,
-  interestFailure,
+  notice,
   onSetDay,
   rhythms,
   walkKey,
@@ -71,7 +71,21 @@ export default function AnchorCard({
   interestChooserOpen?: boolean;
   setInterestChooserOpen?: (open: boolean) => void;
   onApplyInterests?: (selection: InterestSelection) => void;
-  interestFailure?: { message: string; attemptedLabels?: string; onUndo?: () => void };
+  /**
+   * The one notice under the controls when the picks found no day: either the
+   * no-day state (one cause, one next step) or a rebuild for new picks that
+   * failed while the previous day stays on screen. `announce` is set only when
+   * the page's own result region does not already carry the message.
+   */
+  notice?: {
+    message: string;
+    attemptedLabels?: string;
+    action?: "edit_interests" | "retry" | "restart" | null;
+    onRetry?: () => void;
+    restartHref?: string;
+    onUndo?: () => void;
+    announce?: boolean;
+  };
   onSetDay: (offset: 0 | 1) => void;
   rhythms: RhythmOption[];
   walkKey: string;
@@ -206,28 +220,42 @@ export default function AnchorCard({
         </div>
       )}
 
-      {interestFailure && (
+      {notice && (
         <div className={`mt-2 flex flex-col items-start gap-2 ${noticeCard}`}>
-          <p role="status">{interestFailure.message}</p>
-          {interestFailure.attemptedLabels && <p className="text-xs text-parranda-ink-muted">{interestFailure.attemptedLabels}</p>}
-          <div className="flex flex-wrap gap-2">
-            {onApplyInterests && setInterestChooserOpen && (
-              <button type="button" ref={retryInterestsButton} aria-expanded={interestChooserOpen} onClick={() => {
-                interestTrigger.current = retryInterestsButton.current;
-                setAdjustOpen(true);
-                setInterestChooserOpen(true);
-              }} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
-                {t("Ändra intressen", "Edit interests")}
-              </button>
-            )}
-            {interestFailure.onUndo && (
-              <button type="button" onClick={interestFailure.onUndo} aria-label={t("Ångra ändringen", "Undo this change")}
-                className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
-                <UndoIcon className="h-3.5 w-3.5" />
-                {t("Ångra", "Undo")}
-              </button>
-            )}
-          </div>
+          {notice.announce ? <p role="status">{notice.message}</p> : <div>{notice.message}</div>}
+          {notice.attemptedLabels && <p className="text-xs text-parranda-ink-muted">{notice.attemptedLabels}</p>}
+          {notice.action === "restart" && notice.restartHref && (
+            <p>{t("Den sparade dagen kan inte uppdateras säkert. ", "We cannot safely update this saved day. ")}
+              <a href={notice.restartHref} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">
+                {t("Välj startpunkt och datum", "Choose a starting point and date")}
+              </a>
+            </p>
+          )}
+          {(notice.action === "edit_interests" || notice.action === "retry" || notice.onUndo) && (
+            <div className="flex flex-wrap gap-2">
+              {notice.action === "edit_interests" && onApplyInterests && setInterestChooserOpen && (
+                <button type="button" ref={retryInterestsButton} aria-expanded={interestChooserOpen} onClick={() => {
+                  interestTrigger.current = retryInterestsButton.current;
+                  setAdjustOpen(true);
+                  setInterestChooserOpen(true);
+                }} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                  {t("Ändra intressen", "Edit interests")}
+                </button>
+              )}
+              {notice.action === "retry" && notice.onRetry && (
+                <button type="button" onClick={notice.onRetry} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
+                  {t("Försök igen", "Try again")}
+                </button>
+              )}
+              {notice.onUndo && (
+                <button type="button" onClick={notice.onUndo} aria-label={t("Ångra ändringen", "Undo this change")}
+                  className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                  <UndoIcon className="h-3.5 w-3.5" />
+                  {t("Ångra", "Undo")}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
