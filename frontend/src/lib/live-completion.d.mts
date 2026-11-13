@@ -42,6 +42,7 @@ export declare function followLiveCompletion(input: {
   capability: LiveCompletionCapability;
   signal: AbortSignal;
   onLiveEvents?: (liveEvents: any, daySnapshot?: LiveDaySnapshot) => void;
+  allowUpgrade?: () => boolean;
   fetcher?: (url: string, init: RequestInit) => Promise<{ status: number; json(): Promise<any> }>;
   wait?: (ms: number, signal: AbortSignal) => Promise<void>;
   now?: () => number;

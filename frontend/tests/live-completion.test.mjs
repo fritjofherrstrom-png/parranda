@@ -154,6 +154,19 @@ test("an unauthorized capability reads Live and never touches the upgrade endpoi
   assert.equal(h.calls.length, 1);
 });
 
+test("a day changed since its compose declines the upgrade without asking for it", async () => {
+  // A stop kept in place after the compose: the upgrade would replay the
+  // request from before the Keep, so it is never requested for that day.
+  const live = { coverage: "covered", tonight: [{ id: "e1" }] };
+  const h = harness([{ url: LIVE_COMPLETION_ENDPOINT, status: 200, body: { live_events: live, live_completion: { version: 1, state: "ready", route_upgrade: "explicit_request" } } }]);
+  const seen = [];
+  const outcome = await followLiveCompletion({ capability: capability(), signal: new AbortController().signal,
+    onLiveEvents: (events) => seen.push(events), allowUpgrade: () => false, ...h });
+  assert.deepEqual(seen, [live], "the Live result still reaches the day");
+  assert.deepEqual(outcome, { live: "terminal", upgrade: null });
+  assert.deepEqual(h.calls.map((call) => call.url), [LIVE_COMPLETION_ENDPOINT], "the upgrade endpoint is never called");
+});
+
 test("the server's own route_upgrade answer decides, not the original flag", async () => {
   const h = harness([{ url: LIVE_COMPLETION_ENDPOINT, status: 200, body: { live_events: { coverage: "covered" }, live_completion: { version: 1, state: "ready", route_upgrade: "not_supported" } } }]);
   const outcome = await followLiveCompletion({ capability: capability("explicit_request"), signal: new AbortController().signal, ...h });
