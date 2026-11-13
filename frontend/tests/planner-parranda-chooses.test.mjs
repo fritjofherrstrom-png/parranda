@@ -120,3 +120,58 @@ test("interests applied from All interests are the reader's own: the mode ends a
   assert.equal("intent_mode" in sent.body, false);
   assert.ok(named(h, /^Let Parranda choose the day$/), "the offer is back once the reader chose");
 });
+
+test("a failed request before the first auto answer never leaves 'choosing' on screen", async (t) => {
+  const h = await arrive(t, "&parranda_chooses=1");
+  await click(h, named(h, /^Let Parranda choose the day$/));
+  await h.clock.advance(450);
+  assert.match(h.text(), /Choosing from the places, the time and the weather/);
+  await h.fetchMock.respond(composeCalls(h)[1], { error: "unavailable" }, 503);
+  await h.clock.advance(50);
+  assert.doesNotMatch(h.text(), /Choosing from the places, the time and the weather/);
+  assert.match(h.text(), /Parranda couldn't choose for this day\./);
+  assert.ok(named(h, /^Choose yourself$/), "the reader can still take over");
+});
+
+test("an explicitly empty All interests apply ends the mode in state and request", async (t) => {
+  const h = await arrive(t, "&parranda_chooses=1");
+  await click(h, named(h, /^Let Parranda choose the day$/));
+  await h.clock.advance(450);
+  await h.fetchMock.respond(composeCalls(h)[1], day(["r1", "b1"], { parranda_chooses: choice }));
+  await h.clock.advance(50);
+  if (!named(h, /^All interests$/)) await click(h, named(h, /^Adjust/));
+  await click(h, named(h, /^All interests$/));
+  const editor = h.container.querySelector('[aria-label="All interests"]');
+  const inEditor = (name) => [...editor.querySelectorAll("button")].find((b) => (b.getAttribute("aria-label") || b.textContent.trim()) === name);
+  if (inEditor("Clear selection")) await click(h, inEditor("Clear selection"));
+  await click(h, inEditor("Update day"));
+  await h.clock.advance(1000);
+  const sent = composeCalls(h).at(-1);
+  assert.notEqual(sent, composeCalls(h)[1], "the apply composes");
+  assert.deepEqual(sent.body.preferences, []);
+  assert.equal("intent_mode" in sent.body, false, "an explicit empty choice is not the mode");
+  assert.ok(named(h, /^Let Parranda choose the day$/));
+});
+
+test("Undo after the reader's own interests brings back Parranda's choice as it was", async (t) => {
+  const h = await arrive(t, "&parranda_chooses=1");
+  await click(h, named(h, /^Let Parranda choose the day$/));
+  await h.clock.advance(450);
+  await h.fetchMock.respond(composeCalls(h)[1], day(["r1", "b1"], { parranda_chooses: choice }));
+  await h.clock.advance(50);
+  await click(h, named(h, /^Adjust/));
+  await click(h, named(h, /^Views$/));
+  await h.clock.advance(450);
+  await h.fetchMock.respond(composeCalls(h).at(-1), day(["v1", "v2"]));
+  await h.clock.advance(50);
+  assert.ok(named(h, /^Let Parranda choose the day$/), "the reader's own pick ended the mode");
+  const undo = named(h, /^Undo/);
+  assert.ok(undo, "the change can be undone");
+  await click(h, undo);
+  await h.clock.advance(450);
+  const section = h.container.querySelector('section[aria-label="Parranda\'s choice"]');
+  assert.ok(section, "the mode is back");
+  assert.match(section.textContent, /Parranda chose/);
+  assert.deepEqual([...section.querySelectorAll("li")].map((li) => li.textContent), ["Food & drink· Indoors while it rains", "Nightlife· Suits the evening"]);
+  assert.equal(composeCalls(h).length, 3, "Undo puts the day back without composing");
+});

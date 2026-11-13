@@ -271,6 +271,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // The mode the day on screen was composed under, so a choice still on its way
   // reads as "choosing", not as a day Parranda could not choose for.
   const [answeredIntentMode, setAnsweredIntentMode] = useState<"parranda_chooses" | null>(null);
+  // A request for Parranda's choice is on its way: set when the reader asks,
+  // cleared when the current request ends, however it ends. A failure never
+  // leaves "choosing" on screen.
+  const [modeAwaiting, setModeAwaiting] = useState(false);
   useEffect(() => {
     let storage: Storage | null = null;
     try { storage = window.localStorage; } catch { storage = null; }
@@ -1086,6 +1090,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         setPhase("error");
       }
     } finally {
+      if (!silent && requestId === requestSequenceRef.current && intentId === intentSequenceRef.current) {
+        setModeAwaiting(false);
+      }
       if (activeRequestRef.current === controller) {
         activeRequestRef.current = null;
         activeLifecycleCancelRef.current = null;
@@ -1306,6 +1313,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       if (Array.isArray(i.selected)) setSelected(i.selected);
       setIntentMode(i.intentMode === "parranda_chooses" ? "parranda_chooses" : null);
       setAnsweredIntentMode(i.intentMode === "parranda_chooses" ? "parranda_chooses" : null);
+      setModeAwaiting(false);
     }
     // A restored snapshot is a NEW authoritative generation, so everything
     // older has to stop before it is installed. Otherwise a compose that
@@ -1431,6 +1439,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     undoEchoRef.current = adjustmentSignature(nextSelected, nextDayOffset, nextWalkKey, nextCommitments, nextPriority, nextEdit, nextIntentMode);
     setIntentMode(nextIntentMode);
     setAnsweredIntentMode(nextIntentMode);
+    setModeAwaiting(false);
     setSelected(nextSelected);
     setPreferencePriority(nextPriority);
     setDayEdit(nextEdit);
@@ -2819,6 +2828,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     invalidateCommitmentIntent();
     relaxDayEditForAdjustment();
     setIntentMode("parranda_chooses");
+    setModeAwaiting(true);
     setSelected([]);
     setPreferencePriority([]);
     setWalkKey("free");
@@ -2994,7 +3004,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       t={t}
       active={choosing}
       view={answeredIntentMode === intentMode ? parrandaView : null}
-      composing={phase === "loading" || (intentMode !== answeredIntentMode && !restoredAt)}
+      composing={phase === "loading" || (modeAwaiting && !restoredAt)}
       onChoose={chooseForMe}
       onTakeOver={takeOverChoice}
     />
@@ -3020,6 +3030,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         interestChooserOpen={interestChooserOpen}
         setInterestChooserOpen={setInterestChooserOpen}
         onApplyInterests={canUpdateSaved ? applyInterests : undefined}
+        parrandaChoosing={choosing}
         notice={noDay ? {
           // The page's result region announces this one; the card only shows it.
           message: noDayText,
