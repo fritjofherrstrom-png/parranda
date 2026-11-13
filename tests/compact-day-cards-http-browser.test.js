@@ -147,11 +147,14 @@ test('built free-text day publishes a compact Relaxed route, useful source facts
   assert.ok(observations.mobile.controls.every(control => control.height >= 44 && control.width >= 44), 'compact controls retain real touch targets');
   if (evidenceDir) await page.screenshot({ path: path.join(evidenceDir, 'mobile-expanded-card.png') });
   const keptId = calm.main_stops[0].id;
-  const keepReady = nextDay(route => route.main_stops.some(stop => stop.id === keptId));
+  // Keep pins the stop on the day on screen, which already contains it: it
+  // composes nothing, names the stop, and the next question carries the pin.
+  const postsBeforeKeep = posts.length;
   await panel.getByRole('button', { name: 'Keep this one', exact: true }).click();
-  const kept = (await (await keepReady).json()).days[0].primary_route;
+  await page.getByRole('status').filter({ hasText: `Kept: ${calm.main_stops[0].label}` }).waitFor();
+  const kept = calm;
   await rendered(kept);
-  assert.deepEqual(posts.at(-1).pinned_candidate_ids, [keptId]);
+  assert.equal(posts.length, postsBeforeKeep, 'Keep composes nothing');
   await page.waitForFunction(id => {
     const entry = JSON.parse(localStorage.getItem('parranda:anywhere:last') || 'null');
     return entry?.commitments?.entries?.[id]?.kind === 'pin' && entry.inputs?.walkKey === 'calm';
@@ -176,7 +179,9 @@ test('built free-text day publishes a compact Relaxed route, useful source facts
   await rendered(reloaded);
   observations.navigationAfterReload = await page.evaluate(() => performance.getEntriesByType('navigation').map(entry => entry.type));
   assert.deepEqual(observations.navigationAfterReload, ['reload']);
-  assert.deepEqual(posts.at(-1).pinned_candidate_ids, [keptId]);
+  // The exact reload restores the kept day without composing. Its record
+  // carries the Keep, and the next adjustment (Full, below) sends it.
+  assert.deepEqual(restored.commitments.entries[keptId], { kind: 'pin', label: calm.main_stops[0].label });
   assert.equal(posts.at(-1).day_rhythm, 'calm');
   assert.deepEqual(reloaded.main_stops.map(stop => stop.id), kept.main_stops.map(stop => stop.id));
   assert.match(await list.innerText(), /Kept/);

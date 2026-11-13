@@ -499,6 +499,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setLiveSheetScope("around_place");
   }, [safeResponse]);
   const lastEntryRef = useRef<SavedEntry | null>(null); // the latest composed day, for "save"
+  // Remembered entries made by keepInPlace: the same day and response as the
+  // compose that produced them, with one more kept stop in their ledger.
+  const keptInPlaceEntriesRef = useRef(new WeakSet<SavedEntry>());
 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
   const typedPlaceLabel = place.trim();
@@ -1129,6 +1132,21 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // The remembered entry for this day, while it is still the remembered one.
     let entry = installed?.days?.length > 0 && lastEntryRef.current?.safeResponse === installed
       ? lastEntryRef.current : null;
+    // A stop kept in place re-binds the remembered entry to this same day and
+    // response with one more pin. The Live list still belongs to that day, so
+    // the run follows the re-bind; the route upgrade does not, because it
+    // replays the compose from before the Keep and would rebuild the day the
+    // reader has just settled.
+    let keptSince = false;
+    const remembered = () => {
+      const now = lastEntryRef.current;
+      if (entry && now && now !== entry && keptInPlaceEntriesRef.current.has(now) &&
+          now.id === entry.id && now.safeResponse === entry.safeResponse) {
+        entry = now;
+        keptSince = true;
+      }
+      return Boolean(entry) && lastEntryRef.current === entry;
+    };
     const current = () =>
       !controller.signal.aborted &&
       requestId === requestSequenceRef.current &&
@@ -1142,7 +1160,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         const { day_snapshot: previousSnapshot, ...original } = installed;
         const view = { ...original, live_events: liveEvents,
           ...(daySnapshot ? { day_snapshot: daySnapshot } : {}) };
-        if (entry && lastEntryRef.current === entry) {
+        if (entry && remembered()) {
           entry = { ...entry, safeResponse: view };
           lastEntryRef.current = entry;
           writeLS(LAST_KEY, entry);
@@ -1151,14 +1169,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         // binding its displayed terminal sidecar to this exact remembered view.
         setCompletedLive({ day: installed, liveEvents, view, entry });
         const publication = readyPublishedDay(daySnapshot);
-        setSharePublication(publication && entry && lastEntryRef.current === entry ? { entry, publication } : null);
+        setSharePublication(publication && entry && remembered() ? { entry, publication } : null);
+      },
+      allowUpgrade: () => {
+        remembered();
+        return !keptSince;
       },
     })
       .then((outcome) => {
         if (liveCompletionAbortRef.current === controller) liveCompletionAbortRef.current = null;
         if (!current()) return;
         setLiveFollowing(false);
-        if (outcome.upgrade?.kind === "applied" && entry && lastEntryRef.current === entry) {
+        if (outcome.upgrade?.kind === "applied" && entry && remembered() && !keptSince) {
           installLiveUpgrade(outcome.upgrade.result, entry, preserveInterestUndo);
         }
       })
@@ -1898,7 +1920,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setNavigationPublication(null);
       setNavigationWriteFailure(entry);
     }
-  }, [arrivalRead, safeResponse, classification, completedLive, restoredAt, lang, publicReference, publicReadState]);
+    // `commitments`: a Keep made in place (and its Undo) re-binds the accepted
+    // entry without a new response; the pointer follows that entry.
+  }, [arrivalRead, safeResponse, classification, completedLive, restoredAt, lang, publicReference, publicReadState, commitments]);
 
   const leavePlanner =(target: "home" | "language") => {
     if (mode === "typed" && placeSelection) storePlaceChoice({ place, selection: placeSelection, label: selectionLabel });
@@ -2560,7 +2584,61 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   };
   const dismissStop = (identity: string, stopLabel: string) => editStop(identity, stopLabel, "replace");
   const removeStop = (identity: string, stopLabel: string) => editStop(identity, stopLabel, "remove");
-  const keepStop = (identity: string, stopLabel: string) => commit(identity, "pin", stopLabel);
+  // Keep on a stop of the settled day on screen. That day already contains
+  // the stop, so it already answers the pin: the Keep is remembered with the
+  // day, carried by every later adjustment, and said by name, and nothing is
+  // recomposed. A full compose here rebuilt the whole day as a side effect of
+  // Keep (staging 2590f540: reversed order, a woven Live event, +2 km).
+  // A Keep made while another change is pending or in flight joins that
+  // change through commit() instead, and the receipt names it there too.
+  const keepInPlace = (identity: string, stopLabel: string): boolean => {
+    const previous = lastEntryRef.current;
+    const anchor = displayedAnchorKeyRef.current;
+    if (!identity || isLiveOccurrenceId(identity) || commitments[identity] || !previous || !anchor ||
+        !isUndoableDay(previous) || !showDay || phase !== "done" || dayIsStale || restoredAt || publicReference || interestFailure ||
+        upgradePending || stopEditPending || pendingStopEditRef.current || livePlanPendingRef.current ||
+        activeRequestRef.current || recomposeTimerRef.current || pollTimerRef.current ||
+        (dayEdit && !dayEdit.retained_candidate_ids.includes(identity))) return false;
+    const stopIds = (stops: any[]) => stops.map((stop: any) => String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "").trim());
+    if (!stopIds(routeStops).includes(identity) || !stopIds(primaryRouteStops(previous.safeResponse)).includes(identity)) return false;
+    const label = String(stopLabel ?? "").trim();
+    const ledger = readCommitmentSnapshot(previous.commitments, { anchorKey: anchor, dayKey: previous.id });
+    const pin = { id: identity, kind: "pin" as const, label };
+    const answeredPins = [...(ledger.applies ? ledger.appliedPins : []).filter(applied => applied.id !== identity), pin];
+    const next: SavedEntry = {
+      ...previous,
+      commitments: buildCommitmentSnapshot({
+        anchorKey: anchor,
+        dayKey: previous.id,
+        entries: { ...(ledger.applies ? ledger.entries : {}), [identity]: { kind: "pin", label } },
+        appliedPins: answeredPins,
+        refusals: ledger.applies ? ledger.refusals : [],
+      }),
+    };
+    // Undo puts the day back exactly as it was before the Keep, receipt included.
+    const share = matchingSharePublication();
+    keptInPlaceEntriesRef.current.add(next);
+    lastEntryRef.current = next;
+    writeLS(LAST_KEY, next);
+    // The same published day: its share and its Live result stay bound to it.
+    setSharePublication(current => current?.entry === previous ? { ...current, entry: next } : current);
+    setCompletedLive(current => current?.entry === previous ? { ...current, entry: next } : current);
+    setExpandedStopKey(null);
+    setExpandedCandidateKey(null);
+    setChoicesNotCarried(false);
+    setStopEditFeedback(null);
+    setStopEditError(null);
+    commitmentAnchorKeyRef.current = anchor;
+    setAppliedPins(answeredPins);
+    setDayChange({ previous, previousShare: share ? { ...share } : undefined, summary: describeDayChange(previous, next) });
+    // The day on screen already answers these inputs: no adjustment to compose.
+    adoptedInputsRef.current = true;
+    setCommitments({ ...commitments, [identity]: { kind: "pin", label } });
+    return true;
+  };
+  const keepStop = (identity: string, stopLabel: string) => {
+    if (!keepInPlace(identity, stopLabel)) commit(identity, "pin", stopLabel);
+  };
   const releaseCommitment = (identity: string) => {
     if (!identity || !commitments[identity]) return;
     invalidateCommitmentIntent();
@@ -2784,6 +2862,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Where the reader's last adjustment stands, for the Adjust panel:
   // rebuilding, rebuilt (and what the route did), or failed.
   const adjustSummary = dayChange && phase === "done" && !dayIsStale ? dayRouteChange.join(" · ") : "";
+  // Stops the reader kept that the day on screen now answers, named first.
+  const keptNames: string[] = dayChange?.summary.pinned ?? [];
   const adjustRebuild: AdjustRebuild =
     staleNotice === "updating"
       ? { state: "updating" }
@@ -3361,17 +3441,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         {t("Försök planera med evenemanget igen", "Try planning with this event again")}
       </button>}
       {dayChange && (phase === "done" || (phase === "error" && canUndoFailedEdit)) &&
-        (!dayIsStale || canUndoFailedEdit) && (dayChangeLine.length > 0 || stopEditFeedback || stopEditError) && (
+        (!dayIsStale || canUndoFailedEdit) && (dayChangeLine.length > 0 || keptNames.length > 0 || stopEditFeedback || stopEditError) && (
         <div
           role="status"
           className="flex items-center gap-x-2 rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint py-0.5 pl-4 pr-1"
         >
           <p className="min-w-0 flex-1 break-words text-13 leading-snug text-parranda-ink-muted">
             {stopEditError ? stopEditErrorMessage : stopEditFeedback ? stopEditFeedbackMessage : <>
-              <span className="font-bold text-parranda-ink">
-                {dayChange.summary.trigger === "recheck" ? t("Letade efter fler platser", "Looked for more places") : t("Ändrat", "Changed")}:{" "}
-              </span>
-              {dayChangeLine.join(" · ")}
+              {/* A kept stop is named first and on its own: a Keep is never
+                  read as, or hidden behind, whatever else changed. */}
+              {keptNames.length > 0 && <>
+                <span className="font-bold text-parranda-ink">{t("Behålls", "Kept")}:{" "}</span>
+                {keptNames.join(", ")}
+                {dayChangeLine.length > 0 && " · "}
+              </>}
+              {dayChangeLine.length > 0 && <>
+                <span className="font-bold text-parranda-ink">
+                  {dayChange.summary.trigger === "recheck" ? t("Letade efter fler platser", "Looked for more places") : t("Ändrat", "Changed")}:{" "}
+                </span>
+                {dayChangeLine.join(" · ")}
+              </>}
             </>}
           </p>
           <button
