@@ -57,6 +57,27 @@ function isDayOffset(value) {
   return value === 0 || value === 1;
 }
 
+function appliedPinIds(entry) {
+  const pins = entry?.commitments?.appliedPins;
+  return Array.isArray(pins) ? pins.map((pin) => String(pin?.id ?? "").trim()).filter(Boolean) : [];
+}
+
+// The places the reader kept that the new day answers and the previous one
+// did not: pins applied to the next day only, and actually among its stops.
+// A Live occurrence is not a kept place; its choice has its own wording.
+function newlyPinned(previous, next, afterStops) {
+  const before = new Set(appliedPinIds(previous));
+  const stopIds = new Map(afterStops.map((stop) => [String(stop.id ?? stop.candidate_id ?? stop.place_id ?? "").trim(), stop]));
+  const names = [];
+  for (const pin of Array.isArray(next?.commitments?.appliedPins) ? next.commitments.appliedPins : []) {
+    const id = String(pin?.id ?? "").trim();
+    if (!id || id.startsWith("live:") || before.has(id) || !stopIds.has(id)) continue;
+    const name = stopName(stopIds.get(id)) || String(pin?.label ?? "").trim();
+    if (name && !names.includes(name)) names.push(name);
+  }
+  return names;
+}
+
 /**
  * @param {object|null} previous  the saved entry of the day that was on screen
  * @param {object|null} next      the saved entry of the day that replaced it
@@ -110,6 +131,9 @@ export function describeDayChange(previous, next, { cause = null, trigger = null
     km,
     hasRoute: afterStops.length > 0,
     routeChanged: !sameSet || reordered || kmChanged,
+    // Stops the reader kept that this day now answers, by name. Said first
+    // and on its own, so a Keep is never read as whatever else changed.
+    pinned: newlyPinned(previous, next, afterStops),
     // A real Live occurrence may arrive in an ordinary adjustment or a separate
     // completion. Compare the published identities, not the response lane.
     cause: cause === "live" || addedStops.some((stop) => stop.is_live_event === true && liveStopChoiceId(stop)) ? "live" : null,
@@ -148,7 +172,9 @@ export function dayChangeSegments(change, { lang = "en", walkLabel = (key) => ke
     return segments;
   }
   if (!change.routeChanged) {
-    segments.push(sv ? "samma stopp och sträcka" : "same stops and distance");
+    // A Keep on a day that stayed as it was needs no second sentence: the
+    // kept stop is the whole change.
+    if (!change.pinned?.length || segments.length) segments.push(sv ? "samma stopp och sträcka" : "same stops and distance");
     return segments;
   }
   // One short line: counts, not names. The new stops are listed in the day
