@@ -225,6 +225,30 @@ export function routeTimeAnchoring(primaryRoute) {
  * unconfirmed, in the planner's own pick vocabulary. Read only from an anchored
  * evening that says so; anything else gives none.
  */
+const TRUSTED_TIMEZONES = new Set(["resolver_attested", "derived_from_weather_provider"]);
+
+/**
+ * Whether an evening plan's evening is tonight for a reader at `now`: true only
+ * when the place's own calendar day, read in its trusted timezone, is the day's
+ * published date. A composed "today" is no authority after the place's
+ * midnight, and the reader's timezone never decides it. Without a trusted
+ * place day the answer is false, so the day is named by its date instead.
+ */
+export function routeEveningIsTonight(response, now = Date.now()) {
+  const date = text(response?.days?.[0]?.date);
+  const time = response?.agnostic_route_output_experiment?.context?.time;
+  const zone = text(time?.timezone);
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !zone || time.timezone_known !== true ||
+      !TRUSTED_TIMEZONES.has(time.timezone_trust) || !Number.isFinite(now)) return false;
+  try {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" })
+      .formatToParts(new Date(now)).map((part) => [part.type, part.value]));
+    return `${parts.year}-${parts.month}-${parts.day}` === date;
+  } catch {
+    return false;
+  }
+}
+
 export function routeUnconfirmedTonightPicks(primaryRoute) {
   if (routeTimeAnchoring(primaryRoute) !== "evening_plan") return [];
   const values = Array.isArray(primaryRoute?.unconfirmed_tonight_preferences) ? primaryRoute.unconfirmed_tonight_preferences : [];

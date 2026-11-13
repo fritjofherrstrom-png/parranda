@@ -219,3 +219,29 @@ test("an anchored evening plan names the picks whose hours tonight are unconfirm
   assert.deepEqual(routeUnconfirmedTonightPicks({ unconfirmed_tonight_preferences: ["museums"], caveats: ["picks_unconfirmed_tonight"] }), []);
   assert.deepEqual(routeUnconfirmedTonightPicks(null), []);
 });
+
+test('an evening plan is tonight only on the place\'s own trusted calendar day', async () => {
+  const { routeEveningIsTonight } = await import('../src/lib/route-context-view.mjs');
+  const day = (time) => ({ days: [{ date: '2026-10-01' }], agnostic_route_output_experiment: { context: { time } } });
+  const trusted = { timezone: 'Europe/Stockholm', timezone_known: true, timezone_trust: 'resolver_attested' };
+  assert.equal(routeEveningIsTonight(day(trusted), Date.parse('2026-10-01T18:30:00Z')), true, '20:30 in Stockholm');
+  assert.equal(routeEveningIsTonight(day(trusted), Date.parse('2026-10-01T22:30:00Z')), false, '00:30 next day in Stockholm');
+  assert.equal(routeEveningIsTonight(day({ ...trusted, timezone_trust: 'derived_from_weather_provider' }), Date.parse('2026-10-01T18:30:00Z')), true);
+  for (const time of [{ ...trusted, timezone_known: false }, { ...trusted, timezone_trust: 'unavailable' }, { ...trusted, timezone: 'Not/AZone' },
+    { ...trusted, timezone: null }, null]) {
+    assert.equal(routeEveningIsTonight(day(time), Date.parse('2026-10-01T18:30:00Z')), false, JSON.stringify(time));
+  }
+  assert.equal(routeEveningIsTonight({ days: [{ date: 'yesterday' }], agnostic_route_output_experiment: { context: { time: trusted } } },
+    Date.parse('2026-10-01T18:30:00Z')), false);
+  // The reader's own timezone never decides it: in Los Angeles it is still
+  // 1 October at 22:30 UTC, but in Stockholm the plan's evening is over.
+  const previous = process.env.TZ;
+  try {
+    process.env.TZ = 'America/Los_Angeles';
+    assert.equal(new Date(Date.parse('2026-10-01T22:30:00Z')).getDate(), 1, 'precondition: still 1 October for the reader');
+    assert.equal(routeEveningIsTonight(day(trusted), Date.parse('2026-10-01T22:30:00Z')), false);
+    assert.equal(routeEveningIsTonight(day(trusted), Date.parse('2026-10-01T18:30:00Z')), true);
+  } finally {
+    if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+  }
+});

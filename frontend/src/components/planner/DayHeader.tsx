@@ -180,7 +180,11 @@ function Note({ children }: { children: ReactNode }) {
  * How the day was assembled, in the order a reader needs it: where the places
  * came from, then how it sits on the clock. Said once, in "About this day".
  */
-export function dayAssemblyNotes(t: Translate, { sourceBackedDay, timeAnchoring }: { sourceBackedDay: boolean; timeAnchoring: string | null }): string[] {
+export function dayAssemblyNotes(t: Translate, { sourceBackedDay, timeAnchoring, eveningIsTonight = false, eveningDate = null, lang = "sv" }: {
+  sourceBackedDay: boolean; timeAnchoring: string | null;
+  /** The evening is tonight on the place's own trusted calendar day; otherwise the day's date names it. */
+  eveningIsTonight?: boolean; eveningDate?: string | null; lang?: Lang;
+}): string[] {
   const notes: string[] = [];
   if (sourceBackedDay) {
     notes.push(t(
@@ -192,7 +196,16 @@ export function dayAssemblyNotes(t: Translate, { sourceBackedDay, timeAnchoring 
   // doable midday plan. Quietly note the trimmed variant too.
   if (timeAnchoring === "full_arc_not_now") notes.push(t("En hel dags båge — inte förankrad till klockan just nu.", "A full-day arc — not anchored to right now."));
   if (timeAnchoring === "anchored_trimmed") notes.push(t("Förankrad till nu — tidigare dagdelar borttagna.", "Anchored to now — earlier dayparts trimmed."));
-  if (timeAnchoring === "evening_plan") notes.push(t("Planerad för kvällen. För några av dina val är öppettiderna i kväll okända.", "Planned for the evening. For some of your picks, tonight's opening hours are unknown."));
+  if (timeAnchoring === "evening_plan") {
+    const shown = eveningIsTonight ? null : selectedDate(eveningDate);
+    const label = shown ? dayDateLabel(shown, lang) : null;
+    notes.push(eveningIsTonight
+      ? t("Planerad för kvällen. För några av dina val är öppettiderna i kväll okända.", "Planned for the evening. For some of your picks, tonight's opening hours are unknown.")
+      : label
+        ? t(`Planerad för kvällen ${label}. För några av dina val är kvällens öppettider okända.`,
+          `Planned for the evening of ${label}. For some of your picks, that evening's opening hours are unknown.`)
+        : t("Planerad för kvällen. För några av dina val är kvällens öppettider okända.", "Planned for the evening. For some of your picks, the evening's opening hours are unknown."));
+  }
   return notes;
 }
 
@@ -207,6 +220,7 @@ export default function DayHeader({
   anchorLabel,
   primaryRoute,
   date,
+  eveningIsTonight = false,
   weatherSummary,
   titleAction = null,
   controls = null,
@@ -234,6 +248,8 @@ export default function DayHeader({
   primaryRoute: any;
   /** The date of the answer on screen, including held or restored days. */
   date: string | null | undefined;
+  /** The evening is tonight on the place's own trusted calendar day (routeEveningIsTonight). */
+  eveningIsTonight?: boolean;
   /** A trusted selected-day forecast; absence never gets a weather guess. */
   weatherSummary: any;
   /** Beside the title: Change. */
@@ -434,8 +450,14 @@ export default function DayHeader({
         )}
         {unconfirmedTonight.length > 0 && (
           <p className="text-13 leading-relaxed text-parranda-ink-muted" role="status">
-            {t(`${unconfirmedList}: öppettiderna i kväll är okända – kontrollera innan du går.`,
-              `${unconfirmedList}: tonight's opening hours are unknown — check before you go.`)}
+            {eveningIsTonight
+              ? t(`${unconfirmedList}: öppettiderna i kväll är okända – kontrollera innan du går.`,
+                `${unconfirmedList}: tonight's opening hours are unknown — check before you go.`)
+              : displayedDate
+                ? t(`${unconfirmedList}: öppettiderna på kvällen ${dayDateLabel(displayedDate, lang)} är okända – kontrollera innan du går.`,
+                  `${unconfirmedList}: opening hours on the evening of ${dayDateLabel(displayedDate, lang)} are unknown — check before you go.`)
+                : t(`${unconfirmedList}: kvällens öppettider är okända – kontrollera innan du går.`,
+                  `${unconfirmedList}: the evening's opening hours are unknown — check before you go.`)}
           </p>
         )}
         {/* Source limitations describe this published answer, never a live job:

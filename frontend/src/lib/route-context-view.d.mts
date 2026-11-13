@@ -69,3 +69,10 @@ export declare function routeTimeAnchoring(
 export declare function routeUnconfirmedTonightPicks(
   primaryRoute: { caveats?: string[]; anchored_to_local_time?: boolean; unconfirmed_tonight_preferences?: string[] } | null | undefined,
 ): string[];
+
+/** Whether an evening plan's evening is tonight on the place's own trusted calendar day at `now`. */
+export declare function routeEveningIsTonight(
+  response: { days?: Array<{ date?: string | null }> | null; agnostic_route_output_experiment?: { context?: { time?: {
+    timezone?: string | null; timezone_known?: boolean; timezone_trust?: string | null } | null } | null } | null } | null | undefined,
+  now?: number,
+): boolean;
