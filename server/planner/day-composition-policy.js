@@ -35,6 +35,48 @@ function isMeal(candidate) {
   return preferenceFit(candidate).coveredPreferences.includes('food');
 }
 
+// The extra walk orderBalancedDay may add to a stop chain when it reorders.
+const withinOrderGuard = (km, baseKm) => km <= Math.max(baseKm * 1.08, baseKm + 0.25);
+// Stop-to-stop walking km, measured as route-engine walkingKm measures it.
+function legKm(left, right) {
+  const rad = degrees => degrees * Math.PI / 180;
+  const h = Math.sin(rad(right.lat - left.lat) / 2) ** 2 +
+    Math.cos(rad(left.lat)) * Math.cos(rad(right.lat)) * Math.sin(rad(right.lng - left.lng) / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h)) * 1.22;
+}
+
+// A second main meal needs its own place in the day: some order of these stops
+// puts another stop between every two meals, and walks no more than ordering
+// may add over this set's shortest stop chain. Ordering measures its slack from
+// an order at least that long, so its walk guard never forbids that order. A
+// separation that only exists by walking back across the day does not count.
+function mealsSeparable(items) {
+  const meal = items.map(isMeal);
+  const count = meal.filter(Boolean).length;
+  if (count < 2) return true;
+  if (count > Math.ceil(items.length / 2)) return false;
+  const km = items.map(left => items.map(right => legKm(left, right)));
+  const used = items.map(() => false);
+  let shortest = Infinity, separated = Infinity;
+  const visit = (last, depth, total, apart) => {
+    if (total >= shortest && (!apart || total >= separated)) return;
+    if (depth === items.length) {
+      shortest = Math.min(shortest, total);
+      if (apart) separated = Math.min(separated, total);
+      return;
+    }
+    for (let index = 0; index < items.length; index += 1) {
+      if (used[index]) continue;
+      used[index] = true;
+      visit(index, depth + 1, last < 0 ? 0 : total + km[last][index], apart && !(last >= 0 && meal[last] && meal[index]));
+      used[index] = false;
+    }
+  };
+  visit(-1, 0, 0, true);
+  const round = value => Number(value.toFixed(1));
+  return Number.isFinite(separated) && withinOrderGuard(round(separated), round(shortest));
+}
+
 function selectBalancedDay({ rankedCandidates = [], selected = [], preferences = [],
   preferencePriority = [], pinnedIds = [], mealContext = null, ...context } = {}) {
   const requested = normalizeUserIntents(preferences).intents;
@@ -86,10 +128,14 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
     if (diagnostics.estimated_km > Math.max(baseline.estimated_km * 1.25, baseline.estimated_km + 0.5)) continue;
     if (diagnostics.longest_leg_km > Math.max(baseline.longest_leg_km, 1.5)) continue;
     const meals = entries.filter(({ item }) => isMeal(item)).length;
+    // Two meals are fine only when the day can give the second its own place;
+    // otherwise the next-best set without that pair wins. Coverage, the role
+    // spine and the day's stop count are never traded for it.
+    const crowded = meals >= 2 && !mealsSeparable(entries.map(({ item }) => item)) ? 1 : 0;
     // An internal approximate loop target must not trade exact requested
     // coverage for partial fit. Final independent walking gates still decide.
     const lead = [diagnostics.exact_preference_count, diagnostics.partial_preference_count,
-      diagnostics.within_budget ? 1 : 0, -Math.max(0, meals - 2)];
+      diagnostics.within_budget ? 1 : 0, -Math.max(0, meals - 2), -crowded];
     const tail = [diagnostics.local_quality, diagnostics.operational_quality, diagnostics.trust_quality,
       diagnostics.within_target_band ? 1 : 0, -diagnostics.target_distance_km,
       diagnostics.unique_family_count, diagnostics.individual_score];
@@ -155,11 +201,11 @@ function orderBalancedDay({ stops, geometry, geometryFor, chainKm, preferences =
   let best = { ...unchanged, score: score(stops) };
   for (const candidate of orders(stops)) {
     const km = chainKm(candidate);
-    if (km > Math.max(baseKm * 1.08, baseKm + 0.25)) continue;
+    if (!withinOrderGuard(km, baseKm)) continue;
     const nextScore = score(candidate);
     if (compare(nextScore, best.score) <= 0) continue;
     const nextGeometry = geometryFor(candidate);
-    if (nextGeometry.estimatedKm > Math.max(geometry.estimatedKm * 1.08, geometry.estimatedKm + 0.25)) continue;
+    if (!withinOrderGuard(nextGeometry.estimatedKm, geometry.estimatedKm)) continue;
     best = { stops: candidate, geometry: nextGeometry,
       changed: candidate.some((stop, index) => stop !== stops[index]), score: nextScore };
   }
@@ -221,4 +267,4 @@ function dayEditOutcome(dayEdit, stops = [], reason = null) {
     result_candidate_ids: ids };
 }
 
-module.exports = { canonicalPriority, isMeal, selectBalancedDay, orderBalancedDay, selectEditedDay, dayEditOutcome, normalizeDayEdit };
+module.exports = { canonicalPriority, isMeal, mealsSeparable, selectBalancedDay, orderBalancedDay, selectEditedDay, dayEditOutcome, normalizeDayEdit };
