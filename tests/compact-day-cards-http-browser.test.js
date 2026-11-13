@@ -179,7 +179,9 @@ test('built free-text day publishes a compact Relaxed route, useful source facts
   await rendered(reloaded);
   observations.navigationAfterReload = await page.evaluate(() => performance.getEntriesByType('navigation').map(entry => entry.type));
   assert.deepEqual(observations.navigationAfterReload, ['reload']);
-  assert.deepEqual(posts.at(-1).pinned_candidate_ids, [keptId]);
+  // The exact reload restores the kept day without composing. Its record
+  // carries the Keep, and the next adjustment (Full, below) sends it.
+  assert.deepEqual(restored.commitments.entries[keptId], { kind: 'pin', label: calm.main_stops[0].label });
   assert.equal(posts.at(-1).day_rhythm, 'calm');
   assert.deepEqual(reloaded.main_stops.map(stop => stop.id), kept.main_stops.map(stop => stop.id));
   assert.match(await list.innerText(), /Kept/);
