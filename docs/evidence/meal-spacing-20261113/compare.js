@@ -1,17 +1,20 @@
 'use strict';
 // Before/after evidence for "a second main meal needs its own place in the day".
-// Every pair uses the same source pool, place, date, clock and weather: the
-// fixture composer in tests/helpers/day-composition-fixtures.js (date
-// 2026-10-22, clock 2026-10-16T08:00Z, sun, no walking limit). Only
-// server/planner/day-composition-policy.js differs between the two runs.
+// Every pair uses the same source pools (tests/helpers/meal-spacing-pools.js in
+// THIS checkout) and the same fixture composer settings (date 2026-10-22,
+// clock 2026-10-16T08:00Z, sun, no walking limit). The composer itself comes
+// from --root: an exact export of the baseline commit for "before", this
+// checkout for "after".
 //
+//   git worktree add --detach /tmp/baseline c428c3cf     # exact main export
+//   node docs/evidence/meal-spacing-20261113/compare.js --root /tmp/baseline > before-c428c3cf.jsonl
 //   node docs/evidence/meal-spacing-20261113/compare.js > after.jsonl
-//   git show origin/main:server/planner/day-composition-policy.js > /tmp/p.js
-//   (swap that file in, run again into before.jsonl, restore the branch file)
-//   node docs/evidence/meal-spacing-20261113/compare.js --summary before.jsonl after.jsonl
+//   node docs/evidence/meal-spacing-20261113/compare.js --summary before-c428c3cf.jsonl after.jsonl
 const path = require('node:path');
 const fs = require('node:fs');
-const ROOT = path.resolve(__dirname, '../../..');
+const HERE = path.resolve(__dirname, '../../..');
+const rootFlag = process.argv.indexOf('--root');
+const ROOT = rootFlag > 0 ? path.resolve(process.argv[rootFlag + 1]) : HERE;
 
 function summarize(beforeFile, afterFile) {
   const read = file => fs.readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line));
@@ -65,7 +68,7 @@ const CONTROL = {
 };
 
 // Then seeded breadth: the same generator and seed for both runs.
-const { seededPool: seeded } = require(path.join(ROOT, 'tests/helpers/meal-spacing-pools'));
+const { seededPool: seeded } = require(path.join(HERE, 'tests/helpers/meal-spacing-pools'));
 
 const PREFERENCES = [['culture', 'views', 'food'], ['food', 'culture'], ['food', 'fika', 'views'], ['food', 'nightlife'], ['food']];
 const RHYTHMS = ['calm', 'balanced', 'full'];

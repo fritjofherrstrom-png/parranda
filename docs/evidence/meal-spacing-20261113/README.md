@@ -1,74 +1,61 @@
-# A second main meal needs its own place in the day: before/after, 13 Nov 2026
+# A second main meal needs its own place in the day: before/after
 
-Branch `claude/meal-spacing-20261107`, merged with `main` c428c3cf. "Before" is that same tree with `main`'s `server/planner/day-composition-policy.js`; "after" is the branch's file. Nothing else differs.
+`#702`, branch `claude/meal-spacing-20261107`. The current evidence is bound to the head that carries this README. It is compared with an exact export of `main` c428c3cf on the same saved pools.
 
-**Narrowed rule (owner decision, 13 Nov 2026).** The meal sequence is judged on the final route. Only a finished day that puts two meals side by side is recomposed, with the meal-spacing selection, and the new day replaces it whole only if, on both final routes:
-- no meals are side by side;
-- the stop count is the same, every pin is still there, and every meal that was already apart is still there;
-- no requested interest is less covered;
-- the walk is not longer.
+## The rule
+The rule follows the owner decision of 13 Nov 2026 and the review of 14 Nov.
+- Ordinary composition is `main`'s.
+- **When it runs:** only when the finished day, on a day with food and another interest and with no user edit, puts two meals side by side. The same question is then asked again with the meal-spacing selection.
+- **How it decides:** on comparable final results. Both days get the same Live weave and the same final walking validation.
+- **When the alternative wins:** it replaces the held day whole only if:
+  - both results are measured the same way and both are valid;
+  - Live stops, weave outcome and total stop count are the same;
+  - no meals are side by side;
+  - pins and meals that were already apart are kept;
+  - no requested interest is less covered;
+  - the published walk is not longer.
 
-Otherwise the original day is kept, unchanged. `after.jsonl` is this narrowed rule. `after-strict.jsonl` and `summary-strict.json` are the first, stricter version, kept for reference.
-
-## Narrowed rule against main (`summary.json`)
-| | main | narrowed |
-|---|---|---|
-| Mixed-pick days with adjacent meals | 361 | 309 |
-| Food-only days changed | — | 0 |
-| Days that changed | — | 52, all of them adjacent on `main` |
-| Changed days whose meals were already apart on `main` | — | 0 |
-| Changed days with a longer walk | — | 0 (18 equal, 34 shorter, mean −0.53 km) |
-| Changed days with a different stop count or lost coverage | — | 0 |
-| Changed days still with adjacent meals | — | 0 |
-
-- **Daypart labels**, reported separately and unchanged in meaning: 20 changed days lose them and 2 gain them. The engine withholds labels when a stop of an earlier slot comes between two later ones; that is `main`'s behaviour.
-- **The remaining 309 adjacent mixed-pick days** have no recomposition that met every condition above. Mostly the pool forces the pair; otherwise separating the meals would walk further or drop something.
-
-The sections below describe the first, stricter version (`after-strict.jsonl`).
+  Any refusal or failure keeps the held day, never the baseline fallback.
+- **Where it applies:** only where that whole final chain is local, meaning no injected walking router and no OSRM provider. It never spends a provider call. Where walking runs through OSRM, as on staging, no meal change is made.
 
 ## Method
-- One composer for every pair: `tests/helpers/day-composition-fixtures.js`. That fixes the source pool, the place (the fixture anchor), the date (2026-10-22), the clock (2026-10-16T08:00Z), the weather (sun) and the walking mode (no limit).
-- First a small hand-built control: `clustered`, `spread` and `forced` (the pools in `tests/day-meal-spacing.test.js`).
-- Then 60 seeded synthetic pools for breadth. The generator and seed are the same in both runs, and restaurants cluster in 60% of placements.
-- Each pool runs with 5 preference sets (Culture + Views + Food, Food + Culture, Food + Fika + Views, Food + Nightlife, Food alone) × 3 rhythms (calm, balanced, full), so 945 days per run.
-- `compare.js` writes one JSON line per day; `--summary` compares them. `before.jsonl`, `after.jsonl` and `summary.json` are the actual outputs.
+- **Pools:** `tests/helpers/meal-spacing-pools.js` and the hand-built pools in `compare.js`, the same pools the regression tests use.
+  - A small control: `clustered` (the Copenhagen shape), `spread` and `forced`.
+  - 60 seeded synthetic pools. The same seed always gives the same pool.
+- **Settings:** the fixture composer of `tests/helpers/day-composition-fixtures.js`, with date 2026-10-22, clock 2026-10-16T08:00Z, sun and no walking limit. Its walking chain is local, so this run exercises the decision path itself.
+- **Coverage:** 5 preference sets × 3 rhythms, 945 days per run.
+- **Before:** `before-c428c3cf.jsonl` comes from an exact export of `main` c428c3cf (`--root`). The pools always come from this checkout.
+- **After:** `after.jsonl` comes from this checkout.
 
-## Control (hand-built pools)
-- `clustered`, the Copenhagen shape (culture together, three restaurants about 1.1 km away and 120 m apart):
-  - With Culture + Views + Food and with Food + Culture, every rhythm went from two adjacent restaurants to one. The freed place went to another gallery, or to a café (a partial food fit).
-  - Stop counts are unchanged, nothing lost coverage, and the walk moved by −0.2 to +0.1 km.
-- `spread` (a restaurant at each end): unchanged. Both meals stay, with stops between.
-- `forced` (exactly six matching places for a full day): unchanged at full, two meals together. At calm and balanced there is room for a third gallery, so the second meal gives way.
-- Food alone: unchanged everywhere.
-
-## Breadth (945 days, 756 with mixed picks)
-| | before | after |
+## Result: this head against the exact baseline (`summary.json`)
+| | `main` c428c3cf | this head |
 |---|---|---|
-| Mixed-pick days with adjacent meals | 361 | 224 |
-| Food-only days with adjacent meals | 156 | 156 |
-| Meals per mixed-pick day | 2.04 | 1.91 |
-| Days whose stop count changed | — | 0 |
-| Days that lost a covered preference | — | 0 |
+| Mixed-pick days with adjacent meals (of 756) | 361 | 309 |
+| Food-only days changed (of 189) | — | 0 |
+| Days changed | — | 52, every one adjacent on `main` |
+| Changed days whose meals were already apart | — | 0 |
+| Changed days with a longer walk | — | 0 (18 equal, 34 shorter) |
+| Changed days with a different stop count, lost coverage, or meals still adjacent | — | 0 |
 
-- **Days that changed:** 183, all with mixed picks.
-- **The 224 that still have adjacent meals:**
-  - 217 have a final set the rule itself calls inseparable. The pool left no equally covered set without the pair, for example Food + Nightlife in a pool without bars.
-  - 7 (0.9% of mixed-pick days) have a separable set that ordering still left adjacent. The rule only guarantees that ordering's walk guard allows the separated order; its geometry guard and other ordering terms can still win.
+- **Walk change:** the mean of −0.53 km (range −2.4 to 0.0) is over the **52 changed days only**. The other 893 days are identical to `main`.
+- **Control:** the Copenhagen-shaped pool goes from two adjacent restaurants to one at calm, balanced and full with Culture + Views + Food, and at calm and full with Food + Culture. At balanced with Food + Culture, `main`'s day stays: separating the meals would have walked 0.1 km more.
+- **Presentation trade-off, not a change in daypart semantics:** of the 52 changed days, 20 lose their daypart labels and 2 gain them. The engine withholds labels when a stop of an earlier slot comes between two later ones, which is `main`'s existing behaviour.
+- **The remaining 309 adjacent mixed-pick days** had no recomposition that met every condition. Mostly the pool forces the pair; otherwise separating would walk further or drop something.
+- **Not a target:** the 52 changed days are an outcome on these pools. New code is not meant to reproduce them.
 
-## Trade-offs found (an owner decision)
-- **Separated meals dropped:** 15 days already had their two meals apart on `main`, separated by walking back across the day, and now keep one meal. The rule measures separability against the set's shortest stop chain, which is stricter than what ordering achieves on `main`.
-- **Walk changes:** of the changed days, 42 walk at least 0.5 km more and 26 at least 0.5 km less. The mean change is +0.11 km.
-  - The largest increases are 5.4 → 9.2 km (`seeded-28`, Food + Fika + Views, full) and 6.2 → 8.9 km (`seeded-1`, Food + Nightlife, calm, where the meals were already apart).
-  - The selection's own detour guards still apply. They compare with the pre-selection set, not with `main`'s final day.
-- **Daypart labels:** 44 changed days lose their daypart labels and 5 gain them. Separating meals with an earlier-slot stop reads as afternoon → midday → afternoon, and the engine then withholds the labels. That behaviour already exists on `main` and is not new here.
+## History (kept as raw data)
+| File | What it is |
+|---|---|
+| `before.jsonl` | The first baseline: this branch's tree with only `main`'s policy file swapped in. Identical to `before-c428c3cf.jsonl` in all 945 rows except the later-added `separable` field. |
+| `after-8c128613-strict.jsonl`, `summary-8c128613-strict.json` | The first, strict rule. It dropped 15 already-separated second meals and lengthened 42 walks, which led to the owner's narrowing. |
+| `after-408bd0f9.jsonl`, `summary-408bd0f9.json` | The narrowed rule, decided before the Live weave and final validation. On these pools its days are identical to this head's. The review fixed the decision point (regressions in `tests/day-meal-spacing.test.js`), which only shows with a Live weave or a validating walking provider. |
 
 ## Reproduce
 ```bash
+git worktree add --detach /tmp/baseline-c428c3cf c428c3cf
+ln -s "$PWD/node_modules" /tmp/baseline-c428c3cf/node_modules
+node docs/evidence/meal-spacing-20261113/compare.js --root /tmp/baseline-c428c3cf > docs/evidence/meal-spacing-20261113/before-c428c3cf.jsonl
 node docs/evidence/meal-spacing-20261113/compare.js > docs/evidence/meal-spacing-20261113/after.jsonl
-cp server/planner/day-composition-policy.js /tmp/policy-branch.js
-git show origin/main:server/planner/day-composition-policy.js > server/planner/day-composition-policy.js
-node docs/evidence/meal-spacing-20261113/compare.js > docs/evidence/meal-spacing-20261113/before.jsonl
-cp /tmp/policy-branch.js server/planner/day-composition-policy.js
-node docs/evidence/meal-spacing-20261113/compare.js --summary docs/evidence/meal-spacing-20261113/before.jsonl docs/evidence/meal-spacing-20261113/after.jsonl
-# The pools are tests/helpers/meal-spacing-pools.js, shared with tests/day-meal-spacing.test.js.
+node docs/evidence/meal-spacing-20261113/compare.js --summary docs/evidence/meal-spacing-20261113/before-c428c3cf.jsonl docs/evidence/meal-spacing-20261113/after.jsonl
 ```
+No provider, model or reader calls are made. The composer's sources, weather and clock are controlled.
