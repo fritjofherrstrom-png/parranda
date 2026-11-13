@@ -125,8 +125,8 @@ test('ordinary reload also recovers a completed regular place keep through the s
   assert.ok(row);
   await h.act(() => row.dispatchEvent(new h.window.Event('click', { bubbles: true })));
   await click(h, 'Keep this one'); await h.clock.advance(400);
-  assert.deepEqual(routeCalls(h).at(-1).body.pinned_candidate_ids, ['cafe']);
-  await h.fetchMock.respond(routeCalls(h).at(-1), qualifiedResponse());
+  assert.equal(routeCalls(h).length, 1, 'a Keep on the settled day composes nothing; the day already answers it');
+  assert.equal(h.readStorage(LAST).commitments.entries.cafe.kind, 'pin');
   const entry = h.readStorage(LAST), url = h.window.location.href;
   await h.unmount();
   h = await mountPlanner({ url, storage: { [LAST]: entry }, navigationType: 'reload' });

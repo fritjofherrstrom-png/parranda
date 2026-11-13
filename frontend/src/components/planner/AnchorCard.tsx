@@ -5,11 +5,12 @@
  * recomposes on its own (no submit) — the orchestrator's handlers own that.
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { normalizePreferencePriority } from "../../../../shared/planner-intent.mjs";
-import { CheckIcon, LocationIcon } from "../shared/icons";
-import { compactPillTarget, Eyebrow, panelCard, segmentClass, segmentGroup } from "../shared/ui";
+import { MAX_PLANNER_PREFERENCES, normalizePreferencePriority } from "../../../../shared/planner-intent.mjs";
+import { CheckIcon, LocationIcon, UndoIcon } from "../shared/icons";
+import { buttonClass, compactPillTarget, Eyebrow, noticeCard, panelCard, segmentClass, segmentGroup } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
+import InterestChooser, { type InterestSelection } from "./InterestChooser";
 
 type Option = { key: string; sv: string; en: string };
 type RhythmOption = Option & { noteSv: string; noteEn: string };
@@ -37,6 +38,10 @@ export default function AnchorCard({
   preferencePriority = [],
   onToggleMood,
   onClearPriority,
+  interestChooserOpen = false,
+  setInterestChooserOpen,
+  onApplyInterests,
+  notice,
   onSetDay,
   rhythms,
   walkKey,
@@ -63,6 +68,24 @@ export default function AnchorCard({
   onToggleMood: (key: string) => void;
   /** Back to unranked interests: the only way out of a ranking besides Undo. */
   onClearPriority?: () => void;
+  interestChooserOpen?: boolean;
+  setInterestChooserOpen?: (open: boolean) => void;
+  onApplyInterests?: (selection: InterestSelection) => void;
+  /**
+   * The one notice under the controls when the picks found no day: either the
+   * no-day state (one cause, one next step) or a rebuild for new picks that
+   * failed while the previous day stays on screen. `announce` is set only when
+   * the page's own result region does not already carry the message.
+   */
+  notice?: {
+    message: string;
+    attemptedLabels?: string;
+    action?: "edit_interests" | "retry" | "restart" | null;
+    onRetry?: () => void;
+    restartHref?: string;
+    onUndo?: () => void;
+    announce?: boolean;
+  };
   onSetDay: (offset: 0 | 1) => void;
   rhythms: RhythmOption[];
   walkKey: string;
@@ -80,6 +103,21 @@ export default function AnchorCard({
   // only after the person toggled it here, never on an outside state change.
   const panelId = useId();
   const priorityHelpId = useId();
+  const allInterestsButton = useRef<HTMLButtonElement>(null);
+  const retryInterestsButton = useRef<HTMLButtonElement>(null);
+  const interestTrigger = useRef<HTMLButtonElement | null>(null);
+  const returnInterestFocus = useRef(false);
+  useEffect(() => {
+    if (!interestChooserOpen && returnInterestFocus.current) {
+      returnInterestFocus.current = false;
+      const trigger = interestTrigger.current;
+      (trigger?.isConnected ? trigger : allInterestsButton.current)?.focus();
+    }
+  }, [interestChooserOpen]);
+  const closeInterestChooser = () => {
+    returnInterestFocus.current = true;
+    setInterestChooserOpen?.(false);
+  };
   const adjustButton = useRef<HTMLButtonElement>(null);
   const doneButton = useRef<HTMLButtonElement>(null);
   const toggledHere = useRef(false);
@@ -90,6 +128,7 @@ export default function AnchorCard({
   }, [adjustOpen]);
   const toggleAdjust = (open: boolean) => {
     toggledHere.current = true;
+    if (!open) setInterestChooserOpen?.(false);
     setAdjustOpen(open);
   };
   // The control the reader just tapped carries the rebuild's ring until the
@@ -101,6 +140,7 @@ export default function AnchorCard({
   }, [rebuild?.state]);
   const ring = (key: string) => (rebuilding && touched === key ? " motion-safe:animate-[parranda-ring_2.4s_ease-out_infinite]" : "");
   const scale = rhythms.filter((preset) => preset.key !== "free");
+  const atLimit = selected.length >= MAX_PLANNER_PREFERENCES;
   const priority = normalizePreferencePriority(preferencePriority, selected);
   const priorityRanks = new Map<string, number>(priority.map((key, index) => [key, index + 1]));
   // Chips keep their place; only the numbers change, so a tap never moves
@@ -180,6 +220,45 @@ export default function AnchorCard({
         </div>
       )}
 
+      {notice && (
+        <div className={`mt-2 flex flex-col items-start gap-2 ${noticeCard}`}>
+          {notice.announce ? <p role="status">{notice.message}</p> : <div>{notice.message}</div>}
+          {notice.attemptedLabels && <p className="text-xs text-parranda-ink-muted">{notice.attemptedLabels}</p>}
+          {notice.action === "restart" && notice.restartHref && (
+            <p>{t("Den sparade dagen kan inte uppdateras säkert. ", "We cannot safely update this saved day. ")}
+              <a href={notice.restartHref} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">
+                {t("Välj startpunkt och datum", "Choose a starting point and date")}
+              </a>
+            </p>
+          )}
+          {(notice.action === "edit_interests" || notice.action === "retry" || notice.onUndo) && (
+            <div className="flex flex-wrap gap-2">
+              {notice.action === "edit_interests" && onApplyInterests && setInterestChooserOpen && (
+                <button type="button" ref={retryInterestsButton} aria-expanded={interestChooserOpen} onClick={() => {
+                  interestTrigger.current = retryInterestsButton.current;
+                  setAdjustOpen(true);
+                  setInterestChooserOpen(true);
+                }} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                  {t("Ändra intressen", "Edit interests")}
+                </button>
+              )}
+              {notice.action === "retry" && notice.onRetry && (
+                <button type="button" onClick={notice.onRetry} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
+                  {t("Försök igen", "Try again")}
+                </button>
+              )}
+              {notice.onUndo && (
+                <button type="button" onClick={notice.onUndo} aria-label={t("Ångra ändringen", "Undo this change")}
+                  className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                  <UndoIcon className="h-3.5 w-3.5" />
+                  {t("Ångra", "Undo")}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {adjustOpen && (
         <div id={panelId} className={compact ? `${panelCard} mt-2 flex flex-col gap-5 p-4` : "flex flex-col gap-5 border-t-line border-parranda-line-faint p-4"}>
           {/* The status line, then Done (in the card form; compact, Done
@@ -209,23 +288,45 @@ export default function AnchorCard({
                 </p>
               ) : (
                 <p className="text-xs text-parranda-ink-meta">
-                  {t("Dagen byggs om direkt när du ändrar.", "The day rebuilds as you change it.")}
+                  {onApplyInterests
+                    ? t("Snabbval, datum och rytm uppdaterar dagen direkt.", "Quick choices, date and rhythm update the day as you change them.")
+                    : t("Dagen byggs om direkt när du ändrar.", "The day rebuilds as you change it.")}
                 </p>
               )}
             </div>
             {!compact && doneControl}
           </div>
 
+          {interestChooserOpen && onApplyInterests ? (
+            <InterestChooser t={t} lang={lang} selected={selected} preferencePriority={preferencePriority}
+              onCancel={closeInterestChooser}
+              onApply={draft => {
+                setTouched("all-interests");
+                closeInterestChooser();
+                onApplyInterests(draft);
+              }} />
+          ) : <>
           <div className="flex flex-col gap-2">
-            <Eyebrow tone="glow">{t("Intressen", "Interests")}</Eyebrow>
+            <div className="flex flex-wrap items-center justify-between gap-x-3">
+              <Eyebrow tone="glow">{t("Intressen", "Interests")}</Eyebrow>
+              {onApplyInterests && <button type="button" ref={allInterestsButton}
+                onClick={() => {
+                  interestTrigger.current = allInterestsButton.current;
+                  setInterestChooserOpen?.(true);
+                }} className={controlPill + ring("all-interests")}>
+                {t("Alla intressen", "All interests")}
+              </button>}
+            </div>
             <p id={priorityHelpId} className="text-xs text-parranda-ink-meta">
               {priority.length > 0
                 ? t("Siffrorna visar ordningen du valde i. Ettan väger tyngst.", "Numbers show the order you picked. 1 weighs most.")
                 : t("Tryck av och på ett intresse för att låta det väga tyngst.", "Tap an interest off and on to make it weigh most.")}
+              {atLimit && t(" Högst sju intressen. Ta bort ett val för att lägga till ett annat.", " Up to seven interests. Remove a choice to add another.")}
             </p>
             <div role="group" aria-label={t("Intressen", "Interests")} aria-describedby={priorityHelpId} className="flex flex-wrap gap-x-1.5 gap-y-2">
               {orderedPreferences.map((pref) => {
                 const active = selected.includes(pref.key);
+                const blocked = atLimit && !active;
                 const rank = priorityRanks.get(pref.key);
                 const name = lang === "en" ? pref.en : pref.sv;
                 return (
@@ -233,12 +334,14 @@ export default function AnchorCard({
                     <button
                       type="button"
                       aria-pressed={active}
+                      aria-disabled={blocked || undefined}
                       onClick={() => {
+                        if (blocked) return;
                         setTouched(`pick:${pref.key}`);
                         onToggleMood(pref.key);
                       }}
                       className={
-                        `${compactPillTarget} gap-1.5 px-3.5${ring(`pick:${pref.key}`)} ` +
+                        `${compactPillTarget} gap-1.5 px-3.5${ring(`pick:${pref.key}`)} aria-disabled:opacity-60 ` +
                         (active
                           ? "bg-parranda-ink font-bold text-parranda-paper"
                           : "border-line border-parranda-line font-semibold text-parranda-ink-muted hover:border-parranda-line-strong hover:text-parranda-ink")
@@ -343,6 +446,7 @@ export default function AnchorCard({
             )}
           </div>
           </div>
+          </>}
         </div>
       )}
     </section>

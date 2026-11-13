@@ -173,11 +173,12 @@ for (const [label, path, anchor] of [
   assert.equal(await region.locator('button[aria-controls="route-stop-panel-0"]').getAttribute('aria-expanded'), 'true',
     'selecting the map pin opens the corresponding list stop');
   await page.getByRole('button', { name: 'Keep this one', exact: true }).waitFor();
-  const keepResponse = page.waitForResponse(r => new URL(r.url()).pathname === '/api/route-recommendations');
+  // Keep pins the stop on the day on screen: no compose, the stop named.
+  const composesBeforeKeep = composes.length;
   await page.getByRole('button', { name: 'Keep this one', exact: true }).click();
-  await keepResponse;
-  assert.deepEqual(composes.at(-1).pinned_candidate_ids, ['a']);
-  // The next rendered day retains the pin; Remove is distinct from Replace.
+  await page.getByRole('status').filter({ hasText: `Kept: ${label} a` }).waitFor();
+  assert.equal(composes.length, composesBeforeKeep, 'Keep composes nothing');
+  // The next adjustment carries the pin; Remove is distinct from Replace.
   await region.locator('button[aria-controls="route-stop-panel-1"]').click();
   await Promise.all([
     page.waitForResponse(r => new URL(r.url()).pathname === '/api/route-recommendations'),

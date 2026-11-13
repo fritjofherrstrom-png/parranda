@@ -260,15 +260,17 @@ test("near me, a place-source failure keeps the position and retries around it",
   }
 });
 
-test("a resolved place without a day for other reasons keeps the choices advice and no source claim", async () => {
+test("a resolved place without a day for other reasons states one cause, offers Edit interests and no source claim", async () => {
   const h = await mountPlanner({ url: PLACE_URL });
   try {
     await h.clock.advance(500);
     await h.fetchMock.respond(composeCalls(h)[0], { days: [], agnostic_route_output_experiment: { intake: { status: "resolved", resolved: { label: "Testville" } }, source_status: { status: "loaded:12" } } });
     await h.clock.advance(50);
     assert.match(h.text(), /couldn't build a day for Testville yet/);
-    assert.match(h.text(), /We could not confirm a walkable day with your choices/);
+    // One cause per no-day state: the picks are not blamed alongside it.
+    assert.doesNotMatch(h.text(), /with your choices|with these interests/);
     assert.doesNotMatch(h.text(), /didn't answer just now/);
+    assert.ok(buttonNamed(h, "Edit interests"), "the one next step");
     assert.equal(buttonNamed(h, "Try again"), undefined);
   } finally {
     await h.unmount();

@@ -177,8 +177,15 @@ for (const lang of ['sv', 'en']) test(`${lang} stop facts and controls stay comp
   assert.match(panel.textContent, /8 Source Street/);
   assert.match(panel.textContent, lang === 'sv' ? /Matchar dina val: Kultur/ : /Matches your picks: Culture/);
   assert.match(panel.textContent, lang === 'sv' ? /Lösare träff för: Utsikt/ : /A looser match for: Views/);
-  const group = panel.querySelector('[role="group"]');
-  assert.ok(group, 'one compact action group owns keep, replace and remove');
+  // Two kinds of action, as in the reviewed Linje prototype: going there
+  // leads (outlined), changing the day follows (quiet fills). No card.
+  const go = panel.querySelector(`[role="group"][aria-label="${lang === 'sv' ? 'Gå dit' : 'Go there'}"]`);
+  const group = panel.querySelector(`[role="group"][aria-label="${lang === 'sv' ? 'Ändra stopp' : 'Edit stop'}"]`);
+  assert.ok(go && group, 'going there and changing the day are two groups');
+  assert.ok(go.compareDocumentPosition(group) & panel.ownerDocument.defaultView.Node.DOCUMENT_POSITION_FOLLOWING, 'going there leads');
+  assert.deepEqual([...go.querySelectorAll('a')].map(a => a.textContent.trim()), lang === 'sv' ? ['Öppna i Maps', 'Webbplats'] : ['Open in Maps', 'Website']);
+  for (const button of group.querySelectorAll('button')) assert.match(button.className, /\bbg-parranda-fill\b/, 'changing the day is quiet');
+  assert.doesNotMatch(panel.className, /\bborder-line\b|\bbg-parranda-fill-faint\b|\bp-4\b/, 'no card around the open stop');
   assert.deepEqual([...group.querySelectorAll('button')].map(b => b.textContent.trim()),
     lang === 'sv' ? ['Behåll den här', 'Byt', 'Ta bort'] : ['Keep this one', 'Replace', 'Remove']);
   assert.equal(group.querySelector('a'), null, 'external navigation is separate from day editing');

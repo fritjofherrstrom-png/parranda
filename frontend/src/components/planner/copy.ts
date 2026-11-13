@@ -6,8 +6,10 @@
  * not state. A token without a mapping falls back to itself in `label`, and a
  * reason this build does not know falls back to the plain sentence.
  */
+import { PLANNER_INTEREST_GROUPS } from "../../../../shared/planner-intent.mjs";
 import { ANYWHERE_PREFERENCES } from "../../lib/anywhere-payload.mjs";
 import type { LiveEventRelevance } from "../../lib/pulse-view.mjs";
+import type { NoDayCause } from "../../lib/no-day-state.mjs";
 
 export type Lang = "sv" | "en";
 export type Translate = (sv: string, en: string) => string;
@@ -101,10 +103,81 @@ export const PLANNER_INTENT_ALIASES: Record<string, string> = {
   vintage: "second_hand",
 };
 
+const PICK_LABELS = new Map([
+  ...ANYWHERE_PREFERENCES,
+  ...PLANNER_INTEREST_GROUPS.flatMap(({ options }) => options),
+].map(option => [option.key, option]));
+
 /** The pick exactly as its chip reads ("Food & drink"), or the intent label. */
 export function pickLabel(key: string, lang: Lang): string {
-  const chip = ANYWHERE_PREFERENCES.find((pref: { key: string }) => pref.key === key);
+  const chip = PICK_LABELS.get(key);
   return chip ? (lang === "en" ? chip.en : chip.sv) : label(INTENT_LABELS, key, lang);
+}
+
+/**
+ * An interest named as its chip reads, or null when this build has no words
+ * for the key. Where the server lists interests (covered, partial, missing),
+ * an unknown key is left out rather than shown raw: "bathing_places" is never
+ * product copy.
+ */
+export function interestName(key: string, lang: Lang): string | null {
+  const chip = PICK_LABELS.get(key);
+  if (chip) return lang === "en" ? chip.en : chip.sv;
+  return INTENT_LABELS[key]?.[lang] ?? null;
+}
+
+/**
+ * The one sentence a resolved place without a day shows, for the one cause
+ * `noDayState` chose. Every clause restates a verdict the planner already
+ * derived from server evidence; none names a cause it did not choose.
+ */
+export function noDayMessage(
+  state: {
+    cause: NoDayCause;
+    /** Sources: every place source failed, so nothing was fetched. */
+    sourcesUnanswered?: boolean;
+    /** Sources: what failed, from the loader's completion record. */
+    sourceNote?: string;
+    /** Supply: the trusted loader's real-place count behind a scarcity verdict. */
+    sparseCount?: number | null;
+    /** Supply: places were found and grouped, but no route was composed. */
+    placesWithoutRoute?: boolean;
+    /** Interests: live music the reader picked is listed in Live for this day. */
+    liveMusicListed?: boolean;
+  },
+  where: { position: boolean; place: string },
+  t: Translate,
+): string {
+  if (state.cause === "interests") {
+    return [
+      t("Vi kunde inte bekräfta en gångbar dag med de här intressena.", "We couldn’t confirm a walkable day with these interests."),
+      state.liveMusicListed ? t("Livemusik finns i Live.", "Live music is listed in Live.") : "",
+    ].filter(Boolean).join(" ");
+  }
+  if (state.cause === "sources") {
+    if (state.sourcesUnanswered) {
+      return t(
+        `Platskällorna svarade inte just nu, så Parranda kunde inte hämta platser ${where.position ? "nära dig" : `för ${where.place}`} — inget hittas på. Försök igen om en stund.`,
+        `The place sources didn't answer just now, so Parranda couldn't fetch places ${where.position ? "near you" : `for ${where.place}`} — nothing is invented in its place. Try again in a moment.`,
+      );
+    }
+    return `${t("Parranda kunde inte bygga en dag här just nu.", "Parranda couldn't build a day here right now.")} ${
+      state.sourceNote || t("Alla platser kunde inte hämtas.", "Some places could not be loaded.")}`;
+  }
+  if (state.sparseCount && state.sparseCount > 0) {
+    const count = state.sparseCount;
+    return t(
+      `Parranda hittade ${count === 1 ? "1 riktig plats" : `${count} riktiga platser`} ${where.position ? "nära dig" : `nära ${where.place}`}, men inte tillräckligt för en pålitlig dag ännu — inget hittas på.`,
+      `Parranda found ${count === 1 ? "1 real place" : `${count} real places`} ${where.position ? "near you" : `near ${where.place}`}, but not enough for a reliable day yet — nothing is invented in its place.`,
+    );
+  }
+  if (state.placesWithoutRoute) {
+    return t("Parranda hittade platser, men kunde inte bygga en rutt ännu.", "Parranda found places, but couldn't build a route yet.");
+  }
+  return t(
+    `Parranda kunde inte bygga en dag ${where.position ? "nära dig" : `för ${where.place}`} ännu.`,
+    `Parranda couldn't build a day ${where.position ? "near you" : `for ${where.place}`} yet.`,
+  );
 }
 
 export const HOURS_RELEVANT_TYPES = new Set([
@@ -125,7 +198,7 @@ export function partialPreferenceLabels(stop: any, selected: string[], lang: Lan
     (Array.isArray(stop?.partial_preferences) ? stop.partial_preferences : [])
       .map((value: string) => PLANNER_INTENT_ALIASES[value] || value)
       .filter((value: string) => requested.has(value))
-      .map((value: string) => label(INTENT_LABELS, value, lang));
+      .map((value: string) => INTENT_LABELS[value]?.[lang] ?? pickLabel(value, lang));
   return [...new Set<string>(labels)];
 }
 

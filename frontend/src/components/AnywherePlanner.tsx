@@ -12,7 +12,7 @@ import type { Commitments } from "./planner/commitments";
  *   unavailable    → honest empty state (never a crash)
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { normalizeDayEdit, normalizePreferencePriority, togglePreferenceSelection, type DayEdit } from "../../../shared/planner-intent.mjs";
+import { normalizeDayEdit, normalizePreferencePriority, PLANNER_PREFERENCE_KEYS, togglePreferenceSelection, type DayEdit } from "../../../shared/planner-intent.mjs";
 import { fetchPlannerLifecycle } from '../lib/planner-lifecycle.mjs';
 import {
   buildAnywherePayload,
@@ -91,19 +91,37 @@ import { KeepIcon, LocationIcon, MinusIcon, UndoIcon } from "./shared/icons";
 import { busyButton, buttonClass, noticeCard } from "./shared/ui";
 import { useMediaQuery } from "./shared/useMediaQuery";
 import AnchorCard, { ChangePlaceLink, type AdjustRebuild } from "./planner/AnchorCard";
+import type { InterestSelection } from "./planner/InterestChooser";
 import BlitzCard from "./planner/BlitzCard";
-import CandidateAreas from "./planner/CandidateAreas";
+import CandidateAreas, { candidateMatchCount } from "./planner/CandidateAreas";
 import DayHeader, { DayActions, DayWhen, dayAssemblyNotes } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
+import { useFollowPosition } from "./planner/useFollowPosition";
 import DayPlaceholder, { DayMapPlaceholder } from "./planner/DayPlaceholder";
 import { RingMark } from "./shared/RingMark";
 import LiveSheet from "./planner/LiveSheet";
 import { selectedDayEmpty, useLiveFallback } from "./planner/useLiveFallback";
 import SavedDays from "./planner/SavedDays";
 import StopLine from "./planner/StopLine";
-import { pickLabel, unkeptReasonSentence, type Lang } from "./planner/copy";
+import { noDayMessage, pickLabel, unkeptReasonSentence, type Lang } from "./planner/copy";
+import { evidencedMissingIntents, noDayState } from "../lib/no-day-state.mjs";
 import type { LiveEvents, PlaceStructure, PulseEvent } from "./planner/types";
+
+type SharePublication = { entry: SavedEntry; publication: PublishedDayReference };
+type UndoShare = SharePublication & { publicRestoredAt?: string };
+
+const quickPreferenceKeys = new Set(ANYWHERE_PREFERENCES.map(({ key }) => key));
+
+function hasSelectedDayMusic(events: LiveEvents | null) {
+  const matches = (event: PulseEvent): boolean => event.occurrences?.length
+    ? event.occurrences.some(matches)
+    : Boolean(event.matched_preferences?.includes("live_music") &&
+        (!event.occurrence_date || event.occurrence_date === events?.selected_date));
+  return Boolean(events?.selected_date && [
+    ...(events.tonight ?? []), ...(events.browse?.tonight?.more ?? []),
+  ].some(matches));
+}
 
 function readLS<T>(key: string, fallback: T): T {
   try {
@@ -210,7 +228,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [navigationRestoreUnavailable, setNavigationRestoreUnavailable] = useState(false);
   const [publicReference, setPublicReference] = useState<string | null>(null);
   const [publicReadState, setPublicReadState] = useState<"loading" | "unavailable" | null>(null);
-  const [sharePublication, setSharePublication] = useState<{ entry: SavedEntry; publication: PublishedDayReference } | null>(null);
+  const [sharePublication, setSharePublication] = useState<SharePublication | null>(null);
   // False in the static HTML and the hydration render: until the arrival
   // effect has read the URL, nothing is known about the link's place.
   const [arrivalRead, setArrivalRead] = useState(false);
@@ -227,12 +245,17 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [dayEdit, setDayEdit] = useState<DayEdit | null>(null);
   const dayEditScopeRef = useRef<{ anchorKey: string | null; dateIso: string | null } | null>(null);
   const [stopEditPending, setStopEditPending] = useState(false);
-  const pendingStopEditRef = useRef<DayEdit | null>(null);
-  const [stopEditFeedback, setStopEditFeedback] = useState<"remove" | "replace" | null>(null);
+  const pendingStopEditRef = useRef<{ action: DayEdit["action"]; originalLabel: string } | null>(null);
+  const [stopEditFeedback, setStopEditFeedback] = useState<{
+    action: DayEdit["action"];
+    originalLabel: string;
+    replacementLabel: string;
+  } | null>(null);
   const [stopEditError, setStopEditError] = useState<"no_safe_replacement" | "not_confirmed" | "unsupported" | "rebuild_required" | "live_not_preserved" | null>(null);
   const livePlanPendingRef = useRef<string | null>(null);
   const [livePlanPending, setLivePlanPending] = useState(false);
   const resultStatusRef = useRef<HTMLParagraphElement | null>(null);
+  const focusBeforeInterestResultRef = useRef<Element | null>(null);
   const focusDayAfterLiveChoiceRef = useRef(false);
   const [dayOffset, setDayOffset] = useState<0 | 1>(0); // today / tomorrow
   const [dateChoiceVersion, setDateChoiceVersion] = useState(0);
@@ -246,6 +269,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // The day on screen was composed for an earlier request and a newer one is in
   // flight. It stays visible, labelled, until the next verdict replaces it.
   const [dayIsStale, setDayIsStale] = useState(false);
+  // Failed interest attempts have their own Live evidence. They never change
+  // the remembered route, its coverage, or its exact share.
+  const [interestFailure, setInterestFailure] = useState<{ liveEvents: LiveEvents | null } | null>(null);
   // "Not this" — the day's commitment ledger, v1. One verb: the user can remove
   // a place from consideration. Held here and sent with the next compose.
   // ONE ledger: candidate id -> the single commitment that applies to it. A
@@ -305,11 +331,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // recomposes on its own, so the replacement is never silent: it says what
   // moved, and the day before it can be put back with one tap until the next
   // change, a new place or a saved day takes over.
-  const [dayChange, setDayChange] = useState<{ previous: SavedEntry; summary: DayChange } | null>(null);
+  const [dayChange, setDayChange] = useState<{ previous: SavedEntry; summary: DayChange; previousShare?: UndoShare } | null>(null);
   // The day on screen when an adjustment left for the server — the one "Undo"
   // returns to. Taken from the live day, never from a request still in flight,
   // and only while the anchor it belongs to is the one being recomposed.
-  const undoBaselineRef = useRef<{ entry: SavedEntry; anchorKey: string | null; trigger?: "recheck" } | null>(null);
+  const undoBaselineRef = useRef<{ entry: SavedEntry; anchorKey: string | null; trigger?: "recheck"; share?: UndoShare } | null>(null);
   // The reader asked to look for more places; cleared when that answer lands.
   const [recheckPending, setRecheckPending] = useState(false);
   // Undo installs the previous inputs without composing. This is the input
@@ -321,9 +347,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // handoff §2): past the landing there is no second form and no submit — the
   // day re-composes on its own when an adjustment settles.
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [interestChooserOpen, setInterestChooserOpen] = useState(false);
   const recomposeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSequenceRef = useRef(0);
   const retryGenerationRef = useRef(0);
+  const interestRetryIntentRef = useRef<number | null>(null);
   const retryInFlightRef = useRef(false);
   // The user's INTENT generation, as distinct from the request generation
   // above. Intent changes the instant they click; a request does not leave for
@@ -358,6 +386,34 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // detours are collapsed by default — optional ideas must never read as part
   // of the route.
   const [mapExpanded, setMapExpanded] = useState(false);
+  // One explicit, memory-only location session feeds map and line together.
+  const [positionScope, setPositionScope] = useState<string | null>(null);
+  const [followScope, setFollowScope] = useState<string | null>(null);
+  const [positionCentreRequest, setPositionCentreRequest] = useState(0);
+  const displayedDate = safeResponse?.days?.[0]?.date ?? safeResponse?.live_events?.selected_date;
+  const locationScope = JSON.stringify([mode, mode === "near_me" ? routeAnchorCoords : [placeRef, place],
+    dayOffset, displayedDate ?? null, freezeComposeDateIso({ dayOffset })]);
+  const positionEnabled = positionScope === locationScope || followScope === locationScope;
+  const positionSession = useFollowPosition(positionEnabled);
+  const followDayIsToday = dayOffset === 0 && displayedDate === freezeComposeDateIso();
+  useEffect(() => {
+    if (positionScope && positionScope !== locationScope) setPositionScope(null);
+    if (followScope && followScope !== locationScope) setFollowScope(null);
+  }, [positionScope, followScope, locationScope]);
+  const locateOnMap = () => {
+    setPositionScope(locationScope);
+    if (positionEnabled && positionSession.state.status !== "tracking") positionSession.retry();
+    setPositionCentreRequest(value => value + 1);
+  };
+  const stopLocation = () => { setPositionScope(null); setFollowScope(null); };
+  const toggleFollow = () => {
+    if (followScope === locationScope) setFollowScope(null);
+    else {
+      setFollowScope(locationScope);
+      if (positionEnabled && positionSession.state.status !== "tracking") positionSession.retry();
+      setPositionCentreRequest(value => value + 1);
+    }
+  };
   const [detoursOpen, setDetoursOpen] = useState(false);
   // A tapped stop expands an inline panel (why it's here, the walk, hours when
   // known, an explicit Maps action) instead of ejecting straight to Google Maps.
@@ -423,6 +479,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setLiveSheetScope("around_place");
   }, [safeResponse]);
   const lastEntryRef = useRef<SavedEntry | null>(null); // the latest composed day, for "save"
+  // Remembered entries made by keepInPlace: the same day and response as the
+  // compose that produced them, with one more kept stop in their ledger.
+  const keptInPlaceEntriesRef = useRef(new WeakSet<SavedEntry>());
 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
   const typedPlaceLabel = place.trim();
@@ -466,6 +525,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       langOverride,
       preferencesOverride,
       preferencePriorityOverride,
+      interestEdit = false,
       dayEditOverride,
       dayOffsetOverride,
       dateIsoOverride,
@@ -478,6 +538,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       langOverride?: Lang;
       preferencesOverride?: string[];
       preferencePriorityOverride?: string[];
+      interestEdit?: boolean;
       dayEditOverride?: DayEdit | null;
       dayOffsetOverride?: 0 | 1;
       dateIsoOverride?: string;
@@ -488,10 +549,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     } = {},
   ) {
     if (navigationSuspendedRef.current) return;
+    const effectivePreferences = preferencesOverride ?? selected;
+    const interestRequest = interestEdit || effectivePreferences.some(key => !quickPreferenceKeys.has(key));
     activePublicReadRef.current = null;
     setPublicReference(null);
     setPublicReadState(null);
-    setSharePublication(null);
+    if (!interestRequest) setSharePublication(null);
     lastRequestedAnchorRef.current = anchor;
     // An explicit choice already carries the current preferences. An older
     // debounce must not replace it with its previous place-selection closure.
@@ -512,6 +575,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // commitment while it is in flight, this no longer matches and the answer
     // is stale however new the request itself was.
     const intentId = intentSequenceRef.current;
+    interestRetryIntentRef.current = null;
     activeRequestRef.current = controller;
     setSupplyPending(false);
     setNavigationInterrupted(false);
@@ -541,6 +605,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       liveQueryAbortRef.current = null;
       setUpgradePending(false);
       setPhase("loading");
+      setInterestFailure(null);
       setDayIsStale(retention.keepPrevious);
       // The last account described the day this request is replacing; it is
       // not true of whatever comes back.
@@ -548,6 +613,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       if (!retention.keepPrevious) {
         setClassification(null);
         installResponse(null);
+        setSharePublication(null);
         displayedAnchorKeyRef.current = null;
       }
       setServiceRefusal(null);
@@ -567,7 +633,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const baseline = undoBaselineRef.current;
       undoBaselineRef.current = null;
       if (retention.keepPrevious && baseline) {
-        setDayChange({ previous: baseline.entry, summary: describeDayChange(baseline.entry, baseline.entry) });
+        setDayChange({ previous: baseline.entry, previousShare: baseline.share, summary: describeDayChange(baseline.entry, baseline.entry) });
         setDayIsStale(true);
       }
       setUpgradePending(false);
@@ -584,7 +650,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         dateIsoOverride: dateIsoOverride ?? livePlanPendingRef.current?.slice(5, 15),
       });
       lastComposeDateIsoRef.current = effectiveDateIso;
-      const effectivePriority = normalizePreferencePriority(preferencePriorityOverride ?? preferencePriority, preferencesOverride ?? selected);
+      const effectivePriority = normalizePreferencePriority(preferencePriorityOverride ?? preferencePriority, effectivePreferences);
       const editScope = dayEditScopeRef.current;
       const effectiveDayEdit = dayEditOverride !== undefined ? normalizeDayEdit(dayEditOverride)
         : editScope?.anchorKey === nextAnchorKey && editScope.dateIso === effectiveDateIso ? normalizeDayEdit(dayEdit) : null;
@@ -618,7 +684,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         placeBias: anchor.placeBias,
         placeContextSelection: anchor.placeContextSelection,
         dates: [effectiveDateIso],
-        preferences: preferencesOverride ?? selected,
+        preferences: effectivePreferences,
         preferencePriority: effectivePriority,
         dayEdit: effectiveDayEdit,
         dayRhythm: rhythm.key,
@@ -658,18 +724,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       let { body, capability: liveCapability } = takeLiveCompletion(rawBody);
       const refusal = composeServiceRefusal(response.status, body);
       if (refusal) {
-        if (requestedLiveKeep) {
+        if (requestedLiveKeep && !interestEdit) {
           setServiceRefusal(refusal);
           refuseLivePlan();
           return;
         }
+        if (interestRequest && retention.keepPrevious) interestRetryIntentRef.current = intentId;
         // A refused manual attempt has not replaced the published day. Keep
         // that answer, mark it stale, and retain its Undo baseline for either
         // immediate Undo or a later explicit retry. Ordinary refusals below
         // keep their existing no-day policy.
         if (effectiveDayEdit && retention.keepPrevious) {
           const baseline = undoBaselineRef.current;
-          if (baseline) setDayChange({ previous: baseline.entry, summary: describeDayChange(baseline.entry, baseline.entry) });
+          if (baseline) setDayChange({ previous: baseline.entry, previousShare: baseline.share, summary: describeDayChange(baseline.entry, baseline.entry) });
           setStopEditError("not_confirmed");
           setStopEditFeedback(null);
           setServiceRefusal(refusal);
@@ -679,9 +746,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           setPhase("error");
           return;
         }
+        if (interestRequest && retention.keepPrevious) {
+          const baseline = undoBaselineRef.current;
+          if (baseline) setDayChange({ previous: baseline.entry, previousShare: baseline.share, summary: describeDayChange(baseline.entry, baseline.entry) });
+          setServiceRefusal(refusal);
+          setLiveFollowing(false);
+          setPhase("error");
+          return;
+        }
         undoBaselineRef.current = null;
         setDayChange(null);
         setServiceRefusal(refusal);
+        setSharePublication(null);
         setClassification(null);
         installResponse(null);
         displayedAnchorKeyRef.current = null;
@@ -714,6 +790,27 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         liveCapability = null;
       }
       const decision = anywhereDecision();
+      if (!requestedLiveKeep && effectivePreferences.includes("live_music") && liveCapability &&
+          body?.live_events?.pending === true) {
+        const preliminary = decision.classifyAnywhereResult(body);
+        if (!decision.isComposedStatus(preliminary.status) ||
+            routePreferenceCoverage(primaryRouteStops(body), effectivePreferences).covered_preferences.length === 0) {
+          // Await this request's own dated evidence before deciding that no
+          // interest can be confirmed. No second route compose is needed.
+          setLiveFollowing(true);
+          let terminalLive = null;
+          const completion = await followLiveCompletion({
+            capability: liveCapability, signal: controller.signal,
+            onLiveEvents: events => { terminalLive = events; },
+          });
+          if (controller.signal.aborted || requestId !== requestSequenceRef.current || intentId !== intentSequenceRef.current) return;
+          setLiveFollowing(false);
+          body = completion.upgrade?.kind === "applied"
+            ? takeLiveCompletion(completion.upgrade.result).body
+            : { ...body, live_events: terminalLive ?? { ...body.live_events, pending: false, coverage: "unavailable" } };
+          liveCapability = null;
+        }
+      }
       // With a coords anchor there is no typed text and no label to fall back
       // on: the engine's resolved label wins when present, and otherwise the
       // page names the position itself, in the language it is showing now
@@ -721,21 +818,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // the render that sent the request.
       const fallbackLabel = anchor.place ?? "";
       const requestLang = langOverride ?? lang;
-      const cls = decision.classifyAnywhereResult(body, { place: fallbackLabel });
-      const safe = decision.safeResponseFor(body, cls);
+      let cls = decision.classifyAnywhereResult(body, { place: fallbackLabel });
+      let safe = decision.safeResponseFor(body, cls);
       if (requestedLiveKeep && (!decision.isComposedStatus(cls.status) || safe?.days?.[0]?.date !== effectiveDateIso ||
           !primaryRouteStops(safe).some((stop: any) => stop.is_live_event === true &&
             stop.live_choice_eligible === true && stop.live_occurrence_id === requestedLiveKeep))) {
         refuseLivePlan();
         return;
       }
-      if (effectiveDayEdit && body?.agnostic_route_output_experiment?.day_edit?.status !== "applied") {
-        setStopEditError(body?.agnostic_route_output_experiment?.day_edit?.reason === "no_safe_replacement"
+      const dayEditOutcome = body?.agnostic_route_output_experiment?.day_edit;
+      if (effectiveDayEdit && dayEditOutcome?.status !== "applied") {
+        setStopEditError(dayEditOutcome?.reason === "no_safe_replacement"
           ? "no_safe_replacement" : "not_confirmed");
         const baseline = undoBaselineRef.current;
         undoBaselineRef.current = null;
         if (retention.keepPrevious && baseline) {
-          setDayChange({ previous: baseline.entry, summary: describeDayChange(baseline.entry, baseline.entry) });
+          setDayChange({ previous: baseline.entry, previousShare: baseline.share, summary: describeDayChange(baseline.entry, baseline.entry) });
           setDayIsStale(true);
         } else {
           setClassification({ status: "unavailable", hasStructure: false, placeLabel: fallbackLabel });
@@ -772,8 +870,35 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           commitmentAnchorKeyRef.current = anchorKey(anchor);
         }
       }
-      // Atomic replacement. If the new verdict is structure_only/unavailable,
-      // the held day disappears here — it no longer answers the request.
+      const resolvedInterestAttempt = cls.status === "structure_only" || decision.isComposedStatus(cls.status) ||
+        body?.agnostic_route_output_experiment?.intake?.status === "resolved";
+      if (interestRequest && (interestEdit || !requestedLiveKeep) && !pendingStopEditRef.current &&
+          effectivePreferences.length > 0 && resolvedInterestAttempt && cls.status !== "edited_empty" &&
+          routePreferenceCoverage(primaryRouteStops(safe), effectivePreferences).covered_preferences.length === 0) {
+        setInterestFailure({ liveEvents: safe?.live_events ?? null });
+        const previous = lastEntryRef.current;
+        if (retention.keepPrevious && previous?.dateIso === effectiveDateIso && isUndoableDay(previous)) {
+          // Keep the accepted answer together with its applied inputs. Offer
+          // Undo even when the route is identical and only the inputs changed.
+          const baseline = undoBaselineRef.current;
+          undoBaselineRef.current = null;
+          if (baseline) setDayChange({ previous: baseline.entry, previousShare: baseline.share, summary: describeDayChange(baseline.entry, baseline.entry) });
+          setUpgradePending(false);
+          setLiveFollowing(false);
+          setPhase("done");
+          return;
+        }
+        // A generic route with zero exact matches is not this request's day.
+        // Keep its safe place and Live evidence available without its route.
+        if (decision.isComposedStatus(cls.status)) {
+          const withoutRoute = { ...safe, days: [] };
+          cls = decision.classifyAnywhereResult(withoutRoute, { place: fallbackLabel });
+          safe = decision.safeResponseFor(withoutRoute, cls);
+        }
+      }
+      // Atomically replace the previous answer with the current verdict.
+      const composedNow = decision.isComposedStatus(cls.status);
+      if (interestEdit && composedNow) focusBeforeInterestResultRef.current = document.activeElement;
       setClassification(cls);
       installResponse(safe);
       displayedAnchorKeyRef.current = anchorKey(anchor);
@@ -783,13 +908,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // that CONTAINS a day can leave a commitment unmet by it: structure_only
       // and unavailable composed no day, so there is nothing for a pin to have
       // failed to fit into and the snapshot stays empty.
-      const composedNow = decision.isComposedStatus(cls.status);
       const acceptedEditedEmpty = cls.status === "edited_empty";
       // Persist the applied selection, never a one-shot replacement command.
       // Reload asks to retain this result instead of replacing the slot again.
       let persistedDayEdit = effectiveDayEdit;
-      if (effectiveDayEdit && (composedNow || acceptedEditedEmpty) && body?.agnostic_route_output_experiment?.day_edit?.status === "applied") {
-        const publishedIds = primaryRouteStops(safe)
+      if (effectiveDayEdit && (composedNow || acceptedEditedEmpty) && dayEditOutcome?.status === "applied") {
+        const publishedStops = primaryRouteStops(safe);
+        const publishedIds = publishedStops
           .map((stop: any) => String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? ""));
         persistedDayEdit = normalizeDayEdit({ ...effectiveDayEdit, action: "remove",
           retained_candidate_ids: publishedIds, target_stop_count: publishedIds.length, replacement_preference: null });
@@ -798,7 +923,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           adoptedInputsRef.current = true;
           setDayEdit(persistedDayEdit);
         }
-        if (pendingStopEditRef.current) setStopEditFeedback(pendingStopEditRef.current.action);
+        const pendingEdit = pendingStopEditRef.current;
+        if (pendingEdit) {
+          const replacementId = dayEditOutcome.replacement_candidate_id;
+          const replacement = pendingEdit.action === "replace" && typeof replacementId === "string" && replacementId
+            ? publishedStops[publishedIds.indexOf(replacementId)] : undefined;
+          setStopEditFeedback({ ...pendingEdit, replacementLabel: String(replacement?.label || replacement?.name || "").trim() });
+        }
       }
       const refusalsNow: Array<{ id: string; reason: string | null }> = composedNow ? [
         ...(Array.isArray(body?.agnostic_route_output_experiment?.pinned_candidates?.unhonored) ? body.agnostic_route_output_experiment.pinned_candidates.unhonored : []),
@@ -816,7 +947,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // flag. A SILENT upgrade also refreshes the stored entry (so save/share use
       // the upgraded day) but never touches the snapshot flag.
       if (!silent || safe?.place_structure) {
-        const prefs = preferencesOverride ?? selected;
+        const prefs = effectivePreferences;
         const entry = buildSavedEntry({
           city: null,
           place: authoritativePlace,
@@ -872,20 +1003,20 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           undoBaselineRef.current = null;
           setDayChange(
             baseline && baseline.anchorKey !== null && baseline.anchorKey === anchorKey(anchor)
-              ? { previous: baseline.entry, summary: describeDayChange(baseline.entry, entry, { trigger: baseline.trigger ?? null }) }
+              ? { previous: baseline.entry, previousShare: baseline.share, summary: describeDayChange(baseline.entry, entry, { trigger: baseline.trigger ?? null }) }
               : null,
           );
         } else {
           // A silent follow-up refines the same inputs' day; the account keeps
           // describing the day actually on screen.
           setDayChange((current) =>
-            current ? { previous: current.previous, summary: describeDayChange(current.previous, entry) } : current,
+            current ? { ...current, summary: describeDayChange(current.previous, entry) } : current,
           );
         }
       }
       // Pending Live is read through the original compose's own capability,
       // never by recomposing the route.
-      if (liveCapability && safe) startLiveCompletion(liveCapability, requestId, intentId, safe);
+      if (liveCapability && safe) startLiveCompletion(liveCapability, requestId, intentId, safe, interestEdit);
       else setLiveFollowing(false);
       // A bounded silent re-ask covers cold-start honesty gaps. The POLICY —
       // which composes re-ask, and with what delay — is the pure, unit-tested
@@ -901,7 +1032,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       if (followup.schedule) {
         if (followup.upgradePending) setUpgradePending(true);
         if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
-        const effectivePreferences = preferencesOverride ?? selected;
         const effectiveExcluded = excludedOverride ?? activeLedger.excludedIds;
         const effectivePinned = pinnedOverride ?? activeLedger.pinnedIds;
         const followupIntentId = intentSequenceRef.current;
@@ -912,6 +1042,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             silent: true,
             langOverride: langOverride ?? lang,
             preferencesOverride: effectivePreferences,
+            interestEdit,
             preferencePriorityOverride: effectivePriority,
             dayEditOverride: persistedDayEdit,
             dayOffsetOverride: effectiveDayOffset,
@@ -967,7 +1098,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // authorized and applied one, replaces that day only while its generation is
   // still the current one and it is still the day on screen. The route is
   // never recomposed here.
-  function startLiveCompletion(capability: LiveCompletionCapability, requestId: number, intentId: number, installed: any) {
+  function startLiveCompletion(capability: LiveCompletionCapability, requestId: number, intentId: number, installed: any, preserveInterestUndo = false) {
     abortLiveCompletion();
     const controller = new AbortController();
     liveCompletionAbortRef.current = controller;
@@ -975,6 +1106,21 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // The remembered entry for this day, while it is still the remembered one.
     let entry = installed?.days?.length > 0 && lastEntryRef.current?.safeResponse === installed
       ? lastEntryRef.current : null;
+    // A stop kept in place re-binds the remembered entry to this same day and
+    // response with one more pin. The Live list still belongs to that day, so
+    // the run follows the re-bind; the route upgrade does not, because it
+    // replays the compose from before the Keep and would rebuild the day the
+    // reader has just settled.
+    let keptSince = false;
+    const remembered = () => {
+      const now = lastEntryRef.current;
+      if (entry && now && now !== entry && keptInPlaceEntriesRef.current.has(now) &&
+          now.id === entry.id && now.safeResponse === entry.safeResponse) {
+        entry = now;
+        keptSince = true;
+      }
+      return Boolean(entry) && lastEntryRef.current === entry;
+    };
     const current = () =>
       !controller.signal.aborted &&
       requestId === requestSequenceRef.current &&
@@ -988,7 +1134,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         const { day_snapshot: previousSnapshot, ...original } = installed;
         const view = { ...original, live_events: liveEvents,
           ...(daySnapshot ? { day_snapshot: daySnapshot } : {}) };
-        if (entry && lastEntryRef.current === entry) {
+        if (entry && remembered()) {
           entry = { ...entry, safeResponse: view };
           lastEntryRef.current = entry;
           writeLS(LAST_KEY, entry);
@@ -997,15 +1143,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         // binding its displayed terminal sidecar to this exact remembered view.
         setCompletedLive({ day: installed, liveEvents, view, entry });
         const publication = readyPublishedDay(daySnapshot);
-        setSharePublication(publication && entry && lastEntryRef.current === entry ? { entry, publication } : null);
+        setSharePublication(publication && entry && remembered() ? { entry, publication } : null);
+      },
+      allowUpgrade: () => {
+        remembered();
+        return !keptSince;
       },
     })
       .then((outcome) => {
         if (liveCompletionAbortRef.current === controller) liveCompletionAbortRef.current = null;
         if (!current()) return;
         setLiveFollowing(false);
-        if (outcome.upgrade?.kind === "applied" && entry && lastEntryRef.current === entry) {
-          installLiveUpgrade(outcome.upgrade.result, entry);
+        if (outcome.upgrade?.kind === "applied" && entry && remembered() && !keptSince) {
+          installLiveUpgrade(outcome.upgrade.result, entry, preserveInterestUndo);
         }
       })
       .catch(() => {});
@@ -1014,7 +1164,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Called only while the run's generation is current: every adjustment,
   // commitment, restore, undo and compose bumps the generation first, so a
   // newer question always wins over this answer.
-  function installLiveUpgrade(result: any, previous: SavedEntry) {
+  function installLiveUpgrade(result: any, previous: SavedEntry, preserveInterestUndo = false) {
     const decision = anywhereDecision();
     const cls = decision.classifyAnywhereResult(result, { place: previous.place ?? "" });
     if (!decision.isComposedStatus(cls.status)) return;
@@ -1040,9 +1190,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setAppliedRefusals([...(Array.isArray(unhonored) ? unhonored : []), ...(Array.isArray(result?.agnostic_route_output_experiment?.live_event_choices?.unhonored) ? result.agnostic_route_output_experiment.live_event_choices.unhonored : [])]);
     setExpandedStopKey(null);
     setExpandedCandidateKey(null);
-    // Never silent: the change line says Live moved the day, and Undo puts the
-    // original day back.
-    setDayChange({ previous, summary: describeDayChange(previous, upgraded, { cause: "live" }) });
+    // A grouped edit and its own Live completion are one change to Undo.
+    setDayChange(current => {
+      const baseline = preserveInterestUndo && current ? current : { previous };
+      return { ...baseline, summary: describeDayChange(baseline.previous, upgraded, { cause: "live" }) };
+    });
   }
 
   const cancelActivePlannerForNavigation = () => {
@@ -1118,6 +1270,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setStopEditPending(false);
     setStopEditFeedback(null);
     setStopEditError(null);
+    setInterestFailure(null);
+    setInterestChooserOpen(false);
     // A saved day is its own generation: nothing from before it can be undone
     // back onto it.
     undoBaselineRef.current = null;
@@ -1236,6 +1390,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setLivePlanPending(false);
     resetBlitz();
     const previous = change.previous;
+    setInterestFailure(null);
+    setInterestChooserOpen(false);
     setDayChange(null);
     undoBaselineRef.current = null;
     setNavigationInterrupted(false);
@@ -1289,6 +1445,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setAppliedPins(ledger.applies ? ledger.appliedPins : []);
     setAppliedRefusals(ledger.applies ? ledger.refusals : []);
 
+    // The receipt was bound to this exact view before the grouped rebuild.
+    // Check its lifetime again before using it for Share or a public address.
+    const share = change.previousShare?.entry === previous ? change.previousShare : null;
+    const publication = readyPublishedDay(share?.publication);
+    setSharePublication(publication ? { entry: previous, publication } : null);
+    setShareCopied(false);
+    if (share?.publicRestoredAt) {
+      setRestoredAt(share.publicRestoredAt);
+      const href = publication && publishedDayHref(publication.ref, lang);
+      if (href) {
+        try {
+          const state = { ...window.history.state };
+          delete state[NAVIGATION_STATE_KEY];
+          window.history.replaceState(state, "", href + window.location.hash);
+          setPublicReference(publication.ref);
+        } catch {
+          // The browser may block history writes. The local Undo still works.
+        }
+      }
+    }
     lastEntryRef.current = previous;
     writeLS(LAST_KEY, previous);
     setClassification(previous.classification);
@@ -1344,8 +1520,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       return;
     }
     // Legacy links still describe inputs, not an immutable publication.
-    const allowedPrefs = ANYWHERE_PREFERENCES.map((p: { key: string }) => p.key);
-    const shared = decodeShareParams(window.location.search, allowedPrefs);
+    const shared = decodeShareParams(window.location.search, PLANNER_PREFERENCE_KEYS);
+    const hasLinkedPreferences = shared.preferences.length > 0 || shared.explicitEmptyPreferences;
     const entry = plannerEntry.readPlannerEntry(window.location.search);
     // A malformed identity must never turn into a namesake search or a saved day.
     if (shared.invalidPlaceRef) {
@@ -1391,11 +1567,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // change), and only then is the re-run they cause marked as the arrival's.
     const adoptLinkInputs = () => {
       let changed = false;
-      if (shared.preferences.length && shared.preferences.join(",") !== selected.join(",")) {
+      if (hasLinkedPreferences && shared.preferences.join(",") !== selected.join(",")) {
         setSelected(shared.preferences);
         changed = true;
       }
-      const linkedPriority = normalizePreferencePriority(shared.preferencePriority, shared.preferences.length ? shared.preferences : selected);
+      const linkedPriority = normalizePreferencePriority(shared.preferencePriority, hasLinkedPreferences ? shared.preferences : selected);
       if (linkedPriority.join(",") !== preferencePriority.join(",")) {
         setPreferencePriority(linkedPriority);
         changed = true;
@@ -1420,7 +1596,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // or old pin verdicts as this new response's evidence.
     const urlArrivalInputs = (anchor: Parameters<typeof execute>[0]) => {
       const dateIso = freezeComposeDateIso({ dayOffset: shared.dayOffset });
-      const preferences = shared.preferences.length ? shared.preferences : selected;
+      const preferences = hasLinkedPreferences ? shared.preferences : selected;
       const linkedPriority = normalizePreferencePriority(shared.preferencePriority, preferences);
       const linkedEdit = normalizeDayEdit(shared.dayEdit);
       dayEditScopeRef.current = linkedEdit ? { anchorKey: anchorKey(anchor), dateIso } : null;
@@ -1513,9 +1689,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setSavedWriteError(null);
   }
 
-  // Share only the immutable reference emitted for this exact accepted entry.
-  // Revalidate expiry at click time too; never fall back to an input-only URL.
-  const exactShareHref = () => {
+  // Bind a server receipt only to the exact accepted entry and visible facts.
+  const matchingSharePublication = () => {
     const entry = lastEntryRef.current;
     const completed = completedLive?.day === safeResponse ? completedLive : null;
     const view = completed
@@ -1524,7 +1699,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       : safeResponse;
     return view && sharePublication?.entry === entry && sharePublication.entry.safeResponse === view
       && readyPublishedDay(sharePublication.publication)
-        ? publishedDayHref(sharePublication.publication.ref, lang) : null;
+        ? sharePublication : null;
+  };
+  const exactShareHref = () => {
+    const share = matchingSharePublication();
+    return share ? publishedDayHref(share.publication.ref, lang) : null;
   };
   async function shareDay() {
     const href = exactShareHref();
@@ -1560,7 +1739,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   }
 
   // Resolve the anchor (typed place or the user's real position) and compose.
-  async function resolveAndRun(opts: { preferencesOverride?: string[] } = {}) {
+  async function resolveAndRun(opts: Pick<NonNullable<Parameters<typeof execute>[1]>,
+    "preferencesOverride" | "preferencePriorityOverride" | "dayEditOverride" | "interestEdit"> = {}) {
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     const options = { ...opts, ...(navigationDateIsoRef.current ? { dateIsoOverride: navigationDateIsoRef.current } : {}) };
     if (mode === "near_me") {
@@ -1707,7 +1887,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setNavigationPublication(null);
       setNavigationWriteFailure(entry);
     }
-  }, [arrivalRead, safeResponse, classification, completedLive, restoredAt, lang, publicReference, publicReadState]);
+    // `commitments`: a Keep made in place (and its Undo) re-binds the accepted
+    // entry without a new response; the pointer follows that entry.
+  }, [arrivalRead, safeResponse, classification, completedLive, restoredAt, lang, publicReference, publicReadState, commitments]);
 
   const leavePlanner =(target: "home" | "language") => {
     if (mode === "typed" && placeSelection) storePlaceChoice({ place, selection: placeSelection, label: selectionLabel });
@@ -1895,26 +2077,29 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const intakeStatus = safeResponse?.agnostic_route_output_experiment?.intake?.status ?? null;
   const anchorUnresolved =
     mode === "typed" && classification?.status === "unavailable" && intakeStatus !== "resolved";
-  const walkLabel = (() => {
-    const preset = DAY_RHYTHMS.find((p: { key: string }) => p.key === walkKey);
-    return preset ? (lang === "en" ? preset.en : preset.sv) : "";
-  })();
-  const explicitMoodPriority = normalizePreferencePriority(preferencePriority, selected);
+  const retainedInterestDay = interestFailure !== null && dayIsStale;
+  const shownInterestInputs = retainedInterestDay ? lastEntryRef.current?.inputs : null;
+  const shownInterests = shownInterestInputs?.selected ?? selected;
+  const walkLabel = DAY_RHYTHMS.find(({ key }) => key === (shownInterestInputs?.walkKey ?? walkKey))?.[lang] ?? "";
+  const explicitMoodPriority = normalizePreferencePriority(shownInterestInputs?.preferencePriority ?? (retainedInterestDay ? [] : preferencePriority), shownInterests);
   const moodRanks = new Map<string, number>(explicitMoodPriority.map((key, index) => [key, index]));
-  const moodLabel = ANYWHERE_PREFERENCES.filter((p: { key: string }) => selected.includes(p.key))
-    .sort((left, right) => (moodRanks.get(left.key) ?? moodRanks.size) - (moodRanks.get(right.key) ?? moodRanks.size))
-    .map((p: { key: string; sv: string; en: string }) => {
-      const label = lang === "en" ? p.en : p.sv;
+  const moodLabel = [...shownInterests]
+    .sort((left, right) => (moodRanks.get(left) ?? moodRanks.size) - (moodRanks.get(right) ?? moodRanks.size))
+    .map(key => {
+      const label = pickLabel(key, lang);
       // Only picked interests carry a number; the unpicked rest weigh equally.
-      const rank = moodRanks.get(p.key);
+      const rank = moodRanks.get(key);
       return rank === undefined ? label : `${rank + 1}. ${label}`;
     })
     .join(" · ");
 
   const structure: PlaceStructure | null = safeResponse?.place_structure ?? null;
   const day = structure?.district_day;
-  const liveEvents: LiveEvents | null =
-    (completedLive && completedLive.day === safeResponse ? completedLive.liveEvents : safeResponse?.live_events) ?? null;
+  const completedDayLive = completedLive?.day === safeResponse ? completedLive?.liveEvents : null;
+  const failedAttemptLive = interestFailure?.liveEvents?.pending === true ? null : interestFailure?.liveEvents;
+  const liveEvents: LiveEvents | null = (retainedInterestDay
+    ? failedAttemptLive ?? completedDayLive
+    : completedDayLive ?? failedAttemptLive) ?? safeResponse?.live_events ?? null;
   const cardLiveEvents = liveCardObservation?.day === safeResponse &&
     liveCardObservation?.intentId === intentSequenceRef.current ? liveCardObservation.events : liveEvents;
   const liveDayLabel = liveDateLabel(liveEvents?.selected_date, lang);
@@ -2144,7 +2329,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const km = Number.isFinite(leg.distance_km) ? leg.distance_km : null;
     const minutes = Number.isFinite(leg.estimated_walk_minutes) ? leg.estimated_walk_minutes : null;
     if (km === null && minutes === null) return null;
-    const label = anchorIsPosition ? t("Din position", "Your position") : pointLabel;
+    const label = anchorIsPosition ? t("din startpunkt", "your starting point") : pointLabel;
     return { km, minutes, label };
   };
   const startLeg = endpointLeg(publishedStart, routeStops[0], true);
@@ -2176,8 +2361,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     [routeStops, day?.areas],
   );
   const routeCoverage = useMemo(
-    () => routePreferenceCoverage(routeStops, selected),
-    [routeStops, selected],
+    () => routePreferenceCoverage(routeStops, shownInterests),
+    [routeStops, shownInterests],
   );
   // Local-time anchoring truth from the engine's caveat vocabulary (#429):
   // "this is a full-day arc, not now" vs "anchored to now, earlier dayparts
@@ -2239,7 +2424,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (retryInFlightRef.current) return;
     const anchor = lastRequestedAnchorRef.current;
     if (!anchor) return;
-    const dateIsoOverride = sameDate || dayEdit ? lastComposeDateIsoRef.current ?? undefined : undefined;
+    const interestEdit = interestRetryIntentRef.current === intentSequenceRef.current;
+    const dateIsoOverride = sameDate || dayEdit || interestEdit ? lastComposeDateIsoRef.current ?? undefined : undefined;
     if (recomposeTimerRef.current) {
       clearTimeout(recomposeTimerRef.current);
       recomposeTimerRef.current = null;
@@ -2250,7 +2436,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
     const retryGeneration = ++retryGenerationRef.current;
     retryInFlightRef.current = true;
-    execute(anchor, dateIsoOverride ? { dateIsoOverride } : {}).catch(() => {}).finally(() => {
+    execute(anchor, { dateIsoOverride, interestEdit }).catch(() => {}).finally(() => {
       if (retryGenerationRef.current === retryGeneration) retryInFlightRef.current = false;
     });
   };
@@ -2356,14 +2542,68 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (action === "replace") nextCommitments[identity] = { kind: "exclude", label: stopLabel };
     setCommitments(nextCommitments);
     dayEditScopeRef.current = { anchorKey: displayedAnchorKeyRef.current, dateIso: lastEntryRef.current?.dateIso ?? null };
-    pendingStopEditRef.current = edit;
+    pendingStopEditRef.current = { action, originalLabel: stopLabel };
     setStopEditPending(true);
     setDayEdit(edit);
     setExpandedStopKey(null);
   };
   const dismissStop = (identity: string, stopLabel: string) => editStop(identity, stopLabel, "replace");
   const removeStop = (identity: string, stopLabel: string) => editStop(identity, stopLabel, "remove");
-  const keepStop = (identity: string, stopLabel: string) => commit(identity, "pin", stopLabel);
+  // Keep on a stop of the settled day on screen. That day already contains
+  // the stop, so it already answers the pin: the Keep is remembered with the
+  // day, carried by every later adjustment, and said by name, and nothing is
+  // recomposed. A full compose here rebuilt the whole day as a side effect of
+  // Keep (staging 2590f540: reversed order, a woven Live event, +2 km).
+  // A Keep made while another change is pending or in flight joins that
+  // change through commit() instead, and the receipt names it there too.
+  const keepInPlace = (identity: string, stopLabel: string): boolean => {
+    const previous = lastEntryRef.current;
+    const anchor = displayedAnchorKeyRef.current;
+    if (!identity || isLiveOccurrenceId(identity) || commitments[identity] || !previous || !anchor ||
+        !isUndoableDay(previous) || !showDay || phase !== "done" || dayIsStale || restoredAt || publicReference || interestFailure ||
+        upgradePending || stopEditPending || pendingStopEditRef.current || livePlanPendingRef.current ||
+        activeRequestRef.current || recomposeTimerRef.current || pollTimerRef.current ||
+        (dayEdit && !dayEdit.retained_candidate_ids.includes(identity))) return false;
+    const stopIds = (stops: any[]) => stops.map((stop: any) => String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "").trim());
+    if (!stopIds(routeStops).includes(identity) || !stopIds(primaryRouteStops(previous.safeResponse)).includes(identity)) return false;
+    const label = String(stopLabel ?? "").trim();
+    const ledger = readCommitmentSnapshot(previous.commitments, { anchorKey: anchor, dayKey: previous.id });
+    const pin = { id: identity, kind: "pin" as const, label };
+    const answeredPins = [...(ledger.applies ? ledger.appliedPins : []).filter(applied => applied.id !== identity), pin];
+    const next: SavedEntry = {
+      ...previous,
+      commitments: buildCommitmentSnapshot({
+        anchorKey: anchor,
+        dayKey: previous.id,
+        entries: { ...(ledger.applies ? ledger.entries : {}), [identity]: { kind: "pin", label } },
+        appliedPins: answeredPins,
+        refusals: ledger.applies ? ledger.refusals : [],
+      }),
+    };
+    // Undo puts the day back exactly as it was before the Keep, receipt included.
+    const share = matchingSharePublication();
+    keptInPlaceEntriesRef.current.add(next);
+    lastEntryRef.current = next;
+    writeLS(LAST_KEY, next);
+    // The same published day: its share and its Live result stay bound to it.
+    setSharePublication(current => current?.entry === previous ? { ...current, entry: next } : current);
+    setCompletedLive(current => current?.entry === previous ? { ...current, entry: next } : current);
+    setExpandedStopKey(null);
+    setExpandedCandidateKey(null);
+    setChoicesNotCarried(false);
+    setStopEditFeedback(null);
+    setStopEditError(null);
+    commitmentAnchorKeyRef.current = anchor;
+    setAppliedPins(answeredPins);
+    setDayChange({ previous, previousShare: share ? { ...share } : undefined, summary: describeDayChange(previous, next) });
+    // The day on screen already answers these inputs: no adjustment to compose.
+    adoptedInputsRef.current = true;
+    setCommitments({ ...commitments, [identity]: { kind: "pin", label } });
+    return true;
+  };
+  const keepStop = (identity: string, stopLabel: string) => {
+    if (!keepInPlace(identity, stopLabel)) commit(identity, "pin", stopLabel);
+  };
   const releaseCommitment = (identity: string) => {
     if (!identity || !commitments[identity]) return;
     invalidateCommitmentIntent();
@@ -2467,31 +2707,38 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const sourcePartlyUnavailable = phase === "done" && classification?.status === "unavailable" && !anchorUnresolved
     && !sourceUnavailable && !terminalSourceIssue && typeof loadedSourceStatus?.error === "string" && loadedSourceStatus.error.trim() !== ""
     && loadedSourceStatus?.collection?.selection_reason === "loader_error";
-  // Preserve the classifier's absences; choices announce themselves, and an
-  // outstanding upgrade or service refusal is not a final no-day verdict.
-  const unavailableMessage = phase === "done" && (classification?.status === "unavailable" || terminalSourceIssue) && !upgradePending && !serviceRefusal && !unavailableHasChoices
-    ? anchorUnresolved
-      ? placeRef ? referenceFailureMessage : t(
-          `Parranda hittade inte ”${typedPlaceLabel}”. Prova en annan stavning, eller lägg till stad eller land.`,
-          `Parranda couldn't find “${typedPlaceLabel}”. Try another spelling, or add a city or country.`,
-        )
-      : terminalSourceIssue
-        ? `${t("Parranda kunde inte bygga en dag här just nu.", "Parranda couldn't build a day here right now.")} ${sourceEvidenceNote}`
-      : sourceUnavailable
-        ? t(
-            `Platskällorna svarade inte just nu, så Parranda kunde inte hämta platser ${anchorIsPosition ? "nära dig" : `för ${placeName}`} — inget hittas på. Försök igen om en stund.`,
-            `The place sources didn't answer just now, so Parranda couldn't fetch places ${anchorIsPosition ? "near you" : `for ${placeName}`} — nothing is invented in its place. Try again in a moment.`,
-          )
-      : classification?.unavailableReason === "sparse_supply" && classification.realPlaceCount
-        ? t(
-            `Parranda hittade ${classification.realPlaceCount === 1 ? "1 riktig plats" : `${classification.realPlaceCount} riktiga platser`} ${anchorIsPosition ? "nära dig" : `nära ${placeName}`}, men inte tillräckligt för en pålitlig dag ännu — inget hittas på.`,
-            `Parranda found ${classification.realPlaceCount === 1 ? "1 real place" : `${classification.realPlaceCount} real places`} ${anchorIsPosition ? "near you" : `near ${placeName}`}, but not enough for a reliable day yet — nothing is invented in its place.`,
-          )
-        : t(
-            `Parranda kunde inte bygga en dag ${anchorIsPosition ? "nära dig" : `för ${placeName}`} ännu.`,
-            `Parranda couldn't build a day ${anchorIsPosition ? "near you" : `for ${placeName}`} yet.`,
-          )
+  // A typed place Parranda could not pin down. Choices announce themselves,
+  // and an outstanding upgrade or service refusal is not a final verdict. A
+  // resolved place without a day says so through `noDay` below instead.
+  const unavailableMessage = anchorUnresolved && phase === "done" && !upgradePending && !serviceRefusal && !unavailableHasChoices
+    ? placeRef ? referenceFailureMessage : t(
+        `Parranda hittade inte ”${typedPlaceLabel}”. Prova en annan stavning, eller lägg till stad eller land.`,
+        `Parranda couldn't find “${typedPlaceLabel}”. Try another spelling, or add a city or country.`,
+      )
     : "";
+  // ONE STATE for a resolved place that ended without a day. The verdicts
+  // above can all hold at once (picks unconfirmed, a source failed, thin
+  // supply); the page states one cause and offers one next step. Unresolved
+  // places, choices, refusals and pending upgrades keep their own surfaces.
+  const noDay = noDayState({
+    settled: phase === "done" && hasAnchor && !anchorUnresolved && !dayOnScreen && !retainedInterestDay &&
+      !upgradePending && !serviceRefusal && !livePlanPending &&
+      (classification?.status === "unavailable" || classification?.status === "structure_only" || terminalSourceIssue),
+    interestsUnconfirmed: interestFailure !== null,
+    sourcesUnanswered: sourceUnavailable,
+    sourceFailed: terminalSourceIssue || sourcePartlyUnavailable,
+    canRebuild: canUpdateSaved,
+    hasPicks: selected.length > 0,
+  });
+  const noDayText = noDay ? noDayMessage({
+    cause: noDay.cause,
+    sourcesUnanswered: sourceUnavailable,
+    sourceNote: sourceEvidenceNote,
+    sparseCount: classification?.status === "unavailable" && classification.unavailableReason === "sparse_supply"
+      ? classification.realPlaceCount : null,
+    placesWithoutRoute: classification?.status === "structure_only",
+    liveMusicListed: selected.includes("live_music") && hasSelectedDayMusic(interestFailure?.liveEvents ?? null),
+  }, { position: anchorIsPosition, place: placeName }, t) : "";
   const dayContextNote = contextNote(dayLimitations, t, {
     // The header states source limitations; the map keeps its own facts.
     sourceCompletion: incompletePlaceSources ? null : sourceCompletion,
@@ -2504,7 +2751,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // header claims nothing about the picks at all.
   type PickCoverage = { key: string; state: "covered" | "partial" | "missing" | "pending" | "unanswered" };
   const pickCoverage: PickCoverage[] = routeCoverage.has_coverage_evidence
-    ? selected.flatMap((key): PickCoverage[] => {
+    ? shownInterests.flatMap((key): PickCoverage[] => {
         if (routeCoverage.covered_preferences.includes(key)) return [{ key, state: "covered" }];
         if (routeCoverage.partial_preferences.includes(key)) return [{ key, state: "partial" }];
         if (routeCoverage.missing_preferences.includes(key)) return [{ key, state: "missing" }];
@@ -2547,6 +2794,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     : stopEditError === "rebuild_required"
     ? t("Uppdatera den sparade dagen eller välj en ny startpunkt innan du ändrar stopp.", "Rebuild this saved day or choose a new starting point before editing stops.")
     : stopEditError ? t("Ändringen kunde inte bekräftas.", "The change could not be confirmed.") : "";
+  const canUndoFailedEdit = Boolean(stopEditError) || interestRetryIntentRef.current === intentSequenceRef.current;
+  let stopEditFeedbackMessage = "";
+  if (stopEditFeedback) {
+    const { action, originalLabel, replacementLabel } = stopEditFeedback;
+    if (action === "remove") {
+      stopEditFeedbackMessage = t(`Tog bort ${originalLabel}`, `Removed ${originalLabel}`);
+    } else if (replacementLabel) {
+      stopEditFeedbackMessage = t(`Bytte ut ${originalLabel} mot ${replacementLabel}`, `Replaced ${originalLabel} with ${replacementLabel}`);
+    } else {
+      stopEditFeedbackMessage = t(`Bytte ut ${originalLabel}`, `Replaced ${originalLabel}`);
+    }
+  }
   const [dayChangeLine, dayRouteChange] = useMemo(() => {
     if (!dayChange) return [[], []];
     const options = {
@@ -2568,6 +2827,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Where the reader's last adjustment stands, for the Adjust panel:
   // rebuilding, rebuilt (and what the route did), or failed.
   const adjustSummary = dayChange && phase === "done" && !dayIsStale ? dayRouteChange.join(" · ") : "";
+  // Stops the reader kept that the day on screen now answers, named first.
+  const keptNames: string[] = dayChange?.summary.pinned ?? [];
   const adjustRebuild: AdjustRebuild =
     staleNotice === "updating"
       ? { state: "updating" }
@@ -2592,16 +2853,46 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     : t("Ingår i morgondagens rutt", "Included in tomorrow's route");
   // AnchorCard's three adjustments. Each one recomposes on its own, so each
   // first invalidates whatever is in flight for the old intent.
-  const relaxDayEditForAdjustment = () => {
+  const relaxedDayEdit = () => {
     const applied = dayEdit?.action === "replace" ? normalizeDayEdit(lastEntryRef.current?.inputs?.dayEdit) : dayEdit;
-    setDayEdit(applied ? normalizeDayEdit({ ...applied, preserve_retained: false }) : null);
+    return applied ? normalizeDayEdit({ ...applied, preserve_retained: false }) : null;
   };
+  const relaxDayEditForAdjustment = () => setDayEdit(relaxedDayEdit());
   const toggleMood = (key: string) => {
     invalidateCommitmentIntent();
     relaxDayEditForAdjustment();
     const next = togglePreferenceSelection({ selected, preferencePriority }, key);
     setSelected(next.selected);
     setPreferencePriority(next.preferencePriority);
+  };
+  const applyInterests = (draft: InterestSelection) => {
+    const share = matchingSharePublication();
+    const previousShare = undoBaselineRef.current?.share ?? dayChange?.previousShare;
+    const publicRestoredAt = share && (publicReference === share.publication.ref
+      ? restoredAt ?? undefined
+      : previousShare?.entry === share.entry && previousShare.publication.ref === share.publication.ref
+        ? previousShare.publicRestoredAt : undefined);
+    invalidateCommitmentIntent();
+    const onScreen = lastEntryRef.current;
+    const nextEdit = relaxedDayEdit();
+    const date = navigationDateIsoRef.current ??
+      (onScreen?.inputs?.dayOffset === dayOffset ? onScreen.dateIso : null);
+    if (date) navigationDateIsoRef.current = date;
+    undoBaselineRef.current = isUndoableDay(onScreen)
+      ? {
+        entry: onScreen,
+        anchorKey: displayedAnchorKeyRef.current,
+        share: share ? { ...share, publicRestoredAt: publicRestoredAt || undefined } : undefined,
+      }
+      : null;
+    adoptedInputsRef.current = true;
+    setDayEdit(nextEdit);
+    setSelected(draft.selected);
+    setPreferencePriority(draft.preferencePriority);
+    resolveAndRun({
+      preferencesOverride: draft.selected, preferencePriorityOverride: draft.preferencePriority,
+      dayEditOverride: nextEdit, interestEdit: true,
+    }).catch(() => {});
   };
   const clearPriority = () => {
     if (!preferencePriority.length) return;
@@ -2612,7 +2903,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const chooseDay = (offset: 0 | 1) => {
     const nextDate = freezeComposeDateIso({ dayOffset: offset });
     if (dayOffset !== offset || (navigationDateIsoRef.current && navigationDateIsoRef.current !== nextDate)) {
-      navigationDateIsoRef.current = null;
+      navigationDateIsoRef.current = nextDate;
       invalidateCommitmentIntent();
       dayEditScopeRef.current = null;
       setDayEdit(null);
@@ -2665,6 +2956,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // shown (the static build and the first client render are the phone layout).
   const wideScreen = useMediaQuery("(min-width: 64rem)");
   const dayWithRoute = showDay && routeStops.length > 0;
+  useEffect(() => {
+    const previousFocus = focusBeforeInterestResultRef.current;
+    focusBeforeInterestResultRef.current = null;
+    // The first result moves the planner controls into the day header.
+    if (dayWithRoute && previousFocus && !previousFocus.isConnected && document.activeElement === document.body) {
+      resultStatusRef.current?.focus();
+    }
+  }, [dayWithRoute, safeResponse]);
   // While a day composes, wide screens already hold both columns — the day's
   // shape on the left, the map's frame on the right — so the day lands where
   // its shape stood instead of jumping sideways when it arrives.
@@ -2699,6 +2998,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       heightClass={splitLayout ? "h-full" : mapExpanded ? "h-[min(70vh,36rem)]" : "h-52"}
       still={!splitLayout && !mapExpanded}
       regionLabel={splitLayout ? t("Interaktiv karta", "Interactive map") : undefined}
+      positionSession={positionSession}
+      positionEnabled={positionEnabled}
+      positionCentreRequest={positionCentreRequest}
+      onLocate={locateOnMap}
+      onStopLocation={stopLocation}
       t={t}
     />
   ) : null;
@@ -2733,6 +3037,28 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       preferencePriority={preferencePriority}
       onToggleMood={toggleMood}
       onClearPriority={clearPriority}
+      interestChooserOpen={interestChooserOpen}
+      setInterestChooserOpen={setInterestChooserOpen}
+      onApplyInterests={canUpdateSaved ? applyInterests : undefined}
+      notice={noDay ? {
+        // The page's result region announces this one; the card only shows it.
+        message: noDayText,
+        action: noDay.action,
+        onRetry: () => retryPlan({ sameDate: true }),
+        restartHref: `/?lang=${lang}`,
+      } : interestFailure && phase === "done" ? {
+        // New picks found no day while the previous one stays on screen.
+        message: [
+          t("Vi kunde inte bekräfta en gångbar dag med de här intressena.", "We couldn’t confirm a walkable day with these interests."),
+          retainedInterestDay && t("Din tidigare dag visas fortfarande.", "Your previous day is still shown."),
+          selected.includes("live_music") && hasSelectedDayMusic(interestFailure.liveEvents) &&
+            t("Livemusik finns i Live.", "Live music is listed in Live."),
+        ].filter(Boolean).join(" "),
+        action: "edit_interests",
+        attemptedLabels: retainedInterestDay ? selected.map(key => pickLabel(key, lang)).join(" · ") : undefined,
+        onUndo: retainedInterestDay && dayChange ? undoDayChange : undefined,
+        announce: true,
+      } : undefined}
       onSetDay={chooseDay}
       rhythms={DAY_RHYTHMS}
       walkKey={walkKey}
@@ -2827,12 +3153,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {/* One permanently mounted result region: ready or final unavailable.
           Cleared while composing; PlaceChoices carries its own status. */}
       <p ref={resultStatusRef} tabIndex={-1} role="status" className="sr-only">
-        {livePlanPending ? t("Planerar dagen med det valda evenemanget.", "Planning the day with the chosen event.") : phase === "done" && dayWithRoute && staleNotice !== "updating"
+        {noDay ? noDayText : !interestFailure && (livePlanPending ? t("Planerar dagen med det valda evenemanget.", "Planning the day with the chosen event.") : phase === "done" && dayWithRoute && staleNotice !== "updating"
           ? t(
               `En dag ${anchorIsPosition ? "nära dig" : `i ${anchorLabel}`} är klar: ${routeStops.length} stopp.`,
               `A day ${anchorIsPosition ? "near you" : `in ${anchorLabel}`} is ready: ${routeStops.length} ${routeStops.length === 1 ? "stop" : "stops"}.`,
             )
-          : unavailableMessage}
+          : unavailableMessage)}
       </p>
       {hasAnchor && !dayWithRoute && <h1 className="sr-only">{anchorIsPosition
         ? t("Din dag nära dig", "Your day near you")
@@ -2968,7 +3294,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </div>
       )}
 
-      {(phase === "done" || (phase === "error" && stopEditError)) && serviceRefusal && (
+      {(phase === "done" || (phase === "error" && dayIsStale)) && serviceRefusal && (
         <p className={noticeCard} role="status">
           {serviceRefusal.kind === "busy"
             ? t(
@@ -2982,16 +3308,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </p>
       )}
 
-      {phase === "done" && (classification?.status === "unavailable" || terminalSourceIssue) && (
+      {phase === "done" && !noDay && (classification?.status === "unavailable" || terminalSourceIssue) &&
+        (!interestFailure || terminalSourceIssue) && (
         !upgradePending &&
         <div className={`flex flex-col items-start gap-3 ${noticeCard}`}>
-          {/* Three honestly different absences: a typed place Parranda could
-              not pin down (nothing to compose around — say that, and how to
-              fix it), a resolved place whose trusted sources hold real places
-              but too few for a reliable day, and a resolved place that did not
-              compose. The count comes from the classifier's trusted-loader
-              evidence, never from copy. The label follows the pill rule:
-              primary locality, not the resolver's full admin chain. */}
+          {/* A typed place Parranda could not pin down: nothing to compose
+              around, so say that and how to fix it. A resolved place without
+              a day is the anchor card's one no-day notice instead. The label
+              follows the pill rule: primary locality, not the resolver's full
+              admin chain. */}
           {/* Plain visible copy is announced by the permanent result region;
               PlaceChoices instead owns its interactive status. */}
           <div className="text-15 text-parranda-ink">
@@ -3010,23 +3335,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 }} />
             ) : unavailableMessage}
           </div>
-          {sourcePartlyUnavailable && (
-            <p>{t(
-              "Alla platser kunde inte hämtas. Försök igen om en stund.",
-              "Some places could not be loaded. Try again in a moment.",
-            )}</p>
-          )}
-          {canUpdateSaved && (sourceUnavailable || sourcePartlyUnavailable || terminalSourceIssue) && (
-            <button type="button" onClick={() => retryPlan({ sameDate: true })} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
-              {t("Försök igen", "Try again")}
-            </button>
-          )}
-          {!anchorUnresolved && !sourceUnavailable && !sourcePartlyUnavailable && !terminalSourceIssue && selected.length > 0 && (
-            <p>{t(
-              "Vi kunde inte bekräfta en gångbar dag med dina val. Andra intressen läggs inte till automatiskt. Du kan ändra datum, dagens rytm eller själv välja fler intressen.",
-              "We could not confirm a walkable day with your choices. Other interests are not added automatically. You can change the date, day rhythm or choose more interests yourself.",
-            )}</p>
-          )}
           {restoredAt && !canUpdateSaved && (
             <p>{t("Den sparade dagen kan inte uppdateras säkert. ", "We cannot safely update this saved day. ")}
               <a href={`/?lang=${lang}`} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">
@@ -3059,17 +3367,27 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
         {t("Försök planera med evenemanget igen", "Try planning with this event again")}
       </button>}
-      {dayChange && (phase === "done" || (phase === "error" && stopEditError)) && (!dayIsStale || stopEditError) && (dayChangeLine.length > 0 || stopEditFeedback || stopEditError) && (
+      {dayChange && (phase === "done" || (phase === "error" && canUndoFailedEdit)) &&
+        (!dayIsStale || canUndoFailedEdit) && (dayChangeLine.length > 0 || keptNames.length > 0 || stopEditFeedback || stopEditError) && (
         <div
           role="status"
           className="flex items-center gap-x-2 rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint py-0.5 pl-4 pr-1"
         >
-          <p className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink-muted">
-            {stopEditError ? stopEditErrorMessage : stopEditFeedback ? t(stopEditFeedback === "remove" ? "Borttaget" : "Bytt", stopEditFeedback === "remove" ? "Removed" : "Replaced") : <>
-              <span className="font-bold text-parranda-ink">
-                {dayChange.summary.trigger === "recheck" ? t("Letade efter fler platser", "Looked for more places") : t("Ändrat", "Changed")}:{" "}
-              </span>
-              {dayChangeLine.join(" · ")}
+          <p className="min-w-0 flex-1 break-words text-13 leading-snug text-parranda-ink-muted">
+            {stopEditError ? stopEditErrorMessage : stopEditFeedback ? stopEditFeedbackMessage : <>
+              {/* A kept stop is named first and on its own: a Keep is never
+                  read as, or hidden behind, whatever else changed. */}
+              {keptNames.length > 0 && <>
+                <span className="font-bold text-parranda-ink">{t("Behålls", "Kept")}:{" "}</span>
+                {keptNames.join(", ")}
+                {dayChangeLine.length > 0 && " · "}
+              </>}
+              {dayChangeLine.length > 0 && <>
+                <span className="font-bold text-parranda-ink">
+                  {dayChange.summary.trigger === "recheck" ? t("Letade efter fler platser", "Looked for more places") : t("Ändrat", "Changed")}:{" "}
+                </span>
+                {dayChangeLine.join(" · ")}
+              </>}
             </>}
           </p>
           <button
@@ -3106,7 +3424,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {/* Without a composed day, this card carries provenance only. Save/share
           remain route actions: offering them here would call an unsequenced
           candidate surface a day. */}
-      {showStructure && structure && !(showDay && routeStops.length > 0) && (
+      {/* With the one no-day notice up, it is the only state and the only
+          next step: no second headline, no second rebuild action. */}
+      {showStructure && structure && !(showDay && routeStops.length > 0) && !noDay &&
+        (structure.provenance === "agnostic_anchor" || restoredAt) && (
         <section className="rounded-parranda border-line border-parranda-glow/40 bg-parranda-glow/8 p-4">
           <div className="min-w-0 flex-1">
             {structure.provenance === "agnostic_anchor" && (
@@ -3161,6 +3482,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           startLeg={startLeg}
           finishLeg={finishLeg}
           anchorIsPosition={anchorIsPosition}
+          walkingDestination={routeDestination}
+          continuationAllowed={!dayIsStale}
           mapsPlaceContext={mapsPlaceContext}
           expandedStopKey={expandedStopKey}
           setExpandedStopKey={setExpandedStopKey}
@@ -3168,16 +3491,20 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           setExpandedCandidateKey={setExpandedCandidateKey}
           commitments={commitments}
           confirmedLiveKeepIds={confirmedLiveKeepIds}
-          selected={selected}
+          selected={shownInterests}
           releaseCommitment={releaseCommitment}
           keepStop={keepStop}
           dismissStop={dismissStop}
           removeStop={removeStop}
-          editPending={stopEditPending || staleNotice === "updating"}
+          editPending={stopEditPending || retainedInterestDay || staleNotice === "updating"}
           commit={commit}
           eveningEvent={eveningEvent}
           selectedDate={liveEvents?.selected_date}
           dayOffset={dayOffset}
+          follow={positionSession}
+          following={followScope === locationScope && followDayIsToday}
+          canFollowToday={followDayIsToday}
+          onToggleFollow={toggleFollow}
           routeContextSuggestions={routeContextSuggestions}
           detoursOpen={detoursOpen}
           setDetoursOpen={setDetoursOpen}
@@ -3216,13 +3543,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {/* Without a primary route, the broader place structure remains useful —
           but it is explicitly candidates, never a second itinerary. */}
-      {showStructure && structure && !hasPrimaryRoute && (
+      {/* The no-day notice already says why there is no route, so the list
+          adds only places — and, with none, nothing at all. "No places for"
+          names only picks the loader did not find places for, and only when
+          every place source answered: an absence read from partial evidence
+          is not stated as a fact. */}
+      {showStructure && structure && !hasPrimaryRoute && !(noDay && candidateMatchCount(day?.areas) === 0) && (
         <CandidateAreas
           t={t}
           lang={lang}
-          structureOnly={classification?.status === "structure_only"}
+          structureOnly={classification?.status === "structure_only" && !noDay}
           areas={day?.areas ?? []}
-          missingIntents={day?.missing_intents ?? []}
+          missingIntents={incompletePlaceSources ? []
+            : evidencedMissingIntents(day?.missing_intents, safeResponse?.agnostic_route_output_experiment?.source_status)}
           mapsPlaceContext={mapsPlaceContext}
           expandedCandidateKey={expandedCandidateKey}
           setExpandedCandidateKey={setExpandedCandidateKey}
@@ -3238,6 +3571,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               routeContextSuggestions={routeContextSuggestions}
               showContext={false}
               sketch={false}
+              positionSession={positionSession}
+              positionEnabled={positionEnabled}
+              positionCentreRequest={positionCentreRequest}
+              onLocate={locateOnMap}
+              onStopLocation={stopLocation}
               heightClass="h-64 sm:h-72"
               t={t}
             />
