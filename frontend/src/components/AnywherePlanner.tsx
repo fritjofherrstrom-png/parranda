@@ -1002,6 +1002,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               walkKey: effectiveWalkKey,
               preferencePriority: effectivePriority,
               dayEdit: persistedDayEdit,
+              intentMode: payload.intent_mode ?? null,
             }),
             entries: activeLedger.entries,
             appliedPins: decision.isComposedStatus(cls.status) ? sentPins : [],
@@ -1637,7 +1638,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const saved = readLS<SavedEntry | null>(LAST_KEY, null);
       const recovered = urlEntryCommitments(saved, {
         navigationType: navigation?.type, anchor, dateIso, selected: preferences, walkKey: shared.walkKey,
-        preferencePriority: linkedPriority, dayEdit: linkedEdit,
+        preferencePriority: linkedPriority, dayEdit: linkedEdit, intentMode: choosesEnabled ? intentMode : null,
       });
       setChoicesNotCarried(navigation?.type === "reload" && !recovered.applies && hasStoredChoices(saved));
       if (recovered.applies) {
@@ -1977,7 +1978,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const linkedEdit = normalizeDayEdit(dayEdit);
     const recovered = urlEntryCommitments(entry, {
       navigationType: "reload", anchor: { coords }, dateIso, selected, walkKey,
-      preferencePriority: linkedPriority, dayEdit: linkedEdit,
+      preferencePriority: linkedPriority, dayEdit: linkedEdit, intentMode: choosesEnabled ? intentMode : null,
     });
     const recoveredEdit = recovered.applies ? linkedEdit : null;
     dayEditScopeRef.current = recoveredEdit ? { anchorKey: anchorKey({ coords }), dateIso } : null;
