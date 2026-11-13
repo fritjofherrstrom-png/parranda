@@ -2,6 +2,30 @@
 
 Branch `claude/meal-spacing-20261107`, merged with `main` c428c3cf. "Before" is that same tree with `main`'s `server/planner/day-composition-policy.js`; "after" is the branch's file. Nothing else differs.
 
+**Narrowed rule (owner decision, 13 Nov 2026).** The meal sequence is judged on the final route. Only a finished day that puts two meals side by side is recomposed, with the meal-spacing selection, and the new day replaces it whole only if, on both final routes:
+- no meals are side by side;
+- the stop count is the same, every pin is still there, and every meal that was already apart is still there;
+- no requested interest is less covered;
+- the walk is not longer.
+
+Otherwise the original day is kept, unchanged. `after.jsonl` is this narrowed rule. `after-strict.jsonl` and `summary-strict.json` are the first, stricter version, kept for reference.
+
+## Narrowed rule against main (`summary.json`)
+| | main | narrowed |
+|---|---|---|
+| Mixed-pick days with adjacent meals | 361 | 309 |
+| Food-only days changed | — | 0 |
+| Days that changed | — | 52, all of them adjacent on `main` |
+| Changed days whose meals were already apart on `main` | — | 0 |
+| Changed days with a longer walk | — | 0 (18 equal, 34 shorter, mean −0.53 km) |
+| Changed days with a different stop count or lost coverage | — | 0 |
+| Changed days still with adjacent meals | — | 0 |
+
+- **Daypart labels**, reported separately and unchanged in meaning: 20 changed days lose them and 2 gain them. The engine withholds labels when a stop of an earlier slot comes between two later ones; that is `main`'s behaviour.
+- **The remaining 309 adjacent mixed-pick days** have no recomposition that met every condition above. Mostly the pool forces the pair; otherwise separating the meals would walk further or drop something.
+
+The sections below describe the first, stricter version (`after-strict.jsonl`).
+
 ## Method
 - One composer for every pair: `tests/helpers/day-composition-fixtures.js`. That fixes the source pool, the place (the fixture anchor), the date (2026-10-22), the clock (2026-10-16T08:00Z), the weather (sun) and the walking mode (no limit).
 - First a small hand-built control: `clustered`, `spread` and `forced` (the pools in `tests/day-meal-spacing.test.js`).
@@ -46,4 +70,5 @@ git show origin/main:server/planner/day-composition-policy.js > server/planner/d
 node docs/evidence/meal-spacing-20261113/compare.js > docs/evidence/meal-spacing-20261113/before.jsonl
 cp /tmp/policy-branch.js server/planner/day-composition-policy.js
 node docs/evidence/meal-spacing-20261113/compare.js --summary docs/evidence/meal-spacing-20261113/before.jsonl docs/evidence/meal-spacing-20261113/after.jsonl
+# The pools are tests/helpers/meal-spacing-pools.js, shared with tests/day-meal-spacing.test.js.
 ```

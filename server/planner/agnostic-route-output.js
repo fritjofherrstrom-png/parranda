@@ -64,7 +64,7 @@ const { weaveEveningEventRouteStop } = require("../candidates/event-route-stop-w
 const { generateAgnosticRecommendations, buildLegMetrics } = require("../route-engine");
 const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
 const { replacementKeepsOtherStops } = require("./walking-fit-selection");
-const { dayEditOutcome, normalizeDayEdit } = require('./day-composition-policy');
+const { dayEditOutcome, normalizeDayEdit, routeNeedsMealSpacing, acceptMealSpacing } = require('./day-composition-policy');
 const { activeLiveChoices } = require('./live-occurrence-choice');
 const { normalizeSourceWebsite } = require('../lib/source-website');
 const {
@@ -1764,7 +1764,7 @@ async function composeAgnosticRouteViaEngine({
       })
     : null;
 
-  async function runEngine(candidates, pins = pinnedStopIds) {
+  async function runEngine(candidates, pins = pinnedStopIds, { mealSpacing = false } = {}) {
     const engineCityConfig = buildAgnosticEngineCityConfig({
       anchor: origin,
       sourceCandidates: candidates,
@@ -1778,6 +1778,7 @@ async function composeAgnosticRouteViaEngine({
       reservedLiveStopCount: preserveLive ? 1 : 0,
       mealContext: contextBlock?.time?.timezone_known === true && contextBlock.time.requested_date_is_today === true
         ? { date: effectiveDate, nowLocalIso: contextBlock.time.now, fullDay: dayRhythm === 'full' } : null,
+      mealSpacing,
     });
     const engineResult = await generateAgnosticRecommendations({
       cityConfig: engineCityConfig,
@@ -1813,6 +1814,9 @@ async function composeAgnosticRouteViaEngine({
     let anchored = timeAnchoring.anchored;
     let trimmed = timeAnchoring.trimmedDayparts;
     let repairApplied = false;
+    // The candidates and pins behind the day held below, so a recomposition
+    // can ask the same question with one rule changed.
+    let held = { candidates: timeAnchoring.candidates, pins };
     let day = await runEngine(timeAnchoring.candidates, pins);
     let route = (day && day.primary_route) || null;
     if (!route && anchored) {
@@ -1821,6 +1825,7 @@ async function composeAgnosticRouteViaEngine({
       // not claim it is anchored; the caveat below makes that limitation explicit.
       day = await runEngine(sourceCandidates, pins);
       route = (day && day.primary_route) || null;
+      held = { candidates: sourceCandidates, pins };
       anchored = false;
       trimmed = [];
     }
@@ -1848,6 +1853,7 @@ async function composeAgnosticRouteViaEngine({
       })) {
         day = repairedDay;
         route = repairedRoute;
+        held = { candidates: capacityAnchoring.candidates, pins };
         anchored = capacityAnchoring.anchored;
         trimmed = capacityAnchoring.trimmedDayparts;
         repairApplied = true;
@@ -1878,9 +1884,23 @@ async function composeAgnosticRouteViaEngine({
             preservesReplacementQuality(route,trialRoute,preferences)) {
           day = trialDay;
           route = trialRoute;
+          held = { candidates: trialAnchoring.candidates, pins: [] };
           repairApplied = true;
         }
         if (!shouldTryCapacityRepair(route,walkingKmTarget)) break;
+      }
+    }
+    // A second main meal needs its own place in the day (#702, owner decision
+    // 13 Nov 2026). Judged on this finished route: only when it puts two meals
+    // side by side is the same question asked again with the meal-spacing
+    // selection, and that day replaces this one whole only when
+    // acceptMealSpacing confirms it on both final routes. A user edit is its
+    // own atomic answer and is never recomposed here.
+    if (!dayEdit && route && routeNeedsMealSpacing(route, preferences)) {
+      const spacedDay = await runEngine(held.candidates, held.pins, { mealSpacing: true });
+      if (acceptMealSpacing({ baseRoute: route, spacedRoute: spacedDay?.primary_route, preferences, pins: held.pins })) {
+        day = spacedDay;
+        route = spacedDay.primary_route;
       }
     }
     // The event weave is part of what gets EMITTED, and it extends the route by

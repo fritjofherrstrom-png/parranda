@@ -65,23 +65,7 @@ const CONTROL = {
 };
 
 // Then seeded breadth: the same generator and seed for both runs.
-function seeded(city) {
-  let seed = 1000 + city * 7919;
-  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
-  const types = [['restaurant', 6], ['pizza', 2], ['museum', 3], ['gallery', 4], ['viewpoint', 2], ['park', 3], ['garden', 1], ['cafe', 4], ['bar', 3]];
-  const clusterLat = (rnd() - 0.5) * 0.02, clusterLng = (rnd() - 0.5) * 0.03;
-  const rows = [];
-  for (const [type, max] of types) {
-    const count = Math.floor(rnd() * (max + 1));
-    for (let i = 0; i < count; i += 1) {
-      const clustered = (type === 'restaurant' || type === 'pizza') && rnd() < 0.6;
-      rows.push(at(`${type}-${city}-${i}`, type,
-        clustered ? clusterLat + (rnd() - 0.5) * 0.002 : (rnd() - 0.5) * 0.025,
-        clustered ? clusterLng + (rnd() - 0.5) * 0.003 : (rnd() - 0.5) * 0.035));
-    }
-  }
-  return rows;
-}
+const { seededPool: seeded } = require(path.join(ROOT, 'tests/helpers/meal-spacing-pools'));
 
 const PREFERENCES = [['culture', 'views', 'food'], ['food', 'culture'], ['food', 'fika', 'views'], ['food', 'nightlife'], ['food']];
 const RHYTHMS = ['calm', 'balanced', 'full'];
