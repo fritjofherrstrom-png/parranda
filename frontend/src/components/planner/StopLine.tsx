@@ -43,6 +43,7 @@ import { DAYPART_LABELS, label, partialPreferenceLabels, pickLabel, type Lang, t
 import { canCommitTo, type Commitments } from "./commitments";
 import StopCategory, { stopCategoryLabel } from "./StopCategory";
 import type { PositionSession } from "./useFollowPosition";
+import WalkingContinuation from "./WalkingContinuation";
 
 type Leg = { km: number | null; minutes: number | null };
 
@@ -89,6 +90,8 @@ export default function StopLine({
   startLeg,
   finishLeg,
   anchorIsPosition,
+  walkingDestination = null,
+  continuationAllowed = false,
   mapsPlaceContext,
   expandedStopKey,
   setExpandedStopKey,
@@ -129,6 +132,8 @@ export default function StopLine({
   startLeg?: (Leg & { label: string }) | null;
   finishLeg?: (Leg & { label: string }) | null;
   anchorIsPosition?: boolean;
+  walkingDestination?: { lat?: number; lng?: number; label?: string | null } | null;
+  continuationAllowed?: boolean;
   mapsPlaceContext: string | null | undefined;
   expandedStopKey: string | null;
   setExpandedStopKey: (key: string | null) => void;
@@ -232,6 +237,8 @@ export default function StopLine({
       {followStatus && (
         <p className="mb-1 text-13 font-semibold text-parranda-ink" aria-live="polite">{followStatus}</p>
       )}
+      <WalkingContinuation t={t} stops={routeStops} follow={follow}
+        enabled={continuationAllowed && canFollowToday && following && !stale} destination={walkingDestination} />
       {/* Core stops only, grouped under daypart headings taken from
           stop.daypart — only groups that exist render, and the engine's
           order is never changed to force a grouping. The walk INTO a stop
