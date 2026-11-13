@@ -204,6 +204,24 @@ function acceptMealSpacing({ baseRoute, spacedRoute, preferences = [], pins = []
     (!baseReached.has(intent) || reached.has(intent)));
 }
 
+// The same acceptance on the two FINAL results the response could carry: each
+// after its Live weave and final walking validation (null when the day has
+// none). Both must be measured the same way and be valid, carry the same Live
+// stops, and have the same total stop count; the core routes are then judged by
+// acceptMealSpacing on the walk that would actually be published.
+function acceptMealSpacedFinal({ original, trial, preferences = [], pins = [] } = {}) {
+  const live = route => (route?.main_stops || []).filter(stop => stop.is_live_event === true)
+    .map(stop => stop.live_occurrence_id || stop.event_id || stop.id).join('|');
+  const core = ({ route, validation }) => ({ ...route,
+    main_stops: (route.main_stops || []).filter(stop => stop.is_live_event !== true),
+    estimated_km: validation ? validation.result?.estimatedKm : route.estimated_km });
+  if (!original?.route || !trial?.route || Boolean(original.validation) !== Boolean(trial.validation) ||
+      original.validation?.valid === false || trial.validation?.valid === false) return false;
+  if (Boolean(original.weave?.applied) !== Boolean(trial.weave?.applied) || live(original.route) !== live(trial.route) ||
+      (original.route.main_stops || []).length !== (trial.route.main_stops || []).length) return false;
+  return acceptMealSpacing({ baseRoute: core(original), spacedRoute: core(trial), preferences, pins });
+}
+
 function* orders(values, prefix = []) {
   if (!values.length) { yield prefix; return; }
   for (let index = 0; index < values.length; index += 1) {
@@ -305,4 +323,4 @@ function dayEditOutcome(dayEdit, stops = [], reason = null) {
     result_candidate_ids: ids };
 }
 
-module.exports = { canonicalPriority, isMeal, mealsSeparable, routeNeedsMealSpacing, acceptMealSpacing, selectBalancedDay, orderBalancedDay, selectEditedDay, dayEditOutcome, normalizeDayEdit };
+module.exports = { canonicalPriority, isMeal, mealsSeparable, routeNeedsMealSpacing, acceptMealSpacing, acceptMealSpacedFinal, selectBalancedDay, orderBalancedDay, selectEditedDay, dayEditOutcome, normalizeDayEdit };

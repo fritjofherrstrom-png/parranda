@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { record, compose } = require('./helpers/day-composition-fixtures');
-const { isMeal, mealsSeparable, routeNeedsMealSpacing, acceptMealSpacing } = require('../server/planner/day-composition-policy');
+const { isMeal, mealsSeparable, routeNeedsMealSpacing, acceptMealSpacing, acceptMealSpacedFinal } = require('../server/planner/day-composition-policy');
 
 // A second main meal needs its own place in the day. Places are laid out on a
 // small grid around the fixture anchor; 0.001° of latitude is about 110 m.
@@ -143,4 +143,107 @@ test('a recomposed day is accepted only as a confirmed whole-route improvement',
   assert.equal(routeNeedsMealSpacing(route([art('g1'), meal('r1'), art('g2'), meal('r2')], 3.0), preferences), false, 'meals already apart');
   assert.equal(routeNeedsMealSpacing(route([meal('r1'), meal('r2')], 1.0), ['food']), false, 'food-only days are never touched');
   assert.equal(routeNeedsMealSpacing(route([art('g1'), art('g2')], 1.0), preferences), false, 'no meals');
+});
+
+// HOLD review on #702, 14 Nov 2026: the swap was chosen before the Live weave
+// and the final walking validation, so a day that only looked better could be
+// published, or fail and fall back to no day at all. The decision is now made
+// on comparable final results, and the meal change is attempted only where
+// that final chain needs no walking provider; otherwise nothing changes.
+const CLUSTERED_MAIN = ['museum', 'gallery-a', 'gallery-c', 'garden', 'rest-a', 'rest-c'];
+function clusteredPool() {
+  return [
+    at('museum', 'museum', -0.003, 0.002), at('gallery-a', 'gallery', 0), at('gallery-b', 'gallery', 0.0016),
+    at('gallery-c', 'gallery', 0.001, 0.004), at('garden', 'garden', 0.006, 0.003), at('park', 'park', 0.008, -0.002),
+    at('cafe', 'cafe', 0.004), at('rest-a', 'restaurant', 0.01, 0.006), at('rest-b', 'restaurant', 0.0111, 0.006),
+    at('rest-c', 'restaurant', 0.0105, 0.0075),
+  ];
+}
+// A walking router seam for the final chain: legs as the heuristic measures
+// them, except for any route through gallery-b (the meal alternative), which
+// it walks three times longer or refuses outright.
+function walkingRouter(mode, calls) {
+  return async points => {
+    calls.push(points.map(point => point.label));
+    const through = points.some(point => point.label === 'gallery-b');
+    if (through && mode === 'refuse') throw new Error('router refused');
+    const factor = through && mode === 'longer' ? 3 : 1;
+    const legs = points.slice(1).map((point, i) => {
+      const km = Number((legKm(points[i], point) * factor).toFixed(1));
+      return { from_label: points[i].label, to_label: point.label, distance_km: km, estimated_walk_minutes: Math.round(km * 12) };
+    });
+    return { source: 'osrm', mode: 'walking', estimatedKm: Number(legs.reduce((sum, leg) => sum + leg.distance_km, 0).toFixed(1)),
+      legs, pathPoints: points.map(({ lat, lng }) => ({ lat, lng })) };
+  };
+}
+function legKm(left, right) {
+  const rad = d => d * Math.PI / 180;
+  const h = Math.sin(rad(right.lat - left.lat) / 2) ** 2 + Math.cos(rad(left.lat)) * Math.cos(rad(right.lat)) * Math.sin(rad(right.lng - left.lng) / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h)) * 1.22;
+}
+const FINAL_WALK = { walkingConfig: { defaultProvider: 'osrm', transportMode: 'foot' } };
+
+test('an alternative that looks shorter but walks further once validated never replaces the original', async () => {
+  const calls = [];
+  const day = await compose(clusteredPool(), ['culture', 'views', 'food'], { ...FINAL_WALK, walkingRouter: walkingRouter('longer', calls) });
+  assert.deepEqual(day.stops.map(stop => stop.id), CLUSTERED_MAIN, 'the original day is published');
+  assert.ok(calls.length > 0 && calls.every(labels => !labels.includes('gallery-b')),
+    'no walking-provider call is spent on the alternative');
+});
+
+test('when the alternative would fail its final validation, the original day survives whole', async () => {
+  const calls = [];
+  const day = await compose(clusteredPool(), ['culture', 'views', 'food'], { ...FINAL_WALK, walkingRouter: walkingRouter('refuse', calls) });
+  assert.ok(day.route, 'a day is still published, not the baseline fallback');
+  assert.deepEqual(day.stops.map(stop => stop.id), CLUSTERED_MAIN);
+  assert.equal(day.experiment.eligibility.eligible, true);
+});
+
+test('a Live weave that would differ for the alternative keeps the original, with its event', async () => {
+  // main's calm Food + Culture day here ends at restaurant-3-2; the meal
+  // alternative ends at museum-3-0, 2.85 km away. The evening event sits
+  // about 0.5 km beyond restaurant-3-2, so only the original can take it.
+  const event = { id: 'ev-meal', title: 'Evening concert', cultural_tier: 'cultural',
+    starts_at: '2026-10-22T18:00:00Z', ends_at: '2026-10-22T20:00:00Z', starts_on: '2026-10-22', ends_on: '2026-10-22',
+    occurrence_date: '2026-10-22', timezone: 'Europe/Stockholm',
+    time_window: { kind: 'daily', starts_on: '2026-10-01', ends_on: '2026-10-31', local_start: '20:00', local_end: '22:00', timezone: 'Europe/Stockholm' },
+    source_label: 'Open feed', source_url: 'https://example.org/ev-meal', license: 'CC-BY 4.0', lat: 55.60781, lng: 13.015 };
+  const day = await compose(seededPool(3), ['food', 'culture'], { dayRhythm: 'calm',
+    eveningEventStructure: { provenance: 'agnostic_anchor', district_day: { areas: [], evening_event: event } } });
+  const core = day.stops.filter(stop => stop.is_live_event !== true).map(stop => stop.id);
+  assert.deepEqual(core, ['museum-3-1', 'museum-3-0', 'restaurant-3-0', 'restaurant-3-2'], 'main\'s day, kept whole');
+  assert.equal(day.stops.filter(stop => stop.is_live_event === true).length, 1, 'with its woven evening event');
+});
+
+test('the final acceptance compares only like with like, on the walk that would be published', () => {
+  const stop = (id, covered, extra = {}) => ({ id, covered_preferences: covered, ...extra });
+  const meal = id => stop(id, ['food']);
+  const art = id => stop(id, ['museums']);
+  const liveStop = id => stop(id, [], { is_live_event: true, live_occurrence_id: id });
+  const route = (stops, km) => ({ main_stops: stops, estimated_km: km });
+  const walk = (km, valid = true) => ({ valid, result: { estimatedKm: km } });
+  const preferences = ['culture', 'food'];
+  const original = { route: route([art('g1'), art('g2'), meal('r1'), meal('r2')], 3.0), weave: null, validation: walk(3.0) };
+  const trial = { route: route([art('g1'), meal('r1'), art('g2'), art('g3')], 2.0), weave: null, validation: walk(2.9) };
+  assert.equal(acceptMealSpacedFinal({ original, trial, preferences }), true);
+  const refused = {
+    'longer once validated, though shorter by estimate': { ...trial, validation: walk(3.2) },
+    'its final validation fails': { ...trial, validation: walk(2.0, false) },
+    'measured differently (no final validation)': { ...trial, validation: null },
+    'a Live event woven only into the alternative': { route: route([...trial.route.main_stops, liveStop('live:x')], 2.0),
+      weave: { applied: true }, validation: walk(2.9) },
+  };
+  for (const [name, candidate] of Object.entries(refused)) {
+    assert.equal(acceptMealSpacedFinal({ original, trial: candidate, preferences }), false, name);
+  }
+  const wovenOriginal = { route: route([...original.route.main_stops, liveStop('live:x')], 3.4), weave: { applied: true }, validation: walk(3.4) };
+  assert.equal(acceptMealSpacedFinal({ original: wovenOriginal, trial, preferences }), false, 'the original\'s event would be lost');
+  assert.equal(acceptMealSpacedFinal({ original: wovenOriginal, preferences,
+    trial: { route: route([...trial.route.main_stops, liveStop('live:y')], 3.3), weave: { applied: true }, validation: walk(3.3) } }),
+    false, 'a different event');
+  assert.equal(acceptMealSpacedFinal({ original: wovenOriginal, preferences,
+    trial: { route: route([...trial.route.main_stops, liveStop('live:x')], 3.3), weave: { applied: true }, validation: walk(3.3) } }),
+    true, 'the same event on both, a shorter walk');
+  assert.equal(acceptMealSpacedFinal({ original: { ...original, validation: walk(3.0, false) }, trial, preferences }), false,
+    'an original that fails is never swapped; the existing rejection stands');
 });
