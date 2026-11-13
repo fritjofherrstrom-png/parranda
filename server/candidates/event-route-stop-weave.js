@@ -36,7 +36,7 @@
 
 const { validateAgnosticWalkingOrder } = require("../planner/agnostic-route-walking-validation");
 const { classifyEventSourceLink } = require("../pulse-sources/event-source-link");
-const { eventReachesEvening } = require("./evening-event-weave");
+const { MUSIC_ROUTE_ALTERNATIVES, eventReachesEvening } = require("./evening-event-weave");
 
 // A woven evening stop must be a short hop from where the day already ends —
 // beyond this the event stays an anchor (real, sourced, but with no walk claim).
@@ -65,11 +65,36 @@ function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function refusedForWalkingDistance(outcome) {
+  return outcome.blockers.some(blocker =>
+    ["event_leg_too_long", "walking_leg_budget_exceeded", "walking_budget_exceeded"].includes(blocker));
+}
+
 /**
- * @returns {Promise<{result: object, placeStructure: object|null, applied: boolean, blockers: string[], interrupt?: object}>}
+ * @returns {Promise<{result: object, placeStructure: object|null, applied: boolean, blockers: string[], interrupt?: object, finalWalkingValidation?: object}>}
  *   `result`/`placeStructure` are the inputs when not applied, clones when applied.
  */
-async function weaveEveningEventRouteStop({ result, placeStructure, walkingRouter, walkingConfig, requestedPreferences = [] } = {}) {
+async function weaveEveningEventRouteStop(options = {}) {
+  const { placeStructure } = options;
+  const alternatives = placeStructure?.district_day?.evening_event?.explicit_live_choice === true
+    ? null : placeStructure?.[MUSIC_ROUTE_ALTERNATIVES];
+  const trialOptions = alternatives ? options : { ...options, validateFinalWalking: null };
+  const first = await weaveRouteStop(trialOptions);
+  if (!refusedForWalkingDistance(first)) return first;
+  // Preserve salience order and the original anchor/suggestion if none fits.
+  // Transport or evidence failures are terminal, with no extra router attempt.
+  for (const event of alternatives || []) {
+    const alternative = await weaveRouteStop({
+      ...trialOptions,
+      placeStructure: { ...placeStructure, district_day: { ...placeStructure.district_day, evening_event: event } },
+    });
+    if (alternative.applied) return alternative;
+    if (!refusedForWalkingDistance(alternative)) break;
+  }
+  return first;
+}
+
+async function weaveRouteStop({ result, placeStructure, walkingRouter, walkingConfig, requestedPreferences = [], validateFinalWalking }) {
   const unchanged = (blockers, interrupt = null) => ({
     result,
     placeStructure,
@@ -106,12 +131,19 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
   if (route.main_stops.some((s) => s.event_id && event.id && s.event_id === event.id)) {
     return unchanged(["event_already_in_route"]);
   }
+  const eventPoint = { lat: event.lat, lng: event.lng };
+  const eventRoutePoint = { label: eventLabel, ...eventPoint, role: "evening_event" };
+  const routePoints = Array.isArray(route.map_route_points) && route.map_route_points.length
+    ? [...(route.map_route_points.at(-1)?.role === "end" ? route.map_route_points.slice(0, -1) : route.map_route_points),
+      eventRoutePoint]
+    : null;
 
-  // Walking validation of the EXTENDED order — same validator, same honesty:
-  // supplied order only, heuristic router by default, fails closed.
+  // When composition requires a final chain check, route the same published
+  // order here so the shortlist can respond to its real walking budget.
+  // Ordinary weaves retain their existing main-stop walking validation.
   let validation;
   try {
-    validation = await validateAgnosticWalkingOrder({
+    validation = validateFinalWalking ? await validateFinalWalking(routePoints) : await validateAgnosticWalkingOrder({
       stops: [...coordStops.map((s) => ({ lat: s.lat, lng: s.lng, label: s.label })), { lat: event.lat, lng: event.lng, label: eventLabel }],
       // Callers (buildApp) default these to null; the validator's own defaults
       // only engage on undefined.
@@ -124,7 +156,7 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
   const legs = validation && validation.valid && validation.result && Array.isArray(validation.result.legs)
     ? validation.result.legs
     : null;
-  if (!legs || legs.length !== coordStops.length) {
+  if (!legs || legs.length !== (validateFinalWalking ? routePoints.length - 1 : coordStops.length)) {
     return unchanged(["walking_validation_failed", ...((validation && validation.blockers) || [])]);
   }
   const eventLeg = legs[legs.length - 1];
@@ -210,7 +242,9 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
   });
   nextRoute.legs = routeLegs;
 
-  if (Number.isFinite(nextRoute.estimated_km)) {
+  if (validateFinalWalking) {
+    nextRoute.estimated_km = validation.result.estimatedKm;
+  } else if (Number.isFinite(nextRoute.estimated_km)) {
     nextRoute.estimated_km = round1(Math.max(0, nextRoute.estimated_km - removedKm + legKm));
   }
   const legKms = routeLegs.map((l) => Number(l.distance_km)).filter(Number.isFinite);
@@ -219,7 +253,6 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
   if (legMins.length) nextRoute.average_leg_minutes = Math.round(legMins.reduce((a, b) => a + b, 0) / legMins.length);
   if (Array.isArray(nextRoute.daypart_arc)) nextRoute.daypart_arc.push("evening");
 
-  const eventPoint = { lat: event.lat, lng: event.lng };
   if (Array.isArray(nextRoute.map_path_points) && nextRoute.map_path_points.length) {
     const first = nextRoute.map_path_points[0];
     const last = nextRoute.map_path_points[nextRoute.map_path_points.length - 1];
@@ -228,11 +261,7 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
     if (first && last && first.lat === last.lat && first.lng === last.lng) nextRoute.map_path_points.pop();
     nextRoute.map_path_points.push(eventPoint);
   }
-  if (Array.isArray(nextRoute.map_route_points) && nextRoute.map_route_points.length) {
-    const lastPoint = nextRoute.map_route_points[nextRoute.map_route_points.length - 1];
-    if (lastPoint && lastPoint.role === "end") nextRoute.map_route_points.pop();
-    nextRoute.map_route_points.push({ label: eventLabel, lat: event.lat, lng: event.lng, role: "evening_event" });
-  }
+  if (routePoints) nextRoute.map_route_points = deepClone(routePoints);
   if (nextRoute.route_shape === "loop") nextRoute.route_shape = "open";
   nextRoute.live_event_stop = {
     event_id: event.id || null,
@@ -253,6 +282,7 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
     placeStructure: nextStructure,
     applied: true,
     blockers: [],
+    ...(validateFinalWalking ? { finalWalkingValidation: validation } : {}),
     interrupt: buildPulseRouteInterrupt({ status: "applied", event, lastStop, legKm, legMinutes }),
   };
 }

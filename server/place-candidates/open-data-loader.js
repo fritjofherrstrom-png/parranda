@@ -172,6 +172,8 @@ const LOADER_SUPPORTED_INTENTS = new Set([
   ...Object.keys(STABLE_PLACE_INTEREST_ROLES),
 ]);
 const OSM_UNSUPPORTED_INTERESTS = new Set(["brunch", "cheap_eats", "flea_markets", "wine_bars", "cocktail_bars"]);
+const OSM_OUTDOOR_INTERESTS = new Set(["viewpoint_places", "waterside", "bathing_places"]);
+const OSM_REVISED_INTERESTS = new Set([...OSM_OUTDOOR_INTERESTS, "art_museums", "history_museums"]);
 
 // Small, intent-mapped OSM tag → Parranda type table. Kept conservative so
 // every entry maps cleanly into the canonical intent vocabulary. Add lines
@@ -195,6 +197,7 @@ const OSM_TAG_MAP = [
   { key: "natural", value: "beach", type: "beach", tags: ["coast"] },
   { key: "leisure", value: "beach_resort", type: "beach", tags: ["coast"] },
   { key: "leisure", value: "swimming_area", type: "beach", tags: ["coast", "bathing"] },
+  { key: "leisure", value: "bathing_place", type: "beach", tags: ["coast", "bathing"] },
   // second hand / vintage (NOT generic retail)
   { key: "shop", value: "second_hand", type: "vintage-shop", tags: ["second_hand"] },
   { key: "shop", value: "antiques", type: "vintage-shop", tags: ["vintage", "antique"] },
@@ -832,7 +835,8 @@ function createOpenDataLoader({
     const band = normalizeWalkingTargetBand(request.walkingTargetBand);
     const radiusKm = pinnedRadiusKm ?? rhythmAwareRadiusKm(band, request.dayRhythm);
     const anchorKey = `${request.lat.toFixed(3)},${request.lng.toFixed(3)}`;
-    const shape = `l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:i${normalizeRequestedIntents(request.requestedIntents, { osmOnly: true }).join(".") || "all"}`;
+    const requestedIntents = normalizeRequestedIntents(request.requestedIntents, { osmOnly: true });
+    const shape = `l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:i${requestedIntents.join(".") || "all"}`;
     const scopeKey = spatialScopeCacheKey(request.spatialScope ?? null);
     const window = normalizeAvailabilityWindow(request.availabilityWindow);
     const windowKey = window ? `${window.weekday}.${window.startMinute}.${window.endMinute}` : "none";
@@ -845,14 +849,20 @@ function createOpenDataLoader({
       radiusKm,
       targetKm: band ? band.targetKm : null,
     };
-    // Compound shop selectors and relation acquisition change source recall.
-    // Old samples remain on disk, but cannot masquerade as an answer to this
-    // query contract (particularly an old cached empty answer).
-    return previousContract ? identity : {
+    // Exact requests that need the revised map facts refresh their own query.
+    // Keep the previous query's positive outage fallback and share independently
+    // collected neighbour evidence across the two active query revisions.
+    const revised = requestedIntents.some(intent => OSM_REVISED_INTERESTS.has(intent));
+    if (previousContract && !revised) return identity;
+    const revision = revised && !previousContract ? "q3" : "q2";
+    return {
       ...identity,
-      key: `q2:${identity.key}`,
-      budgetsKey: `q2:${identity.budgetsKey}`,
-      evidenceKey: `q2:${identity.evidenceKey}`,
+      key: `${revision}:${identity.key}`,
+      budgetsKey: `${revision}:${identity.budgetsKey}`,
+      evidenceKey: `${revision}:${identity.evidenceKey}`,
+      otherIndexKeys: revision === "q3"
+        ? [`q2:${identity.budgetsKey}`, `q2:${identity.evidenceKey}`]
+        : [`q3:${identity.evidenceKey}`],
     };
   }
 
@@ -912,14 +922,16 @@ function createOpenDataLoader({
     const merged = { ...request, ...anchor };
     if (!canIndexBudgets || !hasAnchor(merged)) return null;
     const own = requestIdentity(merged);
-    const exactBudgets = cache.peek(own.budgetsKey);
-    const heldEvidence = cache.peek(own.evidenceKey);
-    const budgets = [...(Array.isArray(exactBudgets) ? exactBudgets : []),
-      ...(Array.isArray(heldEvidence) ? heldEvidence : [])];
-    if (!budgets.length) return null;
+    const previousKey = requestIdentity(merged, true).key;
+    const entries = [own.budgetsKey, own.evidenceKey, ...own.otherIndexKeys].flatMap(key => {
+      const index = cache.peek(key);
+      return Array.isArray(index) ? index : [];
+    });
+    const budgets = new Map(entries.filter(entry => typeof entry?.key === "string" &&
+      entry.key !== own.key && entry.key !== previousKey).map(entry => [entry.key, entry]));
+    if (!budgets.size) return null;
     const distance = (a, b) => (Number.isFinite(a) && Number.isFinite(b) ? Math.abs(a - b) : Number.POSITIVE_INFINITY);
-    const best = budgets
-      .filter((entry) => typeof entry?.key === "string" && entry.key !== own.key)
+    const best = [...budgets.values()]
       .map((entry) => ({ entry, value: cache.peek(entry.key) }))
       .filter(({ value }) =>
         Array.isArray(value?.records) && value.records.length > 0 &&
@@ -1064,12 +1076,15 @@ function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_
   let i = 0;
   for (const [category, entries] of groups) {
     const setName = `c${i}`;
+    // Unnamed outdoor features are discarded by the mapper. Keep them out of
+    // the focused quota, where node ordering can otherwise hide named ways.
+    const nameFilter = OSM_OUTDOOR_INTERESTS.has(category) ? '["name"]' : '';
     const filters = entries
       .flatMap(({ key, value, and }) => {
         const selector = [[key, value], ...Object.entries(and || {})]
           .map(([key, value]) => `["${key}"="${value}"]`).join('');
         return anchors.flatMap(({ lat, lng }) => ['node', 'way', 'relation']
-          .map(kind => `${kind}${selector}(around:${radiusM},${lat},${lng});`));
+          .map(kind => `${kind}${selector}${nameFilter}(around:${radiusM},${lat},${lng});`));
       })
       .join("");
     blocks.push(`(${filters})->.${setName};.${setName} out center ${perCategory};`);
@@ -1519,7 +1534,7 @@ function mapOsmElement(element) {
     type: mapping.type,
     lat: coords.lat,
     lng: coords.lng,
-    tags: mapping.tags.slice(),
+    tags: details?.kind === 'swimming_prohibited' ? mapping.tags.filter(tag => tag !== 'bathing') : mapping.tags.slice(),
     sources,
     chain: Boolean(brandName || brandWikidata),
     brand: brandName,
@@ -1541,15 +1556,20 @@ function mapOsmElement(element) {
 }
 
 function osmPlaceDetails(tags, type) {
+  const bathingPlace = ['swimming_area', 'bathing_place'].includes(tags.leisure) ||
+    (tags.natural === 'beach' && tags.swimming === 'yes');
   const kind = tags.shop === 'antiques' ? 'antiques'
     : tags.shop === 'bakery' ? 'bakery'
     : tags.amenity === 'cafe' ? 'cafe'
     : tags.tourism === 'museum' && tags.museum === 'art' ? 'art_museum'
     : tags.tourism === 'museum' && tags.museum === 'history' ? 'history_museum'
+    : tags.tourism === 'museum' && tags.museum === 'children' ? 'childrens_museum'
+    : tags.tourism === 'museum' && tags.museum === 'person' ? 'biographical_museum'
     : tags.tourism === 'gallery' ? 'art_gallery'
     : tags.leisure === 'nature_reserve' ? 'nature_reserve'
     : tags.leisure === 'garden' && tags['garden:type'] === 'botanical' ? 'botanical_garden'
-    : tags.leisure === 'swimming_area' || (tags.natural === 'beach' && tags.swimming === 'yes') ? 'bathing_place'
+    : type === 'beach' && tags.swimming === 'no' ? 'swimming_prohibited'
+    : bathingPlace ? 'bathing_place'
     : tags.amenity === 'marketplace' ? 'marketplace'
     : tags.amenity === 'biergarten' ? 'beer_place' : null;
   return normalizePlaceDetails({ kind }, type);

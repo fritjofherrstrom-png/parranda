@@ -93,7 +93,7 @@ import { useMediaQuery } from "./shared/useMediaQuery";
 import AnchorCard, { ChangePlaceLink, type AdjustRebuild } from "./planner/AnchorCard";
 import type { InterestSelection } from "./planner/InterestChooser";
 import BlitzCard from "./planner/BlitzCard";
-import CandidateAreas from "./planner/CandidateAreas";
+import CandidateAreas, { candidateMatchCount } from "./planner/CandidateAreas";
 import DayHeader, { DayActions, DayWhen, dayAssemblyNotes } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
@@ -104,7 +104,8 @@ import LiveSheet from "./planner/LiveSheet";
 import { selectedDayEmpty, useLiveFallback } from "./planner/useLiveFallback";
 import SavedDays from "./planner/SavedDays";
 import StopLine from "./planner/StopLine";
-import { pickLabel, unkeptReasonSentence, type Lang } from "./planner/copy";
+import { noDayMessage, pickLabel, unkeptReasonSentence, type Lang } from "./planner/copy";
+import { evidencedMissingIntents, noDayState } from "../lib/no-day-state.mjs";
 import type { LiveEvents, PlaceStructure, PulseEvent } from "./planner/types";
 
 type SharePublication = { entry: SavedEntry; publication: PublishedDayReference };
@@ -478,6 +479,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setLiveSheetScope("around_place");
   }, [safeResponse]);
   const lastEntryRef = useRef<SavedEntry | null>(null); // the latest composed day, for "save"
+  // Remembered entries made by keepInPlace: the same day and response as the
+  // compose that produced them, with one more kept stop in their ledger.
+  const keptInPlaceEntriesRef = useRef(new WeakSet<SavedEntry>());
 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
   const typedPlaceLabel = place.trim();
@@ -1102,6 +1106,21 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // The remembered entry for this day, while it is still the remembered one.
     let entry = installed?.days?.length > 0 && lastEntryRef.current?.safeResponse === installed
       ? lastEntryRef.current : null;
+    // A stop kept in place re-binds the remembered entry to this same day and
+    // response with one more pin. The Live list still belongs to that day, so
+    // the run follows the re-bind; the route upgrade does not, because it
+    // replays the compose from before the Keep and would rebuild the day the
+    // reader has just settled.
+    let keptSince = false;
+    const remembered = () => {
+      const now = lastEntryRef.current;
+      if (entry && now && now !== entry && keptInPlaceEntriesRef.current.has(now) &&
+          now.id === entry.id && now.safeResponse === entry.safeResponse) {
+        entry = now;
+        keptSince = true;
+      }
+      return Boolean(entry) && lastEntryRef.current === entry;
+    };
     const current = () =>
       !controller.signal.aborted &&
       requestId === requestSequenceRef.current &&
@@ -1115,7 +1134,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         const { day_snapshot: previousSnapshot, ...original } = installed;
         const view = { ...original, live_events: liveEvents,
           ...(daySnapshot ? { day_snapshot: daySnapshot } : {}) };
-        if (entry && lastEntryRef.current === entry) {
+        if (entry && remembered()) {
           entry = { ...entry, safeResponse: view };
           lastEntryRef.current = entry;
           writeLS(LAST_KEY, entry);
@@ -1124,14 +1143,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         // binding its displayed terminal sidecar to this exact remembered view.
         setCompletedLive({ day: installed, liveEvents, view, entry });
         const publication = readyPublishedDay(daySnapshot);
-        setSharePublication(publication && entry && lastEntryRef.current === entry ? { entry, publication } : null);
+        setSharePublication(publication && entry && remembered() ? { entry, publication } : null);
+      },
+      allowUpgrade: () => {
+        remembered();
+        return !keptSince;
       },
     })
       .then((outcome) => {
         if (liveCompletionAbortRef.current === controller) liveCompletionAbortRef.current = null;
         if (!current()) return;
         setLiveFollowing(false);
-        if (outcome.upgrade?.kind === "applied" && entry && lastEntryRef.current === entry) {
+        if (outcome.upgrade?.kind === "applied" && entry && remembered() && !keptSince) {
           installLiveUpgrade(outcome.upgrade.result, entry, preserveInterestUndo);
         }
       })
@@ -1864,7 +1887,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setNavigationPublication(null);
       setNavigationWriteFailure(entry);
     }
-  }, [arrivalRead, safeResponse, classification, completedLive, restoredAt, lang, publicReference, publicReadState]);
+    // `commitments`: a Keep made in place (and its Undo) re-binds the accepted
+    // entry without a new response; the pointer follows that entry.
+  }, [arrivalRead, safeResponse, classification, completedLive, restoredAt, lang, publicReference, publicReadState, commitments]);
 
   const leavePlanner =(target: "home" | "language") => {
     if (mode === "typed" && placeSelection) storePlaceChoice({ place, selection: placeSelection, label: selectionLabel });
@@ -2524,7 +2549,61 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   };
   const dismissStop = (identity: string, stopLabel: string) => editStop(identity, stopLabel, "replace");
   const removeStop = (identity: string, stopLabel: string) => editStop(identity, stopLabel, "remove");
-  const keepStop = (identity: string, stopLabel: string) => commit(identity, "pin", stopLabel);
+  // Keep on a stop of the settled day on screen. That day already contains
+  // the stop, so it already answers the pin: the Keep is remembered with the
+  // day, carried by every later adjustment, and said by name, and nothing is
+  // recomposed. A full compose here rebuilt the whole day as a side effect of
+  // Keep (staging 2590f540: reversed order, a woven Live event, +2 km).
+  // A Keep made while another change is pending or in flight joins that
+  // change through commit() instead, and the receipt names it there too.
+  const keepInPlace = (identity: string, stopLabel: string): boolean => {
+    const previous = lastEntryRef.current;
+    const anchor = displayedAnchorKeyRef.current;
+    if (!identity || isLiveOccurrenceId(identity) || commitments[identity] || !previous || !anchor ||
+        !isUndoableDay(previous) || !showDay || phase !== "done" || dayIsStale || restoredAt || publicReference || interestFailure ||
+        upgradePending || stopEditPending || pendingStopEditRef.current || livePlanPendingRef.current ||
+        activeRequestRef.current || recomposeTimerRef.current || pollTimerRef.current ||
+        (dayEdit && !dayEdit.retained_candidate_ids.includes(identity))) return false;
+    const stopIds = (stops: any[]) => stops.map((stop: any) => String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "").trim());
+    if (!stopIds(routeStops).includes(identity) || !stopIds(primaryRouteStops(previous.safeResponse)).includes(identity)) return false;
+    const label = String(stopLabel ?? "").trim();
+    const ledger = readCommitmentSnapshot(previous.commitments, { anchorKey: anchor, dayKey: previous.id });
+    const pin = { id: identity, kind: "pin" as const, label };
+    const answeredPins = [...(ledger.applies ? ledger.appliedPins : []).filter(applied => applied.id !== identity), pin];
+    const next: SavedEntry = {
+      ...previous,
+      commitments: buildCommitmentSnapshot({
+        anchorKey: anchor,
+        dayKey: previous.id,
+        entries: { ...(ledger.applies ? ledger.entries : {}), [identity]: { kind: "pin", label } },
+        appliedPins: answeredPins,
+        refusals: ledger.applies ? ledger.refusals : [],
+      }),
+    };
+    // Undo puts the day back exactly as it was before the Keep, receipt included.
+    const share = matchingSharePublication();
+    keptInPlaceEntriesRef.current.add(next);
+    lastEntryRef.current = next;
+    writeLS(LAST_KEY, next);
+    // The same published day: its share and its Live result stay bound to it.
+    setSharePublication(current => current?.entry === previous ? { ...current, entry: next } : current);
+    setCompletedLive(current => current?.entry === previous ? { ...current, entry: next } : current);
+    setExpandedStopKey(null);
+    setExpandedCandidateKey(null);
+    setChoicesNotCarried(false);
+    setStopEditFeedback(null);
+    setStopEditError(null);
+    commitmentAnchorKeyRef.current = anchor;
+    setAppliedPins(answeredPins);
+    setDayChange({ previous, previousShare: share ? { ...share } : undefined, summary: describeDayChange(previous, next) });
+    // The day on screen already answers these inputs: no adjustment to compose.
+    adoptedInputsRef.current = true;
+    setCommitments({ ...commitments, [identity]: { kind: "pin", label } });
+    return true;
+  };
+  const keepStop = (identity: string, stopLabel: string) => {
+    if (!keepInPlace(identity, stopLabel)) commit(identity, "pin", stopLabel);
+  };
   const releaseCommitment = (identity: string) => {
     if (!identity || !commitments[identity]) return;
     invalidateCommitmentIntent();
@@ -2628,31 +2707,38 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const sourcePartlyUnavailable = phase === "done" && classification?.status === "unavailable" && !anchorUnresolved
     && !sourceUnavailable && !terminalSourceIssue && typeof loadedSourceStatus?.error === "string" && loadedSourceStatus.error.trim() !== ""
     && loadedSourceStatus?.collection?.selection_reason === "loader_error";
-  // Preserve the classifier's absences; choices announce themselves, and an
-  // outstanding upgrade or service refusal is not a final no-day verdict.
-  const unavailableMessage = (!interestFailure || terminalSourceIssue) && phase === "done" && (classification?.status === "unavailable" || terminalSourceIssue) && !upgradePending && !serviceRefusal && !unavailableHasChoices
-    ? anchorUnresolved
-      ? placeRef ? referenceFailureMessage : t(
-          `Parranda hittade inte ”${typedPlaceLabel}”. Prova en annan stavning, eller lägg till stad eller land.`,
-          `Parranda couldn't find “${typedPlaceLabel}”. Try another spelling, or add a city or country.`,
-        )
-      : terminalSourceIssue
-        ? `${t("Parranda kunde inte bygga en dag här just nu.", "Parranda couldn't build a day here right now.")} ${sourceEvidenceNote}`
-      : sourceUnavailable
-        ? t(
-            `Platskällorna svarade inte just nu, så Parranda kunde inte hämta platser ${anchorIsPosition ? "nära dig" : `för ${placeName}`} — inget hittas på. Försök igen om en stund.`,
-            `The place sources didn't answer just now, so Parranda couldn't fetch places ${anchorIsPosition ? "near you" : `for ${placeName}`} — nothing is invented in its place. Try again in a moment.`,
-          )
-      : classification?.unavailableReason === "sparse_supply" && classification.realPlaceCount
-        ? t(
-            `Parranda hittade ${classification.realPlaceCount === 1 ? "1 riktig plats" : `${classification.realPlaceCount} riktiga platser`} ${anchorIsPosition ? "nära dig" : `nära ${placeName}`}, men inte tillräckligt för en pålitlig dag ännu — inget hittas på.`,
-            `Parranda found ${classification.realPlaceCount === 1 ? "1 real place" : `${classification.realPlaceCount} real places`} ${anchorIsPosition ? "near you" : `near ${placeName}`}, but not enough for a reliable day yet — nothing is invented in its place.`,
-          )
-        : t(
-            `Parranda kunde inte bygga en dag ${anchorIsPosition ? "nära dig" : `för ${placeName}`} ännu.`,
-            `Parranda couldn't build a day ${anchorIsPosition ? "near you" : `for ${placeName}`} yet.`,
-          )
+  // A typed place Parranda could not pin down. Choices announce themselves,
+  // and an outstanding upgrade or service refusal is not a final verdict. A
+  // resolved place without a day says so through `noDay` below instead.
+  const unavailableMessage = anchorUnresolved && phase === "done" && !upgradePending && !serviceRefusal && !unavailableHasChoices
+    ? placeRef ? referenceFailureMessage : t(
+        `Parranda hittade inte ”${typedPlaceLabel}”. Prova en annan stavning, eller lägg till stad eller land.`,
+        `Parranda couldn't find “${typedPlaceLabel}”. Try another spelling, or add a city or country.`,
+      )
     : "";
+  // ONE STATE for a resolved place that ended without a day. The verdicts
+  // above can all hold at once (picks unconfirmed, a source failed, thin
+  // supply); the page states one cause and offers one next step. Unresolved
+  // places, choices, refusals and pending upgrades keep their own surfaces.
+  const noDay = noDayState({
+    settled: phase === "done" && hasAnchor && !anchorUnresolved && !dayOnScreen && !retainedInterestDay &&
+      !upgradePending && !serviceRefusal && !livePlanPending &&
+      (classification?.status === "unavailable" || classification?.status === "structure_only" || terminalSourceIssue),
+    interestsUnconfirmed: interestFailure !== null,
+    sourcesUnanswered: sourceUnavailable,
+    sourceFailed: terminalSourceIssue || sourcePartlyUnavailable,
+    canRebuild: canUpdateSaved,
+    hasPicks: selected.length > 0,
+  });
+  const noDayText = noDay ? noDayMessage({
+    cause: noDay.cause,
+    sourcesUnanswered: sourceUnavailable,
+    sourceNote: sourceEvidenceNote,
+    sparseCount: classification?.status === "unavailable" && classification.unavailableReason === "sparse_supply"
+      ? classification.realPlaceCount : null,
+    placesWithoutRoute: classification?.status === "structure_only",
+    liveMusicListed: selected.includes("live_music") && hasSelectedDayMusic(interestFailure?.liveEvents ?? null),
+  }, { position: anchorIsPosition, place: placeName }, t) : "";
   const dayContextNote = contextNote(dayLimitations, t, {
     // The header states source limitations; the map keeps its own facts.
     sourceCompletion: incompletePlaceSources ? null : sourceCompletion,
@@ -2741,6 +2827,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Where the reader's last adjustment stands, for the Adjust panel:
   // rebuilding, rebuilt (and what the route did), or failed.
   const adjustSummary = dayChange && phase === "done" && !dayIsStale ? dayRouteChange.join(" · ") : "";
+  // Stops the reader kept that the day on screen now answers, named first.
+  const keptNames: string[] = dayChange?.summary.pinned ?? [];
   const adjustRebuild: AdjustRebuild =
     staleNotice === "updating"
       ? { state: "updating" }
@@ -2952,15 +3040,24 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       interestChooserOpen={interestChooserOpen}
       setInterestChooserOpen={setInterestChooserOpen}
       onApplyInterests={canUpdateSaved ? applyInterests : undefined}
-      interestFailure={interestFailure && phase === "done" ? {
+      notice={noDay ? {
+        // The page's result region announces this one; the card only shows it.
+        message: noDayText,
+        action: noDay.action,
+        onRetry: () => retryPlan({ sameDate: true }),
+        restartHref: `/?lang=${lang}`,
+      } : interestFailure && phase === "done" ? {
+        // New picks found no day while the previous one stays on screen.
         message: [
           t("Vi kunde inte bekräfta en gångbar dag med de här intressena.", "We couldn’t confirm a walkable day with these interests."),
           retainedInterestDay && t("Din tidigare dag visas fortfarande.", "Your previous day is still shown."),
           selected.includes("live_music") && hasSelectedDayMusic(interestFailure.liveEvents) &&
             t("Livemusik finns i Live.", "Live music is listed in Live."),
         ].filter(Boolean).join(" "),
+        action: "edit_interests",
         attemptedLabels: retainedInterestDay ? selected.map(key => pickLabel(key, lang)).join(" · ") : undefined,
         onUndo: retainedInterestDay && dayChange ? undoDayChange : undefined,
+        announce: true,
       } : undefined}
       onSetDay={chooseDay}
       rhythms={DAY_RHYTHMS}
@@ -3056,7 +3153,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {/* One permanently mounted result region: ready or final unavailable.
           Cleared while composing; PlaceChoices carries its own status. */}
       <p ref={resultStatusRef} tabIndex={-1} role="status" className="sr-only">
-        {!interestFailure && (livePlanPending ? t("Planerar dagen med det valda evenemanget.", "Planning the day with the chosen event.") : phase === "done" && dayWithRoute && staleNotice !== "updating"
+        {noDay ? noDayText : !interestFailure && (livePlanPending ? t("Planerar dagen med det valda evenemanget.", "Planning the day with the chosen event.") : phase === "done" && dayWithRoute && staleNotice !== "updating"
           ? t(
               `En dag ${anchorIsPosition ? "nära dig" : `i ${anchorLabel}`} är klar: ${routeStops.length} stopp.`,
               `A day ${anchorIsPosition ? "near you" : `in ${anchorLabel}`} is ready: ${routeStops.length} ${routeStops.length === 1 ? "stop" : "stops"}.`,
@@ -3211,17 +3308,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </p>
       )}
 
-      {phase === "done" && (classification?.status === "unavailable" || terminalSourceIssue) &&
+      {phase === "done" && !noDay && (classification?.status === "unavailable" || terminalSourceIssue) &&
         (!interestFailure || terminalSourceIssue) && (
         !upgradePending &&
         <div className={`flex flex-col items-start gap-3 ${noticeCard}`}>
-          {/* Three honestly different absences: a typed place Parranda could
-              not pin down (nothing to compose around — say that, and how to
-              fix it), a resolved place whose trusted sources hold real places
-              but too few for a reliable day, and a resolved place that did not
-              compose. The count comes from the classifier's trusted-loader
-              evidence, never from copy. The label follows the pill rule:
-              primary locality, not the resolver's full admin chain. */}
+          {/* A typed place Parranda could not pin down: nothing to compose
+              around, so say that and how to fix it. A resolved place without
+              a day is the anchor card's one no-day notice instead. The label
+              follows the pill rule: primary locality, not the resolver's full
+              admin chain. */}
           {/* Plain visible copy is announced by the permanent result region;
               PlaceChoices instead owns its interactive status. */}
           <div className="text-15 text-parranda-ink">
@@ -3240,23 +3335,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 }} />
             ) : unavailableMessage}
           </div>
-          {sourcePartlyUnavailable && (
-            <p>{t(
-              "Alla platser kunde inte hämtas. Försök igen om en stund.",
-              "Some places could not be loaded. Try again in a moment.",
-            )}</p>
-          )}
-          {canUpdateSaved && (sourceUnavailable || sourcePartlyUnavailable || terminalSourceIssue) && (
-            <button type="button" onClick={() => retryPlan({ sameDate: true })} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
-              {t("Försök igen", "Try again")}
-            </button>
-          )}
-          {!anchorUnresolved && !sourceUnavailable && !sourcePartlyUnavailable && !terminalSourceIssue && selected.length > 0 && (
-            <p>{t(
-              "Vi kunde inte bekräfta en gångbar dag med dina val. Andra intressen läggs inte till automatiskt. Du kan ändra datum, dagens rytm eller själv välja fler intressen.",
-              "We could not confirm a walkable day with your choices. Other interests are not added automatically. You can change the date, day rhythm or choose more interests yourself.",
-            )}</p>
-          )}
           {restoredAt && !canUpdateSaved && (
             <p>{t("Den sparade dagen kan inte uppdateras säkert. ", "We cannot safely update this saved day. ")}
               <a href={`/?lang=${lang}`} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">
@@ -3290,17 +3368,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         {t("Försök planera med evenemanget igen", "Try planning with this event again")}
       </button>}
       {dayChange && (phase === "done" || (phase === "error" && canUndoFailedEdit)) &&
-        (!dayIsStale || canUndoFailedEdit) && (dayChangeLine.length > 0 || stopEditFeedback || stopEditError) && (
+        (!dayIsStale || canUndoFailedEdit) && (dayChangeLine.length > 0 || keptNames.length > 0 || stopEditFeedback || stopEditError) && (
         <div
           role="status"
           className="flex items-center gap-x-2 rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint py-0.5 pl-4 pr-1"
         >
           <p className="min-w-0 flex-1 break-words text-13 leading-snug text-parranda-ink-muted">
             {stopEditError ? stopEditErrorMessage : stopEditFeedback ? stopEditFeedbackMessage : <>
-              <span className="font-bold text-parranda-ink">
-                {dayChange.summary.trigger === "recheck" ? t("Letade efter fler platser", "Looked for more places") : t("Ändrat", "Changed")}:{" "}
-              </span>
-              {dayChangeLine.join(" · ")}
+              {/* A kept stop is named first and on its own: a Keep is never
+                  read as, or hidden behind, whatever else changed. */}
+              {keptNames.length > 0 && <>
+                <span className="font-bold text-parranda-ink">{t("Behålls", "Kept")}:{" "}</span>
+                {keptNames.join(", ")}
+                {dayChangeLine.length > 0 && " · "}
+              </>}
+              {dayChangeLine.length > 0 && <>
+                <span className="font-bold text-parranda-ink">
+                  {dayChange.summary.trigger === "recheck" ? t("Letade efter fler platser", "Looked for more places") : t("Ändrat", "Changed")}:{" "}
+                </span>
+                {dayChangeLine.join(" · ")}
+              </>}
             </>}
           </p>
           <button
@@ -3337,7 +3424,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {/* Without a composed day, this card carries provenance only. Save/share
           remain route actions: offering them here would call an unsequenced
           candidate surface a day. */}
-      {showStructure && structure && !(showDay && routeStops.length > 0) && (
+      {/* With the one no-day notice up, it is the only state and the only
+          next step: no second headline, no second rebuild action. */}
+      {showStructure && structure && !(showDay && routeStops.length > 0) && !noDay &&
+        (structure.provenance === "agnostic_anchor" || restoredAt) && (
         <section className="rounded-parranda border-line border-parranda-glow/40 bg-parranda-glow/8 p-4">
           <div className="min-w-0 flex-1">
             {structure.provenance === "agnostic_anchor" && (
@@ -3392,6 +3482,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           startLeg={startLeg}
           finishLeg={finishLeg}
           anchorIsPosition={anchorIsPosition}
+          walkingDestination={routeDestination}
+          continuationAllowed={!dayIsStale}
           mapsPlaceContext={mapsPlaceContext}
           expandedStopKey={expandedStopKey}
           setExpandedStopKey={setExpandedStopKey}
@@ -3451,13 +3543,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {/* Without a primary route, the broader place structure remains useful —
           but it is explicitly candidates, never a second itinerary. */}
-      {showStructure && structure && !hasPrimaryRoute && (
+      {/* The no-day notice already says why there is no route, so the list
+          adds only places — and, with none, nothing at all. "No places for"
+          names only picks the loader did not find places for, and only when
+          every place source answered: an absence read from partial evidence
+          is not stated as a fact. */}
+      {showStructure && structure && !hasPrimaryRoute && !(noDay && candidateMatchCount(day?.areas) === 0) && (
         <CandidateAreas
           t={t}
           lang={lang}
-          structureOnly={classification?.status === "structure_only"}
+          structureOnly={classification?.status === "structure_only" && !noDay}
           areas={day?.areas ?? []}
-          missingIntents={day?.missing_intents ?? []}
+          missingIntents={incompletePlaceSources ? []
+            : evidencedMissingIntents(day?.missing_intents, safeResponse?.agnostic_route_output_experiment?.source_status)}
           mapsPlaceContext={mapsPlaceContext}
           expandedCandidateKey={expandedCandidateKey}
           setExpandedCandidateKey={setExpandedCandidateKey}
