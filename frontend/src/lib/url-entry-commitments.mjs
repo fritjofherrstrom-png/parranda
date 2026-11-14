@@ -18,7 +18,7 @@ const knownRhythm = value => ['calm', 'balanced', 'full', 'free', 'short', 'long
  * match the coarse identity already carried by the saved ledger. Explicit snapshot
  * restore stays a separate operation with its existing contract.
  */
-export function urlEntryCommitments(entry, { navigationType, anchor, dateIso, selected, walkKey, preferencePriority, dayEdit, invalidDayEdit } = {}) {
+export function urlEntryCommitments(entry, { navigationType, anchor, dateIso, selected, walkKey, preferencePriority, dayEdit, invalidDayEdit, intentMode = null } = {}) {
   const editedEmpty = isEditedEmptyEntry(entry);
   if (navigationType !== 'reload' || (!isComposedEntry(entry) && !editedEmpty)) return empty();
   const inputs = entry.inputs;
@@ -51,11 +51,13 @@ export function urlEntryCommitments(entry, { navigationType, anchor, dateIso, se
           label(anchor.selectionLabel || anchor.place) !== label(inputs.placeLabel || inputs.place)) return empty();
     }
   }
+  // The intent mode is part of the question: a reload in one mode never
+  // borrows the ledger of a day composed in another.
   const expectedDayKey = savedEntryId({ city: inputs.city, place: inputs.place, placeLabel: inputs.placeLabel,
     dateIso, selected: inputs.selected, walkKey: inputs.walkKey,
-    preferencePriority: inputs.preferencePriority, dayEdit: inputs.dayEdit });
+    preferencePriority: inputs.preferencePriority, dayEdit: inputs.dayEdit, intentMode: inputs.intentMode });
   const requestedDayKey = savedEntryId({ city: inputs.city, place: inputs.place, placeLabel: inputs.placeLabel,
-    dateIso, selected, walkKey, preferencePriority, dayEdit });
+    dateIso, selected, walkKey, preferencePriority, dayEdit, intentMode });
   if (!savedAnchor || entry.id !== expectedDayKey || requestedDayKey !== expectedDayKey) return empty();
   const snapshot = readCommitmentSnapshot(entry.commitments, { anchorKey: savedAnchor, dayKey: expectedDayKey });
   if (editedEmpty && entry.commitments == null) return { applies: true, entries: {} };

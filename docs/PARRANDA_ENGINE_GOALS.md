@@ -393,3 +393,31 @@ visit, including via a pin. Wikidata remains independent corroboration under
 the ordinary shared gates. This restriction does not reinstate a numerical
 two-stop cap or reduce admitted map/directory depth; insufficient current place
 evidence must yield an honest limitation rather than fabricated density.
+
+## Parranda chooses (2026-10, experimental)
+
+A reader who does not know or does not want to choose can ask Parranda to
+choose the day's interests. The request says so explicitly with
+`intent_mode: "parranda_chooses"`; empty preferences alone still mean the
+varied day, and any explicit preference wins over the mode (reported as
+`ignored_explicit_preferences`). The planner sends it only behind the
+`parranda_chooses` frontend experiment flag.
+
+The engine reads the no-preference role survey (same gates, reach policy and
+opening-hours window as the varied day), trusted local time and remaining
+window, trusted weather, and a selected-day Live event already admitted by the
+evening weave. It picks two or three planner interests, at most two when the
+"free" rhythm's density rule says the day is light. An interest needs at least
+two usable, covering places; rain excludes outdoor interests when an indoor one
+qualifies; a bar needs a trusted current evening. Chosen interests then focus
+composition like explicit preferences, with two differences: they never keep
+an eligible Live event out of the day (only the reader's own picks can), and
+choosing never narrows a place to fewer places than the varied day would use.
+If the picks cannot carry a day, or the focused day is not composed or covers
+none of them, the varied day is published and labelled.
+
+`agnostic_route_output_experiment.parranda_chooses` publishes the status, each
+pick's reason codes and counts (usable, corroborated, open in window), the
+interests not chosen with their reason, and the context used. It carries no
+place ids or labels. Missing weather, time or Live removes those reasons and
+adds a note; it never blocks the mode or invents context.

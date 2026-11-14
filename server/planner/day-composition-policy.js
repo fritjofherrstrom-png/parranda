@@ -35,8 +35,50 @@ function isMeal(candidate) {
   return preferenceFit(candidate).coveredPreferences.includes('food');
 }
 
+// The extra walk orderBalancedDay may add to a stop chain when it reorders.
+const withinOrderGuard = (km, baseKm) => km <= Math.max(baseKm * 1.08, baseKm + 0.25);
+// Stop-to-stop walking km, measured as route-engine walkingKm measures it.
+function legKm(left, right) {
+  const rad = degrees => degrees * Math.PI / 180;
+  const h = Math.sin(rad(right.lat - left.lat) / 2) ** 2 +
+    Math.cos(rad(left.lat)) * Math.cos(rad(right.lat)) * Math.sin(rad(right.lng - left.lng) / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h)) * 1.22;
+}
+
+// A second main meal needs its own place in the day: some order of these stops
+// puts another stop between every two meals, and walks no more than ordering
+// may add over this set's shortest stop chain. Ordering measures its slack from
+// an order at least that long, so its walk guard never forbids that order. A
+// separation that only exists by walking back across the day does not count.
+function mealsSeparable(items) {
+  const meal = items.map(isMeal);
+  const count = meal.filter(Boolean).length;
+  if (count < 2) return true;
+  if (count > Math.ceil(items.length / 2)) return false;
+  const km = items.map(left => items.map(right => legKm(left, right)));
+  const used = items.map(() => false);
+  let shortest = Infinity, separated = Infinity;
+  const visit = (last, depth, total, apart) => {
+    if (total >= shortest && (!apart || total >= separated)) return;
+    if (depth === items.length) {
+      shortest = Math.min(shortest, total);
+      if (apart) separated = Math.min(separated, total);
+      return;
+    }
+    for (let index = 0; index < items.length; index += 1) {
+      if (used[index]) continue;
+      used[index] = true;
+      visit(index, depth + 1, last < 0 ? 0 : total + km[last][index], apart && !(last >= 0 && meal[last] && meal[index]));
+      used[index] = false;
+    }
+  };
+  visit(-1, 0, 0, true);
+  const round = value => Number(value.toFixed(1));
+  return Number.isFinite(separated) && withinOrderGuard(round(separated), round(shortest));
+}
+
 function selectBalancedDay({ rankedCandidates = [], selected = [], preferences = [],
-  preferencePriority = [], pinnedIds = [], mealContext = null, ...context } = {}) {
+  preferencePriority = [], pinnedIds = [], mealContext = null, mealSpacing = false, ...context } = {}) {
   const requested = normalizeUserIntents(preferences).intents;
   const priority = canonicalPriority(preferencePriority, preferences);
   const timedFood = priority[0] === 'food' && createMealOrderPolicy(rankedCandidates.map(({ item }) => item), mealContext);
@@ -86,10 +128,14 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
     if (diagnostics.estimated_km > Math.max(baseline.estimated_km * 1.25, baseline.estimated_km + 0.5)) continue;
     if (diagnostics.longest_leg_km > Math.max(baseline.longest_leg_km, 1.5)) continue;
     const meals = entries.filter(({ item }) => isMeal(item)).length;
+    // Only in the meal-spacing recomposition (see acceptMealSpacing): two meals
+    // rank lower when the set cannot give the second its own place. Coverage,
+    // the role spine and the day's stop count are never traded for it.
+    const crowded = mealSpacing === true && meals >= 2 && !mealsSeparable(entries.map(({ item }) => item)) ? 1 : 0;
     // An internal approximate loop target must not trade exact requested
     // coverage for partial fit. Final independent walking gates still decide.
     const lead = [diagnostics.exact_preference_count, diagnostics.partial_preference_count,
-      diagnostics.within_budget ? 1 : 0, -Math.max(0, meals - 2)];
+      diagnostics.within_budget ? 1 : 0, -Math.max(0, meals - 2), -crowded];
     const tail = [diagnostics.local_quality, diagnostics.operational_quality, diagnostics.trust_quality,
       diagnostics.within_target_band ? 1 : 0, -diagnostics.target_distance_km,
       diagnostics.unique_family_count, diagnostics.individual_score];
@@ -118,6 +164,62 @@ function selectBalancedDay({ rankedCandidates = [], selected = [], preferences =
     ...(meals ? meals.scoreSet(entries.map(({ item }) => item)) : []),
     utilityOf(entries, intent => weights.get(intent)), diagnostics.spine_role_count, ...tail]);
   return best ? best.entries.map(({ item }) => item) : selected;
+}
+
+const routeMeals = route => (Array.isArray(route?.main_stops) ? route.main_stops : []).map(isMeal);
+const hasAdjacentMeals = meals => meals.some((meal, index) => meal && index > 0 && meals[index - 1]);
+const servedIntents = (stops, key) => new Set(stops.flatMap(stop => Array.isArray(stop?.[key]) ? stop[key] : []));
+
+// A finished day whose final route puts two meals side by side, on a day with
+// food and another interest. Food-only days are never touched.
+function routeNeedsMealSpacing(route, preferences = []) {
+  const intents = normalizeUserIntents(preferences).intents;
+  const meals = routeMeals(route);
+  return intents.includes('food') && intents.length > 1 && !meals.every(Boolean) && hasAdjacentMeals(meals);
+}
+
+// The meal-spacing recomposition replaces the finished day only as a whole and
+// only when it is a confirmed improvement on the final routes themselves: no
+// meals side by side, the same number of stops, every pin and every meal that
+// was already apart still there, no requested interest less covered, and no
+// longer walk. Otherwise the original day stays exactly as it was.
+function acceptMealSpacing({ baseRoute, spacedRoute, preferences = [], pins = [] } = {}) {
+  const base = Array.isArray(baseRoute?.main_stops) ? baseRoute.main_stops : [];
+  const spaced = Array.isArray(spacedRoute?.main_stops) ? spacedRoute.main_stops : [];
+  if (!routeNeedsMealSpacing(baseRoute, preferences) || !spaced.length || spaced.length !== base.length ||
+      hasAdjacentMeals(routeMeals(spacedRoute))) return false;
+  if (!Number.isFinite(baseRoute.estimated_km) || !Number.isFinite(spacedRoute.estimated_km) ||
+      spacedRoute.estimated_km > baseRoute.estimated_km) return false;
+  const kept = new Set(spaced.map(stop => stop.id));
+  const baseMeals = routeMeals(baseRoute);
+  const apartMeals = base.filter((stop, index) => baseMeals[index] && !baseMeals[index - 1] && !baseMeals[index + 1]);
+  if ([...(Array.isArray(pins) ? pins : [])].some(id => base.some(stop => stop.id === id) && !kept.has(id)) ||
+      apartMeals.some(stop => !kept.has(stop.id))) return false;
+  const requested = normalizeUserIntents(preferences).intents;
+  const covered = servedIntents(spaced, 'covered_preferences');
+  const reached = new Set([...covered, ...servedIntents(spaced, 'partial_preferences')]);
+  const baseCovered = servedIntents(base, 'covered_preferences');
+  const baseReached = new Set([...baseCovered, ...servedIntents(base, 'partial_preferences')]);
+  return requested.every(intent => (!baseCovered.has(intent) || covered.has(intent)) &&
+    (!baseReached.has(intent) || reached.has(intent)));
+}
+
+// The same acceptance on the two FINAL results the response could carry: each
+// after its Live weave and final walking validation (null when the day has
+// none). Both must be measured the same way and be valid, carry the same Live
+// stops, and have the same total stop count; the core routes are then judged by
+// acceptMealSpacing on the walk that would actually be published.
+function acceptMealSpacedFinal({ original, trial, preferences = [], pins = [] } = {}) {
+  const live = route => (route?.main_stops || []).filter(stop => stop.is_live_event === true)
+    .map(stop => stop.live_occurrence_id || stop.event_id || stop.id).join('|');
+  const core = ({ route, validation }) => ({ ...route,
+    main_stops: (route.main_stops || []).filter(stop => stop.is_live_event !== true),
+    estimated_km: validation ? validation.result?.estimatedKm : route.estimated_km });
+  if (!original?.route || !trial?.route || Boolean(original.validation) !== Boolean(trial.validation) ||
+      original.validation?.valid === false || trial.validation?.valid === false) return false;
+  if (Boolean(original.weave?.applied) !== Boolean(trial.weave?.applied) || live(original.route) !== live(trial.route) ||
+      (original.route.main_stops || []).length !== (trial.route.main_stops || []).length) return false;
+  return acceptMealSpacing({ baseRoute: core(original), spacedRoute: core(trial), preferences, pins });
 }
 
 function* orders(values, prefix = []) {
@@ -155,11 +257,11 @@ function orderBalancedDay({ stops, geometry, geometryFor, chainKm, preferences =
   let best = { ...unchanged, score: score(stops) };
   for (const candidate of orders(stops)) {
     const km = chainKm(candidate);
-    if (km > Math.max(baseKm * 1.08, baseKm + 0.25)) continue;
+    if (!withinOrderGuard(km, baseKm)) continue;
     const nextScore = score(candidate);
     if (compare(nextScore, best.score) <= 0) continue;
     const nextGeometry = geometryFor(candidate);
-    if (nextGeometry.estimatedKm > Math.max(geometry.estimatedKm * 1.08, geometry.estimatedKm + 0.25)) continue;
+    if (!withinOrderGuard(nextGeometry.estimatedKm, geometry.estimatedKm)) continue;
     best = { stops: candidate, geometry: nextGeometry,
       changed: candidate.some((stop, index) => stop !== stops[index]), score: nextScore };
   }
@@ -221,4 +323,4 @@ function dayEditOutcome(dayEdit, stops = [], reason = null) {
     result_candidate_ids: ids };
 }
 
-module.exports = { canonicalPriority, isMeal, selectBalancedDay, orderBalancedDay, selectEditedDay, dayEditOutcome, normalizeDayEdit };
+module.exports = { canonicalPriority, isMeal, mealsSeparable, routeNeedsMealSpacing, acceptMealSpacing, acceptMealSpacedFinal, selectBalancedDay, orderBalancedDay, selectEditedDay, dayEditOutcome, normalizeDayEdit };

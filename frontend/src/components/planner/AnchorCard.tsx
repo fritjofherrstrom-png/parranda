@@ -41,6 +41,7 @@ export default function AnchorCard({
   interestChooserOpen = false,
   setInterestChooserOpen,
   onApplyInterests,
+  parrandaChoosing = false,
   notice,
   onSetDay,
   rhythms,
@@ -71,6 +72,8 @@ export default function AnchorCard({
   interestChooserOpen?: boolean;
   setInterestChooserOpen?: (open: boolean) => void;
   onApplyInterests?: (selection: InterestSelection) => void;
+  /** "Let Parranda choose" is on: applying interests hands the choice back. */
+  parrandaChoosing?: boolean;
   /**
    * The one notice under the controls when the picks found no day: either the
    * no-day state (one cause, one next step) or a rebuild for new picks that
@@ -299,6 +302,7 @@ export default function AnchorCard({
 
           {interestChooserOpen && onApplyInterests ? (
             <InterestChooser t={t} lang={lang} selected={selected} preferencePriority={preferencePriority}
+              handsBackChoice={parrandaChoosing}
               onCancel={closeInterestChooser}
               onApply={draft => {
                 setTouched("all-interests");
