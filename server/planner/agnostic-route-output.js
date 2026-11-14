@@ -30,7 +30,14 @@ const { buildAgnosticCityContext } = require("../candidates/agnostic-context");
 const { normalizeUserIntents } = require("../candidates/intent-vocabulary");
 const { EXISTENCE_CLAIM_TYPES } = require("../candidates/evidence");
 const { buildProviderSpecs } = require("../candidates/candidate-pool");
-const { selectPlannerRoleCandidates } = require("./role-selector");
+const { DEFAULT_LIMIT_PER_ROLE, selectPlannerRoleCandidates } = require("./role-selector");
+const {
+  chooseDayInterests,
+  freeRhythmDayProfile,
+  ignoredForExplicitPreferences,
+  normalizeIntentMode,
+  publishInterestChoice,
+} = require("./parranda-chooses");
 const { summarizeDayflowHonesty } = require("./dayflow-honesty");
 const { buildCandidateCombinationInspect } = require("./candidate-combination-inspect");
 const { resolveAgnosticCandidateReachPolicy } = require("./candidate-reach-policy");
@@ -48,7 +55,7 @@ const {
 const { normalizeSelectedHoursCalendar, resolveCandidateDayHours } = require('../place-candidates/opening-hours-calendar');
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
 const { operatorClosureForWindow } = require('../place-candidates/operator-visit-evidence');
-const { buildAgnosticRouteOrdering, daypartForRole, fixedDaypartForRole, timeBandRank } = require("./agnostic-route-ordering");
+const { buildAgnosticRouteOrdering, daypartForRole, knownLastDaypartForRole, timeBandRank } = require("./agnostic-route-ordering");
 const { resolveWalkableMicroBase } = require("./walkable-micro-base");
 const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-route-context");
 const { buildDayflowContext } = require("./dayflow-context");
@@ -64,7 +71,7 @@ const { weaveEveningEventRouteStop } = require("../candidates/event-route-stop-w
 const { generateAgnosticRecommendations, buildLegMetrics } = require("../route-engine");
 const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
 const { replacementKeepsOtherStops } = require("./walking-fit-selection");
-const { dayEditOutcome, normalizeDayEdit } = require('./day-composition-policy');
+const { dayEditOutcome, normalizeDayEdit, routeNeedsMealSpacing, acceptMealSpacedFinal } = require('./day-composition-policy');
 const { activeLiveChoices } = require('./live-occurrence-choice');
 const { normalizeSourceWebsite } = require('../lib/source-website');
 const {
@@ -733,18 +740,32 @@ function anchorAdaptedBodyToCurrentBand(adaptedBody, currentRank) {
 // band. An explicitly requested experience with unknown hours keeps the full
 // unanchored arc rather than being discarded on typical timing alone. With fewer than two retained
 // candidates, keep the full arc and its explicit not-anchored caveat.
+//
+// An evening plan for today, for a day with a rhythm (the planner always sends
+// one). A role whose kind of experience fits the evening (a meal, a view) is
+// planned for tonight. A requested experience whose kind usually fits the
+// daytime (a museum, a market) stays in tonight's plan: unknown hours do not
+// mean it only works by day, and the reader's picks are never moved to another
+// date. A place that serves a pick only partly still serves it. Such a pick is
+// planned for tonight and named as unconfirmed tonight, the same way for one
+// pick or several. Non-requested daytime places are trimmed as at any band,
+// known closures are never planned, and a plan that would keep fewer than two
+// stops keeps the full arc and its caveat.
 function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinnedIds = [], preferences = [], preserveRequestedUnknownTime = false) {
   const candidates = Array.isArray(sourceCandidates) ? sourceCandidates : [];
   const requested = normalizeUserIntents(preferences).intents;
   const currentBand = ["morning", "midday", "afternoon", "evening"][currentRank];
+  const eveningPlan = currentBand === "evening" && preserveRequestedUnknownTime;
   // An explicit "keep this" outranks the typical-timing heuristic. Trimming a
   // pinned place because its role usually happens earlier in the day would drop
   // exactly what the user asked to keep.
   const pins = new Set(Array.isArray(pinnedIds) ? pinnedIds : []);
   const kept = [];
   const trimmedDayparts = [];
+  const unconfirmed = [];
   let retimed = false;
   let retainedUnknownRequestedTime = false;
+  const unchanged = { anchored: false, candidates, trimmedDayparts: [], unconfirmedIntents: [] };
   for (const candidate of candidates) {
     const role = candidate?.role || (Array.isArray(candidate?.route_roles) ? candidate.route_roles[0] : null);
     const daypart = daypartForRole(role || null);
@@ -753,24 +774,44 @@ function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinn
       candidate.availability.status === "available_in_window";
     const requestedExperience = Array.isArray(candidate?.covered_preferences) &&
       requested.some(intent => candidate.covered_preferences.includes(intent));
-    if (rank !== null && rank < currentRank && currentBand && sourceAvailable && requestedExperience) {
+    const servesPick = requestedExperience || (Array.isArray(candidate?.partial_preferences) &&
+      requested.some(intent => candidate.partial_preferences.includes(intent)));
+    const notKnownClosed = candidate?.availability?.eligible !== false;
+    const passed = rank !== null && rank < currentRank;
+    if (passed && currentBand && sourceAvailable && requestedExperience) {
       kept.push({ ...candidate, anchored_daypart: currentBand });
       retimed = true;
-    } else if (preserveRequestedUnknownTime && rank !== null && rank < currentRank && requestedExperience && candidate?.availability?.eligible !== false) {
+    } else if (eveningPlan && passed && notKnownClosed && knownLastDaypartForRole(role || null) === "evening") {
+      kept.push({ ...candidate, anchored_daypart: "evening" });
+      retimed = true;
+    } else if (eveningPlan && passed && servesPick && notKnownClosed) {
+      const tonight = { ...candidate, anchored_daypart: "evening" };
+      kept.push(tonight);
+      unconfirmed.push(tonight);
+    } else if (preserveRequestedUnknownTime && passed && requestedExperience && notKnownClosed) {
       // Typical timing is not a source closure. Keep the explicit experience
       // with unknown hours, but do not claim this full arc is anchored to now.
       kept.push(candidate);
       retainedUnknownRequestedTime = true;
-    } else if (rank !== null && rank < currentRank && !pins.has(String(candidate?.id ?? ""))) {
+    } else if (passed && !pins.has(String(candidate?.id ?? ""))) {
       if (!trimmedDayparts.includes(daypart)) trimmedDayparts.push(daypart);
     } else {
       kept.push(candidate);
     }
   }
-  if (kept.length < 2 || retainedUnknownRequestedTime || (kept.length === candidates.length && !retimed)) {
-    return { anchored: false, candidates, trimmedDayparts: [] };
+  const eveningKept = eveningPlan && (retimed || unconfirmed.length > 0);
+  if (kept.length < 2 || retainedUnknownRequestedTime || (kept.length === candidates.length && !retimed && !eveningKept)) {
+    return unchanged;
   }
-  return { anchored: true, candidates: kept, trimmedDayparts };
+  // A pick is unconfirmed tonight only when nothing else kept for it fits now.
+  const served = candidate => [
+    ...(Array.isArray(candidate?.covered_preferences) ? candidate.covered_preferences : []),
+    ...(Array.isArray(candidate?.partial_preferences) ? candidate.partial_preferences : []),
+  ];
+  const fitsTonight = new Set(kept.filter(candidate => !unconfirmed.includes(candidate)).flatMap(served));
+  const unconfirmedIntents = [...new Set(unconfirmed.flatMap(served))]
+    .filter(intent => requested.includes(intent) && !fitsTonight.has(intent)).sort();
+  return { anchored: true, candidates: kept, trimmedDayparts, unconfirmedIntents };
 }
 
 function buildRouteDaypartHonesty({
@@ -778,27 +819,37 @@ function buildRouteDaypartHonesty({
   currentTimeBand = null,
   anchoredToLocalTime = false,
   trimmedDayparts = [],
+  unconfirmedTonightPreferences = [],
   stopRoles = [],
 } = {}) {
   const arc = (Array.isArray(daypartArc) ? daypartArc : []).filter(Boolean);
+  // Requested picks an evening plan keeps although only places whose kind
+  // usually fits the daytime serve them, in the stops' own preference
+  // vocabulary. Only an anchored evening carries them.
+  const unconfirmed = anchoredToLocalTime && Array.isArray(unconfirmedTonightPreferences)
+    ? [...new Set(unconfirmedTonightPreferences.filter(value => typeof value === "string" && value))]
+    : [];
   const currentRank = timeBandRank(currentTimeBand);
   // A balanced day that interleaves bands withholds its arc labels, but its
   // stops still say whether the day leads with dayparts already past (review,
-  // 25 Oct 2026: a museum and a gallery at 20:00 carried no note at all). Only
-  // fixed dayparts count; a meal may be dinner.
+  // 25 Oct 2026: a museum and a gallery at 20:00 carried no note at all). Each
+  // stop is read by the last daypart its role still fits, so a museum at 15:00
+  // or an evening walk at 20:00 is not "past"; an unknown role has no daypart.
   const stopRanks = arc.length ? [] : (Array.isArray(stopRoles) ? stopRoles : [])
-    .map(role => timeBandRank(fixedDaypartForRole(role))).filter(rank => rank !== null);
+    .map(role => timeBandRank(knownLastDaypartForRole(role))).filter(rank => rank !== null);
   const earliestRank = arc.length ? timeBandRank(arc[0]) : stopRanks.length ? Math.min(...stopRanks) : null;
   const caveats = [];
   if (anchoredToLocalTime) caveats.push("day_anchored_to_current_time");
   if (!anchoredToLocalTime && currentRank !== null && earliestRank !== null && earliestRank < currentRank) {
     caveats.push("daypart_arc_precedes_local_time");
   }
+  if (unconfirmed.length) caveats.push("picks_unconfirmed_tonight");
   return {
     daypart_arc: arc,
     current_local_time_band: currentRank !== null ? currentTimeBand : null,
     anchored_to_local_time: Boolean(anchoredToLocalTime),
     trimmed_dayparts: Array.isArray(trimmedDayparts) ? [...new Set(trimmedDayparts.filter(Boolean))] : [],
+    ...(unconfirmed.length ? { unconfirmed_tonight_preferences: unconfirmed } : {}),
     caveats,
   };
 }
@@ -973,6 +1024,10 @@ function buildBlockedAgnosticRouteOutputExperiment({ baselineResult, blocker, so
 /**
  * Compose the agnostic route-output experiment.
  *
+ * With `intentMode: "parranda_chooses"` and no explicit preferences, the
+ * engine chooses the day's interests from the same trusted evidence and
+ * publishes that choice as `experiment.parranda_chooses`.
+ *
  * @returns {Promise<{ result: object, experiment: object }>} `result` is the
  *   baseline (unchanged) when not eligible, or a deep-cloned mutated/synthesized
  *   result when eligible. `experiment` is the top-level diagnostics block.
@@ -1094,7 +1149,26 @@ async function composeAgnosticRouteOutput(args) {
   return withCandidateHours(replayed, { records, context: snapshot.context, date: snapshot.date }, args.date);
 }
 
-async function composeAgnosticRouteOutputOnce({
+// One composition with the opt-in interest choice reported on its experiment.
+async function composeAgnosticRouteOutputOnce(args = {}) {
+  const interestReport = {};
+  const output = await composeAgnosticRouteOutputCore({ ...args, interestReport });
+  if (interestReport.choice && output?.experiment) {
+    output.experiment.parranda_chooses = interestReport.choice.status === "ignored_explicit_preferences"
+      ? interestReport.choice
+      : publishInterestChoice(interestReport.choice, {
+          fellBack: interestReport.fellBack || null,
+          // Only the engine path weaves inside composition; elsewhere the
+          // response layer may still weave, so no claim is made either way.
+          liveEventWoven: output.experiment.synthesized_via === "agnostic_compose_engine"
+            ? output.eventWeave?.applied === true
+            : null,
+        });
+  }
+  return output;
+}
+
+async function composeAgnosticRouteOutputCore({
   coords,
   baselineResult,
   externalRequested = false,
@@ -1107,6 +1181,10 @@ async function composeAgnosticRouteOutputOnce({
   liveEventChoices = [],
   liveSelectionPending = false,
   lens = null,
+  // Opt-in "Parranda chooses" mode (see parranda-chooses.js). Never inferred.
+  intentMode = null,
+  // Private out-parameter: where the interest choice is reported to the wrapper.
+  interestReport = null,
   date = null,
   todayIsoDate = null,
   timezone = "UTC",
@@ -1225,11 +1303,10 @@ async function composeAgnosticRouteOutputOnce({
   // Rhythm owns day depth; the number of requested interests must not cut
   // off otherwise eligible same-interest options before engine composition.
   const rhythmDepth = Boolean(dayRhythm);
-  const rolePayload = {
+  const baseRolePayload = {
     ...(rhythmDepth ? { limitPerRole: 6 } : {}),
     city: agnosticContext.key,
     date: effectiveDate,
-    preferences: Array.isArray(preferences) ? preferences : [],
     lens: lens || null,
     // Trusted weather only — payload weather is never consulted.
     weather: ctx ? ctx.weather || null : null,
@@ -1281,99 +1358,6 @@ async function composeAgnosticRouteOutputOnce({
             : availability;
         },
       };
-  const candidateReachPolicy = resolveAgnosticCandidateReachPolicy({ anchorMode, spatialScope, dayRhythm, preferences, availabilityWindow });
-  const selectionBaseHelpers = {
-    ...helpers,
-    ...availabilityHelpers,
-    ...(candidateReachPolicy ? { candidateReachPolicy } : {}),
-    walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
-    walkingFitSelection: synthesizeVia === "engine",
-    experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
-    mealContext: preferencePriority?.[0] === 'food' && ctx?.timezoneKnown && ctx.timeAppliesToRequestedDate
-      ? { date: effectiveDate, nowLocalIso: ctx.now, fullDay: dayRhythm === 'full' } : null,
-  };
-  const selectionHelpers = trustedTimeAppliesToRequestedDate
-    ? {
-        ...selectionBaseHelpers,
-      }
-    : {
-        ...selectionBaseHelpers,
-        resolveNowContext: (cfg, pl) => ({
-          date: (pl && pl.date) || cfg.todayIsoDate(),
-          hour: null,
-          weekday: null,
-          now_iso: null,
-        }),
-        resolveTimeBand: () => null,
-      };
-
-  const plannerRoles = selectPlannerRoleCandidates(agnosticContext, rolePayload, selectionHelpers);
-  const dayflowHonesty = summarizeDayflowHonesty(plannerRoles);
-  const candidateCombination = buildCandidateCombinationInspect({
-    plannerRoles,
-    dayflowHonesty,
-    route: null,
-    options: {
-      origin: selectionOrigin,
-      // Exact coordinates and local place scopes keep the composed day within
-      // walking reach of the trusted anchor. Resolver-attested municipality or
-      // region scopes deliberately retain wider flexibility for rural/regional
-      // discovery where a useful day need not sit in one town centre.
-      ...(candidateReachPolicy
-        ? { maxOriginDistanceKm: candidateReachPolicy.max_origin_distance_km }
-        : {}),
-    },
-  });
-  const adapted = buildRouteCandidateFromCandidateCombination({
-    city: agnosticContext.key,
-    candidateCombination,
-  });
-  const adaptedBody = adapted && adapted.body ? adapted.body : {};
-  const engineSourceCandidates = synthesizeVia === "engine"
-    ? mapPlannerReservoirToSourceCandidates({
-        selected: (candidateCombination && candidateCombination.selected) || [],
-        plannerRoles,
-        city: agnosticContext.key,
-        walkingKmTarget,
-        dayRhythm,
-        includeCapacityFrontier: false,
-        pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
-        retainedIds: retainedSelectionIds,
-      })
-    : null;
-  const capacitySourceCandidates = synthesizeVia === "engine"
-    ? mapPlannerReservoirToSourceCandidates({
-        selected: (candidateCombination && candidateCombination.selected) || [],
-        plannerRoles,
-        city: agnosticContext.key,
-        walkingKmTarget,
-        dayRhythm,
-        includeCapacityFrontier: true,
-        // The repaired route can REPLACE the base one, so the capacity
-        // reservoir has to be able to honour the same commitments. Without the
-        // pins here, repair composes from a reservoir that never saw them and
-        // the replacement silently drops what the user kept.
-        pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
-        retainedIds: retainedSelectionIds,
-      })
-    : null;
-
-  // #262 — the trusted-context surface (or a cheap "skipped" marker when a hard
-  // blocker meant no trusted selection ran). When context ran, explain how it
-  // influenced composition via the SELECTED candidates' weather/time fit reasons.
-  const contextBlock = ctx ? ctx.contextBlock : buildSkippedContextBlock({ loaderStatus, externalRequested });
-  if (ctx) {
-    const influence = collectInfluenceReasons(plannerRoles, candidateCombination);
-    contextBlock.influence.weather_fit_reasons = influence.weather;
-    contextBlock.influence.time_fit_reasons = influence.time;
-    if (plannerRoles.availability_summary) {
-      const summary = plannerRoles.availability_summary;
-      contextBlock.influence.opening_hours_fed_into_selection = summary.evaluated_candidate_count > 0;
-      contextBlock.influence.opening_hours_excluded_candidate_count = summary.excluded_candidate_count;
-      contextBlock.influence.opening_hours_unresolved_candidate_count = summary.unresolved_candidate_count;
-    }
-  }
-
   const providerSpecs = buildProviderSpecs({
     externalEnabled: Boolean(externalRequested),
     externalOptions: helpers.external_provider || null,
@@ -1382,18 +1366,163 @@ async function composeAgnosticRouteOutputOnce({
   });
   const candidateReadiness = safeAssessReadiness(agnosticContext, { providerSpecs });
 
-  const eligibility = evaluateEligibility({
-    externalRequested,
-    sourceStatus,
-    adaptedBody,
-    candidateReadiness,
-    engineSourceCandidates,
+  // One selection pipeline per preference set: role reservoirs, combination,
+  // engine supply and eligibility. Explicit preferences run it once. "Parranda
+  // chooses" reads the no-preference run as its survey, then runs it again for
+  // the interests it chose.
+  function buildSelection(selectionPreferences) {
+    const rolePayload = { ...baseRolePayload, preferences: selectionPreferences };
+    const candidateReachPolicy = resolveAgnosticCandidateReachPolicy({ anchorMode, spatialScope, dayRhythm, preferences: selectionPreferences, availabilityWindow });
+    const selectionBaseHelpers = {
+      ...helpers,
+      ...availabilityHelpers,
+      ...(candidateReachPolicy ? { candidateReachPolicy } : {}),
+      walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
+      walkingFitSelection: synthesizeVia === "engine",
+      experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
+      mealContext: preferencePriority?.[0] === 'food' && ctx?.timezoneKnown && ctx.timeAppliesToRequestedDate
+        ? { date: effectiveDate, nowLocalIso: ctx.now, fullDay: dayRhythm === 'full' } : null,
+    };
+    const selectionHelpers = trustedTimeAppliesToRequestedDate
+      ? {
+          ...selectionBaseHelpers,
+        }
+      : {
+          ...selectionBaseHelpers,
+          resolveNowContext: (cfg, pl) => ({
+            date: (pl && pl.date) || cfg.todayIsoDate(),
+            hour: null,
+            weekday: null,
+            now_iso: null,
+          }),
+          resolveTimeBand: () => null,
+        };
+
+    const plannerRoles = selectPlannerRoleCandidates(agnosticContext, rolePayload, selectionHelpers);
+    const dayflowHonesty = summarizeDayflowHonesty(plannerRoles);
+    const candidateCombination = buildCandidateCombinationInspect({
+      plannerRoles,
+      dayflowHonesty,
+      route: null,
+      options: {
+        origin: selectionOrigin,
+        // Exact coordinates and local place scopes keep the composed day within
+        // walking reach of the trusted anchor. Resolver-attested municipality or
+        // region scopes deliberately retain wider flexibility for rural/regional
+        // discovery where a useful day need not sit in one town centre.
+        ...(candidateReachPolicy
+          ? { maxOriginDistanceKm: candidateReachPolicy.max_origin_distance_km }
+          : {}),
+      },
+    });
+    const adapted = buildRouteCandidateFromCandidateCombination({
+      city: agnosticContext.key,
+      candidateCombination,
+    });
+    const adaptedBody = adapted && adapted.body ? adapted.body : {};
+    const engineSourceCandidates = synthesizeVia === "engine"
+      ? mapPlannerReservoirToSourceCandidates({
+          selected: (candidateCombination && candidateCombination.selected) || [],
+          plannerRoles,
+          city: agnosticContext.key,
+          walkingKmTarget,
+          dayRhythm,
+          includeCapacityFrontier: false,
+          pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
+          retainedIds: retainedSelectionIds,
+        })
+      : null;
+    const capacitySourceCandidates = synthesizeVia === "engine"
+      ? mapPlannerReservoirToSourceCandidates({
+          selected: (candidateCombination && candidateCombination.selected) || [],
+          plannerRoles,
+          city: agnosticContext.key,
+          walkingKmTarget,
+          dayRhythm,
+          includeCapacityFrontier: true,
+          // The repaired route can REPLACE the base one, so the capacity
+          // reservoir has to be able to honour the same commitments. Without the
+          // pins here, repair composes from a reservoir that never saw them and
+          // the replacement silently drops what the user kept.
+          pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
+          retainedIds: retainedSelectionIds,
+        })
+      : null;
+
+    const eligibility = evaluateEligibility({
+      externalRequested,
+      sourceStatus,
+      adaptedBody,
+      candidateReadiness,
+      engineSourceCandidates,
+      plannerRoles,
+      candidateCombination,
+      curatedCandidateCount: curatedCandidates.length,
+      geometryAuthority: synthesizeVia === "engine" ? "engine" : "combination",
+      dayEdit: synthesizeVia === 'engine' ? dayEdit : null,
+    });
+    return {
+      preferences: selectionPreferences,
+      plannerRoles,
+      candidateCombination,
+      adaptedBody,
+      engineSourceCandidates,
+      capacitySourceCandidates,
+      eligibility,
+    };
+  }
+
+  const explicitPreferences = Array.isArray(preferences) ? preferences : [];
+  const explicitSelection = buildSelection(explicitPreferences);
+  let selection = explicitSelection;
+  if (normalizeIntentMode(intentMode) && interestReport) {
+    if (explicitPreferences.length) {
+      // The reader's own picks are the answer; the mode never overrides them.
+      interestReport.choice = ignoredForExplicitPreferences();
+    } else {
+      const choice = chooseDayInterests({
+        survey: explicitSelection.plannerRoles,
+        weather: ctx ? ctx.weather || null : null,
+        timeBand: ctx && ctx.timeAppliesToRequestedDate ? ctx.timeBand : null,
+        timeAppliesToRequestedDate: trustedTimeAppliesToRequestedDate,
+        remainingMinutes: availabilityWindow ? availabilityWindow.endMinute - availabilityWindow.startMinute : null,
+        liveEvent: eveningEventStructure?.district_day?.evening_event || null,
+        countedUpTo: rhythmDepth ? 6 : DEFAULT_LIMIT_PER_ROLE,
+      });
+      interestReport.choice = choice;
+      if (choice.preferences.length) {
+        const focused = buildSelection(choice.preferences);
+        if (focused.eligibility.eligible || !explicitSelection.eligibility.eligible) selection = focused;
+        else interestReport.fellBack = "focused_selection_not_eligible";
+      }
+    }
+  }
+  const {
     plannerRoles,
     candidateCombination,
-    curatedCandidateCount: curatedCandidates.length,
-    geometryAuthority: synthesizeVia === "engine" ? "engine" : "combination",
-    dayEdit: synthesizeVia === 'engine' ? dayEdit : null,
-  });
+    adaptedBody,
+    engineSourceCandidates,
+    capacitySourceCandidates,
+    eligibility,
+  } = selection;
+
+  // #262 — the trusted-context surface (or a cheap "skipped" marker when a hard
+  // blocker meant no trusted selection ran). When context ran, explain how it
+  // influenced composition via the SELECTED candidates' weather/time fit reasons.
+  const contextBlock = ctx ? ctx.contextBlock : buildSkippedContextBlock({ loaderStatus, externalRequested });
+  function applyInfluence(influenced) {
+    if (!ctx) return;
+    const influence = collectInfluenceReasons(influenced.plannerRoles, influenced.candidateCombination);
+    contextBlock.influence.weather_fit_reasons = influence.weather;
+    contextBlock.influence.time_fit_reasons = influence.time;
+    if (influenced.plannerRoles.availability_summary) {
+      const summary = influenced.plannerRoles.availability_summary;
+      contextBlock.influence.opening_hours_fed_into_selection = summary.evaluated_candidate_count > 0;
+      contextBlock.influence.opening_hours_excluded_candidate_count = summary.excluded_candidate_count;
+      contextBlock.influence.opening_hours_unresolved_candidate_count = summary.unresolved_candidate_count;
+    }
+  }
+  applyInfluence(selection);
 
   if (!eligibility.eligible) {
     // No engine day exists to be withheld here: eligibility stopped before
@@ -1452,15 +1581,10 @@ async function composeAgnosticRouteOutputOnce({
   // (#274–278) is preserved as a label, not the sequencer (follow-up promotes it
   // into compose ordering).
   if (synthesizeVia === "engine") {
-    return composeAgnosticRouteViaEngine({
+    const engineArgs = {
       agnosticContext,
       origin: selectionOrigin,
       effectiveDate,
-      plannerRoles,
-      candidateCombination,
-      sourceCandidates: engineSourceCandidates,
-      capacitySourceCandidates,
-      eligibility,
       candidateReadiness,
       sourceStatus,
       contextBlock,
@@ -1469,7 +1593,9 @@ async function composeAgnosticRouteOutputOnce({
       walkingKmTarget: Number.isFinite(walkingKmTarget) ? walkingKmTarget : undefined,
       dayRhythm,
       distanceMode,
-      preferences,
+      // Chosen interests focus the day, but only the reader's own picks may
+      // keep an eligible Live event out of it.
+      weavePreferences: explicitPreferences,
       preferencePriority,
       dayEdit,
       pinnedStopIds,
@@ -1489,7 +1615,26 @@ async function composeAgnosticRouteOutputOnce({
       // must fall back to neutral, never to agnosticContext.label — which is the
       // "Nearby" geometry placeholder, not a real place name.
       placeLabel: agnosticLabel,
+    };
+    const selectionArgs = (chosen) => ({
+      plannerRoles: chosen.plannerRoles,
+      candidateCombination: chosen.candidateCombination,
+      sourceCandidates: chosen.engineSourceCandidates,
+      capacitySourceCandidates: chosen.capacitySourceCandidates,
+      eligibility: chosen.eligibility,
+      preferences: chosen.preferences,
     });
+    const composed = await composeAgnosticRouteViaEngine({ ...engineArgs, ...selectionArgs(selection) });
+    // A day Parranda focused for the reader must still be a day. When the
+    // focus cannot be composed, or answers none of its own interests, the
+    // varied day the reader would otherwise have had is published instead.
+    // A manual day edit is atomic and answers the day on screen, so it is
+    // never swapped for a different day.
+    const focusFailure = selection === explicitSelection || dayEdit ? null : focusedDayFailure(composed);
+    if (!focusFailure || !explicitSelection.eligibility.eligible) return composed;
+    interestReport.fellBack = focusFailure;
+    applyInfluence(explicitSelection);
+    return composeAgnosticRouteViaEngine({ ...engineArgs, ...selectionArgs(explicitSelection) });
   }
 
   // #276 — time-anchored selection. ONLY for a today-dated request with a
@@ -1674,6 +1819,8 @@ async function composeAgnosticRouteViaEngine({
   dayRhythm = null,
   distanceMode = null,
   preferences,
+  // The reader's own picks, for the Live weave. Defaults to `preferences`.
+  weavePreferences = preferences,
   preferencePriority = [],
   dayEdit = null,
   pinnedStopIds,
@@ -1732,11 +1879,10 @@ async function composeAgnosticRouteViaEngine({
     const window = contextBlock?.time?.timezone_known
       ? buildLocalDayAvailabilityWindow({ requestedDate: effectiveDate, nowLocalIso: contextBlock.time.now })
       : null;
-    const remaining = window ? window.endMinute - window.startMinute : null;
-    const count = new Set(candidates.map(candidate => candidate.id)).size;
-    if (count < 4 || (remaining !== null && remaining <= 180)) return 'light';
-    if (count < 6 || (remaining !== null && remaining <= 360)) return 'variation';
-    return 'peak';
+    return freeRhythmDayProfile({
+      candidateCount: new Set(candidates.map(candidate => candidate.id)).size,
+      remainingMinutes: window ? window.endMinute - window.startMinute : null,
+    });
   }
 
   const activeLiveKeeps = activeLiveChoices(liveEventChoices, effectiveDate).filter(choice => choice.action === 'keep');
@@ -1764,7 +1910,7 @@ async function composeAgnosticRouteViaEngine({
       })
     : null;
 
-  async function runEngine(candidates, pins = pinnedStopIds) {
+  async function runEngine(candidates, pins = pinnedStopIds, { mealSpacing = false } = {}) {
     const engineCityConfig = buildAgnosticEngineCityConfig({
       anchor: origin,
       sourceCandidates: candidates,
@@ -1778,6 +1924,7 @@ async function composeAgnosticRouteViaEngine({
       reservedLiveStopCount: preserveLive ? 1 : 0,
       mealContext: contextBlock?.time?.timezone_known === true && contextBlock.time.requested_date_is_today === true
         ? { date: effectiveDate, nowLocalIso: contextBlock.time.now, fullDay: dayRhythm === 'full' } : null,
+      mealSpacing,
     });
     const engineResult = await generateAgnosticRecommendations({
       cityConfig: engineCityConfig,
@@ -1812,7 +1959,11 @@ async function composeAgnosticRouteViaEngine({
   async function finalize(pins) {
     let anchored = timeAnchoring.anchored;
     let trimmed = timeAnchoring.trimmedDayparts;
+    let unconfirmed = timeAnchoring.unconfirmedIntents || [];
     let repairApplied = false;
+    // The candidates and pins behind the day held below, so a recomposition
+    // can ask the same question with one rule changed.
+    let held = { candidates: timeAnchoring.candidates, pins };
     let day = await runEngine(timeAnchoring.candidates, pins);
     let route = (day && day.primary_route) || null;
     if (!route && anchored) {
@@ -1821,8 +1972,10 @@ async function composeAgnosticRouteViaEngine({
       // not claim it is anchored; the caveat below makes that limitation explicit.
       day = await runEngine(sourceCandidates, pins);
       route = (day && day.primary_route) || null;
+      held = { candidates: sourceCandidates, pins };
       anchored = false;
       trimmed = [];
+      unconfirmed = [];
     }
 
     if (
@@ -1848,8 +2001,10 @@ async function composeAgnosticRouteViaEngine({
       })) {
         day = repairedDay;
         route = repairedRoute;
+        held = { candidates: capacityAnchoring.candidates, pins };
         anchored = capacityAnchoring.anchored;
         trimmed = capacityAnchoring.trimmedDayparts;
+        unconfirmed = capacityAnchoring.unconfirmedIntents || [];
         repairApplied = true;
       }
     }
@@ -1878,6 +2033,8 @@ async function composeAgnosticRouteViaEngine({
             preservesReplacementQuality(route,trialRoute,preferences)) {
           day = trialDay;
           route = trialRoute;
+          if (anchored) unconfirmed = trialAnchoring.unconfirmedIntents || [];
+          held = { candidates: trialAnchoring.candidates, pins: [] };
           repairApplied = true;
         }
         if (!shouldTryCapacityRepair(route,walkingKmTarget)) break;
@@ -1895,9 +2052,47 @@ async function composeAgnosticRouteViaEngine({
       route: weave.route,
       anchored,
       trimmed,
+      unconfirmed,
       repairApplied,
       weave: weave.outcome,
+      held,
     };
+  }
+
+  // A second main meal needs its own place in the day (#702, owner decision
+  // 13 Nov 2026; review 14 Nov). Decided on comparable FINAL results: the held
+  // day and a recomposition with the meal-spacing selection, each after the
+  // same Live weave and the same final walking validation. The alternative
+  // replaces the held day whole only when acceptMealSpacedFinal confirms it;
+  // any refusal or failure keeps the held day, never the baseline fallback.
+  // Attempted only where that whole final chain is local (no injected walking
+  // router, no OSRM provider), so it spends no provider call. A user edit is
+  // its own atomic answer and is never recomposed here.
+  const mealFinalChainIsLocal = typeof walkingRouter !== "function" &&
+    (walkingConfig?.defaultProvider || "heuristic") !== "osrm";
+  async function finalWalkingOf(result) {
+    return result.weave?.finalWalkingValidation ??
+      (validateFinalWalking ? await validateFinalWalking(result.route.map_route_points) : null);
+  }
+  async function chooseMealSpacedFinal(original) {
+    if (dayEdit || !mealFinalChainIsLocal || !original?.route || !original.held) return original;
+    const core = { ...original.route, main_stops: (original.route.main_stops || []).filter(stop => stop.is_live_event !== true) };
+    if (!routeNeedsMealSpacing(core, preferences)) return original;
+    try {
+      const spacedDay = await runEngine(original.held.candidates, original.held.pins, { mealSpacing: true });
+      if (!spacedDay?.primary_route) return original;
+      const woven = await applyEveningEventWeave({ day: spacedDay, route: spacedDay.primary_route });
+      const trial = { ...original, day: woven.day, route: woven.route, weave: woven.outcome };
+      const accepted = acceptMealSpacedFinal({
+        original: { route: original.route, weave: original.weave, validation: await finalWalkingOf(original) },
+        trial: { route: trial.route, weave: trial.weave, validation: await finalWalkingOf(trial) },
+        preferences,
+        pins: original.held.pins,
+      });
+      return accepted ? trial : original;
+    } catch (_error) {
+      return original;
+    }
   }
 
   /**
@@ -1914,7 +2109,7 @@ async function composeAgnosticRouteViaEngine({
       woven = await weaveEveningEventRouteStop({
         result: { days: [{ ...day, experimental_agnostic_route_applied: true, primary_route: route }] },
         placeStructure: eveningEventStructure,
-        requestedPreferences: preferences,
+        requestedPreferences: weavePreferences,
         walkingRouter: typeof walkingRouter === "function" ? walkingRouter : undefined,
         walkingConfig: walkingConfig || undefined,
         validateFinalWalking,
@@ -1947,10 +2142,12 @@ async function composeAgnosticRouteViaEngine({
       distanceMode,
     });
   }
+  finalized = await chooseMealSpacedFinal(finalized);
   let engineDay = finalized.day;
   let engineRoute = finalized.route;
   let anchoredToLocalTime = finalized.anchored;
   let trimmedDayparts = finalized.trimmed;
+  const unconfirmedTonightPreferences = finalized.unconfirmed || [];
   const capacityRepairApplied = finalized.repairApplied;
   // WHY each unmet commitment went unmet, named at the only layer that can tell
   // the causes apart: the reservoir, what reached the composer, and what the
@@ -2029,6 +2226,7 @@ async function composeAgnosticRouteViaEngine({
       currentTimeBand,
       anchoredToLocalTime,
       trimmedDayparts,
+      unconfirmedTonightPreferences,
       stopRoles: (Array.isArray(engineRoute.main_stops) ? engineRoute.main_stops : []).map(stop => stop?.role),
     });
     Object.assign(engineRoute, daypartHonesty, {
@@ -2175,6 +2373,20 @@ async function composeAgnosticRouteViaEngine({
   const commitmentEligibleIds = collectCommitmentUpstreamEligibleIds({ plannerRoles, sourceCandidates });
 
   return { result, experiment, eventWeave, pinnedRefusals, commitmentEligibleIds };
+}
+
+// Why a day focused on Parranda's chosen interests cannot stand in for the
+// varied day, or null when it can.
+function focusedDayFailure(composed) {
+  const experiment = composed?.experiment;
+  if (!experiment || experiment.route_mutation !== true) return "focused_day_not_composed";
+  const coverage = experiment.constraint_negotiation?.preference_coverage;
+  const requested = Array.isArray(coverage?.requested_preferences) ? coverage.requested_preferences : [];
+  const answered = [
+    ...(Array.isArray(coverage?.covered_preferences) ? coverage.covered_preferences : []),
+    ...(Array.isArray(coverage?.partial_preferences) ? coverage.partial_preferences : []),
+  ];
+  return requested.length && !answered.length ? "focused_day_answers_no_chosen_interest" : null;
 }
 
 function hasAdditionalCandidateIds(baseCandidates, expandedCandidates) {

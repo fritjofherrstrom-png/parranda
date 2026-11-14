@@ -102,6 +102,10 @@ test('mounted original → real publication/store → Share → empty-profile GE
     assert.deepEqual(ids(restored), original.days[0].primary_route.main_stops.map(s => s.id));
     assert.equal(restored.dateIso, original.days[0].date);
     assert.deepEqual(restored.safeResponse, envelope.result, 'authoritative projected facts, not regenerated facts');
+    const verdicts = stops => stops.map(s => [s.id, s.candidate_status, s.weather_reasons]);
+    assert.ok(original.days[0].primary_route.main_stops.every(s => typeof s.candidate_status === 'string' && Array.isArray(s.weather_reasons)));
+    assert.deepEqual(verdicts(restored.safeResponse.days[0].primary_route.main_stops), verdicts(original.days[0].primary_route.main_stops),
+      'the shared day keeps the engine\'s partial-match and weather facts');
     assert.match(recipient.text(), /Saved day/);
     assert.equal(recipient.window.location.href, href, 'no private view contaminates the public URL');
     await recipient.clock.advance(6000);

@@ -95,6 +95,8 @@ function buildAgnosticEngineCityConfig({
   dayEdit = null,
   reservedLiveStopCount = 0,
   mealContext = null,
+  // Only for the meal-spacing recomposition, judged on its final route.
+  mealSpacing = false,
 } = {}) {
   if (!anchor || !Number.isFinite(anchor.lat) || !Number.isFinite(anchor.lng)) {
     throw new Error("buildAgnosticEngineCityConfig requires a finite anchor lat/lng");
@@ -141,6 +143,7 @@ function buildAgnosticEngineCityConfig({
     // Trusted server-local date/time only; the public request cannot set it.
     __mealContext: mealContext ? { date: mealContext.date, nowLocalIso: mealContext.nowLocalIso,
       fullDay: mealContext.fullDay === true } : null,
+    __mealSpacing: mealSpacing === true,
     // One source-eligible explicit evening occurrence belongs inside the day.
     // This private config is constructed by the server, never public payload.
     __reservedLiveStopCount: reservedLiveStopCount === 1 ? 1 : 0,

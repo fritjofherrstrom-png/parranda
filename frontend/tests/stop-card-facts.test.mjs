@@ -126,3 +126,35 @@ test("malformed saved kind cannot crash a stop or erase its valid address", () =
   assert.deepEqual(cardFacts.stopPlaceDetails({ type: 'museum', place_details }),
     { kindLabel: null, address: 'Source Street 1' });
 });
+
+test("the row badge narrows to the source kind only when it fits the route type", () => {
+  const { stopRowKindLabel } = cardFacts;
+  assert.equal(stopRowKindLabel({ type: 'garden', place_details: { kind: 'botanical_garden' } }, 'Garden', 'en'), 'Botanical garden');
+  assert.equal(stopRowKindLabel({ type: 'garden', place_details: { kind: 'botanical_garden' } }, 'Trädgård', 'sv'), 'Botanisk trädgård');
+  assert.equal(stopRowKindLabel({ type: 'cafe', place_details: { kind: 'botanical_garden' } }, 'Café', 'en'), 'Café',
+    'a kind that contradicts the route type never replaces it');
+  assert.equal(stopRowKindLabel({ type: 'garden', place_details: { kind: 'invented_kind' } }, 'Garden', 'en'), 'Garden');
+  assert.equal(stopRowKindLabel({ type: 'vintage-shop', source: { category: 'antiques' }, place_details: { kind: 'antiques' } }, 'Antiques', 'en'), 'Antiques');
+  assert.equal(stopRowKindLabel({ type: 'vintage-shop', source: { category: 'charity' }, place_details: { kind: 'second_hand_clothing' } }, 'Charity shop', 'en'),
+    'Charity shop', 'a specific second-hand source category keeps the row; a merged duplicate kind goes to the panel');
+  assert.equal(stopRowKindLabel({ type: 'vintage-shop', source: { category: 'vintage' }, place_details: { kind: 'antiques' } }, 'Vintage', 'en'), 'Vintage');
+  assert.equal(stopRowKindLabel({ type: 'vintage-shop', source: { category: 'second_hand' }, place_details: { kind: 'second_hand_clothing' } }, 'Second hand', 'en'),
+    'Second-hand clothing', 'the broad second-hand category is narrowed like any broad type');
+  assert.equal(stopRowKindLabel({ type: 'vintage-shop', place_details: { kind: 'second_hand_clothing' } }, 'Second hand', 'sv'), 'Begagnade kläder');
+  assert.equal(stopRowKindLabel({ type: 'garden' }, 'Garden', 'en'), 'Garden');
+  assert.equal(stopRowKindLabel({ type: 'unknown-type' }, '', 'en'), '', 'an unlabelled type stays unlabelled');
+  assert.equal(stopRowKindLabel(null, undefined, 'en'), '');
+});
+
+test("source names only rename raw provider tokens and never hide a source", () => {
+  const { stopSourceLabel } = cardFacts;
+  assert.equal(stopSourceLabel({ source: { label: 'overture' } }), 'Overture Maps');
+  assert.equal(stopSourceLabel({ source: { label: ' osm ' } }), 'OpenStreetMap');
+  assert.equal(stopSourceLabel({ source: { label: 'wikidata' } }), 'Wikidata');
+  assert.equal(stopSourceLabel({ source: { label: 'OSM' } }), 'OpenStreetMap', 'whole tokens match without case');
+  assert.equal(stopSourceLabel({ source: { label: 'Overture' } }), 'Overture Maps');
+  for (const label of ['Roma catalog', 'open data', 'Map source', 'OpenStreetMap', 'OSM contributors', 'visit-sweden-napi'])
+    assert.equal(stopSourceLabel({ source: { label } }), label, `${label} is shown as the source gave it`);
+  for (const stop of [{ source: { label: '' } }, { source: { label: 7 } }, { source: null }, null, { source: { label: 'constructor' } }])
+    assert.equal(stopSourceLabel(stop), typeof stop?.source?.label === 'string' ? stop.source.label : '');
+});

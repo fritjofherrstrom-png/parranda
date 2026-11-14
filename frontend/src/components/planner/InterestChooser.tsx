@@ -6,11 +6,13 @@ import { pickLabel, type Lang, type Translate } from "./copy";
 
 export type InterestSelection = { selected: string[]; preferencePriority: string[] };
 
-export default function InterestChooser({ t, lang, selected, preferencePriority, onApply, onCancel }: InterestSelection & {
+export default function InterestChooser({ t, lang, selected, preferencePriority, onApply, onCancel, handsBackChoice = false }: InterestSelection & {
   t: Translate;
   lang: Lang;
   onApply: (selection: InterestSelection) => void;
   onCancel: () => void;
+  /** Parranda is choosing: any explicit apply, even of the same picks, is the reader's own choice. */
+  handsBackChoice?: boolean;
 }) {
   const [draft, setDraft] = useState<InterestSelection>(() => ({
     selected, preferencePriority: normalizePreferencePriority(preferencePriority, selected),
@@ -23,7 +25,8 @@ export default function InterestChooser({ t, lang, selected, preferencePriority,
   const atLimit = draft.selected.length >= MAX_PLANNER_PREFERENCES;
   const ranked = draft.preferencePriority;
   const orderedSelection = [...ranked, ...draft.selected.filter(key => !ranked.includes(key))];
-  const unchanged = selected.join(",") === draft.selected.join(",") && preferencePriority.join(",") === ranked.join(",");
+  const unchanged = !handsBackChoice &&
+    selected.join(",") === draft.selected.join(",") && preferencePriority.join(",") === ranked.join(",");
   return (
     <section aria-label={t("Alla intressen", "All interests")} aria-describedby={countId}
       className="flex min-w-0 flex-col gap-5"
