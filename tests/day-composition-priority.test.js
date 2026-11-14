@@ -192,6 +192,25 @@ test('a comparable walk with one fewer stop can cover the exact first choice', a
   assert.equal(preferred.experiment.walking_validation.valid, true);
 });
 
+test('an evening priority route names only the unconfirmed picks that its stops serve', async () => {
+  const options = {
+    ...PARK_FIRST, anchorMode: 'place', todayIsoDate: '2026-10-22',
+    clock: () => new Date('2026-10-22T18:30:00Z'),
+  };
+  const evening = await compose(spacedInterests(), EXACT_PICKS, options);
+  assert.equal(evening.result.days[0].date, '2026-10-22');
+  assert.equal(evening.stops.length, 5);
+  assert.ok(evening.stops.some(stop => stop.id === 'river-park'));
+  assert.ok(evening.stops.every(stop => stop.daypart === 'evening'));
+  assert.equal(evening.route.anchored_to_local_time, true);
+  assert.deepEqual(evening.route.unconfirmed_tonight_preferences, ['cafes', 'parks_gardens']);
+
+  const tomorrow = await compose(spacedInterests(), EXACT_PICKS, { ...options, date: '2026-10-23' });
+  assert.equal(tomorrow.result.days[0].date, '2026-10-23');
+  assert.equal(tomorrow.route.unconfirmed_tonight_preferences, undefined);
+  assert.ok(!tomorrow.route.caveats.includes('picks_unconfirmed_tonight'));
+});
+
 test('a preferred route rejected by the pedestrian router falls back to the ordinary chain', async () => {
   const { routeWalkingPath } = require('../server/walking-router');
   const calls = [];

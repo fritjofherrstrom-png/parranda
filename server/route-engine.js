@@ -5493,6 +5493,7 @@ function buildRouteFromTemplate(
       preferFirstChoice: getActiveCityConfig().__preferFirstChoice === true,
       pinnedIds: options.pinnedStopIds || [], start, end, shape, targetKm: selectionTargetKm,
       mealContext: getActiveCityConfig().__mealContext || null,
+      mealSpacing: getActiveCityConfig().__mealSpacing === true,
     });
   }
 

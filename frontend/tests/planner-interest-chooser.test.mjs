@@ -421,6 +421,28 @@ function parkDay(name, km, extra) {
   return result;
 }
 
+test("keeping the current day after a longer suggestion preserves an existing Keep", async t => {
+  const h = await start(t);
+  const firstStop = h.container.querySelector('ol[aria-label="The stops, in order"] > li > button');
+  assert.ok(firstStop);
+  await h.act(() => firstStop.click());
+  await click(h, "Keep this one");
+  const previous = h.readStorage(LAST);
+  assert.deepEqual(previous.commitments.entries.one, { kind: "pin", label: "Previous stop" });
+  assert.equal(compose(h).length, 1);
+
+  const call = await askForWaterAndParks(h);
+  assert.deepEqual(call.body.pinned_candidate_ids, ["one"]);
+  await h.fetchMock.respond(call, parkDay("Long park route", 4));
+  assert.match(route(h), /Previous stop/);
+  await click(h, "Keep current day");
+  await h.clock.advance(1000);
+
+  assert.deepEqual(h.readStorage(LAST), previous);
+  assert.match(h.text(), /1 place kept/);
+  assert.equal(compose(h).length, 2);
+});
+
 test("waiting for a longer alternative retains the original public address and share", async t => {
   const h = await openPublicDay(t);
   const original = h.window.location.href;

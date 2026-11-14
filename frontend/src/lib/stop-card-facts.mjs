@@ -1,5 +1,6 @@
 import { PLANNER_PREFERENCE_KEYS } from "../../../shared/planner-intent.mjs";
 import { selectedDayHoursLabel } from "./selected-day-hours.mjs";
+import { readableSourceName } from "./source-names.mjs";
 
 /**
  * What a route stop's card may say about the place itself: what kind of place
@@ -113,6 +114,20 @@ const PLACE_KINDS = {
 };
 const placeAddress = (value) => typeof value === 'string' && value.trim().length <= 160 &&
   !/[\u0000-\u001f\u007f]/.test(value) && value.trim() ? value.trim() : null;
+
+// The row badge names the source's closed kind when it narrows the route type
+// ("Botanical garden" for a garden); otherwise the broad type label. A
+// second-hand trade whose own source category is specific ("Charity shop")
+// keeps that category on the row; a merged duplicate's kind never replaces it.
+export function stopRowKindLabel(stop, broadLabel, lang = 'en') {
+  const category = String(stop?.source?.category || '');
+  if (stop?.type === 'vintage-shop' && category !== 'second_hand' && Object.hasOwn(SECOND_HAND_LABELS, category)) return broadLabel || '';
+  return stopPlaceDetails(stop, lang).kindLabel || broadLabel || '';
+}
+
+export function stopSourceLabel(stop) {
+  return readableSourceName(stop?.source?.label);
+}
 
 export function stopPlaceDetails(stop, lang = 'en') {
   const details = stop?.place_details;

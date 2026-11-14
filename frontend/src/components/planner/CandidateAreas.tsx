@@ -8,10 +8,20 @@ import type { ReactNode } from "react";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { ExternalIcon, KeepIcon, MinusIcon, PlusIcon } from "../shared/icons";
 import { buttonClass, Eyebrow, panelCard } from "../shared/ui";
-import { INTENT_LABELS, label, type Lang, type Translate } from "./copy";
+import { interestName, type Lang, type Translate } from "./copy";
 import { canCommitTo, type Commitments } from "./commitments";
 import StopCategory, { stopCategoryLabel } from "./StopCategory";
 import type { DistrictArea } from "./types";
+
+/** Places the candidate areas actually list: the count behind "0 matches". */
+export function candidateMatchCount(areas: Array<DistrictArea> | null | undefined): number {
+  return (areas ?? []).reduce((count, area) => count + (area.stops?.length ?? area.stop_ids?.length ?? 0), 0);
+}
+
+/** Interests named as their chips read; a key this build has no words for is left out. */
+function interestNames(keys: string[] | null | undefined, lang: Lang): string[] {
+  return [...new Set((keys ?? []).map((key) => interestName(key, lang)).filter((name): name is string => Boolean(name)))];
+}
 
 export default function CandidateAreas({
   t,
@@ -40,7 +50,8 @@ export default function CandidateAreas({
   releaseCommitment: (identity: string) => void;
   commit: (identity: string, kind: "exclude" | "pin", commitLabel: string) => void;
 }) {
-  const matchCount = areas.reduce((count, area) => count + (area.stops?.length ?? area.stop_ids?.length ?? 0), 0);
+  const matchCount = candidateMatchCount(areas);
+  const missingNames = interestNames(missingIntents, lang);
   return (
     <section className={`flex flex-col gap-4 p-4 sm:p-5 ${panelCard}`}>
       <div>
@@ -55,9 +66,9 @@ export default function CandidateAreas({
         )}
       </div>
 
-      {missingIntents.length > 0 && (
+      {missingNames.length > 0 && (
         <p className="text-sm text-parranda-ink-muted">
-          {t("Inga platser för:", "No places for:")} {missingIntents.map((k) => label(INTENT_LABELS, k, lang)).join(", ")}
+          {t("Inga platser för:", "No places for:")} {missingNames.join(", ")}
         </p>
       )}
       {matchCount === 0 && (
@@ -72,14 +83,14 @@ export default function CandidateAreas({
         {areas.map((area, index) => (
           <li key={index} className="rounded-parranda border-line border-parranda-line-faint bg-parranda-paper p-4">
             <div className="flex flex-wrap items-center gap-1.5">
-              {(area.covers ?? []).map((axis) => (
-                <span key={axis} className="rounded-full bg-parranda-ink px-2.5 py-0.5 text-xs font-bold text-parranda-paper">
-                  {label(INTENT_LABELS, axis, lang)}
+              {interestNames(area.covers, lang).map((name) => (
+                <span key={name} className="rounded-full bg-parranda-ink px-2.5 py-0.5 text-xs font-bold text-parranda-paper">
+                  {name}
                 </span>
               ))}
-              {(area.partial_covers ?? []).map((axis) => (
-                <span key={`partial-${axis}`} className="rounded-full border-line border-parranda-line-firm px-2.5 py-0.5 text-xs font-bold text-parranda-ink">
-                  {label(INTENT_LABELS, axis, lang)} · {t("delvis", "partial")}
+              {interestNames(area.partial_covers, lang).map((name) => (
+                <span key={`partial-${name}`} className="rounded-full border-line border-parranda-line-firm px-2.5 py-0.5 text-xs font-bold text-parranda-ink">
+                  {name} · {t("delvis", "partial")}
                 </span>
               ))}
               <span className="type-data ml-auto text-11 text-parranda-ink-meta">

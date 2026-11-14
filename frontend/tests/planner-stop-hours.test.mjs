@@ -177,8 +177,15 @@ for (const lang of ['sv', 'en']) test(`${lang} stop facts and controls stay comp
   assert.match(panel.textContent, /8 Source Street/);
   assert.match(panel.textContent, lang === 'sv' ? /Matchar dina val: Kultur/ : /Matches your picks: Culture/);
   assert.match(panel.textContent, lang === 'sv' ? /Lösare träff för: Utsikt/ : /A looser match for: Views/);
-  const group = panel.querySelector('[role="group"]');
-  assert.ok(group, 'one compact action group owns keep, replace and remove');
+  // Two kinds of action, as in the reviewed Linje prototype: going there
+  // leads (outlined), changing the day follows (quiet fills). No card.
+  const go = panel.querySelector(`[role="group"][aria-label="${lang === 'sv' ? 'Gå dit' : 'Go there'}"]`);
+  const group = panel.querySelector(`[role="group"][aria-label="${lang === 'sv' ? 'Ändra stopp' : 'Edit stop'}"]`);
+  assert.ok(go && group, 'going there and changing the day are two groups');
+  assert.ok(go.compareDocumentPosition(group) & panel.ownerDocument.defaultView.Node.DOCUMENT_POSITION_FOLLOWING, 'going there leads');
+  assert.deepEqual([...go.querySelectorAll('a')].map(a => a.textContent.trim()), lang === 'sv' ? ['Öppna i Maps', 'Webbplats'] : ['Open in Maps', 'Website']);
+  for (const button of group.querySelectorAll('button')) assert.match(button.className, /\bbg-parranda-fill\b/, 'changing the day is quiet');
+  assert.doesNotMatch(panel.className, /\bborder-line\b|\bbg-parranda-fill-faint\b|\bp-4\b/, 'no card around the open stop');
   assert.deepEqual([...group.querySelectorAll('button')].map(b => b.textContent.trim()),
     lang === 'sv' ? ['Behåll den här', 'Byt', 'Ta bort'] : ['Keep this one', 'Replace', 'Remove']);
   assert.equal(group.querySelector('a'), null, 'external navigation is separate from day editing');
@@ -197,7 +204,31 @@ for (const lang of ['sv', 'en']) test(`${lang} selected source details add usefu
   const h = await completed(t, lang, { place_details: { kind: 'art_museum', address: 'Source Street 12' },
     description: 'Unvalidated wonderful hidden gem' });
   const panel = await expandMuseum(h);
-  assert.match(panel.textContent, lang === 'sv' ? /Konstmuseum/ : /Art museum/);
+  const row = h.container.querySelector(`button[aria-controls="${panel.id}"]`);
+  const kind = lang === 'sv' ? /Konstmuseum/ : /Art museum/;
+  assert.equal(row.querySelector('[data-stop-category]').textContent.trim(), lang === 'sv' ? 'Konstmuseum' : 'Art museum',
+    'the row badge names the source kind instead of the broad type');
+  assert.doesNotMatch(panel.textContent, kind, 'the opened place does not repeat the row badge');
   assert.equal(panel.textContent.match(/Source Street 12/g)?.length, 1);
   assert.doesNotMatch(panel.textContent, /Unvalidated|wonderful|hidden gem/);
+});
+
+for (const lang of ['sv', 'en']) test(`${lang} a raw provider token reads as the source's name inside the place`, async t => {
+  const h = await completed(t, lang, { source: { kind: 'open_geo_source', label: 'overture', url: 'https://overturemaps.org/' } });
+  const panel = await expandMuseum(h);
+  const evidence = panel.querySelector('details');
+  assert.ok(evidence, 'source information remains available');
+  assert.match(evidence.textContent, lang === 'sv' ? /Källa: Overture Maps/ : /Source: Overture Maps/);
+  assert.doesNotMatch(evidence.textContent, /overture(?! Maps)/i, 'the raw token is not shown');
+});
+
+for (const lang of ['sv', 'en']) test(`${lang} a specific second-hand category keeps the row while a merged kind stays in the place`, async t => {
+  const h = await completed(t, lang, { type: 'vintage-shop', covered_preferences: ['second_hand'],
+    source: { kind: 'open_geo_source', label: 'osm', category: 'charity', url: 'https://www.openstreetmap.org/node/42' },
+    place_details: { kind: 'second_hand_clothing' } });
+  const panel = await expandMuseum(h);
+  const row = h.container.querySelector(`button[aria-controls="${panel.id}"]`);
+  assert.equal(row.querySelector('[data-stop-category]').textContent.trim(), lang === 'sv' ? 'Second hand · välgörenhet' : 'Charity shop');
+  assert.match(panel.textContent, lang === 'sv' ? /Begagnade kläder/ : /Second-hand clothing/, 'the narrower kind is still shown once');
+  assert.match(panel.querySelector('details').textContent, lang === 'sv' ? /Källa: OpenStreetMap/ : /Source: OpenStreetMap/);
 });
