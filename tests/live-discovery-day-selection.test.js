@@ -8,6 +8,7 @@ const { buildApp } = require('../server/app');
 const { resolveDefaultEventSupply, HELSINKI_LINKED_EVENTS_FEED } = require('../server/place-candidates/agnostic-event-supply');
 const { requestJson } = require('./helpers/planner-reservoir-compare');
 const { rows } = require('./helpers/day-composition-fixtures');
+const NOW = '2026-10-16T08:00:00Z';
 const DATE = '2026-10-17';
 const PATH = '/api/route-recommendations?lang=en&include_live_completion=1';
 const BODY = { lat: 60.17, lng: 24.94, dates: [DATE], preferences: ['culture', 'views'],
@@ -39,7 +40,9 @@ async function fixture(t) {
     placeResolver: null, reviewedPlaceSource: null, sourceCatalog: null,
     weatherProvider: async () => ({ condition: 'sun', timezone_resolution: {
       timezone: 'Europe/Helsinki', timezone_source: 'weather_provider_auto', utc_offset_seconds: 10800 } }),
-    clock: { now: () => '2026-10-16T08:00:00Z' },
+    // The composer reads the clock as a function; an object with only now()
+    // let the composition fall back to the wall clock (same fix as #623).
+    clock: Object.assign(() => new Date(NOW), { now: () => NOW }),
   }).listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
@@ -59,6 +62,8 @@ async function fixture(t) {
     assert.equal(terminal.live_events.acquisition.source_health.status, 'healthy');
   }
   const initial = await post({});
+  assert.equal(initial.agnostic_route_output_experiment.context?.time?.now?.slice(0, 10), '2026-10-16',
+    'the composition must use the controlled clock, not the wall date');
   const chosen = allEvents(initial.live_events).find(event => event.title === 'Source concert second');
   assert.ok(chosen, 'the source normalizer supplies the alternative event in discovery');
   return { initial, chosen, post };

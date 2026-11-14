@@ -8,6 +8,7 @@ const { buildApp } = require('../server/app');
 const { resolveDefaultEventSupply, HELSINKI_LINKED_EVENTS_FEED } = require('../server/place-candidates/agnostic-event-supply');
 const { requestJson } = require('./helpers/planner-reservoir-compare');
 const { rows } = require('./helpers/day-composition-fixtures');
+const NOW = '2026-10-16T08:00:00Z';
 const DATE = '2026-10-17';
 const ROUTE = '/api/route-recommendations?lang=en&include_live_completion=1&include_live_route_upgrade=1';
 const BODY = { lat: 60.17, lng: 24.94, dates: [DATE], preferences: ['culture', 'views'],
@@ -42,7 +43,9 @@ async function fixture(t) {
     weatherProvider: async () => ({ condition: 'sun', timezone_resolution: {
       timezone: 'Europe/Helsinki', timezone_source: 'weather_provider_auto', utc_offset_seconds: 10800 } }),
     placeResolver: null, reviewedPlaceSource: null, sourceCatalog: null,
-    clock: { now: () => '2026-10-16T08:00:00Z' },
+    // The composer reads the clock as a function; an object with only now()
+    // let the composition fall back to the wall clock (same fix as #623).
+    clock: Object.assign(() => new Date(NOW), { now: () => NOW }),
   }).listen(0, '127.0.0.1');
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
   await new Promise((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
@@ -67,6 +70,8 @@ async function fixture(t) {
   assert.ok(event?.live_occurrence_id, 'the real source normalizer and publisher issue a selectable occurrence');
   const choice = { occurrence_id: event.live_occurrence_id, action: 'keep' };
   const kept = await post(ROUTE, { ...BODY, live_event_choices: [choice] });
+  assert.equal(experiment(kept).context?.time?.now?.slice(0, 10), '2026-10-16',
+    'the composition must use the controlled clock, not the wall date');
   assert.equal(stops(kept).length, 6);
   assert.equal(experiment(kept).live_event_choices.honored_count, 1, 'the unchanged occurrence passes ordinary Keep gates');
   return { kept, choice, event, request: extra => post(ROUTE, { ...BODY, live_event_choices: [choice], ...extra }) };
