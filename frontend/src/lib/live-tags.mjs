@@ -6,6 +6,9 @@
  * show "Musik". Common event categories are translated here; any other tag
  * stays exactly as the source wrote it rather than being guessed at.
  * Generic vocabulary only: no source, city or venue names.
+ *
+ * Catch-all placeholders that name no category ("Miscellaneous",
+ * "Undefined") are not shown: they tell the reader nothing.
  */
 
 const CATEGORIES = [
@@ -47,11 +50,18 @@ for (const category of CATEGORIES) {
   for (const word of category.words) BY_WORD.set(word, category);
 }
 
+const PLACEHOLDERS = new Set(["miscellaneous", "misc", "misc.", "undefined", "other", "others", "övrigt", "övriga", "annat"]);
+
 const normalized = (tag) => tag.trim().toLowerCase().replace(/\s+/g, " ");
 
-/** The tag in `lang`, or the source's own words when it is not a known category. */
+/**
+ * The tag in `lang`, or the source's own words when it is not a known
+ * category. A catch-all placeholder becomes "" (not shown).
+ */
 export function liveTagLabel(tag, lang) {
-  const category = BY_WORD.get(normalized(String(tag)));
+  const key = normalized(String(tag));
+  if (PLACEHOLDERS.has(key)) return "";
+  const category = BY_WORD.get(key);
   return category ? category[lang === "sv" ? "sv" : "en"] : String(tag).trim();
 }
 

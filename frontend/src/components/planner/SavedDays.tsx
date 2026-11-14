@@ -23,7 +23,7 @@ export default function SavedDays({
 }) {
   return (
     <section className="border-t-line border-parranda-line-faint pt-3">
-      <Eyebrow className="py-1">{t("Sparade dagar", "Saved days")}</Eyebrow>
+      <Eyebrow as="h2" className="py-1">{t("Sparade dagar", "Saved days")}</Eyebrow>
       <ul className="flex flex-col">
         {savedDays.map((entry) => (
           <li key={entry.id} className="flex items-center gap-2 border-t-line border-parranda-line-faint first:border-t-0">
