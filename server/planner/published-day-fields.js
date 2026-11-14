@@ -30,6 +30,12 @@ const array = (item, min = 0, max = Infinity) => ({ item, min, max });
 const enumeration = (...values) => ({ values });
 const preference = enumeration(...PLANNER_PREFERENCE_KEYS);
 const preferences = array(preference, 0, MAX_PLANNER_PREFERENCES);
+// The engine's closed per-stop vocabularies: candidateStatusForRole
+// (role-selector.js) and scoreWeather (fit-scorer.js). A value outside them
+// refuses the share, never disappears from it.
+const CANDIDATE_STATUS = enumeration('filled','partial','fallback','missing');
+const WEATHER_REASON = enumeration('rain_favors_indoor','rain_penalizes_exposed','sun_favors_scenic',
+  'hot_favors_swim','hot_penalizes_shadeless','requested_waterfront');
 const fields = {
   LiveChoice: { occurrence_id: r('liveId'), action: r(enumeration('keep','remove','replace')) },
   RequestEdit: { version: r(enumeration(1)), action: r(enumeration('remove','replace')), candidate_id: r('editId'),
@@ -88,6 +94,7 @@ const fields = {
     starts_at: n('instant'), ends_at: n('instant'), starts_on: n('date'), ends_on: n('date'), occurrence_date: n('date'), time_window: n('TimeWindow'), timezone: n('string'),
     lat: r('lat'), lng: r('lng'), type: n('string'), area: n('string'), address: n('string'), daypart: n('string'),
     covered_preferences: n(array('string')), partial_preferences: n(array('string')), missing_preferences: n(array('string')),
+    candidate_status: n(CANDIDATE_STATUS), weather_reasons: o(array(WEATHER_REASON,0,6)),
     source: n('StopSource'), trust: n('Trust'), provisional: o('bool'), origin: n('string'), website: n('shortUrl'),
     place_details: n('PlaceDetails'), selected_day_hours: n('SelectedHours'), provenance: n('Provenance') },
   Leg: { from_label: n('string'), to_label: n('string'), distance_km: n('nonnegative'), estimated_walk_minutes: n('nonnegative') },
