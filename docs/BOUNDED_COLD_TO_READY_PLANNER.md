@@ -112,7 +112,11 @@ runs (`first_pass_while_expanding`), else a fresh stored answer for the same
 anchor, preferences, mode and scope at another walking budget
 (`neighbouring_budget_cache`, with `primary_collection_target_km`). The same
 neighbouring answer backs a request whose own map answer failed (reason
-`primary_failed`, the `loader_error` stays visible). Cached Wikidata and NAPI
+`primary_failed`, the `loader_error` stays visible). Else the place's previous
+answer to the same question, composed from stored query answers that may have
+expired inside the stale-if-error window (`stored_map_answer`, with
+`cache.served_stale` and `refresh_reason: refresh_outstanding`): a refresh that
+is slow leaves the day the same safety net a failed one does. Cached Wikidata and NAPI
 rows join at zero network cost. Only without any of these does the day go
 without the map family (`background_refresh`, reason
 `no_answered_map_evidence`). None of this asks a provider again; see

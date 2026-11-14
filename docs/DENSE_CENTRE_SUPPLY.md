@@ -152,8 +152,23 @@ holds for the anchor, in this order:
    changes the Overpass key, not the place or the trust of an answer already
    verified and stored. The nearest aperture wins, then the nearest budget;
    `neighbouring_budget_cache` with `primary_collection_target_km`.
-3. Otherwise no map evidence: `background_refresh`, reason
+3. **The place's previous answer to this question**, composed from stored
+   query answers that may have expired inside the stale-if-error window —
+   `stored_map_answer`, labelled `cache.served_stale` with
+   `refresh_reason: refresh_outstanding`. A slow refresh gets the same safety
+   net a failed one does.
+4. Otherwise no map evidence: `background_refresh`, reason
    `no_answered_map_evidence`.
+
+Map answers are stored per **query text** as well as per request. A request's
+own key carries what shaped its selection (for a day that is today, the
+availability window starts at the current local minute), so it rarely matches a
+minute later; the query text carries only what shaped the acquisition (place,
+aperture, limit, interests). The same query text is therefore asked once per
+lifetime, every later request selects from its stored answer for its own
+window, and its expired answer is the stale-if-error fallback for every window.
+An empty answer is not stored, and a late answer still is not (see
+`tests/overpass-gate-lifecycle.test.js`).
 
 Every other source then adds what it holds for the anchor at zero network cost:
 the eager directory selection for this budget, cached Wikidata corroboration
