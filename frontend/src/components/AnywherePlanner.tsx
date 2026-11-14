@@ -44,6 +44,7 @@ import {
   buildRouteContextSuggestions,
   routePreferenceCoverage,
   routeTimeAnchoring,
+  routeEveningIsTonight,
 } from "../lib/route-context-view.mjs";
 import {
   splitRouteStops,
@@ -3019,6 +3020,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // picks and Adjust. "Today" belongs to the shown date only when it is
   // today's: a saved day from yesterday keeps the offset it was composed with.
   const shownDate = safeResponse?.days?.[0]?.date;
+  // Read at render from the place's trusted calendar day, never the viewer's.
+  const eveningIsTonight = timeAnchoring === "evening_plan" && routeEveningIsTonight(safeResponse, Date.now());
   const shownDay = typeof shownDate === "string" ? navigationDayPresentation(shownDate, lang) : null;
   const anchorCard = hasAnchor ? (
     <AnchorCard
@@ -3109,6 +3112,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           anchorLabel={anchorLabel}
           primaryRoute={primaryRoute}
           date={shownDate}
+          eveningIsTonight={eveningIsTonight}
           weatherSummary={safeResponse?.days?.[0]?.weather_summary ?? null}
           titleAction={<ChangePlaceLink t={t} lang={lang} onChangePlace={cancelActivePlannerForNavigation} />}
           controls={anchorCard}
@@ -3475,7 +3479,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           newStopIdentities={newStopIdentities}
           routeLineIsSketch={routeLineIsSketch}
           dayContextNote={dayContextNote}
-          assemblyNotes={dayAssemblyNotes(t, { sourceBackedDay, timeAnchoring })}
+          assemblyNotes={dayAssemblyNotes(t, { sourceBackedDay, timeAnchoring, eveningIsTonight, eveningDate: shownDate, lang })}
           split={split}
           routeStops={routeStops}
           legForStop={legForStop}

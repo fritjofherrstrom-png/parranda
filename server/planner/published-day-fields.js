@@ -11,6 +11,7 @@ const { eventOccurrenceForDate } = require('../candidates/evening-event-weave');
 const { parsePlaceRef } = require('../place-candidates/place-ref');
 const { venueMentionsMatchPlace } = require('../place-candidates/venue-mentions');
 const { isApprovedVenueArticleUrl } = require('../place-candidates/venue-mention-policy');
+const { CANONICAL_INTENTS } = require('../candidates/intent-vocabulary');
 const MAX_BYTES = 1048576;
 // Additional projector policy, NOT source cardinality caps. Refuse, never cut.
 const MAX_NODES = 100000;
@@ -107,7 +108,9 @@ const fields = {
     map_path_points: r(array('Point')), legs: r(array('Leg')), estimated_km: rule('nonnegative',true,true),
     routing_source: n('string'), geometry_source: n('string'), geometry_mode: n(enumeration('walking')),
     geometry_attribution: n('GeometryAttribution'), route_shape: n('string'), public_route_scope: n('string'), caveats: n(array('string')),
-    anchored_to_local_time: o('bool'), trust_summary: n('TrustSummary'), credibility_tier: n('string') },
+    // Named in the engine's stop vocabulary ("museums"), not the planner's ("culture").
+    anchored_to_local_time: o('bool'), unconfirmed_tonight_preferences: o(array(enumeration(...Object.keys(CANONICAL_INTENTS)),1,MAX_PLANNER_PREFERENCES)),
+    trust_summary: n('TrustSummary'), credibility_tier: n('string') },
   WeatherObserved: { condition: n('string'), max_temp: n('number'), apparent_temp_max: n('number'), precipitation_probability_max: n('number'),
     precipitation_sum: n('number'), wind_speed_max: n('number') },
   WeatherProvenance: { provider_id: n('string'), role: n('string'), signal_type: n('string'), signal_kind: n('string'), confidence: n('string'),
@@ -329,6 +332,16 @@ function validateObject(type,value) {
       value.starts_on !== value.dates[0] || value.ends_on !== value.dates[value.dates.length-1])) refuse();
   }
   if (type === 'PrimaryRoute') {
+    // An anchored evening names the picks whose hours tonight are unconfirmed:
+    // the list and its caveat travel together, sorted and unique, and every
+    // named pick is served by a stop on this route.
+    const named = value.unconfirmed_tonight_preferences, caveats = value.caveats || [];
+    if (caveats.includes('picks_unconfirmed_tonight') !== Boolean(named)) refuse();
+    if (named) {
+      const served = new Set(value.main_stops.flatMap(stop => [...(stop.covered_preferences || []), ...(stop.partial_preferences || [])]));
+      if (value.anchored_to_local_time !== true || !caveats.includes('day_anchored_to_current_time') ||
+        named.some((pick, i) => (i && pick <= named[i - 1]) || !served.has(pick))) refuse();
+    }
     const stops = value.main_stops;
     if (new Set(stops.map(stop=>stop.id)).size !== stops.length) refuse();
     if (value.public_route_scope === 'selected_stop_chain' && (value.map_route_points.length !== stops.length ||

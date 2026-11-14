@@ -56,6 +56,12 @@ function projectPublishedDay(input = {}) {
       if (requested.length !== experiment.constraint_negotiation.preference_coverage.requested_preferences.length ||
         !isDeepStrictEqual([...requested].sort(),[...expected].sort())) return null;
     }
+    // Named unconfirmed evening picks must be the reader's own picks.
+    const unconfirmedTonight = day.primary_route?.unconfirmed_tonight_preferences || [];
+    if (unconfirmedTonight.length) {
+      const requestedIntents = normalizeUserIntents(intent.preferences).intents;
+      if (unconfirmedTonight.some(pick => !requestedIntents.includes(pick))) return null;
+    }
     const finalStops = day.primary_route?.main_stops || [];
     if (finalStops.some(stop=>intent.excludedCandidateIds.includes(stop.id))) return null;
     const active = activeLiveChoices(intent.liveEventChoices,day.date);

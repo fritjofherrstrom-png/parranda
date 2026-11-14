@@ -204,16 +204,59 @@ export function routePreferenceCoverage(routeStops, requestedPreferences) {
  *                         trusted local time (caveat daypart_arc_precedes_local_time)
  *   "anchored_trimmed"  → the day was anchored to now and already-past dayparts
  *                         were dropped (caveat day_anchored_to_current_time)
+ *   "evening_plan"      → an anchored evening that keeps picks whose hours
+ *                         tonight are unconfirmed (caveat picks_unconfirmed_tonight)
  *   null                → no time-anchoring claim (unknown timezone, future
  *                         plan, or no caveat) — render nothing, never guess.
- * Only these two known caveat tokens are consulted; anything else is ignored
- * so raw engine tokens can never leak into product copy.
+ * Only these known caveat tokens are consulted; anything else is ignored so
+ * raw engine tokens can never leak into product copy.
  */
 export function routeTimeAnchoring(primaryRoute) {
   const caveats = Array.isArray(primaryRoute && primaryRoute.caveats) ? primaryRoute.caveats : [];
   if (caveats.includes("daypart_arc_precedes_local_time")) return "full_arc_not_now";
   if (caveats.includes("day_anchored_to_current_time") || primaryRoute?.anchored_to_local_time === true) {
-    return "anchored_trimmed";
+    return caveats.includes("picks_unconfirmed_tonight") ? "evening_plan" : "anchored_trimmed";
   }
   return null;
+}
+
+/**
+ * The reader's picks an evening plan keeps although their hours tonight are
+ * unconfirmed, in the planner's own pick vocabulary. Read only from an anchored
+ * evening that says so; anything else gives none.
+ */
+const TRUSTED_TIMEZONES = new Set(["resolver_attested", "derived_from_weather_provider"]);
+
+/**
+ * Whether an evening plan's evening is tonight for a reader at `now`: true only
+ * when the place's own calendar day, read in its trusted timezone, is the day's
+ * published date. A composed "today" is no authority after the place's
+ * midnight, and the reader's timezone never decides it. Without a trusted
+ * place day the answer is false, so the day is named by its date instead.
+ */
+export function routeEveningIsTonight(response, now = Date.now()) {
+  const date = text(response?.days?.[0]?.date);
+  const time = response?.agnostic_route_output_experiment?.context?.time;
+  const zone = text(time?.timezone);
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !zone || time.timezone_known !== true ||
+      !TRUSTED_TIMEZONES.has(time.timezone_trust) || !Number.isFinite(now)) return false;
+  try {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" })
+      .formatToParts(new Date(now)).map((part) => [part.type, part.value]));
+    return `${parts.year}-${parts.month}-${parts.day}` === date;
+  } catch {
+    return false;
+  }
+}
+
+export function routeUnconfirmedTonightPicks(primaryRoute) {
+  if (routeTimeAnchoring(primaryRoute) !== "evening_plan") return [];
+  const values = Array.isArray(primaryRoute?.unconfirmed_tonight_preferences) ? primaryRoute.unconfirmed_tonight_preferences : [];
+  const picks = [];
+  for (const value of values) {
+    const key = text(value);
+    const pick = key && (PLANNER_INTENT_ALIASES[key] || key);
+    if (pick && !picks.includes(pick)) picks.push(pick);
+  }
+  return picks;
 }

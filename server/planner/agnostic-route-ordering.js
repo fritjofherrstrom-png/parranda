@@ -52,12 +52,31 @@ function daypartForRole(role) {
   return SLOT_DAYPART[slot] || SLOT_DAYPART[DEFAULT_SLOT];
 }
 
-// The daypart a role keeps whatever the hour, or null. The food anchor is the
-// day's main meal (lunch or dinner) and an unknown role has no daypart of its
-// own, so neither can say a day leads with a daypart already past.
-function fixedDaypartForRole(role) {
-  if (typeof role !== "string" || role === "food_anchor" || !Object.prototype.hasOwnProperty.call(DAYPART_SLOT, role)) return null;
-  return SLOT_DAYPART[DAYPART_SLOT[role]] || null;
+// The last daypart in which a role's kind of experience usually still fits a
+// plan for today. The slot above is only the role's place in the day's arc:
+// a museum sits at midday in the arc but still suits the afternoon, a meal may
+// be dinner, a view may be an evening walk. Each entry is at or after its
+// slot's daypart. It decides only whether a stop may be called already past;
+// anchoring to now still trims by the arc slot. A heuristic about kinds of
+// experience, never opening hours.
+const ROLE_LAST_DAYPART = {
+  coffee_fika_stop: "afternoon",
+  scenic_anchor: "evening",
+  culture_stop: "afternoon",
+  market_stop: "midday",
+  green_walk_stop: "afternoon",
+  swimming_coast_option: "afternoon",
+  vintage_second_hand_option: "afternoon",
+  food_anchor: "evening",
+  evening_bar_option: "evening",
+};
+
+// The last daypart a known role still fits, or null: an unknown role has no
+// daypart of its own, so it cannot say a day leads with a daypart already past.
+function knownLastDaypartForRole(role) {
+  return typeof role === "string" && Object.prototype.hasOwnProperty.call(ROLE_LAST_DAYPART, role)
+    ? ROLE_LAST_DAYPART[role]
+    : null;
 }
 
 // The numeric daypart slot rank for a role (lower = earlier). Shared with the
@@ -265,7 +284,8 @@ module.exports = {
   stableStopId,
   daypartForRole,
   daypartSlotForRole,
-  fixedDaypartForRole,
+  knownLastDaypartForRole,
+  ROLE_LAST_DAYPART,
   SLOT_DAYPART,
   timeBandRank,
 };
