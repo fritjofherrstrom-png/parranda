@@ -22,7 +22,7 @@ import LiveEventTiming from "./LiveEventTiming";
 import VenueMentions from "./VenueMentions";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { selectedDayHoursLabel } from "../../lib/selected-day-hours.mjs";
-import { stopHoursUnknown, stopWebsiteUrl, stopMatchedPreferences, stopPlaceDetails } from "../../lib/stop-card-facts.mjs";
+import { stopHoursUnknown, stopWebsiteUrl, stopMatchedPreferences, stopPlaceDetails, stopRowKindLabel, stopSourceLabel } from "../../lib/stop-card-facts.mjs";
 import { walkingDistanceLabel, type RouteContextSuggestion } from "../../lib/route-context-view.mjs";
 import {
   CheckIcon,
@@ -284,9 +284,12 @@ export default function StopLine({
           const placeDetails = stopPlaceDetails(stop, lang);
           const partialLabels = partialPreferenceLabels(stop, selected, lang);
           const matchedLabels = stopMatchedPreferences(stop, selected).map((key) => pickLabel(key, lang));
-          const stopKindLabel = stopCategoryLabel(stop, lang);
+          const stopKindLabel = stopRowKindLabel(stop, stopCategoryLabel(stop, lang), lang);
           const hoursUnknown = stopHoursUnknown(stop);
-          const sourceLabel = String(stop?.source?.label || "").trim();
+          const sourceLabel = stopSourceLabel(stop);
+          // The row badge already names the kind; the open stop repeats it only
+          // when the row kept something else (a specific second-hand category).
+          const panelKindLabel = placeDetails.kindLabel && placeDetails.kindLabel !== stopKindLabel ? placeDetails.kindLabel : null;
           const behind = currentIndex != null && i < currentIndex;
           const isCurrent = currentIndex === i;
           const station = stale
@@ -384,10 +387,10 @@ export default function StopLine({
                 // two kinds of action. Going there leads, outlined; changing
                 // the day follows, in quiet fills. No card of its own.
                 <div id={panelId} className="mb-1 ml-14 mt-1 flex flex-col gap-3">
-                  {(placeDetails.kindLabel || matchedLabels.length > 0 || partialLabels.length > 0) && (
+                  {(panelKindLabel || matchedLabels.length > 0 || partialLabels.length > 0) && (
                     <p className="text-15 leading-snug text-parranda-ink-soft">
                       {[
-                        placeDetails.kindLabel ? `${placeDetails.kindLabel}.` : "",
+                        panelKindLabel ? `${panelKindLabel}.` : "",
                         matchedLabels.length > 0 ? `${t("Matchar dina val:", "Matches your picks:")} ${matchedLabels.join(", ")}.` : "",
                         partialLabels.length > 0 ? `${t("Lösare träff för:", "A looser match for:")} ${partialLabels.join(", ")}.` : "",
                       ].filter(Boolean).join(" ")}
