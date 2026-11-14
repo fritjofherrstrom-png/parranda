@@ -10,4 +10,6 @@ export declare function urlEntryCommitments(entry: SavedEntry | null, context?: 
   preferencePriority?: string[] | null;
   dayEdit?: DayEdit | null;
   invalidDayEdit?: boolean;
+  /** The mode the next compose sends; a ledger applies only to its own mode. */
+  intentMode?: string | null;
 }): { applies: boolean; entries: Record<string, CommitmentEntry> };

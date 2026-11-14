@@ -40,15 +40,27 @@ export function normalizeSavedWalkKey(value) {
  * with different preferences or walking contracts, are different days — and a
  * record written for one must not be readable by the other.
  */
-export function savedEntryId({ city, place, placeLabel, dateIso, selected, walkKey, preferencePriority, dayEdit, invalidDayEdit = false } = {}) {
+export function savedEntryId({ city, place, placeLabel, dateIso, selected, walkKey, preferencePriority, dayEdit, invalidDayEdit = false, intentMode = null } = {}) {
   const c = String(city || "").trim().toLowerCase();
   const p = (placeLabel || place || "").trim();
   const anchor = c ? `city:${c}` : p || "pos";
   const priority = normalizePreferencePriority(preferencePriority, selected);
   const edit = invalidDayEdit === true ? null : normalizeDayEdit(dayEdit);
+  const mode = savedIntentMode(intentMode, selected);
   return `${anchor}::${dateIso || ""}::${prefsKey(selected)}::rhythm=${normalizeSavedWalkKey(walkKey)}` +
     (priority.length ? `::prio=${priority.join(",")}` : "") +
-    (edit ? `::edit=${JSON.stringify(edit)}` : dayEdit != null || invalidDayEdit === true ? "::edit=invalid" : "");
+    (edit ? `::edit=${JSON.stringify(edit)}` : dayEdit != null || invalidDayEdit === true ? "::edit=invalid" : "") +
+    (mode ? `::mode=${mode}` : "");
+}
+
+/**
+ * The intent mode that is part of a saved day's identity. "Let Parranda
+ * choose" asks a different question from an ordinary free day with the same
+ * place, date and empty picks. Explicit picks win over the mode, so it adds
+ * nothing to their identity, and a neutral mode leaves every ID unchanged.
+ */
+export function savedIntentMode(intentMode, selected) {
+  return intentMode === "parranda_chooses" && !(Array.isArray(selected) && selected.length) ? "parranda_chooses" : null;
 }
 
 /** The saved ledger's coarse identity is not a reusable GPS position. */
@@ -115,6 +127,7 @@ export function buildSavedEntry({
       preferencePriority: priority,
       dayEdit: normalizedInputs?.dayEdit,
       invalidDayEdit: normalizedInputs?.invalidDayEdit,
+      intentMode: inputs?.intentMode,
     }),
     label: (label || p || "Min position").trim(),
     place: p || null,
