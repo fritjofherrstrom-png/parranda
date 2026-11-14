@@ -71,7 +71,7 @@ const { weaveEveningEventRouteStop } = require("../candidates/event-route-stop-w
 const { generateAgnosticRecommendations, buildLegMetrics } = require("../route-engine");
 const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
 const { replacementKeepsOtherStops } = require("./walking-fit-selection");
-const { dayEditOutcome, normalizeDayEdit } = require('./day-composition-policy');
+const { dayEditOutcome, normalizeDayEdit, routeNeedsMealSpacing, acceptMealSpacedFinal } = require('./day-composition-policy');
 const { activeLiveChoices } = require('./live-occurrence-choice');
 const { normalizeSourceWebsite } = require('../lib/source-website');
 const {
@@ -1910,7 +1910,7 @@ async function composeAgnosticRouteViaEngine({
       })
     : null;
 
-  async function runEngine(candidates, pins = pinnedStopIds) {
+  async function runEngine(candidates, pins = pinnedStopIds, { mealSpacing = false } = {}) {
     const engineCityConfig = buildAgnosticEngineCityConfig({
       anchor: origin,
       sourceCandidates: candidates,
@@ -1924,6 +1924,7 @@ async function composeAgnosticRouteViaEngine({
       reservedLiveStopCount: preserveLive ? 1 : 0,
       mealContext: contextBlock?.time?.timezone_known === true && contextBlock.time.requested_date_is_today === true
         ? { date: effectiveDate, nowLocalIso: contextBlock.time.now, fullDay: dayRhythm === 'full' } : null,
+      mealSpacing,
     });
     const engineResult = await generateAgnosticRecommendations({
       cityConfig: engineCityConfig,
@@ -1960,6 +1961,9 @@ async function composeAgnosticRouteViaEngine({
     let trimmed = timeAnchoring.trimmedDayparts;
     let unconfirmed = timeAnchoring.unconfirmedIntents || [];
     let repairApplied = false;
+    // The candidates and pins behind the day held below, so a recomposition
+    // can ask the same question with one rule changed.
+    let held = { candidates: timeAnchoring.candidates, pins };
     let day = await runEngine(timeAnchoring.candidates, pins);
     let route = (day && day.primary_route) || null;
     if (!route && anchored) {
@@ -1968,6 +1972,7 @@ async function composeAgnosticRouteViaEngine({
       // not claim it is anchored; the caveat below makes that limitation explicit.
       day = await runEngine(sourceCandidates, pins);
       route = (day && day.primary_route) || null;
+      held = { candidates: sourceCandidates, pins };
       anchored = false;
       trimmed = [];
       unconfirmed = [];
@@ -1996,6 +2001,7 @@ async function composeAgnosticRouteViaEngine({
       })) {
         day = repairedDay;
         route = repairedRoute;
+        held = { candidates: capacityAnchoring.candidates, pins };
         anchored = capacityAnchoring.anchored;
         trimmed = capacityAnchoring.trimmedDayparts;
         unconfirmed = capacityAnchoring.unconfirmedIntents || [];
@@ -2028,6 +2034,7 @@ async function composeAgnosticRouteViaEngine({
           day = trialDay;
           route = trialRoute;
           if (anchored) unconfirmed = trialAnchoring.unconfirmedIntents || [];
+          held = { candidates: trialAnchoring.candidates, pins: [] };
           repairApplied = true;
         }
         if (!shouldTryCapacityRepair(route,walkingKmTarget)) break;
@@ -2048,7 +2055,44 @@ async function composeAgnosticRouteViaEngine({
       unconfirmed,
       repairApplied,
       weave: weave.outcome,
+      held,
     };
+  }
+
+  // A second main meal needs its own place in the day (#702, owner decision
+  // 13 Nov 2026; review 14 Nov). Decided on comparable FINAL results: the held
+  // day and a recomposition with the meal-spacing selection, each after the
+  // same Live weave and the same final walking validation. The alternative
+  // replaces the held day whole only when acceptMealSpacedFinal confirms it;
+  // any refusal or failure keeps the held day, never the baseline fallback.
+  // Attempted only where that whole final chain is local (no injected walking
+  // router, no OSRM provider), so it spends no provider call. A user edit is
+  // its own atomic answer and is never recomposed here.
+  const mealFinalChainIsLocal = typeof walkingRouter !== "function" &&
+    (walkingConfig?.defaultProvider || "heuristic") !== "osrm";
+  async function finalWalkingOf(result) {
+    return result.weave?.finalWalkingValidation ??
+      (validateFinalWalking ? await validateFinalWalking(result.route.map_route_points) : null);
+  }
+  async function chooseMealSpacedFinal(original) {
+    if (dayEdit || !mealFinalChainIsLocal || !original?.route || !original.held) return original;
+    const core = { ...original.route, main_stops: (original.route.main_stops || []).filter(stop => stop.is_live_event !== true) };
+    if (!routeNeedsMealSpacing(core, preferences)) return original;
+    try {
+      const spacedDay = await runEngine(original.held.candidates, original.held.pins, { mealSpacing: true });
+      if (!spacedDay?.primary_route) return original;
+      const woven = await applyEveningEventWeave({ day: spacedDay, route: spacedDay.primary_route });
+      const trial = { ...original, day: woven.day, route: woven.route, weave: woven.outcome };
+      const accepted = acceptMealSpacedFinal({
+        original: { route: original.route, weave: original.weave, validation: await finalWalkingOf(original) },
+        trial: { route: trial.route, weave: trial.weave, validation: await finalWalkingOf(trial) },
+        preferences,
+        pins: original.held.pins,
+      });
+      return accepted ? trial : original;
+    } catch (_error) {
+      return original;
+    }
   }
 
   /**
@@ -2098,6 +2142,7 @@ async function composeAgnosticRouteViaEngine({
       distanceMode,
     });
   }
+  finalized = await chooseMealSpacedFinal(finalized);
   let engineDay = finalized.day;
   let engineRoute = finalized.route;
   let anchoredToLocalTime = finalized.anchored;
