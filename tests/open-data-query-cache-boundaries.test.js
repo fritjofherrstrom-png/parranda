@@ -53,7 +53,7 @@ for (const fileBacked of [false, true]) {
     let { cache, loader } = open();
     const original = await loader({ ...PLACE, availabilityWindow: windowAt(600) });
     assert.ok(original.length > 0, 'precondition: an actual healthy map answer was stored');
-    const firstQueryKey = `query-v1:${createHash('sha256').update(state.queries[0]).digest('hex')}`;
+    const firstQueryKey = `query-v2:${createHash('sha256').update(state.queries[0]).digest('hex')}`;
     const originalExpiry = cache.inspect(firstQueryKey).expiresAt;
 
     state.now = originalExpiry - 60_000;

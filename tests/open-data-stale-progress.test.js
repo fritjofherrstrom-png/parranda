@@ -30,7 +30,7 @@ test('an expired first pass is already labelled stale while its wider query rema
   // Controlled raw-source fixture only: no selected/granncache entry can hide
   // the progressive path. Capture the query from the real loader, not a guessed key.
   const cache = createSourceCache({ namespace: 'overpass' });
-  cache.set(`query-v1:${createHash('sha256').update(queryTexts[0]).digest('hex')}`, { elements: ELEMENTS });
+  cache.set(`query-v2:${createHash('sha256').update(queryTexts[0]).digest('hex')}`, { elements: ELEMENTS });
   t.mock.timers.tick(7 * HOUR);
   let calls = 0, releaseBody;
   const osm = createOpenDataLoader({ cache, endpoint: 'https://fixture.invalid/overpass', staleIfErrorMs: 7 * DAY,
@@ -81,7 +81,7 @@ test('the primary snapshot stays stale while its regional scout remains outstand
   const primaryQueries = queries.slice(0, -1);
   assert.ok(primaryQueries.length > 0 && !primaryQueries.includes(scoutQuery));
   const cache = createSourceCache({ namespace: 'overpass' });
-  for (const query of primaryQueries) cache.set(`query-v1:${createHash('sha256').update(query).digest('hex')}`, { elements });
+  for (const query of primaryQueries) cache.set(`query-v2:${createHash('sha256').update(query).digest('hex')}`, { elements });
   t.mock.timers.tick(7 * HOUR);
   let calls = 0, releaseBody;
   const osm = createOpenDataLoader({ cache, endpoint: 'https://fixture.invalid/overpass', staleIfErrorMs: 7 * DAY,

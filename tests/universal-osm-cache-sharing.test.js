@@ -10,7 +10,9 @@ const { createOpenDataLoader, mapOsmElement } = require('../server/place-candida
 const { publicSourceUrlsForRecords } = require('../server/place-candidates/source-url-evidence');
 
 const request = { lat: 44.8178, lng: 20.4569, requestedIntents: ['second_hand'], dayRhythm: 'balanced' };
-const oldKey = 'v10:44.818,20.457:r1.5:wnone:l25:munknown:isecond_hand:tnone:snone';
+// Previous query revision within the complete-envelope admission contract.
+// Unmarked predecessor caches are covered by overpass-answer-admission.test.js.
+const oldKey = 'complete-v1:v10:44.818,20.457:r1.5:wnone:l25:munknown:isecond_hand:tnone:snone';
 
 test('owned previous-query disk fallback retains sharing destinations without renewing its source facts', async t => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'universal-osm-share-'));

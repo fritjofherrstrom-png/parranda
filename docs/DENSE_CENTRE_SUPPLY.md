@@ -178,6 +178,34 @@ cached (see `tests/overpass-gate-lifecycle.test.js`). Query reuse requires the
 cache's `peek`, `set` and expiry-bearing `inspect`; opaque caches keep the former
 request-only behavior.
 
+A complete decoded Overpass envelope is required before success/cache admission:
+nonempty `remark`/`error`, malformed collection or non-OSM collection members are
+failures, not healthy empty evidence. The query store uses `query-v2`; selected
+answers and indexes carry `complete-v1` as well as their existing query revision.
+Older unmarked entries lost their original error/partial envelope, so they remain
+untouched but are not replayed or relabelled. They require a fresh validated read.
+Previous-query positive outage fallback still works within the new admission
+contract, with its original expiry and uncertainty. A genuine `elements: []`
+remains a healthy empty selection and does not trigger mirror failover; the
+existing bounded aperture policy is unchanged.
+
+Within the mapped narrow/wider selections, same-OSM-ID facts are reconciled
+before either supply choice: the later original acquisition wins, even when the
+wider answer is not richer. Raw answers persist their local `observedAt`; a
+cache read/restart never stamps a new observation or extends expiry. Equal
+observation times retain an explicit inactive witness rather than using input
+order to reopen it. A strictly later open answer can replace an older closure;
+this is not a permanent negative veto. The local acquisition time is not an OSM
+edit timestamp and does not certify current real-world opening.
+
+`tests/osm-same-id-fact-continuity.test.js` reproduces the old-open/new-closed
+loss through the actual local HTTP publisher, with independent directory
+corroboration, all-open and direct-closed controls. It also checks non-richer
+selection, original cached observation ordering, reopening, and disk/restart.
+These are controlled synthetic sources, not native OSM or public QA acceptance.
+Closure facts discarded before the bounded mapping/selection cut and broader
+cross-source negative carriers are outside this same-ID correction.
+
 Every other source then adds what it holds for the anchor at zero network cost:
 the eager directory selection for this budget, cached Wikidata corroboration
 and cached NAPI rows. When the request's own Overpass answer **fails** (for
