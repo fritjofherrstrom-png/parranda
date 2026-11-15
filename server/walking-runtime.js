@@ -41,6 +41,7 @@ function resolveDefaultWalkingRuntime(env = process.env, dependencies) {
 function createBoundedWalkingRouter(walkingConfig, {
   fetchImpl = globalThis.fetch,
   now = Date.now,
+  wait = ms => new Promise(resolve => setTimeout(resolve, ms)),
   maxEntries = MAX_CACHE_ENTRIES,
   ttlMs = CACHE_TTL_MS,
 } = {}) {
@@ -59,7 +60,7 @@ function createBoundedWalkingRouter(walkingConfig, {
     return copy;
   };
 
-  return async function walkingRouter(points) {
+  return async function walkingRouter(points, { waitForRateSlot = false } = {}) {
     const key = JSON.stringify(points.map(point => [point.lng, point.lat]));
     const instant = now();
     for (const [oldKey, entry] of cache) if (entry.expiresAt <= instant) cache.delete(oldKey);
@@ -69,9 +70,15 @@ function createBoundedWalkingRouter(walkingConfig, {
       return copyFor(cached.result, points);
     }
     if (active?.key === key) return copyFor(await active.promise, points);
-    // No queue: a busy provider never consumes the Planner's remaining source
-    // budget. Identical in-flight chains coalesce; other days retain a sketch.
-    if (active || instant - lastStarted < MIN_INTERVAL_MS) return fallback(points);
+    // No queue for a busy provider. A comparison of two finished plans can
+    // wait once for an idle cooldown, then recheck the shared budget.
+    if (active) return fallback(points);
+    const cooldown = MIN_INTERVAL_MS - (instant - lastStarted);
+    if (cooldown > 0) {
+      if (!waitForRateSlot || cooldown > MIN_INTERVAL_MS) return fallback(points);
+      await wait(cooldown);
+      return walkingRouter(points);
+    }
     lastStarted = instant;
     const pending = routeWalkingPath(points, { walkingConfig, fetchImpl });
     active = { key, promise: pending };

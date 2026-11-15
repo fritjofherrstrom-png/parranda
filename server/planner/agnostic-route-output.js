@@ -71,7 +71,10 @@ const { weaveEveningEventRouteStop } = require("../candidates/event-route-stop-w
 const { generateAgnosticRecommendations, buildLegMetrics } = require("../route-engine");
 const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
 const { replacementKeepsOtherStops } = require("./walking-fit-selection");
-const { dayEditOutcome, normalizeDayEdit, routeNeedsMealSpacing, acceptMealSpacedFinal } = require('./day-composition-policy');
+const {
+  canonicalPriority, dayEditOutcome, isComparableWalk, normalizeDayEdit,
+  routeNeedsMealSpacing, acceptMealSpacedFinal,
+} = require('./day-composition-policy');
 const { activeLiveChoices } = require('./live-occurrence-choice');
 const { normalizeSourceWebsite } = require('../lib/source-website');
 const {
@@ -1902,15 +1905,16 @@ async function composeAgnosticRouteViaEngine({
   } : dayEdit;
   const validateFinalWalking = (dayEdit || eligibility.checks?.geometry_validation === "engine_walk_pending"
     || (walkingConfig?.defaultProvider === "osrm" && walkingConfig?.transportMode === "foot"))
-    ? stops => validateAgnosticWalkingOrder({
+    ? (stops, { waitForRateSlot = false } = {}) => validateAgnosticWalkingOrder({
         stops,
         walkingRouter,
         walkingConfig: walkingConfig || {},
+        waitForRateSlot,
         targetKm: distanceMode === "no_limit" ? null : walkingKmTarget,
       })
     : null;
 
-  async function runEngine(candidates, pins = pinnedStopIds, { mealSpacing = false } = {}) {
+  async function runEngine(candidates, pins = pinnedStopIds, { mealSpacing = false, preferFirstChoice = false } = {}) {
     const engineCityConfig = buildAgnosticEngineCityConfig({
       anchor: origin,
       sourceCandidates: candidates,
@@ -1920,6 +1924,7 @@ async function composeAgnosticRouteViaEngine({
       key: agnosticContext.key,
       dayProfile: profileForCandidates(candidates),
       preferencePriority,
+      preferFirstChoice,
       dayEdit: stableDayEdit,
       reservedLiveStopCount: preserveLive ? 1 : 0,
       mealContext: contextBlock?.time?.timezone_known === true && contextBlock.time.requested_date_is_today === true
@@ -2079,7 +2084,9 @@ async function composeAgnosticRouteViaEngine({
     const core = { ...original.route, main_stops: (original.route.main_stops || []).filter(stop => stop.is_live_event !== true) };
     if (!routeNeedsMealSpacing(core, preferences)) return original;
     try {
-      const spacedDay = await runEngine(original.held.candidates, original.held.pins, { mealSpacing: true });
+      const spacedDay = await runEngine(original.held.candidates, original.held.pins, {
+        mealSpacing: true, preferFirstChoice: original.held.preferFirstChoice,
+      });
       if (!spacedDay?.primary_route) return original;
       const woven = await applyEveningEventWeave({ day: spacedDay, route: spacedDay.primary_route });
       const trial = { ...original, day: woven.day, route: woven.route, weave: woven.outcome };
@@ -2142,12 +2149,42 @@ async function composeAgnosticRouteViaEngine({
       distanceMode,
     });
   }
+  let checkedWalking = null;
+  const firstChoice = canonicalPriority(preferencePriority, preferences)[0];
+  const ordinaryRoute = finalized.route;
+  const competingEvent = finalized.weave?.applied ||
+    (currentEvent && !finalized.weave?.blockers?.includes('event_outside_preference_focus'));
+  if (dayRhythm && distanceMode === 'no_limit' && !dayEdit && !requestedPins.length &&
+      !activeLiveKeeps.length && !competingEvent && firstChoice && ordinaryRoute && finalized.held &&
+      !routePreferenceCoverage(ordinaryRoute, [firstChoice]).exact) {
+    // Retry the selection only within the same admitted reservoir and time
+    // scope. Keep the ordinary route until the new chain passes validation.
+    const { candidates, pins } = finalized.held;
+    if (routePreferenceCoverage({ main_stops: candidates }, [firstChoice]).exact) {
+      const day = await runEngine(candidates, pins, { preferFirstChoice: true });
+      const route = day?.primary_route;
+      if (route && routePreferenceCoverage(route, [firstChoice]).exact &&
+          route.main_stops.length >= Math.max(2, ordinaryRoute.main_stops.length - 1) &&
+          route.main_stops.length <= ordinaryRoute.main_stops.length &&
+          isComparableWalk(route, ordinaryRoute)) {
+        // Give the ordinary chain the same first routing slot it had before
+        // comparing. A rate-limited estimate cannot overwrite that verdict.
+        const ordinaryWalking = validateFinalWalking ? await validateFinalWalking(ordinaryRoute.map_route_points) : null;
+        const walking = validateFinalWalking ? await validateFinalWalking(route.map_route_points, { waitForRateSlot: true }) : null;
+        checkedWalking = ordinaryWalking;
+        if (!walking || (walking.valid && comparableRoutedWalk(walking, ordinaryWalking))) {
+          finalized = { ...finalized, day, route, held: { ...finalized.held, preferFirstChoice: true } };
+          checkedWalking = walking;
+        }
+      }
+    }
+  }
+  const comparedRoute = finalized.route;
   finalized = await chooseMealSpacedFinal(finalized);
   let engineDay = finalized.day;
   let engineRoute = finalized.route;
   let anchoredToLocalTime = finalized.anchored;
   let trimmedDayparts = finalized.trimmed;
-  const unconfirmedTonightPreferences = finalized.unconfirmed || [];
   const capacityRepairApplied = finalized.repairApplied;
   // WHY each unmet commitment went unmet, named at the only layer that can tell
   // the causes apart: the reservoir, what reached the composer, and what the
@@ -2221,6 +2258,8 @@ async function composeAgnosticRouteViaEngine({
   }
 
   if (engineRoute) {
+    const unconfirmedTonightPreferences = (finalized.unconfirmed || []).filter(intent =>
+      routePreferenceCoverage(engineRoute, [intent]).supported > 0);
     const daypartHonesty = buildRouteDaypartHonesty({
       daypartArc: engineRoute.daypart_arc,
       currentTimeBand,
@@ -2264,7 +2303,7 @@ async function composeAgnosticRouteViaEngine({
   // final (post-selection, post-weave, public) stop chain with the SAME safety
   // budgets used by agnostic walking validation. Never validate the unordered
   // reservoir or invent a compactness label for the seed.
-  const deferredWalking = eventWeave?.finalWalkingValidation ??
+  const deferredWalking = (engineRoute === comparedRoute ? checkedWalking : null) ?? eventWeave?.finalWalkingValidation ??
     (validateFinalWalking ? await validateFinalWalking(engineRoute.map_route_points) : null);
   if (deferredWalking && !deferredWalking.valid) {
     const rejectedEligibility = {
@@ -2481,6 +2520,18 @@ function routePreferenceCoverage(route, preferences) {
     supported: exact + partial,
     missing: Math.max(0, requested.length - exact - partial),
   };
+}
+
+function comparableRoutedWalk(preferred, ordinary) {
+  if (ordinary?.checks.walking_source === 'osrm' && preferred.checks.walking_source !== 'osrm') return false;
+  if (!ordinary?.valid && preferred.checks.fallback_used) return false;
+  // When the bounded router can only measure one chain, use the comparable
+  // engine estimates already checked for both. Never mix measurement types.
+  if (!ordinary?.valid ||
+      preferred.checks.walking_source !== ordinary.checks.walking_source ||
+      preferred.checks.fallback_used !== ordinary.checks.fallback_used) return true;
+  const distance = ({ checks }) => ({ estimated_km: checks.total_walk_km, longest_leg_km: checks.max_leg_km });
+  return isComparableWalk(distance(preferred), distance(ordinary));
 }
 
 function preservesReplacementQuality(baseRoute, nextRoute, preferences) {
