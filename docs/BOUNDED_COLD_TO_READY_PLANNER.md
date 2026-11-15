@@ -122,6 +122,14 @@ without the map family (`background_refresh`, reason
 `no_answered_map_evidence`). None of this asks a provider again; see
 `DENSE_CENTRE_SUPPLY.md` for the Pi race that required it.
 
+Raw query answers retain their original expiry when selected for another
+request/window. Neither a new selection nor disk/restart renews freshness or
+the allowed stale period. Stale labels and source-failure reasons are present
+already on an answered first-pass/regional-scout snapshot, not deferred until
+all acquisition ends. Serving a labelled bounded stale answer while refresh is
+still outstanding is an explicit extension of the failed-refresh safety net;
+it does not change the hard producer timeout or permit late positive writes.
+
 An empty successful Overture result is cacheable absence; a failed source is not
 cached as success. In-flight cache coalescing reuses the producer for the same
 window. Rescue can read the result, but cannot restart the original pending job.

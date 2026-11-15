@@ -164,11 +164,19 @@ Map answers are stored per **query text** as well as per request. A request's
 own key carries what shaped its selection (for a day that is today, the
 availability window starts at the current local minute), so it rarely matches a
 minute later; the query text carries only what shaped the acquisition (place,
-aperture, limit, interests). The same query text is therefore asked once per
-lifetime, every later request selects from its stored answer for its own
-window, and its expired answer is the stale-if-error fallback for every window.
-An empty answer is not stored, and a late answer still is not (see
-`tests/overpass-gate-lifecycle.test.js`).
+aperture, limit, interests). A successful non-empty query answer is reused until
+its original expiry; each request still selects for its own window. Concurrent
+identical queries share one call. A derived selected entry expires no later
+than the earliest raw answer used: recalculating selection does not renew source
+freshness or its bounded stale window, including after disk/restart.
+Its expired answer can be the labelled stale fallback for later windows.
+Stale age and the actual refresh failure also follow answered first-pass and
+regional-scout snapshots before the remaining work settles, not only the final
+load. A fallback is never written back as fresh. Empty raw answers are not kept
+in the query store, and an answer after the hard producer timeout still is not
+cached (see `tests/overpass-gate-lifecycle.test.js`). Query reuse requires the
+cache's `peek`, `set` and expiry-bearing `inspect`; opaque caches keep the former
+request-only behavior.
 
 Every other source then adds what it holds for the anchor at zero network cost:
 the eager directory selection for this budget, cached Wikidata corroboration

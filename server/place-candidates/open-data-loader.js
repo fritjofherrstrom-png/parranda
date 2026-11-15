@@ -416,11 +416,26 @@ function createOpenDataLoader({
   // Same lifetime and the same bounded stale-if-error window as those entries.
   // An empty answer is not kept: a 200 with no elements can also be a provider
   // that gave up, and it must not stand in for the place for hours.
-  const canStoreQueries = Boolean(cache) && typeof cache.peek === "function" && typeof cache.set === "function";
+  // Opaque caches retain the former request-only behavior: query reuse needs
+  // its original expiry as well as its value, including after disk/restart.
+  const canStoreQueries = Boolean(cache) && typeof cache.peek === "function" &&
+    typeof cache.set === "function" && typeof cache.inspect === "function";
+  const answerExpiries = new WeakMap();
   const queryKey = (query) => `query-v1:${createHash("sha256").update(query).digest("hex")}`;
   const keptElements = (value) => (Array.isArray(value?.elements) && value.elements.length > 0
     ? { elements: value.elements } : null);
-  const readStoredQuery = (query) => (canStoreQueries ? keptElements(cache.peek(queryKey(query))) : null);
+  const readStoredQuery = (query) => {
+    if (!canStoreQueries) return null;
+    const key = queryKey(query);
+    const payload = keptElements(cache.peek(key));
+    const expiresAt = cache.inspect(key)?.expiresAt;
+    return payload && Number.isFinite(expiresAt) && expiresAt > now()
+      ? { ok: true, payload, expiresAt } : null;
+  };
+  const retainQueryExpiry = (answer, plan) => {
+    if (plan && Number.isFinite(answer.expiresAt)) plan.expiresAt = Math.min(plan.expiresAt, answer.expiresAt);
+    return answer;
+  };
   function readStaleQuery(query) {
     if (!canStoreQueries || boundedStaleIfErrorMs <= 0 || typeof cache.inspect !== "function") return null;
     const entry = cache.inspect(queryKey(query));
@@ -437,7 +452,11 @@ function createOpenDataLoader({
       const attempt = await attemptOverpass(targetEndpoint, query);
       if (attempt.ok) {
         const kept = canStoreQueries ? keptElements(attempt.payload) : null;
-        if (kept) cache.set(queryKey(query), kept);
+        if (kept) {
+          const key = queryKey(query);
+          cache.set(key, kept);
+          return { ...attempt, expiresAt: cache.inspect(key)?.expiresAt };
+        }
         return attempt;
       }
       last = attempt;
@@ -465,11 +484,11 @@ function createOpenDataLoader({
   // back as fresh. `plan.storedOnly` never asks the provider.
   async function answerQuery(query, plan = null) {
     const stored = readStoredQuery(query);
-    if (stored) return { ok: true, payload: stored };
+    if (stored) return retainQueryExpiry(stored, plan);
     const last = plan?.storedOnly
       ? { ok: false, status: "error_failed_closed", error: "refresh_outstanding" }
       : await askProviderOnce(query);
-    if (last.ok) return last;
+    if (last.ok) return retainQueryExpiry(last, plan);
     // Only a load that can label itself may lean on an expired answer.
     const stale = plan ? readStaleQuery(query) : null;
     if (!stale) return last;
@@ -780,9 +799,10 @@ function createOpenDataLoader({
   // expired stored answer (see answerQuery); the whole load is then labelled a
   // stale fallback, with the oldest age used, exactly as a request-level
   // fallback is. `storedOnly` composes from stored answers and never asks.
-  const loadOpenDataAround = async function loadOpenDataAround(request = {}, { onAnsweredPass = null, storedOnly = false } = {}) {
-    const plan = { storedOnly: storedOnly === true, stale: null };
-    const loaded = await loadPlannedOpenDataAround(request, { onAnsweredPass, plan });
+  // Apply age/provenance at every source-owned publication boundary, including
+  // an answered first pass whose expansion/regional scout is still pending.
+  const retainPlanMetadata = (loaded, plan) => {
+    answerExpiries.set(loaded, plan.expiresAt);
     if (!plan.stale || String(loaded.loader_status || "").startsWith("error")) return loaded;
     return withLoaderMetadata(withLoaderStatus(loaded, loaded.loader_status, "stale_cache_refresh_failed"), {
       ...(loaded.loader_metadata && typeof loaded.loader_metadata === "object" ? loaded.loader_metadata : {}),
@@ -792,6 +812,15 @@ function createOpenDataLoader({
         refresh_reason: safeLoaderToken(plan.stale.reason || "provider_failed"),
       },
     });
+  };
+  const loadOpenDataAround = async function loadOpenDataAround(request = {}, { onAnsweredPass = null, storedOnly = false } = {}) {
+    const plan = { storedOnly: storedOnly === true, stale: null, expiresAt: Infinity };
+    const loaded = await loadPlannedOpenDataAround(request, {
+      plan,
+      onAnsweredPass: typeof onAnsweredPass === 'function'
+        ? records => onAnsweredPass(retainPlanMetadata(records, plan)) : null,
+    });
+    return retainPlanMetadata(loaded, plan);
   };
 
   const loadPlannedOpenDataAround = async function loadPlannedOpenDataAround(request = {}, { onAnsweredPass = null, plan = null } = {}) {
@@ -1058,6 +1087,7 @@ function createOpenDataLoader({
           status: result.loader_status,
           error: result.loader_error,
           metadata: result.loader_metadata || null,
+          ...(Number.isFinite(answerExpiries.get(result)) ? { sourceExpiresAt: answerExpiries.get(result) } : {}),
         };
       },
       {
@@ -1065,8 +1095,14 @@ function createOpenDataLoader({
         // not a new answer: storing it here would renew its age.
         shouldStore: (value) => value && typeof value.status === "string" && !value.status.startsWith("error") &&
           value.error !== "stale_cache_refresh_failed",
+        expiresAt: (value) => value.sourceExpiresAt,
         staleIfErrorMs: boundedStaleIfErrorMs,
         onStale: (stale, info) => {
+          // Query-level fallback already selected for this request and carries
+          // its original age/reason. Do not wrap it in an older projection or
+          // replace the actual provider failure with the fallback's own label.
+          if (info?.refreshValue?.error === 'stale_cache_refresh_failed' &&
+              info.refreshValue.metadata?.cache?.served_stale === true) return info.refreshValue;
           const refreshReason = safeLoaderToken(
             info?.refreshValue?.error ||
               (info?.refreshError ? classifyFetchError(info.refreshError) : "provider_failed"),
