@@ -75,9 +75,8 @@ export default function AnchorCard({
   /** "Let Parranda choose" is on: applying interests hands the choice back. */
   parrandaChoosing?: boolean;
   /**
-   * The one notice under the controls when the picks found no day: either the
-   * no-day state (one cause, one next step) or a rebuild for new picks that
-   * failed while the previous day stays on screen. `announce` is set only when
+   * The notice under the controls for a no-day result, a failed rebuild or
+   * a suggested replacement awaiting a decision. `announce` is set only when
    * the page's own result region does not already carry the message.
    */
   notice?: {
@@ -87,6 +86,7 @@ export default function AnchorCard({
     onRetry?: () => void;
     restartHref?: string;
     onUndo?: () => void;
+    onUseSuggestion?: () => void;
     announce?: boolean;
   };
   onSetDay: (offset: 0 | 1) => void;
@@ -108,6 +108,11 @@ export default function AnchorCard({
   const priorityHelpId = useId();
   const allInterestsButton = useRef<HTMLButtonElement>(null);
   const retryInterestsButton = useRef<HTMLButtonElement>(null);
+  const interestNotice = useRef<HTMLParagraphElement>(null);
+  const hasInterestSuggestion = Boolean(notice?.onUseSuggestion);
+  useEffect(() => {
+    if (hasInterestSuggestion && document.activeElement === allInterestsButton.current) interestNotice.current?.focus();
+  }, [hasInterestSuggestion]);
   const interestTrigger = useRef<HTMLButtonElement | null>(null);
   const returnInterestFocus = useRef(false);
   useEffect(() => {
@@ -225,7 +230,9 @@ export default function AnchorCard({
 
       {notice && (
         <div className={`mt-2 flex flex-col items-start gap-2 ${noticeCard}`}>
-          {notice.announce ? <p role="status">{notice.message}</p> : <div>{notice.message}</div>}
+          {notice.announce
+            ? <p role="status" ref={interestNotice} tabIndex={hasInterestSuggestion ? -1 : undefined}>{notice.message}</p>
+            : <div>{notice.message}</div>}
           {notice.attemptedLabels && <p className="text-xs text-parranda-ink-muted">{notice.attemptedLabels}</p>}
           {notice.action === "restart" && notice.restartHref && (
             <p>{t("Den sparade dagen kan inte uppdateras säkert. ", "We cannot safely update this saved day. ")}
@@ -234,7 +241,7 @@ export default function AnchorCard({
               </a>
             </p>
           )}
-          {(notice.action === "edit_interests" || notice.action === "retry" || notice.onUndo) && (
+          {(notice.action === "edit_interests" || notice.action === "retry" || notice.onUndo || notice.onUseSuggestion) && (
             <div className="flex flex-wrap gap-2">
               {notice.action === "edit_interests" && onApplyInterests && setInterestChooserOpen && (
                 <button type="button" ref={retryInterestsButton} aria-expanded={interestChooserOpen} onClick={() => {
@@ -251,10 +258,16 @@ export default function AnchorCard({
                 </button>
               )}
               {notice.onUndo && (
-                <button type="button" onClick={notice.onUndo} aria-label={t("Ångra ändringen", "Undo this change")}
+                <button type="button" onClick={notice.onUndo}
+                  aria-label={hasInterestSuggestion ? undefined : t("Ångra ändringen", "Undo this change")}
                   className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
-                  <UndoIcon className="h-3.5 w-3.5" />
-                  {t("Ångra", "Undo")}
+                  {!hasInterestSuggestion && <UndoIcon className="h-3.5 w-3.5" />}
+                  {hasInterestSuggestion ? t("Behåll min dag", "Keep current day") : t("Ångra", "Undo")}
+                </button>
+              )}
+              {notice.onUseSuggestion && (
+                <button type="button" onClick={notice.onUseSuggestion} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                  {t("Använd förslaget", "Use suggested day")}
                 </button>
               )}
             </div>
