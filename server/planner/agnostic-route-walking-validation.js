@@ -75,11 +75,13 @@ function pathVisitsStops(path, points) {
  * @param {Array<{lat:number,lng:number,label?:string}>} params.stops  ordered candidate stops
  * @param {Function} [params.walkingRouter]  injected router (defaults to routeWalkingPath)
  * @param {object} [params.walkingConfig]    passed through to the router
+ * @param {boolean} [params.waitForRateSlot] allow one idle cooldown before a comparison
  * @param {{totalKm?:number,maxLegKm?:number}} [params.budget]
  * @param {number|null} [params.targetKm] approximate user-selected walking profile
  * @returns {Promise<{valid:boolean, blockers:string[], checks:object, result:object|null}>}
  */
-async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfig = {}, budget = {}, targetKm = null } = {}) {
+async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfig = {}, budget = {}, targetKm = null,
+  waitForRateSlot = false } = {}) {
   const resolvedBudget = resolveAgnosticWalkingBudget({ budget, targetKm });
   const totalBudgetKm = resolvedBudget.totalKm;
   const maxLegBudgetKm = resolvedBudget.maxLegKm;
@@ -110,7 +112,7 @@ async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfi
   // 2. Route the points in the SUPPLIED order. No optimization / reordering.
   let result;
   try {
-    result = await router(points, { walkingConfig });
+    result = await router(points, { walkingConfig, ...(waitForRateSlot ? { waitForRateSlot } : {}) });
   } catch (_error) {
     return failed(["walking_route_unavailable"], checks);
   }
