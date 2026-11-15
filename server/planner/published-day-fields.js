@@ -57,6 +57,8 @@ const fields = {
   Trust: { source_tier: r('string'), confidence: r('string'), human_verified: r('bool'), freshness: r('string') },
   TrustSummary: { source_tiers: r(array('string')), confidence: r('string'), human_verified: r('bool'), freshness: r('string') },
   PlaceDetails: { kind: o('string'), address: o('address') },
+  VisitText: { sv: r('visitText'), en: r('visitText') },
+  VisitContent: { version: r(enumeration(1)), text: r('VisitText'), source_url: r('visitSourceUrl'), checked_on: r('date') },
   HoursWindow: { opens: r('clock'), closes: r('closingClock') },
   SelectedHours: { status: r(enumeration('known','closed','unknown')), all_day: r('bool'), windows: r(array('HoursWindow',0,4)),
     date: o('date'), timezone: o('timezone'), source_url: o('shortUrl'), observed_at: o('instant'),
@@ -97,7 +99,7 @@ const fields = {
     covered_preferences: n(array('string')), partial_preferences: n(array('string')), missing_preferences: n(array('string')),
     candidate_status: n(CANDIDATE_STATUS), weather_reasons: o(array(WEATHER_REASON,0,6)),
     source: n('StopSource'), trust: n('Trust'), provisional: o('bool'), origin: n('string'), website: n('shortUrl'),
-    place_details: n('PlaceDetails'), selected_day_hours: n('SelectedHours'), provenance: n('Provenance') },
+    place_details: n('PlaceDetails'), visit_content: o('VisitContent'), selected_day_hours: n('SelectedHours'), provenance: n('Provenance') },
   Leg: { from_label: n('string'), to_label: n('string'), distance_km: n('nonnegative'), estimated_walk_minutes: n('nonnegative') },
   // Fixed public operator links need no place-source URL witness. The general
   // URL policy remains closed to arbitrary router-provided destinations.
@@ -277,6 +279,11 @@ function budget(privacy) {
     if (type === 'date' && !isRealIsoDate(value)) throw new Error('date');
     if (type === 'placeRef' && !parsePlaceRef(value)) throw new Error('place ref');
     if (type === 'nonblank' && !value.trim()) throw new Error('blank');
+    if (type === 'visitText' && (!value || value !== value.trim() || value.length > 320 || /[\u0000-\u001f\u007f]/.test(value))) throw new Error('visit text');
+    if (type === 'visitSourceUrl') {
+      if (!require('../place-candidates/visit-content').isApprovedVisitSourceUrl(value)) throw new Error('unattested visit source');
+      return value; // Dedicated destination policy; never enlarge unrelated URL witnesses.
+    }
     if (type === 'address' && (value.length > 160 || /[\u0000-\u001f\u007f]/.test(value))) throw new Error('address');
     if (type === 'timezone' && value.length > 80) throw new Error('timezone');
     if (type === 'loaderToken' && !/^[a-z0-9_:-]{1,80}$/.test(value)) throw new Error('loader token');
@@ -297,6 +304,8 @@ function budget(privacy) {
 }
 function validateObject(type,value) {
   const refuse = () => { throw new Error('correlated '+type); };
+  if (type === 'Stop' && value.visit_content &&
+      !require('../place-candidates/visit-content').visitContentMatchesStop(value, value.visit_content)) refuse();
   if (type === 'Stop' && value.provenance?.venue_mentions &&
       !venueMentionsMatchPlace(value,value.provenance.venue_mentions)) refuse();
   if (type === 'PrimaryRoute' && ((value.geometry_mode === 'walking' && value.geometry_source !== 'osrm') ||

@@ -14,6 +14,7 @@ import { CheckIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIc
 import { busyButton, buttonClass, compactPillTarget, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
+import { dayIdea } from "../../lib/day-idea.mjs";
 
 type RoutePart = WalkingRoutePart;
 // "pending": a pick the day on screen never answered — just added, its rebuild
@@ -287,6 +288,7 @@ export default function DayHeader({
     : unconfirmedTonight[0] || "";
   const stops = `${coreCount} ${coreCount === 1 ? t("stopp", "stop") : t("stopp", "stops")}` +
     (wovenCount > 0 ? ` + ${wovenCount} live${lang === "en" ? " event" : "-event"}` : "");
+  const idea = dayIdea(primaryRoute, lang);
   const displayedDate = selectedDate(date);
   const condition = WEATHER_CONDITIONS[String(weatherSummary?.condition || "")];
   const WeatherIcon = WEATHER_ICONS[String(weatherSummary?.condition || "")];
@@ -371,6 +373,12 @@ export default function DayHeader({
         </div>
         {controls}
       </div>
+      {idea && (
+        <div data-day-idea className="flex flex-col gap-1 [overflow-wrap:anywhere]">
+          <p className="text-lg font-extrabold leading-snug text-parranda-ink">{idea.headline}</p>
+          {idea.journey && <p className="text-13 leading-relaxed text-parranda-ink-muted">{idea.journey}</p>}
+        </div>
+      )}
       {/* On a phone the map's still overview pictures the day before its
           facts; it sits in the column edge to edge, no card of its own. */}
       {overview}
