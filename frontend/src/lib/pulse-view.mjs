@@ -493,8 +493,11 @@ export function liveTimeRepresentative(ev, now = new Date(), date = null) {
   return ev;
 }
 
-// Whether a programme slot is listed on a venue-local date. A slot whose date
-// cannot be read stays a candidate.
+// Whether a programme slot is on a venue-local date: listed on it, or running
+// during it. A slot that began the evening before and ends on the date is on
+// it; one that ends exactly at the midnight opening the date is not (the end
+// is exclusive). Without a valid end only the start's date counts. A slot
+// whose date cannot be read stays a candidate.
 function slotListedOn(slot, date) {
   const win = slot.time_window && typeof slot.time_window === "object" ? slot.time_window : null;
   if (win?.kind === "occurrences") return listedDates(win.dates).includes(date);
@@ -502,7 +505,13 @@ function slotListedOn(slot, date) {
   const timezone = slot.timezone || win?.timezone || null;
   if (!startsAt || !timezone) return true;
   const start = new Date(startsAt);
-  return Number.isNaN(start.getTime()) || venueLocalDate(start, timezone) === date;
+  if (Number.isNaN(start.getTime())) return true;
+  const startDate = venueLocalDate(start, timezone);
+  if (startDate === date) return true;
+  const end = new Date(win?.ends_at || slot.ends_at || "");
+  if (Number.isNaN(end.getTime()) || end.getTime() <= start.getTime()) return false;
+  const lastDate = venueLocalDate(new Date(end.getTime() - 1), timezone);
+  return Boolean(startDate && lastDate) && startDate < date && date <= lastDate;
 }
 
 /**

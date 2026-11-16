@@ -342,3 +342,27 @@ test('an expanded start-only occurrence keeps its date while its grouped row giv
  assert.match(s.slots[0],/^started Sat 24 Oct 10:00 · end time unknown/);
  assert.match(s.slots[1],/^Sun 25 Oct 10:00/);
 });
+
+// Review of #643, F1-overlap: a slot that began the evening before and is on
+// now overlaps the selected day, so the slot starting later that day does not
+// set it aside. The card and the sheet read the row by it until it ends.
+test('a programme slot running into the day from the evening before leads its row while on now',async t=>{
+ const {page,render}=await browserHarness(t);
+ await page.clock.install({time:new Date('2026-10-24T09:45:00Z')});
+ const [programme]=groupLiveProgramViews([programmeSlot('slot-spanning','2026-10-23T21:00:00Z','2026-10-24T10:30:00Z'),
+  programmeSlot('slot-later','2026-10-24T11:00:00Z','2026-10-24T12:00:00Z')]);
+ assert.equal(programme.display_group_kind,'source_program');
+ const events={coverage:'covered',selected_date:'2026-10-24',tonight:[programme],this_week:[]};
+ await page.evaluate(events=>window.renderCard(events,'en'),events);
+ await page.getByText('Source programme',{exact:true}).waitFor();
+ const card=await rowState(page,'Source programme');
+ assert.deepEqual({group:card.group,timing:card.timing},{group:'now',timing:'until 12:30'});
+ assert.equal(card.slots.length,2,'every slot stays listed');
+ assert.match(card.slots[0],/^on now · until 12:30/);
+ assert.match(card.slots[1],/^Sat 24 Oct 13:00–14:00/);
+ await render(events,'en','tonight',{liveSheetSort:'for_you'});
+ assert.deepEqual(await shown(page,'Source programme'),{group:null,timing:'on now · until 12:30'});
+ await page.clock.fastForward(61*60000);
+ assert.deepEqual(await shown(page,'Source programme'),{group:null,timing:'13:00–14:00'},'once it is over, the next slot leads');
+ assert.equal((await rowState(page,'Source programme')).slots.length,2);
+});

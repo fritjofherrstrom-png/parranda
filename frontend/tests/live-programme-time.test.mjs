@@ -56,3 +56,23 @@ test("another day's slot does not lead the day's programme row; other rows pass 
   const single = slot('single', '2026-10-24T08:00:00Z', '2026-10-24T09:00:00Z');
   assert.equal(liveTimeRepresentative(single, new Date('2026-10-24T10:00:00Z'), DAY), single);
 });
+
+// Review of #643, F1-overlap: a slot that began the evening before and is on
+// now overlaps the selected day, so a later slot that starts on that day does
+// not set it aside.
+test('a slot running into the selected day from the evening before leads the row while on now', () => {
+  const row = programme(slot('slot-spanning', '2026-10-23T21:00:00Z', '2026-10-24T10:30:00Z'),
+    slot('slot-later', '2026-10-24T11:00:00Z', '2026-10-24T12:00:00Z'));
+  assert.deepEqual(read(row, '2026-10-24T09:45:00Z'), ['now', 'slot-spanning', 'until 12:30']);
+  assert.deepEqual(read(row, '2026-10-24T10:45:00Z'), ['later', 'slot-later', '13:00–14:00'], 'once it is over, the next slot leads');
+  assert.deepEqual(read(row, '2026-10-24T12:01:00Z'), ['ended', 'slot-later', '13:00–14:00']);
+  assert.deepEqual(row.occurrences.map((s) => s.id), ['slot-spanning', 'slot-later']);
+});
+
+test('a slot that ends at the midnight opening the selected day does not overlap it', () => {
+  // 22:00–00:00 local on the 23rd; the day's own slot is the 24th 10:00–11:00.
+  const row = programme(slot('slot-eve', '2026-10-23T20:00:00Z', '2026-10-23T22:00:00Z'),
+    slot('slot-other-day', '2026-10-25T08:00:00Z', '2026-10-25T09:00:00Z'));
+  // Neither slot is on the 24th: the row falls back to all its slots, as before.
+  assert.deepEqual(read(row, '2026-10-24T09:30:00Z')[0], 'timed');
+});
