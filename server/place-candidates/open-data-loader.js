@@ -423,11 +423,18 @@ function createOpenDataLoader({
         perCategory,
         groups: [...groups].map(([category, selectors]) => ({ selectors, named: OSM_OUTDOOR_INTERESTS.has(category) })),
       });
-      return answered && Array.isArray(answered.payload?.elements) ? answered.payload : null;
+      if (!answered || !Array.isArray(answered.payload?.elements)) return null;
+      return { payload: answered.payload, snapshot: answered.snapshot || null };
     } catch (_error) {
       return null;
     }
   }
+  // Records answered from the extract carry the snapshot they came from, so
+  // the day can say that its map evidence is not a live provider answer.
+  const withSnapshot = (records, local) => {
+    if (local?.snapshot) Object.defineProperty(records, "loader_snapshot", { value: local.snapshot, enumerable: false, configurable: true });
+    return records;
+  };
 
   // One attempt against one mirror. Returns { ok, payload } on a usable response,
   // or { ok:false, status, error } so the caller can fail over to the next mirror.
@@ -522,7 +529,8 @@ function createOpenDataLoader({
       mappings: mappingsForRequestedIntents(queryIntents),
       focusedIntents: queryIntents.length ? queryIntents : requestedIntents,
     };
-    const localPayload = answerLocally(question);
+    const local = answerLocally(question);
+    const localPayload = local?.payload || null;
     const query = buildOverpassQueryForAnchors(question);
     // Try each mirror in order; fail over ONLY on a transport/parse error — a
     // genuine 200 (even with zero elements) is a real answer, not a failure.
@@ -536,7 +544,7 @@ function createOpenDataLoader({
           walkingTargetBand,
           availabilityWindow,
         });
-        return withLoaderStatus(attestPublicPlaceRecords(records, 'osm'), records.length > 0 ? `loaded:${records.length}` : "loaded:0", null);
+        return withSnapshot(withLoaderStatus(attestPublicPlaceRecords(records, 'osm'), records.length > 0 ? `loaded:${records.length}` : "loaded:0", null), local);
       }
       last = attempt;
     }
@@ -556,7 +564,8 @@ function createOpenDataLoader({
       mappings: OSM_TAG_MAP,
       focusedIntents: requestedIntents,
     };
-    const localPayload = answerLocally(question);
+    const local = answerLocally(question);
+    const localPayload = local?.payload || null;
     const query = buildOverpassQueryForAnchors(question);
     let last = { status: "error_failed_closed", error: "no_endpoint" };
     for (const targetEndpoint of localPayload ? [null] : resolvedEndpoints) {
@@ -595,7 +604,7 @@ function createOpenDataLoader({
           null,
         ),
       }));
-      return { status: `loaded:${mapped.length}`, error: null, clusters };
+      return { status: `loaded:${mapped.length}`, error: null, clusters, snapshot: local?.snapshot || null };
     }
     return { status: last.status, error: last.error, clusters: [] };
   }
@@ -642,6 +651,7 @@ function createOpenDataLoader({
       availabilityWindow: normalizedWindow,
     });
     let selected = first;
+    let selectedSnapshot = first.loader_snapshot || null;
     let selectedRadiusKm = requestRadiusKm;
     let selectionReason = expansion
       ? "wider_supply_not_richer"
@@ -680,6 +690,7 @@ function createOpenDataLoader({
           expansion_applied: false,
           expansion_trigger: expansion.trigger,
           selection_reason: "expansion_outstanding",
+          map_snapshot: first.loader_snapshot || null,
           anchor_mode: normalizeAnchorMode(anchorMode),
           requested_intents: normalizedRequestedIntents,
           expansion_query_intents: expansionQueryIntents,
@@ -709,6 +720,7 @@ function createOpenDataLoader({
         availabilityWindow: normalizedWindow,
       })) {
         selected = combined;
+        selectedSnapshot = first.loader_snapshot || wider.loader_snapshot || null;
         selectedRadiusKm = widerKm;
         selectionReason = "richer_wider_supply";
       } else if (combined.loader_error) {
@@ -725,6 +737,7 @@ function createOpenDataLoader({
       expansion_applied: selectedRadiusKm > requestRadiusKm,
       expansion_trigger: expansion?.trigger || null,
       selection_reason: selectionReason,
+      map_snapshot: selectedSnapshot,
       anchor_mode: normalizeAnchorMode(anchorMode),
       requested_intents: normalizedRequestedIntents,
       expansion_query_intents: expansion?.trigger === "requested_opening_gap"
@@ -830,6 +843,7 @@ function createOpenDataLoader({
             expansion_applied: true,
             expansion_trigger: "regional_scope_gap",
             selection_reason: "richer_regional_cluster",
+            map_snapshot: regional.snapshot || null,
             selected_profile: supplyProfile(selected, requestedIntents),
             selected_day_capacity: dayCapacityProfile(selected, {
               origin: selectedAnchor,

@@ -946,3 +946,21 @@ test('a real typed day with a grouped interest preserves its saved priority acro
   assert.ok(reopened.entry.safeResponse.days[0].primary_route.main_stops
     .some(stop => stop.covered_preferences?.includes('restaurants')), 'the exact match also survives');
 });
+
+test('a map snapshot label reaches the shared day whole, and a malformed one refuses the share', async () => {
+  const snapshot={region:'slovenia',data_timestamp:'2026-11-14T21:20:00.000Z'};
+  const loader=async()=>Object.assign(records(),{loader_metadata:{map_snapshot:{...snapshot,dir:'/must/not/leak'}}});
+  const published=await publication({}, {openDataLoader:loader});
+  const collection=published.agnostic_route_output_experiment.source_status.collection;
+  assert.deepEqual(collection.map_snapshot,snapshot);
+  assert.equal(JSON.stringify(published).includes('must/not/leak'),false);
+  const projected=projectPublishedDay({published,intent:intent(),privacy:privacy(),language:'en'});assert.ok(projected);
+  assert.deepEqual(projected.result.agnostic_route_output_experiment.source_status.collection.map_snapshot,snapshot);
+
+  const none=await publication({}, {openDataLoader:async()=>Object.assign(records(),{loader_metadata:{map_snapshot:{region:'Not A Token',data_timestamp:'yesterday'}}})});
+  assert.equal(none.agnostic_route_output_experiment.source_status.collection.map_snapshot,null,'an unreadable label is not published');
+
+  const forged=structuredClone(published);
+  forged.agnostic_route_output_experiment.source_status.collection.map_snapshot={region:'slovenia',data_timestamp:'last week'};
+  assert.equal(projectPublishedDay({published:forged,intent:intent(),privacy:privacy(),language:'en'}),null);
+});

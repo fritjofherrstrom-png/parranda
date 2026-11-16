@@ -24,6 +24,9 @@ node scripts/build-osm-extract.js --pbf slovenia.osm.pbf --poly slovenia.poly \
 
 Measured for Slovenia on a laptop (15 Nov 2026): 314 MB extract, 20 s build, 1.9 GB peak memory, 8,178 places in 865 tiles, 4.7 MB on disk. The loader answered Ljubljana in 3 to 31 ms.
 
+## How a day says so
+A day whose map evidence was read from an extract carries `source_status.collection.map_snapshot`: `{ region, data_timestamp }`. It is absent (`null`) for a live provider answer. The label is kept in the request cache and in a shared day; a malformed label refuses the share. The planner UI does not show it yet.
+
 ## Differences from an Overpass answer
 - **Age.** The data is as old as the extract. Geofabrik rebuilds extracts once a day.
 - **Unnamed elements.** Overpass counts them toward a group's size before the mapper drops them. The store holds named places only, so a group can carry more usable places.
@@ -31,7 +34,7 @@ Measured for Slovenia on a laptop (15 Nov 2026): 314 MB extract, 20 s build, 1.9
 - **Edges.** A place whose circle crosses the extract's boundary is not answered locally.
 
 ## Not done
-- **Snapshot label.** The published source status does not yet say that map evidence came from a snapshot or how old it is. The store returns this (`snapshot.region`, `snapshot.data_timestamp`); carrying it through the closed public schema is a separate change.
+- **Showing the label.** The label is in the response, not in the interface.
 - **Fetching and refreshing extracts.** Which regions to hold, when to fetch them and the disk budget are operator decisions. Nothing in the server downloads an extract.
 - **Large countries.** France and Germany are almost 5 GB each. The build is untested above 314 MB; sub-regions are the expected unit.
 

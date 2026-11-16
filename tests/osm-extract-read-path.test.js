@@ -171,3 +171,27 @@ test('the written store keeps only named, mapped places and puts each in its til
   assert.equal(stored.length, 20);
   assert.ok(!stored.some(element => element.id === 5000 || element.id === 5001));
 });
+
+test('a day answered from the extract says so, with the snapshot it came from', async () => {
+  const snapshot = { region: 'testland', data_timestamp: '2026-11-14T21:20:00.000Z' };
+  const { createSourceCache } = require('../server/place-candidates/source-cache');
+  let calls = 0;
+  const loader = createOpenDataLoader({
+    fetcher: async () => {
+      calls += 1;
+      return { ok: true, status: 200, json: async () => ({ elements: [
+        { type: 'node', id: 1, lat: 59.33, lon: 18.07, tags: { name: 'Kafé', amenity: 'cafe' } },
+      ] }) };
+    },
+    cache: createSourceCache({ namespace: 'overpass' }),
+    localSource: createOsmExtractStore({ dir: makeStoreDir(), now: () => NOW }),
+  });
+  const covered = await loader({ lat: CENTRE.lat, lng: CENTRE.lng });
+  assert.deepEqual(covered.loader_metadata.map_snapshot, snapshot);
+  const again = await loader({ lat: CENTRE.lat, lng: CENTRE.lng });
+  assert.deepEqual(again.loader_metadata.map_snapshot, snapshot, 'the label survives the request cache');
+  assert.equal(calls, 0);
+
+  const live = await loader({ lat: 59.33, lng: 18.07 });
+  assert.equal(live.loader_metadata.map_snapshot ?? null, null, 'a provider answer carries no snapshot label');
+});

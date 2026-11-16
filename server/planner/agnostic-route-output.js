@@ -241,6 +241,9 @@ function sanitizeLoaderCollectionMetadata(value) {
     initial_day_capacity: capacity(value.initial_day_capacity),
     selected_day_capacity: capacity(value.selected_day_capacity),
     cache: sanitizeLoaderCacheSummary(value.cache),
+    // Set when the map evidence was read from a local regional extract and
+    // not from a live provider answer: which extract, and when its data ends.
+    map_snapshot: sanitizeMapSnapshot(value.map_snapshot),
     // How the primary map source took part. Absent when it was awaited live.
     //   cached_supply              answered from this request's own cache entry
     //   first_pass_while_expanding its first pass answered; only the wider
@@ -287,6 +290,14 @@ function sanitizeLoaderCacheSummary(value) {
       : null,
     refresh_reason: safeToken(value.refresh_reason),
   };
+}
+
+function sanitizeMapSnapshot(value) {
+  if (!value || typeof value !== "object") return null;
+  const region = safeToken(value.region);
+  const dataMs = typeof value.data_timestamp === "string" ? Date.parse(value.data_timestamp) : NaN;
+  if (!region || !Number.isFinite(dataMs)) return null;
+  return { region, data_timestamp: new Date(dataMs).toISOString() };
 }
 
 function sanitizeSpatialScopeSummary(value) {
