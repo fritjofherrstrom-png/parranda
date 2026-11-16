@@ -69,7 +69,7 @@ test('a new badge belongs only to added stop identity, not every matching label'
   assert.match(h.text(),/Looked for more places: \+1 stop/,'the identity-aware summary sees exactly one added stop');
   const rows = [...h.container.querySelectorAll('ol[aria-label="The stops, in order"] > li')];
   assert.equal(rows.length,4);
-  const newMarks = row => [...row.querySelectorAll('span')].filter(span => span.textContent === 'new');
+  const newMarks = row => [...row.querySelectorAll('span')].filter(span => span.textContent === 'New');
   assert.equal(newMarks(rows[1]).length,1,'positive control: added identity is marked');
   assert.equal(newMarks(rows[0]).length,0,'the existing identity must not be marked new');
 });

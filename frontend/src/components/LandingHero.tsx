@@ -244,7 +244,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
 
       <footer className={`${dataLine} flex items-center justify-between border-t-line border-parranda-line-faint py-4`}>
         <span>Parranda</span>
-        <span>{t("din rutt, din stad", "your route, your city")}</span>
+        <span>{t("Din rutt, din stad", "Your route, your city")}</span>
       </footer>
     </div>
   );
