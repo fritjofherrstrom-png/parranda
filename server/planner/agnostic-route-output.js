@@ -2352,6 +2352,10 @@ async function composeAgnosticRouteViaEngine({
     }
   }
 
+  // Display-only notes bind to finalized catalog identities, never ranking or
+  // request-supplied descriptions. Do this after final walking/event selection.
+  require("../place-candidates/visit-content").hydrateVisitContent(engineRoute);
+
   // Engine geometry owns the actual stop order. Daypart rhythm (#274–278) is a
   // label here, not the sequencer — promoting it into compose ordering is a
   // follow-up, so we record the intent honestly rather than fabricate an arc.

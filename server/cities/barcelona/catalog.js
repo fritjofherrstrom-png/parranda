@@ -382,6 +382,7 @@ const allItems = [
     id: "museu-picasso",
     name: "Museu Picasso",
     kind: "museum",
+    place_details: { kind: "art_museum" },
     lat: 41.3851039,
     lng: 2.1812015,
     area: "born-sant-pere-santa-caterina",
@@ -1817,6 +1818,16 @@ const provenanceById = {
     needs_human_verification: false,
   },
   "museu-picasso": {
+    // Parranda-authored factual note; linked source checked on the date below.
+    visit_content: {
+      "version": 1,
+      "text": {
+        "sv": "Museets samling följer Picassos tidiga utveckling och blå period, och rymmer hela hans Las Meninas-serie.",
+        "en": "The collection traces Picasso’s early work and Blue Period, and includes his complete Las Meninas series."
+      },
+      "source_url": "https://museupicassobcn.cat/index.php/en/museum/presentation",
+      "checked_on": "2026-11-15"
+    },
     source_url: "https://museupicassobcn.cat/",
     source_type: "official_site",
     confidence: "high",
