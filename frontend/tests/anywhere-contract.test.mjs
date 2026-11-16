@@ -561,16 +561,48 @@ test("no control is disabled under the focus that pressed it", () => {
 test("grouped controls never clip the focus ring that sits outside them", () => {
   // The ring is drawn 3px outside a control. A rounded group with
   // overflow-hidden cut it to a sliver on EN/SV, Today/Tomorrow, rhythm and
-  // Live's When/Order; each segment now rounds its own ends instead.
+  // Live's When/Order; each segment now rounds itself instead.
   const ui = componentSource("shared/ui.tsx");
-  assert.match(ui, /export const segmentGroup = "(?![^"]*overflow-hidden)[^"]*rounded-full/);
-  assert.match(ui, /first:rounded-l-full last:rounded-r-full/);
+  assert.match(ui, /export const segmentGroup = "(?![^"]*overflow-hidden)[^"]*rounded-parranda-btn/);
+  assert.match(ui, /"inline-flex min-h-11 items-center justify-center rounded-parranda-btn /);
   for (const file of ["shared/AppBar.tsx", "planner/AnchorCard.tsx", "planner/LiveSheet.tsx"]) {
     const source = componentSource(file);
     assert.doesNotMatch(source, /className="[^"]*overflow-hidden[^"]*"\s+role="group"/, `${file} clips a group`);
     assert.doesNotMatch(source, /overflow-hidden[^"\n]*rounded-full[^"\n]*"\s*\n?\s*role="group"/, `${file} clips a group`);
   }
   assert.doesNotMatch(componentSource("planner/AnchorCard.tsx"), /className=\{`overflow-hidden \$\{panelCard\}`\}/);
+});
+
+test("circles are the line's stations; a control or a label is a soft rectangle", () => {
+  // Linje 2 (Nov 2026): every button, chip, segment and tag was a pill, so ten
+  // controls on the first screen carried the same shape as the stations of
+  // the day's line. Controls are tonal rectangles now; the shared helpers and
+  // the day's own controls never round to a circle.
+  const ui = componentSource("shared/ui.tsx");
+  for (const name of ["pillClass", "compactPillTarget", "segmentGroup", "segmentClass", "labelChip", "noticeCard", "panelCard"]) {
+    const block = ui.split(new RegExp(`export (?:const|function) ${name}\\b`))[1]?.split(/\nexport /)[0] ?? "";
+    assert.ok(block, name);
+    assert.doesNotMatch(block, /rounded-full/, `${name} is a rectangle`);
+  }
+  assert.match(tokensCss, /--p-radius-button: 12px;/);
+  assert.match(tokensCss, /--p-radius-tag: 7px;/);
+  // A tonal control: secondary is a soft fill, not a hairline outline.
+  assert.match(ui, /secondary: "bg-parranda-fill /);
+  // One family: labels and data are narrow Archivo, not a second, mono face.
+  assert.doesNotMatch(anywhereStyles, /--p-font-mono|ui-monospace/);
+  assert.doesNotMatch(tokensCss, /IBM Plex Mono/);
+  // The raised surface (cards, notices) keeps meta text at AA under the
+  // strongest fill, in both themes.
+  const day = tokenBlock(":root");
+  const night = tokenBlock(':root[data-theme="night"]');
+  const meta = Number(tokenValue(day, "--p-ink-meta"));
+  const fillStrong = Number(tokenValue(day, "--p-ink-fill-strong"));
+  for (const [theme, block] of [["day", day], ["night", night]]) {
+    const ink = channels(tokenValue(block, "--p-color-ink"));
+    const panel = over(ink, fillStrong, channels(tokenValue(block, "--p-color-surface")));
+    const ratio = contrast(over(ink, meta, panel), panel);
+    assert.ok(ratio >= 4.5, `meta on a ${theme} surface is ${ratio.toFixed(2)}:1`);
+  }
 });
 
 test("adjustments collapse to a summary and re-compose themselves — no submit past the landing", () => {

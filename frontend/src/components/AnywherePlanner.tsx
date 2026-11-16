@@ -3540,7 +3540,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             type="button"
             onClick={undoDayChange}
             aria-label={t("Ångra ändringen", "Undo this change")}
-            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-bold text-parranda-ink transition hover:bg-parranda-fill"
+            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-parranda-btn px-3 text-xs font-bold text-parranda-ink transition hover:bg-parranda-fill"
           >
             <UndoIcon className="h-3.5 w-3.5" />
             {t("Ångra", "Undo")}

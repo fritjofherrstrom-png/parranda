@@ -35,6 +35,9 @@
   --p-color-live: 35 66 200; /* #2342C8 */
   --p-color-on-live: 255 255 255;
   --p-color-on-terracotta: 255 255 255;
+  /* A raised surface: cards, notices and the controls that float on the map
+     sit a step lighter than the ground, on a soft shadow. */
+  --p-color-surface: 244 240 231; /* #F4F0E7 */
   /* Ink at a named strength. A component never writes an ink percentage:
      text is ink, soft, muted or meta (meta is the 65 % floor, 5.7:1 on day
      paper); lines frame and divide; fills sit behind content. Theme-
@@ -50,8 +53,11 @@
   --p-ink-fill: 0.08;
   --p-ink-fill-faint: 0.05;
   --p-map-tiles: grayscale(1) contrast(0.92) brightness(1.04);
-  --p-radius-card: 18px;
-  --p-radius-button: 14px;
+  /* Shape: circles are the line's stations and the ring in the wordmark.
+     Everything you press or read as a label is a soft rectangle. */
+  --p-radius-card: 20px;
+  --p-radius-button: 12px;
+  --p-radius-tag: 7px;
   /* The weight of every hairline frame: cards, pills, segments, notices. */
   --p-line: 1.5px;
   /* Live device position is distinct from route and event colours. */
@@ -59,6 +65,7 @@
   --p-color-on-location: 255 255 255;
   /* Elevation, low to high. Theme-independent: a shadow is darkness. */
   --p-shadow-control: 0 1px 4px rgb(0 0 0 / 0.18);
+  --p-shadow-card: 0 1px 2px rgb(0 0 0 / 0.05), 0 10px 28px -14px rgb(0 0 0 / 0.22);
   --p-shadow-marker: 0 2px 8px rgb(0 0 0 / 0.28);
   --p-shadow-pop: 0 6px 20px rgb(0 0 0 / 0.25);
   --p-shadow-sheet: 0 25px 50px -12px rgb(0 0 0 / 0.25);
@@ -78,7 +85,6 @@
   --p-z-sheet: 1100;
   --p-font-display: "Archivo";
   --p-font-body: "Archivo";
-  --p-font-mono: "IBM Plex Mono";
 }
 
 :root[data-theme="night"] {
@@ -91,6 +97,7 @@
   --p-color-glow: 255 194 102; /* #FFC266 */
   --p-color-live: 147 168 255; /* #93A8FF */
   --p-color-on-live: 17 16 18;
+  --p-color-surface: 28 27 31; /* #1C1B1F */
   --p-map-tiles: grayscale(1) invert(1) brightness(0.82) contrast(0.92);
 }
 
@@ -105,6 +112,7 @@
     --p-color-glow: 255 194 102;
     --p-color-live: 147 168 255;
     --p-color-on-live: 17 16 18;
+    --p-color-surface: 28 27 31;
     --p-map-tiles: grayscale(1) invert(1) brightness(0.82) contrast(0.92);
   }
 }

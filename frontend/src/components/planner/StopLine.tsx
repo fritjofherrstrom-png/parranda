@@ -226,7 +226,7 @@ export default function StopLine({
               `${compactPillTarget} gap-1.5 px-3.5 font-bold ` +
               (following
                 ? "bg-parranda-ink text-parranda-paper"
-                : "border-line border-parranda-line text-parranda-ink hover:border-parranda-line-strong")
+                : "bg-parranda-fill text-parranda-ink hover:bg-parranda-fill-strong")
             }
           >
             <LocationIcon className={"h-3.5 w-3.5 " + (following ? "" : "text-parranda-ember")} />
@@ -348,10 +348,10 @@ export default function StopLine({
                     {/* Named by the change line above ("4 stops swapped"):
                         which ones are new, for as long as that line stands. */}
                     {!stale && newStopIdentities.has(changeStopIdentity(stop) ?? "") && (
-                      <span className="type-eyebrow text-10 text-parranda-glow">{t("ny", "new")}</span>
+                      <span className="type-eyebrow text-xs text-parranda-glow">{t("ny", "new")}</span>
                     )}
                     {isCurrent && (
-                      <span className="type-eyebrow rounded-full bg-parranda-terracotta px-2 py-0.5 text-10 text-parranda-on-terracotta">
+                      <span className="type-eyebrow rounded-parranda-tag bg-parranda-terracotta px-2 py-0.5 text-xs text-parranda-on-terracotta">
                         {progress?.state === "at" ? t("Du är här", "You're here") : t("Nästa", "Next")}
                       </span>
                     )}

@@ -7,7 +7,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { MAX_PLANNER_PREFERENCES, normalizePreferencePriority } from "../../../../shared/planner-intent.mjs";
 import { CheckIcon, LocationIcon, UndoIcon } from "../shared/icons";
-import { buttonClass, compactPillTarget, Eyebrow, noticeCard, panelCard, segmentClass, segmentGroup } from "../shared/ui";
+import { buttonClass, compactPillTarget, controlTone, Eyebrow, noticeCard, panelCard, segmentClass, segmentGroup } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
 import InterestChooser, { type InterestSelection } from "./InterestChooser";
@@ -361,7 +361,7 @@ export default function AnchorCard({
                         `${compactPillTarget} gap-1.5 px-3.5${ring(`pick:${pref.key}`)} aria-disabled:opacity-60 ` +
                         (active
                           ? "bg-parranda-ink font-bold text-parranda-paper"
-                          : "border-line border-parranda-line font-semibold text-parranda-ink-muted hover:border-parranda-line-strong hover:text-parranda-ink")
+                          : "bg-parranda-fill font-semibold text-parranda-ink-soft hover:bg-parranda-fill-strong hover:text-parranda-ink")
                       }
                     >
                       {active && (rank
@@ -420,7 +420,7 @@ export default function AnchorCard({
                     // "optional, not part of the day" (ui.tsx), which a rhythm is not.
                     (walkKey === free.key
                       ? "bg-parranda-ink font-bold text-parranda-paper"
-                      : "border-line border-parranda-line font-semibold text-parranda-ink-muted hover:border-parranda-line-strong hover:text-parranda-ink")
+                      : "bg-parranda-fill font-semibold text-parranda-ink-soft hover:bg-parranda-fill-strong hover:text-parranda-ink")
                   }
                 >
                   {walkKey === free.key && <CheckIcon className="h-3 w-3" />}
@@ -429,7 +429,7 @@ export default function AnchorCard({
               )}
             </div>
             <div
-              className="grid grid-cols-3 rounded-full border-line border-parranda-line sm:max-w-sm"
+              className="grid grid-cols-3 rounded-parranda-btn bg-parranda-fill sm:max-w-sm"
               role="group"
               aria-label={t("Dagens rytm", "Day rhythm")}
             >
@@ -445,8 +445,7 @@ export default function AnchorCard({
                       onSetRhythm(preset.key);
                     }}
                     className={
-                      "min-h-11 px-2 text-13 leading-tight transition first:rounded-l-full last:rounded-r-full" + ring(`rhythm:${preset.key}`) + " " +
-                      (index > 0 ? "border-l-line border-parranda-line " : "") +
+                      "min-h-11 rounded-parranda-btn px-2 text-13 leading-tight transition" + ring(`rhythm:${preset.key}`) + " " +
                       (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink-muted hover:text-parranda-ink")
                     }
                   >
@@ -472,9 +471,9 @@ export default function AnchorCard({
 
 /**
  * Change, Adjust and Done are the day's controls; they look alike: plain words
- * on an outlined 36px pill with a 44px touch target, like the stops' Follow.
+ * on a soft 36px rectangle with a 44px touch target, like the stops' Follow.
  */
-const controlPill = `${compactPillTarget} shrink-0 gap-1.5 border-line border-parranda-line px-3.5 font-bold text-parranda-ink hover:border-parranda-line-strong`;
+const controlPill = `${compactPillTarget} shrink-0 gap-1.5 px-3.5 ${controlTone}`;
 
 /**
  * "Change": back to the landing for another place. A plain left-click lets the

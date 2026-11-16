@@ -16,6 +16,7 @@
   --color-parranda-live: rgb(var(--p-color-live));
   --color-parranda-on-live: rgb(var(--p-color-on-live));
   --color-parranda-on-terracotta: rgb(var(--p-color-on-terracotta));
+  --color-parranda-surface: rgb(var(--p-color-surface));
 
   /* Ink at its named strengths (tokens.css --p-ink-*). */
   --color-parranda-ink-soft: rgb(var(--p-color-ink) / var(--p-ink-soft));
@@ -34,8 +35,10 @@
 
   --radius-parranda: var(--p-radius-card);
   --radius-parranda-btn: var(--p-radius-button);
+  --radius-parranda-tag: var(--p-radius-tag);
 
   --shadow-control: var(--p-shadow-control);
+  --shadow-card: var(--p-shadow-card);
   --shadow-pop: var(--p-shadow-pop);
   --shadow-sheet: var(--p-shadow-sheet);
 
@@ -51,7 +54,6 @@
 
   --font-display: var(--p-font-display), "Helvetica Neue", Arial, sans-serif;
   --font-body: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
-  --font-mono: var(--p-font-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 
 @layer base {
@@ -85,9 +87,12 @@
   border-left-width: var(--p-line);
 }
 
-/* "Linje" type roles. The display face is Archivo on its width axis — wide and
-   heavy like wayfinding signage; data (times, distances, counts, eyebrows) is
-   set in the mono so numbers line up and read as facts. */
+/* "Linje" type roles: one family, Archivo, on its width axis. Wide and heavy
+   for display, like wayfinding signage; the normal width for reading; narrow
+   for labels and data (times, distances, counts), with lining tabular figures
+   so numbers line up and read as facts. Labels keep the case they are written
+   in: tracked capitals in a second, mono face read as template chrome
+   (Linje 2, Nov 2026), and cost a second font request. */
 @utility type-display {
   font-family: var(--p-font-display), "Helvetica Neue", Arial, sans-serif;
   font-weight: 900;
@@ -107,20 +112,20 @@
 }
 
 @utility type-eyebrow {
-  font-family: var(--p-font-mono), ui-monospace, Menlo, monospace;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
+  font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
+  font-size: 0.8125rem;
+  font-stretch: 88%;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   line-height: 1.3;
-  text-transform: uppercase;
 }
 
 @utility type-data {
-  font-family: var(--p-font-mono), ui-monospace, Menlo, monospace;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums;
-  text-transform: uppercase;
+  font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
+  font-stretch: 88%;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 /* A day that is still composing: every placeholder shape carries one slow,
@@ -374,9 +379,11 @@
   border-radius: 999px;
   background: rgb(var(--p-color-paper));
   color: rgb(var(--p-color-ink));
-  font-family: var(--p-font-mono), ui-monospace, Menlo, monospace;
+  font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-stretch: 88%;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 700;
   border: 3px solid rgb(var(--p-color-ink));
   box-shadow: var(--p-shadow-marker);
 }
@@ -464,9 +471,11 @@
   border: 0;
   background: transparent;
   color: rgb(var(--p-color-ink));
-  font-family: var(--p-font-mono), ui-monospace, Menlo, monospace;
+  font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-stretch: 88%;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 700;
   box-shadow: none;
   transform: translate(-50%, -50%);
   /* The number is anonymous inline content; isolation keeps it above the

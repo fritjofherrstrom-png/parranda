@@ -11,7 +11,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
 import { routeUnconfirmedTonightPicks, walkingDistanceLabel } from "../../lib/route-context-view.mjs";
 import { CheckIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, MinusIcon, RainIcon, SearchIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
-import { busyButton, buttonClass, compactPillTarget, Eyebrow, labelChip } from "../shared/ui";
+import { busyButton, buttonClass, compactPillTarget, controlTone, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
 import { dayIdea } from "../../lib/day-idea.mjs";
@@ -331,7 +331,7 @@ export default function DayHeader({
         {staleNotice === "updating" && (
           <span
             aria-live="polite"
-            className="inline-flex min-h-7 items-center gap-2 rounded-full border-line border-parranda-ember/60 px-2.5 text-xs font-bold text-parranda-clay"
+            className="inline-flex min-h-7 items-center gap-2 rounded-parranda-tag border-line border-parranda-ember/60 px-2.5 text-xs font-bold text-parranda-clay"
           >
             <RingMark className="h-3 w-3" />
             {t("Uppdaterar dagen …", "Updating your day …")}
@@ -341,7 +341,7 @@ export default function DayHeader({
           <>
             <span
               aria-live="polite"
-              className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ember/12 px-2.5 py-0.5 text-11 font-bold text-parranda-clay"
+              className="inline-flex items-center gap-1.5 rounded-parranda-tag bg-parranda-ember/12 px-2.5 py-1 text-xs font-bold text-parranda-clay"
             >
               {navigationInterrupted
                 ? t("Planeringen pausades när du lämnade sidan — visar din förra dag", "Planning paused when you left — showing your previous day")
@@ -350,7 +350,7 @@ export default function DayHeader({
             <button
               type="button"
               onClick={retryPlan}
-              className="inline-flex min-h-11 items-center rounded-full border-line border-parranda-ember/50 px-3.5 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
+              className="inline-flex min-h-11 items-center rounded-parranda-btn border-line border-parranda-ember/50 px-3.5 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
             >
               {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök uppdatera igen", "Try updating again")}
             </button>
@@ -429,7 +429,7 @@ export default function DayHeader({
                 key={key}
                 className={
                   state === "missing"
-                    ? "inline-flex items-center gap-1.5 rounded-full border-line border-dashed border-parranda-line-firm px-2.5 py-1 text-xs font-semibold text-parranda-ink-muted"
+                    ? "inline-flex items-center gap-1.5 rounded-parranda-tag border-line border-dashed border-parranda-line-firm px-2 py-1 text-xs font-semibold text-parranda-ink-muted"
                     : labelChip
                 }
               >
@@ -488,7 +488,7 @@ export default function DayHeader({
                   sourceUpdateHadFocus.current = document.activeElement === sourceUpdateRef.current;
                   onLookForMorePlaces();
                 })}
-                className={`${compactPillTarget} gap-2 border-line border-parranda-line px-3.5 font-bold text-parranda-ink hover:border-parranda-line-strong aria-busy:cursor-progress ${rechecking ? "" : "aria-disabled:opacity-60"}`}>
+                className={`${compactPillTarget} gap-2 px-3.5 ${controlTone} aria-busy:cursor-progress ${rechecking ? "" : "aria-disabled:opacity-60"}`}>
                 {rechecking ? <RingMark className="h-3.5 w-3.5" /> : <SearchIcon className="h-3.5 w-3.5 text-parranda-ink-muted" />}
                 {rechecking ? t("Letar efter fler platser …", "Looking for more places …") : t("Leta efter fler platser", "Look for more places")}
               </button>
@@ -585,13 +585,13 @@ export function DayActions({
                       "flex min-h-14 items-center gap-3 rounded-parranda-btn px-3.5 py-2 text-left text-15 transition " +
                       (first
                         ? "bg-parranda-terracotta font-extrabold text-parranda-on-terracotta hover:brightness-110"
-                        : "border-line border-parranda-line font-bold text-parranda-ink hover:border-parranda-line-strong")
+                        : "bg-parranda-fill font-bold text-parranda-ink hover:bg-parranda-fill-strong")
                     }
                   >
                     <span
                       aria-hidden="true"
                       className={
-                        "type-data inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold " +
+                        "type-data inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-parranda-tag text-13 font-bold " +
                         // A darker disc keeps the white digit at 6.7:1 on terracotta (white/22 gave 3.7:1).
                         (first ? "bg-parranda-shade" : "bg-parranda-fill")
                       }
@@ -601,7 +601,7 @@ export function DayActions({
                     <span className="min-w-0 flex-1">
                       <span className="sr-only">{t(`Del ${index + 1} i Google Maps: `, `Part ${index + 1} in Google Maps: `)}</span>
                       {routeEndLabel(part.from)} → {routeEndLabel(part.to)}
-                      <span className={"type-data block text-11 font-medium " + (first ? "text-parranda-on-terracotta" : "text-parranda-ink-meta")}>
+                      <span className={"type-data block text-13 font-medium " + (first ? "text-parranda-on-terracotta" : "text-parranda-ink-meta")}>
                         {newStops > 0
                           ? t(`${newStops} stopp`, `${newStops} ${newStops === 1 ? "stop" : "stops"}`)
                           : t("Sista biten", "The last stretch")}

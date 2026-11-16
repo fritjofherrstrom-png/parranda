@@ -84,16 +84,16 @@ export default function CandidateAreas({
           <li key={index} className="rounded-parranda border-line border-parranda-line-faint bg-parranda-paper p-4">
             <div className="flex flex-wrap items-center gap-1.5">
               {interestNames(area.covers, lang).map((name) => (
-                <span key={name} className="rounded-full bg-parranda-ink px-2.5 py-0.5 text-xs font-bold text-parranda-paper">
+                <span key={name} className="rounded-parranda-tag bg-parranda-ink px-2 py-0.5 text-xs font-bold text-parranda-paper">
                   {name}
                 </span>
               ))}
               {interestNames(area.partial_covers, lang).map((name) => (
-                <span key={`partial-${name}`} className="rounded-full border-line border-parranda-line-firm px-2.5 py-0.5 text-xs font-bold text-parranda-ink">
+                <span key={`partial-${name}`} className="rounded-parranda-tag border-line border-parranda-line-firm px-2 py-0.5 text-xs font-bold text-parranda-ink">
                   {name} · {t("delvis", "partial")}
                 </span>
               ))}
-              <span className="type-data ml-auto text-11 text-parranda-ink-meta">
+              <span className="type-data ml-auto text-13 text-parranda-ink-meta">
                 {(area.stops?.length ?? area.stop_ids?.length ?? 0)} {t("träffar", "places")}
               </span>
             </div>

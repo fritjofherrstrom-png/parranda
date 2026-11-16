@@ -995,7 +995,7 @@ export default function RouteMap({
           onClick={onToggleExpanded}
           aria-expanded={mapExpanded}
           data-map-control=""
-          className="absolute right-2.5 top-2.5 z-(--p-z-map-control) inline-flex min-h-9 items-center rounded-full border-line border-parranda-line bg-parranda-paper px-3.5 text-13 font-bold text-parranda-ink shadow-control transition before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] hover:border-parranda-line-strong"
+          className="absolute right-2.5 top-2.5 z-(--p-z-map-control) inline-flex min-h-9 items-center rounded-parranda-btn bg-parranda-surface px-3.5 text-13 font-bold text-parranda-ink shadow-control transition before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] hover:bg-parranda-paper"
         >
           {mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
         </button>
@@ -1004,11 +1004,11 @@ export default function RouteMap({
       <div className="flex shrink-0 flex-wrap gap-2 py-1">
         {positionSession?.supported && onLocate && <button type="button" {...busyButton(!mapDrawn, onLocate)}
           aria-label={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-full border-line border-parranda-line bg-parranda-paper px-3 text-13 font-bold text-parranda-ink shadow-control hover:border-parranda-line-strong">
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-parranda-btn bg-parranda-fill px-3.5 text-13 font-bold text-parranda-ink transition hover:bg-parranda-fill-strong">
           <LocationIcon className="h-4 w-4" />{t("Min position", "My location")}
         </button>}
         <button type="button" {...busyButton(!mapDrawn, () => refitRef.current())}
-          className="inline-flex min-h-11 items-center rounded-full border-line border-parranda-line bg-parranda-paper px-3 text-13 font-bold text-parranda-ink shadow-control hover:border-parranda-line-strong">
+          className="inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-fill px-3.5 text-13 font-bold text-parranda-ink transition hover:bg-parranda-fill-strong">
           {hasPrimaryRoute ? t("Visa rutten", "Show route") : t("Visa platserna", "Show places")}
         </button>
       </div>

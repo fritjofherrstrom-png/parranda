@@ -122,7 +122,7 @@ export default function BlitzCard({
                 <div>
                   <p className="type-title text-2xl text-parranda-ink">{move.title}</p>
                   {move.kind === "live_event" && <LiveEventTiming event={move} lang={lang} />}
-                  <div className="type-data mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-11 text-parranda-ink-muted">
+                  <div className="type-data mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-13 text-parranda-ink-muted">
                     {move.kind === "live_event" && <span>{t("Live-händelse", "Live event")}</span>}
                     {Number.isFinite(move.walking_minutes) && <span>{move.walking_minutes} {t("min till fots", "min walk")}</span>}
                     {move.source.label && <span>{move.source.label}</span>}

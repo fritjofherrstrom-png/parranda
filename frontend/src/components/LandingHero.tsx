@@ -205,7 +205,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
             <button
               type="button"
               {...busyButton(locating, useLocation)}
-              className="inline-flex min-h-12 items-center gap-2 rounded-full border-line border-parranda-line px-5 text-15 font-bold text-parranda-ink transition hover:border-parranda-line-strong aria-disabled:opacity-60 aria-busy:cursor-progress"
+              className="inline-flex min-h-12 items-center gap-2 rounded-parranda-btn bg-parranda-fill px-5 text-15 font-bold text-parranda-ink transition hover:bg-parranda-fill-strong aria-disabled:opacity-60 aria-busy:cursor-progress"
             >
               <LocationIcon className="h-4 w-4 text-parranda-ember" />
               {locating ? t("Hämtar position …", "Getting location …") : t("Använd min position", "Use my location")}

@@ -201,7 +201,7 @@ export default function LiveSheet({
             type="button"
             aria-label={t("Stäng live", "Close live")}
             onClick={onClose}
-            className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border-line border-parranda-line text-parranda-ink-soft transition hover:border-parranda-ember"
+            className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-parranda-btn bg-parranda-fill text-parranda-ink-soft transition hover:bg-parranda-fill-strong hover:text-parranda-ink"
           >
             <CloseIcon />
           </button>
@@ -457,7 +457,7 @@ export default function LiveSheet({
           )}
           {(liveQueryError || (!liveQueryPending && (sheetPulseState === "pending" || sheetPulseState === "unavailable"))) && (
             <button type="button" onClick={onRetry}
-              className="inline-flex min-h-11 items-center self-start rounded-full border-line border-parranda-live/60 px-4 text-sm font-bold text-parranda-live">
+              className="inline-flex min-h-11 items-center self-start rounded-parranda-btn border-line border-parranda-live/60 px-4 text-sm font-bold text-parranda-live">
               {t("Försök igen", "Try again")}
             </button>
           )}
