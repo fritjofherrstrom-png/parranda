@@ -289,7 +289,7 @@ test('a Blitz Live move names its destination instead of a generic "Source" link
   t.after(() => h.unmount());
 
   await click(h, button(h, /Adjust/));
-  await click(h, button(h, /Blitz right now/));
+  await click(h, button(h, /^Show an idea$/));
   const call = h.fetchMock.pending().find((c) => c.url.includes('/api/blitz'));
   assert.ok(call, 'Blitz asks the trusted endpoint');
   await h.fetchMock.respond(call, {
@@ -304,9 +304,10 @@ test('a Blitz Live move names its destination instead of a generic "Source" link
     confidence: { level: 'medium' },
   });
 
-  // The Blitz result panel, not the header button that triggers it.
-  const section = [...h.container.querySelectorAll('section[aria-live="polite"]')]
-    .find((s) => /Blitz right now/.test(s.textContent));
+  // The result panel of the "Right now" section, not the button that triggers it.
+  const section = [...h.container.querySelectorAll('section')]
+    .find((s) => s.querySelector('h2')?.textContent.trim() === 'Right now')
+    ?.querySelector('[aria-live="polite"]');
   assert.ok(section, 'the Blitz move renders');
   const [link] = anchorsTo(section, 'https://harbour.example/en/');
   assert.ok(link, 'the Live move keeps its exact link');
