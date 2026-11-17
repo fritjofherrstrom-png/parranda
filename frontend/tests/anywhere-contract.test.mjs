@@ -372,7 +372,8 @@ test("the anchor is chosen once: the planner shows it, and adjusts — never a s
   // not re-asked. The old planner header/mode-toggle/place-form are gone.
   assert.match(anywherePlannerSource, /hasAnchor && \(/);
   assert.match(anywherePlannerSource, /\{anchorLabel\}/);
-  assert.match(anywherePlannerSource, /t\("Byt", "Change"\)/);
+  // Linje 2: the link names its whole action in words ("Change place").
+  assert.match(anywherePlannerSource, /\{t\("Byt plats", "Change place"\)\}/);
   assert.match(anywherePlannerSource, /aria-label=\{t\("Byt plats", "Change place"\)\}/);
   assert.doesNotMatch(anywherePlannerSource, /Planerar \$\{typedPlaceLabel\}|Planning \$\{typedPlaceLabel\}/);
   assert.doesNotMatch(anywherePlannerSource, /Justera känsla, dag och gånglängd/);
@@ -401,9 +402,12 @@ test("compact planner and map controls keep a 44px mobile touch target", () => {
   const anchorCard = componentSource("planner/AnchorCard.tsx");
   assert.match(componentSource("shared/ui.tsx"), /export const compactPillTarget =\s*"relative inline-flex min-h-9 [^"]*before:-inset-y-1 /);
   assert.match(anchorCard, /const controlPill = `\$\{compactPillTarget\} /);
-  assert.match(anchorCard, /aria-label=\{t\("Byt plats", "Change place"\)\}\s*className=\{controlPill\}/);
-  assert.match(anchorCard, /aria-expanded=\{false\}[\s\S]{0,120}className=\{controlPill\}/);
-  assert.match(anchorCard, /aria-expanded=\{true\}[\s\S]{0,120}className=\{controlPill\}/);
+  // Linje 2: Change place is a text link, 44px tall itself; with the picks
+  // summary, Adjust and Done sit in the summary row at 44px (rowControl).
+  assert.match(anchorCard, /aria-label=\{t\("Byt plats", "Change place"\)\}\s*className="inline-flex min-h-11 /);
+  assert.match(anchorCard, /const rowControl = "inline-flex min-h-11 /);
+  assert.match(anchorCard, /aria-expanded=\{false\}[\s\S]{0,120}className=\{compact && summary \? rowControl : controlPill\}/);
+  assert.match(anchorCard, /aria-expanded=\{true\}[\s\S]{0,120}className=\{compact && summary \? rowControl : controlPill\}/);
   // The map's expand control says what it does, in both languages, on the
   // same pill: 36px drawn, 44px to the touch.
   assert.match(
@@ -440,7 +444,7 @@ test("a route stop's visible number is its own tap target", () => {
 });
 
 test("route, saved-day, Blitz, and source actions keep a 44px mobile touch target", () => {
-  assert.match(anywherePlannerSource, /busyButton\([^)]*, blitz\)\}[\s\S]{0,180}min-h-11/);
+  assert.match(anywherePlannerSource, /busyButton\([^)]*, blitz\)\}[\s\S]{0,180}min-h-1[1-3]\b/);
   assert.match(anywherePlannerSource, /onClick=\{\(\) => restoreEntry\(entry\)\}[\s\S]{0,180}min-h-11/);
   assert.match(anywherePlannerSource, /aria-label=\{t\("Ta bort", "Remove"\)\}[\s\S]{0,180}min-h-11 min-w-11/);
   assert.match(anywherePlannerSource, /href=\{pin\}[\s\S]{0,180}min-h-11 min-w-11/);

@@ -10,7 +10,7 @@ import type { AnywhereBlitzView, BlitzMoveView } from "../../lib/blitz-view.mjs"
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { eventSourceLink } from "../../lib/pulse-view.mjs";
 import LiveEventTiming from "./LiveEventTiming";
-import { BoltIcon, ExternalIcon } from "../shared/icons";
+import { BoltIcon, ChevronRightIcon, ExternalIcon } from "../shared/icons";
 import { busyButton, buttonClass, Eyebrow } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 
@@ -47,16 +47,18 @@ export default function BlitzCard({
 }) {
   return (
     <div className="flex flex-col gap-3">
+      {/* A row, not a call to action: Blitz is an aside to the day. */}
       <button
         type="button"
         {...busyButton(blitzPhase === "loading" || blitzPhase === "locating", blitz)}
-        className={buttonClass("secondary", "min-h-11 w-full px-4 text-sm")}
+        className="flex min-h-13 w-full items-center gap-2.5 rounded-parranda-btn bg-parranda-fill px-4 text-left text-15 font-bold text-parranda-ink transition hover:bg-parranda-fill-strong aria-disabled:opacity-60"
       >
-        <BoltIcon className="h-4 w-4 text-parranda-glow" />
-        {blitzPhase === "loading" ? t("Läser läget …", "Reading the moment …") : t("Blitz just nu", "Blitz right now")}
+        <BoltIcon className="h-4 w-4 shrink-0 text-parranda-glow" />
+        <span className="min-w-0 flex-1">{blitzPhase === "loading" ? t("Läser läget …", "Reading the moment …") : t("Blitz just nu", "Blitz right now")}</span>
+        <ChevronRightIcon className="h-4 w-4 shrink-0 text-parranda-ink-meta" />
       </button>
       {blitzPhase === "idle" && (
-        <p className="-mt-1 text-center text-xs text-parranda-ink-meta">
+        <p className="-mt-1.5 px-4 text-13 text-parranda-ink-meta">
           {mode === "near_me"
             ? t("Ett förslag nära dig, just nu", "One idea near you, right now")
             : t(`Ett förslag i ${anchorLabel}, just nu`, `One idea in ${anchorLabel}, right now`)}

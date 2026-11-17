@@ -343,7 +343,7 @@ export default function StopLine({
                   {behind && <span className="sr-only">{routeNumber}</span>}
                 </span>
                 <span className={"flex min-w-0 flex-1 flex-col gap-0.5 transition-opacity" + (stale ? " opacity-45" : "")}>
-                  <span className={"flex flex-wrap items-center gap-x-2 text-17 font-extrabold leading-tight " + (behind ? "text-parranda-ink-meta" : "text-parranda-ink")}>
+                  <span className={"flex flex-wrap items-center gap-x-2 text-lg font-bold leading-tight " + (behind ? "text-parranda-ink-meta" : "text-parranda-ink")}>
                     {name}
                     {/* Named by the change line above ("4 stops swapped"):
                         which ones are new, for as long as that line stands. */}
@@ -362,7 +362,7 @@ export default function StopLine({
                       the one disclosure. Kept and source-closed facts stay
                       visible; unknown hours are available inside the place. */}
                   {(stopKindLabel || kept || hoursClosed) && (
-                    <span className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
                       {stopKindLabel && <StopCategory type={stop?.type} label={stopKindLabel} muted={behind} />}
                       {kept && (
                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-parranda-clay">

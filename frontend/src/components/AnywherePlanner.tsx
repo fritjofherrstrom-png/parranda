@@ -96,7 +96,7 @@ import AnchorCard, { ChangePlaceLink, type AdjustRebuild } from "./planner/Ancho
 import type { InterestSelection } from "./planner/InterestChooser";
 import BlitzCard from "./planner/BlitzCard";
 import CandidateAreas, { candidateMatchCount } from "./planner/CandidateAreas";
-import DayHeader, { DayActions, DayWhen, dayAssemblyNotes } from "./planner/DayHeader";
+import DayHeader, { DayActions, DayWhen, dayAssemblyNotes, PickSummary } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
 import { useFollowPosition } from "./planner/useFollowPosition";
@@ -3210,6 +3210,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         rebuild={adjustRebuild}
         compact={dayWithRoute}
         dayWhen={dayWithRoute ? <DayWhen t={t} lang={lang} date={shownDate} relativeDay={shownDay ? shownDay.activeOffset : null} /> : null}
+        summary={dayWithRoute && shownPickCoverage.length > 0 ? (
+          <PickSummary t={t} lang={lang} pickCoverage={shownPickCoverage}
+            rhythmLabel={t(`Dagens rytm: ${walkLabel}`, `Day rhythm: ${walkLabel}`)} />
+        ) : null}
       />
       {parrandaChoicePanel}
     </>
@@ -3259,6 +3263,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           titleAction={<ChangePlaceLink t={t} lang={lang} onChangePlace={cancelActivePlannerForNavigation} />}
           controls={anchorCard}
           overview={mapOverview}
+          picksInControls={shownPickCoverage.length > 0}
+          relativeDay={shownDay ? shownDay.activeOffset : null}
           coreCount={split.core.length}
           wovenCount={split.woven.length}
           pickCoverage={shownPickCoverage}
@@ -3657,11 +3663,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         />
       )}
 
-      {(dayWithRoute || (classification?.status === "edited_empty" && phase === "done")) && !canShare && (
-        <p className="text-xs leading-relaxed text-parranda-ink-meta" role="status">
-          {t("Exakt delning är inte tillgänglig för den här dagen. Dagen och dina andra val finns kvar.", "Exact sharing is unavailable for this day. Your day and other actions remain available.")}
-        </p>
-      )}
       {dayWithRoute && (
         <DayActions
           t={t}
@@ -3680,6 +3681,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           publishedEnd={publishedEnd}
           stale={staleNotice === "updating"}
         />
+      )}
+      {/* Said once, quietly, after the actions it qualifies. */}
+      {(dayWithRoute || (classification?.status === "edited_empty" && phase === "done")) && !canShare && (
+        <p className="text-xs leading-relaxed text-parranda-ink-meta" role="status">
+          {t("Exakt delning är inte tillgänglig för den här dagen. Dagen och dina andra val finns kvar.", "Exact sharing is unavailable for this day. Your day and other actions remain available.")}
+        </p>
       )}
       {savedWriteError?.action === "save" && savedWriteError.entry === lastEntryRef.current && (
         <p role="status" className="text-sm leading-relaxed text-parranda-ink-muted">

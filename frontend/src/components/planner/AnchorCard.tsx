@@ -6,7 +6,7 @@
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { MAX_PLANNER_PREFERENCES, normalizePreferencePriority } from "../../../../shared/planner-intent.mjs";
-import { CheckIcon, LocationIcon, UndoIcon } from "../shared/icons";
+import { CheckIcon, ChevronDownIcon, LocationIcon, UndoIcon } from "../shared/icons";
 import { buttonClass, compactPillTarget, controlTone, Eyebrow, noticeCard, panelCard, segmentClass, segmentGroup } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
@@ -51,6 +51,7 @@ export default function AnchorCard({
   rebuild = null,
   compact = false,
   dayWhen = null,
+  summary = null,
 }: {
   t: Translate;
   lang: Lang;
@@ -100,6 +101,8 @@ export default function AnchorCard({
   compact?: boolean;
   /** Compact: which day is on screen, said first in the picks line. */
   dayWhen?: ReactNode;
+  /** Compact (Linje 2): what the day did for each pick and its rhythm, in the Adjust row. */
+  summary?: ReactNode;
 }) {
   // Opening swaps "Adjust" for "Done" (and closing swaps back), so the button
   // that had keyboard focus leaves the DOM. Move focus to its counterpart, but
@@ -163,9 +166,10 @@ export default function AnchorCard({
       aria-expanded={true}
       aria-controls={panelId}
       onClick={() => toggleAdjust(false)}
-      className={controlPill}
+      className={compact && summary ? rowControl : controlPill}
     >
       {t("Klar", "Done")}
+      {compact && summary && <ChevronDownIcon className="h-3.5 w-3.5 rotate-180" />}
     </button>
   );
   return (
@@ -196,12 +200,14 @@ export default function AnchorCard({
           as they change, stay in view above the controls that change them. */}
       {(compact || !adjustOpen) && (
         <div className={compact
-          ? "flex min-h-9 items-center justify-between gap-3"
+          ? summary
+            ? "flex min-h-14 items-center gap-2 rounded-parranda-btn bg-parranda-fill py-1.5 pl-3.5 pr-1.5"
+            : "flex min-h-9 items-center justify-between gap-3"
           : "flex min-h-12 flex-wrap items-center gap-2.5 border-t-line border-parranda-line-faint py-1.5 pl-4 pr-1.5"}>
           {/* Compact, one even line in the title's quiet voice: the day, then
               the picks and the rhythm. The card form keeps the picks in bold
               under the place it names. */}
-          {compact ? (
+          {compact && summary ? summary : compact ? (
             <span className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink-muted">
               {dayWhen}
               {dayWhen ? " · " : ""}
@@ -220,9 +226,10 @@ export default function AnchorCard({
               ref={adjustButton}
               aria-expanded={false}
               onClick={() => toggleAdjust(true)}
-              className={controlPill}
+              className={compact && summary ? rowControl : controlPill}
             >
               {t("Justera", "Adjust")}
+              {compact && summary && <ChevronDownIcon className="h-3.5 w-3.5" />}
             </button>
           )}
         </div>
@@ -480,6 +487,9 @@ const controlPill = `${compactPillTarget} shrink-0 gap-1.5 px-3.5 ${controlTone}
  * planner cancel work it no longer needs; the link still works on its own.
  * Beside the day's title once a day is on screen, in the card before that.
  */
+/** Adjust and Done inside the picks row: words and a chevron, the row is the surface. */
+const rowControl = "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-parranda-btn px-3 text-sm font-extrabold text-parranda-ink transition hover:bg-parranda-fill-strong";
+
 export function ChangePlaceLink({ t, lang, onChangePlace }: { t: Translate; lang: Lang; onChangePlace: () => void }) {
   return (
     <a
@@ -490,9 +500,9 @@ export function ChangePlaceLink({ t, lang, onChangePlace }: { t: Translate; lang
         }
       }}
       aria-label={t("Byt plats", "Change place")}
-      className={controlPill}
+      className="inline-flex min-h-11 shrink-0 items-center text-sm font-bold text-parranda-ink-soft underline decoration-[1.5px] underline-offset-4 transition hover:text-parranda-ink"
     >
-      {t("Byt", "Change")}
+      {t("Byt plats", "Change place")}
     </a>
   );
 }

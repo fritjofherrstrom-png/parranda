@@ -38,7 +38,7 @@ for (const lang of ['en', 'sv']) {
     assert.doesNotMatch(status.closest('section')?.className || status.parentElement.className, /bg-parranda-(?:ember|glow)|border-parranda-(?:ember|glow)/, 'the successful day is not styled as a warning');
     assert.equal(header.querySelector('[role="alert"]'), null);
     assert.match(h.text(), /Museum 6/);
-    assert.match(header.textContent, lang === 'en' ? /6 stops/ : /6 stopp/);
+    assert.match(header.textContent, lang === 'en' ? /Six stops/ : /Sex stopp/);
     assert.doesNotMatch(header.textContent, /You can use this day|Du kan använda dagen/);
     assert.equal(header.querySelector('details'), null, 'the limitation is said in the sentence, not hidden behind a disclosure');
     const update = button(h, lang === 'en' ? 'Look for more places' : 'Leta efter fler platser');

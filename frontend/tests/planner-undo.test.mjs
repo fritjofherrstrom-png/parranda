@@ -141,7 +141,7 @@ test("undo puts the previous day and its inputs back without composing", async (
   assert.equal(composeCalls(h).length, 2, "undo asks the server nothing");
   assert.deepEqual(routeStopNames(h).slice(0, 2), ["Place a", "Place b"]);
   assert.doesNotMatch(h.text(), /Place c/);
-  assert.match(h.text(), /≈ 1\.2 km on foot/);
+  assert.match(h.text(), /about 1\.2 km on foot/);
   assert.equal(buttonNamed(h, /^Balanced/).getAttribute("aria-pressed"), "true", "the rhythm it was composed for is back");
   assert.equal(changeNote(h), null, "the account went with the change it described");
   assert.doesNotMatch(h.text(), /Saved day/, "the day put back is not a saved snapshot");

@@ -346,6 +346,35 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
   }
 }
 
+/** The Live card reads like a departures board: a row whose timing is one
+ *  clock on the shown day gets a time column ("20:00" / "to 23:00", or "Now"
+ *  / "to 20:00" while it runs). Anything less certain — a period, a run across
+ *  days, a scheduled-but-unconfirmed session, a date without a clock — returns
+ *  null and keeps its full sentence under the title. Derived from
+ *  eventTiming's own label, so the two can never disagree. */
+export function eventBoardClock(ev, lang, now = new Date(), selectedDate = null) {
+  if (eventTimingNotice(ev, lang)) return null;
+  const label = eventTiming(ev, lang, now, selectedDate);
+  if (!label) return null;
+  const en = lang === "en";
+  const to = (clock) => `${en ? "to" : "till"} ${clock}`;
+  const running = /^(?:on now|pågår nu)(?: · (?:until|till) (\d{1,2}[:.]\d{2}(?::\d{2})?))?$/.exec(label);
+  if (running) return { at: en ? "Now" : "Nu", until: running[1] ? to(running[1]) : null, now: true };
+  // A recurring slot that is only scheduled keeps its qualification in words.
+  if (ev?.recurrence?.occurrence_status === "unconfirmed") return null;
+  const clock = /^([^·–]*?) (\d{1,2}[:.]\d{2}(?::\d{2})?)(?:–(\d{1,2}[:.]\d{2}(?::\d{2})?))?$/.exec(label);
+  if (!clock) return null;
+  // The column drops the date, so the date must be the day the card shows.
+  const nowDate = now instanceof Date ? now : new Date(now);
+  const reference = selectedDate || venueLocalNow(nowDate, ev?.timezone || ev?.time_window?.timezone || null)?.date || null;
+  if (!reference) return null;
+  const shown = new Date(`${reference}T00:00:00Z`);
+  if (Number.isNaN(shown.getTime())) return null;
+  const shownLabel = shown.toLocaleDateString(en ? "en-GB" : "sv-SE", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  if (clock[1] !== shownLabel) return null;
+  return { at: clock[2], until: clock[3] ? to(clock[3]) : null, now: false };
+}
+
 /** A period states a span, not a daily schedule or confirmed sessions. Keep
  *  this qualification separate from the compact date/clock in every surface.
  *  Calendar facts describe dates rather than event sessions. */

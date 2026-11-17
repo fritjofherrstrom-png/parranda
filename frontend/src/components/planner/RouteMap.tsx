@@ -38,7 +38,7 @@ import type { RouteContextSuggestion } from "../../lib/route-context-view.mjs";
 import type { DistrictArea } from "./types";
 import type { Translate } from "./copy";
 import type { PositionSession } from "./useFollowPosition";
-import { LocationIcon } from "../shared/icons";
+import { LocationIcon, RouteIcon } from "../shared/icons";
 import { busyButton } from "../shared/ui";
 
 // Footprints the fit keeps clear of the controls, in px. A route marker's
@@ -64,6 +64,9 @@ type Tip = { name: string; x: number; y: number; direction: "left" | "right" } |
 
 let maplibreModule: Promise<MapLibre> | null = null;
 /** MapLibre and its worker, loaded once and only when a map is drawn. */
+/** A square control on the map: paper, its shadow, a 44px target. */
+const mapIconButton = "relative inline-flex h-10 w-10 items-center justify-center rounded-parranda-btn bg-parranda-surface text-parranda-ink shadow-control transition before:absolute before:-inset-0.5 before:content-[''] hover:bg-parranda-paper aria-disabled:opacity-60";
+
 function loadMapLibre(): Promise<MapLibre> {
   maplibreModule ??= Promise.all([
     import("maplibre-gl"),
@@ -986,9 +989,25 @@ export default function RouteMap({
           {t("Ritar kartan …", "Drawing the map …")}
         </div>
       )}
-      {/* Said in words, like the day's other controls: an icon alone left the
-          reader guessing. A 36px pill on paper with a 44px touch target; it is
-          a map control (data-map-control), so the fit keeps every stop clear. */}
+      {/* Linje 2: the map's own controls sit on the map. Expand stays in
+          words (an icon alone left the reader guessing); location and "show
+          the whole route" are square marks with their names as labels and
+          tooltips. All are map controls (data-map-control), so the fit keeps
+          every stop clear of them. */}
+      <div data-map-control="" className="absolute left-2.5 top-2.5 z-(--p-z-map-control) flex gap-2">
+        {positionSession?.supported && onLocate && <button type="button" {...busyButton(!mapDrawn, onLocate)}
+          aria-label={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
+          title={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
+          className={mapIconButton}>
+          <LocationIcon className="h-[18px] w-[18px]" />
+        </button>}
+        <button type="button" {...busyButton(!mapDrawn, () => refitRef.current())}
+          aria-label={hasPrimaryRoute ? t("Visa rutten", "Show route") : t("Visa platserna", "Show places")}
+          title={hasPrimaryRoute ? t("Visa hela rutten", "Show the whole route") : t("Visa alla platser", "Show all places")}
+          className={mapIconButton}>
+          <RouteIcon className="h-[18px] w-[18px]" />
+        </button>
+      </div>
       {onToggleExpanded && (
         <button
           type="button"
@@ -1001,17 +1020,6 @@ export default function RouteMap({
         </button>
       )}
     </div>
-      <div className="flex shrink-0 flex-wrap gap-2 py-1">
-        {positionSession?.supported && onLocate && <button type="button" {...busyButton(!mapDrawn, onLocate)}
-          aria-label={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-parranda-btn bg-parranda-fill px-3.5 text-13 font-bold text-parranda-ink transition hover:bg-parranda-fill-strong">
-          <LocationIcon className="h-4 w-4" />{t("Min position", "My location")}
-        </button>}
-        <button type="button" {...busyButton(!mapDrawn, () => refitRef.current())}
-          className="inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-fill px-3.5 text-13 font-bold text-parranda-ink transition hover:bg-parranda-fill-strong">
-          {hasPrimaryRoute ? t("Visa rutten", "Show route") : t("Visa platserna", "Show places")}
-        </button>
-      </div>
     {locationStatus}
     {hasPrimaryRoute && (
       <p className="mt-1 break-words text-xs leading-relaxed text-parranda-ink-meta">

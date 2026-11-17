@@ -15,15 +15,13 @@ import { busyButton, buttonClass, compactPillTarget, controlTone, Eyebrow, label
 import { pickLabel, type Lang, type Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
 import { dayIdea } from "../../lib/day-idea.mjs";
+import { daySummary } from "../../lib/day-summary.mjs";
 
 type RoutePart = WalkingRoutePart;
 // "pending": a pick the day on screen never answered — just added, its rebuild
 // still coming. That day says nothing about it yet, so neither does the chip.
 type PickCoverage = { key: string; state: "covered" | "partial" | "missing" | "pending" | "unanswered" };
 
-/** A quiet fact about the day, not a control. */
-// The day's facts are labels, not choices (ui.tsx labelChip).
-const metaChip = labelChip;
 
 /** The source's daily condition, separate from its effect on day composition. */
 const WEATHER_CONDITIONS: Record<string, [string, string]> = {
@@ -210,6 +208,37 @@ export function dayAssemblyNotes(t: Translate, { sourceBackedDay, timeAnchoring,
   return notes;
 }
 
+/**
+ * What the day did for each pick, in one line inside the Adjust row (Linje 2):
+ * the pick's name after its mark (in the day, partly, not in it, still
+ * looking). Status, never selection: no ink fill, no chip.
+ */
+export function PickSummary({ t, lang, pickCoverage, rhythmLabel }: {
+  t: Translate; lang: Lang; pickCoverage: PickCoverage[]; rhythmLabel: string;
+}) {
+  return (
+    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm font-semibold text-parranda-ink" aria-label={t("Dina val i dagen", "Your picks in this day")}>
+        {pickCoverage.map(({ key, state }) => (
+          <li key={key} className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            {state === "covered" && <CheckIcon className="h-3.5 w-3.5 text-parranda-ember" />}
+            {state === "partial" && <HalfCircleIcon className="h-3.5 w-3.5 text-parranda-glow" />}
+            {state === "missing" && <MinusIcon className="h-3.5 w-3.5 text-parranda-ink-meta" />}
+            {state === "pending" && <RingMark className="h-3.5 w-3.5" />}
+            <span className={state === "missing" || state === "unanswered" ? "text-parranda-ink-muted" : ""}>{pickLabel(key, lang)}</span>
+            {state === "covered" && <span className="sr-only">{t(" — med i dagen", " — in this day")}</span>}
+            {state === "partial" && <span className="font-medium text-parranda-ink-meta">{t(" · delvis", " · partly")}</span>}
+            {state === "missing" && <span className="font-medium text-parranda-ink-meta">{t(" · inte med", " · not in this day")}</span>}
+            {state === "pending" && <span className="font-medium text-parranda-ink-meta">{t(" · letar platser …", " · finding places …")}</span>}
+            {state === "unanswered" && <span className="font-medium text-parranda-ink-meta">{t(" · ännu inte bedömt", " · not assessed yet")}</span>}
+          </li>
+        ))}
+      </ul>
+      <span className="text-13 text-parranda-ink-meta">{rhythmLabel}</span>
+    </span>
+  );
+}
+
 export default function DayHeader({
   t,
   lang,
@@ -226,6 +255,8 @@ export default function DayHeader({
   titleAction = null,
   controls = null,
   overview = null,
+  picksInControls = false,
+  relativeDay = null,
   coreCount,
   wovenCount,
   pickCoverage,
@@ -259,6 +290,10 @@ export default function DayHeader({
   controls?: ReactNode;
   /** A phone: the map's short, still overview, between the title and the facts. */
   overview?: ReactNode;
+  /** The picks are said in the Adjust row (PickSummary), not again here. */
+  picksInControls?: boolean;
+  /** 0 today, 1 tomorrow, null for any other day: the facts line says the day the way a person would. */
+  relativeDay?: 0 | 1 | null;
   coreCount: number;
   wovenCount: number;
   pickCoverage: PickCoverage[];
@@ -286,8 +321,6 @@ export default function DayHeader({
   const unconfirmedList = unconfirmedTonight.length > 1
     ? `${unconfirmedTonight.slice(0, -1).join(", ")} ${t("och", "and")} ${unconfirmedTonight[unconfirmedTonight.length - 1]}`
     : unconfirmedTonight[0] || "";
-  const stops = `${coreCount} ${coreCount === 1 ? t("stopp", "stop") : t("stopp", "stops")}` +
-    (wovenCount > 0 ? ` + ${wovenCount} live${lang === "en" ? " event" : "-event"}` : "");
   const idea = dayIdea(primaryRoute, lang);
   const displayedDate = selectedDate(date);
   const condition = WEATHER_CONDITIONS[String(weatherSummary?.condition || "")];
@@ -303,7 +336,6 @@ export default function DayHeader({
   }, [forecastExpiresAt]);
   const forecastFresh = Number.isFinite(forecastFetchedAt) && forecastFetchedAt <= Date.now() + 5 * 60 * 1000
     && forecastExpiresAt > Date.now() && expiredForecast !== forecastExpiresAt;
-  const allPicksCovered = pickCoverage.length > 0 && pickCoverage.every(({ state }) => state === "covered");
   const weatherChip = forecastFresh && displayedDate && weatherSummary?.date === date && weatherSummary?.stale === false && Number.isFinite(weatherSummary?.max_temp)
     ? `${Math.round(weatherSummary.max_temp)}°`
     : null;
@@ -357,82 +389,60 @@ export default function DayHeader({
           </>
         )}
       </div>}
-      {/* Two rows, each with its control on the right: where (the title,
-          Change) and how (which day, the picks and rhythm, Adjust). Change and
-          Adjust stand one above the other, so the stops start high on a phone. */}
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-start justify-between gap-3">
-          <h1 ref={headingRef} tabIndex={-1} className="type-title min-w-0 pt-1.5 text-[1.625rem] text-parranda-ink [overflow-wrap:anywhere] [text-wrap:balance] sm:pt-0.5 sm:text-[2rem]">
-            {mode === "near_me" && !placeLabel ? (
-              <>{t("En dag", "A day")} {t("nära dig", "near you")}</>
-            ) : (
-              <>{t("En dag i", "A day in")} {anchorLabel}</>
-            )}
-          </h1>
+      {/* Linje 2: the place is the sign; "A day in" and Change stand above
+          it on one quiet row. Then the day in one sentence, and when. */}
+      <div className="flex flex-col">
+        <div className="flex min-h-11 items-center justify-between gap-3">
+          <span aria-hidden="true" className="text-15 font-medium text-parranda-ink-muted">
+            {mode === "near_me" && !placeLabel ? t("En dag", "A day") : t("En dag i", "A day in")}
+          </span>
           {titleAction}
         </div>
-        {controls}
-      </div>
-      {idea && (
-        <div data-day-idea className="flex flex-col gap-1 [overflow-wrap:anywhere]">
-          <p className="text-lg font-extrabold leading-snug text-parranda-ink">{idea.headline}</p>
-          {idea.journey && <p className="text-13 leading-relaxed text-parranda-ink-muted">{idea.journey}</p>}
+        <h1 ref={headingRef} tabIndex={-1} className="-mt-1 text-parranda-ink outline-none">
+          <span className="sr-only">{mode === "near_me" && !placeLabel ? t("En dag", "A day") : t("En dag i", "A day in")} </span>
+          <PlaceSign text={mode === "near_me" && !placeLabel ? t("nära dig", "near you") : anchorLabel} />
+        </h1>
+        {/* The day's character from its published places leads; the facts
+            sentence and the date follow in the quieter voice. */}
+        {idea && (
+          <div data-day-idea className="mt-2.5 flex flex-col gap-0.5 [overflow-wrap:anywhere]">
+            <p className="text-17 font-bold leading-snug text-parranda-ink">{idea.headline}</p>
+            {idea.journey && <p className="text-15 leading-snug text-parranda-ink-muted">{idea.journey}</p>}
+          </div>
+        )}
+        <div data-day-facts="" className={(idea ? "mt-1.5" : "mt-2.5") + " flex flex-col gap-0.5 [overflow-wrap:anywhere]"}>
+          <p className={idea ? "text-15 leading-snug text-parranda-ink-muted" : "text-17 font-semibold leading-snug text-parranda-ink"}>
+            {daySummary({ stops: coreCount, live: wovenCount, distance: distance ? walkingDistanceLabel(primaryRoute.estimated_km, lang) : null, lang })}
+          </p>
+          <p className="text-15 text-parranda-ink-muted">
+            {displayedDate && <time dateTime={date!}>{relativeDay === 0 ? t("Idag", "Today") : relativeDay === 1 ? t("Imorgon", "Tomorrow") : dayDateLabel(displayedDate, lang)}</time>}
+            {/* The selected date's forecast, said after the date: the sky's
+                icon, the high and the sky in words. Only a fresh reading. */}
+            {weatherChip && (
+              <>
+                {displayedDate ? <span aria-hidden="true">{"  ·  "}</span> : null}
+                <span role="img" className="inline-flex items-center gap-1 align-[-0.15em]"
+                  aria-label={t(`Prognosens högsta temperatur: ${weatherChip}C${condition ? `. ${condition[0]}` : ""}`, `Forecast high: ${weatherChip}C${condition ? `. ${condition[1]}` : ""}`)}
+                  title={condition ? t(condition[0], condition[1]) : t("Prognosens högsta temperatur", "Forecast high")}>
+                  {WeatherIcon && <WeatherIcon className="h-4 w-4" />}
+                  {weatherChip}
+                </span>
+                {condition && <span aria-hidden="true">{` ${t(condition[0], condition[1]).toLowerCase()}`}</span>}
+              </>
+            )}
+          </p>
         </div>
-      )}
-      {/* On a phone the map's still overview pictures the day before its
-          facts; it sits in the column edge to edge, no card of its own. */}
+      </div>
+      {controls}
+      {/* On a phone the map's still overview pictures the day, edge to edge. */}
       {overview}
-      {/* The facts, what the day did for each pick and the day's caveats
-          read as one block, as in the prototype: rows 6px apart, the
-          header's larger step only between the title block, the map and it. */}
       <div className="flex flex-col gap-1.5">
-        <ul className="flex flex-wrap gap-1.5" aria-label={t("Om dagen", "About the day")}>
-          {distance && (
-            <li className={metaChip}>
-              <WalkIcon className="h-3.5 w-3.5 text-parranda-ink-muted" />
-              {distance}
-            </li>
-          )}
-          <li className={metaChip}>{stops}</li>
-          {/* The selected date's forecast, one chip like the walk: the sky's
-              icon, then the high. Only a fresh reading for this date shows. */}
-          {weatherChip && (
-            <li className={metaChip}>
-              <span role="img" className="inline-flex items-center gap-1.5"
-                aria-label={t(`Prognosens högsta temperatur: ${weatherChip}C${condition ? `. ${condition[0]}` : ""}`, `Forecast high: ${weatherChip}C${condition ? `. ${condition[1]}` : ""}`)}
-                title={condition ? t(condition[0], condition[1]) : t("Prognosens högsta temperatur", "Forecast high")}>
-                {WeatherIcon && <WeatherIcon className="h-3.5 w-3.5 text-parranda-ink-muted" />}
-                {weatherChip}
-              </span>
-            </li>
-          )}
-          {/* Every pick in the day: one fact here instead of repeating the picks
-              the picks line names. A partial or missing pick lists them all. */}
-          {allPicksCovered && (
-            <li className={metaChip}>
-              <CheckIcon className="h-3 w-3 text-parranda-ember" />
-              {t("Alla val finns med", "All picks included")}
-            </li>
-          )}
-        </ul>
-        {/* What the day did for each pick, in the pick's own words. A pick
-            the route only partly covers, or does not cover, says so here
-            rather than at the foot of the page. When every pick is in the day
-            the facts row above says so in one chip instead. */}
-        {pickCoverage.length > 0 && !allPicksCovered && (
+        {pickCoverage.length > 0 && !picksInControls && (
           <ul className="flex flex-wrap gap-2" aria-label={t("Dina val i dagen", "Your picks in this day")}>
             {pickCoverage.map(({ key, state }) => (
-              // Status, not selection: covered and partial are labels like the
-              // facts row (an ink fill would read as a chosen chip, as in Adjust).
-              // Missing keeps the dashed tone, which means "not in the day".
-              <li
-                key={key}
-                className={
-                  state === "missing"
-                    ? "inline-flex items-center gap-1.5 rounded-parranda-tag border-line border-dashed border-parranda-line-firm px-2 py-1 text-xs font-semibold text-parranda-ink-muted"
-                    : labelChip
-                }
-              >
+              <li key={key} className={state === "missing"
+                ? "inline-flex items-center gap-1.5 rounded-parranda-tag border-line border-dashed border-parranda-line-firm px-2 py-1 text-xs font-semibold text-parranda-ink-muted"
+                : labelChip}>
                 {state === "covered" && <CheckIcon className="h-3 w-3 text-parranda-ember" />}
                 {state === "partial" && <HalfCircleIcon className="h-3 w-3 text-parranda-glow" />}
                 {state === "missing" && <MinusIcon className="h-3 w-3" />}
@@ -560,7 +570,7 @@ export function DayActions({
   return (
     <section
       aria-label={t("Ta med dagen", "Take the day with you")}
-      className={`${stale ? "opacity-60 motion-safe:transition-opacity" : ""} flex flex-col gap-3`}
+      className={`${stale ? "opacity-60 motion-safe:transition-opacity" : ""} flex flex-col gap-1.5`}
     >
       {/* THE WALK IN MAPS. One link when Maps can take the whole walk. When
           it can't (Maps takes a few stops per link), a numbered sequence of
@@ -621,18 +631,35 @@ export function DayActions({
           </p>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap">
-        {routeParts.length === 1 && (
-          <a
-            href={routeUrls[0]}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={buttonClass("primary", "col-span-2 min-h-12 px-5 text-15 sm:px-6")}
-          >
-            {t("Öppna rutten i Maps", "Open route in Maps")}
-            <ExternalIcon />
-          </a>
-        )}
+      {/* One walk, one card: the action, then where it starts and ends.
+          The line of stops above leads into it. */}
+      {routeParts.length === 1 && (
+        <a
+          href={routeUrls[0]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex min-h-16 items-center gap-3 rounded-parranda-btn bg-parranda-terracotta px-4 py-3 text-parranda-on-terracotta transition hover:brightness-110"
+        >
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-17 font-extrabold leading-tight">{t("Öppna rutten i Maps", "Open route in Maps")}</span>
+            {!routeOrigin && !routeDestination && (
+              <span className="text-13 font-medium leading-snug">
+                {routeEndLabel(routeParts[0].from)} → {routeEndLabel(routeParts[0].to)}
+                {`, ${routeParts[0].stopIndexes.length} ${t("stopp", routeParts[0].stopIndexes.length === 1 ? "stop" : "stops")}`}
+              </span>
+            )}
+            {Boolean(routeOrigin || routeDestination) && (
+              <span className="text-13 font-medium leading-snug">
+                {Boolean(routeOrigin) && `${t("Start", "Start")}: ${anchorIsPosition ? t("Din position", "Your position") : String(publishedStart?.label || t("kartans startpunkt", "map start point"))}`}
+                {routeOrigin && routeDestination ? " · " : ""}
+                {Boolean(routeDestination) && `${t("Slut", "Finish")}: ${anchorIsPosition ? t("Din position", "Your position") : String(publishedEnd?.label || t("kartans slutpunkt", "map end point"))}`}
+              </span>
+            )}
+          </span>
+          <ExternalIcon className="h-[18px] w-[18px]" />
+        </a>
+      )}
+      <div className="flex flex-wrap gap-x-5">
         <button
           type="button"
           // Saved stays focusable: a disabled button would drop the focus
@@ -640,7 +667,7 @@ export function DayActions({
           onClick={isSaved ? undefined : saveDay}
           aria-disabled={isSaved || undefined}
           aria-label={isSaved ? t("Dagen är sparad", "Day is saved") : t("Spara dagen", "Save this day")}
-          className={buttonClass("secondary", "min-h-12 px-4 text-sm aria-disabled:border-parranda-ember/50 aria-disabled:text-parranda-clay aria-disabled:opacity-100")}
+          className={buttonClass("quiet", "min-h-11 -ml-2 px-2 text-15 aria-disabled:text-parranda-clay aria-disabled:opacity-100")}
         >
           <StarIcon filled={isSaved} />
           {isSaved ? t("Sparad", "Saved") : t("Spara", "Save")}
@@ -650,15 +677,15 @@ export function DayActions({
             type="button"
             onClick={shareDay}
             aria-label={t("Dela dagen", "Share this day")}
-            className={buttonClass("secondary", "min-h-12 px-4 text-sm")}
+            className={buttonClass("quiet", "min-h-11 px-2 text-15")}
           >
             {shareCopied ? <CheckIcon className="h-4 w-4 text-parranda-ember" /> : <ShareIcon />}
             {shareCopied ? t("Länk kopierad", "Link copied") : t("Dela", "Share")}
           </button>
         )}
       </div>
-      {/* A split walk already names its start and finish in the sequence. */}
-      {routeParts.length <= 1 && Boolean(routeOrigin || routeDestination) && (
+      {/* A split walk names its start and finish in the sequence, one walk in its card. */}
+      {routeParts.length === 0 && Boolean(routeOrigin || routeDestination) && (
         <p className="text-xs text-parranda-ink-meta">
           {Boolean(routeOrigin) && `${t("Start", "Start")}: ${anchorIsPosition ? t("Din position", "Your position") : String(publishedStart?.label || t("kartans startpunkt", "map start point"))}`}
           {routeOrigin && routeDestination ? " · " : ""}

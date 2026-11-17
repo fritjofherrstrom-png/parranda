@@ -135,6 +135,17 @@ export function ExpandIcon({ className }: IconProps) {
   );
 }
 
+/** Fit the whole route in view: a winding path between two stations. */
+export function RouteIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <circle cx="6" cy="18" r="2.2" />
+      <circle cx="18" cy="6" r="2.2" />
+      <path d="M8 18h6.5a3.5 3.5 0 0 0 0-7h-5a3.5 3.5 0 0 1 0-7H16" />
+    </Icon>
+  );
+}
+
 export function CollapseIcon({ className }: IconProps) {
   return (
     <Icon className={className}>

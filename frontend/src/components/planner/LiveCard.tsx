@@ -13,11 +13,12 @@ import { useLiveClock } from "./useLiveClock";
  */
 import type { Ref } from "react";
 import { ChevronRightIcon } from "../shared/icons";
-import { buttonClass, Eyebrow } from "../shared/ui";
+import { buttonClass } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 import LiveEventSummary from "./LiveEventSummary";
 import EventOccurrences from "./EventOccurrences";
 import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
+import { eventBoardClock } from "../../lib/pulse-view.mjs";
 import type { LiveEvents, PulseEvent } from "./types";
 
 export default function LiveCard({
@@ -64,16 +65,25 @@ export default function LiveCard({
   const now = useLiveClock([...pulseBuckets.tonight, ...pulseBuckets.thisWeek]);
   return (
     <section
-      className="rounded-parranda border-line border-parranda-live/35 bg-parranda-live/8 p-5 sm:p-6"
+      className="rounded-parranda bg-parranda-live/8 p-5 sm:p-6"
     >
-      <Eyebrow as="h2" tone="live" dot>
-        {mode === "near_me"
-          ? t("Live nära dig", "Live near you")
-          : anchorLabel
-            ? t(`Live i ${anchorLabel}`, `Live in ${anchorLabel}`)
-            : t("Live här", "Live here")}
-        {liveEvents?.selected_date ? ` · ${liveDayLabel}` : ""}
-      </Eyebrow>
+      {/* A departures board: what is on, then when, in one glance. The day
+          sits on the right so the heading reads as a place. */}
+      <h2 className="flex items-baseline justify-between gap-3 text-19 font-extrabold leading-tight text-parranda-ink">
+        <span className="flex min-w-0 items-center gap-2.5">
+          <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-parranda-live" />
+          {mode === "near_me"
+            ? t("Live nära dig", "Live near you")
+            : anchorLabel
+              ? t(`Live i ${anchorLabel}`, `Live in ${anchorLabel}`)
+              : t("Live här", "Live here")}
+        </span>
+        {liveEvents?.selected_date ? (
+          <span className="type-data shrink-0 text-13 font-semibold text-parranda-ink-meta">
+            <span className="sr-only"> · </span>{liveDayLabel}
+          </span>
+        ) : null}
+      </h2>
 
       {((showDay && dayflow?.weather?.headline) || clothing) && (
         <div className="mt-3 flex flex-col gap-1">
@@ -130,13 +140,24 @@ export default function LiveCard({
       {pulseBuckets.tonight.length > 0 && (
         <div className="mt-4">
           {!liveEvents?.selected_date && <p className="mb-2 text-sm font-bold text-parranda-ink">{liveDayLabel}</p>}
-          <ul className="flex flex-col divide-y divide-parranda-line-faint">
-            {pulseBuckets.tonight.slice(0, 4).map((ev: PulseEvent, i: number) => (
-              <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 py-3 text-sm leading-relaxed text-parranda-ink-soft first:pt-1">
-                <LiveEventSummary event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} />
-                <EventOccurrences event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} />
-              </li>
-            ))}
+          <ul className="flex flex-col border-b-line border-parranda-live/25">
+            {pulseBuckets.tonight.slice(0, 4).map((ev: PulseEvent, i: number) => {
+              const clock = eventBoardClock(ev, lang, now, liveEvents?.selected_date);
+              return (
+                <li key={ev.id ?? i} className={`${clock ? "grid grid-cols-[4.25rem_minmax(0,1fr)] gap-x-3" : "flex flex-col"} min-w-0 border-t-line border-parranda-live/25 py-3 text-sm leading-relaxed text-parranda-ink-soft`}>
+                  {clock && (
+                    <p className="type-data flex flex-col pt-2.5 leading-tight">
+                      <span className="text-base font-extrabold text-parranda-live">{clock.at}</span>
+                      {clock.until && <span className="text-13 text-parranda-ink-meta"><span className="sr-only">, </span>{clock.until}</span>}
+                    </p>
+                  )}
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <LiveEventSummary event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} timing={clock ? "" : undefined} />
+                    <EventOccurrences event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} />
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
@@ -144,7 +165,7 @@ export default function LiveCard({
           lives in the Live sheet. The count comes from the bucket, never
           from copy. */}
       {pulseBuckets.thisWeek.length > 0 && (
-        <p className="mt-4 border-t-line border-parranda-live/25 pt-3 text-sm text-parranda-ink-muted">
+        <p className="mt-3 text-sm text-parranda-ink-muted">
           <span className="font-bold text-parranda-ink">{t("Kommande 7 dagar", "Next 7 days")}</span>
           {" · "}
           {pulseBuckets.thisWeek.length}{" "}

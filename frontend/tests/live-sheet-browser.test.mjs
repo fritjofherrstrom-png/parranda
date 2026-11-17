@@ -249,18 +249,18 @@ test('native LiveCard and expanded source occurrences expire together and resync
  await page.getByText('Exact workshop',{exact:true}).waitFor();
  await page.getByText('2 occurrences',{exact:true}).click();
  const row=title=>page.getByRole('listitem').filter({has:page.getByText(title,{exact:true})}).first();
- assert.match(await row('Exact workshop').innerText(),/on now/);
+ assert.match(await row('Exact workshop').innerText(),/\bNow\b/,'the card board says Now in its time column');
  assert.match(await page.locator('details').innerText(),/on now · until 21:00:15/);
  await page.clock.runFor(10100);
- assert.doesNotMatch(await row('Exact workshop').innerText(),/on now/);
+ assert.doesNotMatch(await row('Exact workshop').innerText(),/\bNow\b|on now/);
  assert.match(await page.locator('details').innerText(),/on now/);
  await page.clock.runFor(15000);
  assert.doesNotMatch(await page.locator('details').innerText(),/on now/);
  // Simulate a tab waking after a system-clock adjustment, without a parent render.
  await page.clock.setSystemTime(new Date('2026-10-15T18:59:30Z'));
  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
- await page.waitForFunction(()=>document.querySelector('section').textContent.includes('on now'));
- assert.match(await row('Exact workshop').innerText(),/on now/);
+ await page.waitForFunction(()=>/on now|\bNow\b/.test(document.querySelector('section').textContent));
+ assert.match(await row('Exact workshop').innerText(),/\bNow\b/,'the card board says Now in its time column');
  await page.evaluate(()=>window.unmountView());
  await page.clock.runFor(60000);
  assert.equal(await page.locator('section').count(),0,'unmounted views stay unmounted after clock boundaries');
