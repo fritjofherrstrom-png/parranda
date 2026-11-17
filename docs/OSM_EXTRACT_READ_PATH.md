@@ -6,36 +6,57 @@ Status: draft, off by default. Nothing changes unless `PARRANDA_OSM_EXTRACT_DIR`
 The public Overpass endpoint is the only source of OpenStreetMap places today. On 14 and 15 Nov 2026 it held small queries for about 30 seconds or answered 502 at capacity, so days were built without map evidence and without opening hours. Its own notice says automated use should run its own instance. A regional extract on disk answers the same question in milliseconds.
 
 ## How it works
-1. `scripts/build-osm-extract.js` reads a regional `.osm.pbf` and the extract's boundary file (`.poly`) from disk. It keeps named elements that match `OSM_TAG_MAP` and writes them as small tile files plus a manifest. It downloads nothing.
+1. `scripts/build-osm-extract.js` reads a regional `.osm.pbf` and the extract's boundary file (`.poly`) from disk. It keeps named elements that match `OSM_TAG_MAP` and writes them as tile files plus a manifest. It downloads nothing.
 2. `server/place-candidates/osm-extract-store.js` reads those tiles. It answers the grouped question the loader would send to Overpass: the same selectors per category, the same group size, nodes before ways before relations.
 3. `createOpenDataLoader({ localSource })` asks the store first. An answer goes through the same mapping, balancing and attestation as an Overpass answer. No provider is asked for that query.
 
 The store answers only when all of these hold. Otherwise the loader asks Overpass exactly as before.
-- Every asked circle (centre and eight points on its edge) lies inside the extract's boundary.
-- The snapshot is at most 30 days old (`PARRANDA_OSM_EXTRACT_MAX_AGE_DAYS`).
-- Every tile it needs can be read. A missing tile is an area with no places; an unreadable one is a failure.
+- **Coverage:** every asked circle lies wholly inside one area of the extract's boundary. The centre is inside the outer ring and outside every hole, and no edge of the ring or of any hole comes within the radius (plus 1% and 25 m). A circle across two adjacent areas is refused.
+- **Age:** the snapshot is at most 30 days old (`PARRANDA_OSM_EXTRACT_MAX_AGE_DAYS`). Where several regions cover a place, the newest wins.
+- **Integrity:** every tile it needs is either absent from the manifest's inventory (an area without places) or present with the listed element count and SHA-256. A listed tile that is missing, unreadable or different refuses the answer.
 
-## Build a region
-```bash
-node scripts/build-osm-extract.js --pbf slovenia.osm.pbf --poly slovenia.poly \
-  --region slovenia --data-timestamp 2026-11-14T21:20:00Z --out /path/to/osm-extracts
-```
-`--data-timestamp` is the time the extract's data ends. Geofabrik prints it beside each download. Then start the server with `PARRANDA_OSM_EXTRACT_DIR=/path/to/osm-extracts`. Several regions can sit side by side in that directory.
-
-Measured for Slovenia on a laptop (15 Nov 2026): 314 MB extract, 20 s build, 1.9 GB peak memory, 8,178 places in 865 tiles, 4.7 MB on disk. The loader answered Ljubljana in 3 to 31 ms.
+## The snapshot's data time
+The builder reads the data time from the file itself: the replication timestamp in the PBF header block (`osmosis_replication_timestamp`, see the [osmium fileinfo documentation](https://docs.osmcode.org/osmium/latest/osmium-fileinfo.html)). Geofabrik extracts carry it. The build time is recorded apart as `built_at`, and the file's modification time is not used.
+- A file without that header is refused, unless the operator states the time with `--data-timestamp`. The manifest then records `data_timestamp_source: "operator"`.
+- A stated time that disagrees with the header is refused.
 
 ## How a day says so
-A day whose map evidence was read from an extract carries `source_status.collection.map_snapshot`: `{ region, data_timestamp }`. It is absent (`null`) for a live provider answer. The label is kept in the request cache and in a shared day; a malformed label refuses the share. The planner UI does not show it yet.
+A day whose kept map records came from an extract carries `source_status.collection.map_snapshot`:
+```json
+{ "extracts": [{ "region": "slovenia", "data_timestamp": "2026-11-14T21:20:41.000Z" }], "includes_live_answer": false }
+```
+- `extracts` lists every extract whose records the day keeps, oldest first. It is built from the records kept after the first and wider passes are merged, not from the first pass.
+- `includes_live_answer` is true when kept records also came from a live Overpass answer.
+- The field is `null` when no kept record came from an extract.
+- A label that is present but cannot be read in full is published as `{ "unreadable": true }`, which a shared day refuses. It is never shortened to "no snapshot".
+
+## Replays obey the age limit
+A cached answer that was read from an extract is replayed only while the configured store would still answer from that snapshot. This holds for the request cache (memory and disk, so also after a restart), its outage fallback, the cache-only read, the neighbouring-budget read and the previous-contract fallback. A server without the extract configured does not replay such an answer.
+
+## Build and replace a region
+```bash
+node scripts/build-osm-extract.js --pbf slovenia.osm.pbf --poly slovenia.poly \
+  --region slovenia --out /path/to/osm-extracts
+```
+Start the server with `PARRANDA_OSM_EXTRACT_DIR=/path/to/osm-extracts`. Several regions can sit side by side.
+
+Operating contract:
+- A region directory is immutable while a server reads it.
+- A rebuild writes the new region beside the old one and swaps it in with one rename.
+- Restart the server after a rebuild. A server still holding the old manifest refuses any tile from the new build, because its hash does not match, and asks Overpass instead. It never mixes the two builds.
+
+Measured for Slovenia on a laptop (17 Nov 2026): 314 MB extract, 13 s build, 2.3 GB peak memory, 8,178 places in 865 tiles, 4.8 MB on disk. The loader answered Ljubljana in 30 ms and Piran in 3 ms.
 
 ## Differences from an Overpass answer
 - **Age.** The data is as old as the extract. Geofabrik rebuilds extracts once a day.
 - **Unnamed elements.** Overpass counts them toward a group's size before the mapper drops them. The store holds named places only, so a group can carry more usable places.
 - **Centre of an area.** A way or relation sits at the middle of its bounding box, as with `out center`. A relation uses its member ways only.
-- **Edges.** A place whose circle crosses the extract's boundary is not answered locally.
+- **Edges.** A place whose circle comes near the extract's boundary is not answered locally.
 
 ## Not done
-- **Showing the label.** The label is in the response, not in the interface.
+- **Showing the label.** The label is in the response and the shared day, not in the interface.
 - **Fetching and refreshing extracts.** Which regions to hold, when to fetch them and the disk budget are operator decisions. Nothing in the server downloads an extract.
+- **Hot refresh.** A rebuild needs a restart; see the operating contract.
 - **Large countries.** France and Germany are almost 5 GB each. The build is untested above 314 MB; sub-regions are the expected unit.
 
 ## Attribution

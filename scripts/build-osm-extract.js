@@ -5,15 +5,25 @@
 // on disk. It downloads nothing.
 //
 //   node scripts/build-osm-extract.js --pbf slovenia.osm.pbf --poly slovenia.poly \
-//     --region slovenia --data-timestamp 2026-11-14T21:20:00Z --out <dir>
+//     --region slovenia --out <dir>
 //
 // --poly is the extract's own boundary (Geofabrik publishes one beside every
-// extract). A place is answered locally only inside it. --data-timestamp is the
-// time the extract's data ends (Geofabrik: "contains all OSM data up to").
-// Point PARRANDA_OSM_EXTRACT_DIR at <dir> to use the result.
+// extract). A place is answered locally only inside it.
+//
+// The snapshot's data time is read from the file itself: the replication
+// timestamp in its header (`osmosis_replication_timestamp`), which is the time
+// the data ends. Build time and file time are recorded apart and never used
+// for it. A file without that header is refused, unless the operator states
+// the time with --data-timestamp; the manifest then says it came from the
+// operator. A stated time that disagrees with the header is refused.
+//
+// The new region is written beside the old one and swapped in with a rename.
+// Restart the server after a rebuild. Point PARRANDA_OSM_EXTRACT_DIR at <dir>.
 
 const fs = require("node:fs");
 const path = require("node:path");
+const zlib = require("node:zlib");
+const { createHash } = require("node:crypto");
 const { OSM_TAG_MAP } = require("../server/place-candidates/open-data-loader");
 const { OSM_EXTRACT_FORMAT } = require("../server/place-candidates/osm-extract-store");
 
@@ -50,17 +60,116 @@ function parsePolyFile(text) {
   return coverage;
 }
 
+// Minimal protobuf reading for the PBF file header block. Only the fields
+// needed here are decoded; everything else is skipped by wire type.
+function readVarint(buffer, offset) {
+  let value = 0n;
+  let shift = 0n;
+  for (let i = offset; i < buffer.length && i < offset + 10; i += 1) {
+    const byte = buffer[i];
+    value |= BigInt(byte & 0x7f) << shift;
+    if ((byte & 0x80) === 0) return { value, next: i + 1 };
+    shift += 7n;
+  }
+  throw new Error("malformed varint in the PBF header");
+}
+
+function readFields(buffer) {
+  const fields = new Map();
+  let offset = 0;
+  while (offset < buffer.length) {
+    const tag = readVarint(buffer, offset);
+    const field = Number(tag.value >> 3n);
+    const wire = Number(tag.value & 7n);
+    offset = tag.next;
+    let value;
+    if (wire === 0) {
+      const varint = readVarint(buffer, offset);
+      value = varint.value;
+      offset = varint.next;
+    } else if (wire === 2) {
+      const length = readVarint(buffer, offset);
+      const end = length.next + Number(length.value);
+      if (end > buffer.length) throw new Error("truncated PBF header");
+      value = buffer.subarray(length.next, end);
+      offset = end;
+    } else if (wire === 1) {
+      offset += 8;
+      continue;
+    } else if (wire === 5) {
+      offset += 4;
+      continue;
+    } else {
+      throw new Error("unsupported wire type in the PBF header");
+    }
+    if (!fields.has(field)) fields.set(field, value);
+  }
+  return fields;
+}
+
+// The replication timestamp from the first block of an OSM PBF file, as an
+// ISO instant, or null when the header does not carry one.
+function readPbfReplicationTimestamp(pbfPath) {
+  const fd = fs.openSync(pbfPath, "r");
+  try {
+    const lengthBuffer = Buffer.alloc(4);
+    if (fs.readSync(fd, lengthBuffer, 0, 4, 0) !== 4) throw new Error("not an OSM PBF file");
+    const headerLength = lengthBuffer.readUInt32BE(0);
+    if (headerLength < 1 || headerLength > 64 * 1024) throw new Error("not an OSM PBF file");
+    const blobHeader = Buffer.alloc(headerLength);
+    fs.readSync(fd, blobHeader, 0, headerLength, 4);
+    const headerFields = readFields(blobHeader);
+    if (String(headerFields.get(1) || "") !== "OSMHeader") throw new Error("the PBF file does not start with a header block");
+    const dataSize = Number(headerFields.get(3) || 0n);
+    if (dataSize < 1 || dataSize > 32 * 1024 * 1024) throw new Error("not an OSM PBF file");
+    const blob = Buffer.alloc(dataSize);
+    fs.readSync(fd, blob, 0, dataSize, 4 + headerLength);
+    const blobFields = readFields(blob);
+    const block = blobFields.has(1) ? blobFields.get(1)
+      : blobFields.has(3) ? zlib.inflateSync(blobFields.get(3))
+      : null;
+    if (!block) throw new Error("unsupported PBF header compression");
+    const seconds = readFields(block).get(32);
+    if (typeof seconds !== "bigint" || seconds <= 0n) return null;
+    return new Date(Number(seconds) * 1000).toISOString();
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+// The data time for the manifest and where it came from.
+function resolveDataTimestamp({ headerTimestamp, statedTimestamp }) {
+  const stated = statedTimestamp ? Date.parse(statedTimestamp) : NaN;
+  if (statedTimestamp && !Number.isFinite(stated)) throw new Error("--data-timestamp is not a date");
+  if (headerTimestamp) {
+    if (statedTimestamp && stated !== Date.parse(headerTimestamp)) {
+      throw new Error(`--data-timestamp disagrees with the file header (${headerTimestamp})`);
+    }
+    return { dataTimestamp: headerTimestamp, source: "pbf_header" };
+  }
+  if (!statedTimestamp) {
+    throw new Error("the file header has no replication timestamp; state the data time with --data-timestamp");
+  }
+  return { dataTimestamp: new Date(stated).toISOString(), source: "operator" };
+}
+
 function isMappedPlace(tags) {
   if (!tags || typeof tags.name !== "string" || !tags.name.trim()) return false;
   return OSM_TAG_MAP.some(({ key, value }) => tags[key] === value);
 }
 
-function writeExtractStore({ outDir, region, dataTimestamp, coverage, elements, tileDeg = TILE_DEG }) {
+function writeExtractStore({
+  outDir, region, dataTimestamp, dataTimestampSource = "operator", coverage, elements,
+  tileDeg = TILE_DEG, builtAt = new Date().toISOString(),
+}) {
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(String(region || ""))) throw new Error("region must be a short lowercase name");
   if (!Number.isFinite(Date.parse(dataTimestamp))) throw new Error("data timestamp is not a date");
+  if (!["pbf_header", "operator"].includes(dataTimestampSource)) throw new Error("unknown data timestamp source");
   const regionDir = path.join(outDir, region);
-  const tilesDir = path.join(regionDir, "tiles");
-  fs.rmSync(regionDir, { recursive: true, force: true });
+  // Build beside the live region, then swap it in with one rename, so a
+  // reader never meets a half-written region.
+  const buildDir = path.join(outDir, `.${region}.building-${process.pid}-${Date.now()}`);
+  const tilesDir = path.join(buildDir, "tiles");
   fs.mkdirSync(tilesDir, { recursive: true });
   const tiles = new Map();
   let count = 0;
@@ -73,18 +182,31 @@ function writeExtractStore({ outDir, region, dataTimestamp, coverage, elements, 
     tiles.get(key).push(element);
     count += 1;
   }
-  for (const [key, tile] of tiles) fs.writeFileSync(path.join(tilesDir, `${key}.json`), JSON.stringify(tile));
-  // The manifest is written last: a store without one is not used.
-  fs.writeFileSync(path.join(regionDir, "manifest.json"), JSON.stringify({
+  const inventory = {};
+  for (const [key, tile] of tiles) {
+    const raw = Buffer.from(JSON.stringify(tile));
+    fs.writeFileSync(path.join(tilesDir, `${key}.json`), raw);
+    inventory[key] = { n: tile.length, sha256: createHash("sha256").update(raw).digest("hex") };
+  }
+  // The manifest is written last: a region without one is not used.
+  fs.writeFileSync(path.join(buildDir, "manifest.json"), JSON.stringify({
     format: OSM_EXTRACT_FORMAT,
     region,
     data_timestamp: new Date(Date.parse(dataTimestamp)).toISOString(),
+    data_timestamp_source: dataTimestampSource,
+    built_at: builtAt,
     tile_deg: tileDeg,
     element_count: count,
     tile_count: tiles.size,
     attribution: ATTRIBUTION,
     coverage,
+    tiles: inventory,
   }));
+  const retiredDir = path.join(outDir, `.${region}.retired-${process.pid}-${Date.now()}`);
+  const hadPrevious = fs.existsSync(regionDir);
+  if (hadPrevious) fs.renameSync(regionDir, retiredDir);
+  fs.renameSync(buildDir, regionDir);
+  if (hadPrevious) fs.rmSync(retiredDir, { recursive: true, force: true });
   return { element_count: count, tile_count: tiles.size, dir: regionDir };
 }
 
@@ -145,20 +267,26 @@ function parseArgs(argv) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  for (const name of ["pbf", "poly", "region", "data-timestamp", "out"]) {
+  for (const name of ["pbf", "poly", "region", "out"]) {
     if (!args[name]) {
-      console.error("usage: build-osm-extract.js --pbf <file> --poly <file> --region <name> --data-timestamp <iso> --out <dir>");
+      console.error("usage: build-osm-extract.js --pbf <file> --poly <file> --region <name> --out <dir> [--data-timestamp <iso>]");
       process.exit(2);
     }
   }
   const started = Date.now();
   const coverage = parsePolyFile(fs.readFileSync(args.poly, "utf8"));
+  const { dataTimestamp, source } = resolveDataTimestamp({
+    headerTimestamp: readPbfReplicationTimestamp(args.pbf),
+    statedTimestamp: args["data-timestamp"] || null,
+  });
   const tempDir = path.join(args.out, ".build-tmp");
   fs.mkdirSync(tempDir, { recursive: true });
   try {
     const elements = await readPlaces(args.pbf, { tempDir, memoryLimit: args["memory-limit"] || "2GB" });
-    const written = writeExtractStore({ outDir: args.out, region: args.region, dataTimestamp: args["data-timestamp"], coverage, elements });
-    console.log(JSON.stringify({ ...written, seconds: Number(((Date.now() - started) / 1000).toFixed(1)) }));
+    const written = writeExtractStore({
+      outDir: args.out, region: args.region, dataTimestamp, dataTimestampSource: source, coverage, elements,
+    });
+    console.log(JSON.stringify({ ...written, data_timestamp: dataTimestamp, data_timestamp_source: source, seconds: Number(((Date.now() - started) / 1000).toFixed(1)) }));
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -166,4 +294,4 @@ async function main() {
 
 if (require.main === module) main().catch(error => { console.error(error?.message || error); process.exit(1); });
 
-module.exports = { parsePolyFile, writeExtractStore, isMappedPlace };
+module.exports = { parsePolyFile, writeExtractStore, isMappedPlace, readPbfReplicationTimestamp, resolveDataTimestamp };

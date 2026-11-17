@@ -429,11 +429,21 @@ function createOpenDataLoader({
       return null;
     }
   }
-  // Records answered from the extract carry the snapshot they came from, so
-  // the day can say that its map evidence is not a live provider answer.
+  // Every answered pass records where it came from: the extract snapshot, or
+  // null for a live provider answer. The day's label is built from the
+  // records it keeps, never from the first pass alone.
   const withSnapshot = (records, local) => {
-    if (local?.snapshot) Object.defineProperty(records, "loader_snapshot", { value: local.snapshot, enumerable: false, configurable: true });
+    Object.defineProperty(records, "loader_snapshot", { value: local?.snapshot || null, enumerable: false, configurable: true });
     return records;
+  };
+  // A cached answer that was read from an extract is replayed only while the
+  // configured store would still answer from that snapshot itself.
+  const replayable = (metadata) => {
+    const label = metadata && typeof metadata === "object" ? metadata.map_snapshot : null;
+    if (!label) return true;
+    const extracts = Array.isArray(label.extracts) ? label.extracts : null;
+    if (!extracts || !extracts.length || typeof localSource?.acceptsSnapshot !== "function") return false;
+    return extracts.every(extract => localSource.acceptsSnapshot(extract));
   };
 
   // One attempt against one mirror. Returns { ok, payload } on a usable response,
@@ -651,7 +661,7 @@ function createOpenDataLoader({
       availabilityWindow: normalizedWindow,
     });
     let selected = first;
-    let selectedSnapshot = first.loader_snapshot || null;
+    let wider = null;
     let selectedRadiusKm = requestRadiusKm;
     let selectionReason = expansion
       ? "wider_supply_not_richer"
@@ -690,7 +700,7 @@ function createOpenDataLoader({
           expansion_applied: false,
           expansion_trigger: expansion.trigger,
           selection_reason: "expansion_outstanding",
-          map_snapshot: first.loader_snapshot || null,
+          map_snapshot: mapSnapshotLabel(first, [{ records: first, snapshot: first.loader_snapshot }]),
           anchor_mode: normalizeAnchorMode(anchorMode),
           requested_intents: normalizedRequestedIntents,
           expansion_query_intents: expansionQueryIntents,
@@ -701,7 +711,7 @@ function createOpenDataLoader({
           selected_day_capacity: initialDayCapacity,
         }));
       }
-      const wider = await fetchAtRadius(lat, lng, Math.round(widerKm * 1000), {
+      wider = await fetchAtRadius(lat, lng, Math.round(widerKm * 1000), {
         queryIntents: expansionQueryIntents,
         requestedIntents: selectionIntents,
         walkingTargetBand: normalizedWalkingTargetBand,
@@ -720,7 +730,6 @@ function createOpenDataLoader({
         availabilityWindow: normalizedWindow,
       })) {
         selected = combined;
-        selectedSnapshot = first.loader_snapshot || wider.loader_snapshot || null;
         selectedRadiusKm = widerKm;
         selectionReason = "richer_wider_supply";
       } else if (combined.loader_error) {
@@ -737,7 +746,10 @@ function createOpenDataLoader({
       expansion_applied: selectedRadiusKm > requestRadiusKm,
       expansion_trigger: expansion?.trigger || null,
       selection_reason: selectionReason,
-      map_snapshot: selectedSnapshot,
+      map_snapshot: mapSnapshotLabel(selected, [
+        { records: first, snapshot: first.loader_snapshot },
+        { records: wider, snapshot: wider?.loader_snapshot },
+      ]),
       anchor_mode: normalizeAnchorMode(anchorMode),
       requested_intents: normalizedRequestedIntents,
       expansion_query_intents: expansion?.trigger === "requested_opening_gap"
@@ -843,7 +855,7 @@ function createOpenDataLoader({
             expansion_applied: true,
             expansion_trigger: "regional_scope_gap",
             selection_reason: "richer_regional_cluster",
-            map_snapshot: regional.snapshot || null,
+            map_snapshot: mapSnapshotLabel(selected, [{ records: selected, snapshot: regional.snapshot }]),
             selected_profile: supplyProfile(selected, requestedIntents),
             selected_day_capacity: dayCapacityProfile(selected, {
               origin: selectedAnchor,
@@ -974,7 +986,7 @@ function createOpenDataLoader({
     const best = [...budgets.values()]
       .map((entry) => ({ entry, value: cache.peek(entry.key) }))
       .filter(({ value }) =>
-        Array.isArray(value?.records) && value.records.length > 0 &&
+        Array.isArray(value?.records) && value.records.length > 0 && replayable(value.metadata) &&
         typeof value.status === "string" && !value.status.startsWith("error") &&
         [undefined, null, "primary"].includes(value.metadata?.regional_scout?.selected_anchor))
       .sort((a, b) =>
@@ -1014,6 +1026,9 @@ function createOpenDataLoader({
       },
       {
         shouldStore: (value) => value && typeof value.status === "string" && !value.status.startsWith("error"),
+        // Fresh, stored on disk or kept as the outage fallback: an answer read
+        // from an extract obeys the extract's age limit on every replay.
+        validateCached: (value) => replayable(value?.metadata),
         staleIfErrorMs: boundedStaleIfErrorMs,
         onStale: (stale, info) => {
           const refreshReason = safeLoaderToken(
@@ -1035,6 +1050,7 @@ function createOpenDataLoader({
         },
       },
     );
+    if (request.cacheOnly === true && entry && !replayable(entry.metadata)) entry = null;
     // Preserve the existing outage safety net during a query-contract upgrade.
     // Only a failed refresh may retain positive previous-contract map facts;
     // they keep their original age, are never stored under the new contract,
@@ -1044,6 +1060,7 @@ function createOpenDataLoader({
       const old = cache.inspect(requestIdentity(request, true).key);
       const age = Number.isFinite(old?.expiresAt) ? Math.max(0, now() - old.expiresAt) : Infinity;
       if (age <= boundedStaleIfErrorMs && Array.isArray(old?.value?.records) && old.value.records.length > 0 &&
+          replayable(old.value.metadata) &&
           typeof old.value.status === 'string' && !old.value.status.startsWith('error') &&
           old.value.error !== 'stale_cache_refresh_failed') {
         // This validated predecessor read bypasses get/peek. Retain the same
@@ -1241,6 +1258,39 @@ function mappingsForRequestedIntents(requestedIntents = []) {
     ),
   );
   return mappings.length ? mappings : OSM_TAG_MAP;
+}
+
+// Which extract snapshots the kept map records came from. `passes` lists the
+// answered passes in the order their records were merged; a record that two
+// passes share is the first pass's record. Null when no kept record came
+// from an extract.
+function mapSnapshotLabel(selected, passes) {
+  const origin = new Map();
+  for (const pass of passes) {
+    for (const record of Array.isArray(pass?.records) ? pass.records : []) {
+      if (record && !origin.has(record.id)) origin.set(record.id, pass.snapshot || null);
+    }
+  }
+  const extracts = new Map();
+  let live = false;
+  for (const record of Array.isArray(selected) ? selected : []) {
+    if (!record || !origin.has(record.id)) continue;
+    const snapshot = origin.get(record.id);
+    if (!snapshot) {
+      live = true;
+      continue;
+    }
+    extracts.set(`${snapshot.region}|${snapshot.data_timestamp}`, {
+      region: snapshot.region,
+      data_timestamp: snapshot.data_timestamp,
+    });
+  }
+  if (!extracts.size) return null;
+  return {
+    extracts: [...extracts.values()].sort((a, b) =>
+      a.data_timestamp.localeCompare(b.data_timestamp) || a.region.localeCompare(b.region)),
+    includes_live_answer: live,
+  };
 }
 
 function mergeLoaderRecords(first, wider, limit, origin, { requestedIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {

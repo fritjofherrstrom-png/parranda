@@ -292,12 +292,23 @@ function sanitizeLoaderCacheSummary(value) {
   };
 }
 
+// Every extract whose records the day keeps, oldest first, and whether a live
+// provider answer is mixed in. A label that is present but cannot be read in
+// full is not shortened: it publishes as `unreadable`, which a shared day
+// refuses, rather than as a day with no snapshot.
+const MAX_MAP_SNAPSHOT_EXTRACTS = 4;
 function sanitizeMapSnapshot(value) {
-  if (!value || typeof value !== "object") return null;
-  const region = safeToken(value.region);
-  const dataMs = typeof value.data_timestamp === "string" ? Date.parse(value.data_timestamp) : NaN;
-  if (!region || !Number.isFinite(dataMs)) return null;
-  return { region, data_timestamp: new Date(dataMs).toISOString() };
+  if (value === undefined || value === null) return null;
+  const extracts = value && typeof value === "object" && Array.isArray(value.extracts) ? value.extracts : null;
+  const read = extracts && extracts.length >= 1 && extracts.length <= MAX_MAP_SNAPSHOT_EXTRACTS
+    ? extracts.map(extract => {
+        const region = safeToken(extract?.region);
+        const dataMs = typeof extract?.data_timestamp === "string" ? Date.parse(extract.data_timestamp) : NaN;
+        return region && Number.isFinite(dataMs) ? { region, data_timestamp: new Date(dataMs).toISOString() } : null;
+      })
+    : null;
+  if (!read || read.includes(null) || typeof value.includes_live_answer !== "boolean") return { unreadable: true };
+  return { extracts: read, includes_live_answer: value.includes_live_answer };
 }
 
 function sanitizeSpatialScopeSummary(value) {

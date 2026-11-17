@@ -6,18 +6,35 @@
 // gets its map evidence without a provider call.
 //
 // Layout: <dir>/<region>/manifest.json and <dir>/<region>/tiles/<y>_<x>.json.
-// A place is answered only when every asked circle lies inside the region's
-// coverage polygon and the snapshot is not older than the allowed age.
-// Anything else returns null and the caller asks its provider as before.
+// The manifest lists every tile that holds places, with its element count and
+// SHA-256. A tile the manifest does not list is an area without places; a
+// listed tile that is missing, unreadable or different is a broken store.
+//
+// A place is answered only when every asked circle lies wholly inside the
+// region's coverage polygon and the snapshot is not older than the allowed
+// age. Anything else returns null and the caller asks its provider as before.
+//
+// Operating contract: a region directory is immutable while a server reads
+// it. Replace it as a whole (the builder swaps it in with one rename) and
+// restart the server. A reader that meets a tile from another generation
+// refuses it, because its hash does not match the manifest it loaded.
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { createHash } = require("node:crypto");
 
-const FORMAT = "parranda-osm-extract-v1";
+const FORMAT = "parranda-osm-extract-v2";
 const DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_CACHED_TILES = 64;
 const KIND_ORDER = { node: 0, way: 1, relation: 2 };
 const EARTH_RADIUS_M = 6371000;
+const METRES_PER_DEGREE = 111320;
+// Containment is decided on a local flat projection. The margin covers its
+// error at the loader's apertures (at most 5 km) with room to spare.
+const CONTAINMENT_MARGIN = 1.01;
+const CONTAINMENT_MARGIN_M = 25;
+const TILE_KEY = /^-?\d{1,5}_-?\d{1,5}$/;
+const SHA256 = /^[0-9a-f]{64}$/;
 
 function distanceM(aLat, aLng, bLat, bLng) {
   const rad = Math.PI / 180;
@@ -38,21 +55,38 @@ function inRing(ring, lng, lat) {
   return inside;
 }
 
-function inCoverage(coverage, lng, lat) {
-  return coverage.some(area => inRing(area.outer, lng, lat) && !(area.holes || []).some(hole => inRing(hole, lng, lat)));
+// Shortest distance in metres from the circle's centre to any edge of a ring,
+// on a flat projection around the centre.
+function distanceToRingM(ring, lat, lng) {
+  const kx = METRES_PER_DEGREE * Math.cos((lat * Math.PI) / 180);
+  const ky = METRES_PER_DEGREE;
+  let best = Number.POSITIVE_INFINITY;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+    const ax = (ring[j][0] - lng) * kx;
+    const ay = (ring[j][1] - lat) * ky;
+    const bx = (ring[i][0] - lng) * kx;
+    const by = (ring[i][1] - lat) * ky;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const lengthSq = dx * dx + dy * dy;
+    const t = lengthSq > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / lengthSq)) : 0;
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return best;
 }
 
-// The centre and eight points on the circle. A circle that crosses the edge of
-// the extract would be answered with part of its places missing.
+// A circle lies wholly inside an area when its centre is inside the outer
+// ring and outside every hole, and no edge of the outer ring or of any hole
+// comes within the radius. A hole inside the circle has edges within the
+// radius, so it is caught too. A circle across two adjacent areas is refused.
 function circleInCoverage(coverage, lat, lng, radiusM) {
-  if (!inCoverage(coverage, lng, lat)) return false;
-  const dLat = radiusM / 111320;
-  const dLng = radiusM / (111320 * Math.max(0.01, Math.cos((lat * Math.PI) / 180)));
-  for (let step = 0; step < 8; step += 1) {
-    const angle = (step * Math.PI) / 4;
-    if (!inCoverage(coverage, lng + dLng * Math.cos(angle), lat + dLat * Math.sin(angle))) return false;
-  }
-  return true;
+  const needed = radiusM * CONTAINMENT_MARGIN + CONTAINMENT_MARGIN_M;
+  return coverage.some(area => {
+    if (!inRing(area.outer, lng, lat)) return false;
+    const holes = area.holes || [];
+    if (holes.some(hole => inRing(hole, lng, lat))) return false;
+    return [area.outer, ...holes].every(ring => distanceToRingM(ring, lat, lng) > needed);
+  });
 }
 
 function validRing(ring) {
@@ -76,7 +110,14 @@ function readManifest(regionDir) {
   for (const area of manifest.coverage) {
     if (!validRing(area?.outer) || !(area.holes || []).every(validRing)) return null;
   }
-  return { region: manifest.region, dataMs, tileDeg: manifest.tile_deg, coverage: manifest.coverage, dir: regionDir };
+  const inventory = manifest.tiles;
+  if (!inventory || typeof inventory !== "object" || Array.isArray(inventory)) return null;
+  const tiles = new Map();
+  for (const [key, entry] of Object.entries(inventory)) {
+    if (!TILE_KEY.test(key) || !Number.isInteger(entry?.n) || entry.n < 1 || !SHA256.test(String(entry?.sha256))) return null;
+    tiles.set(key, { n: entry.n, sha256: entry.sha256 });
+  }
+  return { region: manifest.region, dataMs, tileDeg: manifest.tile_deg, coverage: manifest.coverage, tiles, dir: regionDir };
 }
 
 function matchesSelector(tags, { key, value, and }) {
@@ -89,7 +130,7 @@ function createOsmExtractStore({ dir = null, now = () => Date.now(), maxAgeMs = 
   let regions = [];
   try {
     regions = fs.readdirSync(dir, { withFileTypes: true })
-      .filter(entry => entry.isDirectory())
+      .filter(entry => entry.isDirectory() && !entry.name.startsWith("."))
       .map(entry => readManifest(path.join(dir, entry.name)))
       .filter(Boolean);
   } catch (_error) {
@@ -99,33 +140,40 @@ function createOsmExtractStore({ dir = null, now = () => Date.now(), maxAgeMs = 
   const boundedMaxAgeMs = Number.isFinite(maxAgeMs) && maxAgeMs > 0 ? maxAgeMs : DEFAULT_MAX_AGE_MS;
   const tiles = new Map();
 
-  function readTile(region, y, x) {
-    const key = `${region.region}:${y}_${x}`;
-    if (tiles.has(key)) {
-      const hit = tiles.get(key);
-      tiles.delete(key);
-      tiles.set(key, hit);
+  function isFreshMs(dataMs) {
+    return Number.isFinite(dataMs) && now() - dataMs <= boundedMaxAgeMs;
+  }
+
+  function readTile(region, key) {
+    const listed = region.tiles.get(key);
+    if (!listed) return []; // not listed: an area without places
+    const cacheKey = `${region.region}:${key}`;
+    if (tiles.has(cacheKey)) {
+      const hit = tiles.get(cacheKey);
+      tiles.delete(cacheKey);
+      tiles.set(cacheKey, hit);
       return hit;
     }
-    let elements = [];
+    let elements;
     try {
-      const parsed = JSON.parse(fs.readFileSync(path.join(region.dir, "tiles", `${y}_${x}.json`), "utf8"));
-      if (!Array.isArray(parsed)) return null;
-      elements = parsed;
-    } catch (error) {
-      // A tile with no places is not written. Any other failure is a broken
-      // store, and the caller must not take it for an empty neighbourhood.
-      if (error?.code !== "ENOENT") return null;
+      const raw = fs.readFileSync(path.join(region.dir, "tiles", `${key}.json`));
+      if (createHash("sha256").update(raw).digest("hex") !== listed.sha256) return null;
+      elements = JSON.parse(raw.toString("utf8"));
+    } catch (_error) {
+      return null; // listed but missing or unreadable: a broken store
     }
-    tiles.set(key, elements);
+    if (!Array.isArray(elements) || elements.length !== listed.n) return null;
+    tiles.set(cacheKey, elements);
     if (tiles.size > MAX_CACHED_TILES) tiles.delete(tiles.keys().next().value);
     return elements;
   }
 
+  // The newest fresh region that wholly covers every asked circle.
   function regionFor(anchors, radiusM) {
-    const nowMs = now();
-    return regions.find(region => nowMs - region.dataMs <= boundedMaxAgeMs &&
-      anchors.every(anchor => circleInCoverage(region.coverage, anchor.lat, anchor.lng, radiusM))) || null;
+    return regions
+      .filter(region => isFreshMs(region.dataMs) &&
+        anchors.every(anchor => circleInCoverage(region.coverage, anchor.lat, anchor.lng, radiusM)))
+      .sort((a, b) => b.dataMs - a.dataMs || a.region.localeCompare(b.region))[0] || null;
   }
 
   // plan: { anchors: [{lat,lng}], radiusM, groups: [{ selectors, named }], perCategory }
@@ -141,15 +189,15 @@ function createOsmExtractStore({ dir = null, now = () => Date.now(), maxAgeMs = 
 
     const near = new Map();
     for (const anchor of anchors) {
-      const dLat = radiusM / 111320;
-      const dLng = radiusM / (111320 * Math.max(0.01, Math.cos((anchor.lat * Math.PI) / 180)));
+      const dLat = radiusM / METRES_PER_DEGREE;
+      const dLng = radiusM / (METRES_PER_DEGREE * Math.max(0.01, Math.cos((anchor.lat * Math.PI) / 180)));
       const y0 = Math.floor((anchor.lat - dLat) / region.tileDeg);
       const y1 = Math.floor((anchor.lat + dLat) / region.tileDeg);
       const x0 = Math.floor((anchor.lng - dLng) / region.tileDeg);
       const x1 = Math.floor((anchor.lng + dLng) / region.tileDeg);
       for (let y = y0; y <= y1; y += 1) {
         for (let x = x0; x <= x1; x += 1) {
-          const tile = readTile(region, y, x);
+          const tile = readTile(region, `${y}_${x}`);
           if (!tile) return null;
           for (const element of tile) {
             const lat = element?.lat ?? element?.center?.lat;
@@ -181,14 +229,27 @@ function createOsmExtractStore({ dir = null, now = () => Date.now(), maxAgeMs = 
     };
   }
 
+  // Whether an answer recorded earlier from an extract may still be replayed:
+  // the same age limit applies to a cached answer as to a direct one.
+  function acceptsSnapshot(snapshot) {
+    return Boolean(snapshot) && typeof snapshot.data_timestamp === "string" &&
+      isFreshMs(Date.parse(snapshot.data_timestamp));
+  }
+
   return {
     answer,
+    acceptsSnapshot,
     describe: () => regions.map(region => ({
       region: region.region,
       data_timestamp: new Date(region.dataMs).toISOString(),
-      fresh: now() - region.dataMs <= boundedMaxAgeMs,
+      fresh: isFreshMs(region.dataMs),
     })),
   };
 }
 
-module.exports = { createOsmExtractStore, OSM_EXTRACT_FORMAT: FORMAT, DEFAULT_OSM_EXTRACT_MAX_AGE_MS: DEFAULT_MAX_AGE_MS };
+module.exports = {
+  createOsmExtractStore,
+  circleInCoverage,
+  OSM_EXTRACT_FORMAT: FORMAT,
+  DEFAULT_OSM_EXTRACT_MAX_AGE_MS: DEFAULT_MAX_AGE_MS,
+};
