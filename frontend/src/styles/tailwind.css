@@ -548,3 +548,19 @@
 .route-map-frame[data-still] .maplibregl-ctrl-top-left {
   display: none;
 }
+
+/* Linje 2 board: on a phone the day's map runs edge to edge, so the line can
+   come straight out of its lower edge. The lines under the frame (status,
+   credit without a drawn map) keep the page's margin. */
+@media (max-width: 639px) {
+  [data-map-overview] {
+    margin-inline: -1rem;
+  }
+  [data-map-overview] .route-map-frame {
+    border-radius: 0;
+    border-inline-width: 0;
+  }
+  [data-map-overview] .route-map-frame ~ * {
+    padding-inline: 1rem;
+  }
+}

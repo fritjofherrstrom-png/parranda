@@ -74,6 +74,9 @@ async function plannerWith(t, response, url = PLACE_URL) {
 
 const header = (h) => h.container.querySelector("header");
 const routeCard = (h) => h.container.querySelector('section[aria-label="The route"]');
+// Linje 2 board: "About this day and map" closes the page, after Live, the
+// detours and Blitz; the route renders it into that host.
+const aboutDay = (h) => h.container.querySelector('[data-route-about] details');
 const picks = (h) =>
   [...(h.container.querySelector('ul[aria-label="Your picks in this day"]')?.children ?? [])].map((li) =>
     li.textContent.replace(/\s+/g, " ").trim(),
@@ -161,9 +164,10 @@ test("on a phone the header reads title, the day in a sentence, the picks row, t
   assert.ok(picksLine.compareDocumentPosition(map) & FOLLOWING, "then the picks line, before the map");
   const route = routeCard(h);
   const stops = route.querySelector('ol[aria-label="The stops, in order"]');
-  const about = route.querySelector("details");
+  const about = aboutDay(h);
   assert.equal(route.querySelector('[data-map-overview], [data-route-map]'), null, "one map, in the header");
-  assert.ok(stops.compareDocumentPosition(about) & FOLLOWING, "About this day and map follows the line it qualifies");
+  assert.ok(stops.compareDocumentPosition(about) & FOLLOWING, "About this day and map comes after the line it qualifies");
+  assert.equal(route.querySelector("details"), null, "and not inside it: it closes the page (Linje 2 board)");
   // No card around the map: it is the map's own frame, edge to edge in the
   // column, and its canvas is the one "Map of the day" landmark.
   assert.doesNotMatch(map.className, /\bp-4\b|bg-parranda-ink\/4/);
@@ -350,7 +354,7 @@ test("how the day was assembled sits with the route evidence, said once", async 
   assert.doesNotMatch(header(h).textContent, /source-backed|Local time|external sources|estimates/);
   // ...it is one "About this day and map" line beside the map, every fact
   // still stated once: the trust line first, then the estimates and context.
-  const about = routeCard(h).querySelector("details");
+  const about = aboutDay(h);
   assert.ok(about, "the assembly notes are one disclosure");
   assert.match(about.querySelector("summary").textContent, /About this day and map/);
   assert.equal(about.open, false, "closed until asked for");
@@ -368,7 +372,7 @@ test("a day without source-backed provenance still names where its places came f
   );
 
   assert.doesNotMatch(h.text(), /Built from source-backed places/);
-  assert.match(routeCard(h).textContent, /Places come from external sources\./);
+  assert.match(aboutDay(h).textContent, /Places come from external sources\./);
 });
 
 test("what the day contains still leads: a thin day says so under the title", async (t) => {
@@ -386,9 +390,9 @@ test("what the day contains still leads: a thin day says so under the title", as
 
 test("the map explanation names pins-only geometry without implying a walking path", async (t) => {
   const h = await plannerWith(t, composedDay());
-  assert.match(routeCard(h).textContent, /The pins show the stops\. A walking path has not been confirmed on the map\./);
-  assert.doesNotMatch(routeCard(h).textContent, /dotted line|not the streets/);
-  assert.match(routeCard(h).textContent, /Distances and walking times are estimates\./);
+  assert.match(aboutDay(h).textContent, /The pins show the stops\. A walking path has not been confirmed on the map\./);
+  assert.doesNotMatch(aboutDay(h).textContent, /dotted line|not the streets/);
+  assert.match(aboutDay(h).textContent, /Distances and walking times are estimates\./);
 });
 
 test("dense OSRM geometry without a walking mode retains the unconfirmed-path explanation", async (t) => {
@@ -396,8 +400,8 @@ test("dense OSRM geometry without a walking mode retains the unconfirmed-path ex
   const response = composedDay({ pathPoints: path });
   response.days[0].primary_route.geometry_source = "osrm";
   const h = await plannerWith(t, response);
-  assert.match(routeCard(h).textContent, /A walking path has not been confirmed on the map\./);
-  assert.match(routeCard(h).textContent, /Distances and walking times are estimates\./);
+  assert.match(aboutDay(h).textContent, /A walking path has not been confirmed on the map\./);
+  assert.match(aboutDay(h).textContent, /Distances and walking times are estimates\./);
 });
 
 test("a short explicit walking path makes no unconfirmed-path claim and keeps time estimates honest", async (t) => {
@@ -405,8 +409,8 @@ test("a short explicit walking path makes no unconfirmed-path claim and keeps ti
   const response = composedDay({ stops, pathPoints: [{lat:55.6,lng:13}, {lat:55.601,lng:13}] });
   Object.assign(response.days[0].primary_route, { geometry_source: "osrm", geometry_mode: "walking" });
   const h = await plannerWith(t, response);
-  assert.doesNotMatch(routeCard(h).textContent, /walking path has not been confirmed|dotted line/);
-  assert.match(routeCard(h).textContent, /Distances and walking times are estimates\./);
+  assert.doesNotMatch(aboutDay(h).textContent, /walking path has not been confirmed|dotted line/);
+  assert.match(aboutDay(h).textContent, /Distances and walking times are estimates\./);
 });
 
 test("saved days follow the day instead of pushing it down", async (t) => {
@@ -516,5 +520,5 @@ test('a nearby curated day does not claim Parranda lacks full curation', async t
   body.days[0].primary_route.trust_summary = { human_verified: true, source_tiers: ['curated'] };
   const h = await plannerWith(t, body);
   assert.doesNotMatch(h.text(), /does not have full curation here yet/);
-  assert.match(routeCard(h).textContent, /Distances and walking times are estimates/);
+  assert.match(aboutDay(h).textContent, /Distances and walking times are estimates/);
 });

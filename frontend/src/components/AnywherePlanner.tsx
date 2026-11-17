@@ -454,6 +454,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [detoursOpen, setDetoursOpen] = useState(false);
   // The route's "About this day and map" holds the place-shortfall line (Linje 2).
   const [aboutSourcesHost, setAboutSourcesHost] = useState<HTMLElement | null>(null);
+  // Below the line, as on the Linje 2 board: Live, the detours, Blitz, then
+  // "About this day and map". The route renders those two into these hosts.
+  const [detoursHost, setDetoursHost] = useState<HTMLElement | null>(null);
+  const [aboutHost, setAboutHost] = useState<HTMLElement | null>(null);
   // A tapped stop expands an inline panel (why it's here, the walk, hours when
   // known, an explicit Maps action) instead of ejecting straight to Google Maps.
   // Single-open accordion: opening one closes the others.
@@ -1752,6 +1756,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // Stored coords missing/expired (e.g. a reload consumed them): stay honest,
       // and offer to share the position again (useLocationAgain).
       return;
+    }
+    // A saved day opened from the landing (?saved=<id>): that day, as the
+    // labelled snapshot it is. An id this browser no longer holds falls back
+    // to the last day, never to a namesake search.
+    const savedId = new URLSearchParams(window.location.search).get("saved");
+    if (savedId) {
+      const saved = readLS<SavedEntry[]>(SAVED_KEY, []).find(item => item?.id === savedId);
+      if (saved && saved.safeResponse && saved.classification) { restoreEntry(saved); return; }
     }
     const last = readLS<SavedEntry | null>(LAST_KEY, null);
     if (last && last.safeResponse && last.classification) restoreEntry(last, true);
@@ -3664,6 +3676,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           detoursOpen={detoursOpen}
           setDetoursOpen={setDetoursOpen}
           sourcesHost={setAboutSourcesHost}
+          continuesFromMap={Boolean(mapOverview)}
+          detoursHost={detoursHost}
+          aboutHost={aboutHost}
           actions={
             <DayActions
               t={t}
@@ -3767,6 +3782,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         />
       )}
 
+      {dayWithRoute && <div ref={setDetoursHost} data-route-detours="" className="empty:hidden [&>div]:mt-0" />}
+
       {/* Blitz uses the trusted day anchor for every place. */}
       {phase === "done" && hasAnchor && !serviceRefusal && !anchorUnresolved && (
         <BlitzCard
@@ -3783,6 +3800,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           typedPlaceLabel={typedPlaceLabel}
         />
       )}
+
+      {dayWithRoute && <div ref={setAboutHost} data-route-about="" className="-mt-6 empty:hidden" />}
 
       {savedDays.length > 0 && (
         <SavedDays t={t} lang={lang} savedDays={savedDays} restoreEntry={restoreEntry} removeSavedDay={removeSavedDay} />

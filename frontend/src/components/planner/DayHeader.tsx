@@ -381,89 +381,11 @@ export default function DayHeader({
           </div>
       ) : null;
 
-  return (
-    <header className="@container flex flex-col gap-4" aria-busy={staleNotice === "updating"}>
-      {(staleNotice === "updating" || staleNotice === "update_failed") && <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        {/* The day on screen is deliberately still here, and deliberately
-            marked as not current. Never a silent swap. */}
-        {staleNotice === "updating" && (
-          <span
-            aria-live="polite"
-            className="inline-flex min-h-7 items-center gap-2 rounded-parranda-tag border-line border-parranda-ember/60 px-2.5 text-xs font-bold text-parranda-clay"
-          >
-            <RingMark className="h-3 w-3" />
-            {t("Uppdaterar dagen …", "Updating your day …")}
-          </span>
-        )}
-        {staleNotice === "update_failed" && (
-          <>
-            <span
-              aria-live="polite"
-              className="inline-flex items-center gap-1.5 rounded-parranda-tag bg-parranda-ember/12 px-2.5 py-1 text-xs font-bold text-parranda-clay"
-            >
-              {navigationInterrupted
-                ? t("Planeringen pausades när du lämnade sidan — visar din förra dag", "Planning paused when you left — showing your previous day")
-                : t("Kunde inte uppdatera — visar din förra dag", "Couldn't update — showing your previous day")}
-            </span>
-            <button
-              type="button"
-              onClick={retryPlan}
-              className="inline-flex min-h-11 items-center rounded-parranda-btn border-line border-parranda-ember/50 px-3.5 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
-            >
-              {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök uppdatera igen", "Try updating again")}
-            </button>
-          </>
-        )}
-      </div>}
-      {/* Linje 2: the place is the sign; "A day in" and Change stand above
-          it on one quiet row. Then the day in one sentence, and when. */}
-      <div className="flex flex-col">
-        <div className="flex min-h-11 items-center justify-between gap-3">
-          <span aria-hidden="true" className="text-15 font-medium text-parranda-ink-muted">
-            {mode === "near_me" && !placeLabel ? t("En dag", "A day") : t("En dag i", "A day in")}
-          </span>
-          {titleAction}
-        </div>
-        <h1 ref={headingRef} tabIndex={-1} className="-mt-1 text-parranda-ink outline-none">
-          <span className="sr-only">{mode === "near_me" && !placeLabel ? t("En dag", "A day") : t("En dag i", "A day in")} </span>
-          <PlaceSign text={mode === "near_me" && !placeLabel ? t("nära dig", "near you") : anchorLabel} />
-        </h1>
-        {/* The day's character from its published places leads; the facts
-            sentence and the date follow in the quieter voice. */}
-        {idea && (
-          <div data-day-idea className="mt-2.5 flex flex-col gap-0.5 [overflow-wrap:anywhere]">
-            <p className="text-17 font-bold leading-snug text-parranda-ink">{idea.headline}</p>
-            {idea.journey && <p className="text-15 leading-snug text-parranda-ink-muted">{idea.journey}</p>}
-          </div>
-        )}
-        <div data-day-facts="" className={(idea ? "mt-1.5" : "mt-2.5") + " flex flex-col gap-0.5 [overflow-wrap:anywhere]"}>
-          <p className={idea ? "text-15 leading-snug text-parranda-ink-muted" : "text-17 font-semibold leading-snug text-parranda-ink"}>
-            {daySummary({ stops: coreCount, live: wovenCount, distance: distance ? walkingDistanceLabel(primaryRoute.estimated_km, lang) : null, lang })}
-          </p>
-          <p className="text-15 text-parranda-ink-muted">
-            {displayedDate && <time dateTime={date!}>{relativeDay === 0 ? t("Idag", "Today") : relativeDay === 1 ? t("Imorgon", "Tomorrow") : dayDateLabel(displayedDate, lang)}</time>}
-            {/* The selected date's forecast, said after the date: the sky's
-                icon, the high and the sky in words. Only a fresh reading. */}
-            {weatherChip && (
-              <>
-                {/* Said as a sentence, as on the board: "Today, 5° and rain." */}
-                {displayedDate ? <span aria-hidden="true">{", "}</span> : null}
-                <span role="img" className="inline-flex items-center gap-1 align-[-0.15em]"
-                  aria-label={t(`Prognosens högsta temperatur: ${weatherChip}C${condition ? `. ${condition[0]}` : ""}`, `Forecast high: ${weatherChip}C${condition ? `. ${condition[1]}` : ""}`)}
-                  title={condition ? t(condition[0], condition[1]) : t("Prognosens högsta temperatur", "Forecast high")}>
-                  {WeatherIcon && <WeatherIcon className="h-4 w-4" />}
-                  {weatherChip}
-                </span>
-                <span aria-hidden="true">{condition ? ` ${t("och", "and")} ${t(condition[0], condition[1]).toLowerCase()}.` : "."}</span>
-              </>
-            )}
-          </p>
-        </div>
-      </div>
-      {controls}
-      {/* On a phone the map's still overview pictures the day, edge to edge. */}
-      {overview}
-      <div className="flex flex-col gap-1.5">
+  // What the day contains and how it stands (a thin day, a saved snapshot)
+  // is said before the picks and the map, so the map is the last thing in
+  // the header and the line can come straight out of it (Linje 2).
+  const tail = (
+      <div className="flex flex-col gap-1.5 empty:hidden">
         {pickCoverage.length > 0 && !picksInControls && (
           <ul className="flex flex-wrap gap-2" aria-label={t("Dina val i dagen", "Your picks in this day")}>
             {pickCoverage.map(({ key, state }) => (
@@ -533,6 +455,94 @@ export default function DayHeader({
           </p>
         )}
       </div>
+  );
+
+  return (
+    <header className="@container flex flex-col gap-4" aria-busy={staleNotice === "updating"}>
+      {(staleNotice === "updating" || staleNotice === "update_failed") && <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        {/* The day on screen is deliberately still here, and deliberately
+            marked as not current. Never a silent swap. */}
+        {staleNotice === "updating" && (
+          <span
+            aria-live="polite"
+            className="inline-flex min-h-7 items-center gap-2 rounded-parranda-tag border-line border-parranda-ember/60 px-2.5 text-xs font-bold text-parranda-clay"
+          >
+            <RingMark className="h-3 w-3" />
+            {t("Uppdaterar dagen …", "Updating your day …")}
+          </span>
+        )}
+        {staleNotice === "update_failed" && (
+          <>
+            <span
+              aria-live="polite"
+              className="inline-flex items-center gap-1.5 rounded-parranda-tag bg-parranda-ember/12 px-2.5 py-1 text-xs font-bold text-parranda-clay"
+            >
+              {navigationInterrupted
+                ? t("Planeringen pausades när du lämnade sidan — visar din förra dag", "Planning paused when you left — showing your previous day")
+                : t("Kunde inte uppdatera — visar din förra dag", "Couldn't update — showing your previous day")}
+            </span>
+            <button
+              type="button"
+              onClick={retryPlan}
+              className="inline-flex min-h-11 items-center rounded-parranda-btn border-line border-parranda-ember/50 px-3.5 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
+            >
+              {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök uppdatera igen", "Try updating again")}
+            </button>
+          </>
+        )}
+      </div>}
+      {/* Linje 2: the place is the sign; "A day in" and Change stand above
+          it on one quiet row. Then the day in one sentence, and when. */}
+      <div className="flex flex-col">
+        <div className="flex min-h-11 items-center justify-between gap-3">
+          <span aria-hidden="true" className="text-15 font-medium text-parranda-ink-muted">
+            {mode === "near_me" && !placeLabel ? t("En dag", "A day") : t("En dag i", "A day in")}
+          </span>
+          {titleAction}
+        </div>
+        <h1 ref={headingRef} tabIndex={-1} className="-mt-1 text-parranda-ink outline-none">
+          <span className="sr-only">{mode === "near_me" && !placeLabel ? t("En dag", "A day") : t("En dag i", "A day in")} </span>
+          <PlaceSign text={mode === "near_me" && !placeLabel ? t("nära dig", "near you") : anchorLabel} />
+        </h1>
+        {/* Linje 2 board: the sign, then the day in one sentence, then which
+            day and its sky. */}
+        <div data-day-facts="" className="mt-2.5 flex flex-col gap-0.5 [overflow-wrap:anywhere]">
+          <p className="text-17 font-semibold leading-snug text-parranda-ink">
+            {daySummary({ stops: coreCount, live: wovenCount, distance: distance ? walkingDistanceLabel(primaryRoute.estimated_km, lang) : null, lang })}
+          </p>
+          <p className="text-15 text-parranda-ink-muted">
+            {displayedDate && <time dateTime={date!}>{relativeDay === 0 ? t("Idag", "Today") : relativeDay === 1 ? t("Imorgon", "Tomorrow") : dayDateLabel(displayedDate, lang)}</time>}
+            {/* The selected date's forecast, said after the date: the sky's
+                icon, the high and the sky in words. Only a fresh reading. */}
+            {weatherChip && (
+              <>
+                {/* Said as a sentence, as on the board: "Today, 5° and rain." */}
+                {displayedDate ? <span aria-hidden="true">{", "}</span> : null}
+                <span role="img" className="inline-flex items-center gap-1 align-[-0.15em]"
+                  aria-label={t(`Prognosens högsta temperatur: ${weatherChip}C${condition ? `. ${condition[0]}` : ""}`, `Forecast high: ${weatherChip}C${condition ? `. ${condition[1]}` : ""}`)}
+                  title={condition ? t(condition[0], condition[1]) : t("Prognosens högsta temperatur", "Forecast high")}>
+                  {WeatherIcon && <WeatherIcon className="h-4 w-4" />}
+                  {weatherChip}
+                </span>
+                <span aria-hidden="true">{condition ? ` ${t("och", "and")} ${t(condition[0], condition[1]).toLowerCase()}.` : "."}</span>
+              </>
+            )}
+          </p>
+        </div>
+        {/* The day's character from its published places, said once and
+            quietly under the facts: "Culture, food and history. From
+            Postmuseum to Strömparterren." */}
+        {idea && (
+          <p data-day-idea="" className="mt-1.5 text-13 leading-snug text-parranda-ink-muted [overflow-wrap:anywhere]">
+            <span className="font-semibold text-parranda-ink-soft">{idea.headline}.</span>
+            {idea.journey ? <> {idea.journey}</> : null}
+          </p>
+        )}
+      </div>
+      {tail}
+      {controls}
+      {/* On a phone the map's still overview pictures the day, edge to edge. */}
+      {overview}
     </header>
   );
 }

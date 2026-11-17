@@ -35,3 +35,35 @@ export function daySummary({ stops, live = 0, distance = null, lang = "en" }) {
   }
   return `${text}.`;
 }
+
+/**
+ * A day as a station on the landing (Linje 2): "Tonight, five stops and a
+ * live event" for the day in hand, "Saved Thursday 8 October, three stops"
+ * for a saved one. Counted from the stored answer's own stops, never guessed;
+ * an entry without stops gets only its day.
+ *
+ * @param {{ dateIso?: string | null, safeResponse?: any }} entry
+ * @param {{ lang?: "sv" | "en", now?: Date, saved?: boolean }} options
+ */
+export function dayStationLine(entry, { lang = "en", now = new Date(), saved = false } = {}) {
+  const sv = lang === "sv";
+  const locale = sv ? "sv-SE" : "en-GB";
+  const iso = typeof entry?.dateIso === "string" && /^\d{4}-\d{2}-\d{2}$/.test(entry.dateIso) ? entry.dateIso : null;
+  const date = iso ? new Date(`${iso}T00:00:00Z`) : null;
+  const long = date ? date.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }) : "";
+  const localIso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const today = localIso(now);
+  const tomorrow = localIso(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+  let when = "";
+  if (saved) when = long ? (sv ? `Sparad ${long}` : `Saved ${long}`) : (sv ? "Sparad" : "Saved");
+  else if (iso === today) when = now.getHours() >= 17 ? (sv ? "I kväll" : "Tonight") : (sv ? "Idag" : "Today");
+  else if (iso === tomorrow) when = sv ? "Imorgon" : "Tomorrow";
+  else when = long ? capital(long) : "";
+  const stops = entry?.safeResponse?.days?.[0]?.primary_route?.main_stops;
+  if (!Array.isArray(stops) || stops.length === 0) return when;
+  const live = stops.filter((stop) => stop && stop.is_live_event === true).length;
+  const sentence = daySummary({ stops: stops.length - live, live, lang });
+  const phrase = sentence.replace(/\.$/, "");
+  const lower = phrase.charAt(0).toLowerCase() + phrase.slice(1);
+  return when ? `${when}, ${lower}` : phrase;
+}

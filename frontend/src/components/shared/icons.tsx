@@ -52,6 +52,17 @@ export function LocationIcon({ className }: IconProps) {
   );
 }
 
+/** A sight on a place: "start from where you are" (the board's mark). */
+export function CrosshairIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+      <path d="M12 2.5v3.5M12 18v3.5M2.5 12h3.5M18 12h3.5" />
+    </Icon>
+  );
+}
+
 export function ChevronRightIcon({ className }: IconProps) {
   return (
     <Icon className={className}>

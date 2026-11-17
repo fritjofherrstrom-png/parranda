@@ -32,7 +32,7 @@ for (const lang of ['en', 'sv']) {
     // (iPhone, 23 Oct 2026). Linje 2 (Fritjof, 17 Nov): with a route on
     // screen it is said once in "About this day and map", with its action,
     // not under the title.
-    const about = h.container.querySelector('section[aria-label="The route"] [data-about-sources], section[aria-label="Rutten"] [data-about-sources]');
+    const about = h.container.querySelector('[data-route-about] [data-about-sources]');
     const sentence = lang === 'en'
       ? 'Not every place could be loaded, so there may be more than the ones shown.'
       : 'Inte alla platser kunde läsas in, så det kan finnas fler än de som visas.';
