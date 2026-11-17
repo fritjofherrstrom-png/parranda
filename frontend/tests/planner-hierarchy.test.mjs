@@ -189,7 +189,7 @@ test("the day's weather follows the date: the sky's icon, the high, then the sky
   assert.ok(forecast(h).querySelector("svg"), "the sky's icon leads the reading");
   assert.match(forecast(h).getAttribute('aria-label'), /12.*Rain/);
   assert.ok(forecast(h).closest('[data-day-facts]'), "among the facts");
-  assert.match(forecast(h).parentElement.textContent, /12° rain$/);
+  assert.match(forecast(h).parentElement.textContent, /, 12° and rain\.$/);
 });
 
 test('a day in the city leads the heading, with the selected date directly below it', async t => {

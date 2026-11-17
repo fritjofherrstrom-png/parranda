@@ -11,7 +11,7 @@ source of truth; this is the map.
 |---|---|---|
 | Colour roles (day and night) | `--p-color-ink`, `paper`, `terracotta`, `ember`, `clay`, `glow`, `live`, `on-live`, `on-terracotta` | `text-parranda-*`, `bg-parranda-*`, `border-parranda-*` |
 | Ink strengths | `--p-ink-soft` .85, `-muted` .75, `-meta` .68 (text) · `-line-strong` .50, `-line-firm` .30, `-line` .20, `-line-faint` .12 (frames) · `-fill-strong` .14, `-fill` .08, `-fill-faint` .05 (behind content) | `text-parranda-ink-soft/muted/meta`, `border-parranda-line*`, `bg-parranda-fill*` |
-| Radius | `--p-radius-card` 20, `--p-radius-button` 12, `--p-radius-tag` 7 | `rounded-parranda`, `rounded-parranda-btn`, `rounded-parranda-tag` |
+| Radius | `--p-radius-card` 20, `--p-radius-button` 10, `--p-radius-tag` 7 | `rounded-parranda`, `rounded-parranda-btn`, `rounded-parranda-tag` |
 | Surface | `--p-color-surface` (a step lighter than paper, both themes) | `bg-parranda-surface` with `shadow-card` |
 | Line weight | `--p-line` (1.5px) | `border-line`, `border-t-line`, `border-l-line` |
 | Elevation | `--p-shadow-control`, `-card`, `-marker`, `-pop`, `-sheet` | `shadow-control`, `shadow-card`, `shadow-pop`, `shadow-sheet` |

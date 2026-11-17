@@ -32,7 +32,7 @@ function day(events) {
 }
 const queries = h => h.fetchMock.calls.filter(c => c.url.startsWith('/api/live-events'));
 const routes = h => h.fetchMock.calls.filter(c => c.url.includes('route-recommendations'));
-const button = (h, text) => [...h.container.querySelectorAll('button')].find(b => b.textContent.trim() === text);
+const button = (h, text) => [...h.container.querySelectorAll('button')].find(b => b.textContent.trim().replace(/^(See all live|Se allt live), .*$/, '$1') === text);
 async function click(h, text) { const b = button(h, text); assert.ok(b, text); assert.equal(b.disabled, false, text); await h.act(() => b.dispatchEvent(new h.window.Event('click', { bubbles: true }))); }
 async function start(t, events) {
   const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });

@@ -30,6 +30,7 @@
  * Stops, their order, route geometry and the Maps handoff remain unchanged.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { pinGroupLabel, routeDisplayPath, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
 import { controlAwareView, type FitMark, type MapBox } from "../../lib/route-map-fit.mjs";
@@ -38,7 +39,7 @@ import type { RouteContextSuggestion } from "../../lib/route-context-view.mjs";
 import type { DistrictArea } from "./types";
 import type { Translate } from "./copy";
 import type { PositionSession } from "./useFollowPosition";
-import { LocationIcon, RouteIcon } from "../shared/icons";
+import { CollapseIcon, ExpandIcon, LocationIcon, RouteIcon } from "../shared/icons";
 import { busyButton } from "../shared/ui";
 
 // Footprints the fit keeps clear of the controls, in px. A route marker's
@@ -65,7 +66,9 @@ type Tip = { name: string; x: number; y: number; direction: "left" | "right" } |
 let maplibreModule: Promise<MapLibre> | null = null;
 /** MapLibre and its worker, loaded once and only when a map is drawn. */
 /** A square control on the map: paper, its shadow, a 44px target. */
-const mapIconButton = "relative inline-flex h-10 w-10 items-center justify-center rounded-parranda-btn bg-parranda-surface text-parranda-ink shadow-control transition before:absolute before:-inset-0.5 before:content-[''] hover:bg-parranda-paper aria-disabled:opacity-60";
+// The board's map marks: a veiled square with a firm hairline, 40px drawn and
+// 44px to the touch.
+const mapIconButton = "relative inline-flex h-10 w-10 items-center justify-center rounded-parranda-btn border-line border-parranda-line-firm bg-parranda-paper/85 text-parranda-ink backdrop-blur-sm transition before:absolute before:-inset-0.5 before:content-[''] hover:bg-parranda-paper aria-disabled:opacity-60";
 
 function loadMapLibre(): Promise<MapLibre> {
   maplibreModule ??= Promise.all([
@@ -267,6 +270,11 @@ export default function RouteMap({
   // What the view has to show, kept for the re-fit after expand/shrink.
   const marksRef = useRef<FitMark[]>([]);
   const [mapDrawn, setMapDrawn] = useState(false);
+  // Where the walking route's credit joins the map's own attribution, once the map exists.
+  const [creditHost, setCreditHost] = useState<HTMLElement | null>(null);
+  // The map's own marks (location, route, expand): a MapLibre control in the
+  // bottom-right corner, so they stack above the attribution whatever its height.
+  const [marksHost, setMarksHost] = useState<HTMLElement | null>(null);
   const [mapFailed, setMapFailed] = useState(false);
   const [tilesFailed, setTilesFailed] = useState(false);
   const [layoutCrowded, setLayoutCrowded] = useState(false);
@@ -567,6 +575,25 @@ export default function RouteMap({
         // The attribution is set from the start (not when the tiles answer), so
         // its size is known to the first fit and it stays even when they fail.
         map.addControl(new ml.AttributionControl({ compact: false, customAttribution: BASEMAP_PROVIDER.attribution }), "bottom-right");
+        // Added after the attribution, so MapLibre stacks it above it.
+        const marks = document.createElement("div");
+        marks.className = "maplibregl-ctrl route-map-marks";
+        marks.dataset.mapControl = "";
+        map.addControl({ onAdd: () => marks, onRemove: () => marks.remove() }, "bottom-right");
+        setMarksHost(marks);
+        map.once("remove", () => setMarksHost(null));
+        // Linje 2: the walking route's operator credit and "Fix the map" (the
+        // FOSSGIS usage policy asks for both) sit in the same attribution line,
+        // on the map, instead of a line of their own under it. A host beside
+        // the inner text, which MapLibre rewrites whenever sources change.
+        const attrib = mapRef.current.querySelector<HTMLElement>(".maplibregl-ctrl-attrib");
+        if (attrib) {
+          const host = document.createElement("span");
+          host.dataset.walkingCredit = "";
+          attrib.appendChild(host);
+          setCreditHost(host);
+          map.once("remove", () => setCreditHost(null));
+        }
         // A control that changes size (the attribution's font arriving, say)
         // asks for a new fit, so no stop is left under it.
         const controlObserver = typeof ResizeObserver === "function" ? new ResizeObserver(() => refitRef.current()) : null;
@@ -989,12 +1016,11 @@ export default function RouteMap({
           {t("Ritar kartan …", "Drawing the map …")}
         </div>
       )}
-      {/* Linje 2: the map's own controls sit on the map. Expand stays in
-          words (an icon alone left the reader guessing); location and "show
-          the whole route" are square marks with their names as labels and
-          tooltips. All are map controls (data-map-control), so the fit keeps
-          every stop clear of them. */}
-      <div data-map-control="" className="absolute bottom-8 right-2.5 z-(--p-z-map-control) flex gap-2">
+      {/* Linje 2 board: the map's own controls are square marks in one
+          group at the bottom-right, each named by its label and tooltip.
+          They are map controls (data-map-control), so the fit keeps every
+          stop clear of them. */}
+      {marksHost && createPortal(<div className="flex gap-2">
         {positionSession?.supported && onLocate && <button type="button" {...busyButton(!mapDrawn, onLocate)}
           aria-label={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
           title={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
@@ -1007,21 +1033,28 @@ export default function RouteMap({
           className={mapIconButton}>
           <RouteIcon className="h-[18px] w-[18px]" />
         </button>
-      </div>
-      {onToggleExpanded && (
-        <button
+        {onToggleExpanded && <button
           type="button"
           onClick={onToggleExpanded}
           aria-expanded={mapExpanded}
-          data-map-control=""
-          className="absolute right-2.5 top-2.5 z-(--p-z-map-control) inline-flex min-h-9 items-center rounded-parranda-btn bg-parranda-surface px-3.5 text-13 font-bold text-parranda-ink shadow-control transition before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] hover:bg-parranda-paper"
+          aria-label={mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
+          title={mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
+          className={mapIconButton}
         >
-          {mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
-        </button>
-      )}
+          {mapExpanded ? <CollapseIcon className="h-[18px] w-[18px]" /> : <ExpandIcon className="h-[18px] w-[18px]" />}
+        </button>}
+      </div>, marksHost)}
     </div>
     {locationStatus}
-    {hasPrimaryRoute && (
+    {creditHost && geometryAttribution && createPortal(<>
+      {" · "}{t("Gångväg", "Walking route")}{": "}<a href={geometryAttribution.url} target="_blank" rel="noopener noreferrer">{geometryAttribution.label}</a>
+      {geometryAttribution.fixMapUrl && <>{" · "}<a href={geometryAttribution.fixMapUrl} target="_blank" rel="noopener noreferrer">{t("Rätta kartan", "Fix the map")}</a></>}
+    </>, creditHost)}
+    {/* Without a drawn map (no WebGL, or before it exists) the credit and
+        whether a walking path was found stay as a line under the frame. On
+        a drawn map the credit is in the attribution, and "About this day and
+        map" says whether the path was confirmed. */}
+    {hasPrimaryRoute && !creditHost && (
       <p className="mt-1 break-words text-xs leading-relaxed text-parranda-ink-meta">
         {hasWalkingPath
           ? t("Gångväg", "Walking route")

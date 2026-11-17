@@ -96,7 +96,7 @@ import AnchorCard, { ChangePlaceLink, type AdjustRebuild } from "./planner/Ancho
 import type { InterestSelection } from "./planner/InterestChooser";
 import BlitzCard from "./planner/BlitzCard";
 import CandidateAreas, { candidateMatchCount } from "./planner/CandidateAreas";
-import DayHeader, { DayActions, DayWhen, dayAssemblyNotes, PickSummary } from "./planner/DayHeader";
+import DayHeader, { DayActions, dayAssemblyNotes, PickSummary } from "./planner/DayHeader";
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
 import { useFollowPosition } from "./planner/useFollowPosition";
@@ -452,6 +452,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
   };
   const [detoursOpen, setDetoursOpen] = useState(false);
+  // The route's "About this day and map" holds the place-shortfall line (Linje 2).
+  const [aboutSourcesHost, setAboutSourcesHost] = useState<HTMLElement | null>(null);
   // A tapped stop expands an inline panel (why it's here, the walk, hours when
   // known, an explicit Maps action) instead of ejecting straight to Google Maps.
   // Single-open accordion: opening one closes the others.
@@ -3209,7 +3211,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         onChangePlace={cancelActivePlannerForNavigation}
         rebuild={adjustRebuild}
         compact={dayWithRoute}
-        dayWhen={dayWithRoute ? <DayWhen t={t} lang={lang} date={shownDate} relativeDay={shownDay ? shownDay.activeOffset : null} /> : null}
+        // Which day is said once, in the header's facts (Linje 2).
         summary={dayWithRoute && shownPickCoverage.length > 0 ? (
           <PickSummary t={t} lang={lang} pickCoverage={shownPickCoverage}
             rhythmLabel={t(`Dagens rytm: ${walkLabel}`, `Day rhythm: ${walkLabel}`)} />
@@ -3272,6 +3274,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           dayLimitationNote={dayLimitationNote}
           sourceShortfall={sourceShortfall}
           onLookForMorePlaces={lookForMorePlaces}
+          shortfallHost={dayWithRoute ? aboutSourcesHost : null}
           rechecking={recheckPending && staleNotice === "updating"}
           restoredAt={restoredAt}
           canUpdateSaved={canUpdateSaved}
@@ -3660,28 +3663,29 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           routeContextSuggestions={routeContextSuggestions}
           detoursOpen={detoursOpen}
           setDetoursOpen={setDetoursOpen}
+          sourcesHost={setAboutSourcesHost}
+          actions={
+            <DayActions
+              t={t}
+              routeParts={routeParts}
+              routeUrls={routeUrls}
+              routeEndLabel={routeEndLabel}
+              saveDay={saveDay}
+              isSaved={isSaved}
+              canShare={canShare}
+              shareDay={shareDay}
+              shareCopied={shareCopied}
+              routeOrigin={routeOrigin}
+              routeDestination={routeDestination}
+              anchorIsPosition={anchorIsPosition}
+              publishedStart={publishedStart}
+              publishedEnd={publishedEnd}
+              stale={staleNotice === "updating"}
+            />
+          }
         />
       )}
 
-      {dayWithRoute && (
-        <DayActions
-          t={t}
-          routeParts={routeParts}
-          routeUrls={routeUrls}
-          routeEndLabel={routeEndLabel}
-          saveDay={saveDay}
-          isSaved={isSaved}
-          canShare={canShare}
-          shareDay={shareDay}
-          shareCopied={shareCopied}
-          routeOrigin={routeOrigin}
-          routeDestination={routeDestination}
-          anchorIsPosition={anchorIsPosition}
-          publishedStart={publishedStart}
-          publishedEnd={publishedEnd}
-          stale={staleNotice === "updating"}
-        />
-      )}
       {/* Said once, quietly, after the actions it qualifies. */}
       {(dayWithRoute || (classification?.status === "edited_empty" && phase === "done")) && !canShare && (
         <p className="text-xs leading-relaxed text-parranda-ink-meta" role="status">

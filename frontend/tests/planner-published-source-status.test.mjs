@@ -28,19 +28,22 @@ for (const lang of ['en', 'sv']) {
     t.after(() => h.unmount());
     await h.fetchMock.respond(calls(h)[0], day());
     const header = h.container.querySelector('header');
-    // One plain sentence, the failure said in it: no bold "missing" headline,
-    // no hidden "About the place sources" (iPhone, 23 Oct 2026).
+    // One plain sentence, the failure said in it: no bold "missing" headline
+    // (iPhone, 23 Oct 2026). Linje 2 (Fritjof, 17 Nov): with a route on
+    // screen it is said once in "About this day and map", with its action,
+    // not under the title.
+    const about = h.container.querySelector('section[aria-label="The route"] [data-about-sources], section[aria-label="Rutten"] [data-about-sources]');
     const sentence = lang === 'en'
       ? 'Not every place could be loaded, so there may be more than the ones shown.'
       : 'Inte alla platser kunde läsas in, så det kan finnas fler än de som visas.';
-    const status = [...header.querySelectorAll('[role="status"]')].find(node => node.textContent.trim() === sentence);
+    const status = [...about.querySelectorAll('[role="status"]')].find(node => node.textContent.trim() === sentence);
     assert.ok(status, 'a usable day explains incomplete source information in ordinary words');
     assert.doesNotMatch(status.closest('section')?.className || status.parentElement.className, /bg-parranda-(?:ember|glow)|border-parranda-(?:ember|glow)/, 'the successful day is not styled as a warning');
     assert.equal(header.querySelector('[role="alert"]'), null);
     assert.match(h.text(), /Museum 6/);
     assert.match(header.textContent, lang === 'en' ? /Six stops/ : /Sex stopp/);
     assert.doesNotMatch(header.textContent, /You can use this day|Du kan använda dagen/);
-    assert.equal(header.querySelector('details'), null, 'the limitation is said in the sentence, not hidden behind a disclosure');
+    assert.equal(header.querySelector('[role="status"]')?.textContent.includes('Not every place') ?? false, false, 'not repeated under the title');
     const update = button(h, lang === 'en' ? 'Look for more places' : 'Leta efter fler platser');
     assert.ok(update);
     assert.doesNotMatch(update.className, /bg-parranda-ember/, 'looking again is a secondary action beside a valid day');
@@ -91,7 +94,7 @@ test('a failed look keeps the source sentence and enables deliberate recovery', 
   assert.equal(update.getAttribute('aria-busy'), null);
   assert.equal(update.getAttribute('aria-disabled'), null);
   assert.match(h.text(), /Couldn't update — showing your previous day/);
-  assert.match(h.container.querySelector('header').textContent, /Not every place could be loaded/);
+  assert.match(h.text(), /Not every place could be loaded/);
   assert.equal(update.textContent.trim(), 'Look for more places');
   assert.match(h.text(), /Museum 6/);
   await h.clock.advance(120000);
@@ -123,7 +126,7 @@ for (const [name, completion, error] of [
     const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
     t.after(() => h.unmount());
     await h.fetchMock.respond(calls(h)[0], day(completion, error));
-    const header = h.container.querySelector('header').textContent;
+    const header = h.text();
     assert.match(header, name.startsWith('partial') ? /Not every place loaded in time/ : /Not every place could be loaded/);
     if (name.startsWith('partial')) assert.doesNotMatch(header, /could be loaded/, 'an unfinished snapshot is not called a failure');
     assert.doesNotMatch(h.text(), /Parranda couldn't build a day here right now|few places to choose between here/);

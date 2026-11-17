@@ -63,6 +63,20 @@ export default function LiveCard({
   openLiveSheet: () => void;
 }) {
   const now = useLiveClock([...pulseBuckets.tonight, ...pulseBuckets.thisWeek]);
+  // The board names the place, then says when on the right: "Tonight" or
+  // "Today" only for the viewer's own today, any other day by its date.
+  const shownDate = liveEvents?.selected_date ?? null;
+  const viewerToday = new Date(now).toLocaleDateString("en-CA");
+  const evening = new Date(now).getHours() >= 17;
+  const boardTitle = mode === "near_me"
+    ? t("Live nära dig", "Live near you")
+    : anchorLabel
+      ? t(`Live i ${anchorLabel}`, `Live in ${anchorLabel}`)
+      : t("Live här", "Live here");
+  const boardWhen = shownDate && shownDate === viewerToday
+    ? evening ? t("I kväll", "Tonight") : t("Idag", "Today")
+    : liveDayLabel;
+  const weekMore = pulseBuckets.thisWeek.length;
   return (
     <section
       className="rounded-parranda bg-parranda-live/8 p-5 sm:p-6"
@@ -72,15 +86,11 @@ export default function LiveCard({
       <h2 className="flex items-baseline justify-between gap-3 text-19 font-extrabold leading-tight text-parranda-ink">
         <span className="flex min-w-0 items-center gap-2.5">
           <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-parranda-live" />
-          {mode === "near_me"
-            ? t("Live nära dig", "Live near you")
-            : anchorLabel
-              ? t(`Live i ${anchorLabel}`, `Live in ${anchorLabel}`)
-              : t("Live här", "Live here")}
+          {boardTitle}
         </span>
         {liveEvents?.selected_date ? (
           <span className="type-data shrink-0 text-13 font-semibold text-parranda-ink-meta">
-            <span className="sr-only"> · </span>{liveDayLabel}
+            <span className="sr-only"> · </span>{boardWhen}
           </span>
         ) : null}
       </h2>
@@ -146,13 +156,13 @@ export default function LiveCard({
               return (
                 <li key={ev.id ?? i} className={`${clock ? "grid grid-cols-[4.25rem_minmax(0,1fr)] gap-x-3" : "flex flex-col"} min-w-0 border-t-line border-parranda-live/25 py-3 text-sm leading-relaxed text-parranda-ink-soft`}>
                   {clock && (
-                    <p className="type-data flex flex-col pt-2.5 leading-tight">
+                    <p className="type-data flex flex-col pt-0.5 leading-tight">
                       <span className="text-base font-extrabold text-parranda-live">{clock.at}</span>
                       {clock.until && <span className="text-13 text-parranda-ink-meta"><span className="sr-only">, </span>{clock.until}</span>}
                     </p>
                   )}
                   <div className="flex min-w-0 flex-col gap-1">
-                    <LiveEventSummary event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} timing={clock ? "" : undefined} />
+                    <LiveEventSummary event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} timing={clock ? "" : undefined} compact />
                     <EventOccurrences event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} />
                   </div>
                 </li>
@@ -161,15 +171,13 @@ export default function LiveCard({
           </ul>
         </div>
       )}
-      {/* The card keeps a one-line summary for the week — the full list
-          lives in the Live sheet. The count comes from the bucket, never
-          from copy. */}
-      {pulseBuckets.thisWeek.length > 0 && (
+      {/* The week's count rides on the button that opens it (the board):
+          the count comes from the bucket, never from copy. Without the
+          button, it stays a line of its own. */}
+      {weekMore > 0 && !showExplore && (
         <p className="mt-3 text-sm text-parranda-ink-muted">
           <span className="font-bold text-parranda-ink">{t("Kommande 7 dagar", "Next 7 days")}</span>
-          {" · "}
-          {pulseBuckets.thisWeek.length}{" "}
-          {pulseBuckets.thisWeek.length === 1 ? t("till", "more") : t("till", "more")}
+          {" · "}{weekMore}{" "}{t("till", "more")}
         </p>
       )}
       {showExplore && (
@@ -179,8 +187,10 @@ export default function LiveCard({
           onClick={openLiveSheet}
           className={buttonClass("live", "mt-4 min-h-12 w-full px-4 text-sm")}
         >
-          {pulseBuckets.tonight.length > 0 || pulseBuckets.thisWeek.length > 0
-            ? t("Se allt live", "See all live")
+          {pulseBuckets.tonight.length > 0 || weekMore > 0
+            ? weekMore > 0
+              ? t(`Se allt live, ${weekMore} till i veckan`, `See all live, ${weekMore} more this week`)
+              : t("Se allt live", "See all live")
             : t("Utforska live", "Explore live")}
           <ChevronRightIcon className="h-4 w-4" />
         </button>

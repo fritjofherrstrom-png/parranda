@@ -227,7 +227,7 @@ test('ordinary HTTP browser day preserves the second source occurrence through s
     'later adjustments may reuse the actual resolver-issued Helsinki receipt but never client-injected coordinates');
   await capture('published-culture-full');
 
-  await page.getByRole('button', { name: 'See all live', exact: true }).click();
+  await page.getByRole('button', { name: /^See all live/ }).click();
   const sheet = page.getByRole('dialog', { name: 'Live events', exact: true });
   await sheet.getByRole('listitem').filter({ hasText: 'Source concert second' })
     .getByRole('button', { name: 'Plan with this event', exact: true }).waitFor();
@@ -239,7 +239,7 @@ test('ordinary HTTP browser day preserves the second source occurrence through s
     if (new URL(response.url()).pathname !== '/api/live-events' || response.status() !== 200) return false;
     try { return (await response.json()).live_events?.pending !== true; } catch { return false; }
   });
-  await page.getByRole('button', { name: 'See all live', exact: true }).click();
+  await page.getByRole('button', { name: /^See all live/ }).click();
   const second = sheet.getByRole('listitem').filter({ hasText: 'Source concert second' });
   await second.getByRole('button', { name: 'Plan with this event', exact: true }).waitFor();
   // Read identity from the actual sheet-query HTTP response, never construct it.

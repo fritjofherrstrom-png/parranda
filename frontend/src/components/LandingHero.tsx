@@ -195,25 +195,26 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
                 // and moves this button before pointer-up can activate it.
                 if (event.button === 0) event.preventDefault();
               }}
-              className="min-h-[3.75rem] whitespace-nowrap rounded-parranda bg-parranda-terracotta px-8 text-17 font-extrabold text-parranda-on-terracotta transition [font-stretch:110%] hover:brightness-110 sm:min-h-16 sm:text-lg"
+              className="min-h-[3.75rem] whitespace-nowrap rounded-parranda-btn bg-parranda-terracotta px-8 text-17 font-extrabold text-parranda-on-terracotta transition [font-stretch:110%] hover:brightness-110 sm:min-h-16 sm:text-lg"
             >
               {t("Bygg min dag", "Build my day")}
             </button>
           </form>
 
-          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
-            <button
-              type="button"
-              {...busyButton(locating, useLocation)}
-              className="inline-flex min-h-12 items-center gap-2 rounded-parranda-btn bg-parranda-fill px-5 text-15 font-bold text-parranda-ink transition hover:bg-parranda-fill-strong aria-disabled:opacity-60 aria-busy:cursor-progress"
-            >
-              <LocationIcon className="h-4 w-4 text-parranda-ember" />
-              {locating ? t("Hämtar position …", "Getting location …") : t("Använd min position", "Use my location")}
-            </button>
-            <span className="text-13 text-parranda-ink-meta">
-              {t("Hela dagen planeras runt din position.", "The day is planned around where you are.")}
-            </span>
-          </div>
+          {/* The second way in, in words: no box, the ember mark leads. What
+              it does is its description, not a line of its own. */}
+          <button
+            type="button"
+            {...busyButton(locating, useLocation)}
+            aria-describedby="landingLocationNote"
+            className="-ml-1 inline-flex min-h-11 items-center gap-2 self-start rounded-parranda-btn px-1 text-15 font-bold text-parranda-ink transition hover:text-parranda-ember aria-disabled:opacity-60 aria-busy:cursor-progress"
+          >
+            <LocationIcon className="h-4 w-4 text-parranda-ember" />
+            {locating ? t("Hämtar position …", "Getting location …") : t("Börja där du är", "Start from my location")}
+          </button>
+          <span id="landingLocationNote" className="sr-only">
+            {t("Hela dagen planeras runt din position.", "The day is planned around where you are.")}
+          </span>
 
           {geoDenied && (
             <p className="text-13 leading-relaxed text-parranda-ink-muted" aria-live="polite">
@@ -227,24 +228,33 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
 
         {/* A returning visitor's last day is one tap away; the planner restores
             it as a labelled snapshot and offers a fresh rebuild. */}
+        {/* Linje 2 board: the last day waits as a station to step back on. */}
         {resume && (
-          <a
-            href={`/anywhere?restore=last&lang=${lang}`}
-            className="group flex min-h-14 items-center gap-3 self-stretch rounded-parranda-btn bg-parranda-ink px-4 text-sm text-parranda-paper transition hover:brightness-125 sm:self-start"
-          >
-            <span className="type-eyebrow text-parranda-paper/72">{t("Fortsätt", "Continue")}<span className="sr-only"> · </span></span>
-            <span className="min-w-0 flex-1">
-              {resume.place ? t(`En dag i ${resume.place}`, `A day in ${resume.place}`) : t("Din senaste dag", "Your last day")}
-              {resume.dateIso ? <span className="text-parranda-paper/72"> · {liveDateLabel(resume.dateIso, lang)}</span> : ""}
-            </span>
-            <ChevronRightIcon className="h-4 w-4 transition group-hover:translate-x-0.5" />
-          </a>
+          <section aria-labelledby="landingPickUp" className="flex flex-col gap-1.5 border-t-line border-parranda-line-faint pt-5">
+            <h2 id="landingPickUp" className="type-eyebrow text-parranda-glow">{t("Fortsätt en dag", "Pick up a day")}</h2>
+            <a
+              href={`/anywhere?restore=last&lang=${lang}`}
+              className="group flex min-h-14 items-center gap-3 rounded-parranda-btn py-1.5 transition hover:bg-parranda-fill-faint sm:self-start sm:pr-3"
+            >
+              <span aria-hidden="true" className="h-4 w-4 shrink-0 rounded-full border-[3px] border-parranda-ink" />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-base font-bold text-parranda-ink">
+                  {/* The station's name, as on the day's sign: the place's first part. */}
+                  {resume.place ? t(`En dag i ${resume.place.split(",")[0].trim()}`, `A day in ${resume.place.split(",")[0].trim()}`) : t("Din senaste dag", "Your last day")}
+                </span>
+                <span className="text-13 text-parranda-ink-muted">
+                  {t("Fortsätt", "Continue")}
+                  {resume.dateIso ? ` · ${liveDateLabel(resume.dateIso, lang)}` : ""}
+                </span>
+              </span>
+              <ChevronRightIcon className="h-4 w-4 text-parranda-ink-meta transition group-hover:translate-x-0.5" />
+            </a>
+          </section>
         )}
       </main>
 
       <footer className={`${dataLine} flex items-center justify-between border-t-line border-parranda-line-faint py-4`}>
-        <span>Parranda</span>
-        <span>{t("Din rutt, din stad", "Your route, your city")}</span>
+        <span>{t("Din rutt, din stad.", "Your route, your city.")}</span>
       </footer>
     </div>
   );

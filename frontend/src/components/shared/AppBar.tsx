@@ -107,7 +107,8 @@ export default function AppBar({
           <span data-theme-glyph="night"><MoonIcon className="h-4 w-4" /></span>
         </button>
         {/* Each end rounds itself: overflow-hidden here would clip the focus ring. */}
-        <div className="flex rounded-parranda-btn bg-parranda-fill" role="group" aria-label={languageLabel}>
+        {/* Linje 2 board: the languages are words; the current one underlined. */}
+        <div className="flex" role="group" aria-label={languageLabel}>
           {(["en", "sv"] as const).map((option) => {
             const href = languageHref ? languageHref(option) : withLang(search, option);
             return (
@@ -120,8 +121,8 @@ export default function AppBar({
               onClick={href === null ? (event) => event.preventDefault() : leaving("language")}
               aria-current={lang === option ? "true" : undefined}
               className={
-                "type-data relative inline-flex min-h-9 min-w-11 items-center justify-center rounded-parranda-btn px-3 text-13 font-bold transition before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] " +
-                (lang === option ? "bg-parranda-ink text-parranda-paper" : "text-parranda-ink-muted hover:text-parranda-ink") +
+                "type-data relative inline-flex min-h-9 min-w-10 items-center justify-center rounded-parranda-btn px-2 text-sm font-bold transition before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] " +
+                (lang === option ? "text-parranda-ink underline decoration-2 underline-offset-[6px]" : "text-parranda-ink-meta hover:text-parranda-ink") +
                 (href === null ? " cursor-not-allowed opacity-50" : "")
               }
             >

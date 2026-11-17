@@ -285,7 +285,10 @@ test("map hierarchy mirrors route authority instead of numbering two competing p
 });
 
 test("map controls preserve provider attribution space", () => {
-  assert.match(anywherePlannerSource, /absolute right-2\.5 top-2\.5/);
+  // Linje 2: the marks are a MapLibre control added after the attribution in
+  // the same corner, so they stack above it instead of covering it.
+  const map = componentSource("planner/RouteMap.tsx");
+  assert.ok(map.indexOf('new ml.AttributionControl(') < map.indexOf('map.addControl({ onAdd: () => marks'), "attribution first, marks above it");
   assert.doesNotMatch(anywherePlannerSource, /absolute bottom-2\.5 right-2\.5/);
 });
 
@@ -408,12 +411,13 @@ test("compact planner and map controls keep a 44px mobile touch target", () => {
   assert.match(anchorCard, /const rowControl = "inline-flex min-h-11 /);
   assert.match(anchorCard, /aria-expanded=\{false\}[\s\S]{0,120}className=\{compact && summary \? rowControl : controlPill\}/);
   assert.match(anchorCard, /aria-expanded=\{true\}[\s\S]{0,120}className=\{compact && summary \? rowControl : controlPill\}/);
-  // The map's expand control says what it does, in both languages, on the
-  // same pill: 36px drawn, 44px to the touch.
+  // Linje 2: the map's expand control is a square mark among the map's
+  // controls, named in both languages; 40px drawn, 44px to the touch.
   assert.match(
     anywherePlannerSource,
-    /aria-expanded=\{mapExpanded\}\s*data-map-control=""\s*className="[^"]*\bmin-h-9\b[^"]*before:-inset-y-1[^"]*"\s*>\s*\{mapExpanded \? t\("Förminska kartan", "Shrink map"\) : t\("Förstora kartan", "Expand map"\)\}/,
+    /aria-expanded=\{mapExpanded\}\s*aria-label=\{mapExpanded \? t\("Förminska kartan", "Shrink map"\) : t\("Förstora kartan", "Expand map"\)\}[\s\S]{0,200}className=\{mapIconButton\}/,
   );
+  assert.match(anywherePlannerSource, /const mapIconButton = "relative inline-flex h-10 w-10 [^"]*before:-inset-0\.5 /);
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-ctrl-group button\s*\{[\s\S]*width: 44px;/);
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-ctrl-group button\s*\{[\s\S]*height: 44px;/);
   // A route stop's disc and its touch target are 44px markers, both drawn where
@@ -588,7 +592,7 @@ test("circles are the line's stations; a control or a label is a soft rectangle"
     assert.ok(block, name);
     assert.doesNotMatch(block, /rounded-full/, `${name} is a rectangle`);
   }
-  assert.match(tokensCss, /--p-radius-button: 12px;/);
+  assert.match(tokensCss, /--p-radius-button: 10px;/);
   assert.match(tokensCss, /--p-radius-tag: 7px;/);
   // A tonal control: secondary is a soft fill, not a hairline outline.
   assert.match(ui, /secondary: "bg-parranda-fill /);

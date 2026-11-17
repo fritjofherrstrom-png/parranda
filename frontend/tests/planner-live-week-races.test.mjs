@@ -28,7 +28,7 @@ function day(events) {
 }
 const queries = h => h.fetchMock.calls.filter(c => c.url.startsWith('/api/live-events'));
 const routes = h => h.fetchMock.calls.filter(c => c.url.includes('route-recommendations'));
-const button = (h, title) => [...h.container.querySelectorAll('button')].find(b => b.textContent.trim() === title);
+const button = (h, title) => [...h.container.querySelectorAll('button')].find(b => b.textContent.trim().replace(/^(See all live|Se allt live), .*$/, '$1') === title);
 async function click(h, title) {
   const b = button(h, title); assert.ok(b, title); assert.equal(b.disabled, false, title);
   await h.act(() => b.dispatchEvent(new h.window.Event('click', { bubbles: true })));

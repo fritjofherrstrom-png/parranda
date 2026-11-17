@@ -201,7 +201,9 @@ export default function AnchorCard({
       {(compact || !adjustOpen) && (
         <div className={compact
           ? summary
-            ? "flex min-h-14 items-center gap-2 rounded-parranda-btn bg-parranda-fill py-1.5 pl-3.5 pr-1.5"
+            // Linje 2 board: a framed row, and the whole row is Adjust (the
+            // button's ::after stretches over it; the picks stay a list).
+            ? "group relative flex min-h-14 items-center gap-2 rounded-parranda-btn border-line border-parranda-line bg-parranda-fill-faint py-2 pl-3.5 pr-1.5 transition hover:bg-parranda-fill"
             : "flex min-h-9 items-center justify-between gap-3"
           : "flex min-h-12 flex-wrap items-center gap-2.5 border-t-line border-parranda-line-faint py-1.5 pl-4 pr-1.5"}>
           {/* Compact, one even line in the title's quiet voice: the day, then
@@ -488,7 +490,7 @@ const controlPill = `${compactPillTarget} shrink-0 gap-1.5 px-3.5 ${controlTone}
  * Beside the day's title once a day is on screen, in the card before that.
  */
 /** Adjust and Done inside the picks row: words and a chevron, the row is the surface. */
-const rowControl = "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-parranda-btn px-3 text-sm font-extrabold text-parranda-ink transition hover:bg-parranda-fill-strong";
+const rowControl = "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-parranda-btn px-3 text-15 font-extrabold text-parranda-ink after:absolute after:inset-0 after:rounded-parranda-btn after:content-['']";
 
 export function ChangePlaceLink({ t, lang, onChangePlace }: { t: Translate; lang: Lang; onChangePlace: () => void }) {
   return (

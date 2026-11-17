@@ -19,7 +19,7 @@ function placeDisplay(place?: string) {
 
 /** Shared reading order for the compact card and full Live sheet. Original
  *  titles and backend facts are preserved; only the visible place is tidied. */
-export default function LiveEventSummary({ event, lang, now, selectedDate, timing, distance, heading = "h3", titleClassName = "font-bold" }: {
+export default function LiveEventSummary({ event, lang, now, selectedDate, timing, distance, heading = "h3", titleClassName = "font-bold", compact = false }: {
   event: PulseEvent;
   lang: Lang;
   now?: Date;
@@ -28,25 +28,27 @@ export default function LiveEventSummary({ event, lang, now, selectedDate, timin
   distance?: string | null;
   heading?: "h3" | "h5";
   titleClassName?: string;
+  /** The Live card's board row: tighter, same facts and targets. */
+  compact?: boolean;
 }) {
   const Heading = heading;
   const place = placeDisplay(event.place);
   const sourceLink = eventSourceLink(event, lang);
   return (
-    <div className="flex min-w-0 max-w-full flex-col gap-1 [overflow-wrap:anywhere]">
+    <div className={"flex min-w-0 max-w-full flex-col [overflow-wrap:anywhere] " + (compact ? "gap-0.5" : "gap-1")}>
       <Heading aria-label={event.title} className={`text-base leading-snug text-parranda-ink ${titleClassName}`}>
         {sourceLink ? <a href={sourceLink.href} target="_blank" rel="noopener noreferrer"
           aria-label={sourceLink.kind === "site_home" ? `${event.title} — ${sourceLink.text}` : event.title}
-          className="flex min-h-11 items-center gap-1.5 no-underline hover:text-parranda-live focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-parranda-live">
+          className={(compact ? "relative flex items-center before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-[''] " : "flex min-h-11 items-center ") + "gap-1.5 no-underline hover:text-parranda-live focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-parranda-live"}>
           <span className="min-w-0">{event.title}</span>
           <ExternalIcon className="h-3.5 w-3.5 text-parranda-ink-meta" />
         </a> : event.title}
       </Heading>
       <LiveEventTiming event={event} lang={lang} now={now} selectedDate={selectedDate} timing={timing} />
-      {(place || distance) && <p className="text-sm leading-relaxed text-parranda-ink-muted">
+      {(place || distance) && <p className={compact ? "text-sm leading-snug text-parranda-ink-muted" : "text-sm leading-relaxed text-parranda-ink-muted"}>
         {place}{place && distance ? " · " : ""}{distance && <span className="font-semibold text-parranda-live">{distance}</span>}
       </p>}
-      {liveEventSource(event, lang)}
+      {liveEventSource(event, lang, compact)}
     </div>
   );
 }

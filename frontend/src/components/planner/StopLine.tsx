@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { liveStopChoiceId } from "../../lib/live-stop-choice.mjs";
 import { stopIdentity as changeStopIdentity } from "../../lib/day-change.mjs";
 /**
@@ -32,12 +33,11 @@ import {
   ClockIcon,
   ExternalIcon,
   KeepIcon,
-  LocationIcon,
   MinusIcon,
   PlusIcon,
   WalkIcon,
 } from "../shared/icons";
-import { busyButton, buttonClass, compactPillTarget, dataLine, Eyebrow, ExternalLinkText, inlineLinkTarget } from "../shared/ui";
+import { busyButton, buttonClass, dataLine, Eyebrow, ExternalLinkText, inlineLinkTarget } from "../shared/ui";
 import { DAYPART_LABELS, label, partialPreferenceLabels, pickLabel, type Lang, type Translate } from "./copy";
 import { canCommitTo, type Commitments } from "./commitments";
 import StopCategory, { stopCategoryLabel } from "./StopCategory";
@@ -53,8 +53,11 @@ const NO_NEW_STOPS: ReadonlySet<string> = new Set();
  * qualifies. Every fact is still on the page (and read by assistive tech when
  * opened). How Maps walks the route is said beside the Maps action.
  */
-function AboutDayAndMap({ t, assemblyNotes = [], routeLineIsSketch, dayContextNote }: {
+function AboutDayAndMap({ t, assemblyNotes = [], routeLineIsSketch, dayContextNote, sourcesHost }: {
   t: Translate;
+  /** Linje 2: where the header places its "not every place could be loaded"
+   *  line and Look for more places, so they are said here, once, on request. */
+  sourcesHost?: (element: HTMLElement | null) => void;
   assemblyNotes?: string[];
   routeLineIsSketch: boolean;
   dayContextNote: string | null | undefined;
@@ -71,6 +74,7 @@ function AboutDayAndMap({ t, assemblyNotes = [], routeLineIsSketch, dayContextNo
         <li>{t("Avstånd och gångtider är uppskattningar.", "Distances and walking times are estimates.")}</li>
         {dayContextNote && <li>{dayContextNote}</li>}
       </ul>
+      <div ref={sourcesHost} data-about-sources="" className="empty:hidden pb-1 pt-1" />
     </details>
   );
 }
@@ -114,6 +118,8 @@ export default function StopLine({
   onToggleFollow,
   routeContextSuggestions,
   detoursOpen,
+  sourcesHost,
+  actions = null,
   setDetoursOpen,
 }: {
   t: Translate;
@@ -156,6 +162,9 @@ export default function StopLine({
   onToggleFollow: () => void;
   routeContextSuggestions: RouteContextSuggestion[];
   detoursOpen: boolean;
+  sourcesHost?: (element: HTMLElement | null) => void;
+  /** The walk's Maps card, Save and Share: where the line ends. */
+  actions?: ReactNode;
   setDetoursOpen: (update: (cur: boolean) => boolean) => void;
 }) {
   // Read as each station reads its heading below: the first one always opens its daypart.
@@ -201,7 +210,7 @@ export default function StopLine({
   // them. On a phone the map's still overview stands in the day's header,
   // between the title and the facts; wide screens keep the map beside the day.
   const about = (
-    <AboutDayAndMap t={t} assemblyNotes={assemblyNotes} routeLineIsSketch={routeLineIsSketch} dayContextNote={dayContextNote} />
+    <AboutDayAndMap t={t} assemblyNotes={assemblyNotes} routeLineIsSketch={routeLineIsSketch} dayContextNote={dayContextNote} sourcesHost={sourcesHost} />
   );
 
   return (
@@ -222,14 +231,11 @@ export default function StopLine({
             type="button"
             aria-pressed={following}
             onClick={onToggleFollow}
-            className={
-              `${compactPillTarget} gap-1.5 px-3.5 font-bold ` +
-              (following
-                ? "bg-parranda-ink text-parranda-paper"
-                : "bg-parranda-fill text-parranda-ink hover:bg-parranda-fill-strong")
-            }
+            // Linje 2: words and the ember ring, no box: an offer beside the
+            // heading, not a second primary. Following, the ring fills.
+            className="-mr-2 inline-flex min-h-11 items-center gap-2 rounded-parranda-btn px-2 text-15 font-bold text-parranda-ink transition hover:bg-parranda-fill"
           >
-            <LocationIcon className={"h-3.5 w-3.5 " + (following ? "" : "text-parranda-ember")} />
+            <span aria-hidden="true" className={"h-3.5 w-3.5 shrink-0 rounded-full border-[2.5px] border-parranda-ember " + (following ? "bg-parranda-ember" : "")} />
             {following ? t("Sluta följa", "Stop following") : t("Följ dagen", "Follow the day")}
           </button>
         )}
@@ -618,6 +624,13 @@ export default function StopLine({
           <span>{anchorIsPosition ? t(`Tillbaka till ${finishLeg.label}`, `Return to ${finishLeg.label}`) : t(`Till ${finishLeg.label}`, `To ${finishLeg.label}`)}</span>
           <span>{legLabel(finishLeg)}</span>
         </p>
+      )}
+      {/* Linje 2: the line runs on into the walk's Maps action, so the
+          route and the way to walk it read as one thing. */}
+      {actions && (
+        <div data-line-end="" className="relative mt-1 pt-4 before:pointer-events-none before:absolute before:left-[19px] before:-top-3 before:h-7 before:w-1.5 before:bg-parranda-ember before:content-['']">
+          {actions}
+        </div>
       )}
       {about}
 
