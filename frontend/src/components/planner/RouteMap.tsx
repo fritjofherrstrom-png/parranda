@@ -994,7 +994,7 @@ export default function RouteMap({
           the whole route" are square marks with their names as labels and
           tooltips. All are map controls (data-map-control), so the fit keeps
           every stop clear of them. */}
-      <div data-map-control="" className="absolute left-2.5 top-2.5 z-(--p-z-map-control) flex gap-2">
+      <div data-map-control="" className="absolute bottom-8 right-2.5 z-(--p-z-map-control) flex gap-2">
         {positionSession?.supported && onLocate && <button type="button" {...busyButton(!mapDrawn, onLocate)}
           aria-label={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
           title={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}

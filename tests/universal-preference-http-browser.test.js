@@ -164,7 +164,12 @@ for (const scenario of scenarios) test(`built UI and real HTTP: ${scenario.name}
     const picks = await page.getByRole('list', { name: 'Your picks in this day', exact: true }).innerText();
     assert.ok(picks.includes('partly'));
     assert.ok(!picks.includes('not in this day'), 'the real UI does not falsely report the exact requested match missing');
-  } else assert.equal(await page.getByText('All picks included', { exact: true }).count(), 1);
+  } else {
+    // Linje 2: every pick is named with its mark; a covered pick says so to assistive tech.
+    const picks = await page.getByRole('list', { name: 'Your picks in this day', exact: true }).innerText();
+    assert.ok(!/partly|not in this day/.test(picks), 'every pick is in the day');
+    assert.equal(await page.getByRole('list', { name: 'Your picks in this day', exact: true }).locator(':scope > li').count(), scenario.covered.length || 1);
+  }
   assert.ok(state.calls > 0 && state.calls <= 2, 'only the existing bounded initial/expansion source passes');
   if (scenario.kind === 'directory' || scenario.kind === 'osm-shops') assert.equal(route.main_stops.length, 5, 'one interest alone retains Balanced depth');
   const list = page.getByRole('list', { name: 'The stops, in order', exact: true });
