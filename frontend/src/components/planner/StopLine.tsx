@@ -20,6 +20,7 @@ import { lineProgress } from "../../lib/line-progress.mjs";
 import { eventSourceLink } from "../../lib/pulse-view.mjs";
 import LiveEventTiming from "./LiveEventTiming";
 import VenueMentions from "./VenueMentions";
+import { normalizeVisitContent } from "../../../../shared/visit-content.mjs";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { selectedDayHoursLabel } from "../../lib/selected-day-hours.mjs";
 import { stopHoursUnknown, stopWebsiteUrl, stopMatchedPreferences, stopPlaceDetails, stopRowKindLabel, stopSourceLabel } from "../../lib/stop-card-facts.mjs";
@@ -281,6 +282,7 @@ export default function StopLine({
           const hoursClosed = stop?.selected_day_hours?.status === "closed";
           const website = stopWebsiteUrl(stop);
           const placeDetails = stopPlaceDetails(stop, lang);
+          const visitContent = normalizeVisitContent(stop?.visit_content);
           const partialLabels = partialPreferenceLabels(stop, selected, lang);
           const matchedLabels = stopMatchedPreferences(stop, selected).map((key) => pickLabel(key, lang));
           const stopKindLabel = stopRowKindLabel(stop, stopCategoryLabel(stop, lang), lang);
@@ -377,6 +379,11 @@ export default function StopLine({
                       )}
                     </span>
                   )}
+                  {visitContent && (
+                    <span data-visit-summary className="mt-1 text-13 font-normal leading-relaxed text-parranda-ink-soft">
+                      {visitContent.text[lang]}
+                    </span>
+                  )}
                 </span>
                 <ChevronRightIcon
                   className={"h-4 w-4 shrink-0 transition " + (expanded ? "rotate-90 text-parranda-ember" : "text-parranda-ink-meta group-hover:text-parranda-ink")}
@@ -388,6 +395,21 @@ export default function StopLine({
                 // two kinds of action. Going there leads, outlined; changing
                 // the day follows, in quiet fills. No card of its own.
                 <div id={panelId} className="mb-1 ml-14 mt-1 flex flex-col gap-3">
+                  {visitContent && (
+                    <p className="text-xs leading-relaxed text-parranda-ink-muted">
+                      {t("Platsnotis av Parranda", "Place note by Parranda")}{" · "}
+                      <a href={visitContent.source_url} target="_blank" rel="noopener noreferrer"
+                        className={`${inlineLinkTarget} underline decoration-parranda-line-strong underline-offset-4 hover:text-parranda-ink`}>
+                        {t("Läs källan", "Read the source")}
+                      </a>
+                      <span className="block">
+                        {t("Text kontrollerad", "Text checked")}{" "}
+                        <time dateTime={visitContent.checked_on}>
+                          {new Intl.DateTimeFormat(lang === "sv" ? "sv-SE" : "en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(visitContent.checked_on))}
+                        </time>
+                      </span>
+                    </p>
+                  )}
                   {(panelKindLabel || matchedLabels.length > 0 || partialLabels.length > 0) && (
                     <p className="text-15 leading-snug text-parranda-ink-soft">
                       {[

@@ -88,6 +88,7 @@ module.exports = {
   catalog: {
     routeTemplates: barcelonaCatalog.routeTemplates,
     allItems: barcelonaCatalog.allItems,
+    provenanceById: barcelonaCatalog.provenanceById,
     findItemByName: barcelonaCatalog.findItemByName,
   },
   services: {
