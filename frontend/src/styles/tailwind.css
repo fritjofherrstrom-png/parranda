@@ -266,10 +266,6 @@
 .route-map-frame .maplibregl-ctrl-bottom-right .maplibregl-ctrl {
   margin: 0;
 }
-/* Linje 2: the map's marks stand above the attribution, inset like a card. */
-.route-map-frame .maplibregl-ctrl-bottom-right .maplibregl-ctrl.route-map-marks {
-  margin: 0 10px 8px 0;
-}
 .route-map-frame .maplibregl-ctrl-attrib a {
   color: rgb(var(--p-color-ink));
 }

@@ -285,10 +285,10 @@ test("map hierarchy mirrors route authority instead of numbering two competing p
 });
 
 test("map controls preserve provider attribution space", () => {
-  // Linje 2: the marks are a MapLibre control added after the attribution in
-  // the same corner, so they stack above it instead of covering it.
+  // Linje 2: the marks stand above the attribution by its measured height,
+  // so they never cover it, one line or two.
   const map = componentSource("planner/RouteMap.tsx");
-  assert.ok(map.indexOf('new ml.AttributionControl(') < map.indexOf('map.addControl({ onAdd: () => marks'), "attribution first, marks above it");
+  assert.match(map, /style=\{\{ bottom: `\$\{attribHeight \+ 8\}px` \}\}/);
   assert.doesNotMatch(anywherePlannerSource, /absolute bottom-2\.5 right-2\.5/);
 });
 

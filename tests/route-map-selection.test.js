@@ -386,5 +386,8 @@ test('the real map draws only explicit pedestrian geometry and removes it on fal
   await page.waitForFunction(() => window.mapFixtureInstance.getSource('parranda-route').serialize().data.type === 'FeatureCollection');
   assert.deepEqual(await lineData(), { type: 'FeatureCollection', features: [] }, 'fallback removes every old line rather than smoothing its own');
   assert.equal(await page.locator('.route-map-marker').count(), 3, 'pins remain usable without a path');
-  await page.getByText('Stop overview · walking path unavailable', {exact:true}).waitFor();
+  // Linje 2: on a drawn map, whether a walking path was confirmed is said in
+  // the day's "About this day and map"; the map's own attribution must not
+  // keep crediting a router whose path is no longer drawn.
+  await page.waitForFunction(() => !/Walking route|Gångväg/.test(document.querySelector('.maplibregl-ctrl-attrib')?.textContent || ''));
 });

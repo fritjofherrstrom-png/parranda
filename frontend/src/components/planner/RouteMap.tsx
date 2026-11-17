@@ -30,7 +30,7 @@
  * Stops, their order, route geometry and the Maps handoff remain unchanged.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { pinGroupLabel, routeDisplayPath, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
 import { controlAwareView, type FitMark, type MapBox } from "../../lib/route-map-fit.mjs";
@@ -272,9 +272,9 @@ export default function RouteMap({
   const [mapDrawn, setMapDrawn] = useState(false);
   // Where the walking route's credit joins the map's own attribution, once the map exists.
   const [creditHost, setCreditHost] = useState<HTMLElement | null>(null);
-  // The map's own marks (location, route, expand): a MapLibre control in the
-  // bottom-right corner, so they stack above the attribution whatever its height.
-  const [marksHost, setMarksHost] = useState<HTMLElement | null>(null);
+  // The map's own marks (location, route, expand) stand just above the
+  // attribution, whatever its height (one line, or two with the walking credit).
+  const [attribHeight, setAttribHeight] = useState(24);
   const [mapFailed, setMapFailed] = useState(false);
   const [tilesFailed, setTilesFailed] = useState(false);
   const [layoutCrowded, setLayoutCrowded] = useState(false);
@@ -575,13 +575,11 @@ export default function RouteMap({
         // The attribution is set from the start (not when the tiles answer), so
         // its size is known to the first fit and it stays even when they fail.
         map.addControl(new ml.AttributionControl({ compact: false, customAttribution: BASEMAP_PROVIDER.attribution }), "bottom-right");
-        // Added after the attribution, so MapLibre stacks it above it.
-        const marks = document.createElement("div");
-        marks.className = "maplibregl-ctrl route-map-marks";
-        marks.dataset.mapControl = "";
-        map.addControl({ onAdd: () => marks, onRemove: () => marks.remove() }, "bottom-right");
-        setMarksHost(marks);
-        map.once("remove", () => setMarksHost(null));
+        const attribControl = mapRef.current.querySelector<HTMLElement>(".maplibregl-ctrl-attrib");
+        const attribObserver = attribControl && typeof ResizeObserver === "function"
+          ? new ResizeObserver(() => setAttribHeight(attribControl.offsetHeight)) : null;
+        attribObserver?.observe(attribControl!);
+        map.once("remove", () => attribObserver?.disconnect());
         // Linje 2: the walking route's operator credit and "Fix the map" (the
         // FOSSGIS usage policy asks for both) sit in the same attribution line,
         // on the map, instead of a line of their own under it. A host beside
@@ -591,7 +589,11 @@ export default function RouteMap({
           const host = document.createElement("span");
           host.dataset.walkingCredit = "";
           attrib.appendChild(host);
-          setCreditHost(host);
+          // Now, not on React's next pass: the line under the frame leaves
+          // with it, and the map's first fit must already see its final
+          // height, or a late resize refits the map under a reader who has
+          // started tapping (route-map-tap-targets at 1280px).
+          flushSync(() => setCreditHost(host));
           map.once("remove", () => setCreditHost(null));
         }
         // A control that changes size (the attribution's font arriving, say)
@@ -1020,7 +1022,7 @@ export default function RouteMap({
           group at the bottom-right, each named by its label and tooltip.
           They are map controls (data-map-control), so the fit keeps every
           stop clear of them. */}
-      {marksHost && createPortal(<div className="flex gap-2">
+      <div data-map-control="" className="absolute right-2.5 z-(--p-z-map-control) flex gap-2" style={{ bottom: `${attribHeight + 8}px` }}>
         {positionSession?.supported && onLocate && <button type="button" {...busyButton(!mapDrawn, onLocate)}
           aria-label={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
           title={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
@@ -1043,7 +1045,7 @@ export default function RouteMap({
         >
           {mapExpanded ? <CollapseIcon className="h-[18px] w-[18px]" /> : <ExpandIcon className="h-[18px] w-[18px]" />}
         </button>}
-      </div>, marksHost)}
+      </div>
     </div>
     {locationStatus}
     {creditHost && geometryAttribution && createPortal(<>
