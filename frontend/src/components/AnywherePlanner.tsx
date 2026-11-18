@@ -3367,7 +3367,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 ? t("Länkens stoppändring är ogiltig. Välj en plats på startsidan — ingen oförändrad heldag skapas automatiskt.", "This link has an invalid stop edit. Choose a place on the home page — no unedited day is generated automatically.")
                 : conflictingPlaceLink
                 ? t("Länken har motstridiga platsankare. Välj en plats på startsidan — ingen annan plats väljs automatiskt.", "This link has conflicting place anchors. Choose a place on the home page — no other place is selected automatically.")
-                : t("Förbereder din dag. Om ingen sparad dag finns, välj en plats på startsidan.", "Preparing your day. If no saved day is available, choose a place on the home page.")}</p>
+                : t("Ingen sparad dag finns här. Välj en plats på startsidan.", "No saved day is available here. Choose a place on the home page.")}</p>
               <a href={`/?lang=${lang}`} onClick={() => leavePlanner("home")} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
                 {t("Till startsidan", "Go to home")}
               </a>

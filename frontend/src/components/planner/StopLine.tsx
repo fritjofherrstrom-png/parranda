@@ -453,7 +453,7 @@ export default function StopLine({
               {/* A later daypart crosses the line with room above it; the
                   first sits right under the stops' heading. */}
               {daypartHeading && i > 0 && (
-                <h3 className={"type-eyebrow relative mb-1 flex items-center pl-14 text-parranda-glow " + (i === 0 ? "mt-0 min-h-9" : "mt-6 min-h-6")}>
+                <h3 className={"type-eyebrow relative mb-1 mt-4 flex min-h-6 items-center pl-14 text-parranda-glow"}>
                   <span aria-hidden="true" className="absolute left-3.5 top-1/2 h-1 w-4 -translate-y-1/2 rounded-full bg-parranda-ink" />
                   {daypartHeading}
                 </h3>
@@ -466,7 +466,7 @@ export default function StopLine({
                 aria-expanded={expanded}
                 aria-controls={panelId}
                 onClick={() => setExpandedStopKey(expanded ? null : stopKey)}
-                className="group flex min-h-16 w-full items-center gap-3.5 rounded-parranda-btn py-2 pr-1 text-left transition hover:bg-parranda-fill-faint"
+                className="group flex min-h-14 w-full items-center gap-3.5 rounded-parranda-btn py-1.5 pr-1 text-left transition hover:bg-parranda-fill-faint"
               >
                 <span
                   className={`type-data relative z-(--p-z-raised) flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-4 text-sm font-semibold transition ${station}`}
@@ -478,7 +478,7 @@ export default function StopLine({
                   {behind && <span className="sr-only">{routeNumber}</span>}
                 </span>
                 <span className={"flex min-w-0 flex-1 flex-col gap-0.5 transition-opacity" + (stale ? " opacity-45" : "")}>
-                  <span className={"flex flex-wrap items-center gap-x-2 text-lg font-bold leading-tight " + (behind ? "text-parranda-ink-meta" : "text-parranda-ink")}>
+                  <span className={"flex flex-wrap items-center gap-x-2 wrap-anywhere text-lg font-bold leading-tight " + (behind ? "text-parranda-ink-meta" : "text-parranda-ink")}>
                     {name}
                     {/* Named by the change line above ("4 stops swapped"):
                         which ones are new, for as long as that line stands. */}
@@ -513,11 +513,6 @@ export default function StopLine({
                       )}
                     </span>
                   )}
-                  {visitContent && (
-                    <span data-visit-summary className="mt-1 text-13 font-normal leading-relaxed text-parranda-ink-soft">
-                      {visitContent.text[lang]}
-                    </span>
-                  )}
                 </span>
                 <ChevronRightIcon
                   className={"h-4 w-4 shrink-0 transition " + (expanded ? "rotate-90 text-parranda-ember" : "text-parranda-ink-meta group-hover:text-parranda-ink")}
@@ -529,21 +524,6 @@ export default function StopLine({
                 // two kinds of action. Going there leads, outlined; changing
                 // the day follows, in quiet fills. No card of its own.
                 <div id={panelId} className="mb-1 ml-14 mt-1 flex flex-col gap-3">
-                  {visitContent && (
-                    <p className="text-xs leading-relaxed text-parranda-ink-muted">
-                      {t("Platsnotis av Parranda", "Place note by Parranda")}{" · "}
-                      <a href={visitContent.source_url} target="_blank" rel="noopener noreferrer"
-                        className={`${inlineLinkTarget} underline decoration-parranda-line-strong underline-offset-4 hover:text-parranda-ink`}>
-                        {t("Läs källan", "Read the source")}
-                      </a>
-                      <span className="block">
-                        {t("Text kontrollerad", "Text checked")}{" "}
-                        <time dateTime={visitContent.checked_on}>
-                          {new Intl.DateTimeFormat(lang === "sv" ? "sv-SE" : "en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(visitContent.checked_on))}
-                        </time>
-                      </span>
-                    </p>
-                  )}
                   {(panelKindLabel || matchedLabels.length > 0 || partialLabels.length > 0) && (
                     <p className="text-15 leading-snug text-parranda-ink-soft">
                       {[
@@ -629,19 +609,41 @@ export default function StopLine({
                       </div>
                     )}
                   </div>
-                  {(sourceLabel || stop?.candidate_status === "partial") && (
+                  {(visitContent || sourceLabel || stop?.candidate_status === "partial") && (
                     <details className="group -mt-1">
-                      <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold text-parranda-ink-muted hover:text-parranda-ink [&::-webkit-details-marker]:hidden">
-                        {t("Om platsinformationen", "About this place information")}
-                        <ChevronDownIcon className="h-3.5 w-3.5 transition group-open:rotate-180" />
+                      <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-13 font-semibold text-parranda-ink-muted hover:text-parranda-ink [&::-webkit-details-marker]:hidden">
+                        {visitContent ? t("Mer om platsen", "More about this place") : t("Om platsinformationen", "About this place information")}
+                        <ChevronDownIcon className="h-3.5 w-3.5 shrink-0 transition group-open:rotate-180" />
                       </summary>
-                      <p className="text-xs leading-relaxed text-parranda-ink-meta">
-                        {stop?.candidate_status === "partial"
-                          ? sourceLabel
-                            ? t(`Källa: ${sourceLabel} · platsuppgifterna är inte bekräftade ännu`, `Source: ${sourceLabel} · place details are not yet confirmed`)
-                            : t("Platsuppgifterna är inte bekräftade ännu", "Place details are not yet confirmed")
-                          : t(`Källa: ${sourceLabel}`, `Source: ${sourceLabel}`)}
-                      </p>
+                      <div className="space-y-2 pb-2">
+                        {visitContent && (
+                          <>
+                            <p className="text-13 leading-relaxed text-parranda-ink-soft">{visitContent.text[lang]}</p>
+                            <p className="text-xs leading-relaxed text-parranda-ink-muted">
+                              {t("Platsnotis av Parranda", "Place note by Parranda")}{" · "}
+                              <a href={visitContent.source_url} target="_blank" rel="noopener noreferrer"
+                                className={`${inlineLinkTarget} underline decoration-parranda-line-strong underline-offset-4 hover:text-parranda-ink`}>
+                                {t("Läs källan", "Read the source")}
+                              </a>
+                              <span className="block">
+                                {t("Text kontrollerad", "Text checked")}{" "}
+                                <time dateTime={visitContent.checked_on}>
+                                  {new Intl.DateTimeFormat(lang === "sv" ? "sv-SE" : "en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(visitContent.checked_on))}
+                                </time>
+                              </span>
+                            </p>
+                          </>
+                        )}
+                        {(sourceLabel || stop?.candidate_status === "partial") && (
+                          <p className="text-xs leading-relaxed text-parranda-ink-meta">
+                            {stop?.candidate_status === "partial"
+                              ? sourceLabel
+                                ? t(`Källa: ${sourceLabel} · platsuppgifterna är inte bekräftade ännu`, `Source: ${sourceLabel} · place details are not yet confirmed`)
+                                : t("Platsuppgifterna är inte bekräftade ännu", "Place details are not yet confirmed")
+                              : t(`Källa: ${sourceLabel}`, `Source: ${sourceLabel}`)}
+                          </p>
+                        )}
+                      </div>
                     </details>
                   )}
                   <VenueMentions stop={stop} t={t} lang={lang} />

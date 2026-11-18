@@ -208,12 +208,15 @@ test('a day in the city leads the heading, with the selected date directly below
   assert.ok(header(h).querySelector('h1').compareDocumentPosition(date) & h.window.Node.DOCUMENT_POSITION_FOLLOWING);
 });
 
-test('the compact heading: Change place above the sign, then the picks row with Adjust, never the place or date twice', async t => {
+test('the compact heading: ink title beside Change place, then the picks row with Adjust, never the place or date twice', async t => {
   const h = await plannerWith(t, composedDay());
   const title = header(h).querySelector('h1');
   const change = header(h).querySelector('a[aria-label="Change place"]');
   assert.ok(change, "Change place is in the heading");
-  assert.ok(change.compareDocumentPosition(title) & h.window.Node.DOCUMENT_POSITION_FOLLOWING, "on the quiet row above the sign");
+  assert.match(title.textContent.trim(), /^A day in Testville$/);
+  assert.match(title.className, /\btype-title\b/);
+  assert.equal(title.querySelector(".text-parranda-ember"), null, "the city does not take the route colour");
+  assert.equal(change.parentElement, title.parentElement, "Change stays next to the title");
   assert.equal(change.textContent.trim(), 'Change place');
   const card = header(h).querySelector('section[aria-label="Your day\'s starting point"]');
   assert.ok(title.compareDocumentPosition(card) & h.window.Node.DOCUMENT_POSITION_FOLLOWING, "title before the picks");

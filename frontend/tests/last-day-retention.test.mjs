@@ -117,7 +117,7 @@ test("an explicit saved ID ignores composing inputs, even when the ID is unknown
     { query: "saved=saved%2F%CE%B1&place=Namesake", storage: { [LAST_KEY]: last, [savedKey]: [saved] }, expected: /Saved place/ },
     { query: "saved=missing&place=Namesake&lat=0&lng=0", storage: { [LAST_KEY]: last, [savedKey]: [saved] }, expected: /Place a/ },
     { query: "saved=missing&place=Namesake", storage: { [LAST_KEY]: last, [savedKey]: {} }, expected: /Place a/ },
-    { query: "saved=missing&place=Namesake", storage: {}, expected: /Preparing your day/ },
+    { query: "saved=missing&place=Namesake", storage: {}, expected: /No saved day is available here/ },
   ]) {
     const h = await mountPlanner({ url: `http://localhost/anywhere?${query}&lang=en`, storage });
     try {

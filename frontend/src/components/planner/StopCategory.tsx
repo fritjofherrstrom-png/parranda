@@ -16,15 +16,9 @@ export default function StopCategory({ type, label, muted = false }: { type: unk
   return (
     <span
       data-stop-category={family || "other"}
-      className={
-        // Linje 2: what kind of place, said in words under its name with a
-        // small mark; information, never a chip that reads like a control.
-        "inline-flex max-w-full items-center gap-1.5 text-sm font-medium leading-snug " +
-        (muted ? "text-parranda-ink-meta" : "text-parranda-ink-muted")
-      }
+      className={`max-w-full wrap-anywhere rounded-parranda-tag bg-parranda-fill px-2 py-0.5 text-xs font-semibold ${muted ? "text-parranda-ink-meta" : "text-parranda-ink-soft"}`}
     >
-      {/* Linje 2 board: the kind in words only; the family stays as data. */}
-      <span className="truncate">{label}</span>
+      {label}
     </span>
   );
 }

@@ -4,9 +4,8 @@ import { createPortal } from "react-dom";
  * each pick, provenance, and the day-level actions — the walk in Maps, save and
  * share. The line below binds to primary_route only.
  *
- * "Linje": the title is signage (Archivo, wide and heavy), the counts are data
- * (mono), and the city name carries the route colour. Every honesty line keeps
- * the September rule — one fact, one place, beside what it qualifies.
+ * "Linje": the title uses the same compact Archivo signage as the public day.
+ * Each fact stays beside what it qualifies.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
@@ -79,95 +78,6 @@ export function DayWhen({ t, lang, date, relativeDay }: {
     <time dateTime={date!}>
       {relativeDay === 0 ? t("Idag", "Today") : relativeDay === 1 ? t("Imorgon", "Tomorrow") : dayDateLabel(shown, lang)}
     </time>
-  );
-}
-
-/**
- * The place name is set like a station sign: as large as the column allows for
- * ITS longest word, so "Rome", "Malmö" and "Barcelona" each fill one line and
- * no word ever breaks mid-way. The static render starts from an estimate (the
- * header is a size container; a capital in the wide display cut is roughly one
- * em). Once mounted, the real width of the longest word is measured and the
- * size is fitted to the column, between 2rem and 4.75rem; it refits when the
- * column or the fonts change. Only a word too long even at 2rem may break
- * (anywhere, as a last resort). Line height stays at 1 so the marks on Å, Ö
- * and É never touch the line above (a little room above the first line too).
- */
-const SIGN_MIN_PX = 32;
-const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
-const SIGN_MAX_PX = 76;
-
-function signEstimate(text: string): string {
-  const longestWord = Math.max(1, ...String(text).split(/\s+/).map((word) => word.length));
-  return `clamp(2rem, calc(100cqi / ${(longestWord * 1.02).toFixed(2)}), 4.75rem)`;
-}
-
-export function PlaceSign({ text }: { text: string }) {
-  const ref = useRef<HTMLElement | null>(null);
-  const [fitted, setFitted] = useState<{ text: string; px: number; breakable: boolean } | null>(null);
-  const words = String(text).split(/\s+/).filter(Boolean);
-
-  useClientLayoutEffect(() => {
-    const sign = ref.current;
-    if (!sign || typeof window === "undefined") return;
-    let frame = 0;
-    const fit = () => {
-      const column = sign.clientWidth;
-      const current = parseFloat(window.getComputedStyle(sign).fontSize);
-      // Measure each word unwrapped in a hidden probe, so the measurement does
-      // not depend on whether the last fit allowed breaking.
-      const probe = document.createElement("span");
-      probe.setAttribute("aria-hidden", "true");
-      probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;left:0;top:0;";
-      sign.appendChild(probe);
-      let widest = 0;
-      for (const word of words) {
-        probe.textContent = word;
-        widest = Math.max(widest, probe.getBoundingClientRect().width);
-      }
-      sign.removeChild(probe);
-      if (!column || !current || !widest) return;
-      const emWidth = widest / current;
-      const ideal = Math.floor((column / emWidth) * 0.98);
-      const px = Math.max(SIGN_MIN_PX, Math.min(SIGN_MAX_PX, ideal));
-      const breakable = ideal < SIGN_MIN_PX;
-      setFitted((prev) => (prev && prev.text === text && prev.px === px && prev.breakable === breakable ? prev : { text, px, breakable }));
-    };
-    // Coalesce bursts of resize notifications into one fit per frame.
-    const later = typeof window.requestAnimationFrame === "function"
-      ? (fn: () => void) => window.requestAnimationFrame(fn)
-      : (fn: () => void) => window.setTimeout(fn, 16);
-    const cancel = typeof window.cancelAnimationFrame === "function"
-      ? (id: number) => window.cancelAnimationFrame(id)
-      : (id: number) => window.clearTimeout(id);
-    const schedule = () => {
-      cancel(frame);
-      frame = later(fit);
-    };
-    fit();
-    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
-    observer?.observe(sign);
-    document.fonts?.ready?.then(schedule).catch(() => {});
-    return () => {
-      cancel(frame);
-      observer?.disconnect();
-    };
-  }, [text]); // eslint-disable-line react-hooks/exhaustive-deps -- words derive from text
-
-  const fit = fitted && fitted.text === text ? fitted : null;
-  return (
-    <em
-      ref={ref}
-      className={"type-display block not-italic text-parranda-ember" + (fit?.breakable ? " [overflow-wrap:anywhere]" : "")}
-      style={{ fontSize: fit ? `${fit.px}px` : signEstimate(text), lineHeight: 1, paddingTop: "0.08em" }}
-    >
-      {words.map((word, index) => (
-        <span key={index}>
-          {index > 0 ? " " : null}
-          <span data-sign-word="" className={fit?.breakable ? "" : "whitespace-nowrap"}>{word}</span>
-        </span>
-      ))}
-    </em>
   );
 }
 
@@ -459,7 +369,7 @@ export default function DayHeader({
   );
 
   return (
-    <header className="@container flex flex-col gap-4" aria-busy={staleNotice === "updating"}>
+    <header className="flex flex-col gap-4" aria-busy={staleNotice === "updating"}>
       {(staleNotice === "updating" || staleNotice === "update_failed") && <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         {/* The day on screen is deliberately still here, and deliberately
             marked as not current. Never a silent swap. */}
@@ -492,21 +402,15 @@ export default function DayHeader({
           </>
         )}
       </div>}
-      {/* Linje 2: the place is the sign; "A day in" and Change stand above
-          it on one quiet row. Then the day in one sentence, and when. */}
       <div className="flex flex-col">
-        <div className="flex min-h-11 items-center justify-between gap-3">
-          <span aria-hidden="true" className="text-15 font-medium text-parranda-ink-muted">
-            {mode === "near_me" && !placeLabel ? t("En dag", "A day") : t("En dag i", "A day in")}
-          </span>
+        <div className="flex items-start justify-between gap-3">
+          <h1 ref={headingRef} tabIndex={-1} className="type-title min-w-0 wrap-anywhere pt-2 text-[1.625rem] text-parranda-ink sm:pt-1.5 sm:text-[2rem]">
+            {mode === "near_me" && !placeLabel
+              ? t("En dag nära dig", "A day near you")
+              : `${t("En dag i", "A day in")} ${anchorLabel}`}
+          </h1>
           {titleAction}
         </div>
-        <h1 ref={headingRef} tabIndex={-1} className="-mt-1 text-parranda-ink outline-none">
-          <span className="sr-only">{mode === "near_me" && !placeLabel ? t("En dag", "A day") : t("En dag i", "A day in")} </span>
-          <PlaceSign text={mode === "near_me" && !placeLabel ? t("nära dig", "near you") : anchorLabel} />
-        </h1>
-        {/* Linje 2 board: the sign, then the day in one sentence, then which
-            day and its sky. */}
         <div data-day-facts="" className="mt-2.5 flex flex-col gap-0.5 [overflow-wrap:anywhere]">
           <p className="text-17 font-semibold leading-snug text-parranda-ink">
             {daySummary({ stops: coreCount, live: wovenCount, distance: distance ? walkingDistanceLabel(primaryRoute.estimated_km, lang) : null, lang })}
