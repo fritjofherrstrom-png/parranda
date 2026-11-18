@@ -421,7 +421,7 @@ export default function StopLine({
           const matchedLabels = stopMatchedPreferences(stop, selected).map((key) => pickLabel(key, lang));
           const stopKindLabel = stopRowKindLabel(stop, stopCategoryLabel(stop, lang), lang);
           const hoursUnknown = stopHoursUnknown(stop);
-          const sourceLabel = stopSourceLabel(stop);
+          const sourceLabel = stopSourceLabel(stop, lang);
           // The row badge already names the kind; the open stop repeats it only
           // when the row kept something else (a specific second-hand category).
           const panelKindLabel = placeDetails.kindLabel && placeDetails.kindLabel !== stopKindLabel ? placeDetails.kindLabel : null;

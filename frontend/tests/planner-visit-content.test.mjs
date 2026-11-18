@@ -10,7 +10,7 @@ const routes = h => h.fetchMock.calls.filter(call => call.url.includes('route-re
 function answer(content = note) {
   return { days: [{ date: DATE, experimental_agnostic_route_applied: true, primary_route: {
     id: '__agnostic_compose__', estimated_km: 1.2, map_path_points: [], legs: [], main_stops: [
-      { id: item.id, label: item.name, type: item.kind, lat: item.lat, lng: item.lng, visit_content: content, covered_preferences: ['culture'] },
+      { id: item.id, label: item.name, type: item.kind, lat: item.lat, lng: item.lng, visit_content: content, origin: 'curated_catalog', source: { label: 'catalog' }, covered_preferences: ['culture'] },
       { id: 'garden', label: 'Fixture Garden', type: 'garden', lat: item.lat + .001, lng: item.lng, covered_preferences: ['green'] },
     ],
   }, alternatives: [] }], agnostic_route_output_experiment: { promotion: { promote: true },
@@ -37,6 +37,7 @@ for (const lang of ['sv', 'en']) test(`${lang} source-backed visit content is av
   assert.equal(details.open, false);
   assert.match(details.querySelector('summary').textContent, lang === 'sv' ? /Mer om platsen/ : /More about this place/);
   assert.match(details.textContent, factualNote);
+  assert.match(details.textContent, lang === 'sv' ? /Källa: Parrandas katalog/ : /Source: Parranda’s catalog/);
   assert.match(panel.textContent, lang === 'sv' ? /Öppettider saknas/ : /Opening hours unavailable/);
   const source = [...details.querySelectorAll('a')].find(a => a.getAttribute('href') === note.source_url);
   assert.ok(Boolean(source), 'the specific factual source is inspectable');
