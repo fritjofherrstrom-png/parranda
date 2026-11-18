@@ -254,8 +254,13 @@ export default function RouteMap({
   const hasWalkingPath = hasPrimaryRoute && walkingPath.length > 1;
   const geometryAttribution = hasWalkingPath ? walkingAttribution(primaryRoute?.geometry_attribution) : null;
   const mapTitle = regionLabel || t("Karta över dagen", "Map of the day");
-  const mapTitleRef = useRef(mapTitle);
-  mapTitleRef.current = mapTitle;
+  const mapLocale = {
+    "Map.Title": mapTitle,
+    "NavigationControl.ZoomIn": t("Zooma in", "Zoom in"),
+    "NavigationControl.ZoomOut": t("Zooma ut", "Zoom out"),
+  };
+  const mapLocaleRef = useRef(mapLocale);
+  mapLocaleRef.current = mapLocale;
   const stillRef = useRef(still);
   stillRef.current = still;
   const frameRef = useRef<HTMLDivElement | null>(null);
@@ -558,8 +563,7 @@ export default function RouteMap({
             maxPitch: 0,
             renderWorldCopies: false,
             fadeDuration: 0,
-            // The canvas region's accessible name; MapLibre's default is "Map".
-            locale: { "Map.Title": mapTitleRef.current },
+            locale: mapLocaleRef.current,
           });
         } catch {
           // No WebGL2, or the GPU refused: the day stays, the map does not.
@@ -972,10 +976,9 @@ export default function RouteMap({
   if (mapFailed) {
     return (
       <><p role="status" className="rounded-parranda border-line border-parranda-line-faint px-4 py-3 text-sm text-parranda-ink-muted">
-        {t(
-          "Kartan kan inte visas i den här webbläsaren. Stoppen och Maps-rutten fungerar som vanligt.",
-          "The map can't be shown in this browser. The stops and the Maps route work as usual.",
-        )}
+        {hasPrimaryRoute
+          ? t("Kartan kan inte visas i den här webbläsaren. Stoppen och Maps-rutten fungerar som vanligt.", "The map can't be shown in this browser. The stops and the Maps route work as usual.")
+          : t("Kartan kan inte visas i den här webbläsaren. Platser i närheten finns kvar i listan.", "The map can't be shown in this browser. Nearby places are still listed.")}
       </p>{locationStatus}{walkingLegend}</>
     );
   }
@@ -1074,7 +1077,9 @@ export default function RouteMap({
       <p role="status" className="mt-1 text-xs text-parranda-ink-meta">
         {hasWalkingPath
           ? t("Kartbakgrunden kunde inte hämtas — rutten och stoppen visas ändå.", "The map background couldn't be loaded — the route and stops are still shown.")
-          : t("Kartbakgrunden kunde inte hämtas — stoppen visas ändå.", "The map background couldn't be loaded — the stops are still shown.")}
+          : hasPrimaryRoute
+          ? t("Kartbakgrunden kunde inte hämtas — stoppen visas ändå.", "The map background couldn't be loaded — the stops are still shown.")
+          : t("Kartbakgrunden kunde inte hämtas. Platser i närheten visas ändå.", "The map background couldn't be loaded. Nearby places are still shown.")}
       </p>
     )}
     {layoutCrowded && <p role="status" className="mt-1 text-xs text-parranda-ink-meta">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}

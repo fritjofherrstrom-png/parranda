@@ -36,6 +36,7 @@ import {
   boundedRoutePoints,
   buildLiveEventQueryPayload,
   liveDateLabel,
+  liveSelectedDate,
   type LiveEventScope,
 } from "../lib/live-event-query.mjs";
 import { mapsWalkingRouteParts, primaryRouteStops, type RouteEnd } from "../lib/maps-links.mjs";
@@ -2218,7 +2219,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     : completedDayLive ?? failedAttemptLive) ?? safeResponse?.live_events ?? null;
   const cardLiveEvents = liveCardObservation?.day === safeResponse &&
     liveCardObservation?.intentId === intentSequenceRef.current ? liveCardObservation.events : liveEvents;
-  const liveDayLabel = liveDateLabel(liveEvents?.selected_date, lang);
+  const liveDayLabel = liveDateLabel(liveSelectedDate({ live_events: liveEvents, days: safeResponse?.days }), lang);
   const routeStops = useMemo(() => primaryRouteStops(safeResponse), [safeResponse]);
   const hasPrimaryRoute = routeStops.length > 0;
   const mapsPlaceContext = mode === "typed" ? classification?.placeLabel || typedPlaceLabel : null;

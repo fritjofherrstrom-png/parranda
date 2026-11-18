@@ -27,6 +27,27 @@ test("all Live scopes preserve the server-confirmed selected date instead of rec
   }
 });
 
+test("without a dated Live sidecar, all Live scopes keep the accepted route date", () => {
+  const dayDate = "2026-06-30";
+  for (const live_events of [undefined, { selected_date: "2026-02-30" }]) {
+    const dated = { ...response, days: [{ date: dayDate }], live_events };
+    for (const scope of ["around_place", "in_place", "near_route", "near_me"]) {
+      const payload = buildLiveEventQueryPayload({ scope, response: dated,
+        routeStops: [{ lat: 55.6, lng: 13 }, { lat: 55.61, lng: 13.01 }],
+        nearMeCoords: { lat: 55.6, lng: 13 },
+      });
+      assert.equal(payload.selected_date, dayDate, scope);
+    }
+  }
+});
+
+test("a valid Live date still labels its own source rows, and invalid dates stay unset", () => {
+  const dated = { ...response, days: [{ date: "2026-06-30" }], live_events: { selected_date: "2026-06-29" } };
+  assert.equal(buildLiveEventQueryPayload({ response: dated }).selected_date, "2026-06-29");
+  const invalid = { ...response, days: [{ date: "2026-11-31" }], live_events: { selected_date: "tomorrow" } };
+  assert.equal("selected_date" in buildLiveEventQueryPayload({ response: invalid }), false);
+});
+
 test("whole-area Live requires the published place query and sends no client boundaries", () => {
   const payload = buildLiveEventQueryPayload({ scope: "in_place", response });
   assert.equal(payload.place_query, "Kivik");

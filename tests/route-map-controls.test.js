@@ -341,6 +341,15 @@ test("map controls have a 44px touch target in the mobile overview and expanded 
   try {
     for (const expandName of EXPAND_NAMES) {
       await waitForRouteMapLayout(route);
+      if (expandName === EXPAND_NAMES[1]) {
+        const zoom = route.locator(".maplibregl-ctrl-top-left button");
+        assert.deepEqual(await zoom.evaluateAll(buttons => buttons.map(button => ({
+          name: button.getAttribute("aria-label"), title: button.title,
+        }))), [
+          { name: "Zooma in", title: "Zooma in" },
+          { name: "Zooma ut", title: "Zooma ut" },
+        ]);
+      }
       const locate = route.getByRole("button", { name: "Visa min position", exact: true });
       const refit = route.getByRole("button", { name: "Visa rutten", exact: true });
       const expand = route.getByRole("button", { name: expandName, exact: true });

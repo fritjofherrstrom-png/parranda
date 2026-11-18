@@ -25,10 +25,10 @@ test.before(async () => {
         eveningEvent={null} selectedDate="2026-11-18" dayOffset={0} follow={{supported:true,state:{status:'idle'}}}
         following={false} canFollowToday={true} onToggleFollow={()=>{}} routeContextSuggestions={[]}
         detoursOpen={false} setDetoursOpen={()=>{}} continuesFromMap={true}/>
-        :<RouteMap t={t} hasPrimaryRoute={true} routeStops={stops} primaryRoute={{map_path_points:stops,
+        :<RouteMap t={t} hasPrimaryRoute={kind!=='places'} routeStops={stops} primaryRoute={{map_path_points:stops,
           geometry_source:geometry?'osrm':'heuristic',geometry_mode:'walking',geometry_attribution:{label:'FOSSGIS',
           url:'https://routing.openstreetmap.de/about.html',fixMapUrl:'https://www.openstreetmap.org/fixthemap'}}}
-          areas={[]} routeContextSuggestions={[]} showContext={false} sketch={true} still={true} heightClass="h-[190px]"/>);
+          areas={kind==='places'?[{center:stops[0],stops}]:[]} routeContextSuggestions={[]} showContext={false} sketch={true} still={true} heightClass="h-[190px]"/>);
     };` }, bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', loader: { '.css': 'empty' },
     plugins: [{name:'worker-url',setup(build){
       build.onResolve({filter:/\?worker&url$/},args=>({path:args.path,namespace:'worker-url'}));
@@ -114,3 +114,18 @@ for(const webgl of [false,true]) for(const geometry of [true,false]) {
     } finally {await page.close();}
   });
 }
+
+test('candidate map failure copy describes places without promising a route', async()=>{
+  for(const webgl of [false,true]) {
+    const page=await pageFor(webgl);
+    try {
+      await page.evaluate(()=>window.renderFixture('places','en',false));
+      const status = webgl
+        ? "The map background couldn't be loaded. Nearby places are still shown."
+        : "The map can't be shown in this browser. Nearby places are still listed.";
+      await page.getByRole('status').filter({hasText:status}).waitFor({timeout:6000});
+      assert.equal(await page.locator('.route-map-marker').count(),0);
+      assert.equal(await page.getByRole('link',{name:'FOSSGIS',exact:true}).count(),0);
+    } finally {await page.close();}
+  }
+});

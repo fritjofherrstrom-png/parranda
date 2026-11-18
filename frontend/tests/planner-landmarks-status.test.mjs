@@ -37,7 +37,7 @@ test("a link with no place still says where to go once it has been read", async 
   await h.clock.advance(500);
   const status = [...h.container.querySelectorAll('[role="status"]')].find((el) => /home page/.test(el.textContent));
   assert.ok(status, "the verdict is in a status region");
-  assert.match(status.textContent, /If no saved day is available, choose a place on the home page/);
+  assert.match(status.textContent, /No saved day is available here\. Choose a place on the home page/);
   assert.ok(status.querySelector('a[href="/?lang=en"]'), "and links home");
 });
 
