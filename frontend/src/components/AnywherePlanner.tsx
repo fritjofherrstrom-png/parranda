@@ -1585,7 +1585,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (autoPlannedRef.current) return;
     autoPlannedRef.current = true;
     setArrivalRead(true);
-    setSavedDays(readLS<SavedEntry[]>(SAVED_KEY, []));
+    const storedDays = readLS<SavedEntry[] | null>(SAVED_KEY, null);
+    const localDays = Array.isArray(storedDays) ? storedDays : [];
+    setSavedDays(localDays);
     // Public intent outranks private history, LAST and legacy input arrivals.
     const snapshot = plannerEntry.readPublicDaySnapshotLink(window.location.search);
     if (snapshot.kind !== "absent") {
@@ -1619,26 +1621,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         });
       return;
     }
-    // Legacy links still describe inputs, not an immutable publication.
-    const shared = decodeShareParams(window.location.search, PLANNER_PREFERENCE_KEYS);
-    const hasLinkedPreferences = shared.preferences.length > 0 || shared.explicitEmptyPreferences;
-    const entry = plannerEntry.readPlannerEntry(window.location.search);
-    // A malformed identity must never turn into a namesake search or a saved day.
-    if (shared.invalidPlaceRef) {
-      setInvalidPlaceLink(true);
-      return;
-    }
-    if (shared.invalidDayEdit) {
-      setInvalidDayEditLink(true);
-      return;
-    }
-    // Field presence is anchor intent even when coordinate parsing fails.
-    // Never discard a durable identity in favour of caller-supplied geography.
     const params = new URLSearchParams(window.location.search);
-    if (shared.placeRef && (params.has("lat") || params.has("lng") || entry.near)) {
-      setConflictingPlaceLink(true);
-      return;
-    }
     // An explicit local view or this history entry's pointer identifies one
     // accepted answer. It must never borrow global LAST or compose a substitute.
     const navigation = window.performance?.getEntriesByType?.("navigation")[0] as PerformanceNavigationTiming | undefined;
@@ -1662,6 +1645,38 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         setNavigationRestoreUnavailable(true);
         return;
       }
+    }
+    const restoreLast = () => {
+      const last = readLS<SavedEntry | null>(LAST_KEY, null);
+      if (last?.safeResponse && last.classification) restoreEntry(last, true);
+    };
+    // A local snapshot link selects by ID. Its fallback is another stored
+    // answer, even when a legacy place or coordinate is also in the URL.
+    const savedId = params.get("saved");
+    if (savedId !== null) {
+      const saved = savedId ? localDays.find(item => item?.id === savedId) : undefined;
+      if (saved?.safeResponse && saved.classification) restoreEntry(saved);
+      else restoreLast();
+      return;
+    }
+    // Legacy links still describe inputs, not an immutable publication.
+    const shared = decodeShareParams(window.location.search, PLANNER_PREFERENCE_KEYS);
+    const hasLinkedPreferences = shared.preferences.length > 0 || shared.explicitEmptyPreferences;
+    const entry = plannerEntry.readPlannerEntry(window.location.search);
+    // A malformed identity must never turn into a namesake search or a saved day.
+    if (shared.invalidPlaceRef) {
+      setInvalidPlaceLink(true);
+      return;
+    }
+    if (shared.invalidDayEdit) {
+      setInvalidDayEditLink(true);
+      return;
+    }
+    // Field presence is anchor intent even when coordinate parsing fails.
+    // Never discard a durable identity in favour of caller-supplied geography.
+    if (shared.placeRef && (params.has("lat") || params.has("lng") || entry.near)) {
+      setConflictingPlaceLink(true);
+      return;
     }
     // Only values that differ are set (the same picks in a new array are not a
     // change), and only then is the re-run they cause marked as the arrival's.
@@ -1758,16 +1773,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // and offer to share the position again (useLocationAgain).
       return;
     }
-    // A saved day opened from the landing (?saved=<id>): that day, as the
-    // labelled snapshot it is. An id this browser no longer holds falls back
-    // to the last day, never to a namesake search.
-    const savedId = new URLSearchParams(window.location.search).get("saved");
-    if (savedId) {
-      const saved = readLS<SavedEntry[]>(SAVED_KEY, []).find(item => item?.id === savedId);
-      if (saved && saved.safeResponse && saved.classification) { restoreEntry(saved); return; }
-    }
-    const last = readLS<SavedEntry | null>(LAST_KEY, null);
-    if (last && last.safeResponse && last.classification) restoreEntry(last, true);
+    restoreLast();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

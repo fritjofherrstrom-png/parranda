@@ -107,3 +107,25 @@ test("a saved day opened from the landing (?saved=<id>) is that day, restored wi
     await h.unmount();
   }
 });
+
+test("an explicit saved ID ignores composing inputs, even when the ID is unknown", async () => {
+  const last = await composeOnce("http://localhost/anywhere?place=Testville&lang=en", composedDay());
+  const saved = { ...structuredClone(last), id: "saved/α", place: "Savedtown" };
+  saved.safeResponse.days[0].primary_route.main_stops[0].label = "Saved place";
+  const savedKey = "parranda:anywhere:saved";
+  for (const { query, storage, expected } of [
+    { query: "saved=saved%2F%CE%B1&place=Namesake", storage: { [LAST_KEY]: last, [savedKey]: [saved] }, expected: /Saved place/ },
+    { query: "saved=missing&place=Namesake&lat=0&lng=0", storage: { [LAST_KEY]: last, [savedKey]: [saved] }, expected: /Place a/ },
+    { query: "saved=missing&place=Namesake", storage: { [LAST_KEY]: last, [savedKey]: {} }, expected: /Place a/ },
+    { query: "saved=missing&place=Namesake", storage: {}, expected: /Preparing your day/ },
+  ]) {
+    const h = await mountPlanner({ url: `http://localhost/anywhere?${query}&lang=en`, storage });
+    try {
+      await h.clock.advance(500);
+      assert.equal(composeCalls(h).length, 0, query);
+      assert.match(h.text(), expected, query);
+    } finally {
+      await h.unmount();
+    }
+  }
+});
