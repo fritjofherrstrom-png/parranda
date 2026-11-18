@@ -331,6 +331,7 @@ function measureMap({ expandNames, sideMap = false }) {
   };
 }
 
+const { waitForRouteMapLayout } = require('./helpers/route-map-ready');
 const EXPAND_NAMES = ["Förstora kartan", "Förminska kartan"];
 
 // The hit test itself, at the edge that failed in CI (run 37232695990): a
@@ -375,6 +376,7 @@ for (const width of WIDTHS) {
             await route.getByRole("button", { name: state === "expanded" ? "Förstora kartan" : "Förminska kartan" }).click();
             await page.waitForTimeout(SETTLE_MS);
           }
+          await waitForRouteMapLayout(route);
           const measured = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES, sideMap });
           states[state] = measured;
           const where = `${dayName} at ${width}px, ${state}`;
@@ -443,6 +445,7 @@ test("a delayed shrink refits to the rendered mobile size after the old timer bo
     await page.evaluate(() => {
       document.querySelector('header [data-route-map] .maplibregl-map').parentElement.style.transitionDuration = "1200ms";
     });
+    await waitForRouteMapLayout(route);
     const original = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES });
     for (const name of ["Förstora kartan", "Förminska kartan"]) {
       await route.getByRole("button", { name }).click();
