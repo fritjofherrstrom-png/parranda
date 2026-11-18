@@ -344,11 +344,15 @@ export default function StopLine({
       {/* Linje 2 board: no heading row of its own. On a phone the line comes
           out of the map above and runs through this row; the first daypart
           ("Evening") sits on the line beside Follow the day. */}
-      <div className={"relative flex min-h-11 items-center justify-end gap-x-3 " +
-        (continuesFromMap ? "before:pointer-events-none before:absolute before:-top-4 before:bottom-0 before:left-[19px] before:w-1.5 before:content-[''] " +
-          (stale ? "before:bg-parranda-line-faint " : "before:bg-parranda-ember ") : "") +
-        (opensWithDaypart ? "-mb-9 pointer-events-none [&>button]:pointer-events-auto" : "mb-1")}>
+      <div className={"stop-line-heading-row relative mb-1 flex min-h-11 flex-wrap items-center justify-between gap-x-3 pl-14 " +
+        (continuesFromMap || opensWithDaypart ? "before:pointer-events-none before:absolute before:bottom-0 before:left-[19px] before:w-1.5 before:content-[''] " +
+          (continuesFromMap ? "before:-top-4 " : "before:top-1/2 ") +
+          (stale ? "before:bg-parranda-line-faint " : "before:bg-parranda-ember ") : "")}>
         <h2 className="sr-only">{t("Stoppen i ordning", "The stops, in order")}</h2>
+        {opensWithDaypart && <h3 className="type-eyebrow relative min-h-9 text-parranda-glow">
+          <span aria-hidden="true" className="stop-line-daypart-crossing absolute top-1/2 h-1 w-4 -translate-y-1/2 rounded-full bg-parranda-ink" />
+          {label(DAYPART_LABELS, split.core[0].daypart, lang)}
+        </h3>}
         {canFollow && (
           <button
             type="button"
@@ -387,7 +391,7 @@ export default function StopLine({
         className={"relative flex flex-col before:pointer-events-none before:absolute before:bottom-7 before:left-[19px] before:w-1.5 before:rounded-full before:transition-colors before:content-[''] " +
           // A list that opens with a daypart starts its line at that
           // heading's crossing mark, so the mark caps the line.
-          (continuesFromMap ? "before:top-0 " : opensWithDaypart ? "before:top-3 " : "before:top-7 ") +
+          (continuesFromMap || opensWithDaypart ? "before:top-0 " : "before:top-7 ") +
           (stale ? "route-redraw before:bg-parranda-line-faint" : "before:bg-parranda-ember")}
         aria-label={t("Stoppen i ordning", "The stops, in order")}
       >
@@ -448,7 +452,7 @@ export default function StopLine({
               )}
               {/* A later daypart crosses the line with room above it; the
                   first sits right under the stops' heading. */}
-              {daypartHeading && (
+              {daypartHeading && i > 0 && (
                 <h3 className={"type-eyebrow relative mb-1 flex items-center pl-14 text-parranda-glow " + (i === 0 ? "mt-0 min-h-9" : "mt-6 min-h-6")}>
                   <span aria-hidden="true" className="absolute left-3.5 top-1/2 h-1 w-4 -translate-y-1/2 rounded-full bg-parranda-ink" />
                   {daypartHeading}

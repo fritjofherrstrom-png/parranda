@@ -955,6 +955,22 @@ export default function RouteMap({
       </button>
     </div>
   );
+  const walkingCreditLinks = geometryAttribution && <>
+    <a href={geometryAttribution.url} target="_blank" rel="noopener noreferrer"
+      className="underline underline-offset-2 hover:text-parranda-ink focus-visible:outline-2 focus-visible:outline-parranda-ember">{geometryAttribution.label}</a>
+    {geometryAttribution.fixMapUrl && <>{" · "}<a href={geometryAttribution.fixMapUrl} target="_blank" rel="noopener noreferrer"
+      className="underline underline-offset-2 hover:text-parranda-ink focus-visible:outline-2 focus-visible:outline-parranda-ember">{t("Rätta kartan", "Fix the map")}</a></>}
+  </>;
+  // A failed map can leave a detached attribution host behind. Render the
+  // same credit below the error, never into that no-longer-visible host.
+  const walkingLegend = hasPrimaryRoute && (
+    <p className="mt-1 break-words text-xs leading-relaxed text-parranda-ink-meta">
+      {hasWalkingPath
+        ? t("Gångväg", "Walking route")
+        : t("Stoppöversikt · gångväg saknas", "Stop overview · walking path unavailable")}
+      {walkingCreditLinks && <>{" · "}{walkingCreditLinks}</>}
+    </p>
+  );
   if (mapFailed) {
     return (
       <><p role="status" className="rounded-parranda border-line border-parranda-line-faint px-4 py-3 text-sm text-parranda-ink-muted">
@@ -962,7 +978,7 @@ export default function RouteMap({
           "Kartan kan inte visas i den här webbläsaren. Stoppen och Maps-rutten fungerar som vanligt.",
           "The map can't be shown in this browser. The stops and the Maps route work as usual.",
         )}
-      </p>{locationStatus}</>
+      </p>{locationStatus}{walkingLegend}</>
     );
   }
 
@@ -1049,26 +1065,13 @@ export default function RouteMap({
     </div>
     {locationStatus}
     {creditHost && geometryAttribution && createPortal(<>
-      {" · "}{t("Gångväg", "Walking route")}{": "}<a href={geometryAttribution.url} target="_blank" rel="noopener noreferrer">{geometryAttribution.label}</a>
-      {geometryAttribution.fixMapUrl && <>{" · "}<a href={geometryAttribution.fixMapUrl} target="_blank" rel="noopener noreferrer">{t("Rätta kartan", "Fix the map")}</a></>}
+      {" · "}{t("Gångväg", "Walking route")}{": "}{walkingCreditLinks}
     </>, creditHost)}
     {/* Without a drawn map (no WebGL, or before it exists) the credit and
         whether a walking path was found stay as a line under the frame. On
         a drawn map the credit is in the attribution, and "About this day and
         map" says whether the path was confirmed. */}
-    {hasPrimaryRoute && !creditHost && (
-      <p className="mt-1 break-words text-xs leading-relaxed text-parranda-ink-meta">
-        {hasWalkingPath
-          ? t("Gångväg", "Walking route")
-          : t("Stoppöversikt · gångväg saknas", "Stop overview · walking path unavailable")}
-        {geometryAttribution && <>
-          {" · "}<a href={geometryAttribution.url} target="_blank" rel="noopener noreferrer"
-            className="underline underline-offset-2 hover:text-parranda-ink focus-visible:outline-2 focus-visible:outline-parranda-ember">{geometryAttribution.label}</a>
-          {geometryAttribution.fixMapUrl && <>{" · "}<a href={geometryAttribution.fixMapUrl} target="_blank" rel="noopener noreferrer"
-            className="underline underline-offset-2 hover:text-parranda-ink focus-visible:outline-2 focus-visible:outline-parranda-ember">{t("Rätta kartan", "Fix the map")}</a></>}
-        </>}
-      </p>
-    )}
+    {!creditHost && walkingLegend}
     {tilesFailed && (
       <p role="status" className="mt-1 text-xs text-parranda-ink-meta">
         {t("Kartbakgrunden kunde inte hämtas — rutten och stoppen visas ändå.", "The map background couldn't be loaded — the route and stops are still shown.")}
