@@ -8,9 +8,8 @@
  *     the background turns to the new paper, every marker stays, the view does
  *     not jump and the day is not composed again;
  *   - survive the tile provider being down: every non-page host is refused
- *     here, so the basemap never loads; the route and all its numbered stops
- *     still draw over plain paper, and one status line says the background is
- *     missing;
+ *     here, so the basemap never loads; the stops still draw over plain paper
+ *     and the status line only mentions a route when walking geometry exists;
  *   - survive a browser that cannot draw it (no WebGL2): the map is replaced
  *     by one line, the day's stops and its Maps route stay usable, nothing
  *     throws and nothing retries.
@@ -35,7 +34,7 @@ const STOPS = [
 ];
 const PAPER = { day: [232, 226, 215], night: [17, 16, 18] };
 
-function composedDay() {
+function composedDay(confirmedWalking) {
   return {
     days: [{
       date: FIXTURE_DATE,
@@ -48,6 +47,15 @@ function composedDay() {
         map_route_points: [],
         map_path_points: STOPS.map(({ lat, lng }) => ({ lat, lng })),
         confidence: "low",
+        ...(confirmedWalking ? {
+          geometry_source: "osrm",
+          geometry_mode: "walking",
+          geometry_attribution: {
+            label: "FOSSGIS",
+            url: "https://routing.openstreetmap.de/about.html",
+            fixMapUrl: "https://www.openstreetmap.org/fixthemap",
+          },
+        } : { geometry_source: "heuristic" }),
       },
       alternatives: [],
     }],
@@ -100,13 +108,13 @@ async function openRuntime(t) {
   return null;
 }
 
-async function openDay({ browser, origin }, { theme = "day", noWebGL2 = false } = {}) {
+async function openDay({ browser, origin }, { theme = "day", noWebGL2 = false, confirmedWalking = false } = {}) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
   let composes = 0;
   await context.route("**/*", (route) => {
     const url = new URL(route.request().url());
     if (url.origin !== origin) return route.abort();
-    if (url.pathname === "/api/route-recommendations") { composes += 1; return route.fulfill({ json: composedDay() }); }
+    if (url.pathname === "/api/route-recommendations") { composes += 1; return route.fulfill({ json: composedDay(confirmedWalking) }); }
     if (url.pathname.startsWith("/api/")) return route.fulfill({ status: 503, json: { error: "not part of this check" } });
     return route.continue();
   });
@@ -180,21 +188,28 @@ test("a theme switch recolours the drawn map without redrawing the day", { timeo
   }
 });
 
-test("with the tile provider down the route still draws over paper, and says so", { timeout: 120_000 }, async (t) => {
-  const current = await openRuntime(t);
-  if (!current) return;
-  const { context, page, map, pageErrors } = await openDay(current);
-  try {
-    await map.locator(".route-map-marker").nth(STOPS.length - 1).waitFor();
-    assert.deepEqual(await map.locator(".route-map-marker").allTextContents(), ["1", "2", "3", "4"]);
-    await map.getByRole("status").filter({ hasText: "Kartbakgrunden kunde inte hämtas" }).waitFor();
-    // The attribution stays visible even without tiles.
-    assert.match(await map.locator(".maplibregl-ctrl-attrib").innerText(), /OpenStreetMap/);
-    assert.deepEqual(pageErrors, []);
-  } finally {
-    await context.close();
-  }
-});
+for (const [confirmedWalking, visibleContent] of [[true, "rutten och stoppen"], [false, "stoppen"]]) {
+  test(`with the tile provider down the map reports ${confirmedWalking ? "route and stops" : "stops only"}`, { timeout: 120_000 }, async (t) => {
+    const current = await openRuntime(t);
+    if (!current) return;
+    const { context, map, pageErrors } = await openDay(current, { confirmedWalking });
+    try {
+      await map.locator(".route-map-marker").nth(STOPS.length - 1).waitFor();
+      assert.deepEqual(await map.locator(".route-map-marker").allTextContents(), ["1", "2", "3", "4"]);
+      const status = map.getByRole("status").filter({ hasText: "Kartbakgrunden kunde inte hämtas" });
+      await status.waitFor();
+      assert.equal(await status.innerText(), `Kartbakgrunden kunde inte hämtas — ${visibleContent} visas ändå.`);
+      // The basemap's credit stays even without tiles. Only an actual walking
+      // line earns the separate router credit inside the same attribution.
+      const attribution = map.locator(".maplibregl-ctrl-attrib");
+      assert.match(await attribution.innerText(), /OpenStreetMap/);
+      assert.equal(await attribution.getByRole("link", { name: "FOSSGIS", exact: true }).count(), confirmedWalking ? 1 : 0);
+      assert.deepEqual(pageErrors, []);
+    } finally {
+      await context.close();
+    }
+  });
+}
 
 test("without WebGL2 the map is one line and the day stays whole", { timeout: 120_000 }, async (t) => {
   const current = await openRuntime(t);

@@ -33,8 +33,8 @@ const bundle = await build({
         liveFailureSentence={() => 'Selected-source failure preserved'}
         dialogRef={{current:null}} closeRef={{current:null}} onClose={() => {}} {...extra} />);
     };
-    window.renderCard = (events, lang) => root.render(<LiveCard
-      t={(sv,en)=>lang==='sv'?sv:en} lang={lang} mode="typed" anchorLabel="Fixture area"
+    window.renderCard = (events, lang, anchorLabel = "Fixture area") => root.render(<LiveCard
+      t={(sv,en)=>lang==='sv'?sv:en} lang={lang} mode="typed" anchorLabel={anchorLabel}
       liveEvents={events} liveDayLabel="Selected day" showDay={false} dayflow={null} clothing={null}
       wovenNames={[]} includedInRoute="Included in route" pulseState="ok" liveFailure={null}
       liveFailureSentence={()=>''} pulseBuckets={{tonight:events.tonight||[],thisWeek:events.this_week||[]}}
@@ -81,6 +81,35 @@ test('mobile LiveSheet long source periods do not push event text offscreen', as
     assert.ok(dimensions.scroll<=dimensions.width+1,`width ${width}: dialog ${JSON.stringify(dimensions)}`);
     const title=await page.getByText(row.title,{exact:true}).boundingBox();
     assert.ok(title.x>=0 && title.x+title.width<=width+1,'event title stays fully inside viewport');
+  }
+});
+
+test('Live card and sheet wrap unbroken place names and keep a linked title tappable', async t => {
+  const { page, render } = await browserHarness(t);
+  await page.setViewportSize({ width: 320, height: 844 });
+  const cssDir = new URL('../dist/_astro/', import.meta.url);
+  for (const file of readdirSync(cssDir).filter(name => name.endsWith('.css'))) {
+    await page.addStyleTag({ content: readFileSync(new URL(file, cssDir), 'utf8') });
+  }
+  const anchorLabel = 'Qalångaoavbrutnaplatsnamnetiwebbläsarenslayout';
+  const row = { id: 'qa-show', title: 'QA show', source_url: 'https://calendar.example/qa-show',
+    source_link_kind: 'page', source_link_host: 'calendar.example',
+    time_window: { kind: 'all_day', all_day_explicit: true, starts_on: '2026-10-07', ends_on: '2026-10-07' } };
+  const events = { coverage: 'covered', selected_date: '2026-10-07', tonight: [row], this_week: [row] };
+  for (const lang of ['en', 'sv']) {
+    await page.evaluate(({ events, lang, anchorLabel }) => window.renderCard(events, lang, anchorLabel), { events, lang, anchorLabel });
+    const board = page.getByRole('heading', { name: new RegExp(anchorLabel) });
+    await board.waitFor();
+    assert.ok(await board.evaluate(el => el.scrollWidth <= el.clientWidth), 'Live card heading fits at 320px');
+    const link = page.getByRole('link', { name: row.title, exact: true });
+    assert.ok((await link.boundingBox()).height >= 44, 'linked Live title has a 44px target');
+
+    await render(events, lang, 'week', { anchorLabel });
+    const dialog = page.getByRole('dialog');
+    assert.ok(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth), 'Live sheet fits at 320px');
+    const scope = dialog.getByRole('button', { name: new RegExp(anchorLabel) });
+    assert.ok((await scope.boundingBox()).width <= 320, 'long place scope button stays inside the sheet');
+    await dialog.getByRole('button', { name: lang === 'en' ? 'Next 7 days' : 'Kommande 7 dagar', exact: true }).click();
   }
 });
 

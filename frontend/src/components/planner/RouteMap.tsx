@@ -65,10 +65,8 @@ type Tip = { name: string; x: number; y: number; direction: "left" | "right" } |
 
 let maplibreModule: Promise<MapLibre> | null = null;
 /** MapLibre and its worker, loaded once and only when a map is drawn. */
-/** A square control on the map: paper, its shadow, a 44px target. */
-// The board's map marks: a veiled square with a firm hairline, 40px drawn and
-// 44px to the touch.
-const mapIconButton = "relative inline-flex h-10 w-10 items-center justify-center rounded-parranda-btn border-line border-parranda-line-firm bg-parranda-paper/85 text-parranda-ink backdrop-blur-sm transition before:absolute before:-inset-0.5 before:content-[''] hover:bg-parranda-paper aria-disabled:opacity-60";
+// The entire 44px square is the touch target.
+const mapIconButton = "inline-flex h-11 w-11 items-center justify-center rounded-parranda-btn border-line border-parranda-line-firm bg-parranda-paper/85 text-parranda-ink backdrop-blur-sm transition hover:bg-parranda-paper aria-disabled:opacity-60";
 
 function loadMapLibre(): Promise<MapLibre> {
   maplibreModule ??= Promise.all([
@@ -1074,7 +1072,9 @@ export default function RouteMap({
     {!creditHost && walkingLegend}
     {tilesFailed && (
       <p role="status" className="mt-1 text-xs text-parranda-ink-meta">
-        {t("Kartbakgrunden kunde inte hämtas — rutten och stoppen visas ändå.", "The map background couldn't be loaded — the route and stops are still shown.")}
+        {hasWalkingPath
+          ? t("Kartbakgrunden kunde inte hämtas — rutten och stoppen visas ändå.", "The map background couldn't be loaded — the route and stops are still shown.")
+          : t("Kartbakgrunden kunde inte hämtas — stoppen visas ändå.", "The map background couldn't be loaded — the stops are still shown.")}
       </p>
     )}
     {layoutCrowded && <p role="status" className="mt-1 text-xs text-parranda-ink-meta">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}

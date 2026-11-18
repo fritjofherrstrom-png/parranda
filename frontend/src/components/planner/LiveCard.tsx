@@ -89,7 +89,7 @@ export default function LiveCard({
       {/* A departures board: what is on, then when, in one glance. The day
           sits on the right so the heading reads as a place. */}
       <h2 className="flex items-baseline justify-between gap-3 text-19 font-extrabold leading-tight text-parranda-ink">
-        <span className="flex min-w-0 items-center gap-2.5">
+        <span className="flex min-w-0 items-center gap-2.5 wrap-anywhere">
           <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-parranda-live" />
           {boardTitle}
         </span>

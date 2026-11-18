@@ -39,7 +39,7 @@ export default function LiveEventSummary({ event, lang, now, selectedDate, timin
       <Heading aria-label={event.title} className={`text-base leading-snug text-parranda-ink ${titleClassName}`}>
         {sourceLink ? <a href={sourceLink.href} target="_blank" rel="noopener noreferrer"
           aria-label={sourceLink.kind === "site_home" ? `${event.title} — ${sourceLink.text}` : event.title}
-          className={(compact ? "relative flex items-center before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-[''] " : "flex min-h-11 items-center ") + "gap-1.5 no-underline hover:text-parranda-live focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-parranda-live"}>
+          className="flex min-h-11 items-center gap-1.5 no-underline hover:text-parranda-live focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-parranda-live">
           <span className="min-w-0">{event.title}</span>
           <ExternalIcon className="h-3.5 w-3.5 text-parranda-ink-meta" />
         </a> : event.title}

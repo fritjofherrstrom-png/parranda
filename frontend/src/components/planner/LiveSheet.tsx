@@ -32,7 +32,7 @@ type SheetState = "hidden" | "uncovered" | "pending" | "unavailable" | "partial"
 // An unavailable scope is disabled; while a query runs the chips are busy
 // (busyButton), so the pressed chip keeps keyboard focus.
 const scopeChip = (active: boolean) =>
-  pillClass(active, "gap-2 disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:opacity-60 aria-busy:cursor-progress");
+  pillClass(active, "min-w-0 max-w-full gap-2 text-left disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:opacity-60 aria-busy:cursor-progress");
 
 export default function LiveSheet({
   lang,
@@ -179,13 +179,13 @@ export default function LiveSheet({
         aria-modal="true"
         aria-label={t("Live-händelser", "Live events")}
         tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t-line border-parranda-line-faint bg-parranda-paper px-5 pb-8 pt-4 shadow-sheet sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:rounded-3xl sm:border-line sm:px-7"
+        className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t-line border-parranda-line-faint bg-parranda-paper px-5 pb-8 pt-4 shadow-sheet wrap-anywhere sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:rounded-3xl sm:border-line sm:px-7"
       >
         <div className="flex justify-center sm:hidden" aria-hidden="true">
           <span className="h-1 w-11 rounded-full bg-parranda-line" />
         </div>
         <div className="mt-3 flex items-center justify-between gap-3">
-          <h3 className="type-title text-3xl text-parranda-ink">
+          <h3 className="type-title min-w-0 text-3xl text-parranda-ink">
             {liveSheetScope === "near_me" || anchorIsPosition ? (
               <>
                 Live <em className="not-italic text-parranda-live">{t("nära dig", "near you")}</em>

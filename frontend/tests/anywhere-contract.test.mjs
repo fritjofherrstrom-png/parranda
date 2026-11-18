@@ -233,7 +233,7 @@ test("route result has one authoritative route and keeps broader candidates seco
   // counts, and the Maps CTA over the FULL stop order (woven event included).
   assert.match(anywherePlannerSource, /t\("Din dag", "Your day"\)/);
   assert.match(anywherePlannerSource, /t\("En dag i", "A day in"\)/);
-  assert.match(anywherePlannerSource, /t\("En dag", "A day"\)[\s\S]{0,120}t\("nära dig", "near you"\)/);
+  assert.match(anywherePlannerSource, /t\("En dag nära dig", "A day near you"\)/);
   assert.match(anywherePlannerSource, /<time dateTime=\{date!\}/);
   assert.match(anywherePlannerSource, /t\("till fots", "on foot"\)/);
   assert.match(anywherePlannerSource, /t\("Öppna rutten i Maps", "Open route in Maps"\)/);
@@ -412,12 +412,12 @@ test("compact planner and map controls keep a 44px mobile touch target", () => {
   assert.match(anchorCard, /aria-expanded=\{false\}[\s\S]{0,120}className=\{compact && summary \? rowControl : controlPill\}/);
   assert.match(anchorCard, /aria-expanded=\{true\}[\s\S]{0,120}className=\{compact && summary \? rowControl : controlPill\}/);
   // Linje 2: the map's expand control is a square mark among the map's
-  // controls, named in both languages; 40px drawn, 44px to the touch.
+  // controls, named in both languages, with a 44px square target.
   assert.match(
     anywherePlannerSource,
     /aria-expanded=\{mapExpanded\}\s*aria-label=\{mapExpanded \? t\("Förminska kartan", "Shrink map"\) : t\("Förstora kartan", "Expand map"\)\}[\s\S]{0,200}className=\{mapIconButton\}/,
   );
-  assert.match(anywherePlannerSource, /const mapIconButton = "relative inline-flex h-10 w-10 [^"]*before:-inset-0\.5 /);
+  assert.match(anywherePlannerSource, /const mapIconButton = "inline-flex h-11 w-11 /);
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-ctrl-group button\s*\{[\s\S]*width: 44px;/);
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-ctrl-group button\s*\{[\s\S]*height: 44px;/);
   // A route stop's disc and its touch target are 44px markers, both drawn where
