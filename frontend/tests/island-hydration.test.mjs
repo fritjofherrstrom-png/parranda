@@ -294,6 +294,21 @@ test("a returning visitor can continue their last day from the landing", async (
   assert.match(link.textContent, /A day in Barcelona/);
 });
 
+for (const [lang, title] of [["en", "Your saved day"], ["sv", "Din sparade dag"]]) {
+  test(`unnamed saved station is not presented as the last day (${lang})`, async (t) => {
+    const h = await renderAndHydrate({
+      entry: "components/LandingHero.tsx", props: { lang }, url: `http://localhost/?lang=${lang}`,
+      setupBrowser: (window) => window.localStorage.setItem(SAVED_KEY, JSON.stringify([
+        { ...STORED_DAY, place: "", id: "saved #1" },
+      ])),
+    });
+    t.after(() => h.cleanup());
+    const link = h.window.document.querySelector("ol a");
+    assert.equal(link.getAttribute("href"), `/anywhere?saved=saved%20%231&lang=${lang}`);
+    assert.ok(link.textContent.startsWith(title), link.textContent);
+  });
+}
+
 test("a first visit offers nothing to continue", async (t) => {
   const h = await renderAndHydrate({
     entry: "components/LandingHero.tsx",

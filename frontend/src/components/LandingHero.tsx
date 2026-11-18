@@ -199,7 +199,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
       <main className="flex flex-1 flex-col justify-center gap-7 py-10 sm:gap-9 sm:py-16">
         <header className="flex flex-col gap-4">
           {/* Signage, not a slogan: the question the whole product answers. */}
-          <h1 className="type-display text-[4rem] leading-[0.86] text-parranda-ink min-[400px]:text-[4.5rem] sm:text-[7rem] lg:text-[10rem]">
+          <h1 className="type-display text-[clamp(3rem,17vw,4rem)] leading-[0.86] text-parranda-ink min-[400px]:text-[4.5rem] sm:text-[7rem] lg:text-[10rem]">
             {t("Nästa ", "Next ")}
             <br className="sm:hidden" />
             {t("stopp", "stop")}
@@ -264,19 +264,18 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
         {stations.length > 0 && (
           <section aria-labelledby="landingPickUp" className="flex flex-col gap-1 border-t-line border-parranda-line-faint pt-5">
             <h2 id="landingPickUp" className="type-eyebrow text-parranda-glow">{t("Fortsätt en dag", "Pick up a day")}</h2>
-            <ol className={"relative flex flex-col " + (stations.length > 1
-              ? "before:pointer-events-none before:absolute before:bottom-[1.875rem] before:left-[6px] before:top-[1.875rem] before:w-1 before:bg-parranda-ember before:content-['']"
-              : "")}>
+            <ol className="flex flex-col">
               {stations.map((station) => (
-                <li key={station.key}>
+                <li key={station.key} className="relative before:pointer-events-none before:absolute before:inset-y-0 before:left-[6px] before:w-1 before:bg-parranda-ember first:before:top-1/2 last:before:bottom-1/2">
                   <a
                     href={station.href}
                     className="group relative flex min-h-[3.75rem] items-center gap-3 rounded-parranda-btn py-1.5 transition hover:bg-parranda-fill-faint sm:pr-3"
                   >
                     <span aria-hidden="true" className="relative h-4 w-4 shrink-0 rounded-full border-[3px] border-parranda-ink bg-parranda-paper" />
-                    <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="flex min-w-0 flex-1 flex-col wrap-anywhere">
                       <span className="text-base font-bold text-parranda-ink">
-                        {station.place ? t(`En dag i ${station.place}`, `A day in ${station.place}`) : t("Din senaste dag", "Your last day")}
+                        {station.place ? t(`En dag i ${station.place}`, `A day in ${station.place}`)
+                          : station.saved ? t("Din sparade dag", "Your saved day") : t("Din senaste dag", "Your last day")}
                       </span>
                       <span className="text-13 text-parranda-ink-muted">
                         {station.saved ? null : <span className="sr-only">{t("Fortsätt", "Continue")}: </span>}
