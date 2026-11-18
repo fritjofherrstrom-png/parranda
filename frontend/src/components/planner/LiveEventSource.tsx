@@ -7,13 +7,11 @@
  * own disclosure, while location/calendar/recurrence uncertainty stays open.
  */
 import { eventSourceLink, eventTiming } from "../../lib/pulse-view.mjs";
-import { ExternalLinkText, inlineLinkTarget } from "../shared/ui";
+import { ExternalLinkText } from "../shared/ui";
 import type { Lang } from "./copy";
 import type { PulseEvent } from "./types";
 
-/** `compact` (the Live card's board rows): the same facts, on one tight line;
- *  touch targets keep 44px through their ::before, not through padding. */
-export function liveEventSource(event: PulseEvent, lang: Lang, compact = false) {
+export function liveEventSource(event: PulseEvent, lang: Lang) {
   const link = eventSourceLink(event, lang);
   const listedBy = String(event.source_label || "").trim();
   const credits = [...new Set((Array.isArray(event.sources) ? event.sources : [])
@@ -46,15 +44,13 @@ export function liveEventSource(event: PulseEvent, lang: Lang, compact = false) 
       {sourceArea && <p>{lang === "en" ? "Approximate location" : "Ungefärlig plats"}</p>}
       {credits.map(credit => <p key={credit}>{credit}</p>)}
       {(link || listedBy) && <div className="flex min-w-0 flex-wrap items-start gap-x-4">
-        {link && <p className={"min-w-0 max-w-full " + (compact ? "py-1" : "py-3")}>
-          <a href={link.href} target="_blank" rel="noopener noreferrer" className={`${inlineLinkTarget} underline decoration-parranda-line-firm underline-offset-2 hover:text-parranda-clay hover:decoration-parranda-clay`}>
+        {link && <p className="min-w-0 max-w-full">
+          <a href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 max-w-full items-center underline decoration-parranda-line-firm underline-offset-2 hover:text-parranda-clay hover:decoration-parranda-clay">
             <ExternalLinkText text={link.text} />
           </a>
         </p>}
         {listedBy && <details className="min-w-0 max-w-full">
-          <summary className={compact
-            ? "relative cursor-pointer py-1 font-medium before:absolute before:-inset-x-1 before:-inset-y-[10px] before:content-['']"
-            : "min-h-11 cursor-pointer py-3 font-medium"}>{lang === "en" ? "Source details" : "Källinformation"}</summary>
+          <summary className="min-h-11 cursor-pointer py-3 font-medium">{lang === "en" ? "Source details" : "Källinformation"}</summary>
           <p className="pb-2">via&nbsp;{listedBy}</p>
         </details>}
       </div>}

@@ -48,7 +48,7 @@ export default function LiveEventSummary({ event, lang, now, selectedDate, timin
       {(place || distance) && <p className={compact ? "text-sm leading-snug text-parranda-ink-muted" : "text-sm leading-relaxed text-parranda-ink-muted"}>
         {place}{place && distance ? " · " : ""}{distance && <span className="font-semibold text-parranda-live">{distance}</span>}
       </p>}
-      {liveEventSource(event, lang, compact)}
+      {liveEventSource(event, lang)}
     </div>
   );
 }

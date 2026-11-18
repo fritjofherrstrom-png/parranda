@@ -46,7 +46,7 @@ export default function BlitzCard({
   typedPlaceLabel: string;
 }) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 wrap-anywhere">
       {/* A row, not a call to action: Blitz is an aside to the day. */}
       <button
         type="button"

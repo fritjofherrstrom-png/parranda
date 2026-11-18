@@ -14,7 +14,7 @@ test('Live card timing stays in natural case with a separate visible uncertainty
     time_window:{kind:'period',starts_on:'2026-10-01',ends_on:'2026-10-31',local_start:'09:30',local_end:'15:30'},
     source_label:'Simrishamns kommuns evenemangskalender',source_url:'https://venue.example/event',source_link_kind:'page',source_link_host:'venue.example',
     sources:[{attribution:'© Source owner — CC BY 4.0'}]};
-  for(const width of [320,390,430]) for(const lang of ['en','sv']) {
+  for(const width of [320,390,430,1440]) for(const lang of ['en','sv']) {
     await page.setViewportSize({width,height:844});
     await page.evaluate(({ev,lang})=>window.renderCard({selected_date:'2026-10-07',tonight:[ev]},lang),{ev,lang});
     await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
@@ -30,6 +30,15 @@ test('Live card timing stays in natural case with a separate visible uncertainty
     assert.equal(await page.locator('p a[href="https://venue.example/event"]').isVisible(),true,'destination stays outside disclosure');
     assert.doesNotMatch(await page.locator('section').innerText(),/0414-719|info@kiviksmusteri/);
     const details=page.locator('summary').filter({hasText:lang==='en'?'Source details':'Källinformation'});
+    for (const control of [details, page.locator('p a[href="https://venue.example/event"]')]) {
+      await control.scrollIntoViewIfNeeded();
+      assert.equal(await control.evaluate(el => {
+        const rect = el.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        return rect.height >= 44 && [y - 21.5, y + 21.5].every(edge => el.contains(document.elementFromPoint(x, edge)));
+      }), true, 'both source controls have actual 44px targets');
+    }
     await details.click();
     assert.equal(await page.getByText('via Simrishamns kommuns evenemangskalender').isVisible(),true,'full feed attribution stays reachable');
     const rect=await page.locator('section').evaluate(e=>({width:e.clientWidth,scroll:e.scrollWidth}));
