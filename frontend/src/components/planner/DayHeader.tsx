@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
  * (mono), and the city name carries the route colour. Every honesty line keeps
  * the September rule — one fact, one place, beside what it qualifies.
  */
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
 import { routeUnconfirmedTonightPicks, walkingDistanceLabel } from "../../lib/route-context-view.mjs";
 import { CheckIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, MinusIcon, RainIcon, SearchIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
@@ -348,13 +348,17 @@ export default function DayHeader({
   // describe the held day, and its focused update action must stay mounted.
   const previousShortfall = useRef(sourceShortfall);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
-  const sourceUpdateRef = useRef<HTMLButtonElement | null>(null);
   const sourceUpdateHadFocus = useRef(false);
+  // Sample at removal, not at activation: the reader can tab to or from
+  // the busy button while the answer is on its way.
+  const sourceUpdateRef = useCallback((button: HTMLButtonElement | null) => {
+    if (button) return () => { sourceUpdateHadFocus.current = document.activeElement === button; };
+  }, []);
   const displayedShortfall = sourceShortfall || (staleNotice ? previousShortfall.current : null);
   useEffect(() => {
     if (sourceShortfall || !staleNotice) previousShortfall.current = sourceShortfall;
   }, [sourceShortfall, staleNotice]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     // A healthy replacement removes the optional action. Keep a reader who
     // waited there with the day, without taking focus back from another task.
     if (!displayedShortfall && sourceUpdateHadFocus.current && document.activeElement === document.body) headingRef.current?.focus();
@@ -369,10 +373,7 @@ export default function DayHeader({
             </p>
             {onLookForMorePlaces && canUpdateSaved && (
               <button type="button" ref={sourceUpdateRef}
-                {...busyButton(staleNotice === "updating", () => {
-                  sourceUpdateHadFocus.current = document.activeElement === sourceUpdateRef.current;
-                  onLookForMorePlaces();
-                })}
+                {...busyButton(staleNotice === "updating", onLookForMorePlaces)}
                 className={`${compactPillTarget} gap-2 px-3.5 ${controlTone} aria-busy:cursor-progress ${rechecking ? "" : "aria-disabled:opacity-60"}`}>
                 {rechecking ? <RingMark className="h-3.5 w-3.5" /> : <SearchIcon className="h-3.5 w-3.5 text-parranda-ink-muted" />}
                 {rechecking ? t("Letar efter fler platser …", "Looking for more places …") : t("Leta efter fler platser", "Look for more places")}

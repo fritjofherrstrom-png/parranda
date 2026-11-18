@@ -76,7 +76,12 @@ export default function LiveCard({
   const boardWhen = shownDate && shownDate === viewerToday
     ? evening ? t("I kväll", "Tonight") : t("Idag", "Today")
     : liveDayLabel;
-  const weekMore = pulseBuckets.thisWeek.length;
+  const boardRows = pulseBuckets.tonight.slice(0, 4);
+  const shownIds = new Set(boardRows.map(event => event.id));
+  // A period or recurring listing can appear in both feeds. Only count
+  // identifiable weekly listings not already visible on this board.
+  const weekMore = new Set(pulseBuckets.thisWeek.map(event => event.id)
+    .filter(id => id != null && !shownIds.has(id))).size;
   return (
     <section
       className="rounded-parranda bg-parranda-live/8 p-5 sm:p-6"
@@ -151,7 +156,7 @@ export default function LiveCard({
         <div className="mt-4">
           {!liveEvents?.selected_date && <p className="mb-2 text-sm font-bold text-parranda-ink">{liveDayLabel}</p>}
           <ul className="flex flex-col border-b-line border-parranda-live/25">
-            {pulseBuckets.tonight.slice(0, 4).map((ev: PulseEvent, i: number) => {
+            {boardRows.map((ev: PulseEvent, i: number) => {
               const clock = eventBoardClock(ev, lang, now, liveEvents?.selected_date);
               return (
                 <li key={ev.id ?? i} className={`${clock ? "grid grid-cols-[4.25rem_minmax(0,1fr)] gap-x-3" : "flex flex-col"} min-w-0 border-t-line border-parranda-live/25 py-3 text-sm leading-relaxed text-parranda-ink-soft`}>

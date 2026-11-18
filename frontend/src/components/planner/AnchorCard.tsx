@@ -4,7 +4,7 @@
  * second form here. Adjusting is collapsed to one line by default; every change
  * recomposes on its own (no submit) — the orchestrator's handlers own that.
  */
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { MAX_PLANNER_PREFERENCES, normalizePreferencePriority } from "../../../../shared/planner-intent.mjs";
 import { CheckIcon, ChevronDownIcon, LocationIcon, UndoIcon } from "../shared/icons";
 import { buttonClass, compactPillTarget, controlTone, Eyebrow, noticeCard, panelCard, segmentClass, segmentGroup } from "../shared/ui";
@@ -42,6 +42,7 @@ export default function AnchorCard({
   setInterestChooserOpen,
   onApplyInterests,
   parrandaChoosing = false,
+  takeOverFocus,
   notice,
   onSetDay,
   rhythms,
@@ -75,6 +76,7 @@ export default function AnchorCard({
   onApplyInterests?: (selection: InterestSelection) => void;
   /** "Let Parranda choose" is on: applying interests hands the choice back. */
   parrandaChoosing?: boolean;
+  takeOverFocus?: RefObject<boolean>;
   /**
    * The notice under the controls for a no-day result, a failed rebuild or
    * a suggested replacement awaiting a decision. `announce` is set only when
@@ -132,11 +134,12 @@ export default function AnchorCard({
   const adjustButton = useRef<HTMLButtonElement>(null);
   const doneButton = useRef<HTMLButtonElement>(null);
   const toggledHere = useRef(false);
-  useEffect(() => {
-    if (!toggledHere.current) return;
+  useLayoutEffect(() => {
+    if (!toggledHere.current && !takeOverFocus?.current) return;
     toggledHere.current = false;
+    if (takeOverFocus) takeOverFocus.current = false;
     (adjustOpen ? doneButton : adjustButton).current?.focus();
-  }, [adjustOpen]);
+  }, [adjustOpen, parrandaChoosing, takeOverFocus]);
   const toggleAdjust = (open: boolean) => {
     toggledHere.current = true;
     if (!open) setInterestChooserOpen?.(false);

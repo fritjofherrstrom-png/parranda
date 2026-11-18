@@ -384,6 +384,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // handoff §2): past the landing there is no second form and no submit — the
   // day re-composes on its own when an adjustment settles.
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const takeOverFocus = useRef(false);
   const [interestChooserOpen, setInterestChooserOpen] = useState(false);
   const recomposeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSequenceRef = useRef(0);
@@ -2989,6 +2990,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setWalkKey("free");
   };
   const takeOverChoice = (keys: string[]) => {
+    takeOverFocus.current = true;
     invalidateCommitmentIntent();
     relaxDayEditForAdjustment();
     setIntentMode(null);
@@ -3197,6 +3199,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         setInterestChooserOpen={setInterestChooserOpen}
         onApplyInterests={canUpdateSaved ? applyInterests : undefined}
         parrandaChoosing={choosing}
+        takeOverFocus={takeOverFocus}
         notice={noDay ? {
           // The page's result region announces this one; the card only shows it.
           message: noDayText,

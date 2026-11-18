@@ -81,6 +81,18 @@ test('looking for more places keeps its focused action while the published day i
   assert.equal(h.document.activeElement, h.container.querySelector('header h1'), 'removing the completed action leaves focus on the day');
 });
 
+test('focus arriving on the busy action follows the result even after pointer activation', async t => {
+  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
+  t.after(() => h.unmount());
+  await h.fetchMock.respond(calls(h)[0], day());
+  const update = button(h, 'Look for more places');
+  update.closest('details').open = true;
+  await h.act(() => update.click());
+  update.focus();
+  await h.fetchMock.respond(calls(h)[1], day(complete, null));
+  assert.ok(h.document.activeElement === h.container.querySelector('header h1'), 'focus stays with the day');
+});
+
 test('a failed look keeps the source sentence and enables deliberate recovery', async t => {
   const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&prefs=culture&lang=en' });
   t.after(() => h.unmount());
