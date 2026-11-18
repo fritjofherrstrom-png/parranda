@@ -50,7 +50,7 @@ test("navigation sits before main, and the map is one landmark", async (t) => {
   assert.match(planner, /regionLabel=\{splitLayout \? t\("Interaktiv karta", "Interactive map"\) : undefined\}/);
   const routeMap = read("../src/components/planner/RouteMap.tsx");
   assert.match(routeMap, /const mapTitle = regionLabel \|\| t\("Karta över dagen", "Map of the day"\)/);
-  assert.match(routeMap, /"Map\.Title": mapTitleRef\.current/);
+  assert.match(routeMap, /"Map\.Title": mapTitle/);
 
   const h = await mountPlanner({ url: "http://localhost/anywhere?place=Testville&lang=en" });
   t.after(() => h.unmount());

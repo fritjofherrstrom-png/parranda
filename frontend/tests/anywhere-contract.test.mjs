@@ -452,9 +452,11 @@ test("route, saved-day, Blitz, and source actions keep a 44px mobile touch targe
   assert.match(anywherePlannerSource, /onClick=\{\(\) => restoreEntry\(entry\)\}[\s\S]{0,180}min-h-11/);
   assert.match(anywherePlannerSource, /aria-label=\{t\("Ta bort", "Remove"\)\}[\s\S]{0,180}min-h-11 min-w-11/);
   assert.match(anywherePlannerSource, /href=\{pin\}[\s\S]{0,180}min-h-11 min-w-11/);
-  // Live source links (rows, woven stop, Blitz) name their destination. Inline
-  // ones draw the 44px target with ::before, so wrapping never moves the text.
-  assert.match(anywherePlannerSource, /href=\{link\.href\}[\s\S]{0,120}\$\{inlineLinkTarget\}/);
+  // Live board links and their disclosure have full-height targets. The
+  // woven stop's inline link keeps its extended hit area.
+  const liveSource = componentSource("planner/LiveEventSource.tsx");
+  assert.match(liveSource, /href=\{link\.href\}[^>]*min-h-11/);
+  assert.match(liveSource, /<summary className="min-h-11 /);
   assert.match(anywherePlannerSource, /href=\{sourceLink\.href\}[\s\S]{0,120}\$\{inlineLinkTarget\}/);
   assert.match(componentSource("shared/ui.tsx"), /inlineLinkTarget = "relative before:absolute before:-inset-x-1 before:-inset-y-\[14px\]/);
   assert.doesNotMatch(anywherePlannerSource, /-my-3|&nbsp;↗/);
