@@ -39,7 +39,8 @@ window.renderHeadings('en');`);
     await fs.writeFile(path.join(temp, 'tailwind.css'), css.join('\n'));
     server = http.createServer(async (req, res) => {
       try {
-        const file = req.url === '/' ? null : path.join(temp, path.basename(req.url));
+        const directory = req.url.startsWith('/_astro/') ? assets : temp;
+        const file = req.url === '/' ? null : path.join(directory, path.basename(req.url));
         res.setHeader('Content-Type', req.url.endsWith('.js') ? 'application/javascript' : req.url.endsWith('.css') ? 'text/css' : req.url.endsWith('.woff2') ? 'font/woff2' : 'text/html');
         res.end(file ? await fs.readFile(file) : `<!doctype html><html data-theme="day"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/tailwind.css"><div id="root" style="padding:0 16px"></div><script src="/entry.js"></script>`);
       } catch { res.statusCode = 404; res.end(); }
@@ -60,6 +61,15 @@ window.renderHeadings('en');`);
       await page.goto(origin);
       await page.waitForFunction(n => document.querySelectorAll('[data-name]').length === n, NAMES.length);
       await page.evaluate(() => document.fonts.ready);
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('DOM.enable');
+      await cdp.send('CSS.enable');
+      const { root: documentRoot } = await cdp.send('DOM.getDocument');
+      const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: documentRoot.nodeId, selector: 'h1' });
+      const { fonts } = await cdp.send('CSS.getPlatformFontsForNode', { nodeId });
+      assert.ok(fonts.length > 0 && fonts.every(font => /^Archivo\b/.test(font.familyName) && font.isCustomFont),
+        'Measure the production Archivo face: ' + JSON.stringify(fonts));
+      await cdp.detach();
       for (const [lang, theme, rem] of [['en', 'day', 16], ['sv', 'night', 16], ['en', 'night', 32], ['sv', 'day', 32]]) {
         await page.evaluate(async ({lang, theme, rem}) => {
           document.documentElement.dataset.theme = theme;
