@@ -23,6 +23,7 @@ const { once } = require("node:events");
 const test = require("node:test");
 
 const { buildApp } = require("../server/app");
+const { waitForRouteMapLayout } = require("./helpers/route-map-ready");
 
 const FIXTURE_DATE = "2026-09-27";
 const FIXED_NOW = new Date(`${FIXTURE_DATE}T10:00:00Z`);
@@ -162,24 +163,40 @@ async function backgroundAt(page) {
 
 const near = (actual, expected) => actual.every((value, i) => Math.abs(value - expected[i]) <= 3);
 
+async function visibleStopPins(map) {
+  const markers = map.locator(".route-map-marker:visible");
+  await markers.first().waitFor();
+  await waitForRouteMapLayout(map);
+  const pins = await markers.evaluateAll((elements) => elements.map((element) => {
+    const box = element.getBoundingClientRect();
+    return { label: element.textContent, x: Math.round(box.left), y: Math.round(box.top) };
+  }));
+  // The map can display a single stop number or a group such as "1–3,5".
+  const numbers = pins.flatMap(({ label }) => label.split(",").flatMap((part) => {
+    const [first, last = first] = part.split("–").map(Number);
+    return Array.from({ length: last - first + 1 }, (_, offset) => first + offset);
+  }));
+  assert.deepEqual(numbers.sort((a, b) => a - b), STOPS.map((_, index) => index + 1), "every stop is visible once");
+  return pins;
+}
+
 test("a theme switch recolours the drawn map without redrawing the day", { timeout: 120_000 }, async (t) => {
   const current = await openRuntime(t);
   if (!current) return;
   const { context, page, map, pageErrors, composes } = await openDay(current, { theme: "day" });
   try {
-    await map.locator(".route-map-marker").nth(STOPS.length - 1).waitFor();
+    const before = await visibleStopPins(map);
     await map.getByText("Ritar kartan …").waitFor({ state: "detached" });
     await page.waitForTimeout(400);
     const dayPaper = await backgroundAt(page);
     assert.ok(near(dayPaper, PAPER.day), `day background ${dayPaper}`);
-    const before = await map.locator(".route-map-marker").evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [e.textContent, Math.round(r.left), Math.round(r.top)]; }));
     const composed = composes();
 
     await page.getByRole("button", { name: "Kvällsläge" }).click();
     await page.waitForTimeout(400);
     const nightPaper = await backgroundAt(page);
     assert.ok(near(nightPaper, PAPER.night), `night background ${nightPaper}`);
-    const after = await map.locator(".route-map-marker").evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [e.textContent, Math.round(r.left), Math.round(r.top)]; }));
+    const after = await visibleStopPins(map);
     assert.deepEqual(after, before, "every marker stays where it was");
     assert.equal(composes(), composed, "the day is not composed again");
     assert.deepEqual(pageErrors, []);
@@ -194,10 +211,9 @@ for (const [confirmedWalking, visibleContent] of [[true, "rutten och stoppen"], 
     if (!current) return;
     const { context, map, pageErrors } = await openDay(current, { confirmedWalking });
     try {
-      await map.locator(".route-map-marker").nth(STOPS.length - 1).waitFor();
-      assert.deepEqual(await map.locator(".route-map-marker").allTextContents(), ["1", "2", "3", "4"]);
       const status = map.getByRole("status").filter({ hasText: "Kartbakgrunden kunde inte hämtas" });
       await status.waitFor();
+      await visibleStopPins(map);
       assert.equal(await status.innerText(), `Kartbakgrunden kunde inte hämtas — ${visibleContent} visas ändå.`);
       // The basemap's credit stays even without tiles. Only an actual walking
       // line earns the separate router credit inside the same attribution.
