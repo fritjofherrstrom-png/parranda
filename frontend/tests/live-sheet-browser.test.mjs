@@ -98,10 +98,11 @@ test('Live card and sheet wrap unbroken place names and keep a linked title tapp
   const events = { coverage: 'covered', selected_date: '2026-10-07', tonight: [row], this_week: [row] };
   for (const lang of ['en', 'sv']) {
     await page.evaluate(({ events, lang, anchorLabel }) => window.renderCard(events, lang, anchorLabel), { events, lang, anchorLabel });
-    const board = page.getByRole('heading', { name: new RegExp(anchorLabel) });
+    const board = page.getByRole('heading', { level: 2, name: new RegExp(anchorLabel) });
     await board.waitFor();
     assert.ok(await board.evaluate(el => el.scrollWidth <= el.clientWidth), 'Live card heading fits at 320px');
     const link = page.getByRole('link', { name: row.title, exact: true });
+    await link.waitFor();
     assert.ok((await link.boundingBox()).height >= 44, 'linked Live title has a 44px target');
 
     await render(events, lang, 'week', { anchorLabel });
@@ -115,6 +116,30 @@ test('Live card and sheet wrap unbroken place names and keep a linked title tapp
 
 const unknown = /Live information is unavailable right now|Live-information är inte tillgänglig just nu/;
 const falseEmpty = /Nothing verified|Nothing listed|Inget verifierat|Inget listat/;
+
+test('Live close stays in reach while scrolling a full event list on mobile', async t => {
+  const { page, render } = await browserHarness(t);
+  await page.setViewportSize({ width: 320, height: 740 });
+  const cssDir = new URL('../dist/_astro/', import.meta.url);
+  for (const file of readdirSync(cssDir).filter(name => name.endsWith('.css'))) {
+    await page.addStyleTag({ content: readFileSync(new URL(file, cssDir), 'utf8') });
+  }
+  const rows = Array.from({ length: 12 }, (_, index) => ({
+    id: `event-${index}`, title: `Calendar event ${index + 1}`,
+    source_url: 'https://calendar.example/event', source_link_kind: 'page', source_link_host: 'calendar.example',
+    time_window: { kind: 'all_day', all_day_explicit: true, starts_on: '2026-10-07', ends_on: '2026-10-07' },
+  }));
+  await render({ coverage: 'covered', selected_date: '2026-10-07', tonight: rows, this_week: [] });
+  const close = page.getByRole('button', { name: 'Close live', exact: true });
+  const initial = await close.boundingBox();
+  await page.getByRole('heading', { name: 'Calendar event 12', exact: true }).scrollIntoViewIfNeeded();
+  const after = await close.boundingBox();
+  assert.ok(Math.abs(initial.y - after.y) <= 1, 'the close action keeps its position');
+  assert.ok(await close.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    return element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+  }), 'the close action remains tappable');
+});
 
 test('native mounted calendar layout retains escaped credit, admin scope and half-day flags in sv/en and both periods', async t => {
   const { page, render } = await browserHarness(t);

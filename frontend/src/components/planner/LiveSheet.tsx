@@ -179,32 +179,34 @@ export default function LiveSheet({
         aria-modal="true"
         aria-label={t("Live-händelser", "Live events")}
         tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t-line border-parranda-line-faint bg-parranda-paper px-5 pb-8 pt-4 shadow-sheet wrap-anywhere sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:rounded-3xl sm:border-line sm:px-7"
+        className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto scroll-pt-36 rounded-t-3xl border-t-line border-parranda-line-faint bg-parranda-paper px-5 pb-8 shadow-sheet wrap-anywhere sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:rounded-3xl sm:border-line sm:px-7"
       >
-        <div className="flex justify-center sm:hidden" aria-hidden="true">
-          <span className="h-1 w-11 rounded-full bg-parranda-line" />
-        </div>
-        <div className="mt-3 flex items-center justify-between gap-3">
-          <h3 className="type-title min-w-0 text-3xl text-parranda-ink">
-            {liveSheetScope === "near_me" || anchorIsPosition ? (
-              <>
-                Live <em className="not-italic text-parranda-live">{t("nära dig", "near you")}</em>
-              </>
-            ) : (
-              <>
-                {t("Live i", "Live in")} <em className="not-italic text-parranda-live">{anchorLabel}</em>
-              </>
-            )}
-          </h3>
-          <button
-            ref={closeRef}
-            type="button"
-            aria-label={t("Stäng live", "Close live")}
-            onClick={onClose}
-            className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-parranda-btn bg-parranda-fill text-parranda-ink-soft transition hover:bg-parranda-fill-strong hover:text-parranda-ink"
-          >
-            <CloseIcon />
-          </button>
+        <div className="sticky top-0 z-(--p-z-raised) -mx-5 bg-parranda-paper px-5 pb-2 pt-4 sm:-mx-7 sm:px-7">
+          <div className="flex justify-center sm:hidden" aria-hidden="true">
+            <span className="h-1 w-11 rounded-full bg-parranda-line" />
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <h3 className="type-title min-w-0 text-3xl text-parranda-ink">
+              {liveSheetScope === "near_me" || anchorIsPosition ? (
+                <>
+                  Live <em className="not-italic text-parranda-live">{t("nära dig", "near you")}</em>
+                </>
+              ) : (
+                <>
+                  {t("Live i", "Live in")} <em className="not-italic text-parranda-live">{anchorLabel}</em>
+                </>
+              )}
+            </h3>
+            <button
+              ref={closeRef}
+              type="button"
+              aria-label={t("Stäng live", "Close live")}
+              onClick={onClose}
+              className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-parranda-btn bg-parranda-fill text-parranda-ink-soft transition hover:bg-parranda-fill-strong hover:text-parranda-ink"
+            >
+              <CloseIcon />
+            </button>
+          </div>
         </div>
 
         {/* WHERE — a real axis over live_event_query_v1. It reads trusted

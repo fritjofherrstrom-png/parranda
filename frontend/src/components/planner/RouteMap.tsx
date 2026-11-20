@@ -66,7 +66,7 @@ type Tip = { name: string; x: number; y: number; direction: "left" | "right" } |
 let maplibreModule: Promise<MapLibre> | null = null;
 /** MapLibre and its worker, loaded once and only when a map is drawn. */
 // The entire 44px square is the touch target.
-const mapIconButton = "inline-flex h-11 w-11 items-center justify-center rounded-parranda-btn border-line border-parranda-line-firm bg-parranda-paper/85 text-parranda-ink backdrop-blur-sm transition hover:bg-parranda-paper aria-disabled:opacity-60";
+const mapButton = "inline-flex h-11 min-w-11 items-center justify-center rounded-parranda-btn border-line border-parranda-line-firm bg-parranda-paper/85 text-parranda-ink backdrop-blur-sm transition hover:bg-parranda-paper aria-disabled:opacity-60";
 
 function loadMapLibre(): Promise<MapLibre> {
   maplibreModule ??= Promise.all([
@@ -1035,21 +1035,18 @@ export default function RouteMap({
           {t("Ritar kartan …", "Drawing the map …")}
         </div>
       )}
-      {/* Linje 2 board: the map's own controls are square marks in one
-          group at the bottom-right, each named by its label and tooltip.
-          They are map controls (data-map-control), so the fit keeps every
-          stop clear of them. */}
+      {/* The fit accounts for the whole control group, including the visible expand label. */}
       <div data-map-control="" className="absolute right-2.5 z-(--p-z-map-control) flex gap-2" style={{ bottom: `${attribHeight + 8}px` }}>
         {positionSession?.supported && onLocate && <button type="button" {...busyButton(!mapDrawn, onLocate)}
           aria-label={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
           title={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
-          className={mapIconButton}>
+          className={`${mapButton} w-11`}>
           <LocationIcon className="h-[18px] w-[18px]" />
         </button>}
         <button type="button" {...busyButton(!mapDrawn, () => refitRef.current())}
           aria-label={hasPrimaryRoute ? t("Visa rutten", "Show route") : t("Visa platserna", "Show places")}
           title={hasPrimaryRoute ? t("Visa hela rutten", "Show the whole route") : t("Visa alla platser", "Show all places")}
-          className={mapIconButton}>
+          className={`${mapButton} w-11`}>
           <RouteIcon className="h-[18px] w-[18px]" />
         </button>
         {onToggleExpanded && <button
@@ -1057,10 +1054,10 @@ export default function RouteMap({
           onClick={onToggleExpanded}
           aria-expanded={mapExpanded}
           aria-label={mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
-          title={mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
-          className={mapIconButton}
+          className={`${mapButton} gap-1.5 whitespace-nowrap px-2.5 text-xs font-bold`}
         >
           {mapExpanded ? <CollapseIcon className="h-[18px] w-[18px]" /> : <ExpandIcon className="h-[18px] w-[18px]" />}
+          {mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
         </button>}
       </div>
     </div>

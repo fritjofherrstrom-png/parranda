@@ -411,13 +411,12 @@ test("compact planner and map controls keep a 44px mobile touch target", () => {
   assert.match(anchorCard, /const rowControl = "inline-flex min-h-11 /);
   assert.match(anchorCard, /aria-expanded=\{false\}[\s\S]{0,120}className=\{compact && summary \? rowControl : controlPill\}/);
   assert.match(anchorCard, /aria-expanded=\{true\}[\s\S]{0,120}className=\{compact && summary \? rowControl : controlPill\}/);
-  // Linje 2: the map's expand control is a square mark among the map's
-  // controls, named in both languages, with a 44px square target.
+  // Linje 2: the expand control names the action and fits a 44px target.
   assert.match(
     anywherePlannerSource,
-    /aria-expanded=\{mapExpanded\}\s*aria-label=\{mapExpanded \? t\("Förminska kartan", "Shrink map"\) : t\("Förstora kartan", "Expand map"\)\}[\s\S]{0,200}className=\{mapIconButton\}/,
+    /aria-expanded=\{mapExpanded\}\s*aria-label=\{mapExpanded \? t\("Förminska kartan", "Shrink map"\) : t\("Förstora kartan", "Expand map"\)\}/,
   );
-  assert.match(anywherePlannerSource, /const mapIconButton = "inline-flex h-11 w-11 /);
+  assert.match(anywherePlannerSource, /const mapButton = "inline-flex h-11 min-w-11 /);
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-ctrl-group button\s*\{[\s\S]*width: 44px;/);
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-ctrl-group button\s*\{[\s\S]*height: 44px;/);
   // A route stop's disc and its touch target are 44px markers, both drawn where
@@ -734,8 +733,8 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.match(anywherePlannerSource, /sheetBuckets\.thisWeek\.length\}/);
   assert.match(anywherePlannerSource, /sheetSourceHealth\.responding_source_count/);
   assert.match(anywherePlannerSource, /sheetSourceHealth\.event_bearing_source_count/);
-  // The card's week summary is a count, not a second list.
-  assert.match(anywherePlannerSource, /till", "more"/);
+  assert.match(anywherePlannerSource, /t\("Se kommande 7 dagar", "See next 7 days"\)/);
+  assert.doesNotMatch(anywherePlannerSource, /more this week/);
 });
 
 // --------------------------------------------------------------------------

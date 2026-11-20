@@ -454,8 +454,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
   };
   const [detoursOpen, setDetoursOpen] = useState(false);
-  // The route's "About this day and map" holds the place-shortfall line (Linje 2).
-  const [aboutSourcesHost, setAboutSourcesHost] = useState<HTMLElement | null>(null);
   // Below the line, as on the Linje 2 board: Live, the detours, Blitz, then
   // "About this day and map". The route renders those two into these hosts.
   const [detoursHost, setDetoursHost] = useState<HTMLElement | null>(null);
@@ -3069,26 +3067,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setStopEditPending(false);
     setWalkKey(key);
   };
+  const liveSheetEntryTime = liveSheetOpenedRef.current ? liveSheetTime
+    : preferFollowingWeek ? "week"
+    : pulseBuckets.tonight.length > 0 || split.woven.length > 0 ||
+      pulseState === "pending" ||
+      (inPlaceScopeAvailable && selectedDayEmpty(liveEvents)) ? "tonight" : "week";
   const openLiveSheet = () => {
     // Reopening resumes the cell the reader selected. Reapplying
     // the day's default period would relabel another query's rows
     // and a pending route/GPS query would restart around the place.
     const reopening = liveSheetOpenedRef.current;
-    const nextTime = reopening ? liveSheetTime
-      : preferFollowingWeek ? "week"
-      : pulseBuckets.tonight.length > 0 || split.woven.length > 0 ||
-        pulseState === "pending" ||
-        (inPlaceScopeAvailable && selectedDayEmpty(liveEvents)) ? "tonight" : "week";
     const nextScope = reopening ? liveSheetScope : "around_place";
     liveSheetOpenedRef.current = true;
-    setLiveSheetTime(nextTime);
+    setLiveSheetTime(liveSheetEntryTime);
     setLiveSheetOpen(true);
     // "Couldn't verify" + an available anchor: opening the sheet IS
     // the "check again" — fire a fresh around-place query (its own
     // bounded retries) instead of showing the same stale emptiness.
     if ((reopening || pulseState === "unavailable" || pulseState === "pending") &&
         (nextScope !== "around_place" || aroundPlaceScopeAvailable) && !liveQueryPending) {
-      requestLiveSheetScope(nextScope, nextTime, true).catch(() => {});
+      requestLiveSheetScope(nextScope, liveSheetEntryTime, true).catch(() => {});
     }
   };
 
@@ -3296,7 +3294,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           dayLimitationNote={dayLimitationNote}
           sourceShortfall={sourceShortfall}
           onLookForMorePlaces={lookForMorePlaces}
-          shortfallHost={dayWithRoute ? aboutSourcesHost : null}
           rechecking={recheckPending && staleNotice === "updating"}
           restoredAt={restoredAt}
           canUpdateSaved={canUpdateSaved}
@@ -3685,7 +3682,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           routeContextSuggestions={routeContextSuggestions}
           detoursOpen={detoursOpen}
           setDetoursOpen={setDetoursOpen}
-          sourcesHost={setAboutSourcesHost}
           continuesFromMap={Boolean(mapOverview)}
           detoursHost={detoursHost}
           aboutHost={aboutHost}
@@ -3786,6 +3782,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           liveFailureSentence={liveFailureSentence}
           pulseBuckets={pulseBuckets}
           showExplore={pulseBuckets.tonight.length > 0 || pulseBuckets.thisWeek.length > 0 || aroundPlaceScopeAvailable}
+          startsWithWeek={!liveSheetOpenedRef.current && liveSheetEntryTime === "week"}
           pulseSources={pulseSources}
           liveSheetTriggerRef={liveSheetTriggerRef}
           openLiveSheet={openLiveSheet}

@@ -54,11 +54,8 @@ const NO_NEW_STOPS: ReadonlySet<string> = new Set();
  * qualifies. Every fact is still on the page (and read by assistive tech when
  * opened). How Maps walks the route is said beside the Maps action.
  */
-function AboutDayAndMap({ t, assemblyNotes = [], routeLineIsSketch, dayContextNote, sourcesHost }: {
+function AboutDayAndMap({ t, assemblyNotes = [], routeLineIsSketch, dayContextNote }: {
   t: Translate;
-  /** Linje 2: where the header places its "not every place could be loaded"
-   *  line and Look for more places, so they are said here, once, on request. */
-  sourcesHost?: (element: HTMLElement | null) => void;
   assemblyNotes?: string[];
   routeLineIsSketch: boolean;
   dayContextNote: string | null | undefined;
@@ -75,7 +72,6 @@ function AboutDayAndMap({ t, assemblyNotes = [], routeLineIsSketch, dayContextNo
         <li>{t("Avstånd och gångtider är uppskattningar.", "Distances and walking times are estimates.")}</li>
         {dayContextNote && <li>{dayContextNote}</li>}
       </ul>
-      <div ref={sourcesHost} data-about-sources="" className="empty:hidden pb-1 pt-1" />
     </details>
   );
 }
@@ -119,7 +115,6 @@ export default function StopLine({
   onToggleFollow,
   routeContextSuggestions,
   detoursOpen,
-  sourcesHost,
   actions = null,
   continuesFromMap = false,
   detoursHost = null,
@@ -166,7 +161,6 @@ export default function StopLine({
   onToggleFollow: () => void;
   routeContextSuggestions: RouteContextSuggestion[];
   detoursOpen: boolean;
-  sourcesHost?: (element: HTMLElement | null) => void;
   /** The walk's Maps card, Save and Share: where the line ends. */
   actions?: ReactNode;
   /** A phone: the map stands right above, so the line starts at its edge. */
@@ -219,7 +213,7 @@ export default function StopLine({
   // them. On a phone the map's still overview stands in the day's header,
   // between the title and the facts; wide screens keep the map beside the day.
   const about = (
-    <AboutDayAndMap t={t} assemblyNotes={assemblyNotes} routeLineIsSketch={routeLineIsSketch} dayContextNote={dayContextNote} sourcesHost={sourcesHost} />
+    <AboutDayAndMap t={t} assemblyNotes={assemblyNotes} routeLineIsSketch={routeLineIsSketch} dayContextNote={dayContextNote} />
   );
 
   const detours = (routeContextSuggestions.length > 0 && (

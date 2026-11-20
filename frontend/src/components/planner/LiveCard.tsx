@@ -18,7 +18,7 @@ import type { Lang, Translate } from "./copy";
 import LiveEventSummary from "./LiveEventSummary";
 import EventOccurrences from "./EventOccurrences";
 import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
-import { eventBoardClock } from "../../lib/pulse-view.mjs";
+import { eventBoardClock, pulseBrowseBuckets } from "../../lib/pulse-view.mjs";
 import type { LiveEvents, PulseEvent } from "./types";
 
 export default function LiveCard({
@@ -38,6 +38,7 @@ export default function LiveCard({
   liveFailureSentence,
   pulseBuckets,
   showExplore,
+  startsWithWeek = false,
   pulseSources,
   liveSheetTriggerRef,
   openLiveSheet,
@@ -58,6 +59,7 @@ export default function LiveCard({
   liveFailureSentence: (failure: { selected: number; responding: number }) => string;
   pulseBuckets: { tonight: PulseEvent[]; thisWeek: PulseEvent[] };
   showExplore: boolean;
+  startsWithWeek?: boolean;
   pulseSources: string | null;
   liveSheetTriggerRef: Ref<HTMLButtonElement>;
   openLiveSheet: () => void;
@@ -77,11 +79,17 @@ export default function LiveCard({
     ? evening ? t("I kväll", "Tonight") : t("Idag", "Today")
     : liveDayLabel;
   const boardRows = pulseBuckets.tonight.slice(0, 4);
-  const shownIds = new Set(boardRows.map(event => event.id));
-  // A period or recurring listing can appear in both feeds. Only count
-  // identifiable weekly listings not already visible on this board.
-  const weekMore = new Set(pulseBuckets.thisWeek.map(event => event.id)
-    .filter(id => id != null && !shownIds.has(id))).size;
+  const browse = pulseBrowseBuckets(liveEvents);
+  const hasSelectedDayListings = boardRows.length > 0 || wovenNames.length > 0 ||
+    browse.tonight.length > 0 || Boolean(liveEvents?.browse?.tonight?.hidden_count);
+  const hasWeekListings = pulseBuckets.thisWeek.length > 0 || browse.thisWeek.length > 0;
+  const showSelectedDayStatus = shownDate && !hasSelectedDayListings && hasWeekListings &&
+    (pulseState === "ok" || pulseState === "partial");
+  const exploreLabel = startsWithWeek && showSelectedDayStatus
+    ? t("Se kommande 7 dagar", "See next 7 days")
+    : boardRows.length > 0 || pulseBuckets.thisWeek.length > 0
+      ? t("Se allt live", "See all live")
+      : t("Utforska live", "Explore live");
   return (
     <section
       className="rounded-parranda bg-parranda-live/8 p-5 sm:p-6"
@@ -151,6 +159,11 @@ export default function LiveCard({
             : t("Parranda kunde inte verifiera händelser just nu — försök igen om en stund.", "Parranda couldn't verify events right now — try again shortly.")}
         </p>
       )}
+      {showSelectedDayStatus && (
+        <p className="mt-3 text-sm text-parranda-ink-muted">
+          {t("Inga verifierade evenemang för den valda dagen.", "No verified events for the selected day.")}
+        </p>
+      )}
 
       {pulseBuckets.tonight.length > 0 && (
         <div className="mt-4">
@@ -176,15 +189,6 @@ export default function LiveCard({
           </ul>
         </div>
       )}
-      {/* The week's count rides on the button that opens it (the board):
-          the count comes from the bucket, never from copy. Without the
-          button, it stays a line of its own. */}
-      {weekMore > 0 && !showExplore && (
-        <p className="mt-3 text-sm text-parranda-ink-muted">
-          <span className="font-bold text-parranda-ink">{t("Kommande 7 dagar", "Next 7 days")}</span>
-          {" · "}{weekMore}{" "}{t("till", "more")}
-        </p>
-      )}
       {showExplore && (
         <button
           type="button"
@@ -192,11 +196,7 @@ export default function LiveCard({
           onClick={openLiveSheet}
           className={buttonClass("live", "mt-4 min-h-12 w-full px-4 text-sm")}
         >
-          {pulseBuckets.tonight.length > 0 || weekMore > 0
-            ? weekMore > 0
-              ? t(`Se allt live, ${weekMore} till i veckan`, `See all live, ${weekMore} more this week`)
-              : t("Se allt live", "See all live")
-            : t("Utforska live", "Explore live")}
+          {exploreLabel}
           <ChevronRightIcon className="h-4 w-4" />
         </button>
       )}

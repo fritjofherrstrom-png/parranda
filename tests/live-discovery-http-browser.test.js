@@ -371,13 +371,8 @@ test('ordinary HTTP browser day preserves the second source occurrence through s
   assert.equal(routeStops(partial).length, 6);
   assert.equal(occurrence(routeStops(partial).at(-1)), chosenId);
   await assertRenderedDay(page, routeStops(partial));
-  // One plain sentence and one action (iPhone, 23 Oct 2026), no "Update the
-  // day" that could swap stops silently. Linje 2 (Fritjof, 17 Nov): with a
-  // route on screen both are said in "About this day and map", which
-  // closes the page after Live, the detours and Blitz.
-  const quiet = page.getByText('Not every place could be loaded, so there may be more than the ones shown.', { exact: true });
-  await quiet.waitFor({ state: 'attached' });
-  await page.locator('[data-route-about] summary').filter({ hasText: 'About this day and map' }).click();
+  // The published day shows one source note and its action beside the map.
+  const quiet = page.locator('main header').getByText('Not every place could be loaded.', { exact: true });
   await quiet.waitFor();
   assert.equal(await quiet.getAttribute('role'), 'status');
   assert.equal(await quiet.locator('xpath=..').getAttribute('role'), null);

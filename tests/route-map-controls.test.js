@@ -353,6 +353,7 @@ test("map controls have a 44px touch target in the mobile overview and expanded 
       const locate = route.getByRole("button", { name: "Visa min position", exact: true });
       const refit = route.getByRole("button", { name: "Visa rutten", exact: true });
       const expand = route.getByRole("button", { name: expandName, exact: true });
+      assert.equal((await expand.innerText()).trim(), expandName, "the expand action has a visible text label");
       for (const button of [locate, refit, expand]) {
         await button.scrollIntoViewIfNeeded();
         const covered = await button.evaluate(element => {

@@ -1,4 +1,3 @@
-import { createPortal } from "react-dom";
 /**
  * THE DAY HEADER (design handoff §3): title, honest counts, what the day did for
  * each pick, provenance, and the day-level actions — the walk in Maps, save and
@@ -10,8 +9,8 @@ import { createPortal } from "react-dom";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
 import { routeUnconfirmedTonightPicks, walkingDistanceLabel } from "../../lib/route-context-view.mjs";
-import { CheckIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, MinusIcon, RainIcon, SearchIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
-import { busyButton, buttonClass, compactPillTarget, controlTone, Eyebrow, labelChip } from "../shared/ui";
+import { CheckIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, MinusIcon, RainIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
+import { busyButton, buttonClass, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
 import { dayIdea } from "../../lib/day-idea.mjs";
@@ -176,7 +175,6 @@ export default function DayHeader({
   sourceShortfall = null,
   onLookForMorePlaces,
   rechecking = false,
-  shortfallHost = null,
   restoredAt,
   canUpdateSaved = true,
   resolveAndRun,
@@ -217,9 +215,6 @@ export default function DayHeader({
   onLookForMorePlaces?: () => void;
   /** That look is the rebuild now running. */
   rechecking?: boolean;
-  /** Linje 2: when the route's "About this day and map" exists, the place
-   *  shortfall and its action are said there instead of under the title. */
-  shortfallHost?: HTMLElement | null;
   restoredAt: string | null;
   canUpdateSaved?: boolean;
   resolveAndRun: () => void;
@@ -274,23 +269,6 @@ export default function DayHeader({
     if (!displayedShortfall && sourceUpdateHadFocus.current && document.activeElement === document.body) headingRef.current?.focus();
     if (staleNotice !== "updating") sourceUpdateHadFocus.current = false;
   }, [displayedShortfall, staleNotice]);
-  const shortfallBlock = displayedShortfall ? (
-          <div className="flex flex-col items-start gap-2 text-13 leading-relaxed text-parranda-ink-muted">
-            <p role="status">
-              {displayedShortfall === "failed"
-                ? t("Inte alla platser kunde läsas in, så det kan finnas fler än de som visas.", "Not every place could be loaded, so there may be more than the ones shown.")
-                : t("Inte alla platser hann läsas in, så det kan finnas fler än de som visas.", "Not every place loaded in time, so there may be more than the ones shown.")}
-            </p>
-            {onLookForMorePlaces && canUpdateSaved && (
-              <button type="button" ref={sourceUpdateRef}
-                {...busyButton(staleNotice === "updating", onLookForMorePlaces)}
-                className={`${compactPillTarget} gap-2 px-3.5 ${controlTone} aria-busy:cursor-progress ${rechecking ? "" : "aria-disabled:opacity-60"}`}>
-                {rechecking ? <RingMark className="h-3.5 w-3.5" /> : <SearchIcon className="h-3.5 w-3.5 text-parranda-ink-muted" />}
-                {rechecking ? t("Letar efter fler platser …", "Looking for more places …") : t("Leta efter fler platser", "Look for more places")}
-              </button>
-            )}
-          </div>
-      ) : null;
 
   // What the day contains and how it stands (a thin day, a saved snapshot)
   // is said before the picks and the map, so the map is the last thing in
@@ -338,14 +316,6 @@ export default function DayHeader({
                   `${unconfirmedList}: the evening's opening hours are unknown — check before you go.`)}
           </p>
         )}
-        {/* Source limitations describe this published answer, never a live job:
-            one plain sentence and the one thing a reader can do about it. A
-            bold "Some place information is missing", a hidden "About the place
-            sources" and an "Update the day" link that could swap the stops
-            silently confused more than they told (iPhone, 23 Oct 2026).
-            Looking again asks the same question; its result is said in the
-            change line ("Looked for more places: …", with Undo). */}
-        {displayedShortfall && (shortfallHost ? createPortal(shortfallBlock, shortfallHost) : shortfallBlock)}
         {/* What the day CONTAINS stays under the title (a thin day says so);
             how it was ASSEMBLED is one "About this day" line beside the map. */}
         {dayLimitationNote && <Note>{dayLimitationNote}</Note>}
@@ -446,6 +416,23 @@ export default function DayHeader({
       </div>
       {tail}
       {controls}
+      {displayedShortfall && (
+        <div className="flex flex-wrap items-center gap-x-3 text-13 leading-snug text-parranda-ink-muted">
+          <p role="status">
+            {displayedShortfall === "failed"
+              ? t("Inte alla platser kunde läsas in.", "Not every place could be loaded.")
+              : t("Inte alla platser hann läsas in.", "Not every place loaded in time.")}
+          </p>
+          {onLookForMorePlaces && canUpdateSaved && (
+            <button type="button" ref={sourceUpdateRef}
+              {...busyButton(staleNotice === "updating", onLookForMorePlaces)}
+              className={buttonClass("quiet", `min-h-11 gap-2 px-1 text-13 underline underline-offset-2 aria-busy:cursor-progress ${rechecking ? "" : "aria-disabled:opacity-60"}`)}>
+              {rechecking && <RingMark className="h-3.5 w-3.5" />}
+              {rechecking ? t("Letar efter fler platser …", "Looking for more places …") : t("Leta efter fler platser", "Look for more places")}
+            </button>
+          )}
+        </div>
+      )}
       {/* On a phone the map's still overview pictures the day, edge to edge. */}
       {overview}
     </header>
