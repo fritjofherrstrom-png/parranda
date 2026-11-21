@@ -134,6 +134,35 @@ for (const [name, label, portable] of [
   });
 }
 
+test('a day labelled as read from map extracts keeps the label through storage, read and the recipient parser', async t => {
+  const snapshot = { extracts: [{ region: 'b-large', data_timestamp: '2026-05-01T00:00:00.000Z' },
+    { region: 'a-small', data_timestamp: '2026-05-20T00:00:00.000Z' }], includes_live_answer: true };
+  let loads = 0;
+  const h = await setup(t);
+  const labelled = await listen(t, { ...h.options, openDataLoader: async () => {
+    loads++;
+    const rows = [...h.records];
+    Object.defineProperty(rows, 'loader_status', { value: `loaded:${rows.length}` });
+    Object.defineProperty(rows, 'loader_error', { value: null });
+    Object.defineProperty(rows, 'loader_metadata', { value: { map_snapshot: snapshot } });
+    return rows;
+  } });
+  const result = await request(labelled, { pathname: `${ROUTE}&include_day_snapshot=1` });
+  assert.equal(result.status, 200);
+  accepted(result.body);
+  assert.deepEqual(result.body.agnostic_route_output_experiment.source_status.collection.map_snapshot, snapshot);
+  assert.equal(result.body.day_snapshot?.state, 'ready');
+  const { ref } = result.body.day_snapshot;
+  const before = loads;
+  const read = await request(labelled, { method: 'GET', pathname: `/api/shared-days/${ref}`, body: null });
+  assert.equal(read.status, 200);
+  assert.deepEqual(read.body.result.agnostic_route_output_experiment.source_status.collection.map_snapshot, snapshot);
+  const { parsePublishedDay } = await import('../frontend/src/lib/published-day.mjs');
+  const parsed = parsePublishedDay(read.body, { ref, decision: require('../anywhere-render-decision'), now: Date.parse(NOW) });
+  assert.ok(parsed, 'the recipient parser accepts the labelled day');
+  assert.equal(loads, before, 'reading the shared day acquires nothing');
+});
+
 test('direct accepted Roma day persists and reads identically after app/store restart without acquisition', async t => {
   const h = await setup(t);
   const result = await request(h.server, { pathname: `${ROUTE}&include_day_snapshot=1` });

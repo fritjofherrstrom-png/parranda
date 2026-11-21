@@ -946,3 +946,27 @@ test('a real typed day with a grouped interest preserves its saved priority acro
   assert.ok(reopened.entry.safeResponse.days[0].primary_route.main_stops
     .some(stop => stop.covered_preferences?.includes('restaurants')), 'the exact match also survives');
 });
+
+test('a map snapshot label reaches the shared day whole, and a malformed one refuses the share', async () => {
+  const snapshot={extracts:[{region:'b-large',data_timestamp:'2026-11-01T00:00:00.000Z'},{region:'a-small',data_timestamp:'2026-11-15T00:00:00.000Z'}],includes_live_answer:true};
+  const loader=async()=>Object.assign(records(),{loader_metadata:{map_snapshot:{...snapshot,extracts:snapshot.extracts.map(extract=>({...extract,dir:'/must/not/leak'}))}}});
+  const published=await publication({}, {openDataLoader:loader});
+  const collection=published.agnostic_route_output_experiment.source_status.collection;
+  assert.deepEqual(collection.map_snapshot,snapshot);
+  assert.equal(JSON.stringify(published).includes('must/not/leak'),false);
+  const projected=projectPublishedDay({published,intent:intent(),privacy:privacy(),language:'en'});assert.ok(projected);
+  assert.deepEqual(projected.result.agnostic_route_output_experiment.source_status.collection.map_snapshot,snapshot);
+
+  // A present label that cannot be read in full is never published as "no
+  // snapshot": it stays visible as unreadable, and the share is refused.
+  for (const broken of [{region:'Not A Token',data_timestamp:'yesterday'},{extracts:[],includes_live_answer:false},
+    {extracts:[{region:'ok',data_timestamp:'2026-11-01T00:00:00Z'}]},{extracts:[{region:'ok',data_timestamp:'soon'}],includes_live_answer:false}]) {
+    const unreadable=await publication({}, {openDataLoader:async()=>Object.assign(records(),{loader_metadata:{map_snapshot:broken}})});
+    assert.deepEqual(unreadable.agnostic_route_output_experiment.source_status.collection.map_snapshot,{unreadable:true});
+    assert.equal(projectPublishedDay({published:unreadable,intent:intent(),privacy:privacy(),language:'en'}),null);
+  }
+
+  const forged=structuredClone(published);
+  forged.agnostic_route_output_experiment.source_status.collection.map_snapshot={extracts:[{region:'b-large',data_timestamp:'last week'}],includes_live_answer:false};
+  assert.equal(projectPublishedDay({published:forged,intent:intent(),privacy:privacy(),language:'en'}),null);
+});
