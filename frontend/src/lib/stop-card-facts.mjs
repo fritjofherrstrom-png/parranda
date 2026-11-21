@@ -125,8 +125,12 @@ export function stopRowKindLabel(stop, broadLabel, lang = 'en') {
   return stopPlaceDetails(stop, lang).kindLabel || broadLabel || '';
 }
 
-export function stopSourceLabel(stop) {
-  return readableSourceName(stop?.source?.label);
+export function stopSourceLabel(stop, lang = "en") {
+  const label = readableSourceName(stop?.source?.label);
+  if (stop?.origin === "curated_catalog" && label.toLowerCase() === "catalog") {
+    return lang === "sv" ? "Parrandas katalog" : "Parranda’s catalog";
+  }
+  return label;
 }
 
 export function stopPlaceDetails(stop, lang = 'en') {

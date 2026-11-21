@@ -74,13 +74,17 @@ async function plannerWith(t, response, url = PLACE_URL) {
 
 const header = (h) => h.container.querySelector("header");
 const routeCard = (h) => h.container.querySelector('section[aria-label="The route"]');
+// Linje 2 board: "About this day and map" closes the page, after Live, the
+// detours and Blitz; the route renders it into that host.
+const aboutDay = (h) => h.container.querySelector('[data-route-about] details');
 const picks = (h) =>
   [...(h.container.querySelector('ul[aria-label="Your picks in this day"]')?.children ?? [])].map((li) =>
     li.textContent.replace(/\s+/g, " ").trim(),
   );
 
-const dayFacts = (h) =>
-  [...(h.container.querySelector('ul[aria-label="About the day"]')?.children ?? [])].map((li) => li.textContent.trim());
+// Linje 2: the day's facts are one sentence, then which day and its weather.
+const factsBlock = (h) => h.container.querySelector('header [data-day-facts]');
+const daySentence = (h) => factsBlock(h)?.querySelector('p')?.textContent.trim() ?? null;
 const withWeather = (stale) => {
   const day = composedDay();
   day.days[0].weather_summary = { date: '2026-09-25', max_temp: 11.6, condition: 'rain', source: 'open-meteo', fetched_at: new Date().toISOString(), stale };
@@ -138,55 +142,58 @@ test("when every pick is in the day, one line says so instead of repeating the p
     }),
   );
 
-  // The anchor card already names the picks; the facts row confirms them once.
-  assert.equal(h.container.querySelector('ul[aria-label="Your picks in this day"]'), null);
-  assert.deepEqual(dayFacts(h), ["≈ 2.1 km on foot", "3 stops", "All picks included"]);
+  // Linje 2: one quiet row names each pick with its mark; a covered pick
+  // says "in this day" to a screen reader, never as a second line of copy.
+  assert.deepEqual(picks(h), ["Food & drink — in this day", "Culture — in this day", "Views — in this day"]);
+  assert.equal(daySentence(h), "Three stops, about 2.1 km on foot.");
+  assert.doesNotMatch(h.text(), /All picks included/);
 });
 
-test("on a phone the map's short overview pictures the day between its picks line and its facts", async (t) => {
-  // The reviewed Linje prototype (30 Oct): title with Change, the picks line
-  // with Adjust, the map, the facts, then the stops. "About this day and
-  // map" closes the line it qualifies, so nothing stands between the day's
-  // summary and its first stop.
+test("on a phone the header reads title, the day in a sentence, the picks row, then the map", async (t) => {
+  // The approved Linje 2 boards (16 Nov): the place sign, one sentence of
+  // facts with the date and weather, the picks row with Adjust, then the map
+  // and the stops. "About this day and map" closes the line it qualifies.
   const h = await plannerWith(t, composedDay());
   const map = header(h).querySelector('[data-map-overview]');
   const picksLine = header(h).querySelector('section[aria-label="Your day\'s starting point"]');
-  const facts = header(h).querySelector('ul[aria-label="About the day"]');
-  assert.ok(map && picksLine && facts, "the picks line, the overview and the facts are all in the day's header");
+  const facts = factsBlock(h);
+  assert.ok(map && picksLine && facts, "the facts, the picks line and the overview are all in the day's header");
   const FOLLOWING = h.window.Node.DOCUMENT_POSITION_FOLLOWING;
-  assert.ok(header(h).querySelector("h1").compareDocumentPosition(picksLine) & FOLLOWING, "the title comes first");
-  assert.ok(picksLine.compareDocumentPosition(map) & FOLLOWING, "then the picks line");
-  assert.ok(map.compareDocumentPosition(facts) & FOLLOWING, "then the map, before the facts");
+  assert.ok(header(h).querySelector("h1").compareDocumentPosition(facts) & FOLLOWING, "the title comes first");
+  assert.ok(facts.compareDocumentPosition(picksLine) & FOLLOWING, "then the day's sentence");
+  assert.ok(picksLine.compareDocumentPosition(map) & FOLLOWING, "then the picks line, before the map");
   const route = routeCard(h);
   const stops = route.querySelector('ol[aria-label="The stops, in order"]');
-  const about = route.querySelector("details");
+  const about = aboutDay(h);
   assert.equal(route.querySelector('[data-map-overview], [data-route-map]'), null, "one map, in the header");
-  assert.ok(stops.compareDocumentPosition(about) & FOLLOWING, "About this day and map follows the line it qualifies");
+  assert.ok(stops.compareDocumentPosition(about) & FOLLOWING, "About this day and map comes after the line it qualifies");
+  assert.equal(route.querySelector("details"), null, "and not inside it: it closes the page (Linje 2 board)");
   // No card around the map: it is the map's own frame, edge to edge in the
   // column, and its canvas is the one "Map of the day" landmark.
   assert.doesNotMatch(map.className, /\bp-4\b|bg-parranda-ink\/4/);
   assert.equal(h.container.querySelector('[role="region"][aria-label="Map of the day"]'), null, "no second landmark around the canvas");
 });
 
-test("the header states the day's facts as chips, without the day word or the longest stretch", async (t) => {
+test("the header states the day's facts as one sentence, without the longest stretch", async (t) => {
   const h = await plannerWith(t, composedDay());
-  assert.deepEqual(dayFacts(h), ["≈ 2.1 km on foot", "3 stops"]);
-  // The date line under the heading says which day; each stop says its own walk.
-  assert.doesNotMatch(header(h).querySelector('ul[aria-label="About the day"]').textContent, /Today|Tomorrow/);
+  assert.equal(daySentence(h), "Three stops, about 2.1 km on foot.");
+  // Which day is its own line under the sentence; each stop says its own walk.
+  assert.doesNotMatch(daySentence(h), /Today|Tomorrow/);
   assert.doesNotMatch(header(h).textContent, /longest stretch/);
 });
 
-// The selected date's forecast is one of the day's facts: one chip, like the
-// walk, with the sky's icon and the high, and its full reading as its name.
+// The selected date's forecast follows the date in the facts: the sky's icon
+// and the high, its full reading as its name, then the sky in words.
 const forecast = (h) => header(h).querySelector('[aria-label*="Forecast high"]');
 
-test("the day's weather is one fact chip: the sky's icon, then the high", async (t) => {
+test("the day's weather follows the date: the sky's icon, the high, then the sky in words", async (t) => {
   const h = await plannerWith(t, withWeather(false));
-  assert.deepEqual(dayFacts(h), ["≈ 2.1 km on foot", "3 stops", "12°"]);
-  assert.equal(forecast(h).textContent, "12°", "degrees only; the sky is the icon");
-  assert.ok(forecast(h).querySelector("svg"), "the sky's icon leads the chip");
+  assert.equal(daySentence(h), "Three stops, about 2.1 km on foot.");
+  assert.equal(forecast(h).textContent, "12°", "the named reading is the high; the icon is the sky");
+  assert.ok(forecast(h).querySelector("svg"), "the sky's icon leads the reading");
   assert.match(forecast(h).getAttribute('aria-label'), /12.*Rain/);
-  assert.ok(forecast(h).closest('ul[aria-label="About the day"]'), "among the facts");
+  assert.ok(forecast(h).closest('[data-day-facts]'), "among the facts");
+  assert.match(forecast(h).parentElement.textContent, /, 12° and rain\.$/);
 });
 
 test('a day in the city leads the heading, with the selected date directly below it', async t => {
@@ -201,19 +208,22 @@ test('a day in the city leads the heading, with the selected date directly below
   assert.ok(header(h).querySelector('h1').compareDocumentPosition(date) & h.window.Node.DOCUMENT_POSITION_FOLLOWING);
 });
 
-test('the compact heading: Change beside the title, then which day and the picks with Adjust, never the place or date twice', async t => {
+test('the compact heading: ink title beside Change place, then the picks row with Adjust, never the place or date twice', async t => {
   const h = await plannerWith(t, composedDay());
   const title = header(h).querySelector('h1');
-  const change = title.parentElement.querySelector('a[aria-label="Change place"]');
-  assert.ok(change, "Change stands beside the title");
-  assert.equal(change.textContent.trim(), 'Change');
+  const change = header(h).querySelector('a[aria-label="Change place"]');
+  assert.ok(change, "Change place is in the heading");
+  assert.match(title.textContent.trim(), /^A day in Testville$/);
+  assert.match(title.className, /\btype-title\b/);
+  assert.equal(title.querySelector(".text-parranda-ember"), null, "the city does not take the route colour");
+  assert.equal(change.parentElement, title.parentElement, "Change stays next to the title");
+  assert.equal(change.textContent.trim(), 'Change place');
   const card = header(h).querySelector('section[aria-label="Your day\'s starting point"]');
   assert.ok(title.compareDocumentPosition(card) & h.window.Node.DOCUMENT_POSITION_FOLLOWING, "title before the picks");
-  // One even line: which day, the picks, the rhythm. The date is said once,
-  // here; the place only in the title.
-  const line = card.querySelector('time').parentElement;
-  assert.match(line.textContent, /^Fri 25 Sept? · Food & drink · Culture · Views · Day rhythm: /);
-  assert.equal(line.querySelector('strong'), null, "no part of the line shouts");
+  // One row: the picks with their marks, then the rhythm. The date is said
+  // once, in the facts; the place only in the title.
+  assert.match(card.textContent, /Food & drink.*Culture.*Views.*Day rhythm: /);
+  assert.equal(card.querySelector('time'), null, "the date is not repeated in the picks row");
   assert.equal(header(h).querySelectorAll('time').length, 1);
   assert.doesNotMatch(card.textContent, /Testville/);
   const adjust = card.querySelector('button[aria-expanded="false"]');
@@ -223,14 +233,14 @@ test('the compact heading: Change beside the title, then which day and the picks
 });
 
 test('opening Adjust keeps which day and the picks in view, with Done in Adjust\'s place', async t => {
-  // A restored day that is not today's is named only by this line; the
-  // panel's When control has no button for it, so the line must stay.
+  // A restored day that is not today's is named only in the facts; the
+  // panel's When control has no button for it, so that line must stay.
   const h = await plannerWith(t, composedDay());
   const card = header(h).querySelector('section[aria-label="Your day\'s starting point"]');
   await h.act(() => card.querySelector('button[aria-expanded="false"]').click());
   const done = card.querySelector('button[aria-expanded="true"]');
   assert.equal(done?.textContent.trim(), 'Done');
-  assert.equal(done.parentElement, card.querySelector('time').parentElement.parentElement, "Done stands at the end of the line");
+  assert.equal(done.parentElement, card.querySelector('ul[aria-label="Your picks in this day"]').parentElement.parentElement, "Done stands at the end of the picks row");
   assert.equal(h.window.document.activeElement, done, "focus moves to Done");
   assert.ok(h.window.document.getElementById(done.getAttribute('aria-controls')), "Done names the open panel");
   assert.equal(card.querySelectorAll('button[aria-expanded]').length, 1, "one Done, not two");
@@ -291,7 +301,7 @@ test('restoring a saved day does not present an expired or undated forecast as f
       restored = await mountPlanner({url:'http://localhost/anywhere?restore=last&lang=en', storage});
       await restored.clock.advance(500);
       assert.match(restored.text(), /Saved day/);
-      assert.deepEqual(dayFacts(restored), ['≈ 2.1 km on foot', '3 stops']);
+      assert.equal(daySentence(restored), 'Three stops, about 2.1 km on foot.');
       assert.equal(forecast(restored), null);
       assert.equal(restored.fetchMock.calls.length, 0);
     } finally {
@@ -347,7 +357,7 @@ test("how the day was assembled sits with the route evidence, said once", async 
   assert.doesNotMatch(header(h).textContent, /source-backed|Local time|external sources|estimates/);
   // ...it is one "About this day and map" line beside the map, every fact
   // still stated once: the trust line first, then the estimates and context.
-  const about = routeCard(h).querySelector("details");
+  const about = aboutDay(h);
   assert.ok(about, "the assembly notes are one disclosure");
   assert.match(about.querySelector("summary").textContent, /About this day and map/);
   assert.equal(about.open, false, "closed until asked for");
@@ -365,7 +375,7 @@ test("a day without source-backed provenance still names where its places came f
   );
 
   assert.doesNotMatch(h.text(), /Built from source-backed places/);
-  assert.match(routeCard(h).textContent, /Places come from external sources\./);
+  assert.match(aboutDay(h).textContent, /Places come from external sources\./);
 });
 
 test("what the day contains still leads: a thin day says so under the title", async (t) => {
@@ -383,9 +393,9 @@ test("what the day contains still leads: a thin day says so under the title", as
 
 test("the map explanation names pins-only geometry without implying a walking path", async (t) => {
   const h = await plannerWith(t, composedDay());
-  assert.match(routeCard(h).textContent, /The pins show the stops\. A walking path has not been confirmed on the map\./);
-  assert.doesNotMatch(routeCard(h).textContent, /dotted line|not the streets/);
-  assert.match(routeCard(h).textContent, /Distances and walking times are estimates\./);
+  assert.match(aboutDay(h).textContent, /The pins show the stops\. A walking path has not been confirmed on the map\./);
+  assert.doesNotMatch(aboutDay(h).textContent, /dotted line|not the streets/);
+  assert.match(aboutDay(h).textContent, /Distances and walking times are estimates\./);
 });
 
 test("dense OSRM geometry without a walking mode retains the unconfirmed-path explanation", async (t) => {
@@ -393,8 +403,8 @@ test("dense OSRM geometry without a walking mode retains the unconfirmed-path ex
   const response = composedDay({ pathPoints: path });
   response.days[0].primary_route.geometry_source = "osrm";
   const h = await plannerWith(t, response);
-  assert.match(routeCard(h).textContent, /A walking path has not been confirmed on the map\./);
-  assert.match(routeCard(h).textContent, /Distances and walking times are estimates\./);
+  assert.match(aboutDay(h).textContent, /A walking path has not been confirmed on the map\./);
+  assert.match(aboutDay(h).textContent, /Distances and walking times are estimates\./);
 });
 
 test("a short explicit walking path makes no unconfirmed-path claim and keeps time estimates honest", async (t) => {
@@ -402,8 +412,8 @@ test("a short explicit walking path makes no unconfirmed-path claim and keeps ti
   const response = composedDay({ stops, pathPoints: [{lat:55.6,lng:13}, {lat:55.601,lng:13}] });
   Object.assign(response.days[0].primary_route, { geometry_source: "osrm", geometry_mode: "walking" });
   const h = await plannerWith(t, response);
-  assert.doesNotMatch(routeCard(h).textContent, /walking path has not been confirmed|dotted line/);
-  assert.match(routeCard(h).textContent, /Distances and walking times are estimates\./);
+  assert.doesNotMatch(aboutDay(h).textContent, /walking path has not been confirmed|dotted line/);
+  assert.match(aboutDay(h).textContent, /Distances and walking times are estimates\./);
 });
 
 test("saved days follow the day instead of pushing it down", async (t) => {
@@ -513,5 +523,5 @@ test('a nearby curated day does not claim Parranda lacks full curation', async t
   body.days[0].primary_route.trust_summary = { human_verified: true, source_tiers: ['curated'] };
   const h = await plannerWith(t, body);
   assert.doesNotMatch(h.text(), /does not have full curation here yet/);
-  assert.match(routeCard(h).textContent, /Distances and walking times are estimates/);
+  assert.match(aboutDay(h).textContent, /Distances and walking times are estimates/);
 });

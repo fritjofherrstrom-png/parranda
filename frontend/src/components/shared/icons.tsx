@@ -52,6 +52,17 @@ export function LocationIcon({ className }: IconProps) {
   );
 }
 
+/** A sight on a place: "start from where you are" (the board's mark). */
+export function CrosshairIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+      <path d="M12 2.5v3.5M12 18v3.5M2.5 12h3.5M18 12h3.5" />
+    </Icon>
+  );
+}
+
 export function ChevronRightIcon({ className }: IconProps) {
   return (
     <Icon className={className}>
@@ -131,6 +142,17 @@ export function ExpandIcon({ className }: IconProps) {
       <path d="M9.5 20H4v-5.5" />
       <path d="m20 4-6 6" />
       <path d="m4 20 6-6" />
+    </Icon>
+  );
+}
+
+/** Fit the whole route in view: a winding path between two stations. */
+export function RouteIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <circle cx="6" cy="18" r="2.2" />
+      <circle cx="18" cy="6" r="2.2" />
+      <path d="M8 18h6.5a3.5 3.5 0 0 0 0-7h-5a3.5 3.5 0 0 1 0-7H16" />
     </Icon>
   );
 }

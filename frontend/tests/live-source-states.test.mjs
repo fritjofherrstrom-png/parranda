@@ -277,7 +277,7 @@ test('a genuinely empty selected period preserves events in the other period', a
     responding_source_count: 1, accepted_event_count: 1, surfaced_event_count: 1 },
   { this_week: [following], feeds: [{ id: 'calendar', label: 'Official calendar', status: 'ok' }] }));
   t.after(() => h.unmount());
-  await click(h, button(h, /See all live/));
+  await click(h, button(h, /See next 7 days/));
   assert.match(sheetText(h), /Following-day concert/);
   await click(h, button(h, /^Fri 25 Sept$/));
   const query = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));

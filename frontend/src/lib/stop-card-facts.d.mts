@@ -2,6 +2,7 @@ import type { SelectedDayHoursFact } from "./selected-day-hours.mjs";
 
 export interface StopCardFactsInput {
   type?: string | null;
+  origin?: string | null;
   covered_preferences?: string[] | null;
   partial_preferences?: string[] | null;
   source?: { category?: string | null; label?: string | null } | null;
@@ -19,4 +20,4 @@ export function stopMatchedPreferences(stop: StopCardFactsInput | null | undefin
 
 export function stopPlaceDetails(stop: StopCardFactsInput | null | undefined, lang?: "sv" | "en"): { kindLabel: string | null; address: string | null };
 export function stopRowKindLabel(stop: StopCardFactsInput | null | undefined, broadLabel: string | null | undefined, lang?: "sv" | "en"): string;
-export function stopSourceLabel(stop: StopCardFactsInput | null | undefined): string;
+export function stopSourceLabel(stop: StopCardFactsInput | null | undefined, lang?: "sv" | "en"): string;

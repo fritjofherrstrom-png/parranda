@@ -13,11 +13,12 @@ import { useLiveClock } from "./useLiveClock";
  */
 import type { Ref } from "react";
 import { ChevronRightIcon } from "../shared/icons";
-import { buttonClass, Eyebrow } from "../shared/ui";
+import { buttonClass } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 import LiveEventSummary from "./LiveEventSummary";
 import EventOccurrences from "./EventOccurrences";
 import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
+import { eventBoardClock, pulseBrowseBuckets } from "../../lib/pulse-view.mjs";
 import type { LiveEvents, PulseEvent } from "./types";
 
 export default function LiveCard({
@@ -37,6 +38,7 @@ export default function LiveCard({
   liveFailureSentence,
   pulseBuckets,
   showExplore,
+  startsWithWeek = false,
   pulseSources,
   liveSheetTriggerRef,
   openLiveSheet,
@@ -57,23 +59,54 @@ export default function LiveCard({
   liveFailureSentence: (failure: { selected: number; responding: number }) => string;
   pulseBuckets: { tonight: PulseEvent[]; thisWeek: PulseEvent[] };
   showExplore: boolean;
+  startsWithWeek?: boolean;
   pulseSources: string | null;
   liveSheetTriggerRef: Ref<HTMLButtonElement>;
   openLiveSheet: () => void;
 }) {
   const now = useLiveClock([...pulseBuckets.tonight, ...pulseBuckets.thisWeek]);
+  // The board names the place, then says when on the right: "Tonight" or
+  // "Today" only for the viewer's own today, any other day by its date.
+  const shownDate = liveEvents?.selected_date ?? null;
+  const viewerToday = new Date(now).toLocaleDateString("en-CA");
+  const evening = new Date(now).getHours() >= 17;
+  const boardTitle = mode === "near_me"
+    ? t("Live nära dig", "Live near you")
+    : anchorLabel
+      ? t(`Live i ${anchorLabel}`, `Live in ${anchorLabel}`)
+      : t("Live här", "Live here");
+  const boardWhen = shownDate && shownDate === viewerToday
+    ? evening ? t("I kväll", "Tonight") : t("Idag", "Today")
+    : liveDayLabel;
+  const boardRows = pulseBuckets.tonight.slice(0, 4);
+  const browse = pulseBrowseBuckets(liveEvents);
+  const hasSelectedDayListings = boardRows.length > 0 || wovenNames.length > 0 ||
+    browse.tonight.length > 0 || Boolean(liveEvents?.browse?.tonight?.hidden_count);
+  const hasWeekListings = pulseBuckets.thisWeek.length > 0 || browse.thisWeek.length > 0;
+  const showSelectedDayStatus = shownDate && !hasSelectedDayListings && hasWeekListings &&
+    (pulseState === "ok" || pulseState === "partial");
+  const exploreLabel = startsWithWeek && showSelectedDayStatus
+    ? t("Se kommande 7 dagar", "See next 7 days")
+    : boardRows.length > 0 || pulseBuckets.thisWeek.length > 0
+      ? t("Se allt live", "See all live")
+      : t("Utforska live", "Explore live");
   return (
     <section
-      className="rounded-parranda border-line border-parranda-live/35 bg-parranda-live/8 p-5 sm:p-6"
+      className="rounded-parranda bg-parranda-live/8 p-5 sm:p-6"
     >
-      <Eyebrow as="h2" tone="live" dot>
-        {mode === "near_me"
-          ? t("Live nära dig", "Live near you")
-          : anchorLabel
-            ? t(`Live i ${anchorLabel}`, `Live in ${anchorLabel}`)
-            : t("Live här", "Live here")}
-        {liveEvents?.selected_date ? ` · ${liveDayLabel}` : ""}
-      </Eyebrow>
+      {/* A departures board: what is on, then when, in one glance. The day
+          sits on the right so the heading reads as a place. */}
+      <h2 className="flex items-baseline justify-between gap-3 text-19 font-extrabold leading-tight text-parranda-ink">
+        <span className="flex min-w-0 items-center gap-2.5 wrap-anywhere">
+          <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-parranda-live" />
+          {boardTitle}
+        </span>
+        {liveEvents?.selected_date ? (
+          <span className="type-data shrink-0 text-13 font-semibold text-parranda-ink-meta">
+            <span className="sr-only"> · </span>{boardWhen}
+          </span>
+        ) : null}
+      </h2>
 
       {((showDay && dayflow?.weather?.headline) || clothing) && (
         <div className="mt-3 flex flex-col gap-1">
@@ -126,30 +159,35 @@ export default function LiveCard({
             : t("Parranda kunde inte verifiera händelser just nu — försök igen om en stund.", "Parranda couldn't verify events right now — try again shortly.")}
         </p>
       )}
+      {showSelectedDayStatus && (
+        <p className="mt-3 text-sm text-parranda-ink-muted">
+          {t("Inga verifierade evenemang för den valda dagen.", "No verified events for the selected day.")}
+        </p>
+      )}
 
       {pulseBuckets.tonight.length > 0 && (
         <div className="mt-4">
           {!liveEvents?.selected_date && <p className="mb-2 text-sm font-bold text-parranda-ink">{liveDayLabel}</p>}
-          <ul className="flex flex-col divide-y divide-parranda-line-faint">
-            {pulseBuckets.tonight.slice(0, 4).map((ev: PulseEvent, i: number) => (
-              <li key={ev.id ?? i} className="flex min-w-0 flex-col gap-1 py-3 text-sm leading-relaxed text-parranda-ink-soft first:pt-1">
-                <LiveEventSummary event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} />
-                <EventOccurrences event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} />
-              </li>
-            ))}
+          <ul className="flex flex-col border-b-line border-parranda-live/25">
+            {boardRows.map((ev: PulseEvent, i: number) => {
+              const clock = eventBoardClock(ev, lang, now, liveEvents?.selected_date);
+              return (
+                <li key={ev.id ?? i} className={`${clock ? "grid grid-cols-[4.25rem_minmax(0,1fr)] gap-x-3" : "flex flex-col"} min-w-0 border-t-line border-parranda-live/25 py-3 text-sm leading-relaxed text-parranda-ink-soft`}>
+                  {clock && (
+                    <p className="type-data flex flex-col pt-0.5 leading-tight">
+                      <span className="text-base font-extrabold text-parranda-live">{clock.at}</span>
+                      {clock.until && <span className="text-13 text-parranda-ink-meta"><span className="sr-only">, </span>{clock.until}</span>}
+                    </p>
+                  )}
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <LiveEventSummary event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} timing={clock ? "" : undefined} compact />
+                    <EventOccurrences event={ev} lang={lang} now={now} selectedDate={liveEvents?.selected_date} />
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
-      )}
-      {/* The card keeps a one-line summary for the week — the full list
-          lives in the Live sheet. The count comes from the bucket, never
-          from copy. */}
-      {pulseBuckets.thisWeek.length > 0 && (
-        <p className="mt-4 border-t-line border-parranda-live/25 pt-3 text-sm text-parranda-ink-muted">
-          <span className="font-bold text-parranda-ink">{t("Kommande 7 dagar", "Next 7 days")}</span>
-          {" · "}
-          {pulseBuckets.thisWeek.length}{" "}
-          {pulseBuckets.thisWeek.length === 1 ? t("till", "more") : t("till", "more")}
-        </p>
       )}
       {showExplore && (
         <button
@@ -158,9 +196,7 @@ export default function LiveCard({
           onClick={openLiveSheet}
           className={buttonClass("live", "mt-4 min-h-12 w-full px-4 text-sm")}
         >
-          {pulseBuckets.tonight.length > 0 || pulseBuckets.thisWeek.length > 0
-            ? t("Se allt live", "See all live")
-            : t("Utforska live", "Explore live")}
+          {exploreLabel}
           <ChevronRightIcon className="h-4 w-4" />
         </button>
       )}

@@ -90,3 +90,42 @@ test("the landing offers to continue only a stored entry that holds a day", asyn
     }
   }
 });
+
+test("a saved day opened from the landing (?saved=<id>) is that day, restored without composing", async () => {
+  // Linje 2: the landing lists saved days as stations; each opens by its id.
+  const last = await composeOnce("http://localhost/anywhere?place=Testville&lang=en", composedDay());
+  const saved = { ...structuredClone(last), id: "testville::2026-10-08::demo", place: "Savedtown", dateIso: "2026-10-08" };
+  saved.safeResponse.days[0].primary_route.main_stops[0].label = "Saved place";
+  const h = await mountPlanner({ url: `http://localhost/anywhere?saved=${encodeURIComponent(saved.id)}&lang=en`,
+    storage: { [LAST_KEY]: last, "parranda:anywhere:saved": [saved] } });
+  try {
+    await h.clock.advance(500);
+    assert.equal(composeCalls(h).length, 0, "a saved snapshot is shown, not recomposed");
+    assert.match(h.text(), /Saved place/);
+    assert.match(h.text(), /Saved day/);
+  } finally {
+    await h.unmount();
+  }
+});
+
+test("an explicit saved ID ignores composing inputs, even when the ID is unknown", async () => {
+  const last = await composeOnce("http://localhost/anywhere?place=Testville&lang=en", composedDay());
+  const saved = { ...structuredClone(last), id: "saved/α", place: "Savedtown" };
+  saved.safeResponse.days[0].primary_route.main_stops[0].label = "Saved place";
+  const savedKey = "parranda:anywhere:saved";
+  for (const { query, storage, expected } of [
+    { query: "saved=saved%2F%CE%B1&place=Namesake", storage: { [LAST_KEY]: last, [savedKey]: [saved] }, expected: /Saved place/ },
+    { query: "saved=missing&place=Namesake&lat=0&lng=0", storage: { [LAST_KEY]: last, [savedKey]: [saved] }, expected: /Place a/ },
+    { query: "saved=missing&place=Namesake", storage: { [LAST_KEY]: last, [savedKey]: {} }, expected: /Place a/ },
+    { query: "saved=missing&place=Namesake", storage: {}, expected: /No saved day is available here/ },
+  ]) {
+    const h = await mountPlanner({ url: `http://localhost/anywhere?${query}&lang=en`, storage });
+    try {
+      await h.clock.advance(500);
+      assert.equal(composeCalls(h).length, 0, query);
+      assert.match(h.text(), expected, query);
+    } finally {
+      await h.unmount();
+    }
+  }
+});

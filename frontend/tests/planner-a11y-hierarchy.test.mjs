@@ -368,10 +368,10 @@ test("a retry is judged by its own answer: a second failure still says so, a lat
   }
 });
 
-test("how the day was assembled is one closed line beside the map", async (t) => {
+test("how the day was assembled is one closed line, closing the page", async (t) => {
+  // Linje 2 board: after Live, the detours and Blitz, rendered by the route.
   const h = await planner(t);
-  const route = h.container.querySelector('section[aria-label="The route"]');
-  const about = route.querySelectorAll("details");
+  const about = h.container.querySelectorAll("[data-route-about] details");
   assert.equal(about.length, 1);
   assert.equal(about[0].open, false);
   assert.match(about[0].textContent, /Places come from external sources/);

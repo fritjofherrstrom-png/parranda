@@ -2,7 +2,7 @@
 /** URL intent only, never trusted location identity or route data.
  * Read the same first-value URLSearchParams contract on server and client.
  * anchor=near is the consented sessionStorage handoff, not a coordinate claim.
- * restore=last explicitly requests the local saved snapshot (which may be absent).
+ * saved and restore=last explicitly request browser-local snapshots.
  */
 function readPlannerEntry(search) {
   const params = typeof search === "string" ? new URLSearchParams(search) : search;
@@ -19,7 +19,7 @@ function readPlannerEntry(search) {
   const coords = lat !== null && lng !== null ? { lat, lng } : null;
   const near = params.get("anchor") === "near";
   const restore = params.get("restore") === "last";
-  return { place, coords, near, restore, hasIntent: Boolean(params.has("snapshot") || params.has("place_ref") || place || coords || near || restore) };
+  return { place, coords, near, restore, hasIntent: Boolean(params.has("snapshot") || params.has("saved") || params.has("place_ref") || place || coords || near || restore) };
 }
 
 /** URL intent only: ready does not attest snapshot existence, expiry or facts. */

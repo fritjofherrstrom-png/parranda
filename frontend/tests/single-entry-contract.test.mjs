@@ -45,7 +45,7 @@ test("missing explicitly requested snapshot stays honest and links home without 
   const h = await mountPlanner({ url: "http://localhost/anywhere?restore=last&lang=sv" });
   t.after(() => h.unmount());
   await h.clock.advance(500);
-  assert.match(h.text(), /Förbereder din dag/);
+  assert.match(h.text(), /Ingen sparad dag finns här/);
   assert.equal(h.container.querySelector("form"), null);
   assert.ok(h.container.querySelector('a[href="/?lang=sv"]'));
   assert.equal(h.fetchMock.calls.length, 0);

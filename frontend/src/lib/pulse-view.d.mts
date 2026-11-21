@@ -87,6 +87,14 @@ export declare function eventTiming(
   selectedDate?: string | null,
 ): string;
 
+/** A departures-board time column, or null when the timing is not one clock. */
+export declare function eventBoardClock(
+  ev: Parameters<typeof eventTiming>[0],
+  lang: "sv" | "en",
+  now?: Date,
+  selectedDate?: string | null,
+): { at: string; until: string | null; now: boolean } | null;
+
 /** Session uncertainty for source periods; rendered separately from timing. */
 export declare function eventTimingNotice(
   ev: Parameters<typeof eventTiming>[0],
