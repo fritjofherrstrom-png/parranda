@@ -1043,21 +1043,21 @@ export default function RouteMap({
           className={`${mapButton} w-11`}>
           <LocationIcon className="h-[18px] w-[18px]" />
         </button>}
-        <button type="button" {...busyButton(!mapDrawn, () => refitRef.current())}
-          aria-label={hasPrimaryRoute ? t("Visa rutten", "Show route") : t("Visa platserna", "Show places")}
-          title={hasPrimaryRoute ? t("Visa hela rutten", "Show the whole route") : t("Visa alla platser", "Show all places")}
+        {(!still || positionEnabled) && <button type="button" {...busyButton(!mapDrawn, () => refitRef.current())}
+          aria-label={t("Återställ kartvyn", "Reset map view")}
+          title={t("Återställ kartvyn", "Reset map view")}
           className={`${mapButton} w-11`}>
           <RouteIcon className="h-[18px] w-[18px]" />
-        </button>
+        </button>}
         {onToggleExpanded && <button
           type="button"
           onClick={onToggleExpanded}
           aria-expanded={mapExpanded}
           aria-label={mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
-          className={`${mapButton} gap-1.5 whitespace-nowrap px-2.5 text-xs font-bold`}
+          title={mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
+          className={`${mapButton} w-11`}
         >
           {mapExpanded ? <CollapseIcon className="h-[18px] w-[18px]" /> : <ExpandIcon className="h-[18px] w-[18px]" />}
-          {mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
         </button>}
       </div>
     </div>
