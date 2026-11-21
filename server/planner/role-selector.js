@@ -180,7 +180,7 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
 
   const roleEntries = {};
   for (const [role, spec] of Object.entries(activeRoleSpec)) {
-    roleEntries[role] = buildRankedEntriesForRole(spec, roleCandidatePool, localFeelActive);
+    roleEntries[role] = buildRankedEntriesForRole(spec, roleCandidatePool, localFeelActive, role);
     if (localFeelActive) roleEntries[role] = suppressConflictingMapPins(roleEntries[role]);
   }
   if (localFeelActive) {
@@ -533,9 +533,15 @@ function applyReservoirChainFallbackPolicy(roleEntries = {}) {
   }
 }
 
-function buildRankedEntriesForRole(spec, candidatePool, localFeelActive = false) {
+function buildRankedEntriesForRole(spec, candidatePool, localFeelActive = false, role = null) {
   const entries = candidatePool.pool
     .map(({ candidate, derived, gates, evidence, availability, operational, experimental_admission }) => {
+      // The source's own hours say this place is closed when this role is
+      // visited (a lunch-only kitchen as dinner, a bar that shuts before the
+      // evening). It may still fill another role; it does not fill this one.
+      if (role && Array.isArray(availability?.closed_for_roles) && availability.closed_for_roles.includes(role)) {
+        return null;
+      }
       const fit = scoreCandidateFit({
         candidate,
         userIntents: spec.intents,
@@ -704,7 +710,7 @@ function roleAdmissionFields(entry) {
     planner_usable: candidate_status === "filled" || candidate_status === "partial",
     covered_preferences: fit.covered_preferences,
     ...(Number.isFinite(entry.local_feel_rank) ? { local_feel_rank: entry.local_feel_rank } : {}),
-    ...(availability ? { availability: { ...availability } } : {}),
+    ...(availability ? { availability: publicAvailability(availability) } : {}),
     ...(operational ? { operational_viability: { ...operational, reasons: [...operational.reasons] } } : {}),
   };
 }
@@ -759,6 +765,13 @@ function formatRoleCandidate(entry, role, roleEntries, roleSpec = ROLE_SPEC) {
       : null,
     also_covers: alsoCovers(candidate.id, role, roleEntries, roleSpec),
   };
+}
+
+// Per-role closures only steer which role a place may fill; the published
+// candidate keeps its day-level availability.
+function publicAvailability(availability) {
+  const { closed_for_roles: _closedForRoles, ...rest } = availability;
+  return rest;
 }
 
 function compareRankKey(a, b) {
