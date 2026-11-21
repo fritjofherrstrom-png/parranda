@@ -351,10 +351,13 @@ test("map controls have a 44px touch target in the mobile overview and expanded 
         ]);
       }
       const locate = route.getByRole("button", { name: "Visa min position", exact: true });
-      const refit = route.getByRole("button", { name: "Visa rutten", exact: true });
+      const refit = route.getByRole("button", { name: "Återställ kartvyn", exact: true });
       const expand = route.getByRole("button", { name: expandName, exact: true });
-      assert.equal((await expand.innerText()).trim(), expandName, "the expand action has a visible text label");
-      for (const button of [locate, refit, expand]) {
+      assert.equal((await expand.innerText()).trim(), "", "the expand action uses an icon with an accessible name");
+      assert.equal(await refit.count(), expandName === EXPAND_NAMES[0] ? 0 : 1,
+        "reset is available on the interactive map, without occupying the still overview");
+      const controls = expandName === EXPAND_NAMES[0] ? [locate, expand] : [locate, refit, expand];
+      for (const button of controls) {
         await button.scrollIntoViewIfNeeded();
         const covered = await button.evaluate(element => {
           const rect = element.getBoundingClientRect();

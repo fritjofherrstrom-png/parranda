@@ -79,7 +79,7 @@ for(const width of [320,390])test(`current map position shares one opt-in sessio
  assert.ok(accuracyAfter/accuracyBefore>4.9&&accuracyAfter/accuracyBefore<5.1,'the radius represents reported accuracy');
  await page.getByRole('button',{name:'Center on my location',exact:true}).click();
  assert.equal(await page.evaluate(()=>window.__gps.calls.length),1,'recentering must not create a second watch');
- await page.getByRole('button',{name:'Show route',exact:true}).click();
+ await page.getByRole('button',{name:'Reset map view',exact:true}).click();
  await settle(page);
  const frame=await page.locator('[data-route-map]').boundingBox();
  const boxes=await page.locator('.route-map-marker-shell').evaluateAll(es=>es.map(e=>{const b=e.getBoundingClientRect();return {x:b.x+b.width/2,y:b.y+b.height/2};}));
