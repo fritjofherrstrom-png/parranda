@@ -217,7 +217,7 @@ export default function LiveCard({
           type="button"
           ref={liveSheetTriggerRef}
           onClick={openLiveSheet}
-          className={buttonClass("live", "mt-4 min-h-12 w-full px-4 text-sm")}
+          className={buttonClass(offer ? "quiet" : "live", "mt-4 min-h-12 w-full px-4 text-sm")}
         >
           {exploreLabel}
           <ChevronRightIcon className="h-4 w-4" />
