@@ -2612,8 +2612,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setAppliedPins(previous => previous.filter(pin => pin.id !== identity));
     setCommitments({ ...next, [identity]: { kind: "pin", label } });
     relaxDayEditForAdjustment();
-    focusDayAfterLiveChoiceRef.current = true;
-    setLiveSheetOpen(false);
+    if (liveSheetOpen) {
+      focusDayAfterLiveChoiceRef.current = true;
+      setLiveSheetOpen(false);
+    } else {
+      resultStatusRef.current?.focus();
+    }
   };
   const editStop = (identity: string, stopLabel: string, action: "replace" | "remove") => {
     if (!identity || pendingStopEditRef.current || stopEditPending || dayIsStale || phase !== "done") return;
@@ -3096,6 +3100,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // shown (the static build and the first client render are the phone layout).
   const wideScreen = useMediaQuery("(min-width: 64rem)");
   const dayWithRoute = showDay && routeStops.length > 0;
+  const livePlanningAvailable = phase === "done" && !dayIsStale && !restoredAt && !stopEditPending && !livePlanPending;
+  const liveSuggestionAvailable = dayWithRoute && livePlanningAvailable && !interestFailure && !liveChoiceCount &&
+    !liveFollowing && installedResponseIntentRef.current === intentSequenceRef.current;
   useEffect(() => {
     const previousFocus = focusBeforeInterestResultRef.current;
     focusBeforeInterestResultRef.current = null;
@@ -3786,6 +3793,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           pulseSources={pulseSources}
           liveSheetTriggerRef={liveSheetTriggerRef}
           openLiveSheet={openLiveSheet}
+          suggestion={liveSuggestionAvailable ? {
+            live: cardLiveEvents,
+            date: lastComposeDateIsoRef.current,
+            stops: routeStops,
+            selected: shownInterests,
+            commitments,
+            onPlan: planWithLiveOccurrence,
+          } : undefined}
         />
       )}
 
@@ -3846,7 +3861,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           setLiveSheetSort={changeLiveSheetSort}
           setLiveSheetTime={requestLiveSheetTime}
           planningDate={lastComposeDateIsoRef.current}
-          planningAvailable={phase === "done" && !dayIsStale && !restoredAt && !stopEditPending && !livePlanPending}
+          planningAvailable={livePlanningAvailable}
           onPlanOccurrence={planWithLiveOccurrence}
           onRetry={() => { liveSheetPeriodAutomaticRef.current = false; requestLiveSheetScope(liveSheetScope, liveSheetTime, true).catch(() => {}); }}
           liveSheetScope={liveSheetScope}

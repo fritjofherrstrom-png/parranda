@@ -60,18 +60,25 @@ export function pulseBrowseBuckets(liveEvents, wovenIds) {
 }
 
 function excludeWovenEvents(list, exclude) {
+  return withoutPulseRows(list, event => event?.id != null && exclude.has(String(event.id)));
+}
+
+export function pulseRowsWithoutOccurrence(rows, occurrenceId) {
+  return occurrenceId ? withoutPulseRows(rows, event => event?.live_occurrence_id === occurrenceId) : rows;
+}
+
+function withoutPulseRows(list, excluded) {
   const kept = [];
-  const isWoven = event => event?.id != null && exclude.has(String(event.id));
   for (const event of Array.isArray(list) ? list : []) {
     if (!event) continue;
     const slots = event.occurrences;
     if (!Array.isArray(slots) || !slots.length) {
-      if (!isWoven(event)) kept.push(event);
+      if (!excluded(event)) kept.push(event);
       continue;
     }
-    // A group represents distinct source occurrences. The route owns only its
-    // exact woven members; the rest keep their original facts and choice ids.
-    const remaining = slots.filter(slot => slot && !isWoven(slot));
+    // A group represents distinct source occurrences. Keep each remaining
+    // member's original facts and choice ID.
+    const remaining = slots.filter(slot => slot && !excluded(slot));
     if (!remaining.length) continue;
     if (remaining.length === slots.length) {
       kept.push(event);
@@ -410,6 +417,29 @@ function venueLocalNow(nowDate, timezone) {
   } catch {
     return null;
   }
+}
+
+// The caller already has a server-approved occurrence on the selected date.
+// Compare its start in the venue timezone, independent of display formatting
+// or whether the stated end crosses midnight.
+export function hasUpcomingEveningStart(event, date, now) {
+  const window = event.time_window;
+  const timezone = event.timezone || window?.timezone;
+  if (event.recurrence?.occurrence_status === "unconfirmed") return false;
+  if (window?.kind === "daily" || window?.kind === "occurrences") {
+    const clock = window.local_start;
+    if (typeof clock !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(clock)) return false;
+    const startClock = clock.length === 5 ? clock + ":00" : clock;
+    const localNow = venueLocalNow(now, timezone);
+    return Boolean(localNow && startClock >= "17:00:00" &&
+      (date > localNow.date || (date === localNow.date && startClock > localNow.clock)));
+  }
+  const start = event.starts_at || window?.starts_at;
+  if (typeof start !== "string" || !/(?:Z|[+-]\d\d:\d\d)$/.test(start)) return false;
+  const instant = new Date(start);
+  if (!(instant > now)) return false;
+  const localStart = venueLocalNow(instant, timezone);
+  return Boolean(localStart && localStart.date === date && localStart.clock >= "17:00:00");
 }
 
 /**

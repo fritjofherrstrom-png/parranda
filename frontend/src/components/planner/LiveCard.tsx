@@ -14,11 +14,12 @@ import { useLiveClock } from "./useLiveClock";
 import type { Ref } from "react";
 import { ChevronRightIcon } from "../shared/icons";
 import { buttonClass } from "../shared/ui";
-import type { Lang, Translate } from "./copy";
+import { liveRelevanceSentence, type Lang, type Translate } from "./copy";
 import LiveEventSummary from "./LiveEventSummary";
 import EventOccurrences from "./EventOccurrences";
 import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
-import { eventBoardClock, pulseBrowseBuckets } from "../../lib/pulse-view.mjs";
+import { suggestLiveRouteEnd, type LiveRouteSuggestionContext } from "../../lib/live-stop-choice.mjs";
+import { eventBoardClock, pulseBrowseBuckets, pulseRowsWithoutOccurrence } from "../../lib/pulse-view.mjs";
 import type { LiveEvents, PulseEvent } from "./types";
 
 export default function LiveCard({
@@ -42,6 +43,7 @@ export default function LiveCard({
   pulseSources,
   liveSheetTriggerRef,
   openLiveSheet,
+  suggestion,
 }: {
   t: Translate;
   lang: Lang;
@@ -63,8 +65,10 @@ export default function LiveCard({
   pulseSources: string | null;
   liveSheetTriggerRef: Ref<HTMLButtonElement>;
   openLiveSheet: () => void;
+  suggestion?: LiveRouteSuggestionContext & { onPlan: (event: PulseEvent, label: string) => void };
 }) {
-  const now = useLiveClock([...pulseBuckets.tonight, ...pulseBuckets.thisWeek]);
+  const browse = pulseBrowseBuckets(liveEvents);
+  const now = useLiveClock([...pulseBuckets.tonight, ...pulseBuckets.thisWeek, ...browse.tonight]);
   // The board names the place, then says when on the right: "Tonight" or
   // "Today" only for the viewer's own today, any other day by its date.
   const shownDate = liveEvents?.selected_date ?? null;
@@ -78,9 +82,9 @@ export default function LiveCard({
   const boardWhen = shownDate && shownDate === viewerToday
     ? evening ? t("I kväll", "Tonight") : t("Idag", "Today")
     : liveDayLabel;
-  const boardRows = pulseBuckets.tonight.slice(0, 4);
-  const browse = pulseBrowseBuckets(liveEvents);
-  const hasSelectedDayListings = boardRows.length > 0 || wovenNames.length > 0 ||
+  const offer = suggestion ? suggestLiveRouteEnd({ ...suggestion, now }) : null;
+  const boardRows = pulseRowsWithoutOccurrence(pulseBuckets.tonight, offer?.event.live_occurrence_id).slice(0, 4);
+  const hasSelectedDayListings = offer || boardRows.length > 0 || wovenNames.length > 0 ||
     browse.tonight.length > 0 || Boolean(liveEvents?.browse?.tonight?.hidden_count);
   const hasWeekListings = pulseBuckets.thisWeek.length > 0 || browse.thisWeek.length > 0;
   const showSelectedDayStatus = shownDate && !hasSelectedDayListings && hasWeekListings &&
@@ -165,7 +169,25 @@ export default function LiveCard({
         </p>
       )}
 
-      {pulseBuckets.tonight.length > 0 && (
+      {offer && suggestion && (
+        <div data-live-route-suggestion="" className="mt-4 flex flex-col gap-1.5 border-t-line border-parranda-live/25 pt-3">
+          <p className="wrap-anywhere text-sm font-bold text-parranda-ink">
+            {t(`Föreslaget kvällsstopp nära ${offer.lastLabel}`, `Suggested evening stop near ${offer.lastLabel}`)}
+          </p>
+          <LiveEventSummary event={offer.event} lang={lang} now={now} selectedDate={suggestion.date} compact />
+          <p className="text-xs text-parranda-ink-meta">{liveRelevanceSentence(offer.relevance, lang, t)}</p>
+          <p className="text-sm text-parranda-ink-muted">
+            {t("Parranda prövar en ny gångrutt med evenemanget sist. Andra stopp kan ändras.",
+              "Parranda checks a new walking route ending at the event. Other stops may change.")}
+          </p>
+          <button type="button" onClick={() => suggestion.onPlan(offer.event, offer.event.title || "")}
+            className={buttonClass("live", "mt-1 min-h-11 self-start px-4 py-2 text-left text-sm")}>
+            {t("Planera med evenemanget", "Plan with this event")}
+          </button>
+        </div>
+      )}
+
+      {boardRows.length > 0 && (
         <div className="mt-4">
           {!liveEvents?.selected_date && <p className="mb-2 text-sm font-bold text-parranda-ink">{liveDayLabel}</p>}
           <ul className="flex flex-col border-b-line border-parranda-live/25">
@@ -194,7 +216,7 @@ export default function LiveCard({
           type="button"
           ref={liveSheetTriggerRef}
           onClick={openLiveSheet}
-          className={buttonClass("live", "mt-4 min-h-12 w-full px-4 text-sm")}
+          className={buttonClass(offer ? "quiet" : "live", "mt-4 min-h-12 w-full px-4 text-sm")}
         >
           {exploreLabel}
           <ChevronRightIcon className="h-4 w-4" />
