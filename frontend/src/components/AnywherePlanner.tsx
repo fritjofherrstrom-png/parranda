@@ -3101,6 +3101,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const wideScreen = useMediaQuery("(min-width: 64rem)");
   const dayWithRoute = showDay && routeStops.length > 0;
   const livePlanningAvailable = phase === "done" && !dayIsStale && !restoredAt && !stopEditPending && !livePlanPending;
+  const liveSuggestionAvailable = dayWithRoute && livePlanningAvailable && !interestFailure && !liveChoiceCount &&
+    !liveFollowing && installedResponseIntentRef.current === intentSequenceRef.current;
   useEffect(() => {
     const previousFocus = focusBeforeInterestResultRef.current;
     focusBeforeInterestResultRef.current = null;
@@ -3791,8 +3793,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           pulseSources={pulseSources}
           liveSheetTriggerRef={liveSheetTriggerRef}
           openLiveSheet={openLiveSheet}
-          suggestion={dayWithRoute && livePlanningAvailable && !interestFailure && !liveChoiceCount ? {
-            live: completedDayLive ?? safeResponse?.live_events ?? null,
+          suggestion={liveSuggestionAvailable ? {
+            live: cardLiveEvents,
             date: lastComposeDateIsoRef.current,
             stops: routeStops,
             selected: shownInterests,

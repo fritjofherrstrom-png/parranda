@@ -1,5 +1,4 @@
 import type { CommitmentEntry } from "./commitment-snapshot.mjs";
-import type { Lang } from "../components/planner/copy";
 import type { LiveEvents, PulseEvent } from "../components/planner/types";
 import type { MapStop } from "./maps-links.mjs";
 import type { LiveEventRelevance } from "./pulse-view.mjs";
@@ -14,6 +13,6 @@ export interface LiveRouteSuggestionContext {
   selected: string[];
   commitments: Record<string, CommitmentEntry>;
 }
-export function suggestLiveRouteEnd(input: LiveRouteSuggestionContext & { now: Date; lang: Lang }):
+export function suggestLiveRouteEnd(input: LiveRouteSuggestionContext & { now: Date }):
   { event: PulseEvent; lastLabel: string; relevance: LiveEventRelevance } | null;
 export function scopeLiveChoices(entries:Record<string,CommitmentEntry>,date:string):{entries:Record<string,CommitmentEntry>;pinnedIds:string[];excludedIds:string[];liveEventChoices:LiveEventChoice[]};

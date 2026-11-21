@@ -29,13 +29,15 @@ FixtureMap.prototype.fire=function(event,...args){
 const empty=[];
 function Harness(){
   const [expanded,setExpanded]=React.useState(false);
+  const [preview,setPreview]=React.useState(false);
+  window.setMapTestPreview=setPreview;
   const [selected,setSelected]=React.useState(null);
   const [geometry,setGeometry]=React.useState({});
   window.setMapTestGeometry=setGeometry;
   const [stops,setStops]=React.useState([{id:'a',label:'Stop A',lat:55.595,lng:12.99},{id:'b',label:'Stop B',lat:55.598,lng:12.998},{id:'c',label:'Stop C',lat:55.603,lng:13.01}]);
   window.setMapTestStops=setStops;
   const route=React.useMemo(()=>({map_path_points:stops,...geometry}),[stops,geometry]);
-  return <main style={{padding:12,minHeight:1800}}><button onClick={()=>setStops([{id:'new',label:'New day',lat:55.6,lng:13}])}>New day</button><button onClick={()=>setSelected(1)}>Select stop B</button><button onClick={()=>setSelected(null)}>Clear stop</button><output>Selected: {selected ?? 'none'}</output><section aria-label="The route"><RouteMap hasPrimaryRoute={true} routeStops={stops} primaryRoute={route} areas={empty} routeContextSuggestions={empty} showContext={false} sketch={true} selectedStopIndex={selected} onSelectStop={setSelected} mapExpanded={expanded} onToggleExpanded={()=>setExpanded(!expanded)} heightClass={expanded?'h-[420px]':'h-[190px]'} t={(_,en)=>en}/></section><button>Outside map</button></main>;
+  return <main style={{padding:12,minHeight:1800}}><button onClick={()=>setStops([{id:'new',label:'New day',lat:55.6,lng:13}])}>New day</button><button onClick={()=>setSelected(1)}>Select stop B</button><button onClick={()=>setSelected(null)}>Clear stop</button><output>Selected: {selected ?? 'none'}</output><section aria-label="The route"><RouteMap hasPrimaryRoute={true} routeStops={stops} primaryRoute={route} areas={empty} routeContextSuggestions={empty} showContext={false} sketch={true} selectedStopIndex={selected} onSelectStop={setSelected} mapExpanded={expanded} onToggleExpanded={()=>setExpanded(!expanded)} still={preview && !expanded} heightClass={expanded?'h-[420px]':'h-[190px]'} t={(_,en)=>en}/></section><button>Outside map</button></main>;
 } createRoot(document.getElementById('root')).render(<Harness/>);`);
 
   const compiler = path.join(frontend, 'node_modules/esbuild/bin/esbuild');
@@ -338,6 +340,30 @@ test('coincident group members remain inspectable without endless zoom', { timeo
   await page.getByRole('button', { name: 'New day', exact: true }).click();
   await picker.waitFor({ state: 'detached' });
   await page.locator('.route-map-marker-shell[aria-label="1. New day"]').waitFor();
+});
+
+test('reset returns a compact map to its original view after zooming into a group', { timeout: 30000 }, async t => {
+  const page = await pageFor(t, true);
+  await page.evaluate(() => {
+    window.setMapTestPreview(true);
+    window.setMapTestStops([
+      { id: 'near-a', label: 'Alpha', lat: 55.6, lng: 13 },
+      { id: 'near-b', label: 'Beta', lat: 55.6002, lng: 13.0002 },
+      { id: 'far', label: 'Gamma', lat: 55.62, lng: 13.02 },
+    ]);
+  });
+  const group = page.getByRole('button', { name: /Stops 1,2: 1\. Alpha, 2\. Beta/ });
+  await group.waitFor();
+  const initialZoom = await page.evaluate(() => window.mapFixtureInstance.getZoom());
+  const reset = page.getByRole('button', { name: 'Reset map view', exact: true });
+  assert.equal(await reset.count(), 0);
+  await group.tap();
+  await page.waitForFunction(zoom => window.mapFixtureInstance.getZoom() > zoom + 0.1, initialZoom);
+  await reset.waitFor({ timeout: 3000 });
+  await reset.press('Enter');
+  await page.waitForFunction(zoom => Math.abs(window.mapFixtureInstance.getZoom() - zoom) < 0.01, initialZoom);
+  await reset.waitFor({ state: 'detached' });
+  assert.equal(await page.getByRole('button', { name: 'Expand map' }).evaluate(button => button === document.activeElement), true);
 });
 
 test('a distinct pair at maximum zoom has finite keyboard inspection and dismissal', { timeout: 30000 }, async t => {

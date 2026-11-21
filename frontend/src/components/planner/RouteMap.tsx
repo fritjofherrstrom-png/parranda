@@ -264,6 +264,7 @@ export default function RouteMap({
   const stillRef = useRef(still);
   stillRef.current = still;
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const expandControlRef = useRef<HTMLButtonElement | null>(null);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<{ ml: MapLibre; map: any; ready: Promise<void>; markers: any[] } | null>(null);
   // One map instance moves between layouts; its name follows where it sits.
@@ -273,6 +274,7 @@ export default function RouteMap({
   // What the view has to show, kept for the re-fit after expand/shrink.
   const marksRef = useRef<FitMark[]>([]);
   const [mapDrawn, setMapDrawn] = useState(false);
+  const [overviewZoomed, setOverviewZoomed] = useState(false);
   // Where the walking route's credit joins the map's own attribution, once the map exists.
   const [creditHost, setCreditHost] = useState<HTMLElement | null>(null);
   // The map's own marks (location, route, expand) stand just above the
@@ -643,7 +645,11 @@ export default function RouteMap({
         };
         map.on("move", layoutSoon);
         map.on("movestart", () => setGroupPicker(null));
-        map.on("moveend", () => layoutRef.current());
+        map.on("moveend", () => {
+          layoutRef.current();
+          setOverviewZoomed(stillRef.current && Number.isFinite(fittedZoomRef.current) &&
+            map.getZoom() > fittedZoomRef.current + 0.01);
+        });
         map.on("zoomend", () => layoutRef.current());
         map.on("resize", () => layoutRef.current());
         map.once("remove", () => { if (layoutFrame) cancelAnimationFrame(layoutFrame); });
@@ -831,7 +837,7 @@ export default function RouteMap({
   }, [areas, primaryRoute, hasPrimaryRoute, routeStops, routeContextSuggestions, showContext, walkingPath]);
 
   // Updating a disclosure should not rebuild or refit the map.
-  useEffect(() => { layoutRef.current(); }, [selectedStopIndex]);
+  useEffect(() => { layoutRef.current(); }, [selectedStopIndex, overviewZoomed]);
   // Opening a list panel above a mobile map must not move the map away from
   // the finger. Keep its viewport position while the selected panel changes.
   useLayoutEffect(() => {
@@ -1043,13 +1049,20 @@ export default function RouteMap({
           className={`${mapButton} w-11`}>
           <LocationIcon className="h-[18px] w-[18px]" />
         </button>}
-        {(!still || positionEnabled) && <button type="button" {...busyButton(!mapDrawn, () => refitRef.current())}
+        {(!still || positionEnabled || overviewZoomed) && <button type="button" {...busyButton(!mapDrawn, () => {
+          if (still && overviewZoomed) {
+            setOverviewZoomed(false);
+            if (!positionEnabled) expandControlRef.current?.focus({ preventScroll: true });
+          }
+          refitRef.current();
+        })}
           aria-label={t("Återställ kartvyn", "Reset map view")}
           title={t("Återställ kartvyn", "Reset map view")}
           className={`${mapButton} w-11`}>
           <RouteIcon className="h-[18px] w-[18px]" />
         </button>}
         {onToggleExpanded && <button
+          ref={expandControlRef}
           type="button"
           onClick={onToggleExpanded}
           aria-expanded={mapExpanded}
