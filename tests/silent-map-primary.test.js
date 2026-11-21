@@ -181,10 +181,14 @@ test('a successful lifecycle cache read restores the full wait for a changed int
   assert.equal(recovered.loader_metadata.primary_collection, 'cached_supply');
   assert.equal(pending.length, 1, 'the lifecycle read uses the actual populated map cache');
 
+  // A focused interest adds its own selectors, so this is a different query
+  // text. (A broad interest such as food asks the identical query, which the
+  // stored answer now answers without a provider call; see
+  // open-data-loader-query-store.test.js.)
   let changed;
-  loader({ ...A, requestedIntents: ['food'], dayRhythm: true }).then(value => { changed = value; });
+  loader({ ...A, requestedIntents: ['restaurants'], dayRhythm: true }).then(value => { changed = value; });
   await flush();
-  assert.equal(pending.length, 2, 'the changed intent starts its own map query');
+  assert.equal(pending.length, 2, 'the changed query starts its own map query');
   t.mock.timers.tick(GRACE);
   await flush();
   assert.equal(changed, undefined, 'a recovered place gives the new query its full wait');

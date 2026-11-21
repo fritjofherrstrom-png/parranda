@@ -11,6 +11,9 @@ const { createWikidataSource } = require('../server/place-candidates/wikidata-so
 const { composeAgnosticRouteOutput } = require('../server/planner/agnostic-route-output');
 const { createOverpassEmulator } = require('./helpers/dense-centre-fixture');
 
+// Cache fixtures below are previous query revisions within complete-v1
+// admission. Refusal of unmarked pre-admission records has separate coverage in
+// overpass-answer-admission.test.js; these controls preserve query migration.
 const origin = { lat: 55.6, lng: 13 };
 const unrelated = ['restaurant', 'cafe', 'museum'].flatMap((category, group) =>
   Array.from({ length: 4 }, (_, index) => ({ category, osmId: 300 + group * 10 + index,
@@ -74,7 +77,7 @@ test('explicitly prohibited swimming overrides an OSM bathing classification wit
 });
 
 test('the corrected outdoor query replaces a cached old negative and keeps its own warm answer', async () => {
-  const oldKey = 'q2:v10:55.600,13.000:r1.5:wnone:l25:munknown:iviewpoint_places:tnone:snone';
+  const oldKey = 'q2:complete-v1:v10:55.600,13.000:r1.5:wnone:l25:munknown:iviewpoint_places:tnone:snone';
   const cache = createSourceCache({ ttlMs: 60_000 });
   cache.set(oldKey, { records: [], status: 'loaded:0', error: null, metadata: null });
   const { fetcher, stats } = createOverpassEmulator([...places('scenic_viewpoint'), ...unrelated]);
@@ -88,7 +91,7 @@ test('the corrected outdoor query replaces a cached old negative and keeps its o
 });
 
 test('a failed outdoor refresh can use the preceding query’s positive evidence as stale', async () => {
-  const oldKey = 'q2:v10:55.600,13.000:r1.5:wnone:l25:munknown:iwaterside:tnone:snone';
+  const oldKey = 'q2:complete-v1:v10:55.600,13.000:r1.5:wnone:l25:munknown:iwaterside:tnone:snone';
   const cache = createSourceCache({ ttlMs: 60_000 });
   const record = mapOsmElement({ type: 'way', id: 201, center: { lat: origin.lat, lon: origin.lng },
     tags: { name: 'Source pier', man_made: 'pier' } });
@@ -104,9 +107,9 @@ test('a failed outdoor refresh can use the preceding query’s positive evidence
 });
 
 test('outdoor refresh retains independently collected nearby map evidence while its query is pending', () => {
-  const oldExactKey = 'q2:v10:55.600,13.000:r1.5:wnone:l25:munknown:iwaterside:tnone:snone';
-  const neighbouringKey = 'q2:v10:55.600,13.000:r1.5:wnone:l25:munknown:iother:tnone:snone';
-  const evidenceKey = 'q2:v10-evidence:55.600,13.000:l25:munknown:snone';
+  const oldExactKey = 'q2:complete-v1:v10:55.600,13.000:r1.5:wnone:l25:munknown:iwaterside:tnone:snone';
+  const neighbouringKey = 'q2:complete-v1:v10:55.600,13.000:r1.5:wnone:l25:munknown:iother:tnone:snone';
+  const evidenceKey = 'q2:complete-v1:v10-evidence:55.600,13.000:l25:munknown:snone';
   const cache = createSourceCache({ ttlMs: 60_000 });
   const record = mapOsmElement({ type: 'way', id: 201, center: { lat: origin.lat, lon: origin.lng },
     tags: { name: 'Source pier', man_made: 'pier' } });

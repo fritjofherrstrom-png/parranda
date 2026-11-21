@@ -89,13 +89,18 @@ test('unknown timezone never invents an opening window',async()=>{
 
 test('cached acquisition distinguishes rhythms and local clock windows without repeat identical reads',async()=>{
  const {createSourceCache}=require('../server/place-candidates/source-cache');
- const radii=[];const loader=createOpenDataLoader({endpoint:'https://fixture.test',cache:createSourceCache(),fetcher:async(_url,options)=>{radii.push(radius(options));return response(rich);}});
+ // Cafés open only until 07:00 on Wednesdays: the 06:59 window can use them, the 07:00 window cannot.
+ const mixed=rich.map((element,i)=>i%4===1?{...element,tags:{...element.tags,opening_hours:'We 05:00-07:00'}}:element);
+ const radii=[];const loader=createOpenDataLoader({endpoint:'https://fixture.test',cache:createSourceCache(),fetcher:async(_url,options)=>{radii.push(radius(options));return response(mixed);}});
  const r={...anchor,anchorMode:'place',dayRhythm:'calm',requestedIntents:['food']};
  await loader(r);await loader(r);assert.deepEqual(radii,[1500]);
  await loader({...r,dayRhythm:'full'});assert.deepEqual(radii,[1500,5000]);
- await loader({...r,availabilityWindow:{weekday:3,startMinute:420,endMinute:421}});
- await loader({...r,availabilityWindow:{weekday:3,startMinute:421,endMinute:422}});
- assert.deepEqual(radii,[1500,5000,1500,1500]);
+ const early=await loader({...r,availabilityWindow:{weekday:3,startMinute:419,endMinute:420}});
+ const late=await loader({...r,availabilityWindow:{weekday:3,startMinute:420,endMinute:421}});
+ // Each window still gets its own selection, made from the one stored answer:
+ // the identical query text is not sent to the provider again.
+ assert.deepEqual(radii,[1500,5000]);
+ assert.notDeepEqual(early.map(row=>row.id),late.map(row=>row.id),'the selection follows the clock window');
 });
 
 test('explicit source radius and legacy walking budget retain their contracts',async()=>{
