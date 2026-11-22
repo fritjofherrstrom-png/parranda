@@ -6,7 +6,7 @@
  */
 import type { ReactNode } from "react";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
-import { ExternalIcon, KeepIcon, MinusIcon, PlusIcon } from "../shared/icons";
+import { ExternalIcon, IconSwap, KeepIcon, MinusIcon, PlusIcon } from "../shared/icons";
 import { buttonClass, Eyebrow, panelCard } from "../shared/ui";
 import { interestName, type Lang, type Translate } from "./copy";
 import { canCommitTo, type Commitments } from "./commitments";
@@ -120,11 +120,11 @@ export default function CandidateAreas({
                         className="flex min-h-11 w-full items-center justify-between gap-3 text-left font-bold transition hover:text-parranda-clay"
                       >
                         <span>{name}</span>
-                        {expanded ? <MinusIcon className="h-4 w-4 shrink-0 text-parranda-ember" /> : <PlusIcon className="h-4 w-4 shrink-0 text-parranda-ink-meta" />}
+                        <IconSwap state={expanded ? "open" : "closed"}>{expanded ? <MinusIcon className="h-4 w-4 shrink-0 text-parranda-ember" /> : <PlusIcon className="h-4 w-4 shrink-0 text-parranda-ink-meta" />}</IconSwap>
                       </button>
                       {kindLabel && <div className="pb-1.5"><StopCategory type={stop.type} label={kindLabel} /></div>}
                       {expanded && (
-                        <div id={candidatePanelId} className="border-t-line border-parranda-line-faint pb-2 pt-2">
+                        <div id={candidatePanelId} className="reveal border-t-line border-parranda-line-faint pb-2 pt-2">
                           {facts.length > 0 && <p className="text-xs text-parranda-ink-meta">{facts.join(" · ")}</p>}
                           {url && (
                             <a

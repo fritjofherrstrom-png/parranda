@@ -60,6 +60,20 @@
   --p-radius-tag: 7px;
   /* The weight of every hairline frame: cards, pills, segments, notices. */
   --p-line: 1.5px;
+  /* The weight of an icon's stroke, drawn the same at every icon size, so a
+     chevron or a star beside bold 13–17px labels reads as heavy as the
+     letters next to it. A 24-unit stroke of 2 shrank to 1.2–1.3px at the
+     14–16px icons most controls use and looked thinner than its label. */
+  --p-icon-stroke: 1.75px;
+  /* Motion. Strong custom curves: the built-in ease curves start too slowly
+     for something the reader just touched. `out` is for anything that
+     enters or answers a touch; `drawer` is the iOS sheet curve. A press
+     settles in 150ms, a reveal in 200ms, a sheet in 400ms. Every movement
+     sits under prefers-reduced-motion: no-preference; fades stay. */
+  --p-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --p-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --p-press: 0.97;
+  --p-press-row: 0.985;
   /* Live device position is distinct from route and event colours. */
   --p-color-location: 37 99 235;
   --p-color-on-location: 255 255 255;
@@ -127,6 +141,8 @@ html {
 
 body {
   min-height: 100vh;
+  /* The visible height on a phone, whether or not the browser's bars show. */
+  min-height: 100dvh;
   margin: 0;
   font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
   color: rgb(var(--p-color-ink));

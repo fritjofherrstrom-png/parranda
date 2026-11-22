@@ -38,7 +38,7 @@ export function buttonClass(tone: ButtonTone, size: string): string {
   // a chevron) must not also get `justify-center`: Tailwind orders the two by
   // name, not by position in the class string, so center won.
   const justify = /(^|\s)justify-/.test(size) ? "" : "justify-center ";
-  return `inline-flex items-center ${justify}gap-2 rounded-parranda-btn transition disabled:opacity-60 aria-disabled:opacity-60 aria-busy:cursor-progress ${TONES[tone]} ${size}`;
+  return `inline-flex items-center ${justify}gap-2 rounded-parranda-btn transition press disabled:opacity-60 aria-disabled:opacity-60 aria-busy:cursor-progress ${TONES[tone]} ${size}`;
 }
 
 /**
@@ -68,7 +68,7 @@ export const controlTone = "bg-parranda-fill font-bold text-parranda-ink hover:b
 
 export function pillClass(active = false, extra = ""): string {
   return (
-    "inline-flex min-h-11 items-center gap-1.5 rounded-parranda-btn px-4 text-13 transition " +
+    "inline-flex min-h-11 items-center gap-1.5 rounded-parranda-btn px-4 text-13 transition press " +
     (active ? choiceOn : choiceOff) +
     (extra ? ` ${extra}` : "")
   );
@@ -81,7 +81,7 @@ export function pillClass(active = false, extra = ""): string {
  * size, padding and colours are the caller's.
  */
 export const compactPillTarget =
-  "relative inline-flex min-h-9 items-center rounded-parranda-btn text-13 transition before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']";
+  "relative inline-flex min-h-9 items-center rounded-parranda-btn text-13 transition press before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']";
 
 /**
  * A row of mutually exclusive choices drawn as one control (Today / Tomorrow,
@@ -94,7 +94,7 @@ export const segmentGroup = "inline-flex self-start rounded-parranda-btn bg-parr
 /** One segment of `segmentGroup`. Selected is the system's one "chosen" fill: ink. */
 export function segmentClass(active: boolean, extra = ""): string {
   return (
-    "inline-flex min-h-11 items-center justify-center rounded-parranda-btn px-[18px] text-13 transition " +
+    "inline-flex min-h-11 items-center justify-center rounded-parranda-btn px-[18px] text-13 transition press " +
     (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink-muted hover:text-parranda-ink") +
     (extra ? ` ${extra}` : "")
   );

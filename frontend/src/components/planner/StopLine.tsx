@@ -33,6 +33,7 @@ import {
   ChevronRightIcon,
   ClockIcon,
   ExternalIcon,
+  IconSwap,
   KeepIcon,
   MinusIcon,
   PlusIcon,
@@ -265,14 +266,14 @@ export default function StopLine({
                     className="flex min-h-11 w-full items-center justify-between gap-3 text-left text-sm font-bold text-parranda-ink transition hover:text-parranda-clay"
                   >
                     <span>{name}</span>
-                    {expanded ? <MinusIcon className="h-4 w-4 shrink-0 text-parranda-ember" /> : <PlusIcon className="h-4 w-4 shrink-0 text-parranda-ink-meta" />}
+                    <IconSwap state={expanded ? "open" : "closed"}>{expanded ? <MinusIcon className="h-4 w-4 shrink-0 text-parranda-ember" /> : <PlusIcon className="h-4 w-4 shrink-0 text-parranda-ink-meta" />}</IconSwap>
                   </button>
                   {kindLabel && <div className="pb-1.5"><StopCategory type={stop.type} label={kindLabel} /></div>}
                   <p className={`${dataLine} pb-1.5`}>
                     {walkingDistanceLabel(stop.distance_km, lang)} {t("från", "from")} {stop.route_stop_name}
                   </p>
                   {expanded && (
-                    <div id={candidatePanelId} className="mb-1.5 mt-1 border-t-line border-parranda-line-faint pt-3">
+                    <div id={candidatePanelId} className="reveal mb-1.5 mt-1 border-t-line border-parranda-line-faint pt-3">
                       {url && (
                         <a
                           href={url}
@@ -460,7 +461,7 @@ export default function StopLine({
                 aria-expanded={expanded}
                 aria-controls={panelId}
                 onClick={() => setExpandedStopKey(expanded ? null : stopKey)}
-                className="group flex min-h-14 w-full items-center gap-3.5 rounded-parranda-btn py-1.5 pr-1 text-left transition hover:bg-parranda-fill-faint"
+                className="group flex min-h-14 w-full items-center gap-3.5 rounded-parranda-btn py-1.5 pr-1 text-left transition press-row origin-left hover:bg-parranda-fill-faint"
               >
                 <span
                   className={`type-data relative z-(--p-z-raised) flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-4 text-sm font-semibold transition ${station}`}
@@ -517,7 +518,7 @@ export default function StopLine({
                 // name: what it is and does for the picks, its facts, then
                 // two kinds of action. Going there leads, outlined; changing
                 // the day follows, in quiet fills. No card of its own.
-                <div id={panelId} className="mb-1 ml-14 mt-1 flex flex-col gap-3">
+                <div id={panelId} className="reveal mb-1 ml-14 mt-1 flex flex-col gap-3">
                   {(panelKindLabel || matchedLabels.length > 0 || partialLabels.length > 0) && (
                     <p className="text-15 leading-snug text-parranda-ink-soft">
                       {[

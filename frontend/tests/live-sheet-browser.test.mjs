@@ -131,6 +131,8 @@ test('Live close stays in reach while scrolling a full event list on mobile', as
   }));
   await render({ coverage: 'covered', selected_date: '2026-10-07', tonight: rows, this_week: [] });
   const close = page.getByRole('button', { name: 'Close live', exact: true });
+  // The sheet rises into place when it opens: measure where it settles.
+  await page.waitForFunction(() => document.getAnimations().every(animation => animation.playState !== 'running'));
   const initial = await close.boundingBox();
   await page.getByRole('heading', { name: 'Calendar event 12', exact: true }).scrollIntoViewIfNeeded();
   const after = await close.boundingBox();

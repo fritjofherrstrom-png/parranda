@@ -206,7 +206,7 @@ export default function AnchorCard({
           ? summary
             // Linje 2 board: a framed row, and the whole row is Adjust (the
             // button's ::after stretches over it; the picks stay a list).
-            ? "group relative flex min-h-14 items-center gap-2 rounded-parranda-btn border-line border-parranda-line bg-parranda-fill-faint py-2 pl-3.5 pr-1.5 transition hover:bg-parranda-fill"
+            ? "group relative flex min-h-14 items-center gap-2 rounded-parranda-btn border-line border-parranda-line bg-parranda-fill-faint py-2 pl-3.5 pr-1.5 transition press-within hover:bg-parranda-fill"
             : "flex min-h-9 items-center justify-between gap-3"
           : "flex min-h-12 flex-wrap items-center gap-2.5 border-t-line border-parranda-line-faint py-1.5 pl-4 pr-1.5"}>
           {/* Compact, one even line in the title's quiet voice: the day, then
@@ -288,7 +288,7 @@ export default function AnchorCard({
       )}
 
       {adjustOpen && (
-        <div id={panelId} className={compact ? `${panelCard} mt-2 flex flex-col gap-5 p-4` : "flex flex-col gap-5 border-t-line border-parranda-line-faint p-4"}>
+        <div id={panelId} className={compact ? `reveal ${panelCard} mt-2 flex flex-col gap-5 p-4` : "reveal flex flex-col gap-5 border-t-line border-parranda-line-faint p-4"}>
           {/* The status line, then Done (in the card form; compact, Done
               stands in the line above): the panel needs no title of its own,
               the row it opened from says what it adjusts. */}

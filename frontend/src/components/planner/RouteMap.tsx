@@ -39,7 +39,7 @@ import type { RouteContextSuggestion } from "../../lib/route-context-view.mjs";
 import type { DistrictArea } from "./types";
 import type { Translate } from "./copy";
 import type { PositionSession } from "./useFollowPosition";
-import { CollapseIcon, ExpandIcon, LocationIcon, RouteIcon } from "../shared/icons";
+import { CollapseIcon, ExpandIcon, IconSwap, LocationIcon, RouteIcon } from "../shared/icons";
 import { busyButton } from "../shared/ui";
 
 // Footprints the fit keeps clear of the controls, in px. A route marker's
@@ -66,7 +66,7 @@ type Tip = { name: string; x: number; y: number; direction: "left" | "right" } |
 let maplibreModule: Promise<MapLibre> | null = null;
 /** MapLibre and its worker, loaded once and only when a map is drawn. */
 // The entire 44px square is the touch target.
-const mapButton = "inline-flex h-11 min-w-11 items-center justify-center rounded-parranda-btn border-line border-parranda-line-firm bg-parranda-paper/85 text-parranda-ink backdrop-blur-sm transition hover:bg-parranda-paper aria-disabled:opacity-60";
+const mapButton = "inline-flex h-11 min-w-11 items-center justify-center rounded-parranda-btn border-line border-parranda-line-firm bg-parranda-paper/85 text-parranda-ink backdrop-blur-sm transition press hover:bg-parranda-paper aria-disabled:opacity-60";
 
 function loadMapLibre(): Promise<MapLibre> {
   maplibreModule ??= Promise.all([
@@ -991,7 +991,7 @@ export default function RouteMap({
 
   return (
     <div className={heightClass === "h-full" ? "flex h-full min-h-0 flex-col" : undefined}>
-    <div ref={frameRef} data-route-map="" data-still={still || undefined} className={`route-map-frame relative w-full overflow-hidden rounded-parranda border-line border-parranda-line-faint transition-all ${heightClass === "h-full" ? "min-h-0 flex-1" : heightClass}`}>
+    <div ref={frameRef} data-route-map="" data-still={still || undefined} className={`route-map-frame relative w-full overflow-hidden rounded-parranda border-line border-parranda-line-faint transition-[height] ${heightClass === "h-full" ? "min-h-0 flex-1" : heightClass}`}>
       {/* Screen layout keeps each numbered touch footprint independently visible. */}
       <div ref={mapRef} className="h-full w-full" />
       {groupPicker && (
@@ -1070,7 +1070,7 @@ export default function RouteMap({
           title={mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
           className={`${mapButton} w-11`}
         >
-          {mapExpanded ? <CollapseIcon className="h-[18px] w-[18px]" /> : <ExpandIcon className="h-[18px] w-[18px]" />}
+          <IconSwap state={mapExpanded ? "collapse" : "expand"}>{mapExpanded ? <CollapseIcon className="h-[18px] w-[18px]" /> : <ExpandIcon className="h-[18px] w-[18px]" />}</IconSwap>
         </button>}
       </div>
     </div>

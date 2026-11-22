@@ -788,3 +788,35 @@ test("a partially covered request stays composed_limited and names the missing i
   assert.ok(!note.toLowerCase().includes("scenic"));
   assert.ok(!note.toLowerCase().includes("views"));
 });
+
+test("motion answers a touch on Linje's own curve, and only movement yields to reduced motion", () => {
+  // Nov 2026 polish audit (staging 65d5d37d): Adjust opened 515px and a stop
+  // 275px in one frame, no control answered a press, every transition ran on
+  // Tailwind's ease-in-out, icons drew 1.2–1.3px strokes beside bold labels,
+  // and the Live sheet appeared at once inside a 85vh cap.
+  const day = tokenBlock(":root");
+  assert.equal(tokenValue(day, "--p-ease-out"), "cubic-bezier(0.23, 1, 0.32, 1)");
+  assert.match(tokenValue(day, "--p-icon-stroke"), /px$/);
+  assert.match(anywhereStyles, /--default-transition-timing-function: var\(--p-ease-out\)/);
+  // A press settles under the finger; a disabled, finished or working one does not.
+  const ui = componentSource("shared/ui.tsx");
+  for (const name of ["buttonClass", "pillClass", "compactPillTarget", "segmentClass"]) {
+    const block = ui.split(new RegExp(`export (?:const|function) ${name}\\b`))[1]?.split(/\nexport /)[0] ?? "";
+    assert.match(block, /\bpress\b/, `${name} answers a press`);
+  }
+  assert.match(anywhereStyles, /&:active:not\(:disabled, \[aria-disabled="true"\], \[aria-busy="true"\]\)/);
+  // What a tap opens arrives; the Live sheet rises within the visible height.
+  assert.match(componentSource("planner/AnchorCard.tsx"), /id=\{panelId\} className=\{compact \? `reveal /);
+  assert.match(componentSource("planner/StopLine.tsx"), /id=\{panelId\} className="reveal /);
+  const sheet = componentSource("planner/LiveSheet.tsx");
+  assert.match(sheet, /live-sheet-panel [^"]*max-h-\[85dvh\]/);
+  assert.doesNotMatch(sheet, /\d+vh\]/);
+  // Movement (translate, scale) sits under no-preference; fades are allowed for everyone.
+  const starts = [...anywhereStyles.matchAll(/(@media ([^{]*)\{\s*)?@starting-style\s*\{([^{}]*\{[^}]*\})/g)];
+  assert.ok(starts.length >= 6, "the reveal, icon swap and sheet entries are declared");
+  for (const [, , media = "", rules] of starts) {
+    if (/transform:/.test(rules)) assert.match(media, /prefers-reduced-motion: no-preference/, `movement waits for no-preference: ${rules.trim()}`);
+  }
+  assert.doesNotMatch(anywhereStyles, /transition-all|transition: all/);
+  assert.doesNotMatch(componentSource("planner/RouteMap.tsx"), /transition-all/);
+});

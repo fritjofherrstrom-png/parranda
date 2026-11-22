@@ -172,14 +172,14 @@ export default function LiveSheet({
 
   return (
     <div className="fixed inset-0 z-(--p-z-sheet)">
-      <div aria-hidden="true" onClick={onClose} className="absolute inset-0 bg-parranda-scrim backdrop-blur-[2px]" />
+      <div aria-hidden="true" onClick={onClose} className="live-sheet-scrim absolute inset-0 bg-parranda-scrim backdrop-blur-[2px]" />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={t("Live-händelser", "Live events")}
         tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto scroll-pt-36 rounded-t-3xl border-t-line border-parranda-line-faint bg-parranda-paper px-5 pb-8 shadow-sheet wrap-anywhere sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:rounded-3xl sm:border-line sm:px-7"
+        className="live-sheet-panel absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto scroll-pt-36 rounded-t-3xl border-t-line border-parranda-line-faint bg-parranda-paper px-5 pb-8 shadow-sheet wrap-anywhere sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:rounded-3xl sm:border-line sm:px-7"
       >
         <div className="sticky top-0 z-(--p-z-raised) -mx-5 bg-parranda-paper px-5 pb-2 pt-4 sm:-mx-7 sm:px-7">
           <div className="flex justify-center sm:hidden" aria-hidden="true">

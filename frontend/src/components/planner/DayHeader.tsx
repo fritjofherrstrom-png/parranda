@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
 import { routeUnconfirmedTonightPicks, walkingDistanceLabel } from "../../lib/route-context-view.mjs";
-import { CheckIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, MinusIcon, RainIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
+import { CheckIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, IconSwap, MinusIcon, RainIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
 import { busyButton, buttonClass, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
@@ -548,7 +548,7 @@ export function DayActions({
           href={routeUrls[0]}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex min-h-16 items-center gap-3 rounded-parranda-btn bg-parranda-terracotta px-4 py-3 text-parranda-on-terracotta transition hover:brightness-110"
+          className="flex min-h-16 items-center gap-3 rounded-parranda-btn bg-parranda-terracotta px-4 py-3 text-parranda-on-terracotta transition press hover:brightness-110"
         >
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="text-17 font-extrabold leading-tight">{t("Öppna rutten i Maps", "Open route in Maps")}</span>
@@ -579,7 +579,7 @@ export function DayActions({
           aria-label={isSaved ? t("Dagen är sparad", "Day is saved") : t("Spara dagen", "Save this day")}
           className={buttonClass("quiet", "min-h-11 -ml-2 px-2 text-15 aria-disabled:text-parranda-clay aria-disabled:opacity-100")}
         >
-          <StarIcon filled={isSaved} />
+          <IconSwap state={isSaved ? "saved" : "save"}><StarIcon filled={isSaved} /></IconSwap>
           {isSaved ? t("Sparad", "Saved") : t("Spara", "Save")}
         </button>
         {canShare && (
@@ -589,7 +589,7 @@ export function DayActions({
             aria-label={t("Dela dagen", "Share this day")}
             className={buttonClass("quiet", "min-h-11 px-2 text-15")}
           >
-            {shareCopied ? <CheckIcon className="h-4 w-4 text-parranda-ember" /> : <ShareIcon />}
+            <IconSwap state={shareCopied ? "copied" : "share"}>{shareCopied ? <CheckIcon className="h-4 w-4 text-parranda-ember" /> : <ShareIcon />}</IconSwap>
             {shareCopied ? t("Länk kopierad", "Link copied") : t("Dela", "Share")}
           </button>
         )}

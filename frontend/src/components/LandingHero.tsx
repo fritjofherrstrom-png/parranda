@@ -226,7 +226,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
                 // and moves this button before pointer-up can activate it.
                 if (event.button === 0) event.preventDefault();
               }}
-              className="min-h-[3.75rem] whitespace-nowrap rounded-parranda-btn bg-parranda-terracotta px-8 text-17 font-extrabold text-parranda-on-terracotta transition [font-stretch:110%] hover:brightness-110 sm:min-h-16 sm:text-lg"
+              className="min-h-[3.75rem] whitespace-nowrap rounded-parranda-btn bg-parranda-terracotta px-8 text-17 font-extrabold text-parranda-on-terracotta transition press [font-stretch:110%] hover:brightness-110 sm:min-h-16 sm:text-lg"
             >
               {t("Bygg min dag", "Build my day")}
             </button>
