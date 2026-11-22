@@ -191,6 +191,7 @@ const PRIMARY_COLLECTIONS = new Set([
   "cached_supply",
   "first_pass_while_expanding",
   "neighbouring_budget_cache",
+  "stored_map_answer",
   "background_refresh",
 ]);
 const PRIMARY_COLLECTION_REASONS = new Set([
@@ -248,6 +249,10 @@ function sanitizeLoaderCollectionMetadata(value) {
     //   neighbouring_budget_cache  this anchor's fresh answer for another
     //                              walking budget (`primary_collection_target_km`)
     //                              while this budget's was outstanding or failed
+    //   stored_map_answer          the place's previous answer to this question,
+    //                              from stored query answers that may have expired
+    //                              inside the stale window (`cache.served_stale`),
+    //                              while the refresh was outstanding
     //   background_refresh         no answered map evidence at the bounded wait;
     //                              other families composed the day
     primary_collection: PRIMARY_COLLECTIONS.has(value.primary_collection)

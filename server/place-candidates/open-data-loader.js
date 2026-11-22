@@ -29,6 +29,7 @@
  * service. Those are deliberate next-step boundaries.
  */
 
+const { createHash } = require("node:crypto");
 const { createSourceCache } = require("./source-cache");
 const { createBackgroundSource, SOURCE_COMPLETION, SOURCE_SNAPSHOT, SOURCE_PENDING } = require("./background-source");
 const { createWikidataSource, WIKIDATA_CACHE_NAMESPACE } = require("./wikidata-source");
@@ -369,6 +370,17 @@ function rhythmAwareRadiusKm(band, dayRhythm) {
     ?? budgetAwareRadiusKm(null);
 }
 
+// JSON syntax and HTTP success do not establish a complete Overpass answer.
+// Runtime errors can accompany already-emitted elements through `remark`.
+// Keep a genuine empty collection distinct from malformed/error-shaped data.
+function isCompleteOverpassPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !Array.isArray(payload.elements)) return false;
+  if (['remark', 'error'].some(key => Object.hasOwn(payload, key) &&
+      (typeof payload[key] !== 'string' || payload[key].trim() !== ''))) return false;
+  return payload.elements.every(element => element && typeof element === 'object' && !Array.isArray(element) &&
+    ['node', 'way', 'relation'].includes(element.type) && Number.isSafeInteger(element.id));
+}
+
 function createOpenDataLoader({
   fetcher = typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
   endpoint = null,
@@ -405,6 +417,100 @@ function createOpenDataLoader({
         : [DEFAULT_OVERPASS_ENDPOINT, ...DEFAULT_OVERPASS_FALLBACKS];
 
   const gate = createOverpassGate({ now, maxWaitMs: boundedTimeoutMs });
+
+  // The map answer to one exact query text, kept beside the request-shaped
+  // entries below. A request's own key carries what shaped its SELECTION (the
+  // availability window is the current local minute for a day that is today),
+  // so the same place a minute later was a new key and a new provider call,
+  // and its expired answer was never found as a fallback. The query text only
+  // carries what shaped the ACQUISITION: place, aperture, limit and interests.
+  // Same lifetime and the same bounded stale-if-error window as those entries.
+  // An empty answer is not kept: a 200 with no elements can also be a provider
+  // that gave up, and it must not stand in for the place for hours.
+  // Opaque caches retain the former request-only behavior: query reuse needs
+  // its original expiry as well as its value, including after disk/restart.
+  const canStoreQueries = Boolean(cache) && typeof cache.peek === "function" &&
+    typeof cache.set === "function" && typeof cache.inspect === "function";
+  const answerExpiries = new WeakMap();
+  // Local acquisition order, not the time an OSM edit happened. Keep it with
+  // the raw answer across cache/restart; never restamp an older cache read.
+  const recordObservations = new WeakMap();
+  // v1 discarded error/remark before validating completeness, so it cannot
+  // attest this contract. Leave its files intact, but never silently reuse them.
+  const queryKey = (query) => `query-v2:${createHash("sha256").update(query).digest("hex")}`;
+  const keptElements = (value) => (isCompleteOverpassPayload(value) && value.elements.length > 0
+    ? { elements: value.elements, ...(Number.isFinite(value.observedAt) ? { observedAt: value.observedAt } : {}) } : null);
+  const readStoredQuery = (query) => {
+    if (!canStoreQueries) return null;
+    const key = queryKey(query);
+    const payload = keptElements(cache.peek(key));
+    const expiresAt = cache.inspect(key)?.expiresAt;
+    return payload && Number.isFinite(expiresAt) && expiresAt > now()
+      ? { ok: true, payload, expiresAt, observedAt: payload.observedAt } : null;
+  };
+  const retainQueryExpiry = (answer, plan) => {
+    if (plan && Number.isFinite(answer.expiresAt)) plan.expiresAt = Math.min(plan.expiresAt, answer.expiresAt);
+    return answer;
+  };
+  function readStaleQuery(query) {
+    if (!canStoreQueries || boundedStaleIfErrorMs <= 0 || typeof cache.inspect !== "function") return null;
+    const entry = cache.inspect(queryKey(query));
+    const payload = keptElements(entry?.value);
+    const ageMs = Number.isFinite(entry?.expiresAt) ? Math.max(0, now() - entry.expiresAt) : Number.POSITIVE_INFINITY;
+    return payload && ageMs <= boundedStaleIfErrorMs ? { payload, ageMs } : null;
+  }
+
+  // Mirror failover: only transport/parse/incomplete-response failure qualifies.
+  // A complete 200 with a genuine empty collection is an answer, not a failure.
+  async function askProvider(query) {
+    let last = { ok: false, status: "error_failed_closed", error: "no_endpoint" };
+    for (const targetEndpoint of resolvedEndpoints) {
+      const attempt = await attemptOverpass(targetEndpoint, query);
+      if (attempt.ok) {
+        const kept = canStoreQueries ? keptElements(attempt.payload) : null;
+        if (kept) {
+          const key = queryKey(query);
+          cache.set(key, { ...kept, observedAt: attempt.observedAt });
+          return { ...attempt, expiresAt: cache.inspect(key)?.expiresAt };
+        }
+        return attempt;
+      }
+      last = attempt;
+    }
+    return last;
+  }
+  // Requests that differ only in their selection ask the identical query text
+  // at the same moment; they share one provider call instead of queueing a
+  // second one behind it. Only where the answer can be stored and re-read.
+  const askingQueries = new Map();
+  function askProviderOnce(query) {
+    if (!canStoreQueries) return askProvider(query);
+    const key = queryKey(query);
+    if (!askingQueries.has(key)) {
+      const asking = askProvider(query);
+      askingQueries.set(key, asking);
+      const settle = () => { if (askingQueries.get(key) === asking) askingQueries.delete(key); };
+      asking.then(settle, settle);
+    }
+    return askingQueries.get(key);
+  }
+  // One query: its stored answer when that is fresh, else the provider. When
+  // no mirror answers, the expired stored answer is the bounded safety net;
+  // `plan` records that it was used, so the load is labelled and never written
+  // back as fresh. `plan.storedOnly` never asks the provider.
+  async function answerQuery(query, plan = null) {
+    const stored = readStoredQuery(query);
+    if (stored) return retainQueryExpiry(stored, plan);
+    const last = plan?.storedOnly
+      ? { ok: false, status: "error_failed_closed", error: "refresh_outstanding" }
+      : await askProviderOnce(query);
+    if (last.ok) return retainQueryExpiry(last, plan);
+    // Only a load that can label itself may lean on an expired answer.
+    const stale = plan ? readStaleQuery(query) : null;
+    if (!stale) return last;
+    plan.stale = { ageMs: Math.max(plan.stale?.ageMs || 0, stale.ageMs), reason: plan.stale?.reason || last.error };
+    return { ok: true, payload: stale.payload, observedAt: stale.payload.observedAt };
+  }
 
   // One attempt against one mirror. Returns { ok, payload } on a usable response,
   // or { ok:false, status, error } so the caller can fail over to the next mirror.
@@ -462,8 +568,11 @@ function createOpenDataLoader({
         try {
           const payload = await response.json();
           if (controller.signal.aborted || elapsedNow() - started >= boundedTimeoutMs) return timedOut();
+          if (!isCompleteOverpassPayload(payload)) {
+            return { ok: false, status: 'error_failed_closed', error: 'invalid_response' };
+          }
           gate.observeSuccess(targetEndpoint);
-          return { ok: true, payload };
+          return { ok: true, payload, observedAt: now() };
         } catch (_error) {
           return controller.signal.aborted ? timedOut()
             : { ok: false, status: "error_failed_closed", error: "parse_error" };
@@ -490,7 +599,7 @@ function createOpenDataLoader({
   // One geocoded query at a given radius, with mirror failover. Fetch wider than
   // the final limit so scarce-but-important categories (scenic in a food-dense
   // centre) survive, then balance down to `boundedLimit` client-side.
-  async function fetchAtRadius(lat, lng, radiusM, { queryIntents = [], requestedIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
+  async function fetchAtRadius(lat, lng, radiusM, { queryIntents = [], requestedIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}, plan = null) {
     const fetchBreadth = Math.min(boundedLimit * 6, OVERPASS_FETCH_CAP);
     const query = buildOverpassQuery({
       lat,
@@ -500,26 +609,20 @@ function createOpenDataLoader({
       mappings: mappingsForRequestedIntents(queryIntents),
       focusedIntents: queryIntents.length ? queryIntents : requestedIntents,
     });
-    // Try each mirror in order; fail over ONLY on a transport/parse error — a
-    // genuine 200 (even with zero elements) is a real answer, not a failure.
-    let last = { status: "error_failed_closed", error: "no_endpoint" };
-    for (const targetEndpoint of resolvedEndpoints) {
-      const attempt = await attemptOverpass(targetEndpoint, query);
-      if (attempt.ok) {
-        const records = mapOverpassResponse(attempt.payload, boundedLimit, {
-          origin: { lat, lng },
-          requestedIntents,
-          walkingTargetBand,
-          availabilityWindow,
-        });
-        return withLoaderStatus(attestPublicPlaceRecords(records, 'osm'), records.length > 0 ? `loaded:${records.length}` : "loaded:0", null);
-      }
-      last = attempt;
-    }
-    return withLoaderStatus([], last.status, last.error);
+    const attempt = await answerQuery(query, plan);
+    if (!attempt.ok) return withLoaderStatus([], attempt.status, attempt.error);
+    // The selection is made now, for this request's window, from the answer.
+    const records = mapOverpassResponse(attempt.payload, boundedLimit, {
+      origin: { lat, lng },
+      requestedIntents,
+      walkingTargetBand,
+      availabilityWindow,
+    });
+    for (const record of records) recordObservations.set(record, attempt.observedAt);
+    return withLoaderStatus(attestPublicPlaceRecords(records, 'osm'), records.length > 0 ? `loaded:${records.length}` : "loaded:0", null);
   }
 
-  async function fetchAcrossAnchors(anchors, radiusM, { requestedIntents = [] } = {}) {
+  async function fetchAcrossAnchors(anchors, radiusM, { requestedIntents = [] } = {}, plan = null) {
     const boundedAnchors = (Array.isArray(anchors) ? anchors : [])
       .filter((anchor) => Number.isFinite(anchor?.lat) && Number.isFinite(anchor?.lng))
       .slice(0, 2);
@@ -532,13 +635,9 @@ function createOpenDataLoader({
       mappings: OSM_TAG_MAP,
       focusedIntents: requestedIntents,
     });
-    let last = { status: "error_failed_closed", error: "no_endpoint" };
-    for (const targetEndpoint of resolvedEndpoints) {
-      const attempt = await attemptOverpass(targetEndpoint, query);
-      if (!attempt.ok) {
-        last = attempt;
-        continue;
-      }
+    {
+      const attempt = await answerQuery(query, plan);
+      if (!attempt.ok) return { status: attempt.status, error: attempt.error, clusters: [] };
       const mapped = mapOverpassResponse(
         attempt.payload,
         // Keep the complete, already provider-capped response until it has been
@@ -571,7 +670,6 @@ function createOpenDataLoader({
       }));
       return { status: `loaded:${mapped.length}`, error: null, clusters };
     }
-    return { status: last.status, error: last.error, clusters: [] };
   }
 
   const loadPrimaryOpenDataAround = async function loadPrimaryOpenDataAround({
@@ -582,7 +680,7 @@ function createOpenDataLoader({
     walkingTargetBand = null,
     dayRhythm = null,
     availabilityWindow = null,
-  } = {}, { onAnsweredPass = null } = {}) {
+  } = {}, { onAnsweredPass = null, plan = null } = {}) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return withLoaderStatus([], "loaded:0", null);
 
     const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents, { osmOnly: true });
@@ -602,7 +700,7 @@ function createOpenDataLoader({
       requestedIntents: selectionIntents,
       walkingTargetBand: normalizedWalkingTargetBand,
       availabilityWindow: normalizedWindow,
-    });
+    }, plan);
     const initialProfile = supplyProfile(first, normalizedRequestedIntents);
     const initialDayCapacity = dayCapacityProfile(first, {
       origin,
@@ -669,13 +767,27 @@ function createOpenDataLoader({
         requestedIntents: selectionIntents,
         walkingTargetBand: normalizedWalkingTargetBand,
         availabilityWindow: normalizedWindow,
-      });
-      const combined = mergeLoaderRecords(first, wider, boundedLimit, origin, {
+      }, plan);
+      // Reconcile facts before BOTH supply-selection outcomes. A later answer
+      // is not allowed to vanish merely because it adds no richer supply. Use
+      // original source observations, not cache-read time or radius as recency.
+      const widerById = new Map(wider.map(record => [record.id, record]));
+      const currentFirst = withLoaderStatus(first.map(record => {
+        const next = widerById.get(record.id);
+        const priorAt = recordObservations.get(record);
+        const nextAt = next && recordObservations.get(next);
+        const later = Number.isFinite(nextAt) && (!Number.isFinite(priorAt) || nextAt > priorAt);
+        const tiedClosure = Number.isFinite(nextAt) && nextAt === priorAt &&
+          next.operational_status === 'inactive' && record.operational_status !== 'inactive';
+        return later || tiedClosure ? next : record;
+      }), first.loader_status, first.loader_error);
+      selected = currentFirst;
+      const combined = mergeLoaderRecords(currentFirst, wider, boundedLimit, origin, {
         requestedIntents: selectionIntents,
         walkingTargetBand: normalizedWalkingTargetBand,
         availabilityWindow: normalizedWindow,
       });
-      if (isWiderSupplyBetter(first, combined, {
+      if (isWiderSupplyBetter(currentFirst, combined, {
         requestedIntents: normalizedRequestedIntents,
         origin,
         walkingTargetBand: normalizedWalkingTargetBand,
@@ -687,7 +799,7 @@ function createOpenDataLoader({
         selectionReason = "richer_wider_supply";
       } else if (combined.loader_error) {
         // Choosing the useful base rows must not erase a failed wider query.
-        selected = withLoaderStatus([...first], first.loader_status, combined.loader_error);
+        selected = withLoaderStatus([...currentFirst], first.loader_status, combined.loader_error);
       }
     }
     return withLoaderMetadata(selected, {
@@ -717,8 +829,36 @@ function createOpenDataLoader({
     });
   };
 
-  const loadOpenDataAround = async function loadOpenDataAround(request = {}, { onAnsweredPass = null } = {}) {
-    const primary = await loadPrimaryOpenDataAround(request, { onAnsweredPass });
+  // One load. A query whose provider did not answer may fall back on its
+  // expired stored answer (see answerQuery); the whole load is then labelled a
+  // stale fallback, with the oldest age used, exactly as a request-level
+  // fallback is. `storedOnly` composes from stored answers and never asks.
+  // Apply age/provenance at every source-owned publication boundary, including
+  // an answered first pass whose expansion/regional scout is still pending.
+  const retainPlanMetadata = (loaded, plan) => {
+    answerExpiries.set(loaded, plan.expiresAt);
+    if (!plan.stale || String(loaded.loader_status || "").startsWith("error")) return loaded;
+    return withLoaderMetadata(withLoaderStatus(loaded, loaded.loader_status, "stale_cache_refresh_failed"), {
+      ...(loaded.loader_metadata && typeof loaded.loader_metadata === "object" ? loaded.loader_metadata : {}),
+      cache: {
+        served_stale: true,
+        stale_age_seconds: Math.max(0, Math.floor(plan.stale.ageMs / 1000)),
+        refresh_reason: safeLoaderToken(plan.stale.reason || "provider_failed"),
+      },
+    });
+  };
+  const loadOpenDataAround = async function loadOpenDataAround(request = {}, { onAnsweredPass = null, storedOnly = false } = {}) {
+    const plan = { storedOnly: storedOnly === true, stale: null, expiresAt: Infinity };
+    const loaded = await loadPlannedOpenDataAround(request, {
+      plan,
+      onAnsweredPass: typeof onAnsweredPass === 'function'
+        ? records => onAnsweredPass(retainPlanMetadata(records, plan)) : null,
+    });
+    return retainPlanMetadata(loaded, plan);
+  };
+
+  const loadPlannedOpenDataAround = async function loadPlannedOpenDataAround(request = {}, { onAnsweredPass = null, plan = null } = {}) {
+    const primary = await loadPrimaryOpenDataAround(request, { onAnsweredPass, plan });
     const anchorMode = normalizeAnchorMode(request.anchorMode);
     const scope = anchorMode === "place" ? sanitizeTrustedSpatialScope(request.spatialScope) : null;
     const primaryMetadata = primary.loader_metadata || null;
@@ -773,7 +913,7 @@ function createOpenDataLoader({
     }
     const regional = await fetchAcrossAnchors(secondaryAnchors, REGIONAL_CLUSTER_RADIUS_KM * 1000, {
       requestedIntents: request.dayRhythm ? normalizeRequestedIntents(request.requestedIntents, { osmOnly: true }) : [],
-    });
+    }, plan);
     const requestedIntents = normalizeRequestedIntents(request.requestedIntents, { osmOnly: true });
     let selected = primary;
     let selectedAnchor = { id: "primary", lat: request.lat, lng: request.lng };
@@ -841,17 +981,18 @@ function createOpenDataLoader({
     const window = normalizeAvailabilityWindow(request.availabilityWindow);
     const windowKey = window ? `${window.weekday}.${window.startMinute}.${window.endMinute}` : "none";
     const identity = {
-      key: !request.dayRhythm && !window
+      key: `complete-v1:${!request.dayRhythm && !window
         ? `v8:${anchorKey}:r${radiusKm}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`
-        : `${request.dayRhythm ? 'v10' : 'v9'}:${anchorKey}:r${radiusKm}:w${windowKey}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
-      budgetsKey: `${request.dayRhythm ? 'v10' : 'v8'}-budgets:${anchorKey}:${shape}:s${scopeKey}`,
-      evidenceKey: `${request.dayRhythm ? 'v10' : 'v8'}-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
+        : `${request.dayRhythm ? 'v10' : 'v9'}:${anchorKey}:r${radiusKm}:w${windowKey}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`}`,
+      budgetsKey: `complete-v1:${request.dayRhythm ? 'v10' : 'v8'}-budgets:${anchorKey}:${shape}:s${scopeKey}`,
+      evidenceKey: `complete-v1:${request.dayRhythm ? 'v10' : 'v8'}-evidence:${anchorKey}:l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:s${scopeKey}`,
       radiusKm,
       targetKm: band ? band.targetKm : null,
     };
     // Exact requests that need the revised map facts refresh their own query.
-    // Keep the previous query's positive outage fallback and share independently
-    // collected neighbour evidence across the two active query revisions.
+    // Keep completeness-attested previous-query outage fallback and share
+    // neighbour evidence across the two active query revisions. Older unmarked
+    // selections/indexes cannot attest their already discarded response envelope.
     const revised = requestedIntents.some(intent => OSM_REVISED_INTERESTS.has(intent));
     if (previousContract && !revised) return identity;
     const revision = revised && !previousContract ? "q3" : "q2";
@@ -887,6 +1028,17 @@ function createOpenDataLoader({
   const readProgress = (anchor, request = {}) => {
     const merged = { ...request, ...anchor };
     return hasAnchor(merged) ? answeredPasses.get(requestIdentity(merged).key)?.records || null : null;
+  };
+
+  // This request's map answer composed only from stored query answers, fresh
+  // or inside the stale window, or null. It never asks the provider: a
+  // composition whose own refresh is still outstanding at its wait bound may
+  // keep the place's previous map answer instead of dropping the family.
+  const readStored = async (anchor, request = {}) => {
+    const merged = { ...request, ...anchor };
+    if (!canStoreQueries || !hasAnchor(merged)) return null;
+    const stored = await loadOpenDataAround(merged, { storedOnly: true });
+    return stored.length > 0 && !String(stored.loader_status || "").startsWith("error") ? stored : null;
   };
 
   if (!cache || typeof cache.get !== "function") {
@@ -970,12 +1122,22 @@ function createOpenDataLoader({
           status: result.loader_status,
           error: result.loader_error,
           metadata: result.loader_metadata || null,
+          ...(Number.isFinite(answerExpiries.get(result)) ? { sourceExpiresAt: answerExpiries.get(result) } : {}),
         };
       },
       {
-        shouldStore: (value) => value && typeof value.status === "string" && !value.status.startsWith("error"),
+        // A load that leaned on an expired query answer is a labelled fallback,
+        // not a new answer: storing it here would renew its age.
+        shouldStore: (value) => value && typeof value.status === "string" && !value.status.startsWith("error") &&
+          value.error !== "stale_cache_refresh_failed",
+        expiresAt: (value) => value.sourceExpiresAt,
         staleIfErrorMs: boundedStaleIfErrorMs,
         onStale: (stale, info) => {
+          // Query-level fallback already selected for this request and carries
+          // its original age/reason. Do not wrap it in an older projection or
+          // replace the actual provider failure with the fallback's own label.
+          if (info?.refreshValue?.error === 'stale_cache_refresh_failed' &&
+              info.refreshValue.metadata?.cache?.served_stale === true) return info.refreshValue;
           const refreshReason = safeLoaderToken(
             info?.refreshValue?.error ||
               (info?.refreshError ? classifyFetchError(info.refreshError) : "provider_failed"),
@@ -1036,6 +1198,7 @@ function createOpenDataLoader({
   cachedLoader.readCached = (anchor, request = {}) => cachedLoader({ ...request, ...anchor, cacheOnly: true });
   cachedLoader.readProgress = readProgress;
   cachedLoader.readNeighbouring = readNeighbouring;
+  cachedLoader.readStored = readStored;
   return cachedLoader;
 }
 
@@ -2030,7 +2193,12 @@ function composeOpenDataLoaders(
         ? osmLoader.readProgress(primaryAnchor, request) : null;
       const neighbour = answered?.length || typeof osmLoader.readNeighbouring !== "function"
         ? null : osmLoader.readNeighbouring(primaryAnchor, request);
-      const mapEvidence = answered?.length ? answered : neighbour?.length ? neighbour : null;
+      // Else the place's own previous answer to this question, from stored
+      // query answers that may have expired inside the stale window. A refresh
+      // that is slow leaves the day the same safety net a failed one does.
+      const stored = answered?.length || neighbour?.length || typeof osmLoader.readStored !== "function"
+        ? null : await Promise.resolve(osmLoader.readStored(primaryAnchor, request)).catch(() => null);
+      const mapEvidence = answered?.length ? answered : neighbour?.length ? neighbour : stored?.length ? stored : null;
       // Every other source adds what it already holds for this anchor at zero
       // network cost — cached Wikidata corroboration and cached official
       // evidence — so the downstream identity merge can still corroborate.
@@ -2057,7 +2225,7 @@ function composeOpenDataLoaders(
           }),
           primary_collection: answered?.length
             ? "first_pass_while_expanding"
-            : neighbour?.length ? "neighbouring_budget_cache" : "background_refresh",
+            : neighbour?.length ? "neighbouring_budget_cache" : stored?.length ? "stored_map_answer" : "background_refresh",
           primary_collection_reason: mapEvidence
             ? "primary_outstanding_at_wait_bound"
             : "no_answered_map_evidence",

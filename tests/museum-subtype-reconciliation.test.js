@@ -72,7 +72,7 @@ test('an exact museum request refreshes cached map rows that predate subtype pre
   const { createSourceCache } = require('../server/place-candidates/source-cache');
   const { createOverpassEmulator } = require('./helpers/dense-centre-fixture');
   const origin = { lat: 55.6, lng: 13 };
-  const oldKey = 'q2:v10:55.600,13.000:r1.5:wnone:l25:munknown:iart_museums:tnone:snone';
+  const oldKey = 'q2:complete-v1:v10:55.600,13.000:r1.5:wnone:l25:munknown:iart_museums:tnone:snone';
   const cache = createSourceCache({ ttlMs: 60_000 });
   const record = mapOsmElement({ type: 'node', id: 100, lat: origin.lat, lon: origin.lng,
     tags: { tourism: 'museum', name: 'Cedar Museum' } });

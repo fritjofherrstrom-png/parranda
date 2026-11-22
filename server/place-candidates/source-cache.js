@@ -109,6 +109,7 @@ function createSourceCache(options = {}) {
    *   shouldStore?: (value:any) => boolean,
    *   validateCached?: (value:any) => boolean, // source-owned persisted schema
    *   signal?: AbortSignal, // producer ownership, not an individual shared consumer
+   *   expiresAt?: (value:any) => number|undefined, // source-owned upper bound; never extends TTL
    *   staleIfErrorMs?: number,
    *   onStale?: (value:any, info:object) => any
    * }} [opts]
@@ -150,7 +151,12 @@ function createSourceCache(options = {}) {
       try {
         const value = await producer();
         if (!signal?.aborted && shouldStore(value)) {
-          const entry = { value, expiresAt: now() + boundedTtlMs };
+          const expiryLimit = typeof opts.expiresAt === 'function' ? opts.expiresAt(value) : undefined;
+          const expiresAt = Number.isFinite(expiryLimit)
+            ? Math.min(now() + boundedTtlMs, expiryLimit) : now() + boundedTtlMs;
+          // A newly calculated projection is not a new source observation.
+          if (Number.isFinite(expiryLimit) && expiresAt <= now()) return value;
+          const entry = { value, expiresAt };
           remember(key, entry);
           writeFile(key, entry);
           return value;

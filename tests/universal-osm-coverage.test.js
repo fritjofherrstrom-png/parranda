@@ -6,6 +6,8 @@ const { createOpenDataLoader, buildOverpassQuery, mapOsmElement, mapOverpassResp
 const { matchCandidateToIntent } = require('../server/candidates/intent-vocabulary');
 const { createSourceCache } = require('../server/place-candidates/source-cache');
 
+// Previous-query fixture keys belong to complete-v1 admission; unmarked
+// pre-admission cache refusal is tested independently, not grandfathered in.
 const anchor = { lat: 44.8178, lng: 20.4569 };
 const node = (id, tags) => ({ type: 'node', id, lat: anchor.lat + id * .00001, lon: anchor.lng, tags: { name: `Берза ${id}`, ...tags } });
 
@@ -83,7 +85,7 @@ test('real loader acquires compound shops and relations without another request 
 
 test('new acquisition contract does not reuse a fresh old negative map cache', async () => {
   const cache = createSourceCache({ now: () => 1000, ttlMs: 10000 });
-  const oldKey = 'v10:44.818,20.457:r1.5:wnone:l25:munknown:isecond_hand:tnone:snone';
+  const oldKey = 'complete-v1:v10:44.818,20.457:r1.5:wnone:l25:munknown:isecond_hand:tnone:snone';
   cache.set(oldKey, { records: [], status: 'loaded:0', error: null, metadata: null });
   let calls = 0;
   const loader = createOpenDataLoader({ radiusKm: 1.5, cache, endpoint: 'https://controlled.example/interpreter', fetcher: async () => {
@@ -104,7 +106,7 @@ test('previous-contract positive evidence remains bounded outage fallback withou
   for (const age of [0, 6000]) {
     let now = 1000;
     const cache = createSourceCache({ now: () => now, ttlMs: 1000 });
-    const oldKey = 'v10:44.818,20.457:r1.5:wnone:l25:munknown:isecond_hand:tnone:snone';
+    const oldKey = 'complete-v1:v10:44.818,20.457:r1.5:wnone:l25:munknown:isecond_hand:tnone:snone';
     const record = mapOsmElement(node(77, { shop: 'second_hand' }));
     cache.set(oldKey, { records: [record], status: 'loaded:1', error: null, metadata: null });
     const expiresAt = cache.inspect(oldKey).expiresAt;
@@ -125,7 +127,7 @@ test('previous-contract positive evidence remains bounded outage fallback withou
 test('previous-contract evidence never replaces a healthy empty answer or crosses anchors', async () => {
   for (const scenario of ['empty', 'other-anchor']) {
     const cache = createSourceCache({ now: () => 1000, ttlMs: 10000 });
-    const oldKey = 'v10:44.818,20.457:r1.5:wnone:l25:munknown:isecond_hand:tnone:snone';
+    const oldKey = 'complete-v1:v10:44.818,20.457:r1.5:wnone:l25:munknown:isecond_hand:tnone:snone';
     const record = mapOsmElement(node(77, { shop: 'second_hand' }));
     cache.set(oldKey, { records: [record], status: 'loaded:1', error: null, metadata: null });
     const loader = createOpenDataLoader({ radiusKm: 1.5, cache, now: () => 1000, staleIfErrorMs: 5000,
