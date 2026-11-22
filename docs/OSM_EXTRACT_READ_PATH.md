@@ -47,6 +47,8 @@ Operating contract:
 
 Measured for Slovenia on a laptop (17 Nov 2026): 314 MB extract, 13 s build, 2.3 GB peak memory, 8,178 places in 865 tiles, 4.8 MB on disk. The loader answered Ljubljana in 30 ms and Piran in 3 ms.
 
+Measured for Sweden on the same laptop (22 Nov 2026): 1.0 GB extract (data time 2026-11-21T21:20:51Z), 46 s build with `--memory-limit 6GB`, 41,199 places in 7,956 tiles, 38 MB on disk. DuckDB spilled about 1.5 GB of temporary files beside the output during the build, so plan for the extract plus about 1.5 times its size free while building. The extract and the temporary files can be deleted afterwards; the server reads only the store.
+
 ## Differences from an Overpass answer
 - **Age.** The data is as old as the extract. Geofabrik rebuilds extracts once a day.
 - **Unnamed elements.** Overpass counts them toward a group's size before the mapper drops them. The store holds named places only, so a group can carry more usable places.
@@ -57,7 +59,7 @@ Measured for Slovenia on a laptop (17 Nov 2026): 314 MB extract, 13 s build, 2.3
 - **Showing the label.** The label is in the response and the shared day, not in the interface.
 - **Fetching and refreshing extracts.** Which regions to hold, when to fetch them and the disk budget are operator decisions. Nothing in the server downloads an extract.
 - **Hot refresh.** A rebuild needs a restart; see the operating contract.
-- **Large countries.** France and Germany are almost 5 GB each. The build is untested above 314 MB; sub-regions are the expected unit.
+- **Large countries.** France and Germany are almost 5 GB each. The build is tested up to 1.0 GB (Sweden); sub-regions are the expected unit above that.
 
 ## Attribution
 © OpenStreetMap contributors, ODbL 1.0. The records keep their `openstreetmap.org` source URLs, as with Overpass.
