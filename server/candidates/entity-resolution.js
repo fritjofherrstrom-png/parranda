@@ -49,6 +49,10 @@ const GENERIC_NAME_TOKENS = new Set([
   // articles / connectors
   "the", "a", "an", "la", "le", "il", "lo", "gli", "los", "las", "el", "der",
   "die", "das", "den", "det", "en", "ett", "of", "de", "di", "da", "del", "dei",
+  // Conjunctions. "&" is already dropped by normalizeName, so "X och Y" and
+  // "X & Y" must not differ by a distinctive word. A name made only of
+  // connectors stays generic and never merges on geo+name.
+  "and", "och", "og", "und", "et",
   // category nouns
   "bar", "pub", "cafe", "caffe", "kafe", "cafeteria", "restaurant", "ristorante",
   "trattoria", "osteria", "pizzeria", "pizza", "bakery", "forno", "museo",
