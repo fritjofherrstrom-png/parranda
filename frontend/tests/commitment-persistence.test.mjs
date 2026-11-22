@@ -64,7 +64,8 @@ function composedDay(stopIds, refusals = []) {
             size: 1,
             stop_ids: ["outsider"],
             stop_names: ["Place outsider"],
-            stops: [{ id: "outsider", name: "Place outsider", lat: 41.9002, lng: 12.49, type: "cafe", tags: [] }],
+            // Committable, so "Add to my day" can ask the server for it.
+            stops: [{ id: "outsider", name: "Place outsider", lat: 41.9002, lng: 12.49, type: "cafe", tags: [], commitment_eligible: true }],
           },
         ],
       },
@@ -108,11 +109,29 @@ async function keepFirstStop(h) {
   await click(h, buttonMatching(h, /Keep this one/));
 }
 
-/** Commit, let the recompose land, and return the day that answered it. */
-async function keepAndSettle(h, answer = ["a", "b", "c"], refusals = []) {
+/**
+ * Keep a stop of the day on screen. That day already answers the pin, so it
+ * settles at once: nothing is composed, and the day records it as answered.
+ */
+async function keepAndSettle(h) {
   await keepFirstStop(h);
   await h.clock.advance(500);
+  assert.equal(h.fetchMock.pending().length, 0, "a Keep on the settled day composes nothing");
+}
+
+/** Add the nearby place the day did not choose. */
+async function addOutsider(h) {
+  await click(h, buttonMatching(h, /detour ideas? near your route/));
+  await click(h, buttonMatching(h, /^Place outsider/));
+  await click(h, buttonMatching(h, /Add to my day/));
+}
+
+/** Add, let the compose that asks for it land, and return that request. */
+async function addAndSettle(h, answer, refusals = []) {
+  await addOutsider(h);
+  await h.clock.advance(500);
   const inFlight = h.fetchMock.pending()[0];
+  assert.deepEqual(inFlight.body.pinned_candidate_ids, ["outsider"]);
   await h.fetchMock.respond(inFlight, composedDay(answer, refusals));
   await h.clock.advance(50);
   return inFlight;
@@ -155,7 +174,7 @@ test("a restored day answers with its own verdict, not a recomputed one", async 
   // The day was composed WITHOUT the kept place, so its record says the
   // commitment went unmet. That verdict travels with it.
   const first = await plannerWithDay();
-  await keepAndSettle(first, ["b", "c", "d"]);
+  await addAndSettle(first, ["b", "c", "d"]);
   assert.match(first.text(), NOTICE, "precondition: the live day reported it unmet");
   const persisted = first.readStorage(LAST_KEY);
   await first.unmount();
@@ -165,15 +184,15 @@ test("a restored day answers with its own verdict, not a recomputed one", async 
   await h.clock.advance(100);
 
   assert.match(h.text(), NOTICE, "the restored day reports what it actually answered");
-  assert.match(h.text(), /Place a/, "and names it");
+  assert.match(h.text(), /Place outsider/, "and names it");
 });
 
 test("a restored day carries the server reason that belongs to its verdict", async (t) => {
   const first = await plannerWithDay();
-  await keepAndSettle(
+  await addAndSettle(
     first,
     ["b", "c", "d"],
-    [{ id: "a", reason: "walking_budget" }],
+    [{ id: "outsider", reason: "walking_budget" }],
   );
   assert.match(first.text(), /too far for the walk you asked for/i, "precondition: the live day renders the server reason");
   const persisted = first.readStorage(LAST_KEY);
@@ -268,7 +287,7 @@ test("restoring still cancels a compose that would have overwritten it", async (
 
   await click(h, h.container.querySelector('button[aria-label="Save this day"]'));
   await h.clock.advance(50);
-  await keepFirstStop(h);
+  await addOutsider(h);
   await h.clock.advance(500);
   const inFlight = h.fetchMock.pending()[0];
   assert.ok(inFlight, "a compose is in flight");

@@ -233,7 +233,7 @@ test("route result has one authoritative route and keeps broader candidates seco
   // counts, and the Maps CTA over the FULL stop order (woven event included).
   assert.match(anywherePlannerSource, /t\("Din dag", "Your day"\)/);
   assert.match(anywherePlannerSource, /t\("En dag i", "A day in"\)/);
-  assert.match(anywherePlannerSource, /t\("En dag", "A day"\)[\s\S]{0,120}t\("nära dig", "near you"\)/);
+  assert.match(anywherePlannerSource, /t\("En dag nära dig", "A day near you"\)/);
   assert.match(anywherePlannerSource, /<time dateTime=\{date!\}/);
   assert.match(anywherePlannerSource, /t\("till fots", "on foot"\)/);
   assert.match(anywherePlannerSource, /t\("Öppna rutten i Maps", "Open route in Maps"\)/);
@@ -285,7 +285,10 @@ test("map hierarchy mirrors route authority instead of numbering two competing p
 });
 
 test("map controls preserve provider attribution space", () => {
-  assert.match(anywherePlannerSource, /absolute right-2\.5 top-2\.5/);
+  // Linje 2: the marks stand above the attribution by its measured height,
+  // so they never cover it, one line or two.
+  const map = componentSource("planner/RouteMap.tsx");
+  assert.match(map, /style=\{\{ bottom: `\$\{attribHeight \+ 8\}px` \}\}/);
   assert.doesNotMatch(anywherePlannerSource, /absolute bottom-2\.5 right-2\.5/);
 });
 
@@ -372,7 +375,8 @@ test("the anchor is chosen once: the planner shows it, and adjusts — never a s
   // not re-asked. The old planner header/mode-toggle/place-form are gone.
   assert.match(anywherePlannerSource, /hasAnchor && \(/);
   assert.match(anywherePlannerSource, /\{anchorLabel\}/);
-  assert.match(anywherePlannerSource, /t\("Byt", "Change"\)/);
+  // Linje 2: the link names its whole action in words ("Change place").
+  assert.match(anywherePlannerSource, /\{t\("Byt plats", "Change place"\)\}/);
   assert.match(anywherePlannerSource, /aria-label=\{t\("Byt plats", "Change place"\)\}/);
   assert.doesNotMatch(anywherePlannerSource, /Planerar \$\{typedPlaceLabel\}|Planning \$\{typedPlaceLabel\}/);
   assert.doesNotMatch(anywherePlannerSource, /Justera känsla, dag och gånglängd/);
@@ -401,15 +405,18 @@ test("compact planner and map controls keep a 44px mobile touch target", () => {
   const anchorCard = componentSource("planner/AnchorCard.tsx");
   assert.match(componentSource("shared/ui.tsx"), /export const compactPillTarget =\s*"relative inline-flex min-h-9 [^"]*before:-inset-y-1 /);
   assert.match(anchorCard, /const controlPill = `\$\{compactPillTarget\} /);
-  assert.match(anchorCard, /aria-label=\{t\("Byt plats", "Change place"\)\}\s*className=\{controlPill\}/);
-  assert.match(anchorCard, /aria-expanded=\{false\}[\s\S]{0,120}className=\{controlPill\}/);
-  assert.match(anchorCard, /aria-expanded=\{true\}[\s\S]{0,120}className=\{controlPill\}/);
-  // The map's expand control says what it does, in both languages, on the
-  // same pill: 36px drawn, 44px to the touch.
+  // Linje 2: Change place is a text link, 44px tall itself; with the picks
+  // summary, Adjust and Done sit in the summary row at 44px (rowControl).
+  assert.match(anchorCard, /aria-label=\{t\("Byt plats", "Change place"\)\}\s*className="inline-flex min-h-11 /);
+  assert.match(anchorCard, /const rowControl = "inline-flex min-h-11 /);
+  assert.match(anchorCard, /aria-expanded=\{false\}[\s\S]{0,120}className=\{compact && summary \? rowControl : controlPill\}/);
+  assert.match(anchorCard, /aria-expanded=\{true\}[\s\S]{0,120}className=\{compact && summary \? rowControl : controlPill\}/);
+  // Linje 2: the expand control names the action and fits a 44px target.
   assert.match(
     anywherePlannerSource,
-    /aria-expanded=\{mapExpanded\}\s*data-map-control=""\s*className="[^"]*\bmin-h-9\b[^"]*before:-inset-y-1[^"]*"\s*>\s*\{mapExpanded \? t\("Förminska kartan", "Shrink map"\) : t\("Förstora kartan", "Expand map"\)\}/,
+    /aria-expanded=\{mapExpanded\}\s*aria-label=\{mapExpanded \? t\("Förminska kartan", "Shrink map"\) : t\("Förstora kartan", "Expand map"\)\}/,
   );
+  assert.match(anywherePlannerSource, /const mapButton = "inline-flex h-11 min-w-11 /);
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-ctrl-group button\s*\{[\s\S]*width: 44px;/);
   assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-ctrl-group button\s*\{[\s\S]*height: 44px;/);
   // A route stop's disc and its touch target are 44px markers, both drawn where
@@ -440,13 +447,15 @@ test("a route stop's visible number is its own tap target", () => {
 });
 
 test("route, saved-day, Blitz, and source actions keep a 44px mobile touch target", () => {
-  assert.match(anywherePlannerSource, /busyButton\([^)]*, blitz\)\}[\s\S]{0,180}min-h-11/);
+  assert.match(anywherePlannerSource, /busyButton\([^)]*, blitz\)\}[\s\S]{0,180}min-h-1[1-3]\b/);
   assert.match(anywherePlannerSource, /onClick=\{\(\) => restoreEntry\(entry\)\}[\s\S]{0,180}min-h-11/);
   assert.match(anywherePlannerSource, /aria-label=\{t\("Ta bort", "Remove"\)\}[\s\S]{0,180}min-h-11 min-w-11/);
   assert.match(anywherePlannerSource, /href=\{pin\}[\s\S]{0,180}min-h-11 min-w-11/);
-  // Live source links (rows, woven stop, Blitz) name their destination. Inline
-  // ones draw the 44px target with ::before, so wrapping never moves the text.
-  assert.match(anywherePlannerSource, /href=\{link\.href\}[\s\S]{0,120}\$\{inlineLinkTarget\}/);
+  // Live board links and their disclosure have full-height targets. The
+  // woven stop's inline link keeps its extended hit area.
+  const liveSource = componentSource("planner/LiveEventSource.tsx");
+  assert.match(liveSource, /href=\{link\.href\}[^>]*min-h-11/);
+  assert.match(liveSource, /<summary className="min-h-11 /);
   assert.match(anywherePlannerSource, /href=\{sourceLink\.href\}[\s\S]{0,120}\$\{inlineLinkTarget\}/);
   assert.match(componentSource("shared/ui.tsx"), /inlineLinkTarget = "relative before:absolute before:-inset-x-1 before:-inset-y-\[14px\]/);
   assert.doesNotMatch(anywherePlannerSource, /-my-3|&nbsp;↗/);
@@ -561,16 +570,48 @@ test("no control is disabled under the focus that pressed it", () => {
 test("grouped controls never clip the focus ring that sits outside them", () => {
   // The ring is drawn 3px outside a control. A rounded group with
   // overflow-hidden cut it to a sliver on EN/SV, Today/Tomorrow, rhythm and
-  // Live's When/Order; each segment now rounds its own ends instead.
+  // Live's When/Order; each segment now rounds itself instead.
   const ui = componentSource("shared/ui.tsx");
-  assert.match(ui, /export const segmentGroup = "(?![^"]*overflow-hidden)[^"]*rounded-full/);
-  assert.match(ui, /first:rounded-l-full last:rounded-r-full/);
+  assert.match(ui, /export const segmentGroup = "(?![^"]*overflow-hidden)[^"]*rounded-parranda-btn/);
+  assert.match(ui, /"inline-flex min-h-11 items-center justify-center rounded-parranda-btn /);
   for (const file of ["shared/AppBar.tsx", "planner/AnchorCard.tsx", "planner/LiveSheet.tsx"]) {
     const source = componentSource(file);
     assert.doesNotMatch(source, /className="[^"]*overflow-hidden[^"]*"\s+role="group"/, `${file} clips a group`);
     assert.doesNotMatch(source, /overflow-hidden[^"\n]*rounded-full[^"\n]*"\s*\n?\s*role="group"/, `${file} clips a group`);
   }
   assert.doesNotMatch(componentSource("planner/AnchorCard.tsx"), /className=\{`overflow-hidden \$\{panelCard\}`\}/);
+});
+
+test("circles are the line's stations; a control or a label is a soft rectangle", () => {
+  // Linje 2 (Nov 2026): every button, chip, segment and tag was a pill, so ten
+  // controls on the first screen carried the same shape as the stations of
+  // the day's line. Controls are tonal rectangles now; the shared helpers and
+  // the day's own controls never round to a circle.
+  const ui = componentSource("shared/ui.tsx");
+  for (const name of ["pillClass", "compactPillTarget", "segmentGroup", "segmentClass", "labelChip", "noticeCard", "panelCard"]) {
+    const block = ui.split(new RegExp(`export (?:const|function) ${name}\\b`))[1]?.split(/\nexport /)[0] ?? "";
+    assert.ok(block, name);
+    assert.doesNotMatch(block, /rounded-full/, `${name} is a rectangle`);
+  }
+  assert.match(tokensCss, /--p-radius-button: 10px;/);
+  assert.match(tokensCss, /--p-radius-tag: 7px;/);
+  // A tonal control: secondary is a soft fill, not a hairline outline.
+  assert.match(ui, /secondary: "bg-parranda-fill /);
+  // One family: labels and data are narrow Archivo, not a second, mono face.
+  assert.doesNotMatch(anywhereStyles, /--p-font-mono|ui-monospace/);
+  assert.doesNotMatch(tokensCss, /IBM Plex Mono/);
+  // The raised surface (cards, notices) keeps meta text at AA under the
+  // strongest fill, in both themes.
+  const day = tokenBlock(":root");
+  const night = tokenBlock(':root[data-theme="night"]');
+  const meta = Number(tokenValue(day, "--p-ink-meta"));
+  const fillStrong = Number(tokenValue(day, "--p-ink-fill-strong"));
+  for (const [theme, block] of [["day", day], ["night", night]]) {
+    const ink = channels(tokenValue(block, "--p-color-ink"));
+    const panel = over(ink, fillStrong, channels(tokenValue(block, "--p-color-surface")));
+    const ratio = contrast(over(ink, meta, panel), panel);
+    assert.ok(ratio >= 4.5, `meta on a ${theme} surface is ${ratio.toFixed(2)}:1`);
+  }
 });
 
 test("adjustments collapse to a summary and re-compose themselves — no submit past the landing", () => {
@@ -692,8 +733,8 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.match(anywherePlannerSource, /sheetBuckets\.thisWeek\.length\}/);
   assert.match(anywherePlannerSource, /sheetSourceHealth\.responding_source_count/);
   assert.match(anywherePlannerSource, /sheetSourceHealth\.event_bearing_source_count/);
-  // The card's week summary is a count, not a second list.
-  assert.match(anywherePlannerSource, /till", "more"/);
+  assert.match(anywherePlannerSource, /t\("Se kommande 7 dagar", "See next 7 days"\)/);
+  assert.doesNotMatch(anywherePlannerSource, /more this week/);
 });
 
 // --------------------------------------------------------------------------

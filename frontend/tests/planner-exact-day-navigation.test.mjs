@@ -383,9 +383,9 @@ test('fresh same-position consent after exact navigation keeps the published dat
   await first.fetchMock.respond(initial, answer());
   await open(first, 'Fixture museum'); await click(first, 'Keep this one');
   await first.clock.advance(500);
-  const kept = composeCalls(first).at(-1);
-  assert.deepEqual(kept.body.pinned_candidate_ids, ['fixture-museum']);
-  await first.fetchMock.respond(kept, answer()); await first.clock.advance(50);
+  // The published day already answers the Keep: nothing is composed, and the
+  // day it answered is remembered with it.
+  assert.equal(composeCalls(first).length, 1);
   const saved = first.readStorage(LAST_KEY);
   assert.equal(saved.commitments.entries['fixture-museum'].kind, 'pin');
   const url = first.window.location.href;
@@ -457,7 +457,7 @@ for (const moved of [false, true]) test(moved
   };
   await first.fetchMock.respond(initial, answer());
   await open(first, 'Fixture museum'); await click(first, 'Keep this one'); await first.clock.advance(500);
-  await first.fetchMock.respond(composeCalls(first).at(-1), answer());
+  assert.equal(composeCalls(first).length, 1, 'a Keep on the published day composes nothing');
   await open(first, 'Fixture park'); await click(first, 'Remove'); await first.clock.advance(500);
   const removal = composeCalls(first).at(-1);
   assert.equal(removal.body.day_edit.target_stop_count, 2);

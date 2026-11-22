@@ -5490,8 +5490,10 @@ function buildRouteFromTemplate(
     selectedStops = selectBalancedDay({
       rankedCandidates: sortedPool, selected: constrained.selected, preferences,
       preferencePriority: options.preferencePriority || getActiveCityConfig().__preferencePriority || [],
+      preferFirstChoice: getActiveCityConfig().__preferFirstChoice === true,
       pinnedIds: options.pinnedStopIds || [], start, end, shape, targetKm: selectionTargetKm,
       mealContext: getActiveCityConfig().__mealContext || null,
+      mealSpacing: getActiveCityConfig().__mealSpacing === true,
     });
   }
 

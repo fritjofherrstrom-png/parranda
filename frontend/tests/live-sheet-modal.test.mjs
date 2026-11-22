@@ -88,3 +88,33 @@ test('the open Live sheet makes the page behind inert, wraps Tab and hands focus
   assert.equal(h.container.querySelector('[inert]'), null, 'nothing stays inert after closing');
   assert.equal(h.document.activeElement, trigger, 'focus returns to the trigger');
 });
+
+test('a day without a Live sidecar keeps the accepted date on the sheet and its query', async t => {
+  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
+  t.after(() => h.unmount());
+  await h.clock.advance(500);
+  const { live_events, ...withoutLive } = day;
+  const selectedDate = '2026-06-30';
+  await h.fetchMock.respond(h.fetchMock.pending()[0], {
+    ...withoutLive, days: [{ ...day.days[0], date: selectedDate }],
+  });
+  await h.clock.advance(50);
+
+  const trigger = [...h.container.querySelectorAll('button')].find(b => /Explore live/i.test(b.textContent));
+  assert.ok(trigger, 'the accepted day offers Live exploration');
+  await h.act(() => trigger.dispatchEvent(new h.window.Event('click', { bubbles: true })));
+  await h.clock.advance(50);
+  const dialog = h.container.querySelector('[role="dialog"]');
+  assert.ok(dialog);
+  const dateLabel = new Date(`${selectedDate}T00:00:00Z`).toLocaleDateString('en-GB', {
+    weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC',
+  });
+  const selectedDay = [...dialog.querySelectorAll('button')].find(b => b.textContent.trim() === dateLabel);
+  assert.ok(selectedDay, 'the day selector uses the accepted date');
+  const nearRoute = [...dialog.querySelectorAll('button')].find(b => b.textContent.trim() === 'Near the route');
+  assert.ok(nearRoute);
+  await h.act(() => nearRoute.dispatchEvent(new h.window.Event('click', { bubbles: true })));
+  await h.clock.advance(50);
+  const query = h.fetchMock.calls.find(call => call.body?.scope === 'near_route');
+  assert.equal(query?.body.selected_date, selectedDate);
+});

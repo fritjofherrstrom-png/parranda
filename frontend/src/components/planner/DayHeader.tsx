@@ -3,26 +3,24 @@
  * each pick, provenance, and the day-level actions — the walk in Maps, save and
  * share. The line below binds to primary_route only.
  *
- * "Linje": the title is signage (Archivo, wide and heavy), the counts are data
- * (mono), and the city name carries the route colour. Every honesty line keeps
- * the September rule — one fact, one place, beside what it qualifies.
+ * "Linje": the title uses the same compact Archivo signage as the public day.
+ * Each fact stays beside what it qualifies.
  */
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
-import { walkingDistanceLabel } from "../../lib/route-context-view.mjs";
-import { CheckIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, MinusIcon, RainIcon, SearchIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
-import { busyButton, buttonClass, compactPillTarget, Eyebrow, labelChip } from "../shared/ui";
+import { routeUnconfirmedTonightPicks, walkingDistanceLabel } from "../../lib/route-context-view.mjs";
+import { CheckIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, MinusIcon, RainIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
+import { busyButton, buttonClass, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
+import { dayIdea } from "../../lib/day-idea.mjs";
+import { daySummary } from "../../lib/day-summary.mjs";
 
 type RoutePart = WalkingRoutePart;
 // "pending": a pick the day on screen never answered — just added, its rebuild
 // still coming. That day says nothing about it yet, so neither does the chip.
 type PickCoverage = { key: string; state: "covered" | "partial" | "missing" | "pending" | "unanswered" };
 
-/** A quiet fact about the day, not a control. */
-// The day's facts are labels, not choices (ui.tsx labelChip).
-const metaChip = labelChip;
 
 /** The source's daily condition, separate from its effect on day composition. */
 const WEATHER_CONDITIONS: Record<string, [string, string]> = {
@@ -82,95 +80,6 @@ export function DayWhen({ t, lang, date, relativeDay }: {
   );
 }
 
-/**
- * The place name is set like a station sign: as large as the column allows for
- * ITS longest word, so "Rome", "Malmö" and "Barcelona" each fill one line and
- * no word ever breaks mid-way. The static render starts from an estimate (the
- * header is a size container; a capital in the wide display cut is roughly one
- * em). Once mounted, the real width of the longest word is measured and the
- * size is fitted to the column, between 2rem and 4.75rem; it refits when the
- * column or the fonts change. Only a word too long even at 2rem may break
- * (anywhere, as a last resort). Line height stays at 1 so the marks on Å, Ö
- * and É never touch the line above (a little room above the first line too).
- */
-const SIGN_MIN_PX = 32;
-const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
-const SIGN_MAX_PX = 76;
-
-function signEstimate(text: string): string {
-  const longestWord = Math.max(1, ...String(text).split(/\s+/).map((word) => word.length));
-  return `clamp(2rem, calc(100cqi / ${(longestWord * 1.02).toFixed(2)}), 4.75rem)`;
-}
-
-export function PlaceSign({ text }: { text: string }) {
-  const ref = useRef<HTMLElement | null>(null);
-  const [fitted, setFitted] = useState<{ text: string; px: number; breakable: boolean } | null>(null);
-  const words = String(text).split(/\s+/).filter(Boolean);
-
-  useClientLayoutEffect(() => {
-    const sign = ref.current;
-    if (!sign || typeof window === "undefined") return;
-    let frame = 0;
-    const fit = () => {
-      const column = sign.clientWidth;
-      const current = parseFloat(window.getComputedStyle(sign).fontSize);
-      // Measure each word unwrapped in a hidden probe, so the measurement does
-      // not depend on whether the last fit allowed breaking.
-      const probe = document.createElement("span");
-      probe.setAttribute("aria-hidden", "true");
-      probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;left:0;top:0;";
-      sign.appendChild(probe);
-      let widest = 0;
-      for (const word of words) {
-        probe.textContent = word;
-        widest = Math.max(widest, probe.getBoundingClientRect().width);
-      }
-      sign.removeChild(probe);
-      if (!column || !current || !widest) return;
-      const emWidth = widest / current;
-      const ideal = Math.floor((column / emWidth) * 0.98);
-      const px = Math.max(SIGN_MIN_PX, Math.min(SIGN_MAX_PX, ideal));
-      const breakable = ideal < SIGN_MIN_PX;
-      setFitted((prev) => (prev && prev.text === text && prev.px === px && prev.breakable === breakable ? prev : { text, px, breakable }));
-    };
-    // Coalesce bursts of resize notifications into one fit per frame.
-    const later = typeof window.requestAnimationFrame === "function"
-      ? (fn: () => void) => window.requestAnimationFrame(fn)
-      : (fn: () => void) => window.setTimeout(fn, 16);
-    const cancel = typeof window.cancelAnimationFrame === "function"
-      ? (id: number) => window.cancelAnimationFrame(id)
-      : (id: number) => window.clearTimeout(id);
-    const schedule = () => {
-      cancel(frame);
-      frame = later(fit);
-    };
-    fit();
-    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
-    observer?.observe(sign);
-    document.fonts?.ready?.then(schedule).catch(() => {});
-    return () => {
-      cancel(frame);
-      observer?.disconnect();
-    };
-  }, [text]); // eslint-disable-line react-hooks/exhaustive-deps -- words derive from text
-
-  const fit = fitted && fitted.text === text ? fitted : null;
-  return (
-    <em
-      ref={ref}
-      className={"type-display block not-italic text-parranda-ember" + (fit?.breakable ? " [overflow-wrap:anywhere]" : "")}
-      style={{ fontSize: fit ? `${fit.px}px` : signEstimate(text), lineHeight: 1, paddingTop: "0.08em" }}
-    >
-      {words.map((word, index) => (
-        <span key={index}>
-          {index > 0 ? " " : null}
-          <span data-sign-word="" className={fit?.breakable ? "" : "whitespace-nowrap"}>{word}</span>
-        </span>
-      ))}
-    </em>
-  );
-}
-
 /** A day-shape caveat under the facts: one plain line, like the facts' own voice. */
 function Note({ children }: { children: ReactNode }) {
   return <p className="text-13 leading-relaxed text-parranda-ink-muted">{children}</p>;
@@ -180,7 +89,11 @@ function Note({ children }: { children: ReactNode }) {
  * How the day was assembled, in the order a reader needs it: where the places
  * came from, then how it sits on the clock. Said once, in "About this day".
  */
-export function dayAssemblyNotes(t: Translate, { sourceBackedDay, timeAnchoring }: { sourceBackedDay: boolean; timeAnchoring: string | null }): string[] {
+export function dayAssemblyNotes(t: Translate, { sourceBackedDay, timeAnchoring, eveningIsTonight = false, eveningDate = null, lang = "sv" }: {
+  sourceBackedDay: boolean; timeAnchoring: string | null;
+  /** The evening is tonight on the place's own trusted calendar day; otherwise the day's date names it. */
+  eveningIsTonight?: boolean; eveningDate?: string | null; lang?: Lang;
+}): string[] {
   const notes: string[] = [];
   if (sourceBackedDay) {
     notes.push(t(
@@ -192,7 +105,48 @@ export function dayAssemblyNotes(t: Translate, { sourceBackedDay, timeAnchoring 
   // doable midday plan. Quietly note the trimmed variant too.
   if (timeAnchoring === "full_arc_not_now") notes.push(t("En hel dags båge — inte förankrad till klockan just nu.", "A full-day arc — not anchored to right now."));
   if (timeAnchoring === "anchored_trimmed") notes.push(t("Förankrad till nu — tidigare dagdelar borttagna.", "Anchored to now — earlier dayparts trimmed."));
+  if (timeAnchoring === "evening_plan") {
+    const shown = eveningIsTonight ? null : selectedDate(eveningDate);
+    const label = shown ? dayDateLabel(shown, lang) : null;
+    notes.push(eveningIsTonight
+      ? t("Planerad för kvällen. För några av dina val är öppettiderna i kväll okända.", "Planned for the evening. For some of your picks, tonight's opening hours are unknown.")
+      : label
+        ? t(`Planerad för kvällen ${label}. För några av dina val är kvällens öppettider okända.`,
+          `Planned for the evening of ${label}. For some of your picks, that evening's opening hours are unknown.`)
+        : t("Planerad för kvällen. För några av dina val är kvällens öppettider okända.", "Planned for the evening. For some of your picks, the evening's opening hours are unknown."));
+  }
   return notes;
+}
+
+/**
+ * What the day did for each pick, in one line inside the Adjust row (Linje 2):
+ * the pick's name after its mark (in the day, partly, not in it, still
+ * looking). Status, never selection: no ink fill, no chip.
+ */
+export function PickSummary({ t, lang, pickCoverage, rhythmLabel }: {
+  t: Translate; lang: Lang; pickCoverage: PickCoverage[]; rhythmLabel: string;
+}) {
+  return (
+    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm font-semibold text-parranda-ink" aria-label={t("Dina val i dagen", "Your picks in this day")}>
+        {pickCoverage.map(({ key, state }) => (
+          <li key={key} className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            {state === "covered" && <CheckIcon className="h-3.5 w-3.5 text-parranda-ember" />}
+            {state === "partial" && <HalfCircleIcon className="h-3.5 w-3.5 text-parranda-glow" />}
+            {state === "missing" && <MinusIcon className="h-3.5 w-3.5 text-parranda-ink-meta" />}
+            {state === "pending" && <RingMark className="h-3.5 w-3.5" />}
+            <span className={state === "missing" || state === "unanswered" ? "text-parranda-ink-muted" : ""}>{pickLabel(key, lang)}</span>
+            {state === "covered" && <span className="sr-only">{t(" — med i dagen", " — in this day")}</span>}
+            {state === "partial" && <span className="font-medium text-parranda-ink-meta">{t(" · delvis", " · partly")}</span>}
+            {state === "missing" && <span className="font-medium text-parranda-ink-meta">{t(" · inte med", " · not in this day")}</span>}
+            {state === "pending" && <span className="font-medium text-parranda-ink-meta">{t(" · letar platser …", " · finding places …")}</span>}
+            {state === "unanswered" && <span className="font-medium text-parranda-ink-meta">{t(" · ännu inte bedömt", " · not assessed yet")}</span>}
+          </li>
+        ))}
+      </ul>
+      <span className="text-13 text-parranda-ink-meta">{rhythmLabel}</span>
+    </span>
+  );
 }
 
 export default function DayHeader({
@@ -206,10 +160,13 @@ export default function DayHeader({
   anchorLabel,
   primaryRoute,
   date,
+  eveningIsTonight = false,
   weatherSummary,
   titleAction = null,
   controls = null,
   overview = null,
+  picksInControls = false,
+  relativeDay = null,
   coreCount,
   wovenCount,
   pickCoverage,
@@ -233,6 +190,8 @@ export default function DayHeader({
   primaryRoute: any;
   /** The date of the answer on screen, including held or restored days. */
   date: string | null | undefined;
+  /** The evening is tonight on the place's own trusted calendar day (routeEveningIsTonight). */
+  eveningIsTonight?: boolean;
   /** A trusted selected-day forecast; absence never gets a weather guess. */
   weatherSummary: any;
   /** Beside the title: Change. */
@@ -241,6 +200,10 @@ export default function DayHeader({
   controls?: ReactNode;
   /** A phone: the map's short, still overview, between the title and the facts. */
   overview?: ReactNode;
+  /** The picks are said in the Adjust row (PickSummary), not again here. */
+  picksInControls?: boolean;
+  /** 0 today, 1 tomorrow, null for any other day: the facts line says the day the way a person would. */
+  relativeDay?: 0 | 1 | null;
   coreCount: number;
   wovenCount: number;
   pickCoverage: PickCoverage[];
@@ -261,8 +224,14 @@ export default function DayHeader({
   const distance = Number.isFinite(primaryRoute?.estimated_km)
     ? `≈ ${walkingDistanceLabel(primaryRoute.estimated_km, lang)} ${t("till fots", "on foot")}`
     : null;
-  const stops = `${coreCount} ${coreCount === 1 ? t("stopp", "stop") : t("stopp", "stops")}` +
-    (wovenCount > 0 ? ` + ${wovenCount} live${lang === "en" ? " event" : "-event"}` : "");
+  // Picks an evening plan keeps although only places whose kind usually fits
+  // the daytime serve them. Said the same way for one pick or several; the day
+  // never moves them to another date.
+  const unconfirmedTonight = routeUnconfirmedTonightPicks(primaryRoute).map((key) => pickLabel(key, lang));
+  const unconfirmedList = unconfirmedTonight.length > 1
+    ? `${unconfirmedTonight.slice(0, -1).join(", ")} ${t("och", "and")} ${unconfirmedTonight[unconfirmedTonight.length - 1]}`
+    : unconfirmedTonight[0] || "";
+  const idea = dayIdea(primaryRoute, lang);
   const displayedDate = selectedDate(date);
   const condition = WEATHER_CONDITIONS[String(weatherSummary?.condition || "")];
   const WeatherIcon = WEATHER_ICONS[String(weatherSummary?.condition || "")];
@@ -277,7 +246,6 @@ export default function DayHeader({
   }, [forecastExpiresAt]);
   const forecastFresh = Number.isFinite(forecastFetchedAt) && forecastFetchedAt <= Date.now() + 5 * 60 * 1000
     && forecastExpiresAt > Date.now() && expiredForecast !== forecastExpiresAt;
-  const allPicksCovered = pickCoverage.length > 0 && pickCoverage.every(({ state }) => state === "covered");
   const weatherChip = forecastFresh && displayedDate && weatherSummary?.date === date && weatherSummary?.stale === false && Number.isFinite(weatherSummary?.max_temp)
     ? `${Math.round(weatherSummary.max_temp)}°`
     : null;
@@ -285,122 +253,34 @@ export default function DayHeader({
   // describe the held day, and its focused update action must stay mounted.
   const previousShortfall = useRef(sourceShortfall);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
-  const sourceUpdateRef = useRef<HTMLButtonElement | null>(null);
   const sourceUpdateHadFocus = useRef(false);
+  // Sample at removal, not at activation: the reader can tab to or from
+  // the busy button while the answer is on its way.
+  const sourceUpdateRef = useCallback((button: HTMLButtonElement | null) => {
+    if (button) return () => { sourceUpdateHadFocus.current = document.activeElement === button; };
+  }, []);
   const displayedShortfall = sourceShortfall || (staleNotice ? previousShortfall.current : null);
   useEffect(() => {
     if (sourceShortfall || !staleNotice) previousShortfall.current = sourceShortfall;
   }, [sourceShortfall, staleNotice]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     // A healthy replacement removes the optional action. Keep a reader who
     // waited there with the day, without taking focus back from another task.
     if (!displayedShortfall && sourceUpdateHadFocus.current && document.activeElement === document.body) headingRef.current?.focus();
     if (staleNotice !== "updating") sourceUpdateHadFocus.current = false;
   }, [displayedShortfall, staleNotice]);
-  return (
-    <header className="@container flex flex-col gap-4" aria-busy={staleNotice === "updating"}>
-      {(staleNotice === "updating" || staleNotice === "update_failed") && <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        {/* The day on screen is deliberately still here, and deliberately
-            marked as not current. Never a silent swap. */}
-        {staleNotice === "updating" && (
-          <span
-            aria-live="polite"
-            className="inline-flex min-h-7 items-center gap-2 rounded-full border-line border-parranda-ember/60 px-2.5 text-xs font-bold text-parranda-clay"
-          >
-            <RingMark className="h-3 w-3" />
-            {t("Uppdaterar dagen …", "Updating your day …")}
-          </span>
-        )}
-        {staleNotice === "update_failed" && (
-          <>
-            <span
-              aria-live="polite"
-              className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ember/12 px-2.5 py-0.5 text-11 font-bold text-parranda-clay"
-            >
-              {navigationInterrupted
-                ? t("Planeringen pausades när du lämnade sidan — visar din förra dag", "Planning paused when you left — showing your previous day")
-                : t("Kunde inte uppdatera — visar din förra dag", "Couldn't update — showing your previous day")}
-            </span>
-            <button
-              type="button"
-              onClick={retryPlan}
-              className="inline-flex min-h-11 items-center rounded-full border-line border-parranda-ember/50 px-3.5 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
-            >
-              {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök uppdatera igen", "Try updating again")}
-            </button>
-          </>
-        )}
-      </div>}
-      {/* Two rows, each with its control on the right: where (the title,
-          Change) and how (which day, the picks and rhythm, Adjust). Change and
-          Adjust stand one above the other, so the stops start high on a phone. */}
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-start justify-between gap-3">
-          <h1 ref={headingRef} tabIndex={-1} className="type-title min-w-0 pt-1.5 text-[1.625rem] text-parranda-ink [overflow-wrap:anywhere] [text-wrap:balance] sm:pt-0.5 sm:text-[2rem]">
-            {mode === "near_me" && !placeLabel ? (
-              <>{t("En dag", "A day")} {t("nära dig", "near you")}</>
-            ) : (
-              <>{t("En dag i", "A day in")} {anchorLabel}</>
-            )}
-          </h1>
-          {titleAction}
-        </div>
-        {controls}
-      </div>
-      {/* On a phone the map's still overview pictures the day before its
-          facts; it sits in the column edge to edge, no card of its own. */}
-      {overview}
-      {/* The facts, what the day did for each pick and the day's caveats
-          read as one block, as in the prototype: rows 6px apart, the
-          header's larger step only between the title block, the map and it. */}
-      <div className="flex flex-col gap-1.5">
-        <ul className="flex flex-wrap gap-1.5" aria-label={t("Om dagen", "About the day")}>
-          {distance && (
-            <li className={metaChip}>
-              <WalkIcon className="h-3.5 w-3.5 text-parranda-ink-muted" />
-              {distance}
-            </li>
-          )}
-          <li className={metaChip}>{stops}</li>
-          {/* The selected date's forecast, one chip like the walk: the sky's
-              icon, then the high. Only a fresh reading for this date shows. */}
-          {weatherChip && (
-            <li className={metaChip}>
-              <span role="img" className="inline-flex items-center gap-1.5"
-                aria-label={t(`Prognosens högsta temperatur: ${weatherChip}C${condition ? `. ${condition[0]}` : ""}`, `Forecast high: ${weatherChip}C${condition ? `. ${condition[1]}` : ""}`)}
-                title={condition ? t(condition[0], condition[1]) : t("Prognosens högsta temperatur", "Forecast high")}>
-                {WeatherIcon && <WeatherIcon className="h-3.5 w-3.5 text-parranda-ink-muted" />}
-                {weatherChip}
-              </span>
-            </li>
-          )}
-          {/* Every pick in the day: one fact here instead of repeating the picks
-              the picks line names. A partial or missing pick lists them all. */}
-          {allPicksCovered && (
-            <li className={metaChip}>
-              <CheckIcon className="h-3 w-3 text-parranda-ember" />
-              {t("Alla val finns med", "All picks included")}
-            </li>
-          )}
-        </ul>
-        {/* What the day did for each pick, in the pick's own words. A pick
-            the route only partly covers, or does not cover, says so here
-            rather than at the foot of the page. When every pick is in the day
-            the facts row above says so in one chip instead. */}
-        {pickCoverage.length > 0 && !allPicksCovered && (
+
+  // What the day contains and how it stands (a thin day, a saved snapshot)
+  // is said before the picks and the map, so the map is the last thing in
+  // the header and the line can come straight out of it (Linje 2).
+  const tail = (
+      <div className="flex flex-col gap-1.5 empty:hidden">
+        {pickCoverage.length > 0 && !picksInControls && (
           <ul className="flex flex-wrap gap-2" aria-label={t("Dina val i dagen", "Your picks in this day")}>
             {pickCoverage.map(({ key, state }) => (
-              // Status, not selection: covered and partial are labels like the
-              // facts row (an ink fill would read as a chosen chip, as in Adjust).
-              // Missing keeps the dashed tone, which means "not in the day".
-              <li
-                key={key}
-                className={
-                  state === "missing"
-                    ? "inline-flex items-center gap-1.5 rounded-full border-line border-dashed border-parranda-line-firm px-2.5 py-1 text-xs font-semibold text-parranda-ink-muted"
-                    : labelChip
-                }
-              >
+              <li key={key} className={state === "missing"
+                ? "inline-flex items-center gap-1.5 rounded-parranda-tag border-line border-dashed border-parranda-line-firm px-2 py-1 text-xs font-semibold text-parranda-ink-muted"
+                : labelChip}>
                 {state === "covered" && <CheckIcon className="h-3 w-3 text-parranda-ember" />}
                 {state === "partial" && <HalfCircleIcon className="h-3 w-3 text-parranda-glow" />}
                 {state === "missing" && <MinusIcon className="h-3 w-3" />}
@@ -424,32 +304,17 @@ export default function DayHeader({
                   `Your first choice ${pickLabel(priorityShortfall.key, lang)} is not represented in this day.`)}
           </p>
         )}
-        {/* Source limitations describe this published answer, never a live job:
-            one plain sentence and the one thing a reader can do about it. A
-            bold "Some place information is missing", a hidden "About the place
-            sources" and an "Update the day" link that could swap the stops
-            silently confused more than they told (iPhone, 23 Oct 2026).
-            Looking again asks the same question; its result is said in the
-            change line ("Looked for more places: …", with Undo). */}
-        {displayedShortfall && (
-          <div className="flex flex-col items-start gap-2 text-13 leading-relaxed text-parranda-ink-muted">
-            <p role="status">
-              {displayedShortfall === "failed"
-                ? t("Inte alla platser kunde läsas in, så det kan finnas fler än de som visas.", "Not every place could be loaded, so there may be more than the ones shown.")
-                : t("Inte alla platser hann läsas in, så det kan finnas fler än de som visas.", "Not every place loaded in time, so there may be more than the ones shown.")}
-            </p>
-            {onLookForMorePlaces && canUpdateSaved && (
-              <button type="button" ref={sourceUpdateRef}
-                {...busyButton(staleNotice === "updating", () => {
-                  sourceUpdateHadFocus.current = document.activeElement === sourceUpdateRef.current;
-                  onLookForMorePlaces();
-                })}
-                className={`${compactPillTarget} gap-2 border-line border-parranda-line px-3.5 font-bold text-parranda-ink hover:border-parranda-line-strong aria-busy:cursor-progress ${rechecking ? "" : "aria-disabled:opacity-60"}`}>
-                {rechecking ? <RingMark className="h-3.5 w-3.5" /> : <SearchIcon className="h-3.5 w-3.5 text-parranda-ink-muted" />}
-                {rechecking ? t("Letar efter fler platser …", "Looking for more places …") : t("Leta efter fler platser", "Look for more places")}
-              </button>
-            )}
-          </div>
+        {unconfirmedTonight.length > 0 && (
+          <p className="text-13 leading-relaxed text-parranda-ink-muted" role="status">
+            {eveningIsTonight
+              ? t(`${unconfirmedList}: öppettiderna i kväll är okända – kontrollera innan du går.`,
+                `${unconfirmedList}: tonight's opening hours are unknown — check before you go.`)
+              : displayedDate
+                ? t(`${unconfirmedList}: öppettiderna på kvällen ${dayDateLabel(displayedDate, lang)} är okända – kontrollera innan du går.`,
+                  `${unconfirmedList}: opening hours on the evening of ${dayDateLabel(displayedDate, lang)} are unknown — check before you go.`)
+                : t(`${unconfirmedList}: kvällens öppettider är okända – kontrollera innan du går.`,
+                  `${unconfirmedList}: the evening's opening hours are unknown — check before you go.`)}
+          </p>
         )}
         {/* What the day CONTAINS stays under the title (a thin day says so);
             how it was ASSEMBLED is one "About this day" line beside the map. */}
@@ -471,6 +336,105 @@ export default function DayHeader({
           </p>
         )}
       </div>
+  );
+
+  return (
+    <header className="flex flex-col gap-4" aria-busy={staleNotice === "updating"}>
+      {(staleNotice === "updating" || staleNotice === "update_failed") && <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        {/* The day on screen is deliberately still here, and deliberately
+            marked as not current. Never a silent swap. */}
+        {staleNotice === "updating" && (
+          <span
+            aria-live="polite"
+            className="inline-flex min-h-7 items-center gap-2 rounded-parranda-tag border-line border-parranda-ember/60 px-2.5 text-xs font-bold text-parranda-clay"
+          >
+            <RingMark className="h-3 w-3" />
+            {t("Uppdaterar dagen …", "Updating your day …")}
+          </span>
+        )}
+        {staleNotice === "update_failed" && (
+          <>
+            <span
+              aria-live="polite"
+              className="inline-flex items-center gap-1.5 rounded-parranda-tag bg-parranda-ember/12 px-2.5 py-1 text-xs font-bold text-parranda-clay"
+            >
+              {navigationInterrupted
+                ? t("Planeringen pausades när du lämnade sidan — visar din förra dag", "Planning paused when you left — showing your previous day")
+                : t("Kunde inte uppdatera — visar din förra dag", "Couldn't update — showing your previous day")}
+            </span>
+            <button
+              type="button"
+              onClick={retryPlan}
+              className="inline-flex min-h-11 items-center rounded-parranda-btn border-line border-parranda-ember/50 px-3.5 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
+            >
+              {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök uppdatera igen", "Try updating again")}
+            </button>
+          </>
+        )}
+      </div>}
+      <div className="flex flex-col">
+        <div className="flex items-start justify-between gap-3">
+          <h1 ref={headingRef} tabIndex={-1} className="type-title min-w-0 wrap-anywhere pt-2 text-[1.625rem] text-parranda-ink sm:pt-1.5 sm:text-[2rem]">
+            {mode === "near_me" && !placeLabel
+              ? t("En dag nära dig", "A day near you")
+              : `${t("En dag i", "A day in")} ${anchorLabel}`}
+          </h1>
+          {titleAction}
+        </div>
+        <div data-day-facts="" className="mt-2.5 flex flex-col gap-0.5 [overflow-wrap:anywhere]">
+          <p className="text-17 font-semibold leading-snug text-parranda-ink">
+            {daySummary({ stops: coreCount, live: wovenCount, distance: distance ? walkingDistanceLabel(primaryRoute.estimated_km, lang) : null, lang })}
+          </p>
+          <p className="text-15 text-parranda-ink-muted">
+            {displayedDate && <time dateTime={date!}>{relativeDay === 0 ? t("Idag", "Today") : relativeDay === 1 ? t("Imorgon", "Tomorrow") : dayDateLabel(displayedDate, lang)}</time>}
+            {/* The selected date's forecast, said after the date: the sky's
+                icon, the high and the sky in words. Only a fresh reading. */}
+            {weatherChip && (
+              <>
+                {/* Said as a sentence, as on the board: "Today, 5° and rain." */}
+                {displayedDate ? <span aria-hidden="true">{", "}</span> : null}
+                <span role="img" className="inline-flex items-center gap-1 align-[-0.15em]"
+                  aria-label={t(`Prognosens högsta temperatur: ${weatherChip}C${condition ? `. ${condition[0]}` : ""}`, `Forecast high: ${weatherChip}C${condition ? `. ${condition[1]}` : ""}`)}
+                  title={condition ? t(condition[0], condition[1]) : t("Prognosens högsta temperatur", "Forecast high")}>
+                  {WeatherIcon && <WeatherIcon className="h-4 w-4" />}
+                  {weatherChip}
+                </span>
+                <span aria-hidden="true">{condition ? ` ${t("och", "and")} ${t(condition[0], condition[1]).toLowerCase()}.` : "."}</span>
+              </>
+            )}
+          </p>
+        </div>
+        {/* The day's character from its published places, said once and
+            quietly under the facts: "Culture, food and history. From
+            Postmuseum to Strömparterren." */}
+        {idea && (
+          <p data-day-idea="" className="mt-1.5 text-13 leading-snug text-parranda-ink-muted [overflow-wrap:anywhere]">
+            <span className="font-semibold text-parranda-ink-soft">{idea.headline}.</span>
+            {idea.journey ? <> {idea.journey}</> : null}
+          </p>
+        )}
+      </div>
+      {tail}
+      {controls}
+      {displayedShortfall && (
+        <div className="flex flex-wrap items-center gap-x-3 text-13 leading-snug text-parranda-ink-muted">
+          <p role="status">
+            {displayedShortfall === "failed"
+              ? t("Inte alla platser kunde läsas in.", "Not every place could be loaded.")
+              : t("Inte alla platser hann läsas in.", "Not every place loaded in time.")}
+          </p>
+          {onLookForMorePlaces && canUpdateSaved && (
+            <button type="button" ref={sourceUpdateRef}
+              {...busyButton(staleNotice === "updating", onLookForMorePlaces)}
+              className={buttonClass("quiet", `min-h-11 gap-2 px-1 text-13 underline underline-offset-2 aria-busy:cursor-progress ${rechecking ? "" : "aria-disabled:opacity-60"}`)}>
+              {rechecking && <RingMark className="h-3.5 w-3.5" />}
+              {rechecking ? t("Letar efter fler platser …", "Looking for more places …") : t("Leta efter fler platser", "Look for more places")}
+            </button>
+          )}
+        </div>
+      )}
+      {/* On a phone the map's still overview pictures the day, edge to edge. */}
+      {overview}
     </header>
   );
 }
@@ -516,7 +480,7 @@ export function DayActions({
   return (
     <section
       aria-label={t("Ta med dagen", "Take the day with you")}
-      className={`${stale ? "opacity-60 motion-safe:transition-opacity" : ""} flex flex-col gap-3`}
+      className={`${stale ? "opacity-60 motion-safe:transition-opacity" : ""} flex flex-col gap-1.5`}
     >
       {/* THE WALK IN MAPS. One link when Maps can take the whole walk. When
           it can't (Maps takes a few stops per link), a numbered sequence of
@@ -541,13 +505,13 @@ export function DayActions({
                       "flex min-h-14 items-center gap-3 rounded-parranda-btn px-3.5 py-2 text-left text-15 transition " +
                       (first
                         ? "bg-parranda-terracotta font-extrabold text-parranda-on-terracotta hover:brightness-110"
-                        : "border-line border-parranda-line font-bold text-parranda-ink hover:border-parranda-line-strong")
+                        : "bg-parranda-fill font-bold text-parranda-ink hover:bg-parranda-fill-strong")
                     }
                   >
                     <span
                       aria-hidden="true"
                       className={
-                        "type-data inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold " +
+                        "type-data inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-parranda-tag text-13 font-bold " +
                         // A darker disc keeps the white digit at 6.7:1 on terracotta (white/22 gave 3.7:1).
                         (first ? "bg-parranda-shade" : "bg-parranda-fill")
                       }
@@ -557,7 +521,7 @@ export function DayActions({
                     <span className="min-w-0 flex-1">
                       <span className="sr-only">{t(`Del ${index + 1} i Google Maps: `, `Part ${index + 1} in Google Maps: `)}</span>
                       {routeEndLabel(part.from)} → {routeEndLabel(part.to)}
-                      <span className={"type-data block text-11 font-medium " + (first ? "text-parranda-on-terracotta" : "text-parranda-ink-meta")}>
+                      <span className={"type-data block text-13 font-medium " + (first ? "text-parranda-on-terracotta" : "text-parranda-ink-meta")}>
                         {newStops > 0
                           ? t(`${newStops} stopp`, `${newStops} ${newStops === 1 ? "stop" : "stops"}`)
                           : t("Sista biten", "The last stretch")}
@@ -577,18 +541,35 @@ export function DayActions({
           </p>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap">
-        {routeParts.length === 1 && (
-          <a
-            href={routeUrls[0]}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={buttonClass("primary", "col-span-2 min-h-12 px-5 text-15 sm:px-6")}
-          >
-            {t("Öppna rutten i Maps", "Open route in Maps")}
-            <ExternalIcon />
-          </a>
-        )}
+      {/* One walk, one card: the action, then where it starts and ends.
+          The line of stops above leads into it. */}
+      {routeParts.length === 1 && (
+        <a
+          href={routeUrls[0]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex min-h-16 items-center gap-3 rounded-parranda-btn bg-parranda-terracotta px-4 py-3 text-parranda-on-terracotta transition hover:brightness-110"
+        >
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-17 font-extrabold leading-tight">{t("Öppna rutten i Maps", "Open route in Maps")}</span>
+            {!routeOrigin && !routeDestination && (
+              <span className="text-13 font-medium leading-snug">
+                {routeEndLabel(routeParts[0].from)} → {routeEndLabel(routeParts[0].to)}
+                {`, ${routeParts[0].stopIndexes.length} ${t("stopp", routeParts[0].stopIndexes.length === 1 ? "stop" : "stops")}`}
+              </span>
+            )}
+            {Boolean(routeOrigin || routeDestination) && (
+              <span className="text-13 font-medium leading-snug">
+                {Boolean(routeOrigin) && `${t("Start", "Start")}: ${anchorIsPosition ? t("Din position", "Your position") : String(publishedStart?.label || t("kartans startpunkt", "map start point"))}`}
+                {routeOrigin && routeDestination ? " · " : ""}
+                {Boolean(routeDestination) && `${t("Slut", "Finish")}: ${anchorIsPosition ? t("Din position", "Your position") : String(publishedEnd?.label || t("kartans slutpunkt", "map end point"))}`}
+              </span>
+            )}
+          </span>
+          <ExternalIcon className="h-[18px] w-[18px]" />
+        </a>
+      )}
+      <div className="flex flex-wrap gap-x-5">
         <button
           type="button"
           // Saved stays focusable: a disabled button would drop the focus
@@ -596,7 +577,7 @@ export function DayActions({
           onClick={isSaved ? undefined : saveDay}
           aria-disabled={isSaved || undefined}
           aria-label={isSaved ? t("Dagen är sparad", "Day is saved") : t("Spara dagen", "Save this day")}
-          className={buttonClass("secondary", "min-h-12 px-4 text-sm aria-disabled:border-parranda-ember/50 aria-disabled:text-parranda-clay aria-disabled:opacity-100")}
+          className={buttonClass("quiet", "min-h-11 -ml-2 px-2 text-15 aria-disabled:text-parranda-clay aria-disabled:opacity-100")}
         >
           <StarIcon filled={isSaved} />
           {isSaved ? t("Sparad", "Saved") : t("Spara", "Save")}
@@ -606,15 +587,15 @@ export function DayActions({
             type="button"
             onClick={shareDay}
             aria-label={t("Dela dagen", "Share this day")}
-            className={buttonClass("secondary", "min-h-12 px-4 text-sm")}
+            className={buttonClass("quiet", "min-h-11 px-2 text-15")}
           >
             {shareCopied ? <CheckIcon className="h-4 w-4 text-parranda-ember" /> : <ShareIcon />}
             {shareCopied ? t("Länk kopierad", "Link copied") : t("Dela", "Share")}
           </button>
         )}
       </div>
-      {/* A split walk already names its start and finish in the sequence. */}
-      {routeParts.length <= 1 && Boolean(routeOrigin || routeDestination) && (
+      {/* A split walk names its start and finish in the sequence, one walk in its card. */}
+      {routeParts.length === 0 && Boolean(routeOrigin || routeDestination) && (
         <p className="text-xs text-parranda-ink-meta">
           {Boolean(routeOrigin) && `${t("Start", "Start")}: ${anchorIsPosition ? t("Din position", "Your position") : String(publishedStart?.label || t("kartans startpunkt", "map start point"))}`}
           {routeOrigin && routeDestination ? " · " : ""}

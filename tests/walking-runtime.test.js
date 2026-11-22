@@ -118,3 +118,22 @@ test("walking runtime expires and bounds the geometry cache", async () => {
   await router(points);
   assert.equal(calls, 5);
 });
+
+test('only a bounded comparison may wait out the idle walking cooldown', async () => {
+  let now = 1000;
+  const calls = [];
+  const delays = [];
+  const config = resolveDefaultWalkingRuntime(environment).walkingConfig;
+  const other = points.map(point => ({ ...point, lat: point.lat + .01 }));
+  const router = createBoundedWalkingRouter(config, {
+    now: () => now,
+    wait: async ms => { delays.push(ms); now += ms; },
+    fetchImpl: async () => { calls.push(now); return responseFor(calls.length === 1 ? points : other); },
+  });
+  assert.equal((await router(points)).source, 'osrm');
+  now = 1250;
+  assert.equal((await router(other)).source, 'heuristic');
+  assert.equal((await router(other, { waitForRateSlot: true })).source, 'osrm');
+  assert.deepEqual(calls, [1000, 2000]);
+  assert.deepEqual(delays, [750]);
+});

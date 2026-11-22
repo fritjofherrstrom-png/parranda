@@ -39,7 +39,7 @@ export default function SavedDays({
               type="button"
               onClick={() => removeSavedDay(entry.id)}
               aria-label={t("Ta bort", "Remove")}
-              className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-parranda-ink-meta transition hover:bg-parranda-fill hover:text-parranda-ink"
+              className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-parranda-btn text-parranda-ink-meta transition hover:bg-parranda-fill hover:text-parranda-ink"
             >
               <CloseIcon />
             </button>

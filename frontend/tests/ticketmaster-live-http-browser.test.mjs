@@ -232,7 +232,7 @@ for (const coldPlace of [false, true]) test(`Ticketmaster exact occurrence survi
     return savedDay(page);
   }
   async function chooseExact() {
-    await page.getByRole('button', { name: 'See all live', exact: true }).click();
+    await page.getByRole('button', { name: /^See all live/ }).click();
     const sheet = page.getByRole('dialog', { name: 'Live events', exact: true });
     await sheet.getByRole('button', { name: 'By time', exact: true }).click();
     const row = sheet.locator('li').filter({ has: page.locator(`a[href="${TARGET_URL}"]`) });
@@ -402,7 +402,7 @@ for (const coldPlace of [false, true]) test(`Ticketmaster exact occurrence survi
 
     setPhase('settled-live-and-bounded-browse');
     const composeBeforeBrowse = composeRequests().length;
-    await page.getByRole('button', { name: 'See all live', exact: true }).click();
+    await page.getByRole('button', { name: /^See all live/ }).click();
     const sheet = page.getByRole('dialog', { name: 'Live events', exact: true });
     await sheet.getByRole('button', { name: 'By time', exact: true }).click();
     await sheet.locator(`p a[href="${TARGET_URL}"]`).waitFor({ state: 'visible' });

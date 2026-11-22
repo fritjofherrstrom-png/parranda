@@ -331,7 +331,50 @@ function measureMap({ expandNames, sideMap = false }) {
   };
 }
 
+const { waitForRouteMapLayout } = require('./helpers/route-map-ready');
 const EXPAND_NAMES = ["Förstora kartan", "Förminska kartan"];
+
+test("map controls have a 44px touch target in the mobile overview and expanded map", { timeout: 120_000 }, async (t) => {
+  const current = await openRuntime(t);
+  if (!current) return;
+  const { context, route } = await openDay(current, { width: 320, stops: DAYS["diagonal, Live stop north-east"] });
+  try {
+    for (const expandName of EXPAND_NAMES) {
+      await waitForRouteMapLayout(route);
+      if (expandName === EXPAND_NAMES[1]) {
+        const zoom = route.locator(".maplibregl-ctrl-top-left button");
+        assert.deepEqual(await zoom.evaluateAll(buttons => buttons.map(button => ({
+          name: button.getAttribute("aria-label"), title: button.title,
+        }))), [
+          { name: "Zooma in", title: "Zooma in" },
+          { name: "Zooma ut", title: "Zooma ut" },
+        ]);
+      }
+      const locate = route.getByRole("button", { name: "Visa min position", exact: true });
+      const refit = route.getByRole("button", { name: "Återställ kartvyn", exact: true });
+      const expand = route.getByRole("button", { name: expandName, exact: true });
+      assert.equal((await expand.innerText()).trim(), "", "the expand action uses an icon with an accessible name");
+      assert.equal(await refit.count(), expandName === EXPAND_NAMES[0] ? 0 : 1,
+        "reset is available on the interactive map, without occupying the still overview");
+      const controls = expandName === EXPAND_NAMES[0] ? [locate, expand] : [locate, refit, expand];
+      for (const button of controls) {
+        await button.scrollIntoViewIfNeeded();
+        const covered = await button.evaluate(element => {
+          const rect = element.getBoundingClientRect();
+          const x = rect.left + rect.width / 2;
+          const y = rect.top + rect.height / 2;
+          const edge = 21.5; // Just inside each edge of a 44px square.
+          return [[x - edge, y], [x + edge, y], [x, y - edge], [x, y + edge]]
+            .every(([left, top]) => element.contains(document.elementFromPoint(left, top)));
+        });
+        assert.ok(covered, `in the ${expandName} state, ${await button.getAttribute("aria-label")} needs a 44px touch target`);
+      }
+      if (expandName === EXPAND_NAMES[0]) await expand.click();
+    }
+  } finally {
+    await context.close();
+  }
+});
 
 // The hit test itself, at the edge that failed in CI (run 37232695990): a
 // marker whose centre lies in the viewport's last fractional pixel row. The
@@ -375,6 +418,7 @@ for (const width of WIDTHS) {
             await route.getByRole("button", { name: state === "expanded" ? "Förstora kartan" : "Förminska kartan" }).click();
             await page.waitForTimeout(SETTLE_MS);
           }
+          await waitForRouteMapLayout(route);
           const measured = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES, sideMap });
           states[state] = measured;
           const where = `${dayName} at ${width}px, ${state}`;
@@ -443,6 +487,7 @@ test("a delayed shrink refits to the rendered mobile size after the old timer bo
     await page.evaluate(() => {
       document.querySelector('header [data-route-map] .maplibregl-map').parentElement.style.transitionDuration = "1200ms";
     });
+    await waitForRouteMapLayout(route);
     const original = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES });
     for (const name of ["Förstora kartan", "Förminska kartan"]) {
       await route.getByRole("button", { name }).click();

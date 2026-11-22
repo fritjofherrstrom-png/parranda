@@ -14,7 +14,7 @@ const temp = await mkdtemp(fileURLToPath(new URL('./.walking-map-', import.meta.
 const bundle = await build({
   entryPoints: [fileURLToPath(new URL('../src/components/planner/RouteMap.tsx', import.meta.url))],
   bundle: true, write: false, format: 'esm', platform: 'node', jsx: 'automatic', logLevel: 'silent',
-  external: ['react', 'react/jsx-runtime'],
+  external: ['react', 'react/jsx-runtime', 'react-dom'],
   plugins: [{ name: 'unloaded-map-imports', setup(build) {
     build.onResolve({ filter: /^maplibre-gl/ }, args => ({ path: args.path, namespace: 'unloaded' }));
     build.onLoad({ filter: /.*/, namespace: 'unloaded' }, () => ({ contents: 'export default {}; export const setWorkerUrl=()=>{};', loader: 'js' }));

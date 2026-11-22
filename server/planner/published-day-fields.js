@@ -11,6 +11,7 @@ const { eventOccurrenceForDate } = require('../candidates/evening-event-weave');
 const { parsePlaceRef } = require('../place-candidates/place-ref');
 const { venueMentionsMatchPlace } = require('../place-candidates/venue-mentions');
 const { isApprovedVenueArticleUrl } = require('../place-candidates/venue-mention-policy');
+const { CANONICAL_INTENTS } = require('../candidates/intent-vocabulary');
 const MAX_BYTES = 1048576;
 // Additional projector policy, NOT source cardinality caps. Refuse, never cut.
 const MAX_NODES = 100000;
@@ -30,6 +31,12 @@ const array = (item, min = 0, max = Infinity) => ({ item, min, max });
 const enumeration = (...values) => ({ values });
 const preference = enumeration(...PLANNER_PREFERENCE_KEYS);
 const preferences = array(preference, 0, MAX_PLANNER_PREFERENCES);
+// The engine's closed per-stop vocabularies: candidateStatusForRole
+// (role-selector.js) and scoreWeather (fit-scorer.js). A value outside them
+// refuses the share, never disappears from it.
+const CANDIDATE_STATUS = enumeration('filled','partial','fallback','missing');
+const WEATHER_REASON = enumeration('rain_favors_indoor','rain_penalizes_exposed','sun_favors_scenic',
+  'hot_favors_swim','hot_penalizes_shadeless','requested_waterfront');
 const fields = {
   LiveChoice: { occurrence_id: r('liveId'), action: r(enumeration('keep','remove','replace')) },
   RequestEdit: { version: r(enumeration(1)), action: r(enumeration('remove','replace')), candidate_id: r('editId'),
@@ -50,6 +57,8 @@ const fields = {
   Trust: { source_tier: r('string'), confidence: r('string'), human_verified: r('bool'), freshness: r('string') },
   TrustSummary: { source_tiers: r(array('string')), confidence: r('string'), human_verified: r('bool'), freshness: r('string') },
   PlaceDetails: { kind: o('string'), address: o('address') },
+  VisitText: { sv: r('visitText'), en: r('visitText') },
+  VisitContent: { version: r(enumeration(1)), text: r('VisitText'), source_url: r('visitSourceUrl'), checked_on: r('date') },
   HoursWindow: { opens: r('clock'), closes: r('closingClock') },
   SelectedHours: { status: r(enumeration('known','closed','unknown')), all_day: r('bool'), windows: r(array('HoursWindow',0,4)),
     date: o('date'), timezone: o('timezone'), source_url: o('shortUrl'), observed_at: o('instant'),
@@ -88,8 +97,9 @@ const fields = {
     starts_at: n('instant'), ends_at: n('instant'), starts_on: n('date'), ends_on: n('date'), occurrence_date: n('date'), time_window: n('TimeWindow'), timezone: n('string'),
     lat: r('lat'), lng: r('lng'), type: n('string'), area: n('string'), address: n('string'), daypart: n('string'),
     covered_preferences: n(array('string')), partial_preferences: n(array('string')), missing_preferences: n(array('string')),
+    candidate_status: n(CANDIDATE_STATUS), weather_reasons: o(array(WEATHER_REASON,0,6)),
     source: n('StopSource'), trust: n('Trust'), provisional: o('bool'), origin: n('string'), website: n('shortUrl'),
-    place_details: n('PlaceDetails'), selected_day_hours: n('SelectedHours'), provenance: n('Provenance') },
+    place_details: n('PlaceDetails'), visit_content: o('VisitContent'), selected_day_hours: n('SelectedHours'), provenance: n('Provenance') },
   Leg: { from_label: n('string'), to_label: n('string'), distance_km: n('nonnegative'), estimated_walk_minutes: n('nonnegative') },
   // Fixed public operator links need no place-source URL witness. The general
   // URL policy remains closed to arbitrary router-provided destinations.
@@ -100,7 +110,9 @@ const fields = {
     map_path_points: r(array('Point')), legs: r(array('Leg')), estimated_km: rule('nonnegative',true,true),
     routing_source: n('string'), geometry_source: n('string'), geometry_mode: n(enumeration('walking')),
     geometry_attribution: n('GeometryAttribution'), route_shape: n('string'), public_route_scope: n('string'), caveats: n(array('string')),
-    anchored_to_local_time: o('bool'), trust_summary: n('TrustSummary'), credibility_tier: n('string') },
+    // Named in the engine's stop vocabulary ("museums"), not the planner's ("culture").
+    anchored_to_local_time: o('bool'), unconfirmed_tonight_preferences: o(array(enumeration(...Object.keys(CANONICAL_INTENTS)),1,MAX_PLANNER_PREFERENCES)),
+    trust_summary: n('TrustSummary'), credibility_tier: n('string') },
   WeatherObserved: { condition: n('string'), max_temp: n('number'), apparent_temp_max: n('number'), precipitation_probability_max: n('number'),
     precipitation_sum: n('number'), wind_speed_max: n('number') },
   WeatherProvenance: { provider_id: n('string'), role: n('string'), signal_type: n('string'), signal_kind: n('string'), confidence: n('string'),
@@ -267,6 +279,11 @@ function budget(privacy) {
     if (type === 'date' && !isRealIsoDate(value)) throw new Error('date');
     if (type === 'placeRef' && !parsePlaceRef(value)) throw new Error('place ref');
     if (type === 'nonblank' && !value.trim()) throw new Error('blank');
+    if (type === 'visitText' && (!value || value !== value.trim() || value.length > 320 || /[\u0000-\u001f\u007f]/.test(value))) throw new Error('visit text');
+    if (type === 'visitSourceUrl') {
+      if (!require('../place-candidates/visit-content').isApprovedVisitSourceUrl(value)) throw new Error('unattested visit source');
+      return value; // Dedicated destination policy; never enlarge unrelated URL witnesses.
+    }
     if (type === 'address' && (value.length > 160 || /[\u0000-\u001f\u007f]/.test(value))) throw new Error('address');
     if (type === 'timezone' && value.length > 80) throw new Error('timezone');
     if (type === 'loaderToken' && !/^[a-z0-9_:-]{1,80}$/.test(value)) throw new Error('loader token');
@@ -287,6 +304,8 @@ function budget(privacy) {
 }
 function validateObject(type,value) {
   const refuse = () => { throw new Error('correlated '+type); };
+  if (type === 'Stop' && value.visit_content &&
+      !require('../place-candidates/visit-content').visitContentMatchesStop(value, value.visit_content)) refuse();
   if (type === 'Stop' && value.provenance?.venue_mentions &&
       !venueMentionsMatchPlace(value,value.provenance.venue_mentions)) refuse();
   if (type === 'PrimaryRoute' && ((value.geometry_mode === 'walking' && value.geometry_source !== 'osrm') ||
@@ -322,6 +341,16 @@ function validateObject(type,value) {
       value.starts_on !== value.dates[0] || value.ends_on !== value.dates[value.dates.length-1])) refuse();
   }
   if (type === 'PrimaryRoute') {
+    // An anchored evening names the picks whose hours tonight are unconfirmed:
+    // the list and its caveat travel together, sorted and unique, and every
+    // named pick is served by a stop on this route.
+    const named = value.unconfirmed_tonight_preferences, caveats = value.caveats || [];
+    if (caveats.includes('picks_unconfirmed_tonight') !== Boolean(named)) refuse();
+    if (named) {
+      const served = new Set(value.main_stops.flatMap(stop => [...(stop.covered_preferences || []), ...(stop.partial_preferences || [])]));
+      if (value.anchored_to_local_time !== true || !caveats.includes('day_anchored_to_current_time') ||
+        named.some((pick, i) => (i && pick <= named[i - 1]) || !served.has(pick))) refuse();
+    }
     const stops = value.main_stops;
     if (new Set(stops.map(stop=>stop.id)).size !== stops.length) refuse();
     if (value.public_route_scope === 'selected_stop_chain' && (value.map_route_points.length !== stops.length ||

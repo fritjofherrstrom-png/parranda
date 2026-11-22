@@ -4,10 +4,10 @@
  * second form here. Adjusting is collapsed to one line by default; every change
  * recomposes on its own (no submit) — the orchestrator's handlers own that.
  */
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { MAX_PLANNER_PREFERENCES, normalizePreferencePriority } from "../../../../shared/planner-intent.mjs";
-import { CheckIcon, LocationIcon, UndoIcon } from "../shared/icons";
-import { buttonClass, compactPillTarget, Eyebrow, noticeCard, panelCard, segmentClass, segmentGroup } from "../shared/ui";
+import { CheckIcon, ChevronDownIcon, LocationIcon, UndoIcon } from "../shared/icons";
+import { buttonClass, compactPillTarget, controlTone, Eyebrow, noticeCard, panelCard, segmentClass, segmentGroup } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
 import InterestChooser, { type InterestSelection } from "./InterestChooser";
@@ -41,7 +41,9 @@ export default function AnchorCard({
   interestChooserOpen = false,
   setInterestChooserOpen,
   onApplyInterests,
-  interestFailure,
+  parrandaChoosing = false,
+  takeOverFocus,
+  notice,
   onSetDay,
   rhythms,
   walkKey,
@@ -50,6 +52,7 @@ export default function AnchorCard({
   rebuild = null,
   compact = false,
   dayWhen = null,
+  summary = null,
 }: {
   t: Translate;
   lang: Lang;
@@ -71,7 +74,24 @@ export default function AnchorCard({
   interestChooserOpen?: boolean;
   setInterestChooserOpen?: (open: boolean) => void;
   onApplyInterests?: (selection: InterestSelection) => void;
-  interestFailure?: { message: string; attemptedLabels?: string; onUndo?: () => void };
+  /** "Let Parranda choose" is on: applying interests hands the choice back. */
+  parrandaChoosing?: boolean;
+  takeOverFocus?: RefObject<boolean>;
+  /**
+   * The notice under the controls for a no-day result, a failed rebuild or
+   * a suggested replacement awaiting a decision. `announce` is set only when
+   * the page's own result region does not already carry the message.
+   */
+  notice?: {
+    message: string;
+    attemptedLabels?: string;
+    action?: "edit_interests" | "retry" | "restart" | null;
+    onRetry?: () => void;
+    restartHref?: string;
+    onUndo?: () => void;
+    onUseSuggestion?: () => void;
+    announce?: boolean;
+  };
   onSetDay: (offset: 0 | 1) => void;
   rhythms: RhythmOption[];
   walkKey: string;
@@ -83,6 +103,8 @@ export default function AnchorCard({
   compact?: boolean;
   /** Compact: which day is on screen, said first in the picks line. */
   dayWhen?: ReactNode;
+  /** Compact (Linje 2): what the day did for each pick and its rhythm, in the Adjust row. */
+  summary?: ReactNode;
 }) {
   // Opening swaps "Adjust" for "Done" (and closing swaps back), so the button
   // that had keyboard focus leaves the DOM. Move focus to its counterpart, but
@@ -91,6 +113,11 @@ export default function AnchorCard({
   const priorityHelpId = useId();
   const allInterestsButton = useRef<HTMLButtonElement>(null);
   const retryInterestsButton = useRef<HTMLButtonElement>(null);
+  const interestNotice = useRef<HTMLParagraphElement>(null);
+  const hasInterestSuggestion = Boolean(notice?.onUseSuggestion);
+  useEffect(() => {
+    if (hasInterestSuggestion && document.activeElement === allInterestsButton.current) interestNotice.current?.focus();
+  }, [hasInterestSuggestion]);
   const interestTrigger = useRef<HTMLButtonElement | null>(null);
   const returnInterestFocus = useRef(false);
   useEffect(() => {
@@ -107,11 +134,12 @@ export default function AnchorCard({
   const adjustButton = useRef<HTMLButtonElement>(null);
   const doneButton = useRef<HTMLButtonElement>(null);
   const toggledHere = useRef(false);
-  useEffect(() => {
-    if (!toggledHere.current) return;
+  useLayoutEffect(() => {
+    if (!toggledHere.current && !takeOverFocus?.current) return;
     toggledHere.current = false;
+    if (takeOverFocus) takeOverFocus.current = false;
     (adjustOpen ? doneButton : adjustButton).current?.focus();
-  }, [adjustOpen]);
+  }, [adjustOpen, parrandaChoosing, takeOverFocus]);
   const toggleAdjust = (open: boolean) => {
     toggledHere.current = true;
     if (!open) setInterestChooserOpen?.(false);
@@ -141,9 +169,10 @@ export default function AnchorCard({
       aria-expanded={true}
       aria-controls={panelId}
       onClick={() => toggleAdjust(false)}
-      className={controlPill}
+      className={compact && summary ? rowControl : controlPill}
     >
       {t("Klar", "Done")}
+      {compact && summary && <ChevronDownIcon className="h-3.5 w-3.5 rotate-180" />}
     </button>
   );
   return (
@@ -174,12 +203,16 @@ export default function AnchorCard({
           as they change, stay in view above the controls that change them. */}
       {(compact || !adjustOpen) && (
         <div className={compact
-          ? "flex min-h-9 items-center justify-between gap-3"
+          ? summary
+            // Linje 2 board: a framed row, and the whole row is Adjust (the
+            // button's ::after stretches over it; the picks stay a list).
+            ? "group relative flex min-h-14 items-center gap-2 rounded-parranda-btn border-line border-parranda-line bg-parranda-fill-faint py-2 pl-3.5 pr-1.5 transition hover:bg-parranda-fill"
+            : "flex min-h-9 items-center justify-between gap-3"
           : "flex min-h-12 flex-wrap items-center gap-2.5 border-t-line border-parranda-line-faint py-1.5 pl-4 pr-1.5"}>
           {/* Compact, one even line in the title's quiet voice: the day, then
               the picks and the rhythm. The card form keeps the picks in bold
               under the place it names. */}
-          {compact ? (
+          {compact && summary ? summary : compact ? (
             <span className="min-w-0 flex-1 text-13 leading-snug text-parranda-ink-muted">
               {dayWhen}
               {dayWhen ? " · " : ""}
@@ -198,36 +231,59 @@ export default function AnchorCard({
               ref={adjustButton}
               aria-expanded={false}
               onClick={() => toggleAdjust(true)}
-              className={controlPill}
+              className={compact && summary ? rowControl : controlPill}
             >
               {t("Justera", "Adjust")}
+              {compact && summary && <ChevronDownIcon className="h-3.5 w-3.5" />}
             </button>
           )}
         </div>
       )}
 
-      {interestFailure && (
+      {notice && (
         <div className={`mt-2 flex flex-col items-start gap-2 ${noticeCard}`}>
-          <p role="status">{interestFailure.message}</p>
-          {interestFailure.attemptedLabels && <p className="text-xs text-parranda-ink-muted">{interestFailure.attemptedLabels}</p>}
-          <div className="flex flex-wrap gap-2">
-            {onApplyInterests && setInterestChooserOpen && (
-              <button type="button" ref={retryInterestsButton} aria-expanded={interestChooserOpen} onClick={() => {
-                interestTrigger.current = retryInterestsButton.current;
-                setAdjustOpen(true);
-                setInterestChooserOpen(true);
-              }} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
-                {t("Ändra intressen", "Edit interests")}
-              </button>
-            )}
-            {interestFailure.onUndo && (
-              <button type="button" onClick={interestFailure.onUndo} aria-label={t("Ångra ändringen", "Undo this change")}
-                className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
-                <UndoIcon className="h-3.5 w-3.5" />
-                {t("Ångra", "Undo")}
-              </button>
-            )}
-          </div>
+          {notice.announce
+            ? <p role="status" ref={interestNotice} tabIndex={hasInterestSuggestion ? -1 : undefined}>{notice.message}</p>
+            : <div>{notice.message}</div>}
+          {notice.attemptedLabels && <p className="text-xs text-parranda-ink-muted">{notice.attemptedLabels}</p>}
+          {notice.action === "restart" && notice.restartHref && (
+            <p>{t("Den sparade dagen kan inte uppdateras säkert. ", "We cannot safely update this saved day. ")}
+              <a href={notice.restartHref} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">
+                {t("Välj startpunkt och datum", "Choose a starting point and date")}
+              </a>
+            </p>
+          )}
+          {(notice.action === "edit_interests" || notice.action === "retry" || notice.onUndo || notice.onUseSuggestion) && (
+            <div className="flex flex-wrap gap-2">
+              {notice.action === "edit_interests" && onApplyInterests && setInterestChooserOpen && (
+                <button type="button" ref={retryInterestsButton} aria-expanded={interestChooserOpen} onClick={() => {
+                  interestTrigger.current = retryInterestsButton.current;
+                  setAdjustOpen(true);
+                  setInterestChooserOpen(true);
+                }} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                  {t("Ändra intressen", "Edit interests")}
+                </button>
+              )}
+              {notice.action === "retry" && notice.onRetry && (
+                <button type="button" onClick={notice.onRetry} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
+                  {t("Försök igen", "Try again")}
+                </button>
+              )}
+              {notice.onUndo && (
+                <button type="button" onClick={notice.onUndo}
+                  aria-label={hasInterestSuggestion ? undefined : t("Ångra ändringen", "Undo this change")}
+                  className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                  {!hasInterestSuggestion && <UndoIcon className="h-3.5 w-3.5" />}
+                  {hasInterestSuggestion ? t("Behåll min dag", "Keep current day") : t("Ångra", "Undo")}
+                </button>
+              )}
+              {notice.onUseSuggestion && (
+                <button type="button" onClick={notice.onUseSuggestion} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                  {t("Använd förslaget", "Use suggested day")}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -271,6 +327,7 @@ export default function AnchorCard({
 
           {interestChooserOpen && onApplyInterests ? (
             <InterestChooser t={t} lang={lang} selected={selected} preferencePriority={preferencePriority}
+              handsBackChoice={parrandaChoosing}
               onCancel={closeInterestChooser}
               onApply={draft => {
                 setTouched("all-interests");
@@ -316,7 +373,7 @@ export default function AnchorCard({
                         `${compactPillTarget} gap-1.5 px-3.5${ring(`pick:${pref.key}`)} aria-disabled:opacity-60 ` +
                         (active
                           ? "bg-parranda-ink font-bold text-parranda-paper"
-                          : "border-line border-parranda-line font-semibold text-parranda-ink-muted hover:border-parranda-line-strong hover:text-parranda-ink")
+                          : "bg-parranda-fill font-semibold text-parranda-ink-soft hover:bg-parranda-fill-strong hover:text-parranda-ink")
                       }
                     >
                       {active && (rank
@@ -375,7 +432,7 @@ export default function AnchorCard({
                     // "optional, not part of the day" (ui.tsx), which a rhythm is not.
                     (walkKey === free.key
                       ? "bg-parranda-ink font-bold text-parranda-paper"
-                      : "border-line border-parranda-line font-semibold text-parranda-ink-muted hover:border-parranda-line-strong hover:text-parranda-ink")
+                      : "bg-parranda-fill font-semibold text-parranda-ink-soft hover:bg-parranda-fill-strong hover:text-parranda-ink")
                   }
                 >
                   {walkKey === free.key && <CheckIcon className="h-3 w-3" />}
@@ -384,7 +441,7 @@ export default function AnchorCard({
               )}
             </div>
             <div
-              className="grid grid-cols-3 rounded-full border-line border-parranda-line sm:max-w-sm"
+              className="grid grid-cols-3 rounded-parranda-btn bg-parranda-fill sm:max-w-sm"
               role="group"
               aria-label={t("Dagens rytm", "Day rhythm")}
             >
@@ -400,8 +457,7 @@ export default function AnchorCard({
                       onSetRhythm(preset.key);
                     }}
                     className={
-                      "min-h-11 px-2 text-13 leading-tight transition first:rounded-l-full last:rounded-r-full" + ring(`rhythm:${preset.key}`) + " " +
-                      (index > 0 ? "border-l-line border-parranda-line " : "") +
+                      "min-h-11 rounded-parranda-btn px-2 text-13 leading-tight transition" + ring(`rhythm:${preset.key}`) + " " +
                       (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink-muted hover:text-parranda-ink")
                     }
                   >
@@ -427,15 +483,18 @@ export default function AnchorCard({
 
 /**
  * Change, Adjust and Done are the day's controls; they look alike: plain words
- * on an outlined 36px pill with a 44px touch target, like the stops' Follow.
+ * on a soft 36px rectangle with a 44px touch target, like the stops' Follow.
  */
-const controlPill = `${compactPillTarget} shrink-0 gap-1.5 border-line border-parranda-line px-3.5 font-bold text-parranda-ink hover:border-parranda-line-strong`;
+const controlPill = `${compactPillTarget} shrink-0 gap-1.5 px-3.5 ${controlTone}`;
 
 /**
  * "Change": back to the landing for another place. A plain left-click lets the
  * planner cancel work it no longer needs; the link still works on its own.
  * Beside the day's title once a day is on screen, in the card before that.
  */
+/** Adjust and Done inside the picks row: words and a chevron, the row is the surface. */
+const rowControl = "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-parranda-btn px-3 text-15 font-extrabold text-parranda-ink after:absolute after:inset-0 after:rounded-parranda-btn after:content-['']";
+
 export function ChangePlaceLink({ t, lang, onChangePlace }: { t: Translate; lang: Lang; onChangePlace: () => void }) {
   return (
     <a
@@ -446,9 +505,9 @@ export function ChangePlaceLink({ t, lang, onChangePlace }: { t: Translate; lang
         }
       }}
       aria-label={t("Byt plats", "Change place")}
-      className={controlPill}
+      className="inline-flex min-h-11 shrink-0 items-center text-sm font-bold text-parranda-ink-soft underline decoration-[1.5px] underline-offset-4 transition hover:text-parranda-ink"
     >
-      {t("Byt", "Change")}
+      {t("Byt plats", "Change place")}
     </a>
   );
 }

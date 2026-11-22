@@ -42,3 +42,11 @@ test("no-ref shell routing keeps no-intent, GPS, restore and coordinate first-va
     assert.equal(shell(`/labs/anywhere?${query}`).location, `/anywhere?${query}`);
   }
 });
+
+test("local saved IDs reach the Planner through the real Express entry routes", () => {
+  for (const query of ["saved=opaque%2F%CE%B1", "saved="]) {
+    assert.equal(readPlannerEntry(query).hasIntent, true, query);
+    assert.equal(shell(`/anywhere?${query}&lang=sv`).status, 200, query);
+    assert.equal(shell(`/labs/anywhere?${query}&lang=sv`).location, `/anywhere?${query}&lang=sv`);
+  }
+});

@@ -1,6 +1,5 @@
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { LAST_KEY } from "../lib/anywhere-storage.mjs";
-import { SearchIcon } from "./shared/icons";
 import { isPlaceSearchQueryEligible } from "../../../shared/place-search-query.mjs";
 
 export interface PlaceSuggestion {
@@ -138,8 +137,9 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
   }, [selected, value, inputRef]);
   return (
     <div className="relative min-w-0 flex-1" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) dismiss(); }}>
-      <div className={"flex min-h-[3.75rem] items-center gap-3 rounded-parranda border-2 bg-parranda-fill-faint px-5 transition focus-within:border-parranda-ember focus-within:ring-3 focus-within:ring-parranda-glow/60 sm:min-h-16 " + (geoDenied ? "border-parranda-glow ring-3 ring-parranda-glow" : "border-parranda-ink")}>
-        <SearchIcon className="h-5 w-5 shrink-0 text-parranda-ink-meta" />
+      <div className={"flex min-h-[3.75rem] items-center gap-3 rounded-parranda-btn border-2 bg-parranda-fill-faint px-5 transition focus-within:border-parranda-ember focus-within:ring-3 focus-within:ring-parranda-glow/60 sm:min-h-16 " + (geoDenied ? "border-parranda-glow ring-3 ring-parranda-glow" : "border-parranda-ink")}>
+        {/* Linje 2: the field is the next station: its ember ring. */}
+        <span aria-hidden="true" className="h-[18px] w-[18px] shrink-0 rounded-full border-[4px] border-parranda-ember" />
         <input id="landingCity" ref={inputRef} value={value} onChange={onChange}
           role="combobox" aria-autocomplete="list" aria-expanded={shown} aria-controls={shown ? listId : undefined}
           aria-activedescendant={shown && active >= 0 ? `${listId}-${active}` : undefined}
@@ -155,6 +155,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
             if (shown && active >= 0 && event.key === "Enter") { event.preventDefault(); choose(choices[active]); }
           }}
           autoComplete="off"
+          placeholder={t("Stad eller plats", "City or place")}
           className="min-w-0 flex-1 bg-transparent text-lg text-parranda-ink outline-hidden placeholder:text-parranda-ink-meta focus-visible:outline-hidden sm:text-xl" />
       </div>
       {selected && selectedOverflows && <span aria-hidden="true" className="mt-2 block text-sm leading-snug text-parranda-ink-muted [overflow-wrap:anywhere] sm:hidden">{value}</span>}

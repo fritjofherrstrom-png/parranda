@@ -443,8 +443,9 @@ test("restoring a snapshot cancels the compose that would have overwritten it", 
   await click(h, h.container.querySelector('button[aria-label="Save this day"]'));
   await h.clock.advance(50);
 
-  // Start a recompose and leave it in flight.
-  await keepFirstStop(h);
+  // Start a recompose and leave it in flight. (A Keep on the settled day
+  // composes nothing; an Add asks the server.)
+  await addOutsider(h);
   await h.clock.advance(500);
   const inFlight = h.fetchMock.pending()[0];
   assert.ok(inFlight, "a compose is in flight");
@@ -489,18 +490,15 @@ test("releasing a pin mid-flight does not leave the day naming it", async (t) =>
   const h = await plannerWithDay();
   t.after(() => h.unmount());
 
-  await keepFirstStop(h);
+  await addOutsider(h);
   await h.clock.advance(500);
   const inFlight = h.fetchMock.pending()[0];
-  assert.deepEqual(inFlight.body.pinned_candidate_ids, ["a"]);
+  assert.deepEqual(inFlight.body.pinned_candidate_ids, ["outsider"]);
 
   // Withdraw the commitment while the request that carries it is outstanding.
-  const disclosure = [...h.container.querySelectorAll("button")].find((b) =>
-    /Place a/.test(b.textContent || ""),
-  );
-  await click(h, disclosure);
-  const release = buttonMatching(h, /Kept — release/);
-  if (release) await click(h, release);
+  const release = buttonMatching(h, /In my day — release|Kept — release/) ??
+    (await click(h, buttonMatching(h, /^Place outsider/)), buttonMatching(h, /In my day — release|Kept — release/));
+  await click(h, release);
 
   // The in-flight answer lands without the place.
   await h.fetchMock.respond(inFlight, composedDay(["b", "c", "d"])).catch(() => {});
@@ -511,7 +509,7 @@ test("releasing a pin mid-flight does not leave the day naming it", async (t) =>
   const text = h.text();
   if (NOTICE.test(text)) {
     assert.ok(
-      !/Place a/.test(text.slice(text.search(NOTICE))),
+      !/Place outsider/.test(text.slice(text.search(NOTICE))),
       "a released commitment must not be named as unmet",
     );
   }

@@ -1,3 +1,5 @@
+import { readableSourceName } from "./source-names.mjs";
+
 const CONTRACT = "anywhere_contextual_blitz_v1";
 
 function text(value) {
@@ -9,14 +11,7 @@ function finite(value) {
 }
 
 function sourceLabel(value) {
-  const label = text(value);
-  if (!label) return null;
-  const known = {
-    osm: "OpenStreetMap",
-    openstreetmap: "OpenStreetMap",
-    wikidata: "Wikidata",
-  };
-  return known[label.toLocaleLowerCase()] || label;
+  return readableSourceName(value) || null;
 }
 
 function attribution(move) {

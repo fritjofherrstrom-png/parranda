@@ -429,6 +429,16 @@ const provenanceById = {
     source_note: "Nominatim confirmed Pafsaniou 4 coordinates. Corroborated: thisisathens.org + xo.gr.",
   },
   "athens-diporto": {
+    // Parranda-authored factual note; linked source checked on the date below.
+    visit_content: {
+      "version": 1,
+      "text": {
+        "sv": "En traditionell källartaverna där stadens marknadshandlare också äter.",
+        "en": "A traditional basement taverna whose regulars include the city’s market traders."
+      },
+      "source_url": "https://www.thisisathens.org/restaurants/diporto",
+      "checked_on": "2026-11-15"
+    },
     source_url: "https://www.thisisathens.org/restaurants/diporto",
     source_type: "official_site",
     confidence: "high",
@@ -489,6 +499,16 @@ const provenanceById = {
     source_note: "Nominatim confirmed 4 Neophytou Douka (Kolonaki) coordinates. Corroborated: cycladic.gr + thisisathens.org + discovergreece.com.",
   },
   "athens-taf-foundation": {
+    // Parranda-authored factual note; linked source checked on the date below.
+    visit_content: {
+      "version": 1,
+      "text": {
+        "sv": "Galleri, bar och små designbutiker runt en skyddad innergård i ett hus från 1800-talet.",
+        "en": "An art gallery, bar and small design shops surrounding a sheltered courtyard in a 19th-century house."
+      },
+      "source_url": "https://www.thisisathens.org/arts-entertainment/taf-art-foundation",
+      "checked_on": "2026-11-15"
+    },
     source_url: "https://www.thisisathens.org/arts-entertainment/taf-art-foundation",
     source_type: "official_site",
     confidence: "high",

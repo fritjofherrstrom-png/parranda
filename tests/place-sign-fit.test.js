@@ -1,34 +1,46 @@
 'use strict';
-// The day title's place name fills one line for its longest word and never
-// breaks inside a word ("MALM / Ö"). The fit measures the rendered word, so it
-// holds for whichever face is loaded; the test uses Chromium's fallback for the
-// display stack (no network), which is wider than the estimate assumed.
+// Exercise the production day heading with narrow columns and larger text.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const http = require('node:http');
-const { execFileSync } = require('node:child_process');
 const { chromium } = require('playwright-core');
 const root = path.resolve(__dirname, '..');
 const frontend = path.join(root, 'frontend');
-const NAMES = ['Malmö', 'Rome', 'Barcelona', 'Reykjavík', 'Wrocław', 'Mmmmmmm', 'Ålesund', 'San Sebastián', 'Llanfairpwllgwyngyll'];
+const NAMES = ['Stockholm', 'Malmö', 'Rome', 'Barcelona', 'Reykjavík', 'Wrocław', 'Mmmmmmm', 'Ålesund', 'San Sebastián', 'Llanfairpwllgwyngyll'];
 
-test('place names fit their column without breaking a word', { timeout: 240000 }, async t => {
+test('the compact ink day heading wraps and fits beside Change place', { timeout: 240000 }, async t => {
   const temp = await fs.mkdtemp(path.join(frontend, '.place-sign-'));
   let browser, server;
   try {
     const entry = path.join(temp, 'entry.tsx');
-    await fs.writeFile(entry, `import React from 'react'; import {createRoot} from 'react-dom/client'; import {PlaceSign} from '../src/components/planner/DayHeader';
+    await fs.writeFile(entry, `import React from 'react';
+import {createRoot} from 'react-dom/client';
+import DayHeader from '../src/components/planner/DayHeader';
+import {ChangePlaceLink} from '../src/components/planner/AnchorCard';
 const names=${JSON.stringify(NAMES)};
-function Harness(){return <div>{names.map(n=><h2 key={n} data-name={n} className="type-title text-[2.5rem] text-parranda-ink" style={{containerType:'inline-size',marginBottom:24}}>A day in <PlaceSign text={n}/></h2>)}</div>}
-createRoot(document.getElementById('root')).render(<Harness/>);`);
+const noop = () => {};
+const root = createRoot(document.getElementById('root'));
+window.renderHeadings = (lang) => {
+  const t = (sv, en) => lang === 'sv' ? sv : en;
+  root.render(names.map(name => <section key={name} data-name={name} style={{maxWidth:'36rem'}}>
+    <DayHeader t={t} lang={lang} staleNotice={null} navigationInterrupted={false} retryPlan={noop}
+      mode="typed" placeLabel={name} anchorLabel={name} primaryRoute={{}} date={null} weatherSummary={null}
+      titleAction={<ChangePlaceLink t={t} lang={lang} onChangePlace={noop}/>}
+      coreCount={3} wovenCount={0} pickCoverage={[]} dayLimitationNote={null} restoredAt={null} resolveAndRun={noop}/>
+  </section>));
+};
+window.renderHeadings('en');`);
     await require(path.join(frontend, 'node_modules/esbuild')).build({ entryPoints: [entry], bundle: true, outdir: temp, format: 'iife', jsx: 'automatic', logLevel: 'silent' });
-    await fs.writeFile(path.join(temp, 'input.css'), `@import ${JSON.stringify(path.join(frontend, 'src/styles/tokens.css'))};\n@import ${JSON.stringify(path.join(frontend, 'src/styles/tailwind.css'))};\n@source not ${JSON.stringify(path.join(frontend, 'src'))};\n@source ${JSON.stringify(entry)};\n@source ${JSON.stringify(path.join(frontend, 'src/components/planner/DayHeader.tsx'))};\n`);
-    execFileSync(process.execPath, [path.join(frontend, 'node_modules/@tailwindcss/cli/dist/index.mjs'), '-i', path.join(temp, 'input.css'), '-o', path.join(temp, 'tailwind.css')], { cwd: frontend, stdio: 'pipe' });
+    const assets = path.join(frontend, 'dist', '_astro');
+    const styles = (await fs.readdir(assets)).filter(file => file.endsWith('.css'));
+    const css = await Promise.all(styles.map(file => fs.readFile(path.join(assets, file), 'utf8')));
+    await fs.writeFile(path.join(temp, 'tailwind.css'), css.join('\n'));
     server = http.createServer(async (req, res) => {
       try {
-        const file = req.url === '/' ? null : path.join(temp, path.basename(req.url));
+        const directory = req.url.startsWith('/_astro/') ? assets : temp;
+        const file = req.url === '/' ? null : path.join(directory, path.basename(req.url));
         res.setHeader('Content-Type', req.url.endsWith('.js') ? 'application/javascript' : req.url.endsWith('.css') ? 'text/css' : req.url.endsWith('.woff2') ? 'font/woff2' : 'text/html');
         res.end(file ? await fs.readFile(file) : `<!doctype html><html data-theme="day"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/tailwind.css"><div id="root" style="padding:0 16px"></div><script src="/entry.js"></script>`);
       } catch { res.statusCode = 404; res.end(); }
@@ -43,36 +55,51 @@ createRoot(document.getElementById('root')).render(<Harness/>);`);
       if (process.env.CI) throw new Error('Real Chromium is required in CI');
       t.skip('Chromium unavailable; set PARRANDA_TEST_CHROMIUM'); return;
     }
-    for (const width of [320, 390, 1280]) {
+    for (const width of [320, 390, 430, 1280, 1440]) {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
+      await page.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
       await page.goto(origin);
       await page.waitForFunction(n => document.querySelectorAll('[data-name]').length === n, NAMES.length);
       await page.evaluate(() => document.fonts.ready);
-      await page.waitForTimeout(300);
-      const seen = await page.evaluate(() => [...document.querySelectorAll('[data-name]')].map(h => {
-        const sign = h.querySelector('em');
-        const size = parseFloat(getComputedStyle(sign).fontSize);
-        const words = [...sign.querySelectorAll('[data-sign-word]')].map(w => {
-          const rects = w.getClientRects();
-          return { word: w.textContent, lines: new Set([...rects].map(r => Math.round(r.top))).size, width: w.getBoundingClientRect().width };
-        });
-        return { name: h.dataset.name, size, column: sign.clientWidth, words };
-      }));
-      for (const sign of seen) {
-        if (sign.name === 'Llanfairpwllgwyngyll') {
-          // Too long for one line even at the floor: it may break, never overflow.
-          assert.ok(sign.size >= 32, `${width}px ${sign.name}: never below 2rem`);
-          for (const w of sign.words) assert.ok(w.width <= sign.column + 1, `${width}px ${sign.name}: stays in the column`);
-          continue;
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('DOM.enable');
+      await cdp.send('CSS.enable');
+      const { root: documentRoot } = await cdp.send('DOM.getDocument');
+      const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: documentRoot.nodeId, selector: 'h1' });
+      const { fonts } = await cdp.send('CSS.getPlatformFontsForNode', { nodeId });
+      assert.ok(fonts.length > 0 && fonts.every(font => /^Archivo\b/.test(font.familyName) && font.isCustomFont),
+        'Measure the production Archivo face: ' + JSON.stringify(fonts));
+      await cdp.detach();
+      for (const [lang, theme, rem] of [['en', 'day', 16], ['sv', 'night', 16], ['en', 'night', 32], ['sv', 'day', 32]]) {
+        await page.evaluate(async ({lang, theme, rem}) => {
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.fontSize = rem + 'px';
+          window.renderHeadings(lang);
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        }, {lang, theme, rem});
+        const seen = await page.locator('[data-name]').evaluateAll(sections => sections.map(section => {
+          const heading = section.querySelector('h1');
+          const link = section.querySelector('a');
+          const style = getComputedStyle(heading);
+          const ink = 'rgb(' + style.getPropertyValue('--p-color-ink').trim().split(/\s+/).join(', ') + ')';
+          const range = document.createRange();
+          range.selectNodeContents(heading);
+          const linkRect = link.getBoundingClientRect();
+          return { name: section.dataset.name, text: heading.textContent, size: parseFloat(style.fontSize),
+            correctInk: style.color === ink && [...heading.querySelectorAll('*')].every(el => getComputedStyle(el).color === ink),
+            fits: [...range.getClientRects()].every(rect => rect.right <= linkRect.left + 1 && rect.left >= section.getBoundingClientRect().left - 1),
+            linkHeight: linkRect.height, scrollWidth: document.documentElement.scrollWidth };
+        }));
+        for (const title of seen) {
+          const context = `${width}px · ${lang} · ${theme} · ${rem}px · ${title.name}`;
+          assert.equal(title.text, `${lang === 'sv' ? 'En dag i' : 'A day in'} ${title.name}`, context);
+          assert.equal(title.correctInk, true, context);
+          assert.equal(title.size, rem * (width >= 640 ? 2 : 1.625), context);
+          assert.equal(title.fits, true, context);
+          assert.equal(title.scrollWidth, width, context);
+          assert.ok(title.linkHeight >= 44, context);
         }
-        for (const w of sign.words) {
-          assert.equal(w.lines, 1, `${width}px ${sign.name}: "${w.word}" is on one line (no MALM / Ö)`);
-          assert.ok(w.width <= sign.column + 1, `${width}px ${sign.name}: "${w.word}" fits the column (${w.width} > ${sign.column})`);
-        }
-        assert.ok(sign.size >= 32 && sign.size <= 76, `${width}px ${sign.name}: size within 2–4.75rem (${sign.size})`);
       }
-      const malmo = seen.find(s => s.name === 'Malmö');
-      assert.ok(malmo.words[0].width >= malmo.column * 0.85 || malmo.size === 76, `${width}px Malmö fills its line`);
       await page.close();
     }
   } finally {

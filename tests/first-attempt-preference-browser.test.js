@@ -199,7 +199,7 @@ test('built UI keeps the original cold job pending past 8s, then publishes its f
 
 // Catches padding a terminal Second hand result with museums, claiming active
 // fetching after completion, or silently retrying instead of awaiting the user.
-test('built UI shows zero matches for terminal museum-only Second hand, then explicit retry recovers the same choices', { timeout: 35000 }, async t => {
+test('built UI shows one source-failure state for terminal museum-only Second hand, then explicit retry recovers the same choices', { timeout: 35000 }, async t => {
   const firstWork = deferred();
   t.after(() => firstWork.resolve([]));
   const f = await fixture(t, { knowledgeCount: 12, directoryLoad: attempt => attempt === 1
@@ -222,13 +222,16 @@ test('built UI shows zero matches for terminal museum-only Second hand, then exp
   assert.ok(body.place_structure.areas.some(area => area.member_ids?.some(id => id.startsWith('open_knowledge-'))),
     'the raw diagnostic structure contains real nonmatching museum records');
   assert.deepEqual(body.place_structure.district_day.areas, [], 'diagnostics are not published as preference matches');
-  await f.page.getByText('0 matches for your picks.', { exact: true }).waitFor();
   await f.page.getByText(/Parranda couldn't build a day here right now/).and(f.page.locator('div')).waitFor();
   await f.page.getByText(/One or more place sources failed/).and(f.page.locator('div')).waitFor();
   assert.equal(await f.page.getByRole('list', { name: 'The stops, in order', exact: true }).count(), 0);
-  const candidates = f.page.locator('section').filter({ has: f.page.getByText('Places nearby', { exact: true }) });
-  assert.match(await candidates.innerText(), /No places for:\s*Second hand/);
-  assert.equal(await candidates.getByRole('button', { name: /Knowledge museum/ }).count(), 0);
+  // One no-day state: the failed source is the cause. The empty candidate
+  // list and its "No places for: Second hand" are not shown — the directory
+  // that failed is the one that holds the vintage shops the retry finds.
+  assert.equal(await f.page.getByText('0 matches for your picks.', { exact: true }).count(), 0);
+  assert.equal(await f.page.getByText('Places nearby', { exact: true }).count(), 0);
+  assert.equal(await f.page.getByText(/No places for/).count(), 0);
+  assert.equal(await f.page.getByRole('button', { name: /Knowledge museum/ }).count(), 0);
   assert.equal(await f.page.getByText(pendingCopy, { exact: true }).count(), 0);
   assert.equal(await f.page.getByText(/More places are on their way|Places .* are still being fetched/).count(), 0);
   const retry = f.page.getByRole('button', { name: 'Try again', exact: true });

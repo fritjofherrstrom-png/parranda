@@ -120,7 +120,7 @@ test("once rebuilt, the panel says what changed and the new stop is marked", asy
   assert.match(h.text(), /Changed: \+ Coffee · \+1 stop/);
   assert.equal(h.container.querySelector('section[aria-label="The route"]').dataset.rebuilding, undefined);
   const rows = [...h.container.querySelectorAll('ol[aria-label="The stops, in order"] > li')].map((li) => li.textContent);
-  assert.match(rows.find((row) => row.includes("Cafe d")), /new/);
+  assert.match(rows.find((row) => row.includes("Cafe d")), /New/);
   assert.doesNotMatch(rows.find((row) => row.includes("Place a")), /\bnew\b/);
   assert.equal(button(h, /Coffee/).className.includes("parranda-ring"), false, "the ring ends with the wait");
 });
