@@ -50,6 +50,11 @@ async function composed(t, lang, rows = reportedRows) {
 }
 const card = h => [...h.container.querySelectorAll('section')]
   .find(section => /^Live (i|in) Testville/.test(section.querySelector('h2')?.textContent || ''));
+test('rows repeated by the week feed are not advertised as additional events', async t => {
+  const h = await composed(t, 'en');
+  assert.doesNotMatch(card(h).querySelector('button').textContent, /more this week/);
+});
+
 const paragraphs = root => [...root.querySelectorAll('p')];
 const exactParagraph = (root, text) => paragraphs(root).find(p => p.textContent.trim() === text);
 function eventRow(root, title) {

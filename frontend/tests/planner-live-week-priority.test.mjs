@@ -32,18 +32,26 @@ function day(events) {
 }
 const queries = h => h.fetchMock.calls.filter(c => c.url.startsWith('/api/live-events'));
 const routes = h => h.fetchMock.calls.filter(c => c.url.includes('route-recommendations'));
-const button = (h, text) => [...h.container.querySelectorAll('button')].find(b => b.textContent.trim() === text);
+const button = (h, text) => [...h.container.querySelectorAll('button')].find(b => b.textContent.trim().replace(/^(See all live|Se allt live), .*$/, '$1') === text);
 async function click(h, text) { const b = button(h, text); assert.ok(b, text); assert.equal(b.disabled, false, text); await h.act(() => b.dispatchEvent(new h.window.Event('click', { bubbles: true }))); }
-async function start(t, events) {
+async function installDay(t, events) {
   const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
   t.after(() => h.unmount()); await h.clock.advance(500);
   await h.fetchMock.respond(routes(h)[0], day(events)); await h.clock.advance(50);
+  return h;
+}
+async function start(t, events) {
+  const h = await installDay(t, events);
   await click(h, events.pending ? 'Explore live' : 'See all live'); return h;
 }
 function query(events) { return { contract: 'live_event_query_v1', route_mutation: false, day_anchor_mutation: false, live_events: events }; }
 
 for (const partial of [false, true]) test(`first open prioritizes real following rows over an empty selected-day display (partial=${partial})`, async t => {
-  const h = await start(t, live({ partial }));
+  const h = await installDay(t, live({ partial }));
+  assert.match(h.text(), /No verified events for the selected day/);
+  assert.doesNotMatch(h.text(), /more this week/);
+  if (partial) assert.match(h.text(), /list may be incomplete/);
+  await click(h, 'See next 7 days');
   assert.equal(button(h, 'Next 7 days').getAttribute('aria-pressed'), 'true');
   assert.match(h.container.querySelector('[role="dialog"]').textContent, /Listed Monday concert/);
   assert.equal(routes(h).length, 1);
@@ -69,6 +77,7 @@ test('opening before completion moves automatically to following rows after the 
 
 test('an explicit selected-day click during pending survives sheet-query completion and reopen', async t => {
   const h = await start(t, live({ pending: true }));
+  assert.doesNotMatch(h.text(), /No verified events for the selected day/);
   await click(h, 'Sun 25 Oct');
   const latest = queries(h).at(-1);
   await h.fetchMock.respond(latest, query(live()));

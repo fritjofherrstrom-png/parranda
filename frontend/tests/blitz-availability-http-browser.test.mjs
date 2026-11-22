@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import http from 'node:http';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -17,7 +18,9 @@ const bundle = await build({
     import {createRoot} from 'react-dom/client';
     import BlitzCard from './src/components/planner/BlitzCard';
     import {anywhereBlitzView} from './src/lib/blitz-view.mjs';
-    const lang = new URLSearchParams(location.search).get('lang') || 'en';
+    const params = new URLSearchParams(location.search);
+    const lang = params.get('lang') || 'en';
+    const anchorLabel = params.get('anchor') || 'Test anchor';
     function App() {
       const [phase,setPhase] = useState('idle');
       const [result,setResult] = useState(null);
@@ -31,7 +34,7 @@ const bundle = await build({
         setResult(anywhereBlitzView(window.actualResponse)); setPhase('done');
       }
       return <BlitzCard t={(sv,en)=>lang==='sv'?sv:en} lang={lang}
-        mode="typed" anchorLabel="Test anchor" typedPlaceLabel="Test anchor" dayOnScreen={true}
+        mode="typed" anchorLabel={anchorLabel} typedPlaceLabel={anchorLabel} dayOnScreen={true}
         blitz={blitz} blitzPhase={phase} blitzResult={result}
         sharePositionForBlitz={()=>{}} blitzPositionFailed={false} />;
     }
@@ -65,7 +68,7 @@ async function harness(t, records, { weatherProvider = async () => ({
   const page=await browser.newPage({viewport:{width:390,height:844}});
   const errors=[]; page.on('pageerror',e=>errors.push(e.message));
   t.after(()=>assert.deepEqual(errors,[]));
-  return {page, async show(lang) {
+  return {page, origin: `http://127.0.0.1:${server.address().port}`, async show(lang) {
     await page.goto(`http://127.0.0.1:${server.address().port}/__blitz-test?lang=${lang}`);
     await page.getByRole('button',{name:lang==='sv'?'Blitz just nu':'Blitz right now',exact:true}).click();
     await page.waitForFunction(()=>window.actualResponse);
@@ -126,5 +129,20 @@ test('actual HTTP → native BlitzCard distinguishes known source hours from unc
     assert.equal((text.match(unconfirmed)||[]).length,2,
       'best and backup each disclose that current opening could not be confirmed');
     assert.match(text,/Known-hours gallery/);
+  }
+});
+
+test('a long unbroken place in the Blitz caption fits the mobile day', async t => {
+  const {page,origin}=await harness(t,[structuredClone(observation.selected)]);
+  await page.setViewportSize({width:320,height:844});
+  const anchor='QA ALongSingleUnbrokenDistrictNameWithMultipleSections';
+  for (const lang of ['sv','en']) {
+    await page.goto(origin + '/__blitz-test?lang=' + lang + '&anchor=' + encodeURIComponent(anchor));
+    const cssDir=new URL('../dist/_astro/',import.meta.url);
+    for (const file of readdirSync(cssDir).filter(name=>name.endsWith('.css'))) {
+      await page.addStyleTag({content:readFileSync(new URL(file,cssDir),'utf8')});
+    }
+    const caption=page.locator('#root p').filter({hasText:anchor});
+    assert.ok(await caption.evaluate(element=>element.scrollWidth<=element.clientWidth),lang);
   }
 });

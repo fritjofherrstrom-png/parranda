@@ -16,3 +16,5 @@ coverage/
 frontend/tests/helpers/.planner-harness-bundle*.mjs
 # Same, for the hydration harness — one bundle per island, named after its entry.
 frontend/tests/helpers/.hydration-*.mjs
+# Temporary SSR walking-map harness output (not fixture source).
+frontend/tests/.walking-map-*/map.mjs

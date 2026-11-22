@@ -7,7 +7,7 @@
  * own disclosure, while location/calendar/recurrence uncertainty stays open.
  */
 import { eventSourceLink, eventTiming } from "../../lib/pulse-view.mjs";
-import { ExternalLinkText, inlineLinkTarget } from "../shared/ui";
+import { ExternalLinkText } from "../shared/ui";
 import type { Lang } from "./copy";
 import type { PulseEvent } from "./types";
 
@@ -44,8 +44,8 @@ export function liveEventSource(event: PulseEvent, lang: Lang) {
       {sourceArea && <p>{lang === "en" ? "Approximate location" : "Ungefärlig plats"}</p>}
       {credits.map(credit => <p key={credit}>{credit}</p>)}
       {(link || listedBy) && <div className="flex min-w-0 flex-wrap items-start gap-x-4">
-        {link && <p className="min-w-0 max-w-full py-3">
-          <a href={link.href} target="_blank" rel="noopener noreferrer" className={`${inlineLinkTarget} underline decoration-parranda-line-firm underline-offset-2 hover:text-parranda-clay hover:decoration-parranda-clay`}>
+        {link && <p className="min-w-0 max-w-full">
+          <a href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 max-w-full items-center underline decoration-parranda-line-firm underline-offset-2 hover:text-parranda-clay hover:decoration-parranda-clay">
             <ExternalLinkText text={link.text} />
           </a>
         </p>}

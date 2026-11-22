@@ -158,3 +158,12 @@ test("source names only rename raw provider tokens and never hide a source", () 
   for (const stop of [{ source: { label: '' } }, { source: { label: 7 } }, { source: null }, null, { source: { label: 'constructor' } }])
     assert.equal(stopSourceLabel(stop), typeof stop?.source?.label === 'string' ? stop.source.label : '');
 });
+
+test('only a curated stop gets the localized Parranda catalog credit', () => {
+  const { stopSourceLabel } = cardFacts;
+  const curated = { origin: 'curated_catalog', source: { label: 'catalog' } };
+  assert.equal(stopSourceLabel(curated, 'sv'), 'Parrandas katalog');
+  assert.equal(stopSourceLabel(curated, 'en'), 'Parranda’s catalog');
+  assert.equal(stopSourceLabel({ source: { label: 'catalog' } }, 'sv'), 'catalog');
+  assert.equal(stopSourceLabel({ ...curated, source: { label: 'Barcelona catalog' } }, 'sv'), 'Barcelona catalog');
+});

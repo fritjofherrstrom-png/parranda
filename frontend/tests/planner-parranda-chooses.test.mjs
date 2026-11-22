@@ -76,7 +76,10 @@ test("Parranda chooses: one compose with intent_mode, its picks as labels, and a
   assert.equal(section.querySelectorAll("li button").length, 0, "status labels, not controls");
   assert.match(h.text(), /Parranda chooses · Day rhythm: Parranda chooses/, "the summary line says who chose");
 
-  await click(h, named(h, /^Take over the picks$/));
+  const takeOverButton = named(h, /^Take over the picks$/);
+  takeOverButton.focus();
+  await click(h, takeOverButton);
+  assert.ok(h.document.activeElement === named(h, /^Done$/), 'taking over moves focus into Adjust');
   await h.clock.advance(450);
   const takeOver = composeCalls(h)[2];
   assert.deepEqual(takeOver.body.preferences, ["food", "nightlife"]);

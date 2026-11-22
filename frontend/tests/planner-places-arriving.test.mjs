@@ -53,7 +53,7 @@ test("a published partial day states historical incompleteness and offers an exp
   await h.clock.advance(500);
   await h.fetchMock.respond(composeCalls(h)[0], thinDay(pending));
   await h.clock.advance(50);
-  assert.match(h.text(), /Not every place could be loaded, so there may be more than the ones shown/);
+  assert.match(h.text(), /Not every place could be loaded\./);
   assert.doesNotMatch(h.text(), /More places are on their way|still fetching|update in a moment/i);
   assert.doesNotMatch(h.text(), /few places to choose between here/i);
   const update = buttonNamed(h, "Look for more places");

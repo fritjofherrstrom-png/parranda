@@ -54,6 +54,7 @@ const { once } = require("node:events");
 const test = require("node:test");
 
 const { buildApp } = require("../server/app");
+const { waitForRouteMapLayout } = require('./helpers/route-map-ready');
 
 const FIXTURE_DATE = "2026-09-27";
 const FIXED_NOW = Date.parse(`${FIXTURE_DATE}T10:00:00Z`);
@@ -276,12 +277,11 @@ function stopsShown(n) {
   return numbers.length === n && numbers.every((value, index) => value === index + 1);
 }
 
-// Runs in the page. Brings the whole map into view (elementFromPoint sees only
-// the viewport), then finds the numbers drawn under another disc, and checks
+// Runs in the page after the pre-interaction scroll/layout barrier. Finds the
+// numbers drawn under another disc, and checks
 // what a tap on each visible number, and around its disc, would hit.
 function measureMarkers() {
   const container = document.querySelector('header [data-route-map] .maplibregl-map, aside[aria-label="Karta över dagen"] .maplibregl-map');
-  container.scrollIntoView({ block: "center" });
   const frame = container.parentElement;
   const map = container.getBoundingClientRect();
   const problems = [];
@@ -426,7 +426,8 @@ async function nameOpenedByTap(page, x, y) {
 }
 
 // Checks one view; returns what failed, and the numbers it found hidden.
-async function checkMarkers(page, stops, where) {
+async function checkMarkers(page, stops, where, route) {
+  await waitForRouteMapLayout(route);
   const { markers, problems } = await page.evaluate(measureMarkers);
   const found = problems.map((problem) => `${where}: ${problem}`);
   // Every stop once: its own number, or inside one group pin that names it.
@@ -533,7 +534,7 @@ for (const width of WIDTHS) {
             await page.waitForTimeout(SETTLE_MS);
           }
           const where = `${dayName} at ${width}px, ${state}`;
-          const { found, hidden } = await checkMarkers(page, stops, where);
+          const { found, hidden } = await checkMarkers(page, stops, where, route);
           problems.push(...found);
           hiddenByView.set(where, hidden);
         }

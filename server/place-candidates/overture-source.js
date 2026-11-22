@@ -30,6 +30,7 @@
  */
 
 const { createBoundedOvertureQuery } = require('./bounded-overture-query');
+const { hasContradictoryFoodListing } = require('./overture-category-consistency');
 const { createOvertureAssetResolver } = require('./overture-stac-assets');
 const { createHash } = require('node:crypto');
 const { validSample, validAssets, digest } = require('./overture-sample-cache');
@@ -310,6 +311,7 @@ function mapOvertureRow(row, { minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
   if (!licenses.length) return null;
   const brand = String(row.brand || "").trim() || null;
   const website = firstHttpUrl(row.websites);
+  if (hasContradictoryFoodListing({ name, type: mapping.type, website })) return null;
   const details = normalizePlaceDetails({ kind: OVERTURE_KINDS[row.category] }, mapping.type);
   const record = {
     id: `overture-${id}`,
@@ -505,9 +507,9 @@ function spreadAcrossWalkingReach(entries, { band }) {
 }
 
 function selectRecords(records, { anchor, requestedIntents = [], walkingTargetBand = null, corroborationRecords = [], limit = DEFAULT_LIMIT } = {}) {
-  // Apply the same negative consistency gate to retained samples before they
+  // Apply the same negative consistency checks to retained samples before they
   // can rank or lend corroboration. Keep stored facts and receipts unchanged.
-  records = records.filter(record => !hasGreenspaceCareFacilityConflict(record));
+  records = records.filter(record => !hasGreenspaceCareFacilityConflict(record) && !hasContradictoryFoodListing(record));
   const { retained, ambiguous } = corroborationSelection(records, corroborationRecords);
   const intents = normalizeUserIntents(requestedIntents).intents;
   const entries = records.filter(record => !ambiguous.has(record.id)).map((record) => ({
