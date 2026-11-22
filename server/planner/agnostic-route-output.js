@@ -241,6 +241,9 @@ function sanitizeLoaderCollectionMetadata(value) {
     initial_day_capacity: capacity(value.initial_day_capacity),
     selected_day_capacity: capacity(value.selected_day_capacity),
     cache: sanitizeLoaderCacheSummary(value.cache),
+    // Set when the map evidence was read from a local regional extract and
+    // not from a live provider answer: which extract, and when its data ends.
+    map_snapshot: sanitizeMapSnapshot(value.map_snapshot),
     // How the primary map source took part. Absent when it was awaited live.
     //   cached_supply              answered from this request's own cache entry
     //   first_pass_while_expanding its first pass answered; only the wider
@@ -287,6 +290,25 @@ function sanitizeLoaderCacheSummary(value) {
       : null,
     refresh_reason: safeToken(value.refresh_reason),
   };
+}
+
+// Every extract whose records the day keeps, oldest first, and whether a live
+// provider answer is mixed in. A label that is present but cannot be read in
+// full is not shortened: it publishes as `unreadable`, which a shared day
+// refuses, rather than as a day with no snapshot.
+const MAX_MAP_SNAPSHOT_EXTRACTS = 4;
+function sanitizeMapSnapshot(value) {
+  if (value === undefined || value === null) return null;
+  const extracts = value && typeof value === "object" && Array.isArray(value.extracts) ? value.extracts : null;
+  const read = extracts && extracts.length >= 1 && extracts.length <= MAX_MAP_SNAPSHOT_EXTRACTS
+    ? extracts.map(extract => {
+        const region = safeToken(extract?.region);
+        const dataMs = typeof extract?.data_timestamp === "string" ? Date.parse(extract.data_timestamp) : NaN;
+        return region && Number.isFinite(dataMs) ? { region, data_timestamp: new Date(dataMs).toISOString() } : null;
+      })
+    : null;
+  if (!read || read.includes(null) || typeof value.includes_live_answer !== "boolean") return { unreadable: true };
+  return { extracts: read, includes_live_answer: value.includes_live_answer };
 }
 
 function sanitizeSpatialScopeSummary(value) {
