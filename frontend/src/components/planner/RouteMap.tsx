@@ -991,7 +991,7 @@ export default function RouteMap({
 
   return (
     <div className={heightClass === "h-full" ? "flex h-full min-h-0 flex-col" : undefined}>
-    <div ref={frameRef} data-route-map="" data-still={still || undefined} className={`route-map-frame relative w-full overflow-hidden rounded-parranda border-line border-parranda-line-faint transition-[height] ${heightClass === "h-full" ? "min-h-0 flex-1" : heightClass}`}>
+    <div ref={frameRef} data-route-map="" data-still={still || undefined} className={`route-map-frame relative w-full overflow-hidden rounded-parranda border-line border-parranda-line-faint transition-[height] ease-in-out ${heightClass === "h-full" ? "min-h-0 flex-1" : heightClass}`}>
       {/* Screen layout keeps each numbered touch footprint independently visible. */}
       <div ref={mapRef} className="h-full w-full" />
       {groupPicker && (

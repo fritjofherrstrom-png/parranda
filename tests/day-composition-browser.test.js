@@ -198,6 +198,9 @@ test('native composed day preserves dominance, removal/reload, replacement, refu
     const beforeRemoval = ids(saved);
     const list = page.locator('ol[aria-label="Stoppen i ordning"]');
     await list.locator(':scope > li > button').first().click();
+    // The open stop settles into place (a CSS transition; the page's looping
+    // indicators keep running): measure it where it lands.
+    await page.waitForFunction(() => document.getAnimations().every(animation => !(animation instanceof CSSTransition) || animation.playState !== 'running'));
     const removeBox = await page.getByRole('button', { name: 'Ta bort', exact: true }).boundingBox();
     const replaceBox = await page.getByRole('button', { name: 'Byt', exact: true }).boundingBox();
     assert.ok(removeBox && replaceBox && Math.abs(removeBox.y - replaceBox.y) <= 1, 'mobile edit controls share a row');
