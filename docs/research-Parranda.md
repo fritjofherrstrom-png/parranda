@@ -103,6 +103,16 @@ kan strypas/blockeras och ger ingen tillgänglighetsgaranti. Källor lästa
 kapacitetslöfte för flera repliker eller publik tillväxt. Välj drift/provider
 utifrån beslutad last och budget; inget nytt avtal eller byte beslutas här.
 
+**Reserv när Photon inte svarar.** Photons publika API svarade inte den 12 november 2026, och sökförslagen saknade då reserv. Nu gäller tre lager:
+
+- **Ett tidigare svar.** Ett svar som Photon gav på samma fråga får användas i upp till sju dygn.
+- **Ett lokalt ortsregister.** Det byggs från GeoNames `cities1000` (CC BY 4.0) med `node scripts/build-place-gazetteer.js` till `PARRANDA_CACHE_DIR/place-gazetteer/` (cirka 30 MB) och läses in först när Photon blir långsam.
+  - En rad från registret är en punkt med källan "GeoNames".
+  - Raden har ingen OSM-identitet och inga gränser.
+- **En brytare.** Efter två fel i rad frågas Photon inte på 30 s. Därefter skickas en provfråga i bakgrunden.
+
+Ett tomt svar från en frisk Photon ersätts aldrig. Nominatim används inte för förslag. Om en egen Photon behövs pekar `PARRANDA_PLACE_SUGGESTIONS_ENDPOINT` ut den, och registret stängs av med `PARRANDA_PLACE_GAZETTEER=disabled`.
+
 Den valfria citerande eventläsaren skickar begränsad offentlig dokumenttext
 till en modell och verifierar citat server-side. Den kan inte skapa koordinater,
 licens, ägarskap, godkännande eller ruttval. Modelloberoende eventkällor behövs

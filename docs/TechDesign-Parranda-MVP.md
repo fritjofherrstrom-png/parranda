@@ -24,7 +24,7 @@ Host hade Node v24.15.0; `.nvmrc` och CI använder 22, `engines` kräver >=22.
 
 ```text
 Landing / PlaceSearchField
-  -> server-side Photon-förslag och platsval
+  -> server-side Photon-förslag (reserv: tidigare svar, GeoNames-register) och platsval
   -> signerad selektion eller trusted resolver
   -> normaliserad Planner-request och bounded lifecycle
   -> trusted loaders / fresh reviewed reservoir
