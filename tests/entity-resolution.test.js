@@ -295,3 +295,40 @@ test("conflicting explicit entities and lookalike Wikidata URLs never establish 
     assert.equal(wikidataIdOf(external({ evidence: [{ source_ref: { url } }] })), null);
   }
 });
+
+// Simrishamn, 22 Nov 2026: OSM and Overture named the same museum with "och"
+// and "&". The conjunction counted as a distinctive word, so the day listed
+// the museum twice. Coordinates are the two real source records, ~7 m apart.
+test("an 'och' and an '&' in the same name do not split one place in two", () => {
+  const osm = external({ id: "osm-gw", label: "Konstmuseet Gösta Werner och Havet", type: "museum",
+    lat: 55.5589186, lng: 14.3519352, evidence: [] });
+  const overture = external({ id: "overture-gw", label: "Konstmuseet Gösta Werner & Havet", type: "museum",
+    lat: 55.5589752, lng: 14.3519869, evidence: [], provider_id: "overture", candidate_origin: "external_open" });
+  const v = matchIdentity(osm, overture);
+  assert.equal(v.same, true, JSON.stringify(v));
+  assert.equal(v.confidence, "geo_name");
+  const resolved = resolveCandidateIdentity([osm, overture], { now: NOW });
+  assert.equal(resolved.candidates.length, 1, "one stop for one museum");
+  assert.equal(resolved.summary.merged_count, 1);
+});
+
+test("conjunctions in other languages are connectors too", () => {
+  for (const [a, b] of [
+    ["Smith and Wollensky", "Smith & Wollensky"],
+    ["Sankt und Söhne", "Sankt & Söhne"],
+    ["Tante et Fils", "Tante & Fils"],
+    ["Kaffe og Kage Holm", "Kaffe & Kage Holm"],
+  ]) {
+    const v = matchIdentity(external({ label: a, type: "restaurant", evidence: [] }),
+      external({ id: "osm-2", label: b, type: "restaurant", evidence: [] }));
+    assert.equal(v.same, true, `${a} / ${b}: ${JSON.stringify(v)}`);
+  }
+});
+
+test("a shared conjunction never joins two different places", () => {
+  const a = external({ label: "Lund och Havet", type: "museum", evidence: [] });
+  const b = external({ id: "osm-2", label: "Lund och Skogen", type: "museum", evidence: [] });
+  assert.equal(matchIdentity(a, b).same, false);
+  assert.equal(matchIdentity({ ...a, label: "Och" }, { ...b, label: "Och" }).same, false,
+    "a name that is only a conjunction is generic and needs a hard id");
+});
