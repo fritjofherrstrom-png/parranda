@@ -9,32 +9,47 @@ source of truth; this is the map.
 
 | Kind | Tokens | Utilities |
 |---|---|---|
-| Colour roles (day and night) | `--p-color-ink`, `paper`, `terracotta`, `ember`, `clay`, `glow`, `live`, `on-live` | `text-parranda-*`, `bg-parranda-*`, `border-parranda-*` |
-| Radius | `--p-radius-card`, `--p-radius-button` | `rounded-parranda`, `rounded-parranda-btn` |
+| Colour roles (day and night) | `--p-color-ink`, `paper`, `terracotta`, `ember`, `clay`, `glow`, `live`, `on-live`, `on-terracotta` | `text-parranda-*`, `bg-parranda-*`, `border-parranda-*` |
+| Ink strengths | `--p-ink-soft` .85, `-muted` .75, `-meta` .68 (text) · `-line-strong` .50, `-line-firm` .30, `-line` .20, `-line-faint` .12 (frames) · `-fill-strong` .14, `-fill` .08, `-fill-faint` .05 (behind content) | `text-parranda-ink-soft/muted/meta`, `border-parranda-line*`, `bg-parranda-fill*` |
+| Radius | `--p-radius-card` 20, `--p-radius-button` 10, `--p-radius-tag` 7 | `rounded-parranda`, `rounded-parranda-btn`, `rounded-parranda-tag` |
+| Surface | `--p-color-surface` (a step lighter than paper, both themes) | `bg-parranda-surface` with `shadow-card` |
 | Line weight | `--p-line` (1.5px) | `border-line`, `border-t-line`, `border-l-line` |
-| Elevation | `--p-shadow-control`, `-marker`, `-pop`, `-sheet` | `shadow-control`, `shadow-pop`, `shadow-sheet` |
-| Stacking | `--p-z-popover`, `-map-control`, `-map-tooltip`, `-sheet` | `z-(--p-z-…)` |
+| Elevation | `--p-shadow-control`, `-card`, `-marker`, `-pop`, `-sheet` | `shadow-control`, `shadow-card`, `shadow-pop`, `shadow-sheet` |
+| Darkness | `--p-scrim` (behind a modal sheet), `--p-shade` (deepens terracotta under a white digit) | `bg-parranda-scrim`, `bg-parranda-shade` |
+| Stacking | `--p-z-raised`, `-popover`, `-map-control`, `-map-tooltip`, `-map-overlay`, `-sheet`, low to high | `z-(--p-z-…)` |
 | Text sizes | `text-10/11/13/15/17` in `tailwind.css` (rem) | next to Tailwind's `text-xs`, `sm`, `base`, `lg` |
-| Type roles | `type-display`, `type-title`, `type-eyebrow`, `type-data` | |
+| Type roles | `type-display`, `type-title`, `type-eyebrow`, `type-data` — one family, Archivo: wide for display, narrow (88 %) with lining tabular figures for labels and data, in the case they are written in | |
 
-Never write a px text size, a raw z-index, a black shadow or a `1.5px` border
-in a component; a contract test fails if one appears.
+Never write an ink percentage (`parranda-ink/68`), an arbitrary opacity
+(`/[0.07]`), raw black or white, a px text size, a raw or arbitrary z-index, a
+black shadow, or a frame other than `border-line` in a component; a contract
+test fails if one appears. Other roles keep Tailwind's opacity modifiers
+(`bg-parranda-live/8`).
 
 ## Components — `src/components/shared/ui.tsx`
 
 | Helper | Use for |
 |---|---|
-| `buttonClass(tone, size)` | Buttons and button-looking links. Tones: `primary` (the one filled action), `secondary`, `quiet`, `live`, `dashed` (optional, not part of the day). |
+| `buttonClass(tone, size)` | Buttons and button-looking links. Tones: `primary` (the one filled action), `secondary` (a soft fill), `quiet` (words only; a fill under the pointer), `live`, `dashed` (optional, not part of the day). |
 | `busyButton(busy, onClick)` | A button that is working. Spread it instead of `disabled`. |
-| `pillClass(active)` | A chip-like choice (Live's Where). |
+| `pillClass(active)`, `choiceOn` / `choiceOff` | A choice among several (Live's Where, interests): ink when chosen, a soft fill when not. |
+| `controlTone` | A standalone control that is not the surface's filled action (Change, Adjust, Follow). |
 | `segmentGroup` + `segmentClass(active)` | Mutually exclusive choices drawn as one control (Today/Tomorrow, rhythm, When, Order). |
-| `compactPillTarget` | A 36px pill that keeps a 44px target. |
+| `compactPillTarget` | A 36px control that keeps a 44px target. |
 | `labelChip` | A fact or status, never a control: day facts, pick coverage, Live tags. |
 | `inlineLinkTarget` + `ExternalLinkText` | A link inside running text that leaves Parranda. |
 | `noticeCard`, `panelCard` | Notices and grouped panels. |
 | `Eyebrow`, `DataLine` / `dataLine` | Section labels and mono fact lines. |
 
 ## Rules
+
+- **Circles are stations.** The day's stations, the map's stop markers and
+  the ring in the wordmark are the only circles. Everything you press or read
+  as a label is a soft rectangle: controls `rounded-parranda-btn`, tags and
+  fact chips `rounded-parranda-tag`, cards `rounded-parranda`.
+- **Tonal, not outlined.** A control is a soft ink fill that deepens under the
+  pointer; the hairline frame is for dashed "not part of the day" and Live's
+  own outlines. Cards and notices sit on `surface` with `shadow-card`.
 
 - **Selected is ink.** A chosen chip, pill or segment is filled with ink.
   Live blue is for Live content, not for selection. A status is a
@@ -48,8 +63,11 @@ in a component; a contract test fails if one appears.
   something that was never available.
 - **A modal makes the page behind it inert** (`lib/modal-focus.mjs`) and
   wraps Tab through the controls Tab can actually reach.
-- **Text contrast.** Body text is ink; secondary text never goes below 65 %
-  ink. Text on terracotta is solid white. Ember is for graphics and display
+- **Text contrast.** Body text is ink; secondary text is `ink-soft`
+  (notices, chips, errors), `ink-muted` (explanatory sentences, status) or
+  `ink-meta` (data, eyebrows, meta), never lighter. The contract test checks
+  each of them at 4.5:1 or better on a `fill-strong` panel in both themes.
+  Text on terracotta is `on-terracotta`. Ember is for graphics and display
   type, not small text.
 - **Marks are SVG.** External links end in `ExternalIcon`, never "↗", which
   Safari draws as an emoji.

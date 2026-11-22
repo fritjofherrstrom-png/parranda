@@ -141,7 +141,7 @@ test("undo puts the previous day and its inputs back without composing", async (
   assert.equal(composeCalls(h).length, 2, "undo asks the server nothing");
   assert.deepEqual(routeStopNames(h).slice(0, 2), ["Place a", "Place b"]);
   assert.doesNotMatch(h.text(), /Place c/);
-  assert.match(h.text(), /≈ 1\.2 km on foot/);
+  assert.match(h.text(), /about 1\.2 km on foot/);
   assert.equal(buttonNamed(h, /^Balanced/).getAttribute("aria-pressed"), "true", "the rhythm it was composed for is back");
   assert.equal(changeNote(h), null, "the account went with the change it described");
   assert.doesNotMatch(h.text(), /Saved day/, "the day put back is not a saved snapshot");
@@ -188,8 +188,8 @@ test("a replaced stop comes back with its day, and Undo forgets the exclusion an
   });
   await h.fetchMock.respond(calls[1], composedDay(["a", "c"], 1.4, calls[1].body.day_edit));
   await h.clock.advance(50);
-  assert.ok([...h.container.querySelectorAll('[role="status"] p')].some(p => p.textContent.trim() === "Replaced"),
-    "the explicit edit is acknowledged beside its Undo control");
+  const undo = buttonNamed(h, /^Undo this change$/);
+  assert.match(undo.closest('[role="status"]').textContent, /Replaced Place b with Place c/);
 
   assert.match(h.text(), /1 place dismissed/, "precondition: the ledger shows the dismissal");
   assert.deepEqual(routeStopNames(h).slice(0, 2), ["Place a", "Place c"], "replacement preserves the other stop and the count");
@@ -199,7 +199,7 @@ test("a replaced stop comes back with its day, and Undo forgets the exclusion an
   assert.equal(replaced.inputs.dayEdit.action, "remove", "saved state retains the applied answer rather than replaying Replace");
   assert.deepEqual(replaced.inputs.dayEdit.retained_candidate_ids, ["a", "c"]);
 
-  await click(h, buttonNamed(h, /^Undo this change$/));
+  await click(h, undo);
   await h.clock.advance(1000);
   assert.equal(composeCalls(h).length, 2);
   assert.deepEqual(routeStopNames(h).slice(0, 2), ["Place a", "Place b"]);

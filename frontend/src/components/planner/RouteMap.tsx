@@ -1,10 +1,9 @@
 /**
  * The planner's map. It follows the same authority hierarchy as the copy:
  *
- *   - a composed day gets numbered primary-route markers joined in order. The
- *     line is solid only when the route carries walking geometry; a line made of
- *     the stops' own coordinates is drawn dotted, because straight segments
- *     crossing water and buildings are not a walking path Parranda computed;
+ *   - a composed day gets numbered primary-route markers. A solid line appears
+ *     only for explicitly validated pedestrian geometry; unknown or heuristic
+ *     geometry leaves the numbered stops without a fabricated connector;
  *   - optional detour ideas are muted dots, drawn only while the detour list is
  *     open, so a mark on the map is never left without its explanation;
  *   - without a route (candidates only) there is no connecting line and no
@@ -30,15 +29,18 @@
  * Displaced badges retain a dot at their authoritative geographic coordinate.
  * Stops, their order, route geometry and the Maps handoff remain unchanged.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal, flushSync } from "react-dom";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { pinGroupLabel, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
+import { pinGroupLabel, routeDisplayPath, screenPinPresentation } from "../../lib/route-map-presentation.mjs";
 import { controlAwareView, type FitMark, type MapBox } from "../../lib/route-map-fit.mjs";
 import { BASEMAP_PROVIDER, basemapPaint, basemapStyle, type BasemapTheme } from "../../lib/route-map-style.mjs";
 import type { RouteContextSuggestion } from "../../lib/route-context-view.mjs";
-import { CollapseIcon, ExpandIcon } from "../shared/icons";
 import type { DistrictArea } from "./types";
 import type { Translate } from "./copy";
+import type { PositionSession } from "./useFollowPosition";
+import { CollapseIcon, ExpandIcon, LocationIcon, RouteIcon } from "../shared/icons";
+import { busyButton } from "../shared/ui";
 
 // Footprints the fit keeps clear of the controls, in px. A route marker's
 // visible disc is 30px (tailwind.css: the 44px `.route-map-marker`, its
@@ -63,6 +65,9 @@ type Tip = { name: string; x: number; y: number; direction: "left" | "right" } |
 
 let maplibreModule: Promise<MapLibre> | null = null;
 /** MapLibre and its worker, loaded once and only when a map is drawn. */
+// The entire 44px square is the touch target.
+const mapButton = "inline-flex h-11 min-w-11 items-center justify-center rounded-parranda-btn border-line border-parranda-line-firm bg-parranda-paper/85 text-parranda-ink backdrop-blur-sm transition hover:bg-parranda-paper aria-disabled:opacity-60";
+
 function loadMapLibre(): Promise<MapLibre> {
   maplibreModule ??= Promise.all([
     import("maplibre-gl"),
@@ -72,6 +77,15 @@ function loadMapLibre(): Promise<MapLibre> {
     return mod;
   });
   return maplibreModule;
+}
+
+/** A still map takes no pan or zoom gesture; its markers still take a tap. */
+function applyStill(map: any, still: boolean): void {
+  for (const handler of [map.dragPan, map.touchZoomRotate, map.doubleClickZoom, map.boxZoom, map.keyboard]) {
+    if (still) handler?.disable?.();
+    else handler?.enable?.();
+  }
+  if (!still) map.touchZoomRotate?.disableRotation?.();
 }
 
 function currentTheme(): BasemapTheme {
@@ -163,6 +177,20 @@ const pointCollection = (points: Array<{ lat: number; lng: number; name?: string
   })),
 });
 
+/** Attribution URLs arrive as data, including when a stored day is restored. */
+function walkingAttribution(value: any): { label: string; url: string; fixMapUrl: string | null } | null {
+  const https = (input: unknown): string | null => {
+    if (typeof input !== "string" || input.length > 2048) return null;
+    try {
+      const url = new URL(input);
+      return url.protocol === "https:" && !url.username && !url.password ? url.href : null;
+    } catch { return null; }
+  };
+  const url = https(value?.url);
+  if (!url || typeof value?.label !== "string" || !value.label.trim() || value.label.length > 120) return null;
+  return { label: value.label.trim(), url, fixMapUrl: https(value.fixMapUrl) };
+}
+
 export default function RouteMap({
   hasPrimaryRoute,
   routeStops,
@@ -170,11 +198,18 @@ export default function RouteMap({
   areas,
   routeContextSuggestions,
   showContext,
-  sketch,
+  selectedStopIndex,
+  onSelectStop,
   mapExpanded,
   onToggleExpanded,
   heightClass,
   regionLabel,
+  still = false,
+  positionSession,
+  positionEnabled = false,
+  positionCentreRequest = 0,
+  onLocate,
+  onStopLocation,
   t,
 }: {
   hasPrimaryRoute: boolean;
@@ -184,8 +219,11 @@ export default function RouteMap({
   routeContextSuggestions: RouteContextSuggestion[];
   /** Draw the optional detour ideas (the detour list is open). */
   showContext: boolean;
-  /** The route line joins the stops' own coordinates — draw it dotted. */
+  /** Legacy overview classification; explicit geometry metadata owns drawing. */
   sketch: boolean;
+  /** The open list stop, in route order, if one is selected. */
+  selectedStopIndex?: number | null;
+  onSelectStop?: (index: number) => void;
   mapExpanded?: boolean;
   /** Offer the expand control only where the map can grow in place. */
   onToggleExpanded?: () => void;
@@ -196,12 +234,37 @@ export default function RouteMap({
    * two landmarks with one name read as a duplicate.
    */
   regionLabel?: string;
+  /**
+   * A short overview in the page's scroll path (a phone, collapsed): the map
+   * does not pan or zoom, so a thumb scrolling the page past it scrolls the
+   * page. Its stops still open on a tap; Expand gives the full map.
+   */
+  still?: boolean;
+  positionSession?: PositionSession;
+  positionEnabled?: boolean;
+  positionCentreRequest?: number;
+  onLocate?: () => void;
+  onStopLocation?: () => void;
   t: Translate;
 }) {
+  const walkingPath = useMemo(() => routeDisplayPath(primaryRoute?.map_path_points, {
+    geometrySource: primaryRoute?.geometry_source,
+    geometryMode: primaryRoute?.geometry_mode,
+  }), [primaryRoute?.map_path_points, primaryRoute?.geometry_source, primaryRoute?.geometry_mode]);
+  const hasWalkingPath = hasPrimaryRoute && walkingPath.length > 1;
+  const geometryAttribution = hasWalkingPath ? walkingAttribution(primaryRoute?.geometry_attribution) : null;
   const mapTitle = regionLabel || t("Karta över dagen", "Map of the day");
-  const mapTitleRef = useRef(mapTitle);
-  mapTitleRef.current = mapTitle;
+  const mapLocale = {
+    "Map.Title": mapTitle,
+    "NavigationControl.ZoomIn": t("Zooma in", "Zoom in"),
+    "NavigationControl.ZoomOut": t("Zooma ut", "Zoom out"),
+  };
+  const mapLocaleRef = useRef(mapLocale);
+  mapLocaleRef.current = mapLocale;
+  const stillRef = useRef(still);
+  stillRef.current = still;
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const expandControlRef = useRef<HTMLButtonElement | null>(null);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<{ ml: MapLibre; map: any; ready: Promise<void>; markers: any[] } | null>(null);
   // One map instance moves between layouts; its name follows where it sits.
@@ -211,9 +274,17 @@ export default function RouteMap({
   // What the view has to show, kept for the re-fit after expand/shrink.
   const marksRef = useRef<FitMark[]>([]);
   const [mapDrawn, setMapDrawn] = useState(false);
+  const [overviewZoomed, setOverviewZoomed] = useState(false);
+  // Where the walking route's credit joins the map's own attribution, once the map exists.
+  const [creditHost, setCreditHost] = useState<HTMLElement | null>(null);
+  // The map's own marks (location, route, expand) stand just above the
+  // attribution, whatever its height (one line, or two with the walking credit).
+  const [attribHeight, setAttribHeight] = useState(24);
   const [mapFailed, setMapFailed] = useState(false);
   const [tilesFailed, setTilesFailed] = useState(false);
   const [layoutCrowded, setLayoutCrowded] = useState(false);
+  const position = positionEnabled && positionSession?.state.status === "tracking" ? positionSession.state.position : null;
+  const centredRequestRef = useRef(0);
   const [tip, setTip] = useState<Tip>(null);
   const [groupPicker, setGroupPicker] = useState<{ key: string; members: number[] } | null>(null);
   const groupPickerRef = useRef<HTMLDivElement | null>(null);
@@ -250,7 +321,21 @@ export default function RouteMap({
     document.addEventListener("pointerdown", outside, true);
     return () => document.removeEventListener("pointerdown", outside, true);
   }, [groupPicker]);
-  const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; move: (x: number, y: number, direction: "left" | "right") => void; showOrigin: (visible: boolean) => void; setGrouped: (grouped: boolean) => void; focus: () => void }>>([]);
+  const selectedStopRef = useRef<number | null>(selectedStopIndex ?? null);
+  selectedStopRef.current = selectedStopIndex ?? null;
+  const onSelectStopRef = useRef(onSelectStop);
+  onSelectStopRef.current = onSelectStop;
+  const selectionViewportTopRef = useRef<{ index: number; top: number } | null>(null);
+  const selectStop = (index: number) => {
+    if (!onSelectStopRef.current) return;
+    if (selectedStopRef.current !== index && frameRef.current) {
+      selectionViewportTopRef.current = { index, top: frameRef.current.getBoundingClientRect().top };
+    }
+    onSelectStopRef.current(index);
+  };
+  const selectStopRef = useRef(selectStop);
+  selectStopRef.current = selectStop;
+  const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; routeIndex: number; element: HTMLElement; grouped?: boolean; move: (x: number, y: number, direction: "left" | "right") => void; showOrigin: (visible: boolean) => void; setGrouped: (grouped: boolean) => void; focus: () => void }>>([]);
   // Group pins by member key ("0,1,4"), the last shift of every pin (so a pin
   // stays put while the map moves), and the stop to focus once a group pin
   // opened from the keyboard has separated.
@@ -289,6 +374,16 @@ export default function RouteMap({
       for (const pin of pins) if (pin.members.length > 1) pin.members.forEach((i) => badgesRef.current[i].setGrouped(true));
     }
     syncGroupPins(map, groups);
+    // Keep the selected station visible even when it shares a grouped pin.
+    badgesRef.current.forEach((badge) => {
+      if (!badge.grouped && badge.routeIndex === selectedStopRef.current) badge.element.setAttribute("data-route-selected", "true");
+      else badge.element.removeAttribute("data-route-selected");
+    });
+    for (const [key, pin] of groupPinsRef.current) {
+      const selected = key.split(",").some((member) => badgesRef.current[Number(member)]?.routeIndex === selectedStopRef.current);
+      if (selected) pin.element.setAttribute("data-route-selected", "true");
+      else pin.element.removeAttribute("data-route-selected");
+    }
     // Origin dots are optional coordinate hints, never relocated coordinates.
     // Suppress a hint when it would paint over any station (including its own)
     // or a group pin; a stop inside a group pin shows none.
@@ -470,8 +565,7 @@ export default function RouteMap({
             maxPitch: 0,
             renderWorldCopies: false,
             fadeDuration: 0,
-            // The canvas region's accessible name; MapLibre's default is "Map".
-            locale: { "Map.Title": mapTitleRef.current },
+            locale: mapLocaleRef.current,
           });
         } catch {
           // No WebGL2, or the GPU refused: the day stays, the map does not.
@@ -480,10 +574,32 @@ export default function RouteMap({
           return;
         }
         map.touchZoomRotate?.disableRotation?.();
+        applyStill(map, stillRef.current);
         map.addControl(new ml.NavigationControl({ showCompass: false }), "top-left");
         // The attribution is set from the start (not when the tiles answer), so
         // its size is known to the first fit and it stays even when they fail.
         map.addControl(new ml.AttributionControl({ compact: false, customAttribution: BASEMAP_PROVIDER.attribution }), "bottom-right");
+        const attribControl = mapRef.current.querySelector<HTMLElement>(".maplibregl-ctrl-attrib");
+        const attribObserver = attribControl && typeof ResizeObserver === "function"
+          ? new ResizeObserver(() => setAttribHeight(attribControl.offsetHeight)) : null;
+        attribObserver?.observe(attribControl!);
+        map.once("remove", () => attribObserver?.disconnect());
+        // Linje 2: the walking route's operator credit and "Fix the map" (the
+        // FOSSGIS usage policy asks for both) sit in the same attribution line,
+        // on the map, instead of a line of their own under it. A host beside
+        // the inner text, which MapLibre rewrites whenever sources change.
+        const attrib = mapRef.current.querySelector<HTMLElement>(".maplibregl-ctrl-attrib");
+        if (attrib) {
+          const host = document.createElement("span");
+          host.dataset.walkingCredit = "";
+          attrib.appendChild(host);
+          // Now, not on React's next pass: the line under the frame leaves
+          // with it, and the map's first fit must already see its final
+          // height, or a late resize refits the map under a reader who has
+          // started tapping (route-map-tap-targets at 1280px).
+          flushSync(() => setCreditHost(host));
+          map.once("remove", () => setCreditHost(null));
+        }
         // A control that changes size (the attribution's font arriving, say)
         // asks for a new fit, so no stop is left under it.
         const controlObserver = typeof ResizeObserver === "function" ? new ResizeObserver(() => refitRef.current()) : null;
@@ -529,7 +645,11 @@ export default function RouteMap({
         };
         map.on("move", layoutSoon);
         map.on("movestart", () => setGroupPicker(null));
-        map.on("moveend", () => layoutRef.current());
+        map.on("moveend", () => {
+          layoutRef.current();
+          setOverviewZoomed(stillRef.current && Number.isFinite(fittedZoomRef.current) &&
+            map.getZoom() > fittedZoomRef.current + 0.01);
+        });
         map.on("zoomend", () => layoutRef.current());
         map.on("resize", () => layoutRef.current());
         map.once("remove", () => { if (layoutFrame) cancelAnimationFrame(layoutFrame); });
@@ -555,15 +675,12 @@ export default function RouteMap({
       let contextDots: any = emptyCollection;
       let candidateDots: any = emptyCollection;
       if (hasPrimaryRoute) {
-        const enginePath: Array<[number, number]> = (Array.isArray(primaryRoute?.map_path_points) ? primaryRoute.map_path_points : [])
-          .filter((point: any) => point && Number.isFinite(point.lat) && Number.isFinite(point.lng))
-          .map((point: any) => [point.lat, point.lng] as [number, number]);
-        const routePath = enginePath.length > 1
-          ? enginePath
-          : drawableRouteStops.map((stop: any) => [stop.lat, stop.lng] as [number, number]);
+        // No coordinate interpolation or point-count inference: only the
+        // explicit server-validated pedestrian path is drawable as a line.
+        const routePath = walkingPath;
         if (routePath.length > 1) {
-          routeLine = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: routePath.map(([lat, lng]) => [lng, lat]) } };
-          routePath.forEach(([lat, lng]: [number, number]) => marks.push({ lat, lng, avoidControls: false }));
+          routeLine = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: routePath.map(({ lat, lng }) => [lng, lat]) } };
+          routePath.forEach(({ lat, lng }) => marks.push({ lat, lng, avoidControls: false }));
         }
 
         routeStops.forEach((stop: any, index: number) => {
@@ -586,6 +703,7 @@ export default function RouteMap({
                 && event.clientX === previous.x && event.clientY === previous.y)) return;
             }
             if (interaction === "click" && event) lastPointerRef.current = { x: event.clientX, y: event.clientY };
+            if (interaction === "click") selectStopRef.current(index);
             const badge = badgesRef.current[badgeIndex];
             const point = map.project([stop.lng, stop.lat]);
             tipAnchorRef.current = { index: badgeIndex, interaction };
@@ -625,6 +743,9 @@ export default function RouteMap({
           disc.addEventListener("click", (event) => open("click", event));
           shell.addEventListener("focus", () => open("focus"));
           shell.addEventListener("blur", () => close("blur"));
+          shell.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); open("click"); }
+          });
           const targetMarker = new ml.Marker({ element: target, anchor: "center", offset: [shiftX, shiftY] }).setLngLat([stop.lng, stop.lat]).addTo(map);
           const discMarker = new ml.Marker({ element: shell, anchor: "center", offset: [shiftX, shiftY] }).setLngLat([stop.lng, stop.lat]).addTo(map);
           // MapLibre sets its own stacking; targets stay beneath every disc.
@@ -636,6 +757,8 @@ export default function RouteMap({
             lat: stop.lat,
             lng: stop.lng,
             name: markerName,
+            routeIndex: index,
+            element: shell,
             x: shiftX,
             y: shiftY,
             direction: "right",
@@ -694,8 +817,8 @@ export default function RouteMap({
       map.getSource(ROUTE_SOURCE)?.setData(routeLine);
       map.getSource(CONTEXT_SOURCE)?.setData(contextDots);
       map.getSource(CANDIDATE_SOURCE)?.setData(candidateDots);
-      // Dotted when the line only joins the stops' own coordinates.
-      map.setPaintProperty("route-line", "line-dasharray", sketch ? [0.2, 2.2] : null);
+      // Unknown geometry has no line; every drawn route is real walking geometry.
+      map.setPaintProperty("route-line", "line-dasharray", null);
       marksRef.current = marks;
       map.resize();
       // A new view starts from no remembered nudges, so the same view always
@@ -711,7 +834,19 @@ export default function RouteMap({
     return () => {
       cancelled = true;
     };
-  }, [areas, primaryRoute, hasPrimaryRoute, routeStops, routeContextSuggestions, showContext, sketch]);
+  }, [areas, primaryRoute, hasPrimaryRoute, routeStops, routeContextSuggestions, showContext, walkingPath]);
+
+  // Updating a disclosure should not rebuild or refit the map.
+  useEffect(() => { layoutRef.current(); }, [selectedStopIndex, overviewZoomed]);
+  // Opening a list panel above a mobile map must not move the map away from
+  // the finger. Keep its viewport position while the selected panel changes.
+  useLayoutEffect(() => {
+    const previous = selectionViewportTopRef.current;
+    selectionViewportTopRef.current = null;
+    if (!previous || previous.index !== selectedStopIndex || !frameRef.current) return;
+    const delta = frameRef.current.getBoundingClientRect().top - previous.top;
+    if (Math.abs(delta) > 0.5) window.scrollBy({ top: delta, behavior: "instant" });
+  }, [selectedStopIndex]);
 
   // Follow the page's theme without redrawing the day.
   useEffect(() => {
@@ -760,6 +895,11 @@ export default function RouteMap({
     };
   }, [mapExpanded]);
 
+  useEffect(() => {
+    const map = instanceRef.current?.map;
+    if (map) applyStill(map, still);
+  }, [still]);
+
   // The instance belongs to this element: release it with the element.
   useEffect(
     () => () => {
@@ -770,20 +910,88 @@ export default function RouteMap({
     [],
   );
 
+  // Current position is a separate display marker: it never enters the route
+  // source, its fit bounds, the stop list or the Maps handoff.
+  useEffect(() => {
+    const instance = instanceRef.current;
+    if (!position || !mapDrawn || mapFailed || !instance) return;
+    const { ml, map } = instance;
+    const accuracy = document.createElement("div");
+    accuracy.className = "route-map-position-accuracy";
+    accuracy.setAttribute("aria-hidden", "true");
+    const dot = document.createElement("div");
+    dot.className = "route-map-current-position";
+    dot.setAttribute("data-current-position", "");
+    dot.setAttribute("role", "img");
+    dot.setAttribute("aria-label", t("Din nuvarande position", "Your current position"));
+    const at: [number, number] = [position.lng, position.lat];
+    const ring = new ml.Marker({ element: accuracy, anchor: "center" }).setLngLat(at).addTo(map);
+    const marker = new ml.Marker({ element: dot, anchor: "center" }).setLngLat(at).addTo(map);
+    const sizeAccuracy = () => {
+      const centre = new ml.LngLat(position.lng, position.lat);
+      const pixel = map.project(at);
+      const metresPerPixel = centre.distanceTo(map.unproject([pixel.x + 100, pixel.y])) / 100;
+      const diameter = 2 * position.accuracy / metresPerPixel;
+      accuracy.style.display = Number.isFinite(diameter) && diameter >= 0 ? "" : "none";
+      accuracy.style.width = accuracy.style.height = `${diameter}px`;
+    };
+    map.on("zoom", sizeAccuracy);
+    sizeAccuracy();
+    if (positionCentreRequest > centredRequestRef.current) {
+      centredRequestRef.current = positionCentreRequest;
+      map.jumpTo({ center: at });
+    }
+    layoutRef.current();
+    return () => { map.off("zoom", sizeAccuracy); marker.remove(); ring.remove(); };
+  }, [position, mapDrawn, mapFailed, positionCentreRequest]);
+
+  const locationState = positionSession?.state;
+  const locationStatus = positionEnabled && locationState && (
+    <div className="mt-1 flex min-h-11 flex-wrap items-center gap-x-3 text-xs text-parranda-ink-meta">
+      <span role="status">{locationState.status === "tracking"
+        ? t("Din position visas", "Your location is shown")
+        : locationState.status === "paused"
+          ? t("Positionsvisningen är pausad", "Location is paused")
+          : locationState.status === "denied"
+            ? t("Tillåt platsdelning för att visa din position.", "Allow location sharing to show your position.")
+            : locationState.status === "unavailable"
+              ? t("Positionen kunde inte hämtas. Försök igen.", "Location couldn't be found. Try again.")
+              : t("Hämtar din position …", "Finding your position …")}</span>
+      {position && <span aria-live="off">± {Math.max(1, Math.ceil(position.accuracy))} m</span>}
+      <button type="button" onClick={onStopLocation} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">
+        {t("Stäng av position", "Stop location")}
+      </button>
+    </div>
+  );
+  const walkingCreditLinks = geometryAttribution && <>
+    <a href={geometryAttribution.url} target="_blank" rel="noopener noreferrer"
+      className="underline underline-offset-2 hover:text-parranda-ink focus-visible:outline-2 focus-visible:outline-parranda-ember">{geometryAttribution.label}</a>
+    {geometryAttribution.fixMapUrl && <>{" · "}<a href={geometryAttribution.fixMapUrl} target="_blank" rel="noopener noreferrer"
+      className="underline underline-offset-2 hover:text-parranda-ink focus-visible:outline-2 focus-visible:outline-parranda-ember">{t("Rätta kartan", "Fix the map")}</a></>}
+  </>;
+  // A failed map can leave a detached attribution host behind. Render the
+  // same credit below the error, never into that no-longer-visible host.
+  const walkingLegend = hasPrimaryRoute && (
+    <p className="mt-1 break-words text-xs leading-relaxed text-parranda-ink-meta">
+      {hasWalkingPath
+        ? t("Gångväg", "Walking route")
+        : t("Stoppöversikt · gångväg saknas", "Stop overview · walking path unavailable")}
+      {walkingCreditLinks && <>{" · "}{walkingCreditLinks}</>}
+    </p>
+  );
   if (mapFailed) {
     return (
-      <p role="status" className="rounded-parranda border border-parranda-ink/10 px-4 py-3 text-sm text-parranda-ink/72">
-        {t(
-          "Kartan kan inte visas i den här webbläsaren. Stoppen och Maps-rutten fungerar som vanligt.",
-          "The map can't be shown in this browser. The stops and the Maps route work as usual.",
-        )}
-      </p>
+      <><p role="status" className="rounded-parranda border-line border-parranda-line-faint px-4 py-3 text-sm text-parranda-ink-muted">
+        {hasPrimaryRoute
+          ? t("Kartan kan inte visas i den här webbläsaren. Stoppen och Maps-rutten fungerar som vanligt.", "The map can't be shown in this browser. The stops and the Maps route work as usual.")
+          : t("Kartan kan inte visas i den här webbläsaren. Platser i närheten finns kvar i listan.", "The map can't be shown in this browser. Nearby places are still listed.")}
+      </p>{locationStatus}{walkingLegend}</>
     );
   }
 
   return (
-    <>
-    <div ref={frameRef} data-route-map="" className={`route-map-frame relative w-full overflow-hidden rounded-parranda border border-parranda-ink/10 transition-all ${heightClass}`}>
+    <div className={heightClass === "h-full" ? "flex h-full min-h-0 flex-col" : undefined}>
+    <div ref={frameRef} data-route-map="" data-still={still || undefined} className={`route-map-frame relative w-full overflow-hidden rounded-parranda border-line border-parranda-line-faint transition-all ${heightClass === "h-full" ? "min-h-0 flex-1" : heightClass}`}>
       {/* Screen layout keeps each numbered touch footprint independently visible. */}
       <div ref={mapRef} className="h-full w-full" />
       {groupPicker && (
@@ -791,7 +999,7 @@ export default function RouteMap({
           ref={groupPickerRef}
           role="dialog"
           aria-label={t("Stopp i gruppen", "Stops in this group")}
-          className="route-map-group-picker absolute left-2 top-2 z-[2000] max-h-[calc(100%_-_1rem)] w-64 max-w-[calc(100%_-_1rem)] overflow-y-auto rounded-parranda border border-parranda-ink/20 bg-parranda-paper p-2 text-parranda-ink shadow-control"
+          className="route-map-group-picker absolute left-2 top-2 z-(--p-z-map-overlay) max-h-[calc(100%_-_1rem)] w-64 max-w-[calc(100%_-_1rem)] overflow-y-auto rounded-parranda border-line border-parranda-line bg-parranda-paper p-2 text-parranda-ink shadow-control"
         >
           <div className="flex items-center justify-between gap-2 pl-2">
             <strong className="text-sm">{t("Stopp i gruppen", "Stops in this group")}</strong>
@@ -806,12 +1014,13 @@ export default function RouteMap({
             const badge = badgesRef.current[index];
             if (!badge) return null;
             return <button key={index} type="button" data-group-stop=""
-              className="mb-1 min-h-11 w-full rounded-parranda border border-parranda-ink/15 px-3 py-2 text-left text-sm hover:border-parranda-ember focus-visible:outline-2 focus-visible:outline-parranda-ember"
+              className="mb-1 min-h-11 w-full rounded-parranda border-line border-parranda-line-faint px-3 py-2 text-left text-sm hover:border-parranda-ember focus-visible:outline-2 focus-visible:outline-parranda-ember"
               onClick={() => {
                 const map = instanceRef.current?.map;
                 if (!map) return;
                 const point = map.project([badge.lng, badge.lat]);
                 tipAnchorRef.current = { index, interaction: "click" };
+                selectStopRef.current(badge.routeIndex);
                 setGroupPicker(null);
                 setTip({ name: badge.name, x: point.x, y: point.y, direction: point.x < mapRef.current!.clientWidth / 2 ? "right" : "left" });
               }}>{index + 1}. {badge.name}</button>;
@@ -828,31 +1037,62 @@ export default function RouteMap({
         </div>
       )}
       {!mapDrawn && (
-        <div className="absolute inset-0 flex items-center justify-center bg-parranda-ink/10 text-sm text-parranda-ink/68">
+        <div className="absolute inset-0 flex items-center justify-center bg-parranda-fill text-sm text-parranda-ink-meta">
           {t("Ritar kartan …", "Drawing the map …")}
         </div>
       )}
-      {/* An icon, so it covers no more of the map than a thumb needs. It is a
-          map control (data-map-control): the fit keeps every stop clear of it. */}
-      {onToggleExpanded && (
-        <button
+      {/* The fit accounts for the whole control group, including the visible expand label. */}
+      <div data-map-control="" className="absolute right-2.5 z-(--p-z-map-control) flex gap-2" style={{ bottom: `${attribHeight + 8}px` }}>
+        {positionSession?.supported && onLocate && <button type="button" {...busyButton(!mapDrawn, onLocate)}
+          aria-label={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
+          title={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
+          className={`${mapButton} w-11`}>
+          <LocationIcon className="h-[18px] w-[18px]" />
+        </button>}
+        {(!still || positionEnabled || overviewZoomed) && <button type="button" {...busyButton(!mapDrawn, () => {
+          if (still && overviewZoomed) {
+            setOverviewZoomed(false);
+            if (!positionEnabled) expandControlRef.current?.focus({ preventScroll: true });
+          }
+          refitRef.current();
+        })}
+          aria-label={t("Återställ kartvyn", "Reset map view")}
+          title={t("Återställ kartvyn", "Reset map view")}
+          className={`${mapButton} w-11`}>
+          <RouteIcon className="h-[18px] w-[18px]" />
+        </button>}
+        {onToggleExpanded && <button
+          ref={expandControlRef}
           type="button"
           onClick={onToggleExpanded}
           aria-expanded={mapExpanded}
           aria-label={mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
-          data-map-control=""
-          className="absolute right-2.5 top-2.5 z-(--p-z-map-control) inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-parranda-ink/20 bg-parranda-paper/90 text-parranda-ink/85 shadow-control backdrop-blur-xs transition hover:border-parranda-ember"
+          title={mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
+          className={`${mapButton} w-11`}
         >
-          {mapExpanded ? <CollapseIcon className="h-5 w-5" /> : <ExpandIcon className="h-5 w-5" />}
-        </button>
-      )}
+          {mapExpanded ? <CollapseIcon className="h-[18px] w-[18px]" /> : <ExpandIcon className="h-[18px] w-[18px]" />}
+        </button>}
+      </div>
     </div>
+    {locationStatus}
+    {creditHost && geometryAttribution && createPortal(<>
+      {" · "}{t("Gångväg", "Walking route")}{": "}{walkingCreditLinks}
+    </>, creditHost)}
+    {/* Without a drawn map (no WebGL, or before it exists) the credit and
+        whether a walking path was found stay as a line under the frame. On
+        a drawn map the credit is in the attribution, and "About this day and
+        map" says whether the path was confirmed. */}
+    {!creditHost && walkingLegend}
     {tilesFailed && (
-      <p role="status" className="mt-1 text-xs text-parranda-ink/68">
-        {t("Kartbakgrunden kunde inte hämtas — rutten och stoppen visas ändå.", "The map background couldn't be loaded — the route and stops are still shown.")}
+      <p role="status" className="mt-1 text-xs text-parranda-ink-meta">
+        {hasWalkingPath
+          ? t("Kartbakgrunden kunde inte hämtas — rutten och stoppen visas ändå.", "The map background couldn't be loaded — the route and stops are still shown.")
+          : hasPrimaryRoute
+          ? t("Kartbakgrunden kunde inte hämtas — stoppen visas ändå.", "The map background couldn't be loaded — the stops are still shown.")
+          : t("Kartbakgrunden kunde inte hämtas. Platser i närheten visas ändå.", "The map background couldn't be loaded. Nearby places are still shown.")}
       </p>
     )}
-    {layoutCrowded && <p role="status" className="mt-1 text-xs text-parranda-ink/68">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}
-    </>
+    {layoutCrowded && <p role="status" className="mt-1 text-xs text-parranda-ink-meta">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}
+    </div>
   );
 }

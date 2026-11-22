@@ -119,13 +119,28 @@ test('applied Remove persists the shorter intent and Undo restores the previous 
   assert.deepEqual(saved.inputs.dayEdit.retained_candidate_ids, remaining.map(stop => stop.id));
   assert.notEqual(saved.id, previous.id, 'the shorter intent has a distinct canonical saved identity');
   assert.equal(JSON.parse(new URL(h.window.location.href).searchParams.get('edit')).target_stop_count, 4);
-  assert.match(h.text(), /Removed/);
+  assert.match(button(h, 'Undo').closest('[role="status"]').textContent, /Removed Fixture Museum/);
   await click(h, 'Undo');
   assert.match(h.container.querySelector('section[aria-label="The route"]').textContent, /Fixture Museum/);
   assert.equal(h.readStorage(LAST).id, previous.id);
   assert.equal(h.readStorage(LAST).inputs.dayEdit, undefined);
   await h.clock.advance(500);
   assert.equal(routeCalls(h).length, 2, 'Undo installs the old answer atomically, not another generation');
+});
+
+for (const { lang, replace, undo, receipt } of [
+  { lang: 'en', replace: 'Replace', undo: 'Undo', receipt: /Replaced Fixture Museum with Fixture Archive/ },
+  { lang: 'sv', replace: 'Byt', undo: 'Ångra', receipt: /Bytte ut Fixture Museum mot Fixture Archive/ },
+]) test(`${lang} the replacement receipt names the old and confirmed new stop`, async t => {
+  const h = await completed(t, { url: PLANNER_URL.replace('lang=en', `lang=${lang}`) });
+  await expandMuseum(h);
+  await click(h, replace);
+  await h.clock.advance(400);
+  const request = routeCalls(h).at(-1);
+  const archive = { ...initialStops[0], id: 'archive', label: 'Fixture Archive' };
+  const editedStops = [...initialStops.slice(1), archive];
+  await h.fetchMock.respond(request, response(editedStops, dayPolicy.dayEditOutcome(request.body.day_edit, editedStops)));
+  assert.match(button(h, undo).closest('[role="status"]').textContent, receipt);
 });
 
 test('reload carries the applied shorter day instead of regenerating the original Full extent', async t => {

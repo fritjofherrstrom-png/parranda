@@ -155,7 +155,10 @@ test('a typed day restored through language remains editable on its original abs
   const anchor = next.container.querySelector('section[aria-label="Dagens utgångspunkt"]');
   assert.ok(anchor);
   assert.doesNotMatch(anchor.textContent, /Testville\s*·\s*idag/, 'yesterday must not be labelled today');
-  assert.match(anchor.textContent, /24\s+okt/i, 'the original absolute date is visible');
+  // The day's heading carries its date now; the card keeps only its controls.
+  const shownDate = next.container.querySelector('header time')?.textContent || '';
+  assert.match(shownDate, /24\s+okt/i, 'the original absolute date is visible');
+  assert.doesNotMatch(shownDate, /^Idag/, 'yesterday must not be labelled today in the heading either');
   const adjust = [...next.container.querySelectorAll('button')].find(element => element.textContent.trim() === 'Justera');
   assert.ok(adjust);
   await next.act(() => adjust.dispatchEvent(new next.window.MouseEvent('click', { bubbles: true })));
@@ -225,7 +228,7 @@ test('Undo after an explicit Today change restores calendar authority for the ne
   assert.deepEqual(stopIds(restored), stopIds(previous));
   assert.deepEqual(restored.commitments, previous.commitments);
   const anchor = next.container.querySelector('section[aria-label="Dagens utgångspunkt"]');
-  const restoredDateVisible = /24\s+okt/i.test(anchor.textContent);
+  const restoredDateVisible = /24\s+okt/i.test(next.container.querySelector('header time')?.textContent || '');
   const todayIsPressed = [...next.container.querySelectorAll('button')]
     .find(element => element.textContent.trim() === 'Idag')?.getAttribute('aria-pressed');
   await click(next, 'Fylld');
@@ -380,9 +383,9 @@ test('fresh same-position consent after exact navigation keeps the published dat
   await first.fetchMock.respond(initial, answer());
   await open(first, 'Fixture museum'); await click(first, 'Keep this one');
   await first.clock.advance(500);
-  const kept = composeCalls(first).at(-1);
-  assert.deepEqual(kept.body.pinned_candidate_ids, ['fixture-museum']);
-  await first.fetchMock.respond(kept, answer()); await first.clock.advance(50);
+  // The published day already answers the Keep: nothing is composed, and the
+  // day it answered is remembered with it.
+  assert.equal(composeCalls(first).length, 1);
   const saved = first.readStorage(LAST_KEY);
   assert.equal(saved.commitments.entries['fixture-museum'].kind, 'pin');
   const url = first.window.location.href;
@@ -454,7 +457,7 @@ for (const moved of [false, true]) test(moved
   };
   await first.fetchMock.respond(initial, answer());
   await open(first, 'Fixture museum'); await click(first, 'Keep this one'); await first.clock.advance(500);
-  await first.fetchMock.respond(composeCalls(first).at(-1), answer());
+  assert.equal(composeCalls(first).length, 1, 'a Keep on the published day composes nothing');
   await open(first, 'Fixture park'); await click(first, 'Remove'); await first.clock.advance(500);
   const removal = composeCalls(first).at(-1);
   assert.equal(removal.body.day_edit.target_stop_count, 2);

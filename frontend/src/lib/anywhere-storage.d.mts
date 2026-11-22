@@ -21,6 +21,8 @@ export interface SavedInputs {
   liveSheetSort?: "for_you" | "by_time";
   dayEdit?: DayEdit | null;
   invalidDayEdit?: boolean;
+  /** Set when the reader asked Parranda to choose the day's interests. */
+  intentMode?: "parranda_chooses" | null;
 }
 
 export interface SavedEntry {
@@ -51,7 +53,10 @@ export declare function savedEntryId(options?: {
   preferencePriority?: string[] | null;
   dayEdit?: DayEdit | null;
   invalidDayEdit?: boolean;
+  intentMode?: string | null;
 }): string;
+
+export declare function savedIntentMode(intentMode: unknown, selected: unknown): "parranda_chooses" | null;
 
 export declare function buildSavedEntry(options?: {
   placeLabel?: string;
@@ -69,3 +74,5 @@ export declare function buildSavedEntry(options?: {
 export declare function upsertSaved(list: SavedEntry[] | null | undefined, entry: SavedEntry): SavedEntry[];
 
 export declare function removeSaved(list: SavedEntry[] | null | undefined, id: string): SavedEntry[];
+
+export declare function isSavedEntryVersion(saved: SavedEntry | null | undefined, current: SavedEntry | null | undefined): boolean;

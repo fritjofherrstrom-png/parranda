@@ -29,7 +29,9 @@
 const { buildAgnosticCityContext } = require("../candidates/agnostic-context");
 const { normalizeSelectedDayHoursFact } = require("../place-candidates/opening-hours");
 const { normalizeSourceWebsite } = require("../lib/source-website");
+const { copyReviewedVenueMentions } = require("../place-candidates/venue-mentions");
 const { plannerUsableOptionsForRole } = require("./candidate-combination");
+const { isIndividuallyAdmitted, explicitAdmissionByIdentity } = require("./explicit-selection-admission");
 const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
 
 const { normalizeUserIntents } = require("../candidates/intent-vocabulary");
@@ -90,9 +92,12 @@ function buildAgnosticEngineCityConfig({
   key = AGNOSTIC_ENGINE_CITY_KEY,
   dayProfile = null,
   preferencePriority = [],
+  preferFirstChoice = false,
   dayEdit = null,
   reservedLiveStopCount = 0,
   mealContext = null,
+  // Only for the meal-spacing recomposition, judged on its final route.
+  mealSpacing = false,
 } = {}) {
   if (!anchor || !Number.isFinite(anchor.lat) || !Number.isFinite(anchor.lng)) {
     throw new Error("buildAgnosticEngineCityConfig requires a finite anchor lat/lng");
@@ -135,10 +140,12 @@ function buildAgnosticEngineCityConfig({
     // not the public request payload, so callers cannot promote their own route.
     __agnosticDayProfile: ["light", "variation", "peak"].includes(dayProfile) ? dayProfile : null,
     __preferencePriority: Array.isArray(preferencePriority) ? [...preferencePriority] : [],
+    __preferFirstChoice: preferFirstChoice === true,
     __dayEdit: dayEdit ? structuredClone(dayEdit) : null,
     // Trusted server-local date/time only; the public request cannot set it.
     __mealContext: mealContext ? { date: mealContext.date, nowLocalIso: mealContext.nowLocalIso,
       fullDay: mealContext.fullDay === true } : null,
+    __mealSpacing: mealSpacing === true,
     // One source-eligible explicit evening occurrence belongs inside the day.
     // This private config is constructed by the server, never public payload.
     __reservedLiveStopCount: reservedLiveStopCount === 1 ? 1 : 0,
@@ -246,6 +253,13 @@ function toSourceCandidate({
       : [];
   const selectedDayHours = normalizeSelectedDayHoursFact(rich?.availability?.selected_day_hours);
   const website = normalizeSourceWebsite(rich?.website);
+  const venueMentions = copyReviewedVenueMentions({
+    id: pick.candidate_id,
+    label: (rich && rich.label) || pick.label || pick.candidate_id,
+    lat: coords.lat, lng: coords.lng,
+    source_address: rich?.source_address,
+    address: rich?.place_details?.address,
+  }, provenance.venue_mentions);
   return {
     id: pick.candidate_id,
     city,
@@ -318,6 +332,7 @@ function toSourceCandidate({
       provider_id: provenance.provider_id || null,
       attribution,
       corroborated_by_external: provenance.corroborated_by_external === true,
+      ...(venueMentions.length ? { venue_mentions: venueMentions } : {}),
       ...(provenance.trusted_source ? { trusted_source: { ...provenance.trusted_source } } : {}),
       weatherTags: [],
     },
@@ -372,12 +387,23 @@ function mapPlannerReservoirToSourceCandidates({
     ...(Array.isArray(retainedIds) ? retainedIds : [])])];
   const pins = new Set(selectionIds);
   if (pins.size > 0) {
+    // The private selector verdict includes assessments below every role cut.
+    // Standalone callers judge their supplied assessed universe instead.
+    const admittedIds = Array.isArray(plannerRoles?.commitment_admissible_ids)
+      ? new Set(plannerRoles.commitment_admissible_ids.map(String))
+      : new Set([...explicitAdmissionByIdentity(plannerRoles?.roles)]
+        .filter(([, allowed]) => allowed).map(([id]) => id));
     for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
       const role = roleEntry?.role;
       if (!role) continue;
-      for (const rich of plannerUsableOptionsForRole(roleEntry)) {
+      // Relative best-tier selection is for automatic choices. An explicit
+      // pin/retained identity must pass the same individual admission and
+      // availability gates, not disappear merely because another place now
+      // ranks better. Only already-gated candidates in this role are inspected.
+      for (const rich of Array.isArray(roleEntry.candidates) ? roleEntry.candidates : []) {
         const id = rich?.candidate_id;
         if (!id || !pins.has(String(id)) || seen.has(id)) continue;
+        if (!admittedIds.has(String(id)) || !isIndividuallyAdmitted(rich)) continue;
         // Pins can use explicit experimental admission. Modern requested-role
         // rhythm depth below can also use these admitted places, in tier order;
         // support/legacy depth remains stricter. Every path preserves the

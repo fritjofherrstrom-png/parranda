@@ -297,8 +297,14 @@ async function runColdLoop(fixture) {
   const countryOnly = await supply(request);
   assert.deepEqual(countryOnly.tonight, [], "a selected or unavailable broad calendar fabricates no local events");
   if (fixture.countryCode === "fr") {
-    assert.ok(cold.feeds.some(feed => feed.id === "datatourisme-fr"));
-    assert.equal(countryOnly.feeds.find(feed => feed.id === "datatourisme-fr").reason, "source_credentials_unavailable");
+    for (const response of [cold, countryOnly]) {
+      assert.equal(response.feeds.some(feed => feed.id === "datatourisme-fr"), false,
+        "a skipped prerequisite is not a selected source");
+      const skipped = response.acquisition.runtime_readiness.unavailable_sources
+        .find(feed => feed.id === "datatourisme-fr");
+      assert.equal(skipped.reason, "source_credentials_unavailable");
+      assert.equal(skipped.attempted, false);
+    }
   }
 
   const first = await runScoutWorkerBatch({ catalog, runtime, limit: 1 });

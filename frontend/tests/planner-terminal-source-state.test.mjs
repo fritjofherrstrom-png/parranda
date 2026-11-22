@@ -16,7 +16,7 @@ for(const lang of ['en','sv']) for(const kind of ['partial','failed','primary_fa
     const text=h.text();
     assert.match(text,lang==='en'?/Parranda couldn't build a day here right now/:/Parranda kunde inte bygga en dag här just nu/);
     assert.match(text,kind==='partial'
-      ? lang==='en'?/incomplete when the response was produced/:/ofullständigt när svaret skapades/
+      ? lang==='en'?/Place information was incomplete/:/Platsuppgifterna var ofullständiga/
       : lang==='en'?/One or more place sources failed/:/En eller flera platskällor misslyckades/);
     assert.doesNotMatch(text,/on their way|still being fetched|hämtas fortfarande|är på väg|snart.*rutt/i);
     const retry=[...h.container.querySelectorAll('button')].find(b=>b.textContent.trim()===(lang==='en'?'Try again':'Försök igen'));

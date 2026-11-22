@@ -44,6 +44,7 @@ const MAX_RADIUS_KM = 5;
 // request path — see open-data-loader composition). This is an upper bound:
 // cancellation of the last owning consumer aborts fetch and body reading early.
 const DEFAULT_TIMEOUT_MS = 30000;
+const BATHING_SITE_QID = "Q567998";
 
 // Curated P31/P279* root classes → Parranda type. Each TARGET type is one the
 // OSM loader + intent vocabulary already understand, so a Wikidata candidate is
@@ -59,9 +60,10 @@ const WIKIDATA_CLASS_MAP = [
   { qid: "Q57821", type: "castle" }, // fortification
   { qid: "Q330284", type: "market" }, // marketplace
   { qid: "Q1773153", type: "viewpoint" }, // observation deck
+  { qid: BATHING_SITE_QID, type: "beach", kind: "bathing_place" },
 ];
 
-const CLASS_TYPE_BY_QID = new Map(WIKIDATA_CLASS_MAP.map((c) => [c.qid, c.type]));
+const CLASS_BY_QID = new Map(WIKIDATA_CLASS_MAP.map((classification) => [classification.qid, classification]));
 
 function clamp(value, min, max) {
   const n = Number(value);
@@ -86,10 +88,11 @@ function dedupeLanguages(languages) {
 // Build a bounded, typed `wikibase:around` query. `labelLangs` is a priority
 // list (local language first) so the chosen name matches the local OSM name.
 function buildWikidataQuery({ lat, lng, radiusKm, limit, labelLangs }) {
-  const values = WIKIDATA_CLASS_MAP.map((c) => `wd:${c.qid}`).join(" ");
+  const values = WIKIDATA_CLASS_MAP.filter(({ qid }) => qid !== BATHING_SITE_QID).map(({ qid }) => `wd:${qid}`).join(" ");
   const labelPriority = `${labelLangs.join(",")}`;
   // `?classRoot` is bound to the matched curated root so we can map type → engine
   // type deterministically (P279* may walk through many intermediate classes).
+  // Bathing places require a direct instance claim in the same bounded query.
   // Property paths and the lifecycle EXISTS can multiply identical solutions
   // in WDQS. Deduplicate there, before LIMIT; mapper deduplication is too late
   // to recover places whose rows were crowded out by one repeated identity.
@@ -100,8 +103,13 @@ function buildWikidataQuery({ lat, lng, radiusKm, limit, labelLangs }) {
     bd:serviceParam wikibase:radius "${radiusKm}" .
     bd:serviceParam wikibase:distance ?dist .
   }
-  VALUES ?classRoot { ${values} }
-  ?item wdt:P31/wdt:P279* ?classRoot .
+  {
+    VALUES ?classRoot { ${values} }
+    ?item wdt:P31/wdt:P279* ?classRoot .
+  } UNION {
+    VALUES ?classRoot { wd:${BATHING_SITE_QID} }
+    ?item wdt:P31 ?classRoot .
+  }
   ?item wdt:P625 ?pt .
   OPTIONAL { ?item wdt:P856 ?website . }
   BIND(EXISTS {
@@ -149,8 +157,9 @@ function mapWikidataBinding(binding) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
 
   const classRoot = qidFromUri(binding.classRoot && binding.classRoot.value);
-  const type = classRoot ? CLASS_TYPE_BY_QID.get(classRoot) : null;
-  if (!type) return null; // unmapped class → drop (defensive; query already filters)
+  const classification = CLASS_BY_QID.get(classRoot);
+  if (!classification) return null; // unmapped class → drop (defensive; query already filters)
+  const { type, kind } = classification;
   const website = normalizePublicWebsite(binding.website && binding.website.value);
   // P576 means dissolved/abolished/demolished. Only a non-deprecated best-rank
   // claim whose entire stated Gregorian year/month/day has elapsed is a veto.
@@ -167,6 +176,7 @@ function mapWikidataBinding(binding) {
     lat,
     lng,
     tags: [],
+    ...(kind ? { place_details: { kind } } : {}),
     sources: [
       {
         provider: "wikidata",

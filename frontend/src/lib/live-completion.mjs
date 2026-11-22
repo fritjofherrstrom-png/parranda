@@ -145,6 +145,10 @@ export async function followLiveCompletion({
   capability,
   signal,
   onLiveEvents = () => {},
+  // Asked once, after the terminal read: is the day this capability was issued
+  // for still the day to upgrade? A day the reader has changed since (a stop
+  // kept in place) is not, so the one upgrade is never requested for it.
+  allowUpgrade = () => true,
   fetcher = fetch,
   wait = pause,
   now = Date.now,
@@ -210,6 +214,10 @@ export async function followLiveCompletion({
       let read;
       try {
         const { status, body } = await post(LIVE_COMPLETION_ENDPOINT);
+        // A gateway response is an interrupted read, not the producer's
+        // terminal answer. Keep following this same capability and lifetime.
+        // A structured 503 remains an explicit server refusal.
+        if (status === 502 || status === 504 || (status === 503 && body === null)) continue;
         read = readLiveCompletionResponse(status, body);
       } catch {
         if (signal.aborted) return cancelled();
@@ -223,7 +231,7 @@ export async function followLiveCompletion({
     if (signal.aborted) return cancelled();
     if (Object.hasOwn(terminal, 'daySnapshot')) onLiveEvents(terminal.liveEvents, terminal.daySnapshot);
     else onLiveEvents(terminal.liveEvents);
-    if (terminal.routeUpgrade !== "explicit_request") return { live: "terminal", upgrade: null };
+    if (terminal.routeUpgrade !== "explicit_request" || !allowUpgrade()) return { live: "terminal", upgrade: null };
 
     // Exactly one upgrade request; a pending answer is re-read on the same
     // cadence because the server shares the one reserved attempt.

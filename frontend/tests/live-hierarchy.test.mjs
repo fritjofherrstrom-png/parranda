@@ -48,7 +48,7 @@ async function chooseSelectedDay(h, events) {
 test('explicit empty selected-day view shows wider-area suggestions without changing Where/When or day', async t => {
   const h=await composed(t,live({this_week:[event('Later local','2026-10-09')]}));
   const saved=h.readStorage(LAST_KEY);
-  await click(h,/Explore live|See all live/);
+  await click(h,/See next 7 days/);
   await chooseSelectedDay(h, live({this_week:[event('Later local','2026-10-09')]}));
   const query=h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
   assert.ok(query,'one automatic wider-area request');
@@ -118,7 +118,7 @@ test('explicit near-route cancels automatic wider suggestions without moving the
 
 test('a failing wider query is not retried or presented as an empty larger area', async t => {
   const h=await composed(t,live({this_week:[event('Future','2026-10-09')]}));
-  await click(h,/See all live/);
+  await click(h,/See next 7 days/);
   await chooseSelectedDay(h, live({this_week:[event('Future','2026-10-09')]}));
   const query=h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
   await h.fetchMock.respond(query,{},502);
@@ -156,7 +156,7 @@ test('a wider-area partial response still shows its verified events with a limit
 test('following-days suggestions retain a source-timed single event, not just listed-date series', async t => {
   const future=event('Timed concert','2026-10-09',{time_window:{kind:'continuous',starts_at:'2026-10-09T16:00:00Z',ends_at:'2026-10-09T18:00:00Z'},anchor_distance_km:1});
   const h=await composed(t,live({this_week:[future]}));
-  await click(h,/See all live/);
+  await click(h,/See next 7 days/);
   await chooseSelectedDay(h, live({this_week:[future]}));
   const query=h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
   await h.fetchMock.respond(query,body(live()));
@@ -190,7 +190,7 @@ test('a mismatched wider response date never becomes selected-day suggestions', 
 for (const lang of ['en','sv']) test(`healthy wider selected-day empty reuses following-day local dates in ${lang}`, async t => {
   const future=event('Later local','2026-10-09');
   const h=await composed(t,live({this_week:[future]}),lang);
-  await click(h,/See all live|Se allt live/);
+  await click(h,/See next 7 days|Se kommande 7 dagar/);
   await chooseSelectedDay(h, live({this_week:[future]}));
   const query=h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
   assert.ok(query);

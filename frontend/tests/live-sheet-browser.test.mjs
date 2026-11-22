@@ -33,8 +33,8 @@ const bundle = await build({
         liveFailureSentence={() => 'Selected-source failure preserved'}
         dialogRef={{current:null}} closeRef={{current:null}} onClose={() => {}} {...extra} />);
     };
-    window.renderCard = (events, lang) => root.render(<LiveCard
-      t={(sv,en)=>lang==='sv'?sv:en} lang={lang} mode="typed" anchorLabel="Fixture area"
+    window.renderCard = (events, lang, anchorLabel = "Fixture area") => root.render(<LiveCard
+      t={(sv,en)=>lang==='sv'?sv:en} lang={lang} mode="typed" anchorLabel={anchorLabel}
       liveEvents={events} liveDayLabel="Selected day" showDay={false} dayflow={null} clothing={null}
       wovenNames={[]} includedInRoute="Included in route" pulseState="ok" liveFailure={null}
       liveFailureSentence={()=>''} pulseBuckets={{tonight:events.tonight||[],thisWeek:events.this_week||[]}}
@@ -84,8 +84,62 @@ test('mobile LiveSheet long source periods do not push event text offscreen', as
   }
 });
 
+test('Live card and sheet wrap unbroken place names and keep a linked title tappable', async t => {
+  const { page, render } = await browserHarness(t);
+  await page.setViewportSize({ width: 320, height: 844 });
+  const cssDir = new URL('../dist/_astro/', import.meta.url);
+  for (const file of readdirSync(cssDir).filter(name => name.endsWith('.css'))) {
+    await page.addStyleTag({ content: readFileSync(new URL(file, cssDir), 'utf8') });
+  }
+  const anchorLabel = 'Qalångaoavbrutnaplatsnamnetiwebbläsarenslayout';
+  const row = { id: 'qa-show', title: 'QA show', source_url: 'https://calendar.example/qa-show',
+    source_link_kind: 'page', source_link_host: 'calendar.example',
+    time_window: { kind: 'all_day', all_day_explicit: true, starts_on: '2026-10-07', ends_on: '2026-10-07' } };
+  const events = { coverage: 'covered', selected_date: '2026-10-07', tonight: [row], this_week: [row] };
+  for (const lang of ['en', 'sv']) {
+    await page.evaluate(({ events, lang, anchorLabel }) => window.renderCard(events, lang, anchorLabel), { events, lang, anchorLabel });
+    const board = page.getByRole('heading', { level: 2, name: new RegExp(anchorLabel) });
+    await board.waitFor();
+    assert.ok(await board.evaluate(el => el.scrollWidth <= el.clientWidth), 'Live card heading fits at 320px');
+    const link = page.getByRole('link', { name: row.title, exact: true });
+    await link.waitFor();
+    assert.ok((await link.boundingBox()).height >= 44, 'linked Live title has a 44px target');
+
+    await render(events, lang, 'week', { anchorLabel });
+    const dialog = page.getByRole('dialog');
+    assert.ok(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth), 'Live sheet fits at 320px');
+    const scope = dialog.getByRole('button', { name: new RegExp(anchorLabel) });
+    assert.ok((await scope.boundingBox()).width <= 320, 'long place scope button stays inside the sheet');
+    await dialog.getByRole('button', { name: lang === 'en' ? 'Next 7 days' : 'Kommande 7 dagar', exact: true }).click();
+  }
+});
+
 const unknown = /Live information is unavailable right now|Live-information är inte tillgänglig just nu/;
 const falseEmpty = /Nothing verified|Nothing listed|Inget verifierat|Inget listat/;
+
+test('Live close stays in reach while scrolling a full event list on mobile', async t => {
+  const { page, render } = await browserHarness(t);
+  await page.setViewportSize({ width: 320, height: 740 });
+  const cssDir = new URL('../dist/_astro/', import.meta.url);
+  for (const file of readdirSync(cssDir).filter(name => name.endsWith('.css'))) {
+    await page.addStyleTag({ content: readFileSync(new URL(file, cssDir), 'utf8') });
+  }
+  const rows = Array.from({ length: 12 }, (_, index) => ({
+    id: `event-${index}`, title: `Calendar event ${index + 1}`,
+    source_url: 'https://calendar.example/event', source_link_kind: 'page', source_link_host: 'calendar.example',
+    time_window: { kind: 'all_day', all_day_explicit: true, starts_on: '2026-10-07', ends_on: '2026-10-07' },
+  }));
+  await render({ coverage: 'covered', selected_date: '2026-10-07', tonight: rows, this_week: [] });
+  const close = page.getByRole('button', { name: 'Close live', exact: true });
+  const initial = await close.boundingBox();
+  await page.getByRole('heading', { name: 'Calendar event 12', exact: true }).scrollIntoViewIfNeeded();
+  const after = await close.boundingBox();
+  assert.ok(Math.abs(initial.y - after.y) <= 1, 'the close action keeps its position');
+  assert.ok(await close.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    return element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+  }), 'the close action remains tappable');
+});
 
 test('native mounted calendar layout retains escaped credit, admin scope and half-day flags in sv/en and both periods', async t => {
   const { page, render } = await browserHarness(t);
@@ -111,10 +165,11 @@ test('native mounted calendar layout retains escaped credit, admin scope and hal
     assert.match(shown,lang === 'en' ? /Provisional date/ : /Preliminärt datum/);
     assert.equal(shown.split(credit).length - 1,2);
     assert.equal(await page.locator('img').count(),0);
-    const anchors = page.locator('a');
-    assert.equal(await anchors.count(),1);
-    assert.equal(await anchors.getAttribute('href'),url);
-    assert.equal((await anchors.innerText()).replace(/\s*↗$/, ''),'api.example');
+    const titleLink = page.getByRole('heading', { name: 'Source holiday title' }).locator('a');
+    assert.equal(await titleLink.getAttribute('href'), url);
+    const sourceLink = page.locator('p a').filter({ hasText: 'api.example' });
+    assert.equal(await sourceLink.getAttribute('href'), url);
+    assert.equal((await sourceLink.innerText()).replace(/\s*↗$/, ''),'api.example');
     const dialog = await page.locator('[role="dialog"]').boundingBox();
     assert.ok(dialog.width <= 390,'dialog stays within the narrow fixture viewport');
   }
@@ -135,7 +190,7 @@ test('native mounted LiveSheet distinguishes captured uncovered and healthy cont
   for (const lang of ['en', 'sv']) for (const time of ['tonight', 'week']) {
     for (const response of captured) {
       const text = await render(response.live_events, lang, time);
-      assert.match(text, /No verified calendar coverage for this area yet|Verifierad kalendertäckning saknas för det här området/);
+      assert.match(text, /We don.t have verified event sources for this area yet|Vi har inga verifierade evenemangskällor för området ännu/);
       assert.doesNotMatch(text, falseEmpty);
       assert.doesNotMatch(text, /0\/0|no_approved_sources/);
       assert.equal(await page.evaluate(() => window.sheetState), 'uncovered');
@@ -148,7 +203,7 @@ test('native mounted LiveSheet distinguishes captured uncovered and healthy cont
     assert.match(pending, /calendars are still updating|Kalendrarna uppdateras fortfarande/);
     assert.doesNotMatch(pending, /responded|svarade/);
     const refreshing = await render(captured[0].live_events,lang,time,{liveQueryPending:true});
-    assert.match(refreshing, /Refreshing verified sources|Uppdaterar verifierade källor/);
+    assert.match(refreshing, /Looking for events|Letar efter evenemang/);
     assert.doesNotMatch(refreshing, falseEmpty);
     for (const status of ['unknown','unavailable']) {
       const unavailable = await render(events({status,result:'unknown',selected_source_count:0}),lang,time);
@@ -176,7 +231,7 @@ test('native mounted LiveSheet distinguishes captured uncovered and healthy cont
     assert.ok(shown.includes(lang === 'en' ? 'Recurring schedule — occurrence unconfirmed'
       : 'Återkommande schema — tillfället är inte bekräftat'));
     assert.ok(shown.includes('© OpenStreetMap contributors — ODbL'));
-    assert.equal(await page.locator('a[href="https://www.openstreetmap.org/node/42"]').count(),1);
+    assert.equal(await page.locator('p a[href="https://www.openstreetmap.org/node/42"]').count(),1);
   }
 });
 
@@ -248,18 +303,18 @@ test('native LiveCard and expanded source occurrences expire together and resync
  await page.getByText('Exact workshop',{exact:true}).waitFor();
  await page.getByText('2 occurrences',{exact:true}).click();
  const row=title=>page.getByRole('listitem').filter({has:page.getByText(title,{exact:true})}).first();
- assert.match(await row('Exact workshop').innerText(),/on now/);
+ assert.match(await row('Exact workshop').innerText(),/\bNow\b/,'the card board says Now in its time column');
  assert.match(await page.locator('details').innerText(),/on now · until 21:00:15/);
  await page.clock.runFor(10100);
- assert.doesNotMatch(await row('Exact workshop').innerText(),/on now/);
+ assert.doesNotMatch(await row('Exact workshop').innerText(),/\bNow\b|on now/);
  assert.match(await page.locator('details').innerText(),/on now/);
  await page.clock.runFor(15000);
  assert.doesNotMatch(await page.locator('details').innerText(),/on now/);
  // Simulate a tab waking after a system-clock adjustment, without a parent render.
  await page.clock.setSystemTime(new Date('2026-10-15T18:59:30Z'));
  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
- await page.waitForFunction(()=>document.querySelector('section').textContent.includes('on now'));
- assert.match(await row('Exact workshop').innerText(),/on now/);
+ await page.waitForFunction(()=>/on now|\bNow\b/.test(document.querySelector('section').textContent));
+ assert.match(await row('Exact workshop').innerText(),/\bNow\b/,'the card board says Now in its time column');
  await page.evaluate(()=>window.unmountView());
  await page.clock.runFor(60000);
  assert.equal(await page.locator('section').count(),0,'unmounted views stay unmounted after clock boundaries');

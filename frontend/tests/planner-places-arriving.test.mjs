@@ -53,7 +53,7 @@ test("a published partial day states historical incompleteness and offers an exp
   await h.clock.advance(500);
   await h.fetchMock.respond(composeCalls(h)[0], thinDay(pending));
   await h.clock.advance(50);
-  assert.match(h.text(), /Not every place could be loaded, so there may be more than the ones shown/);
+  assert.match(h.text(), /Not every place could be loaded\./);
   assert.doesNotMatch(h.text(), /More places are on their way|still fetching|update in a moment/i);
   assert.doesNotMatch(h.text(), /few places to choose between here/i);
   const update = buttonNamed(h, "Look for more places");
@@ -101,7 +101,7 @@ test("a no-route terminal snapshot states incomplete evidence without judging th
   });
   await h.clock.advance(50);
   assert.match(h.text(), /Parranda kunde inte bygga en dag här just nu/);
-  assert.match(h.text(), /ofullständigt när svaret skapades/);
+  assert.match(h.text(), /Platsuppgifterna var ofullständiga/);
   assert.doesNotMatch(h.text(), /är på väg|hämtas fortfarande|snart.*rutt/);
   assert.doesNotMatch(h.text(), /med dina val/);
   assert.doesNotMatch(h.text(), /inte tillräckligt för en pålitlig dag/, "the place is not judged on incomplete evidence");

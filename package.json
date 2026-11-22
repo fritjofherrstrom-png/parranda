@@ -42,6 +42,7 @@
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.5-r.4",
+    "acorn": "8.15.0",
     "express": "^5.2.1",
     "geo-tz": "8.1.9",
     "ipaddr.js": "2.2.0",

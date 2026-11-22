@@ -20,6 +20,7 @@ function boundedDocument(html) {
   const nodes = [];
   const texts = new Map();
   const articleOwners = new Map();
+  const scripts = [];
   let characters = 0;
   let inspected = 0;
   while (stack.length) {
@@ -30,11 +31,16 @@ function boundedDocument(html) {
     );
     if (frame.next === 0) {
       if (++inspected > 20000 || frame.depth > 256) return null;
+      // Separate, non-executed data lane. Hidden/inert ancestors are never
+      // traversed, and script text still cannot lend ordinary DOM facts.
+      if (node.tagName === "script" && !(node.attrs || []).some((attr) =>
+        attr.name === "hidden" || (attr.name === "aria-hidden" && attr.value.toLowerCase() === "true"),
+      )) scripts.push(node);
       // Inert nodes themselves cannot supply attributes/links as evidence.
       // They still consume the inspection budget even without descendants.
       if (!inert) {
         nodes.push(node);
-        articleOwners.set(node, frame.articleOwner || null);
+        articleOwners.set(node, isMappedOwner(node) ? null : frame.articleOwner || null);
       }
       characters += (node.value || node.data || "").length;
       for (const attr of node.attrs || []) characters += attr.name.length + attr.value.length;
@@ -44,14 +50,18 @@ function boundedDocument(html) {
     const children = inert ? [] : node.childNodes || [];
     if (frame.next < children.length) {
       stack.push({ node: children[frame.next++], depth: frame.depth + 1, next: 0,
-        articleOwner: node.tagName === "article" ? node : frame.articleOwner });
+        articleOwner: node.tagName === "article" ? node : isMappedOwner(node) ? null : frame.articleOwner });
       continue;
     }
-    texts.set(node, frame.overflow ? null : cleanText(frame.text));
+    texts.set(node, frame.overflow || frame.foreignOwner ? null : cleanText(frame.text));
     stack.pop();
-    // An article never lends its facts to a containing article or field.
-    if (stack.length && node.tagName !== "article" && !inert) {
+    // A mapped owner cannot lend text or join fragments inside another
+    // entity's field. Reject that containing text, not its independent siblings.
+    if (stack.length && isMappedOwner(node) && !inert) {
+      stack[stack.length - 1].foreignOwner = true;
+    } else if (stack.length && node.tagName !== "article" && !inert) {
       const parent = stack[stack.length - 1];
+      parent.foreignOwner ||= frame.foreignOwner;
       // Keep line/block token boundaries without splitting legitimate inline
       // emphasis. In particular, 20<br>26 must never become the year 2026.
       const text = node.tagName && !INLINE_TEXT.has(node.tagName) ? ` ${frame.text} ` : frame.text;
@@ -59,7 +69,7 @@ function boundedDocument(html) {
       parent.text = (parent.text + text).slice(0, 4096);
     }
   }
-  return { root, nodes, texts, articleOwners };
+  return { root, nodes, texts, articleOwners, scripts };
 }
 
 function attribute(node, name) {
@@ -70,10 +80,24 @@ function hasClass(node, value) {
   return attribute(node, "class").split(/\s+/).includes(value);
 }
 
+function isMappedOwner(node) {
+  return node?.tagName === "div" && hasClass(node, "flip-container");
+}
+
+// One negative-only carrier survives all supported positive reader lanes.
+// Canonical single dates agree across formats; unsupported cardinality never
+// grants a positive occurrence, and a discovered conflict stays withdrawn.
+function recordCardClaim(claims, url, title, date, dateCount) {
+  const identity = JSON.stringify([title, date, dateCount]);
+  const previous = claims.get(url);
+  claims.set(url, previous === undefined ? identity : previous === identity ? previous : null);
+}
+
 function ownedBy(node, owner) {
+  if (isMappedOwner(node)) return false;
   for (let parent = node.parentNode; parent; parent = parent.parentNode) {
     if (parent === owner) return true;
-    if (parent.tagName === "article") return false;
+    if (parent.tagName === "article" || isMappedOwner(parent)) return false;
   }
   return false;
 }
@@ -101,4 +125,4 @@ function sameOriginUrl(value, base) {
   }
 }
 
-module.exports = { boundedDocument, attribute, hasClass, ownedBy, within, cleanText, sameOriginUrl };
+module.exports = { boundedDocument, attribute, hasClass, ownedBy, within, cleanText, sameOriginUrl, recordCardClaim };

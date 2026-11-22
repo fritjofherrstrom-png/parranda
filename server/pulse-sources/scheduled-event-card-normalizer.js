@@ -3,7 +3,8 @@
 const { createHash } = require("node:crypto");
 const { normalizeSourceEventDate } = require("./source-event-time");
 const { parseDateRange } = require("./official-program-article-time");
-const { boundedDocument, attribute, hasClass, ownedBy, within, cleanText, sameOriginUrl } = require("./scheduled-event-document");
+const { boundedDocument, attribute, hasClass, ownedBy, within, cleanText, sameOriginUrl, recordCardClaim } = require("./scheduled-event-document");
+const { extractMappedEventCards } = require("./mapped-event-card-reader");
 
 function explicitSingleDate(value) {
   const text = cleanText(value);
@@ -19,28 +20,39 @@ function explicitSingleDate(value) {
 }
 
 function extractScheduledEventCards(html, { sourceUrl } = {}) {
-  if (!/\bnode--type-event\b/.test(String(html || ""))) return { recognized: false, cards: [] };
+  if (!/\b(?:node--type-event|flip-container)\b/.test(String(html || ""))) return { recognized: false, cards: [] };
   if (!sameOriginUrl(sourceUrl, sourceUrl)) return { recognized: false, cards: [] };
   const doc = boundedDocument(html);
   if (!doc) return { recognized: false, cards: [] };
   const articles = doc.nodes.filter((node) => node.tagName === "article" && hasClass(node, "node--type-event"));
-  if (articles.length > 200) return { recognized: false, cards: [] };
-  const cards = [];
+  const mappedOwners = doc.nodes.filter((node) => node.tagName === "div" && hasClass(node, "flip-container"));
+  if (articles.length > 200 || mappedOwners.length > 200) return { recognized: false, cards: [] };
+  const claims = new Map();
+  const cards = extractMappedEventCards(doc, { sourceUrl, explicitSingleDate, claims });
   for (const article of articles) {
     const own = doc.nodes.filter((node) => doc.articleOwners.get(node) === article);
     const headings = own.filter((node) => /^h[1-6]$/.test(node.tagName) && hasClass(node, "node--title"));
-    if (!headings.length || headings.length > 2) continue;
-    const links = own.filter((node) => node.tagName === "a" && headings.some((heading) => within(node, heading)));
+    const headingSet = new Set(headings);
+    const links = own.filter((node) => {
+      if (node.tagName !== "a") return false;
+      for (let parent = node.parentNode; parent; parent = parent.parentNode) if (headingSet.has(parent)) return true;
+      return false;
+    });
     const identities = links.map((node) => ({
       url: sameOriginUrl(attribute(node, "href"), sourceUrl),
       title: doc.texts.get(node),
     }));
-    if (!identities.length || identities.length > 4 || identities.some((item) => !item.url || item.url === sourceUrl || !item.title || item.title.length > 200)) continue;
+    const schedules = own.filter((node) => hasClass(node, "field--name-field-schedule"));
+    const date = schedules.length === 1 ? explicitSingleDate(doc.texts.get(schedules[0])) : null;
+    for (const identity of identities) {
+      if (identity.url && identity.url !== sourceUrl && identity.title && identity.title.length <= 200) {
+        recordCardClaim(claims, identity.url, identity.title, date, schedules.length);
+      }
+    }
+    if (!headings.length || headings.length > 2 || !identities.length || identities.length > 4 || identities.some((item) => !item.url || item.url === sourceUrl || !item.title || item.title.length > 200)) continue;
     const unique = [...new Set(identities.map((item) => `${item.url}|${item.title}`))];
     if (unique.length !== 1) continue;
-    const schedules = own.filter((node) => hasClass(node, "field--name-field-schedule"));
     if (schedules.length !== 1) continue;
-    const date = explicitSingleDate(doc.texts.get(schedules[0]));
     if (!date) continue;
     cards.push({ ...identities[0], date });
   }
@@ -53,7 +65,7 @@ function extractScheduledEventCards(html, { sourceUrl } = {}) {
     grouped.set(card.url, values);
   }
   const unique = [...grouped.values()].filter((values) =>
-    new Set(values.map((card) => `${card.title}|${card.date}`)).size === 1,
+    claims.get(values[0].url) !== null && new Set(values.map((card) => JSON.stringify([card.title, card.date, card.contact || null]))).size === 1,
   ).map((values) => values[0]);
   return { recognized: unique.length >= 2, cards: unique };
 }

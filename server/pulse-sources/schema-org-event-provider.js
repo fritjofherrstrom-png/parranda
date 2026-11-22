@@ -28,12 +28,21 @@
 const { GENERIC_PROVIDER_CITY } = require("./provider-registry");
 const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
 const { createAccessCheckedSourceFetch } = require("./access-checked-source-fetch");
+const { normalizeSourceEventDate, normalizeSourceEventDateTime, normalizeIanaTimezone, datePartsInTimezone } = require("./source-event-time");
+const { addCalendarDays } = require("../place-candidates/event-calendar-date");
 
 const SCHEMA_ORG_EVENT_PROVIDER_ID = "generic-schema-org-events";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
 const DEFAULT_TIMEOUT_MS = 8000;
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
+// Full bounded listing location evidence is private to its real collection.
+// It can veto unnamed-host placement after row selection, never authorize it.
+const collectionLocations = new WeakMap();
+
+function schemaOrgCollectionLocationScope(collection) {
+  return collectionLocations.get(collection) || null;
+}
 
 function buildDescriptor({ label, sourceUrl, license } = {}) {
   return {
@@ -137,11 +146,19 @@ function createSchemaOrgEventProvider(providerOptions = {}) {
             clearTimeout(timer);
           }
 
-          const normalizedEvents = (Array.isArray(events) ? events : [])
-            .slice(0, limit)
-            .map(mapSchemaOrgEventToRaw)
+          const sourceLocationScope = [];
+          const sourceEvents = (Array.isArray(events) ? events : [])
+            .map(sourceEvent => {
+              const event = mapSchemaOrgEventToRaw(sourceEvent);
+              if (event) sourceLocationScope.push(locationScopeForSourceEvent(sourceEvent, event));
+              return event;
+            })
             .filter(Boolean);
-          return {
+          const normalizedEvents = prioritizeUnendedSchemaEvents(sourceEvents, {
+            date: collectionContext.date,
+            timezone: providerOptions.timezone,
+          }).slice(0, limit);
+          const collection = {
             events: [],
             signals: [],
             time_sensitive_events: normalizedEvents,
@@ -150,10 +167,79 @@ function createSchemaOrgEventProvider(providerOptions = {}) {
               eventRows: normalizedEvents.length,
             }),
           };
+          collectionLocations.set(collection, Object.freeze(sourceLocationScope));
+          return collection;
         },
       };
     },
   };
+}
+
+// The public mapper can omit both coordinates when either is malformed. Keep
+// that explicit point presence privately: missing or invalid components must
+// remain a veto, not turn into permission to use the host's point.
+function locationScopeForSourceEvent(sourceEvent, event) {
+  const scope = Object.fromEntries(["place_context", "address", "venue_name", "lat", "lng"]
+    .filter(key => Object.hasOwn(event, key)).map(key => [key, event[key]]));
+  const geo = sourceEvent.geo || sourceEvent.location?.geo;
+  if (geo && typeof geo === "object" && ["latitude", "lat", "longitude", "lng", "lon"].some(key => Object.hasOwn(geo, key))) {
+    scope.lat = scopeCoordinate(geo.latitude ?? geo.lat);
+    scope.lng = scopeCoordinate(geo.longitude ?? geo.lng ?? geo.lon);
+  }
+  return Object.freeze(scope);
+}
+
+function scopeCoordinate(value) {
+  if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value);
+  return value === undefined ? null : value;
+}
+
+// A listing's archive must not consume the bounded prefix before current
+// programming is inspected. This is stable demotion of demonstrably ended
+// records only: it establishes neither event eligibility nor venue geometry.
+function prioritizeUnendedSchemaEvents(events, { date, timezone } = {}) {
+  const zone = normalizeIanaTimezone(timezone);
+  const explicitDay = normalizeSourceEventDate(date);
+  const instants = new Map();
+  const instantFor = value => {
+    if (!instants.has(value)) instants.set(value, sourceInstant(value, zone));
+    return instants.get(value);
+  };
+  const instant = instantFor(date);
+  if (!explicitDay && instant === null) return events;
+  const day = explicitDay || sourceDay(instant, zone);
+  // Without a published timezone, calendar-day comparisons can cross a UTC
+  // boundary. Keep that uncertainty even when the requested day is date-only.
+  const earliestDay = zone ? day : addCalendarDays(day, -1);
+  const ended = (event) => {
+    const startDay = normalizeSourceEventDate(event.starts_at);
+    const endDay = normalizeSourceEventDate(event.ends_at);
+    if (startDay && endDay && endDay >= startDay) return endDay < earliestDay;
+    const start = instantFor(event.starts_at);
+    const end = instantFor(event.ends_at);
+    if (start === null || end === null || end < start) return false;
+    return instant !== null ? end < instant : sourceDay(end, zone) < earliestDay;
+  };
+  const retained = [];
+  const archived = [];
+  for (const event of events) (ended(event) ? archived : retained).push(event);
+  return [...retained, ...archived];
+}
+
+function sourceInstant(value, timezone) {
+  // The shared datetime parser validates clocks/DST. Validate the literal date
+  // as well, so Date's rollover cannot retire malformed source evidence.
+  if (typeof value !== "string" || !normalizeSourceEventDate(value.slice(0, 10))) return null;
+  const normalized = normalizeSourceEventDateTime(value, { timezone });
+  if (!normalized) return null;
+  const instant = Date.parse(normalized);
+  return Number.isFinite(instant) ? instant : null;
+}
+
+function sourceDay(instant, timezone) {
+  const parts = timezone ? datePartsInTimezone(instant, timezone) : null;
+  return parts ? `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`
+    : new Date(instant).toISOString().slice(0, 10);
 }
 
 function normalizeFormat(value) {
@@ -258,6 +344,11 @@ function mapSchemaOrgEventToRaw(event) {
   if (!event || typeof event !== "object") return null;
   const coords = extractCoordinates(event);
   const url = firstString(event.url, event["@id"], event.identifier);
+  const types = [event["@type"] || event.type].flat();
+  const musicEvent = types.some(type => typeof type === "string" && /^(?:https?:\/\/schema\.org\/|schema:)?MusicEvent$/.test(type));
+  const status = schemaIdentifier(event.eventStatus) || schemaIdentifier(event["schema:eventStatus"]);
+  const attendance = schemaIdentifier(event.eventAttendanceMode) || schemaIdentifier(event["schema:eventAttendanceMode"]);
+  const onlineOnly = status === "EventMovedOnline" || attendance === "OnlineEventAttendanceMode";
   return compact({
     id: firstString(event["@id"], event.identifier, event.url),
     title: localizedString(event.name),
@@ -265,13 +356,14 @@ function mapSchemaOrgEventToRaw(event) {
     ends_at: firstString(event.endDate, event.end_date, event["schema:endDate"]),
     source_url: url,
     place_context: localizedString(event.location && event.location.name),
+    source_location_scope: onlineOnly ? "virtual" : null,
     area: localizedString(event.location && event.location.address && event.location.address.addressLocality),
     lat: coords.lat,
     lng: coords.lng,
     tags: stringList(event.keywords),
-    // event_status maps schema.org EventCancelled → freshness signal the
-    // normalizer reads; never claim "now" for a cancelled event.
-    freshness: isCancelled(event) ? "stale" : null,
+    intents: musicEvent ? ["live_music"] : null,
+    // The stated dates are no longer live for cancelled or postponed events.
+    freshness: /cancel|postpon/i.test(status || "") ? "stale" : null,
   });
 }
 
@@ -285,9 +377,8 @@ function extractCoordinates(event) {
   return { lat: null, lng: null };
 }
 
-function isCancelled(event) {
-  const status = firstString(event.eventStatus, event["schema:eventStatus"]);
-  return typeof status === "string" && /cancel/i.test(status);
+function schemaIdentifier(value) {
+  return firstString(value, value?.["@id"])?.replace(/^(?:https?:\/\/schema\.org\/|schema:)/, "");
 }
 
 // schema.org name can be a plain string or a language map / array of language
@@ -360,6 +451,7 @@ module.exports = {
   SCHEMA_ORG_EVENT_PROVIDER_ID,
   DEFAULT_USER_AGENT,
   createSchemaOrgEventProvider,
+  schemaOrgCollectionLocationScope,
   resolveDefaultSchemaOrgEventProvider,
   // exported for tests / introspection
   extractSchemaOrgEvents,

@@ -193,14 +193,14 @@ test('cold Planner renders an honest wait then the real day after one submission
   await h.fetchMock.respond(initial, { planner_lifecycle: {
     version: 1, state: 'warm_pending', token, retry_after_ms: 3000, remaining_ms: 50000, max_polls: 20,
   } }, 202);
-  assert.match(h.text(), /plan will continue automatically/i);
+  assert.match(h.text(), /finding places and building your day/i);
   assert.ok(!h.text().includes('Place a'));
   await h.clock.advance(3000);
   const poll = h.fetchMock.pending().find(call => call.url === '/api/planner-status');
   assert.deepEqual(poll.body, { token });
   await h.fetchMock.respond(poll, composedDay(['a', 'b']));
   assert.match(h.text(), /Place a/);
-  assert.doesNotMatch(h.text(), /plan will continue automatically/i);
+  assert.doesNotMatch(h.text(), /finding places and building your day/i);
   await h.clock.advance(10000);
   assert.equal(h.fetchMock.calls.filter(call => call.url.includes('route-recommendations')).length, 1);
   assert.deepEqual(initial.body, frozenInput);
@@ -219,7 +219,7 @@ test('an adjustment cancels cold polling immediately, before debounce, and ignor
   await h.fetchMock.respond(poll, composedDay(['old-a', 'old-b']), 200, { deferBody: true });
   await click(h, buttonMatching(h, /Adjust/));
   await click(h, buttonMatching(h, /Tomorrow/));
-  assert.doesNotMatch(h.text(), /plan will continue automatically/i, 'cancelled waiting copy disappears before debounce');
+  assert.doesNotMatch(h.text(), /finding places and building your day/i, 'cancelled waiting copy disappears before debounce');
   await h.fetchMock.releaseBody(poll);
   assert.doesNotMatch(h.text(), /Place old-a/);
   await h.clock.advance(400);
@@ -240,7 +240,7 @@ test('a terminal cold timeout offers one explicit retry with the current inputs'
     version: 1, state: 'warm_pending', token, retry_after_ms: 3000, remaining_ms: 500, max_polls: 20,
   } }, 202);
   await h.clock.advance(50);
-  assert.match(h.text(), /engine isn't answering/i);
+  assert.match(h.text(), /couldn't build your day right now/i);
   await click(h, buttonMatching(h, /Adjust/));
   await click(h, buttonMatching(h, /Tomorrow/));
   await click(h, buttonMatching(h, /^Coffee$/));
@@ -443,8 +443,9 @@ test("restoring a snapshot cancels the compose that would have overwritten it", 
   await click(h, h.container.querySelector('button[aria-label="Save this day"]'));
   await h.clock.advance(50);
 
-  // Start a recompose and leave it in flight.
-  await keepFirstStop(h);
+  // Start a recompose and leave it in flight. (A Keep on the settled day
+  // composes nothing; an Add asks the server.)
+  await addOutsider(h);
   await h.clock.advance(500);
   const inFlight = h.fetchMock.pending()[0];
   assert.ok(inFlight, "a compose is in flight");
@@ -489,18 +490,15 @@ test("releasing a pin mid-flight does not leave the day naming it", async (t) =>
   const h = await plannerWithDay();
   t.after(() => h.unmount());
 
-  await keepFirstStop(h);
+  await addOutsider(h);
   await h.clock.advance(500);
   const inFlight = h.fetchMock.pending()[0];
-  assert.deepEqual(inFlight.body.pinned_candidate_ids, ["a"]);
+  assert.deepEqual(inFlight.body.pinned_candidate_ids, ["outsider"]);
 
   // Withdraw the commitment while the request that carries it is outstanding.
-  const disclosure = [...h.container.querySelectorAll("button")].find((b) =>
-    /Place a/.test(b.textContent || ""),
-  );
-  await click(h, disclosure);
-  const release = buttonMatching(h, /Kept — release/);
-  if (release) await click(h, release);
+  const release = buttonMatching(h, /In my day — release|Kept — release/) ??
+    (await click(h, buttonMatching(h, /^Place outsider/)), buttonMatching(h, /In my day — release|Kept — release/));
+  await click(h, release);
 
   // The in-flight answer lands without the place.
   await h.fetchMock.respond(inFlight, composedDay(["b", "c", "d"])).catch(() => {});
@@ -511,7 +509,7 @@ test("releasing a pin mid-flight does not leave the day naming it", async (t) =>
   const text = h.text();
   if (NOTICE.test(text)) {
     assert.ok(
-      !/Place a/.test(text.slice(text.search(NOTICE))),
+      !/Place outsider/.test(text.slice(text.search(NOTICE))),
       "a released commitment must not be named as unmet",
     );
   }

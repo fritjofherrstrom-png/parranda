@@ -7,7 +7,7 @@
  * (honest: events / "today" reflect when THEY open it, not when it was shared).
  */
 
-import { normalizePreferencePriority, normalizeDayEdit } from "../../../shared/planner-intent.mjs";
+import { MAX_PLANNER_PREFERENCES, normalizePreferencePriority, normalizeDayEdit } from "../../../shared/planner-intent.mjs";
 
 // The full bounded schema fits even when every ID needs JSON escaping. Refuse
 // oversized raw URL input before parsing; never truncate an edit into another.
@@ -20,7 +20,7 @@ export function validPlaceRef(value) {
   return typeof value === "string" && PLACE_REF.test(value) && !/[\r\n]/.test(value) ? value : null;
 }
 
-export function encodeShareParams({ city, place, placeRef, preferences = [], preferencePriority, dayEdit, invalidDayEdit = false, dayOffset = 0, walkKey = "balanced", lang = "en" } = {}) {
+export function encodeShareParams({ city, place, placeRef, preferences, preferencePriority, dayEdit, invalidDayEdit = false, dayOffset = 0, walkKey = "balanced", lang = "en" } = {}) {
   const params = new URLSearchParams();
   const cityKey = String(city || "").trim().toLowerCase();
   if (/^[a-z0-9-]{1,64}$/.test(cityKey)) params.set("city", cityKey);
@@ -29,7 +29,7 @@ export function encodeShareParams({ city, place, placeRef, preferences = [], pre
   // Display text is optional; the server resolves the identity itself.
   if (validPlaceRef(placeRef)) params.set("place_ref", placeRef);
   params.set("planner", "open");
-  if (Array.isArray(preferences) && preferences.length) params.set("prefs", preferences.join(","));
+  if (Array.isArray(preferences)) params.set("prefs", preferences.join(","));
   const priority = normalizePreferencePriority(preferencePriority, preferences);
   if (priority.length) params.set("prio", priority.join(","));
   if (dayEdit != null || invalidDayEdit === true) {
@@ -65,7 +65,9 @@ export function decodeShareParams(search, allowedPrefKeys = null) {
   const place = (params.get("place") || "").trim();
   const placeRef = validPlaceRef(params.get("place_ref"));
   const rawPrefs = (params.get("prefs") || "").split(",").map((s) => s.trim()).filter(Boolean);
-  const preferences = allowedPrefKeys ? rawPrefs.filter((k) => allowedPrefKeys.includes(k)) : rawPrefs;
+  const preferences = [...new Set(allowedPrefKeys ? rawPrefs.filter((k) => allowedPrefKeys.includes(k)) : rawPrefs)]
+    .slice(0, MAX_PLANNER_PREFERENCES);
+  const explicitEmptyPreferences = params.getAll("prefs").length === 1 && params.get("prefs") === "";
   const priority = normalizePreferencePriority((params.get("prio") || "").split(","), preferences);
   const editParams = params.getAll("edit");
   let dayEdit = null;
@@ -83,6 +85,7 @@ export function decodeShareParams(search, allowedPrefKeys = null) {
   const lang = langRaw === "sv" ? "sv" : langRaw === "en" ? "en" : null;
   const invalidPlaceRef = params.has("place_ref") && !validPlaceRef(params.get("place_ref"));
   return { city, place, placeRef, invalidPlaceRef, preferences, dayOffset, walkKey, lang,
+    ...(explicitEmptyPreferences ? { explicitEmptyPreferences } : {}),
     ...(priority.length ? { preferencePriority: priority } : {}),
     ...(editParams.length ? { dayEdit, invalidDayEdit: !dayEdit } : {}) };
 }

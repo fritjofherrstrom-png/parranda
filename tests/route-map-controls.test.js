@@ -210,15 +210,16 @@ async function openDay({ browser, origin }, { width, stops }) {
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.clock.setFixedTime(FIXED_NOW);
   await page.goto(`${origin}/anywhere?place=Testville&lang=sv`);
-  // Phones draw the map inside the route section; from 64rem the planner puts
-  // the same map beside the day, sticky, at the window's height, with no
-  // expand control (there is nothing left to expand into).
+  // Phones draw the map in the day's header, between the picks line and the
+  // facts; from 64rem the planner puts the same map beside the day, sticky, at
+  // the window's height, with no expand control (there is nothing left to
+  // expand into).
   const route = width >= 1024
     ? page.getByRole("complementary", { name: "Karta över dagen" })
-    : page.getByRole("region", { name: "Rutten" });
+    : page.locator("header [data-route-map]");
   // Every stop is on the map once: its own number, or in a group pin naming it.
   await page.waitForFunction((n) => {
-    const numbers = [...document.querySelectorAll('section[aria-label="Rutten"] .route-map-marker, aside[aria-label="Karta över dagen"] .route-map-marker')]
+    const numbers = [...document.querySelectorAll('header [data-route-map] .route-map-marker, aside[aria-label="Karta över dagen"] .route-map-marker')]
       .filter((element) => getComputedStyle(element).visibility !== "hidden")
       .flatMap((element) => element.textContent.trim().split(",").flatMap((part) => {
         const [a, b] = part.split("–").map(Number);
@@ -235,7 +236,7 @@ async function openDay({ browser, origin }, { width, stops }) {
 // the page.
 function measureMap({ expandNames, sideMap = false }) {
   const frame = document.querySelector(
-    sideMap ? 'aside[aria-label="Karta över dagen"] .maplibregl-map' : 'section[aria-label="Rutten"] .maplibregl-map',
+    sideMap ? 'aside[aria-label="Karta över dagen"] .maplibregl-map' : 'header [data-route-map] .maplibregl-map',
   ).parentElement;
   const box = (element) => {
     const rect = element.getBoundingClientRect();
@@ -247,9 +248,13 @@ function measureMap({ expandNames, sideMap = false }) {
   const expand = [...frame.querySelectorAll("button")].find((button) =>
     expandNames.includes((button.getAttribute("aria-label") || button.textContent || "").trim()),
   );
+  // A phone's collapsed map is a still overview: it takes no zoom gesture and
+  // shows no zoom bar (RouteMap `still`), so only Expand and the attribution
+  // must stay clear of the stops there.
+  const still = frame.closest("[data-route-map]")?.hasAttribute("data-still") || frame.hasAttribute("data-still");
   const controls = {
     ...(sideMap ? {} : { "the expand button": expand }),
-    "the zoom bar": frame.querySelector(".maplibregl-ctrl-group"),
+    ...(still ? {} : { "the zoom bar": frame.querySelector(".maplibregl-ctrl-group") }),
     "the attribution": frame.querySelector(".maplibregl-ctrl-attrib"),
   };
   const problems = Object.entries(controls)
@@ -326,7 +331,50 @@ function measureMap({ expandNames, sideMap = false }) {
   };
 }
 
+const { waitForRouteMapLayout } = require('./helpers/route-map-ready');
 const EXPAND_NAMES = ["Förstora kartan", "Förminska kartan"];
+
+test("map controls have a 44px touch target in the mobile overview and expanded map", { timeout: 120_000 }, async (t) => {
+  const current = await openRuntime(t);
+  if (!current) return;
+  const { context, route } = await openDay(current, { width: 320, stops: DAYS["diagonal, Live stop north-east"] });
+  try {
+    for (const expandName of EXPAND_NAMES) {
+      await waitForRouteMapLayout(route);
+      if (expandName === EXPAND_NAMES[1]) {
+        const zoom = route.locator(".maplibregl-ctrl-top-left button");
+        assert.deepEqual(await zoom.evaluateAll(buttons => buttons.map(button => ({
+          name: button.getAttribute("aria-label"), title: button.title,
+        }))), [
+          { name: "Zooma in", title: "Zooma in" },
+          { name: "Zooma ut", title: "Zooma ut" },
+        ]);
+      }
+      const locate = route.getByRole("button", { name: "Visa min position", exact: true });
+      const refit = route.getByRole("button", { name: "Återställ kartvyn", exact: true });
+      const expand = route.getByRole("button", { name: expandName, exact: true });
+      assert.equal((await expand.innerText()).trim(), "", "the expand action uses an icon with an accessible name");
+      assert.equal(await refit.count(), expandName === EXPAND_NAMES[0] ? 0 : 1,
+        "reset is available on the interactive map, without occupying the still overview");
+      const controls = expandName === EXPAND_NAMES[0] ? [locate, expand] : [locate, refit, expand];
+      for (const button of controls) {
+        await button.scrollIntoViewIfNeeded();
+        const covered = await button.evaluate(element => {
+          const rect = element.getBoundingClientRect();
+          const x = rect.left + rect.width / 2;
+          const y = rect.top + rect.height / 2;
+          const edge = 21.5; // Just inside each edge of a 44px square.
+          return [[x - edge, y], [x + edge, y], [x, y - edge], [x, y + edge]]
+            .every(([left, top]) => element.contains(document.elementFromPoint(left, top)));
+        });
+        assert.ok(covered, `in the ${expandName} state, ${await button.getAttribute("aria-label")} needs a 44px touch target`);
+      }
+      if (expandName === EXPAND_NAMES[0]) await expand.click();
+    }
+  } finally {
+    await context.close();
+  }
+});
 
 // The hit test itself, at the edge that failed in CI (run 37232695990): a
 // marker whose centre lies in the viewport's last fractional pixel row. The
@@ -338,7 +386,7 @@ test("a marker centred in the viewport's last fractional pixel row is still hit-
   const { context, page } = await openDay(current, { width: 390, stops: DAYS["diagonal, Live stop north-east"] });
   try {
     const centreY = () => page.evaluate(() => {
-      const rect = [...document.querySelectorAll('section[aria-label="Rutten"] .route-map-marker')].find((element) => getComputedStyle(element).visibility !== "hidden").getBoundingClientRect();
+      const rect = [...document.querySelectorAll('header [data-route-map] .route-map-marker')].find((element) => getComputedStyle(element).visibility !== "hidden").getBoundingClientRect();
       return { y: (rect.top + rect.bottom) / 2, innerHeight, scrollY };
     });
     const start = await centreY();
@@ -370,6 +418,7 @@ for (const width of WIDTHS) {
             await route.getByRole("button", { name: state === "expanded" ? "Förstora kartan" : "Förminska kartan" }).click();
             await page.waitForTimeout(SETTLE_MS);
           }
+          await waitForRouteMapLayout(route);
           const measured = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES, sideMap });
           states[state] = measured;
           const where = `${dayName} at ${width}px, ${state}`;
@@ -417,9 +466,11 @@ test("the expanded map shows a phone's day closer than the collapsed one", { tim
     await route.getByRole("button", { name: "Förstora kartan" }).click();
     await page.waitForTimeout(SETTLE_MS);
     const expanded = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES });
-    // A 192px strip holds this day a zoom level further out than the 384px map.
+    // The larger collapsed map already fits more of the day. Expansion still
+    // adds usable height and zooms in, until the phone's width limits the fit.
+    assert.ok(expanded.height >= collapsed.height * 2, 'expansion doubles the usable map height');
     assert.ok(
-      expanded.spread > collapsed.spread * 1.5,
+      expanded.spread > collapsed.spread * 1.25,
       `expected the day drawn larger once expanded: ${Math.round(collapsed.spread)}px → ${Math.round(expanded.spread)}px`,
     );
   } finally {
@@ -434,8 +485,9 @@ test("a delayed shrink refits to the rendered mobile size after the old timer bo
   const { context, page, route } = await openDay(current, { width: 320, stops });
   try {
     await page.evaluate(() => {
-      document.querySelector('section[aria-label="Rutten"] .maplibregl-map').parentElement.style.transitionDuration = "1200ms";
+      document.querySelector('header [data-route-map] .maplibregl-map').parentElement.style.transitionDuration = "1200ms";
     });
+    await waitForRouteMapLayout(route);
     const original = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES });
     for (const name of ["Förstora kartan", "Förminska kartan"]) {
       await route.getByRole("button", { name }).click();

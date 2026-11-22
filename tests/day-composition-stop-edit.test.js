@@ -146,6 +146,24 @@ test('manual walking validation measures exactly the published stop chain and su
   assert.equal(output.experiment.day_edit.status, 'applied');
 });
 
+for (const source of [null, 'osrm']) test(`a deferred walking result preserves ${source ?? 'unknown'} geometry provenance`, async () => {
+  const { routeWalkingPath } = require('../server/walking-router');
+  const records = rows('shop', 'vintage-shop', 5);
+  let measured;
+  const output = await compose(records, ['second_hand'], {
+    anchorMode: 'place', dayEdit: edit('remove', 'shop-0', ['shop-1', 'shop-2', 'shop-3']),
+    walkingRouter: async (points, options) => {
+      measured = await routeWalkingPath(points, options);
+      if (source) measured.source = source;
+      else delete measured.source;
+      return measured;
+    },
+  });
+  assert.equal(output.experiment.day_edit.status, 'applied');
+  assert.equal(output.route.geometry_source, source);
+  assert.deepEqual(output.route.map_path_points, measured.pathPoints);
+});
+
 test('remove refuses the actual final chain when an independently measured leg exceeds the safety cap', async () => {
   const { routeWalkingPath } = require('../server/walking-router');
   const records = rows('shop', 'vintage-shop', 5);

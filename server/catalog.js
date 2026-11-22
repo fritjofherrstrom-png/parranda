@@ -1521,6 +1521,7 @@ function enrichItem(item) {
   return {
     ...item,
     priceLevel: meta.priceLevel || inferPriceLevel(item),
+    priceLevelInferred: !meta.priceLevel,
     bestTime: meta.bestTime || inferBestTime(item),
     vibe: meta.vibe || inferVibe(item),
     groupSize: meta.groupSize || "2-4 personer",
@@ -2738,8 +2739,8 @@ const extraSpecialtyItemsRaw = [
     id: "roscioli-salumeria",
     name: "Roscioli Salumeria con Cucina",
     kind: "restaurant",
-    lat: 41.8957,
-    lng: 12.4729,
+    lat: 41.894501,
+    lng: 12.473962,
     area: "Centro",
     tags: ["mat", "vin", "kultur", "dolce-vita"],
     weatherTags: ["all-weather", "evening"],

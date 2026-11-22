@@ -58,12 +58,12 @@ async function completed(t) {
   try {
     await h.fetchMock.respond(routes(h)[0], response());
     await click(h, 'Museum', true); await click(h, 'Keep this one'); await h.clock.advance(400);
-    assert.deepEqual(routes(h).at(-1).body.pinned_candidate_ids, ['museum']);
-    await h.fetchMock.respond(routes(h).at(-1), response());
+    assert.equal(routes(h).length, 1, 'a Keep on the published day composes nothing');
+    assert.deepEqual(h.readStorage(LAST).commitments.entries, { museum: { kind: 'pin', label: 'Museum' } });
     const beforeEdit = { entry: h.readStorage(LAST), url: h.window.location.href };
     await click(h, 'Park', true); await click(h, 'Replace'); await h.clock.advance(400);
     const replacement = routes(h).at(-1);
-    assert.equal(routes(h).length, 3, 'Keep and Replace each emit exactly one compose');
+    assert.equal(routes(h).length, 2, 'Replace emits exactly one compose, carrying the Keep');
     assert.deepEqual(replacement.body.pinned_candidate_ids, ['museum']);
     assert.deepEqual(replacement.body.excluded_candidate_ids, ['park']);
     assert.deepEqual(replacement.body.day_edit, {
@@ -208,9 +208,9 @@ test('route list includes published start and return estimates already counted i
   const h = await mountPlanner({ url: 'http://localhost/anywhere?anchor=near&lang=en', sessionStorage: { 'parranda:anchor:coords': P1 } });
   t.after(() => h.unmount()); await h.fetchMock.respond(routes(h)[0], response());
   const route = h.container.querySelector('section[aria-label="The route"]');
-  assert.match(route.textContent, /From Your position/);
+  assert.match(route.textContent, /From your starting point/);
   assert.match(route.textContent, /2 min · (?:100 m|0.1 km)/);
-  assert.match(route.textContent, /Return to Your position/);
+  assert.match(route.textContent, /Return to your starting point/);
   assert.match(route.textContent, /8 min · (?:600 m|0.6 km)/);
 });
 

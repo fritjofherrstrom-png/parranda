@@ -317,12 +317,15 @@ test("integration: rain weather attaches dayflow_context to the day with provena
 });
 
 test("integration: boring weather attaches no dayflow_context (silence)", async () => {
-  const restoreWeather = withInjectedWeather({ [DATE]: BORING });
+  const restoreWeather = withInjectedWeather({ [DATE]: { ...BORING, rawCode: 3 } });
   const restoreFetch = quietFetch();
   try {
     const result = await generateRecommendations(ROUTE_PAYLOAD);
     const day = result.days[0];
     assert.equal(day.dayflow_context, null, "boring weather → no dayflow_context");
+    assert.equal(day.weather_summary?.date, DATE, 'ordinary weather still has a date-bound summary');
+    assert.equal(day.weather_summary?.max_temp, 21);
+    assert.equal(day.weather_summary?.condition, 'clouds');
   } finally {
     restoreWeather();
     restoreFetch();

@@ -55,10 +55,12 @@ const { createPublishedDayReadHandler } = require('./planner/published-day-http'
 const { createDayPublication, publishTerminalDay } = require('./planner/published-day-publication');
 const { publicLiveSourceUrls } = require('./place-candidates/live-source-destination-evidence');
 const { retainComposition, createRouteUpgrade } = require('./planner/live-route-upgrade');
+const { MUSIC_ROUTE_ALTERNATIVES, weaveEveningEvent } = require("./candidates/evening-event-weave");
 const { nearbyCuratedSupply } = require('./planner/nearby-curated-supply');
 const { createPlaceSelectionStore, placeResolutionInputs } = require('./place-candidates/place-selection');
 const { toPlaceRef } = require('./place-candidates/place-ref');
 const { resolveDefaultPlaceSuggestions } = require('./place-candidates/place-suggestions');
+const { isPlaceSearchQueryEligible } = require('../shared/place-search-query.mjs');
 const { attributeToWithheldDay } = require("./planner/pin-refusal-reasons");
 const {
   markCommitmentEligibility,
@@ -67,6 +69,7 @@ const {
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
 const { reconcileAgnosticConstraintNegotiation } = require("./planner/agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./planner/agnostic-walking-target");
+const { resolveDefaultWalkingRuntime } = require("./walking-runtime");
 const { resolveAgnosticIntake, parsePlaceQuery } = require("./planner/agnostic-place-intake");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const {
@@ -647,14 +650,15 @@ async function weaveEventStopFailSoft({ result, placeStructure, walkingRouter, w
   }
 }
 
-function reconcileConstraintAfterEventWeave({ experiment, woven, walkingKmTarget }) {
-  if (!woven?.applied || !experiment?.constraint_negotiation) return;
-  const finalRoute = woven.result?.days?.[0]?.primary_route || null;
+function reconcileConstraintAfterEventWeave({ experiment, woven, walkingKmTarget, routePublished = true }) {
+  const negotiation = experiment?.constraint_negotiation;
+  if (!negotiation || (!woven?.applied && (routePublished || !negotiation.preference_coverage?.covered_preferences?.includes("live_music")))) return;
+  const finalRoute = routePublished ? woven.result?.days?.[0]?.primary_route : null;
   experiment.constraint_negotiation = reconcileAgnosticConstraintNegotiation({
-    negotiation: experiment.constraint_negotiation,
+    negotiation,
     experimentalRoute: finalRoute,
     walkingKmTarget,
-    walkingValidated: true,
+    walkingValidated: Boolean(woven?.applied && routePublished),
   });
 }
 
@@ -1489,7 +1493,10 @@ function blockPrivateRepoPaths(request, response, next) {
 }
 
 function selectPublishedEventWeave({ promotionPromote, eventWeave, publicResult }) {
-  if (!promotionPromote || !eventWeave?.applied) return null;
+  if (!promotionPromote || !eventWeave) return null;
+  // The promoted engine day already tried its music shortlist. Repeating a
+  // refusal here could reroute the published day outside finalization.
+  if (!eventWeave.applied && !eventWeave.placeStructure?.[MUSIC_ROUTE_ALTERNATIVES]) return null;
   return { ...eventWeave, result: publicResult };
 }
 
@@ -1513,8 +1520,8 @@ function buildApp({
   eventSupply,
   sourceCatalog,
   reviewedPlaceSource,
-  walkingRouter = null,
-  walkingConfig = null,
+  walkingRouter,
+  walkingConfig,
   weatherProvider = null,
   clock = null,
   // NEW-frontend /anywhere takeover (contract-gated): the flag decides serving,
@@ -1522,6 +1529,14 @@ function buildApp({
   // values (env flag + the frontend workspace's build output).
   anywhereV2Dir = path.join(appRoot, "frontend", "dist"),
 } = {}) {
+  // Server-owned opt-in only. Explicit injections (including null) keep
+  // test/operator overrides independent of process defaults.
+  if (walkingRouter === undefined && walkingConfig === undefined) {
+    ({ walkingRouter, walkingConfig } = resolveDefaultWalkingRuntime());
+  } else {
+    walkingRouter ??= null;
+    walkingConfig ??= null;
+  }
   // Event venue recovery reuses the same trusted, rate-limited server resolver
   // as freeform place intake. Explicit test injections still win, including
   // `null`; no public payload can provide either seam.
@@ -1556,7 +1571,7 @@ function buildApp({
   app.post('/api/place-suggestions', async (request, response) => {
     const query = typeof request.body?.query === 'string' ? request.body.query.trim().replace(/\s+/g, ' ') : '';
     if (query.length > 200) return response.status(400).json({ error: 'invalid_query' });
-    if (query.length < 3) return response.json({ status: 'ready', choices: [] });
+    if (!isPlaceSearchQueryEligible(query)) return response.json({ status: 'ready', choices: [] });
     if (typeof placeSuggestions !== 'function') return response.json({ status: 'unavailable', choices: [] });
     const previous = placeSelectionStore.read(request.body?.context_selection);
     const controller = new AbortController();
@@ -1564,7 +1579,7 @@ function buildApp({
     request.once('aborted', cancel);
     response.once('close', cancel);
     try {
-      const result = await placeSuggestions(query, { language: normalizeLanguage(request.query?.lang), signal: controller.signal, ...(previous ? { near: { lat: previous.lat, lng: previous.lng } } : {}) });
+      const result = await placeSuggestions(query, { language: normalizeLanguage(request.query?.lang), signal: controller.signal, ...(previous ? { near: { lat: previous.lat, lng: previous.lng } } : {}), ...(request.body?.retry === true ? { explicit: true } : {}) });
       if (controller.signal.aborted) return;
       const registry = buildLandingCityRegistry(normalizeLanguage(request.query?.lang));
       const choices = (result.choices || []).slice(0, 5).flatMap(choice => {
@@ -1577,7 +1592,7 @@ function buildApp({
         const placeRef = toPlaceRef(point.osm_ref);
         return [{ title: choice.title, context: choice.context, query: choice.query, kind: choice.kind, ...(placeRef ? { place_ref: placeRef } : {}), selection_id: selection, attribution: point.attribution, license: point.license, ...(cityKey ? { city_key: cityKey } : {}) }];
       });
-      response.json({ status: result.status, choices, ...(result.retry_after_ms ? { retry_after_ms: result.retry_after_ms } : {}) });
+      response.json({ status: result.status, choices, ...(result.retry_after_ms ? { retry_after_ms: result.retry_after_ms } : {}), ...(result.retryable === false ? { retryable: false } : {}) });
     } catch (_) {
       if (!controller.signal.aborted) response.json({ status: 'unavailable', choices: [] });
     } finally {
@@ -2504,11 +2519,11 @@ function buildApp({
       // Additive + fail-soft: no suitable event → the day is unchanged.
       let wovenPlaceStructure = agnosticPlaceStructure;
       try {
-        const { weaveEveningEvent } = require("./candidates/evening-event-weave");
         const selectedRouteDate = resolveSelectedRouteDate(payload, baselineBody, cityConfig);
         wovenPlaceStructure = weaveEveningEvent(agnosticPlaceStructure, liveEvents, {
           selectedDate: selectedRouteDate,
           liveEventChoices,
+          preferences,
         });
       } catch (_error) {
         wovenPlaceStructure = agnosticPlaceStructure;
@@ -2539,6 +2554,9 @@ function buildApp({
         // may defer a missing occurrence verdict. Public payload cannot set it.
         liveSelectionPending: Boolean(upgradeRequested && liveEvents?.pending),
         lens: request.body?.lens || request.query?.lens || null,
+        // Opt-in only: the reader asked Parranda to choose the day's interests.
+        // Explicit preferences still win; an absent field changes nothing.
+        intentMode: request.body?.intent_mode ?? null,
         // #262 — payload weather is NOT trusted; trusted weather/time come only
         // from the server-injected seams. `trustedTimezone` is taken from the
         // trusted resolver when present; otherwise agnostic context may derive a
@@ -2690,6 +2708,7 @@ function buildApp({
             experiment,
             woven: engineWoven,
             walkingKmTarget: requestedRhythm ? null : payload.walkingKmTarget,
+            routePublished: promotion.promote,
           });
           // The eligibility verdict belongs to the candidate context that was
           // actually PUBLISHED. When the gate withholds the engine's day, the
@@ -2758,6 +2777,7 @@ function buildApp({
       });
       const legacyWoven = await weaveEventStopFailSoft({
         result: publicResult,
+        ...(normalizeUserIntents(preferences).intents.includes("live_music") ? { requestedPreferences: preferences } : {}),
         placeStructure: wovenPlaceStructure,
         walkingRouter,
         walkingConfig,

@@ -23,10 +23,14 @@ const {
   normalizeSourceEventDateTime,
 } = require("../pulse-sources/source-event-time");
 const { listedOccurrenceDates } = require("../place-candidates/event-calendar-date");
+const { normalizeUserIntents } = require("./intent-vocabulary");
+const { scoreEventPreferenceFit } = require("../pulse-engine/event-preference-fit");
 
 const { liveOccurrenceId, activeLiveChoices } = require("../planner/live-occurrence-choice");
 const EVENING_START_HOUR = 17;
 const EVENING_START_MINUTES = EVENING_START_HOUR * 60;
+const MAX_MUSIC_ROUTE_CANDIDATES = 3;
+const MUSIC_ROUTE_ALTERNATIVES = Symbol("music_route_alternatives");
 
 function dateKeyFromParts(parts) {
   if (!parts) return null;
@@ -205,10 +209,10 @@ function eventOccurrenceForDate(event, selectedDate) {
   return materializeContinuousOccurrence(event, date);
 }
 
-function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null, liveEventChoices = [] } = {}) {
-  if (!placeStructure || typeof placeStructure !== "object" || !placeStructure.district_day) {
-    return placeStructure;
-  }
+function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null, liveEventChoices = [], preferences = [] } = {}) {
+  const requested = normalizeUserIntents(preferences).intents;
+  const requestsMusic = requested.includes("live_music");
+  if (!placeStructure?.district_day && !requestsMusic) return placeStructure;
   const requestedDate = normalizeSourceEventDate(selectedDate);
   const tonight = requestedDate
     ? selectedDayCandidates(liveEvents)
@@ -220,20 +224,51 @@ function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null, li
   // notices can stay in Pulse/source inspect, but must not become an evening
   // anchor just because they are timed and geocoded.
   const choices = activeLiveChoices(liveEventChoices, requestedDate);
-  const clearEvent = () => ({ ...placeStructure, district_day: { ...placeStructure.district_day, evening_event: null } });
+  const clearEvent = () => placeStructure?.district_day
+    ? { ...placeStructure, district_day: { ...placeStructure.district_day, evening_event: null } }
+    : placeStructure;
   // Removal is deliberately subtractive, even if its old source disappeared.
   // It cannot vouch for or add an event; completion must not refill the slot.
   if (choices.some(choice => choice.action === "remove")) return clearEvent();
   const excluded = new Set(choices.filter(x => x.action === "replace").map(x => x.occurrence_id));
   const pins = new Set(choices.filter(x => x.action === "keep").map(x => x.occurrence_id));
   const eligible = tonight.filter(isEligibleEveningAnchor).filter(row => !excluded.has(liveOccurrenceId(row)));
+  const matchesMusic = row => requestsMusic && row?.route_eligible === true &&
+    scoreEventPreferenceFit(row, ["live_music"], { selectedDate: requestedDate }).level === "strong";
+  const music = !pins.size && requestsMusic
+    ? eligible.filter(matchesMusic).slice(0, requestedDate ? MAX_MUSIC_ROUTE_CANDIDATES : 1)
+    : [];
   const event = pins.size
     ? eligible.find(row => row.route_eligible === true && pins.has(liveOccurrenceId(row)))
-    : eligible[0];
+    : music[0] || (requested.length === 1 && requestsMusic ? null : eligible[0]);
   if (!event) return choices.length ? clearEvent() : placeStructure;
-  const occurrenceId = liveOccurrenceId(event);
-
+  const exactMusic = event === music[0] || (pins.size > 0 && matchesMusic(event));
+  if (!placeStructure?.district_day) {
+    if (!exactMusic && !pins.size) return placeStructure;
+    // Two admitted stops can form a route even when there is too little
+    // place supply for district clustering. Keep the ordinary Live stop gate.
+    placeStructure = { provenance: "agnostic_anchor", area_count: 0, district_day: { areas: [] } };
+  }
   const areas = Array.isArray(placeStructure.district_day.areas) ? placeStructure.district_day.areas : [];
+  const next = {
+    ...placeStructure,
+    district_day: {
+      ...placeStructure.district_day,
+      evening_event: buildEveningAnchor(event, areas, exactMusic, pins),
+    },
+  };
+  // A private shortlist marks an automatic music trial even when there are no
+  // alternatives. The response carries one anchor and the ordinary Live ranking.
+  if (requestedDate && music.length) {
+    Object.defineProperty(next, MUSIC_ROUTE_ALTERNATIVES, {
+      value: music.slice(1).map(row => buildEveningAnchor(row, areas, true, pins)),
+    });
+  }
+  return next;
+}
+
+function buildEveningAnchor(event, areas, exactMusic, pins) {
+  const occurrenceId = liveOccurrenceId(event);
   let nearIndex = null;
   let nearKm = Infinity;
   areas.forEach((area, i) => {
@@ -247,7 +282,7 @@ function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null, li
     }
   });
 
-  const eveningEvent = {
+  return {
     id: event.id || null,
     live_occurrence_id: occurrenceId,
     live_choice_eligible: Boolean(occurrenceId && event.route_eligible === true),
@@ -265,6 +300,7 @@ function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null, li
     ...classifyEventSourceLink(event.source_url),
     license: event.license || null,
     cultural_tier: event.cultural_tier || null,
+    ...(exactMusic ? { covered_preferences: ["live_music"] } : {}),
     salience_score: Number.isFinite(event.salience_score) ? event.salience_score : null,
     // Venue-local timezone rides along (same contract as the event views) so a
     // "tonight at 19:00" renders in the VENUE's clock wherever it is shown.
@@ -273,11 +309,6 @@ function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null, li
     lng: event.lng,
     near_area_index: nearIndex,
     near_area_km: nearIndex != null && Number.isFinite(nearKm) ? Number(nearKm.toFixed(2)) : null,
-  };
-
-  return {
-    ...placeStructure,
-    district_day: { ...placeStructure.district_day, evening_event: eveningEvent },
   };
 }
 
@@ -311,6 +342,7 @@ function isEligibleEveningAnchor(event) {
 }
 
 module.exports = {
+  MUSIC_ROUTE_ALTERNATIVES,
   eventOccurrenceForDate,
   eventReachesEvening,
   isEligibleEveningAnchor,

@@ -107,7 +107,7 @@ const component = plannerSurfaceSource();
 
 test("the compose teardown only clears the day when retention says so", () => {
   // The bug this slice fixes: an UNCONDITIONAL clear before the fetch.
-  const guarded = /if \(!retention\.keepPrevious\) \{\s*\n\s*setClassification\(null\);\s*\n\s*setSafeResponse\(null\);/;
+  const guarded = /if \(!retention\.keepPrevious\) \{\s*\n\s*setClassification\(null\);\s*\n\s*installResponse\(null\);/;
   assert.match(component, guarded, "the pre-fetch clear must be behind the retention guard");
 
   // And the guard must be computed from the policy, not re-implemented inline.
@@ -132,7 +132,7 @@ test("a landed verdict replaces the held day atomically", () => {
   );
   const order = [
     "setClassification(cls);",
-    "setSafeResponse(safe);",
+    "installResponse(safe);",
     "displayedAnchorKeyRef.current = anchorKey(anchor);",
     "setAppliedPins(composedNow ? sentPins : []);",
     "setDayIsStale(false);",

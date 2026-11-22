@@ -32,7 +32,7 @@ const DINNER_AND_BARS = [
   place('bistro', 'restaurant', ['restaurant'], 3),
 ];
 
-async function compose({ clock, preferences, records, date = DATE }) {
+async function compose({ clock, preferences, records, date = DATE, pins = [] }) {
   const server = buildApp({
     openDataLoader: makeLoader(records),
     weatherProvider: async () => null,
@@ -45,6 +45,7 @@ async function compose({ clock, preferences, records, date = DATE }) {
       place: 'Fixture place', dates: [date], preferences, day_rhythm: 'balanced', leg_pacing: 'balanced',
       distance_mode: 'no_limit', start: { type: 'auto' }, end: { type: 'auto' }, home_base: { type: 'auto' },
       experimental_agnostic_route_output: 1, include_external_candidates: 1, agnostic_engine_compose: 1,
+      ...(pins.length ? { pinned_candidate_ids: pins } : {}),
     } });
     assert.equal(response.status, 200);
     const route = response.body.days[0]?.primary_route;
@@ -55,14 +56,16 @@ async function compose({ clock, preferences, records, date = DATE }) {
   }
 }
 
-test('an evening day that keeps daytime stops says it is not anchored to now', async () => {
+// An evening plan keeps the daytime stops the reader asked for and says their
+// hours tonight are unconfirmed, instead of calling the day not anchored.
+test('an evening day that keeps daytime stops names them as unconfirmed tonight', async () => {
   const route = await compose({ clock: EVENING, preferences: DAYTIME_PREFERENCES, records: DAYTIME_DAY });
   assert.ok(route.main_stops.some(stop => stop.role === 'culture_stop'), JSON.stringify(route.main_stops.map(s => s.role)));
-  // The labels stay withheld: an interleaved day must not print a backwards arc.
-  assert.deepEqual(route.daypart_arc, []);
+  // No backwards arc: every stop in tonight's plan reads as evening.
+  assert.ok(route.daypart_arc.every(daypart => daypart === 'evening'), JSON.stringify(route.daypart_arc));
   assert.equal(route.current_local_time_band, 'evening');
-  assert.equal(route.anchored_to_local_time, false);
-  assert.ok(route.caveats.includes('daypart_arc_precedes_local_time'), JSON.stringify(route.caveats));
+  assert.ok(route.caveats.includes('picks_unconfirmed_tonight'), JSON.stringify(route.caveats));
+  assert.ok(!route.caveats.includes('daypart_arc_precedes_local_time'), JSON.stringify(route.caveats));
 });
 
 test('dinner and bars in the evening carry no such note; a meal may be dinner', async () => {

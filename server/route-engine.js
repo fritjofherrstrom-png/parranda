@@ -17,6 +17,7 @@ const { normalizeSelectedDayHoursFact } = require("./place-candidates/opening-ho
 const { normalizeSourceWebsite } = require("./lib/source-website");
 const { normalizeTrustSummary } = require("./route-candidates/contract");
 const { buildDayflowContext } = require("./planner/dayflow-context");
+const { buildDayWeatherSummary } = require("./planner/day-weather-summary");
 const { daypartSlotForRole, SLOT_DAYPART } = require("./planner/agnostic-route-ordering");
 const { selectAgnosticCandidateSet } = require("./planner/agnostic-candidate-set");
 const { selectBalancedDay, orderBalancedDay, selectEditedDay, dayEditOutcome } = require("./planner/day-composition-policy");
@@ -228,6 +229,8 @@ function buildAgnosticComposeTemplate(targetKm) {
 
 function markAgnosticComposeRoute(route) {
   if (route && typeof route === "object") {
+    // Composition provenance must not erase the source of the map geometry.
+    if (route.routing_source === "heuristic" || route.routing_source === "osrm") route.geometry_source = route.routing_source;
     route.routing_source = "agnostic_compose";
     route.confidence = "low";
   }
@@ -4330,7 +4333,17 @@ function summarizeArcGeometry(orderedStops, start, end, startProfile, endProfile
 }
 
 
-function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing = "balanced", lang = "sv") {
+function betterStopOrder(geometry, bestGeometry, preferNearbyStart) {
+  if (!bestGeometry || geometry.objective < bestGeometry.objective) return true;
+  // Equivalent loops can put a place at the reader's anchor last simply
+  // because that permutation was encountered first. Keep the original
+  // geometry objective primary; proximity only resolves an exact tie.
+  return preferNearbyStart && geometry.objective === bestGeometry.objective &&
+    geometry.firstGap < bestGeometry.firstGap;
+}
+
+function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing = "balanced", lang = "sv", orderOptions = null) {
+  const preferNearbyStart = shape === "loop" && orderOptions?.preferNearbyStart === true;
   if (selectedStops.length <= 1) {
     const summary =
       shape === "loop"
@@ -4368,10 +4381,10 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
           lang,
         );
 
-  // Same objective either way — only the SEARCH changes. Inside the safe range
-  // the exhaustive order is byte-identical to before.
+  // Same objective either way — only the SEARCH changes. Without the private
+  // near-start opt-in, the exhaustive order stays byte-identical to before.
   if (selectedStops.length > MAX_EXHAUSTIVE_STOP_ORDER) {
-    return refineStopOrder(selectedStops, start, geometryFor);
+    return refineStopOrder(selectedStops, start, geometryFor, preferNearbyStart);
   }
 
   let bestOrder = selectedStops;
@@ -4380,7 +4393,7 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
   permuteStops(selectedStops).forEach((candidate) => {
     const geometry = geometryFor(candidate);
 
-    if (!bestGeometry || geometry.objective < bestGeometry.objective) {
+    if (betterStopOrder(geometry, bestGeometry, preferNearbyStart)) {
       bestGeometry = geometry;
       bestOrder = candidate;
     }
@@ -4398,7 +4411,7 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
 // the same day. It drops nothing — every stop handed in comes back out, so an
 // oversized day stays honest about its own size instead of quietly shrinking to
 // fit the optimizer.
-function refineStopOrder(selectedStops, start, geometryFor) {
+function refineStopOrder(selectedStops, start, geometryFor, preferNearbyStart = false) {
   const remaining = [...selectedStops];
   const ordered = [];
   let cursor = start;
@@ -4420,6 +4433,10 @@ function refineStopOrder(selectedStops, start, geometryFor) {
 
   let bestOrder = ordered;
   let bestGeometry = geometryFor(ordered);
+  // Retain the legacy search cursor: accepting a tie there changes which
+  // later improvements bounded 2-opt sees. Track an equivalent return choice
+  // separately, among the candidates this same search already evaluates.
+  let preferred = { orderedStops: bestOrder, geometry: bestGeometry };
   for (let pass = 0; pass < MAX_STOP_ORDER_REFINEMENT_PASSES; pass += 1) {
     let improved = false;
     for (let i = 0; i < bestOrder.length - 1; i += 1) {
@@ -4435,12 +4452,15 @@ function refineStopOrder(selectedStops, start, geometryFor) {
           bestOrder = candidate;
           improved = true;
         }
+        if (preferNearbyStart && betterStopOrder(geometry, preferred.geometry, true)) {
+          preferred = { orderedStops: candidate, geometry };
+        }
       }
     }
     if (!improved) break;
   }
 
-  return { orderedStops: bestOrder, geometry: bestGeometry };
+  return preferNearbyStart ? preferred : { orderedStops: bestOrder, geometry: bestGeometry };
 }
 
 // The earliest daypart slot a stop can fill, from its planner role(s). Null when
@@ -5470,8 +5490,10 @@ function buildRouteFromTemplate(
     selectedStops = selectBalancedDay({
       rankedCandidates: sortedPool, selected: constrained.selected, preferences,
       preferencePriority: options.preferencePriority || getActiveCityConfig().__preferencePriority || [],
+      preferFirstChoice: getActiveCityConfig().__preferFirstChoice === true,
       pinnedIds: options.pinnedStopIds || [], start, end, shape, targetKm: selectionTargetKm,
       mealContext: getActiveCityConfig().__mealContext || null,
+      mealSpacing: getActiveCityConfig().__mealSpacing === true,
     });
   }
 
@@ -5510,6 +5532,7 @@ function buildRouteFromTemplate(
     distanceMode,
     legPacing,
     lang,
+    { preferNearbyStart: template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID && !dayEdit },
   );
 
   // Agnostic_compose daypart post-pass (gated). Reorder the geometry-optimal
@@ -7230,6 +7253,7 @@ async function generateRecommendations({
         if (!primary || agnosticTooThin || manualEmptyDay || primaryEdit?.status === 'refused') {
           days.push({
             date,
+            weather_summary: buildDayWeatherSummary(weather, date),
             ...(primaryEdit ? { day_edit: primaryEdit } : {}),
             ...(manualEmptyDay ? { manual_empty_day: true } : {}),
             date_signals: dateSignals,
@@ -7282,6 +7306,7 @@ async function generateRecommendations({
 
         days.push({
           date,
+          weather_summary: buildDayWeatherSummary(weather, date),
           date_signals: dateSignals,
           live_events: annotatedLiveEvents,
           primary_route: primary.route,

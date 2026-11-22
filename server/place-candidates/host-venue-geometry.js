@@ -79,7 +79,7 @@ function namedPlaceVerdict(event, hostNames, townWords) {
   return named.every((name) => hostNames.has(name)) ? "host" : "other";
 }
 
-function placeAtHostVenue(events, hostVenue, { placeContext = null } = {}) {
+function placeAtHostVenue(events, hostVenue, { placeContext = null, sourceLocationScope = null } = {}) {
   const rows = Array.isArray(events) ? events : [];
   const host = validHostVenue(hostVenue);
   if (!host || !rows.length) return rows;
@@ -96,7 +96,13 @@ function placeAtHostVenue(events, hostVenue, { placeContext = null } = {}) {
     }
     return namedPlaceVerdict(event, hostNames, townWords);
   });
-  const pointsElsewhere = verdicts.some((verdict) => verdict === "other" || verdict === "elsewhere");
+  const pointsElsewhere = [...rows, ...(Array.isArray(sourceLocationScope) ? sourceLocationScope : [])]
+    .some((event) => {
+      if (event?.lat !== undefined || event?.lng !== undefined) {
+        return !hasCoordinates(event) || distanceKm(host, event) > MULTI_VENUE_DISTANCE_KM;
+      }
+      return namedPlaceVerdict(event, hostNames, townWords) === "other";
+    });
   return rows.map((event, index) => {
     const basis = verdicts[index] === "host" ? "host_venue_name"
       : verdicts[index] === "unnamed" && !pointsElsewhere ? "host_venue_programme" : null;

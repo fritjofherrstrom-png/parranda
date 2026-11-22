@@ -1,17 +1,6 @@
-import type { ReactNode } from "react";
-import { stopCategoryFamily, type StopCategoryFamily } from "../../lib/stop-category.mjs";
+import { stopCategoryFamily } from "../../lib/stop-category.mjs";
 import { stopTypeLabel, type StopCardFactsInput } from "../../lib/stop-card-facts.mjs";
-import { CultureIcon, DrinkIcon, FoodIcon, NatureIcon, ShopIcon, SightIcon } from "../shared/icons";
 import { typeLabel, type Lang } from "./copy";
-
-const CATEGORY_ICONS: Record<StopCategoryFamily, (props: { className?: string }) => ReactNode> = {
-  food: FoodIcon,
-  drink: DrinkIcon,
-  culture: CultureIcon,
-  nature: NatureIcon,
-  sight: SightIcon,
-  shop: ShopIcon,
-};
 
 // A source kind describes the place, never its route admission or requested fit.
 // Unknown types stay unlabelled; second-hand trade stays broad unless its own
@@ -24,17 +13,12 @@ export function stopCategoryLabel(stop: StopCardFactsInput | null | undefined, l
 
 export default function StopCategory({ type, label, muted = false }: { type: unknown; label: string; muted?: boolean }) {
   const family = stopCategoryFamily(type);
-  const Symbol = family ? CATEGORY_ICONS[family] : null;
   return (
     <span
       data-stop-category={family || "other"}
-      className={
-        "inline-flex max-w-full items-center gap-1.5 rounded-full bg-parranda-ink/[0.07] py-1 pl-2 pr-2.5 text-xs font-semibold leading-none " +
-        (muted ? "text-parranda-ink/68" : "text-parranda-ink")
-      }
+      className={`max-w-full wrap-anywhere rounded-parranda-tag bg-parranda-fill px-2 py-0.5 text-xs font-semibold ${muted ? "text-parranda-ink-meta" : "text-parranda-ink-soft"}`}
     >
-      {Symbol && <Symbol className="h-3.5 w-3.5 text-parranda-ink/72" />}
-      <span className="truncate">{label}</span>
+      {label}
     </span>
   );
 }

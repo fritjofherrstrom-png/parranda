@@ -27,7 +27,7 @@ const { createDateRangeListingProvider } = require("../pulse-sources/date-range-
 const { createLinkedEventsProvider } = require("../pulse-sources/linked-events-source-provider");
 const { createTicketmasterProvider } = require("../pulse-sources/ticketmaster-source-provider");
 const { groupLiveProgramViews, diversifyLiveHighlights } = require("./live-program-presentation");
-const { createSchemaOrgEventProvider } = require("../pulse-sources/schema-org-event-provider");
+const { createSchemaOrgEventProvider, schemaOrgCollectionLocationScope } = require("../pulse-sources/schema-org-event-provider");
 const { createEventsCalendarProvider } = require("../pulse-sources/events-calendar-source-provider");
 const { createRssAtomEventProvider } = require("../pulse-sources/rss-atom-event-provider");
 const { createHtmlVenueCalendarProvider } = require("../pulse-sources/html-venue-calendar-provider");
@@ -61,6 +61,7 @@ const {
 } = require("../pulse-sources/source-event-time");
 const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensitive-events");
 const { scoreEventPreferenceFit } = require("../pulse-engine/event-preference-fit");
+const { normalizeUserIntents } = require("../candidates/intent-vocabulary");
 const { createSourceCache } = require("./source-cache");
 const { LIVE_COLLECTION_READ } = require('../planner/live-completion');
 const {
@@ -632,13 +633,13 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
   };
 }
 
-function rankEventViews(views, preferences = []) {
+function rankEventViews(views, preferences = [], context = {}) {
   return dedupeViews(
     views
     .filter(Boolean)
     // Every served row, fresh or from a pool cached before the link
     // classification existed, carries it — derived from its own source_url.
-    .map((view) => withEventPreferenceFit(withEventSourceLink(view), preferences))
+    .map((view) => withEventPreferenceFit(withEventSourceLink(view), preferences, context))
     .sort(
       (a, b) =>
         eventRankingScore(b) - eventRankingScore(a) ||
@@ -649,11 +650,14 @@ function rankEventViews(views, preferences = []) {
   );
 }
 
-function buildEventBucketSurface(views, preferences = []) {
+function buildEventBucketSurface(views, preferences = [], context = {}) {
   let evidenceRank = 0;
-  const evidence = rankEventViews(groupSourceOccurrences(views), preferences).map(view => {
+  const evidence = rankEventViews(groupSourceOccurrences(views), preferences, context).map(view => {
     if (view.occurrences?.length) return { ...view, live_evidence_rank: evidenceRank,
-      occurrences: view.occurrences.map(slot => ({ ...slot, live_evidence_rank: evidenceRank++ })) };
+      occurrences: view.occurrences.map(slot => ({
+        ...(view.requested_preferences?.includes("live_music") ? withEventPreferenceFit(slot, preferences, context) : slot),
+        live_evidence_rank: evidenceRank++,
+      })) };
     return { ...view, live_evidence_rank: evidenceRank++ };
   });
   const ranked = groupLiveProgramViews(evidence);
@@ -754,8 +758,8 @@ function buildEventBrowse(tonightSurface, thisWeekSurface) {
   };
 }
 
-function withEventPreferenceFit(view, preferences = []) {
-  const fit = scoreEventPreferenceFit(view, preferences);
+function withEventPreferenceFit(view, preferences = [], context = {}) {
+  const fit = scoreEventPreferenceFit(view, preferences, context);
   if (fit.requested_preferences.length === 0) return view;
   return {
     ...view,
@@ -793,13 +797,16 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
     }
   }
   const { _rankable_events: _internalPool, _live_destination_inputs: _privateInputs, ...publicResult } = collected;
+  const context = { selectedDate: collected.selected_date, now: now ?? undefined };
   const tonightSurface = buildEventBucketSurface(
     filterEventsForLiveScope(tonightPool, scope),
     preferences,
+    context,
   );
   const thisWeekSurface = buildEventBucketSurface(
     filterEventsForLiveScope(thisWeekPool, scope),
     preferences,
+    context,
   );
   const tonight = tonightSurface.highlights;
   const thisWeek = thisWeekSurface.highlights;
@@ -823,7 +830,7 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
       accepted_event_count: projectedCount,
       out_of_period_event_count: (Number(baseHealth.out_of_period_event_count) || 0) + endedSinceCollection,
       result: projectedCount > 0 ? "events_found"
-        : requestTimeDiscoveryFailed(collected) ? "unknown"
+        : requestTimeDiscoveryFailed(collected) || baseAcquisition.runtime_readiness?.unavailable_candidate_count > 0 ? "unknown"
         : baseHealth.responding_source_count > 0 ? "empty" : "unknown",
       reasons,
     };
@@ -905,6 +912,51 @@ function buildScopedEventSourcePlan({
   return selected.slice(0, sourceCap);
 }
 
+// Runtime requirements belong to the adapter and trusted server configuration,
+// not a publisher's readiness claim. This is eligibility, not source approval.
+function planRuntimeReadyEventSources({ datatourismeKey = null, ...options } = {}) {
+  const unavailable = source => normalizeLocalEventAdapter(source.adapter || source.kind) === "datatourisme" &&
+    !String(datatourismeKey || "").trim();
+  const initial = buildScopedEventSourcePlan(options);
+  const unavailableSources = initial.filter(unavailable).map(source => ({
+    ...compactSourceStatus({ source, status: "unavailable", reason: "source_credentials_unavailable", raw: [] }),
+    attempted: false,
+  }));
+  const sourcePlan = unavailableSources.length
+    ? buildScopedEventSourcePlan({ ...options, registry: options.registry.filter(source => !unavailable(source)) })
+    : initial;
+  return { sourcePlan, unavailableSources };
+}
+
+function withRuntimeReadiness(collected, unavailableSources) {
+  if (!unavailableSources.length) return collected;
+  const acquisition = collected.acquisition || {};
+  const health = acquisition.source_health || buildAnchorEventSourceHealth([]);
+  const pending = collected.pending === true || health.status === "pending";
+  const reasons = Array.isArray(health.reasons) ? health.reasons : [];
+  return carryLiveDestinationEvidence(collected, {
+    ...collected,
+    coverage: "covered",
+    acquisition: {
+      ...acquisition,
+      runtime_readiness: {
+        unavailable_candidate_count: unavailableSources.length,
+        unavailable_sources: unavailableSources,
+      },
+      source_health: {
+        ...health,
+        // These candidates made no request and are not selected-source failures.
+        // Keep selected-source counters intact; disclose the prerequisite separately.
+        unavailable_candidate_count: unavailableSources.length,
+        status: pending ? "pending" : health.responding_source_count > 0 ? "partial" : "unavailable",
+        result: health.result === "empty" ? "unknown" : health.result,
+        reasons: [...new Set([...reasons.filter(reason => reason !== "no_current_events_found"),
+          "source_prerequisites_unavailable", "source_credentials_unavailable"])],
+      },
+    },
+  });
+}
+
 /**
  * Collect ranked live events near an anchor, bucketed tonight / this_week.
  * @param {object} opts
@@ -954,7 +1006,7 @@ async function collectAnchorEvents({
     MAX_EVENT_COLLECTION_RADIUS_M,
     Math.max(100, Math.round(radiusM || DEFAULT_RADIUS_M)),
   );
-  const sourcePlan = buildScopedEventSourcePlan({
+  const { sourcePlan, unavailableSources } = planRuntimeReadyEventSources({
     anchor,
     sourceAnchors,
     registry: registry || resolveEventFeedRegistry(),
@@ -963,6 +1015,7 @@ async function collectAnchorEvents({
     globalEnabled: Boolean(globalKey),
     maxSources,
     maxLocalSources,
+    datatourismeKey,
     complementarySourceIds,
     sourceBounds,
     // The same server-owned instant the rest of this collection reasons with.
@@ -972,7 +1025,7 @@ async function collectAnchorEvents({
     now,
   });
   if (sourcePlan.length === 0) {
-    return {
+    return withRuntimeReadiness({
       coverage: "uncovered",
       ...(selectedDate ? { selected_date: selectedDate } : {}),
       feed: null,
@@ -981,7 +1034,7 @@ async function collectAnchorEvents({
       this_week: [],
       browse: emptyEventBrowse(),
       acquisition: emptyAcquisition(effectiveRadiusM),
-    };
+    }, unavailableSources);
   }
 
   const nowDate = now ? new Date(now) : selectedDate ? new Date() : null;
@@ -1038,7 +1091,10 @@ async function collectAnchorEvents({
       sourceEvidence.push(normalized);
     }
     // A source found on a venue's own website places its rows there on evidence.
-    normalizedEvidence.push(...placeAtHostVenue(sourceEvidence, source.host_venue, { placeContext }));
+    normalizedEvidence.push(...placeAtHostVenue(sourceEvidence, source.host_venue, {
+      placeContext,
+      sourceLocationScope: collection.sourceLocationScope,
+    }));
   }
 
   // Only rows that can appear in the requested Live period may use the
@@ -1125,10 +1181,12 @@ async function collectAnchorEvents({
   const tonightSurface = buildEventBucketSurface(
     filterEventsForLiveScope(tonight, scope),
     preferences,
+    { selectedDate, now: nowDate },
   );
   const thisWeekSurface = buildEventBucketSurface(
     filterEventsForLiveScope(thisWeek, scope),
     preferences,
+    { selectedDate, now: nowDate },
   );
   const rankedTonight = tonightSurface.highlights;
   const rankedThisWeek = thisWeekSurface.highlights;
@@ -1140,7 +1198,7 @@ async function collectAnchorEvents({
     outOfPeriodEventCount: outOfPeriodCount,
     rejected,
   });
-  return bindLiveCollection({
+  return withRuntimeReadiness(bindLiveCollection({
     coverage: "covered",
     ...(selectedDate ? { selected_date: selectedDate } : {}),
     feed: feeds[0] || null,
@@ -1170,7 +1228,7 @@ async function collectAnchorEvents({
       venue_resolution: venueResolution.summary,
       geometry_scope: bounded.geometry_scope,
     },
-  }, destinationInputs);
+  }, destinationInputs), unavailableSources);
 }
 
 // The Live period a row belongs to: the selected (or current) day, the
@@ -1373,6 +1431,7 @@ async function collectEventSource({
       raw,
       status: outcome.status,
       reason: outcome.reason,
+      sourceLocationScope: schemaOrgCollectionLocationScope(collected),
     };
   } catch (_error) {
     return { source, raw: [], status: "failed", reason: String(_error?.code || "").startsWith("source_redirect_")
@@ -1422,6 +1481,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
     return createSchemaOrgEventProvider({
       ...common,
       format: adapter === "schema_org_html" ? "html" : source.format,
+      timezone: source.timezone || source.fallback_timezone || undefined,
     });
   }
   if (adapter === "events_calendar" || adapter === "ical") {
@@ -1637,6 +1697,7 @@ function eventCacheKey(
   spatialScope = null,
   selectedDate = null,
   time = "tonight",
+  unavailableSources = [],
 ) {
   const lat = Number(anchor.lat).toFixed(5);
   const lng = Number(anchor.lng).toFixed(5);
@@ -1646,8 +1707,11 @@ function eventCacheKey(
     .sort()
     .join(",");
   const radius = Math.min(MAX_EVENT_COLLECTION_RADIUS_M, Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)));
-  return createHash("sha256").update(JSON.stringify([lat, lng, hour, radius,
-    spatialScopeCacheKey(spatialScope), sources, selectedDate || "current", time])).digest("hex");
+  // Selected IDs alone do not identify skipped candidates. Bind their server-
+  // owned identities/reasons as well, never the credential value itself.
+  const unavailable = unavailableSources.map(source => JSON.stringify([source.id, source.adapter, source.reason])).sort();
+  return createHash("sha256").update(JSON.stringify([EVENT_CACHE_NAMESPACE, lat, lng, hour, radius,
+    spatialScopeCacheKey(spatialScope), sources, selectedDate || "current", time, unavailable])).digest("hex");
 }
 
 function sourceIdentityForUrl(value) {
@@ -1727,7 +1791,9 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // gain their own acquisition priority. Earlier v21 pools cannot attest it.
 // v23 cannot reuse v22 selection of programme interfaces whose payload exceeds
 // the adapter's unchanged default byte budget.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v23";
+// v24 isolates runtime prerequisite selection and nullable holiday contracts.
+// The namespace also participates in keys for operator-supplied caches.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v25";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read
@@ -1976,10 +2042,11 @@ function resolveDefaultEventSupply(
       const marketFeed = osmMarketFeedForAnchor(anchor);
       if (marketFeed) appendUniqueEventFeeds(requestRegistry, [marketFeed]);
     }
-    const sourcePlan = buildScopedEventSourcePlan({
+    const { sourcePlan, unavailableSources } = planRuntimeReadyEventSources({
       anchor,
       sourceAnchors,
       registry: requestRegistry,
+      datatourismeKey,
       sourceBounds: scope?.kind === "in_place" ? scope.trusted_place_scope?.bounds : null,
       now,
       globalSource: GLOBAL_FEED_DESCRIPTOR,
@@ -2016,7 +2083,7 @@ function resolveDefaultEventSupply(
     const discoverNow = (!hasApprovedLocalSource || complementaryDiscoveryNeeded) &&
       typeof requestTimeDiscovery === "function";
     if (sourcePlan.length === 0 && !discoverNow) {
-      return {
+      return withRuntimeReadiness({
         coverage: "uncovered",
         ...(selectedDate ? { selected_date: selectedDate } : {}),
         feed: null,
@@ -2031,9 +2098,12 @@ function resolveDefaultEventSupply(
             "source_discovery_environment_not_wired",
           ),
         ),
-      };
+      }, unavailableSources);
     }
     const descriptors = sourcePlan.map((source) => compactSourceStatus({ source, status: "pending", raw: [] }));
+    // Earlier aggregate pools lack source-owned music classification and
+    // status. Keep ordinary warm reads and re-collect for this exact intent.
+    const requestsLiveMusic = Array.isArray(preferences) && normalizeUserIntents(preferences).intents.includes("live_music");
     const baseKey = eventCacheKey(
       anchor,
       now,
@@ -2042,18 +2112,21 @@ function resolveDefaultEventSupply(
       spatialScope,
       selectedDate,
       time,
-    );
+      unavailableSources,
+    ) + (requestsLiveMusic ? ":live-music-v1" : "");
     // A plain coordinate/calendar warm-up has not performed local research.
     // Do not let it answer for a later resolver-attested discovery request.
+    // Old derived pools also cannot attest topic-aware source selection;
+    // isolate only the discovery lane and preserve non-discovery cache keys.
     const key = discoverNow ? `${baseKey}:discovery:${createHash("sha256")
-      .update(JSON.stringify([placeLabel, placeContext, spatialScopeCacheKey(discoveryScope)]))
+      .update(JSON.stringify(["event-topic-prefix-v1", placeLabel, placeContext, spatialScopeCacheKey(discoveryScope)]))
       .digest("hex").slice(0, 20)}` : baseKey;
     // A broad calendar does not erase the existing local-discovery outcome.
     // Keep its current status alongside collection health, including cached
     // views, without allowing one to claim the other's successful coverage.
-    const withDiscoveryHealth = collected => discoveryHealth ? carryLiveDestinationEvidence(collected, {
+    const withDiscoveryHealth = collected => withRuntimeReadiness(discoveryHealth ? carryLiveDestinationEvidence(collected, {
       ...collected, acquisition: { ...collected.acquisition, discovery_health: discoveryHealth },
-    }) : collected;
+    }) : collected, unavailableSources);
     const cacheRead = readLiveDestinationCache(cache, sourcePlan);
     const cached = cacheRead.peek(key);
     if (cached) return cacheRead.carry(cached,
@@ -2123,7 +2196,7 @@ function resolveDefaultEventSupply(
         shouldStore: shouldCacheEventSupplyResult,
       });
     }
-    const pending = {
+    const pending = withRuntimeReadiness({
       coverage: "covered",
       ...(selectedDate ? { selected_date: selectedDate } : {}),
       feed: descriptors[0] || null,
@@ -2161,7 +2234,7 @@ function resolveDefaultEventSupply(
           reasons: ["background_refresh_pending"],
         },
       },
-    };
+    }, unavailableSources);
     // Capture this producer, not its cache key: a later refresh of the same key
     // must never replace an older planner's completion. Ranking remains frozen
     // to the original request; this reader performs no acquisition or catalog IO.

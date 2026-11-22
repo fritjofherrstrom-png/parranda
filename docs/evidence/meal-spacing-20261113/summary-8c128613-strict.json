@@ -1,0 +1,1482 @@
+{
+ "totals": {
+  "days": 945,
+  "changed": 183,
+  "adjacent_before": 517,
+  "adjacent_after": 380,
+  "meals_before": 2158,
+  "meals_after": 2063,
+  "stops_changed": 0,
+  "coverage_lost": 0,
+  "km_before": 5173.8,
+  "km_after": 5193.7,
+  "labelled_before": 448,
+  "labelled_after": 409
+ },
+ "changes": [
+  {
+   "key": "clustered|culture+views+food|calm",
+   "before": "museum > garden > rest-a > rest-c",
+   "after": "museum > gallery-a > garden > rest-a",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "3.8->3.6"
+  },
+  {
+   "key": "clustered|culture+views+food|balanced",
+   "before": "museum > gallery-a > garden > rest-a > rest-c",
+   "after": "museum > gallery-a > gallery-c > garden > rest-a",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "3.8->3.8"
+  },
+  {
+   "key": "clustered|culture+views+food|full",
+   "before": "museum > gallery-a > gallery-c > garden > rest-a > rest-c",
+   "after": "museum > gallery-a > gallery-b > gallery-c > garden > rest-a",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "4->4"
+  },
+  {
+   "key": "clustered|food+culture|calm",
+   "before": "museum > gallery-a > rest-a > rest-c",
+   "after": "museum > gallery-a > gallery-b > rest-a",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "3.8->3.6"
+  },
+  {
+   "key": "clustered|food+culture|balanced",
+   "before": "museum > gallery-a > gallery-b > rest-a > rest-c",
+   "after": "museum > gallery-a > gallery-b > gallery-c > rest-a",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "3.8->3.9"
+  },
+  {
+   "key": "clustered|food+culture|full",
+   "before": "museum > gallery-a > gallery-b > gallery-c > rest-a > rest-c",
+   "after": "museum > gallery-a > gallery-c > gallery-b > cafe > rest-a",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "4.1->4"
+  },
+  {
+   "key": "clustered|food+fika+views|calm",
+   "before": "cafe > garden > rest-a > rest-c",
+   "after": "cafe > garden > park > rest-a",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "3.1->3.5"
+  },
+  {
+   "key": "forced|culture+views+food|calm",
+   "before": "gallery-a > gallery-d > rest-a > rest-b",
+   "after": "gallery-a > gallery-b > gallery-d > rest-a",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "3.1->2.9"
+  },
+  {
+   "key": "forced|culture+views+food|balanced",
+   "before": "gallery-a > gallery-b > gallery-d > rest-a > rest-b",
+   "after": "gallery-a > gallery-b > gallery-d > gallery-c > rest-a",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "3.2->3.2"
+  },
+  {
+   "key": "forced|food+culture|calm",
+   "before": "gallery-a > gallery-d > rest-a > rest-b",
+   "after": "gallery-a > gallery-b > gallery-d > rest-a",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "3.1->2.9"
+  },
+  {
+   "key": "forced|food+culture|balanced",
+   "before": "gallery-a > gallery-b > gallery-d > rest-a > rest-b",
+   "after": "gallery-a > gallery-b > gallery-d > gallery-c > rest-a",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "3.2->3.2"
+  },
+  {
+   "key": "seeded-0|culture+views+food|calm",
+   "before": "museum-0-0 > restaurant-0-0 > viewpoint-0-0 > restaurant-0-1",
+   "after": "viewpoint-0-0 > restaurant-0-1 > gallery-0-0 > museum-0-0",
+   "meals": "2->1",
+   "adjacent": "false->false",
+   "km": "9.4->8.8"
+  },
+  {
+   "key": "seeded-0|culture+views+food|balanced",
+   "before": "viewpoint-0-0 > restaurant-0-1 > restaurant-0-2 > gallery-0-0 > museum-0-0",
+   "after": "viewpoint-0-0 > restaurant-0-1 > gallery-0-0 > park-0-0 > museum-0-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "8.8->8.9"
+  },
+  {
+   "key": "seeded-0|culture+views+food|full",
+   "before": "viewpoint-0-0 > restaurant-0-0 > restaurant-0-1 > gallery-0-0 > park-0-0 > museum-0-0",
+   "after": "viewpoint-0-0 > park-0-1 > restaurant-0-1 > gallery-0-0 > park-0-0 > museum-0-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "8.9->9"
+  },
+  {
+   "key": "seeded-0|food+fika+views|calm",
+   "before": "cafe-0-0 > restaurant-0-1 > restaurant-0-0 > viewpoint-0-0",
+   "after": "cafe-0-0 > restaurant-0-1 > park-0-1 > viewpoint-0-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "4.9->5"
+  },
+  {
+   "key": "seeded-1|food+fika+views|full",
+   "before": "viewpoint-1-0 > viewpoint-1-1 > restaurant-1-0 > cafe-1-2 > cafe-1-1 > restaurant-1-1",
+   "after": "restaurant-1-1 > cafe-1-1 > cafe-1-2 > viewpoint-1-1 > garden-1-0 > viewpoint-1-0",
+   "meals": "2->1",
+   "adjacent": "false->false",
+   "km": "9.3->7.6"
+  },
+  {
+   "key": "seeded-1|food+nightlife|calm",
+   "before": "bar-1-2 > restaurant-1-1 > bar-1-0 > restaurant-1-0",
+   "after": "bar-1-0 > restaurant-1-1 > bar-1-2 > bar-1-1",
+   "meals": "2->1",
+   "adjacent": "false->false",
+   "km": "6.2->8.9"
+  },
+  {
+   "key": "seeded-1|food+nightlife|balanced",
+   "before": "bar-1-0 > restaurant-1-1 > pizza-1-0 > bar-1-2 > bar-1-1",
+   "after": "bar-1-2 > restaurant-1-0 > bar-1-0 > restaurant-1-1 > cafe-1-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "8.9->7.6"
+  },
+  {
+   "key": "seeded-1|food+nightlife|full",
+   "before": "bar-1-2 > cafe-1-1 > cafe-1-2 > restaurant-1-1 > bar-1-0 > restaurant-1-0",
+   "after": "bar-1-2 > cafe-1-1 > restaurant-1-1 > cafe-1-0 > restaurant-1-0 > bar-1-0",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "6.9->7.9"
+  },
+  {
+   "key": "seeded-3|culture+views+food|full",
+   "before": "museum-3-0 > viewpoint-3-0 > gallery-3-0 > museum-3-1 > restaurant-3-4 > restaurant-3-2",
+   "after": "restaurant-3-2 > museum-3-1 > restaurant-3-1 > gallery-3-0 > viewpoint-3-0 > museum-3-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "7.8->7.8"
+  },
+  {
+   "key": "seeded-3|food+culture|calm",
+   "before": "museum-3-1 > museum-3-0 > restaurant-3-0 > restaurant-3-2",
+   "after": "restaurant-3-2 > cafe-3-0 > restaurant-3-0 > museum-3-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "7.8->6.1"
+  },
+  {
+   "key": "seeded-3|food+culture|balanced",
+   "before": "museum-3-1 > gallery-3-0 > museum-3-0 > restaurant-3-0 > restaurant-3-2",
+   "after": "restaurant-3-2 > cafe-3-0 > restaurant-3-0 > museum-3-0 > museum-3-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "8->8.1"
+  },
+  {
+   "key": "seeded-7|culture+views+food|calm",
+   "before": "park-7-1 > restaurant-7-5 > restaurant-7-1 > museum-7-1",
+   "after": "restaurant-7-3 > park-7-1 > restaurant-7-5 > museum-7-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6.2->7.3"
+  },
+  {
+   "key": "seeded-7|culture+views+food|balanced",
+   "before": "park-7-1 > museum-7-0 > restaurant-7-5 > restaurant-7-1 > museum-7-1",
+   "after": "restaurant-7-3 > park-7-1 > museum-7-0 > restaurant-7-5 > museum-7-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6.3->7.4"
+  },
+  {
+   "key": "seeded-7|culture+views+food|full",
+   "before": "museum-7-1 > gallery-7-0 > restaurant-7-5 > park-7-1 > museum-7-0 > restaurant-7-1",
+   "after": "museum-7-1 > gallery-7-0 > restaurant-7-5 > park-7-1 > museum-7-0 > restaurant-7-2",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "7.6->7.8"
+  },
+  {
+   "key": "seeded-7|food+culture|calm",
+   "before": "museum-7-0 > restaurant-7-5 > restaurant-7-1 > museum-7-1",
+   "after": "museum-7-0 > restaurant-7-5 > restaurant-7-3 > museum-7-1",
+   "meals": "2->2",
+   "adjacent": "true->true",
+   "km": "6.3->6.7"
+  },
+  {
+   "key": "seeded-7|food+culture|balanced",
+   "before": "museum-7-1 > gallery-7-0 > restaurant-7-5 > museum-7-0 > restaurant-7-1",
+   "after": "gallery-7-0 > restaurant-7-5 > museum-7-0 > restaurant-7-2 > museum-7-1",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "7.7->6.9"
+  },
+  {
+   "key": "seeded-7|food+fika+views|calm",
+   "before": "restaurant-7-1 > park-7-1 > restaurant-7-5 > cafe-7-1",
+   "after": "park-7-1 > cafe-7-0 > restaurant-7-5 > cafe-7-1",
+   "meals": "2->1",
+   "adjacent": "false->false",
+   "km": "7.3->5.7"
+  },
+  {
+   "key": "seeded-7|food+fika+views|balanced",
+   "before": "restaurant-7-1 > park-7-1 > cafe-7-0 > restaurant-7-5 > cafe-7-1",
+   "after": "park-7-1 > cafe-7-0 > restaurant-7-5 > garden-7-0 > cafe-7-1",
+   "meals": "2->1",
+   "adjacent": "false->false",
+   "km": "7.5->5.7"
+  },
+  {
+   "key": "seeded-7|food+fika+views|full",
+   "before": "cafe-7-3 > cafe-7-2 > park-7-1 > restaurant-7-5 > cafe-7-1 > restaurant-7-1",
+   "after": "cafe-7-3 > cafe-7-2 > park-7-1 > cafe-7-0 > restaurant-7-5 > cafe-7-1",
+   "meals": "2->1",
+   "adjacent": "false->false",
+   "km": "8.9->7.3"
+  },
+  {
+   "key": "seeded-8|culture+views+food|calm",
+   "before": "museum-8-1 > restaurant-8-1 > restaurant-8-2 > garden-8-0",
+   "after": "museum-8-1 > restaurant-8-1 > garden-8-0 > restaurant-8-3",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6.5->7"
+  },
+  {
+   "key": "seeded-8|food+culture|calm",
+   "before": "museum-8-1 > museum-8-0 > restaurant-8-2 > restaurant-8-3",
+   "after": "museum-8-0 > restaurant-8-1 > museum-8-1 > restaurant-8-3",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "7.6->7.6"
+  },
+  {
+   "key": "seeded-8|food+culture|balanced",
+   "before": "museum-8-1 > restaurant-8-1 > museum-8-0 > restaurant-8-2 > restaurant-8-3",
+   "after": "restaurant-8-1 > museum-8-0 > restaurant-8-2 > cafe-8-1 > restaurant-8-3",
+   "meals": "3->3",
+   "adjacent": "true->false",
+   "km": "7.8->6.6"
+  },
+  {
+   "key": "seeded-8|food+culture|full",
+   "before": "museum-8-1 > cafe-8-0 > restaurant-8-1 > museum-8-0 > pizza-8-0 > restaurant-8-3",
+   "after": "museum-8-1 > restaurant-8-1 > museum-8-0 > pizza-8-0 > cafe-8-1 > restaurant-8-3",
+   "meals": "3->3",
+   "adjacent": "true->false",
+   "km": "8.3->8.6"
+  },
+  {
+   "key": "seeded-8|food+fika+views|balanced",
+   "before": "garden-8-0 > restaurant-8-2 > cafe-8-1 > restaurant-8-1 > cafe-8-0",
+   "after": "restaurant-8-3 > garden-8-0 > cafe-8-1 > restaurant-8-1 > cafe-8-0",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "7.1->7.2"
+  },
+  {
+   "key": "seeded-9|culture+views+food|calm",
+   "before": "museum-9-1 > park-9-0 > restaurant-9-0 > restaurant-9-2",
+   "after": "museum-9-1 > park-9-0 > gallery-9-1 > restaurant-9-2",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "4.7->4"
+  },
+  {
+   "key": "seeded-9|culture+views+food|balanced",
+   "before": "museum-9-0 > museum-9-1 > park-9-0 > restaurant-9-0 > restaurant-9-2",
+   "after": "museum-9-0 > museum-9-1 > pizza-9-0 > park-9-0 > restaurant-9-2",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "7.3->6.8"
+  },
+  {
+   "key": "seeded-9|culture+views+food|full",
+   "before": "gallery-9-2 > museum-9-0 > museum-9-1 > park-9-0 > restaurant-9-0 > restaurant-9-2",
+   "after": "museum-9-0 > museum-9-1 > park-9-0 > restaurant-9-0 > cafe-9-1 > restaurant-9-2",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "8.3->7.7"
+  },
+  {
+   "key": "seeded-9|food+culture|calm",
+   "before": "museum-9-0 > museum-9-1 > restaurant-9-0 > restaurant-9-1",
+   "after": "museum-9-1 > restaurant-9-1 > gallery-9-0 > restaurant-9-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "5->2.7"
+  },
+  {
+   "key": "seeded-9|food+culture|balanced",
+   "before": "museum-9-0 > gallery-9-2 > museum-9-1 > restaurant-9-0 > restaurant-9-1",
+   "after": "museum-9-0 > gallery-9-2 > pizza-9-0 > museum-9-1 > restaurant-9-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6.4->6.5"
+  },
+  {
+   "key": "seeded-9|food+culture|full",
+   "before": "gallery-9-3 > gallery-9-2 > museum-9-0 > museum-9-1 > restaurant-9-0 > restaurant-9-1",
+   "after": "restaurant-9-0 > museum-9-1 > pizza-9-0 > gallery-9-3 > gallery-9-2 > museum-9-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6.4->6.9"
+  },
+  {
+   "key": "seeded-9|food+fika+views|calm",
+   "before": "cafe-9-0 > park-9-0 > restaurant-9-0 > restaurant-9-1",
+   "after": "cafe-9-0 > pizza-9-0 > park-9-0 > restaurant-9-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "3.8->3.8"
+  },
+  {
+   "key": "seeded-9|food+fika+views|balanced",
+   "before": "cafe-9-0 > park-9-0 > restaurant-9-0 > restaurant-9-1 > cafe-9-1",
+   "after": "cafe-9-0 > pizza-9-0 > park-9-0 > restaurant-9-0 > cafe-9-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "5.2->5.3"
+  },
+  {
+   "key": "seeded-9|food+fika+views|full",
+   "before": "cafe-9-0 > park-9-0 > restaurant-9-0 > restaurant-9-1 > cafe-9-2 > cafe-9-1",
+   "after": "cafe-9-0 > pizza-9-0 > park-9-0 > restaurant-9-0 > cafe-9-2 > cafe-9-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6.1->6.2"
+  },
+  {
+   "key": "seeded-9|food+nightlife|calm",
+   "before": "bar-9-0 > bar-9-1 > restaurant-9-0 > restaurant-9-1",
+   "after": "restaurant-9-0 > bar-9-1 > restaurant-9-2 > bar-9-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6.2->6.5"
+  },
+  {
+   "key": "seeded-9|food+nightlife|balanced",
+   "before": "bar-9-0 > cafe-9-1 > bar-9-1 > restaurant-9-0 > restaurant-9-1",
+   "after": "cafe-9-0 > bar-9-0 > restaurant-9-2 > bar-9-1 > restaurant-9-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6.2->7"
+  },
+  {
+   "key": "seeded-9|food+nightlife|full",
+   "before": "cafe-9-0 > bar-9-0 > cafe-9-1 > bar-9-1 > restaurant-9-1 > restaurant-9-0",
+   "after": "cafe-9-0 > bar-9-0 > cafe-9-1 > restaurant-9-2 > bar-9-1 > restaurant-9-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6.6->7.3"
+  },
+  {
+   "key": "seeded-10|food+fika+views|calm",
+   "before": "park-10-2 > park-10-1 > restaurant-10-1 > restaurant-10-0",
+   "after": "restaurant-10-0 > park-10-1 > park-10-0 > park-10-2",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.5->5.3"
+  },
+  {
+   "key": "seeded-12|culture+views+food|calm",
+   "before": "restaurant-12-4 > museum-12-0 > restaurant-12-1 > viewpoint-12-0",
+   "after": "viewpoint-12-0 > restaurant-12-1 > gallery-12-0 > museum-12-0",
+   "meals": "2->1",
+   "adjacent": "false->false",
+   "km": "5.5->6.7"
+  },
+  {
+   "key": "seeded-12|culture+views+food|balanced",
+   "before": "restaurant-12-4 > museum-12-0 > restaurant-12-1 > viewpoint-12-0 > viewpoint-12-1",
+   "after": "restaurant-12-2 > viewpoint-12-1 > viewpoint-12-0 > restaurant-12-1 > museum-12-0",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "7.1->8.5"
+  },
+  {
+   "key": "seeded-12|culture+views+food|full",
+   "before": "viewpoint-12-0 > viewpoint-12-1 > gallery-12-2 > restaurant-12-1 > museum-12-0 > restaurant-12-4",
+   "after": "restaurant-12-2 > gallery-12-2 > viewpoint-12-1 > viewpoint-12-0 > restaurant-12-1 > museum-12-0",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "7.6->8.5"
+  },
+  {
+   "key": "seeded-12|food+culture|calm",
+   "before": "museum-12-0 > restaurant-12-3 > gallery-12-1 > restaurant-12-1",
+   "after": "museum-12-0 > restaurant-12-3 > gallery-12-0 > restaurant-12-1",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "5.2->5.1"
+  },
+  {
+   "key": "seeded-12|food+culture|full",
+   "before": "gallery-12-1 > restaurant-12-1 > restaurant-12-4 > gallery-12-0 > restaurant-12-3 > museum-12-0",
+   "after": "restaurant-12-0 > gallery-12-1 > restaurant-12-1 > museum-12-0 > restaurant-12-3 > gallery-12-0",
+   "meals": "3->3",
+   "adjacent": "true->false",
+   "km": "5.8->6.7"
+  },
+  {
+   "key": "seeded-12|food+fika+views|calm",
+   "before": "viewpoint-12-1 > restaurant-12-5 > viewpoint-12-0 > restaurant-12-1",
+   "after": "restaurant-12-4 > park-12-1 > restaurant-12-1 > viewpoint-12-0",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "5.7->3.7"
+  },
+  {
+   "key": "seeded-12|food+fika+views|full",
+   "before": "restaurant-12-4 > park-12-1 > restaurant-12-1 > viewpoint-12-1 > viewpoint-12-0 > restaurant-12-5",
+   "after": "restaurant-12-2 > viewpoint-12-1 > viewpoint-12-0 > restaurant-12-1 > park-12-1 > restaurant-12-3",
+   "meals": "3->3",
+   "adjacent": "false->false",
+   "km": "6.2->7.1"
+  },
+  {
+   "key": "seeded-12|food+nightlife|calm",
+   "before": "bar-12-0 > restaurant-12-1 > bar-12-2 > restaurant-12-0",
+   "after": "bar-12-0 > restaurant-12-1 > bar-12-1 > restaurant-12-2",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "4.7->5"
+  },
+  {
+   "key": "seeded-12|food+nightlife|balanced",
+   "before": "bar-12-0 > restaurant-12-1 > restaurant-12-0 > bar-12-2 > bar-12-1",
+   "after": "bar-12-0 > restaurant-12-1 > bar-12-2 > bar-12-1 > restaurant-12-2",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "5.3->5.4"
+  },
+  {
+   "key": "seeded-12|food+nightlife|full",
+   "before": "bar-12-0 > restaurant-12-1 > restaurant-12-0 > bar-12-2 > bar-12-1 > restaurant-12-2",
+   "after": "restaurant-12-5 > bar-12-0 > restaurant-12-1 > bar-12-2 > bar-12-1 > restaurant-12-2",
+   "meals": "3->3",
+   "adjacent": "true->false",
+   "km": "5.5->6.5"
+  },
+  {
+   "key": "seeded-13|culture+views+food|calm",
+   "before": "restaurant-13-0 > viewpoint-13-0 > restaurant-13-2 > museum-13-0",
+   "after": "restaurant-13-0 > viewpoint-13-0 > restaurant-13-3 > museum-13-0",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "5->5"
+  },
+  {
+   "key": "seeded-13|food+fika+views|calm",
+   "before": "cafe-13-0 > restaurant-13-0 > viewpoint-13-1 > restaurant-13-1",
+   "after": "viewpoint-13-1 > viewpoint-13-0 > restaurant-13-1 > cafe-13-0",
+   "meals": "2->1",
+   "adjacent": "false->false",
+   "km": "7.2->6.7"
+  },
+  {
+   "key": "seeded-14|culture+views+food|calm",
+   "before": "gallery-14-0 > viewpoint-14-0 > restaurant-14-2 > restaurant-14-0",
+   "after": "restaurant-14-2 > viewpoint-14-0 > gallery-14-2 > gallery-14-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "6.9->7"
+  },
+  {
+   "key": "seeded-14|culture+views+food|balanced",
+   "before": "gallery-14-0 > gallery-14-2 > viewpoint-14-0 > restaurant-14-2 > restaurant-14-0",
+   "after": "restaurant-14-2 > gallery-14-2 > viewpoint-14-0 > park-14-2 > gallery-14-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "7.1->7.2"
+  },
+  {
+   "key": "seeded-14|culture+views+food|full",
+   "before": "gallery-14-0 > park-14-2 > viewpoint-14-0 > gallery-14-2 > restaurant-14-2 > restaurant-14-0",
+   "after": "restaurant-14-2 > gallery-14-2 > viewpoint-14-0 > gallery-14-1 > park-14-2 > gallery-14-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "7.3->7.6"
+  },
+  {
+   "key": "seeded-14|food+fika+views|calm",
+   "before": "viewpoint-14-0 > park-14-1 > restaurant-14-2 > restaurant-14-0",
+   "after": "garden-14-0 > viewpoint-14-0 > park-14-1 > restaurant-14-2",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "3.8->3.8"
+  },
+  {
+   "key": "seeded-14|food+fika+views|balanced",
+   "before": "garden-14-0 > viewpoint-14-0 > park-14-1 > restaurant-14-2 > restaurant-14-0",
+   "after": "park-14-2 > garden-14-0 > viewpoint-14-0 > park-14-1 > restaurant-14-2",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "3.9->4.6"
+  },
+  {
+   "key": "seeded-19|food+culture|calm",
+   "before": "museum-19-0 > restaurant-19-0 > restaurant-19-1 > gallery-19-0",
+   "after": "cafe-19-0 > restaurant-19-1 > museum-19-0 > restaurant-19-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "5.3->5.4"
+  },
+  {
+   "key": "seeded-21|culture+views+food|calm",
+   "before": "gallery-21-1 > viewpoint-21-0 > restaurant-21-1 > restaurant-21-0",
+   "after": "gallery-21-1 > cafe-21-1 > viewpoint-21-0 > restaurant-21-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "4.5->4.7"
+  },
+  {
+   "key": "seeded-21|culture+views+food|balanced",
+   "before": "gallery-21-1 > viewpoint-21-0 > gallery-21-0 > restaurant-21-0 > restaurant-21-1",
+   "after": "gallery-21-1 > cafe-21-1 > viewpoint-21-0 > gallery-21-0 > restaurant-21-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "4.6->4.7"
+  },
+  {
+   "key": "seeded-21|culture+views+food|full",
+   "before": "gallery-21-1 > cafe-21-1 > viewpoint-21-0 > gallery-21-0 > restaurant-21-0 > restaurant-21-1",
+   "after": "cafe-21-1 > gallery-21-1 > viewpoint-21-0 > gallery-21-0 > park-21-1 > restaurant-21-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5->4.9"
+  },
+  {
+   "key": "seeded-21|food+culture|calm",
+   "before": "gallery-21-1 > gallery-21-0 > restaurant-21-0 > restaurant-21-1",
+   "after": "gallery-21-1 > cafe-21-1 > gallery-21-0 > restaurant-21-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "4.6->4.8"
+  },
+  {
+   "key": "seeded-21|food+fika+views|balanced",
+   "before": "cafe-21-0 > cafe-21-1 > viewpoint-21-0 > restaurant-21-0 > restaurant-21-1",
+   "after": "cafe-21-0 > garden-21-0 > cafe-21-1 > viewpoint-21-0 > restaurant-21-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.7->5.4"
+  },
+  {
+   "key": "seeded-21|food+fika+views|full",
+   "before": "cafe-21-0 > garden-21-0 > cafe-21-1 > viewpoint-21-0 > restaurant-21-1 > restaurant-21-0",
+   "after": "restaurant-21-0 > park-21-1 > viewpoint-21-0 > cafe-21-1 > garden-21-0 > cafe-21-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.6->5.6"
+  },
+  {
+   "key": "seeded-22|culture+views+food|calm",
+   "before": "park-22-0 > viewpoint-22-0 > restaurant-22-1 > restaurant-22-0",
+   "after": "restaurant-22-0 > viewpoint-22-0 > restaurant-22-2 > garden-22-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "4.8->5.1"
+  },
+  {
+   "key": "seeded-22|food+nightlife|calm",
+   "before": "bar-22-1 > bar-22-0 > restaurant-22-3 > restaurant-22-0",
+   "after": "restaurant-22-0 > bar-22-0 > bar-22-1 > restaurant-22-2",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "4.6->4.7"
+  },
+  {
+   "key": "seeded-23|food+culture|balanced",
+   "before": "gallery-23-0 > restaurant-23-0 > gallery-23-1 > gallery-23-2 > restaurant-23-1",
+   "after": "gallery-23-1 > gallery-23-2 > restaurant-23-1 > gallery-23-3 > gallery-23-0",
+   "meals": "2->1",
+   "adjacent": "false->false",
+   "km": "2.2->2.4"
+  },
+  {
+   "key": "seeded-24|culture+views+food|calm",
+   "before": "park-24-0 > museum-24-0 > restaurant-24-0 > restaurant-24-1",
+   "after": "museum-24-0 > park-24-0 > gallery-24-0 > restaurant-24-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "7.8->7.8"
+  },
+  {
+   "key": "seeded-24|culture+views+food|balanced",
+   "before": "museum-24-0 > park-24-0 > gallery-24-0 > restaurant-24-1 > restaurant-24-0",
+   "after": "museum-24-0 > park-24-0 > gallery-24-0 > gallery-24-2 > restaurant-24-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "7.8->7.9"
+  },
+  {
+   "key": "seeded-24|food+culture|calm",
+   "before": "museum-24-0 > gallery-24-2 > restaurant-24-1 > restaurant-24-0",
+   "after": "museum-24-0 > gallery-24-0 > gallery-24-2 > restaurant-24-1",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "6.6->6.8"
+  },
+  {
+   "key": "seeded-24|food+nightlife|calm",
+   "before": "bar-24-0 > bar-24-2 > restaurant-24-1 > restaurant-24-0",
+   "after": "bar-24-0 > bar-24-1 > bar-24-2 > restaurant-24-1",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.7->6.4"
+  },
+  {
+   "key": "seeded-24|food+nightlife|balanced",
+   "before": "bar-24-0 > bar-24-1 > bar-24-2 > restaurant-24-1 > restaurant-24-0",
+   "after": "bar-24-0 > cafe-24-0 > bar-24-1 > bar-24-2 > restaurant-24-1",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "6.6->7"
+  },
+  {
+   "key": "seeded-26|culture+views+food|calm",
+   "before": "viewpoint-26-0 > museum-26-1 > restaurant-26-3 > restaurant-26-2",
+   "after": "viewpoint-26-0 > museum-26-1 > gallery-26-0 > restaurant-26-2",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "4.1->4.6"
+  },
+  {
+   "key": "seeded-26|culture+views+food|balanced",
+   "before": "viewpoint-26-0 > viewpoint-26-1 > museum-26-1 > restaurant-26-3 > restaurant-26-2",
+   "after": "viewpoint-26-0 > viewpoint-26-1 > museum-26-1 > gallery-26-0 > restaurant-26-2",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "4.2->4.7"
+  },
+  {
+   "key": "seeded-26|culture+views+food|full",
+   "before": "museum-26-0 > viewpoint-26-0 > viewpoint-26-1 > museum-26-1 > restaurant-26-3 > restaurant-26-2",
+   "after": "restaurant-26-2 > museum-26-1 > viewpoint-26-1 > viewpoint-26-0 > museum-26-0 > restaurant-26-4",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "5.3->6.5"
+  },
+  {
+   "key": "seeded-26|food+culture|calm",
+   "before": "museum-26-0 > museum-26-1 > restaurant-26-3 > restaurant-26-2",
+   "after": "restaurant-26-2 > museum-26-1 > museum-26-0 > restaurant-26-4",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "5.2->6.4"
+  },
+  {
+   "key": "seeded-26|food+culture|balanced",
+   "before": "museum-26-0 > gallery-26-3 > museum-26-1 > restaurant-26-3 > restaurant-26-2",
+   "after": "restaurant-26-2 > museum-26-1 > gallery-26-3 > museum-26-0 > restaurant-26-4",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "5.4->6.6"
+  },
+  {
+   "key": "seeded-26|food+culture|full",
+   "before": "museum-26-0 > gallery-26-3 > museum-26-1 > gallery-26-2 > restaurant-26-3 > restaurant-26-2",
+   "after": "restaurant-26-2 > gallery-26-2 > gallery-26-0 > museum-26-1 > gallery-26-3 > museum-26-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.4->6.2"
+  },
+  {
+   "key": "seeded-26|food+nightlife|calm",
+   "before": "bar-26-1 > bar-26-0 > restaurant-26-1 > restaurant-26-3",
+   "after": "restaurant-26-1 > bar-26-0 > bar-26-1 > restaurant-26-4",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "5.3->6.3"
+  },
+  {
+   "key": "seeded-27|food+culture|calm",
+   "before": "museum-27-0 > museum-27-1 > restaurant-27-3 > restaurant-27-2",
+   "after": "restaurant-27-3 > museum-27-1 > gallery-27-0 > restaurant-27-2",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6.5->5.4"
+  },
+  {
+   "key": "seeded-27|food+fika+views|calm",
+   "before": "cafe-27-0 > park-27-0 > restaurant-27-3 > restaurant-27-1",
+   "after": "restaurant-27-3 > park-27-0 > cafe-27-1 > cafe-27-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "7.1->6"
+  },
+  {
+   "key": "seeded-27|food+fika+views|balanced",
+   "before": "cafe-27-0 > park-27-1 > restaurant-27-1 > restaurant-27-3 > park-27-0",
+   "after": "park-27-1 > restaurant-27-3 > park-27-0 > pizza-27-0 > cafe-27-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6.9->5.8"
+  },
+  {
+   "key": "seeded-28|culture+views+food|calm",
+   "before": "museum-28-0 > park-28-1 > restaurant-28-1 > restaurant-28-2",
+   "after": "museum-28-0 > park-28-1 > museum-28-1 > restaurant-28-2",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "4.7->5.2"
+  },
+  {
+   "key": "seeded-28|culture+views+food|balanced",
+   "before": "museum-28-0 > park-28-1 > museum-28-1 > restaurant-28-0 > restaurant-28-2",
+   "after": "park-28-1 > museum-28-0 > gallery-28-0 > museum-28-1 > restaurant-28-2",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.2->6.1"
+  },
+  {
+   "key": "seeded-28|food+culture|calm",
+   "before": "museum-28-0 > museum-28-1 > restaurant-28-0 > restaurant-28-1",
+   "after": "museum-28-0 > gallery-28-0 > museum-28-1 > restaurant-28-1",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5->5.8"
+  },
+  {
+   "key": "seeded-28|food+fika+views|calm",
+   "before": "cafe-28-0 > park-28-1 > restaurant-28-1 > restaurant-28-3",
+   "after": "cafe-28-0 > park-28-1 > park-28-0 > restaurant-28-1",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.3->5.4"
+  },
+  {
+   "key": "seeded-28|food+fika+views|balanced",
+   "before": "cafe-28-0 > park-28-1 > cafe-28-2 > restaurant-28-1 > restaurant-28-3",
+   "after": "cafe-28-0 > park-28-1 > park-28-0 > cafe-28-2 > restaurant-28-1",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.3->5.3"
+  },
+  {
+   "key": "seeded-28|food+fika+views|full",
+   "before": "cafe-28-0 > park-28-1 > park-28-0 > cafe-28-2 > restaurant-28-1 > restaurant-28-3",
+   "after": "restaurant-28-1 > park-28-0 > park-28-1 > park-28-2 > cafe-28-0 > cafe-28-1",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.4->9.2"
+  },
+  {
+   "key": "seeded-28|food+nightlife|balanced",
+   "before": "bar-28-0 > bar-28-2 > restaurant-28-1 > bar-28-1 > restaurant-28-0",
+   "after": "bar-28-0 > bar-28-2 > restaurant-28-1 > bar-28-1 > restaurant-28-4",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "6.6->6.7"
+  },
+  {
+   "key": "seeded-29|food+culture|balanced",
+   "before": "museum-29-0 > gallery-29-1 > gallery-29-0 > pizza-29-0 > restaurant-29-0",
+   "after": "restaurant-29-0 > gallery-29-2 > pizza-29-0 > gallery-29-1 > museum-29-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6.1->6.7"
+  },
+  {
+   "key": "seeded-29|food+nightlife|calm",
+   "before": "bar-29-1 > bar-29-0 > pizza-29-0 > restaurant-29-1",
+   "after": "bar-29-0 > restaurant-29-0 > cafe-29-0 > restaurant-29-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "7.2->4.9"
+  },
+  {
+   "key": "seeded-31|food+fika+views|calm",
+   "before": "cafe-31-0 > park-31-0 > restaurant-31-0 > restaurant-31-2",
+   "after": "restaurant-31-0 > park-31-0 > restaurant-31-5 > cafe-31-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "4.8->4.1"
+  },
+  {
+   "key": "seeded-32|culture+views+food|calm",
+   "before": "museum-32-1 > viewpoint-32-0 > restaurant-32-1 > restaurant-32-0",
+   "after": "museum-32-1 > viewpoint-32-0 > museum-32-0 > restaurant-32-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.2->5.5"
+  },
+  {
+   "key": "seeded-32|culture+views+food|balanced",
+   "before": "museum-32-1 > viewpoint-32-0 > museum-32-0 > restaurant-32-2 > restaurant-32-0",
+   "after": "museum-32-1 > viewpoint-32-0 > restaurant-32-1 > museum-32-0 > restaurant-32-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "5.5->5.5"
+  },
+  {
+   "key": "seeded-32|food+culture|calm",
+   "before": "museum-32-1 > restaurant-32-2 > museum-32-2 > restaurant-32-0",
+   "after": "museum-32-1 > restaurant-32-1 > museum-32-2 > restaurant-32-2",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "4.3->4.9"
+  },
+  {
+   "key": "seeded-32|food+culture|balanced",
+   "before": "museum-32-1 > museum-32-2 > restaurant-32-0 > restaurant-32-2 > museum-32-0",
+   "after": "museum-32-1 > restaurant-32-1 > museum-32-0 > restaurant-32-2 > museum-32-2",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "4.7->4.8"
+  },
+  {
+   "key": "seeded-33|culture+views+food|calm",
+   "before": "museum-33-0 > park-33-0 > restaurant-33-2 > restaurant-33-0",
+   "after": "park-33-0 > museum-33-0 > cafe-33-0 > restaurant-33-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "4.1->5.3"
+  },
+  {
+   "key": "seeded-33|food+nightlife|calm",
+   "before": "bar-33-2 > bar-33-0 > restaurant-33-1 > restaurant-33-2",
+   "after": "restaurant-33-2 > bar-33-0 > cafe-33-1 > bar-33-2",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.4->5.6"
+  },
+  {
+   "key": "seeded-33|food+nightlife|balanced",
+   "before": "bar-33-2 > cafe-33-1 > bar-33-0 > restaurant-33-1 > restaurant-33-2",
+   "after": "restaurant-33-2 > cafe-33-0 > bar-33-0 > cafe-33-1 > bar-33-2",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.7->6.1"
+  },
+  {
+   "key": "seeded-33|food+nightlife|full",
+   "before": "bar-33-2 > cafe-33-1 > bar-33-0 > bar-33-1 > restaurant-33-1 > restaurant-33-2",
+   "after": "restaurant-33-2 > cafe-33-0 > bar-33-1 > bar-33-0 > cafe-33-1 > bar-33-2",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "7.7->7.8"
+  },
+  {
+   "key": "seeded-34|culture+views+food|calm",
+   "before": "viewpoint-34-0 > museum-34-0 > pizza-34-0 > restaurant-34-0",
+   "after": "restaurant-34-0 > museum-34-0 > gallery-34-1 > viewpoint-34-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.1->5.5"
+  },
+  {
+   "key": "seeded-34|food+culture|calm",
+   "before": "museum-34-0 > gallery-34-1 > pizza-34-0 > restaurant-34-0",
+   "after": "restaurant-34-0 > gallery-34-1 > cafe-34-0 > museum-34-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "3.8->3.8"
+  },
+  {
+   "key": "seeded-34|food+culture|balanced",
+   "before": "gallery-34-0 > pizza-34-0 > restaurant-34-0 > gallery-34-1 > museum-34-0",
+   "after": "gallery-34-0 > restaurant-34-0 > gallery-34-1 > cafe-34-0 > museum-34-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "4.4->4.4"
+  },
+  {
+   "key": "seeded-34|food+culture|full",
+   "before": "gallery-34-1 > museum-34-0 > restaurant-34-0 > gallery-34-2 > gallery-34-0 > pizza-34-0",
+   "after": "museum-34-0 > cafe-34-0 > gallery-34-1 > restaurant-34-0 > gallery-34-0 > gallery-34-2",
+   "meals": "2->1",
+   "adjacent": "false->false",
+   "km": "5.9->5.7"
+  },
+  {
+   "key": "seeded-34|food+fika+views|balanced",
+   "before": "viewpoint-34-1 > pizza-34-0 > restaurant-34-0 > cafe-34-0 > viewpoint-34-0",
+   "after": "viewpoint-34-1 > park-34-1 > restaurant-34-0 > cafe-34-0 > viewpoint-34-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.2->5.4"
+  },
+  {
+   "key": "seeded-35|culture+views+food|full",
+   "before": "viewpoint-35-1 > viewpoint-35-0 > museum-35-2 > museum-35-0 > restaurant-35-0 > pizza-35-0",
+   "after": "museum-35-1 > restaurant-35-0 > museum-35-0 > museum-35-2 > viewpoint-35-0 > viewpoint-35-1",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "8.2->8.3"
+  },
+  {
+   "key": "seeded-36|culture+views+food|calm",
+   "before": "restaurant-36-2 > museum-36-0 > restaurant-36-1 > viewpoint-36-0",
+   "after": "museum-36-0 > restaurant-36-2 > museum-36-1 > viewpoint-36-0",
+   "meals": "2->1",
+   "adjacent": "false->false",
+   "km": "5.6->5.4"
+  },
+  {
+   "key": "seeded-36|culture+views+food|balanced",
+   "before": "restaurant-36-1 > museum-36-0 > restaurant-36-2 > museum-36-1 > viewpoint-36-0",
+   "after": "restaurant-36-2 > museum-36-0 > restaurant-36-3 > viewpoint-36-0 > museum-36-1",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "5.6->5.6"
+  },
+  {
+   "key": "seeded-36|culture+views+food|full",
+   "before": "restaurant-36-1 > museum-36-0 > restaurant-36-2 > museum-36-1 > viewpoint-36-0 > gallery-36-0",
+   "after": "restaurant-36-2 > museum-36-0 > restaurant-36-3 > gallery-36-0 > viewpoint-36-0 > museum-36-1",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "6.3->5.8"
+  },
+  {
+   "key": "seeded-36|food+fika+views|balanced",
+   "before": "viewpoint-36-0 > cafe-36-2 > cafe-36-1 > restaurant-36-1 > restaurant-36-0",
+   "after": "restaurant-36-0 > cafe-36-1 > pizza-36-0 > cafe-36-2 > viewpoint-36-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "5.9->6.9"
+  },
+  {
+   "key": "seeded-36|food+fika+views|full",
+   "before": "restaurant-36-0 > cafe-36-1 > restaurant-36-1 > cafe-36-2 > viewpoint-36-0 > cafe-36-0",
+   "after": "restaurant-36-0 > cafe-36-1 > pizza-36-0 > cafe-36-2 > viewpoint-36-0 > cafe-36-0",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "7.6->8.1"
+  },
+  {
+   "key": "seeded-37|culture+views+food|full",
+   "before": "viewpoint-37-1 > museum-37-0 > museum-37-1 > restaurant-37-0 > restaurant-37-2 > viewpoint-37-0",
+   "after": "restaurant-37-0 > viewpoint-37-0 > garden-37-0 > museum-37-1 > museum-37-0 > viewpoint-37-1",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "7.2->7.4"
+  },
+  {
+   "key": "seeded-37|food+culture|calm",
+   "before": "museum-37-0 > museum-37-1 > restaurant-37-2 > restaurant-37-0",
+   "after": "restaurant-37-2 > cafe-37-0 > museum-37-1 > museum-37-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "4.2->4"
+  },
+  {
+   "key": "seeded-37|food+culture|balanced",
+   "before": "museum-37-0 > museum-37-1 > cafe-37-0 > restaurant-37-2 > restaurant-37-0",
+   "after": "restaurant-37-2 > cafe-37-0 > museum-37-1 > museum-37-0 > restaurant-37-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "4.2->4.9"
+  },
+  {
+   "key": "seeded-37|food+nightlife|calm",
+   "before": "bar-37-1 > bar-37-0 > restaurant-37-0 > restaurant-37-2",
+   "after": "restaurant-37-2 > bar-37-0 > bar-37-1 > restaurant-37-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "4.3->5.3"
+  },
+  {
+   "key": "seeded-37|food+nightlife|balanced",
+   "before": "bar-37-1 > bar-37-0 > cafe-37-0 > restaurant-37-2 > restaurant-37-0",
+   "after": "restaurant-37-2 > cafe-37-0 > bar-37-0 > bar-37-1 > restaurant-37-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "4.4->5.3"
+  },
+  {
+   "key": "seeded-39|food+fika+views|balanced",
+   "before": "cafe-39-2 > cafe-39-3 > restaurant-39-1 > restaurant-39-2 > park-39-0",
+   "after": "cafe-39-2 > cafe-39-3 > park-39-1 > restaurant-39-2 > park-39-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.3->5.4"
+  },
+  {
+   "key": "seeded-39|food+fika+views|full",
+   "before": "cafe-39-2 > cafe-39-3 > restaurant-39-1 > restaurant-39-2 > cafe-39-1 > park-39-0",
+   "after": "cafe-39-2 > cafe-39-3 > restaurant-39-2 > cafe-39-1 > cafe-39-0 > park-39-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.7->6.2"
+  },
+  {
+   "key": "seeded-39|food+nightlife|calm",
+   "before": "bar-39-2 > bar-39-0 > restaurant-39-1 > restaurant-39-2",
+   "after": "restaurant-39-2 > bar-39-0 > bar-39-2 > restaurant-39-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "5.6->6.5"
+  },
+  {
+   "key": "seeded-40|food+fika+views|balanced",
+   "before": "viewpoint-40-0 > cafe-40-1 > cafe-40-3 > restaurant-40-2 > restaurant-40-0",
+   "after": "viewpoint-40-0 > cafe-40-3 > restaurant-40-2 > cafe-40-0 > restaurant-40-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6.1->7.3"
+  },
+  {
+   "key": "seeded-40|food+fika+views|full",
+   "before": "viewpoint-40-0 > cafe-40-2 > cafe-40-0 > restaurant-40-2 > cafe-40-3 > restaurant-40-0",
+   "after": "park-40-1 > cafe-40-1 > viewpoint-40-0 > cafe-40-3 > restaurant-40-2 > restaurant-40-0",
+   "meals": "2->2",
+   "adjacent": "false->true",
+   "km": "7.6->7.1"
+  },
+  {
+   "key": "seeded-41|culture+views+food|calm",
+   "before": "museum-41-0 > park-41-0 > restaurant-41-1 > restaurant-41-0",
+   "after": "restaurant-41-1 > park-41-0 > park-41-1 > museum-41-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.2->5.2"
+  },
+  {
+   "key": "seeded-41|culture+views+food|balanced",
+   "before": "park-41-1 > museum-41-0 > park-41-0 > restaurant-41-1 > restaurant-41-0",
+   "after": "restaurant-41-1 > park-41-2 > park-41-0 > park-41-1 > museum-41-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.5->5.5"
+  },
+  {
+   "key": "seeded-41|food+culture|calm",
+   "before": "museum-41-0 > restaurant-41-0 > restaurant-41-1 > cafe-41-0",
+   "after": "restaurant-41-1 > museum-41-0 > cafe-41-1 > cafe-41-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "7.9->8.3"
+  },
+  {
+   "key": "seeded-41|food+fika+views|calm",
+   "before": "cafe-41-1 > park-41-0 > restaurant-41-1 > restaurant-41-0",
+   "after": "restaurant-41-1 > park-41-2 > park-41-0 > cafe-41-1",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.7->5.8"
+  },
+  {
+   "key": "seeded-41|food+fika+views|balanced",
+   "before": "cafe-41-0 > cafe-41-1 > park-41-0 > restaurant-41-1 > restaurant-41-0",
+   "after": "restaurant-41-1 > park-41-2 > park-41-0 > cafe-41-1 > cafe-41-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "7.2->7.3"
+  },
+  {
+   "key": "seeded-42|culture+views+food|calm",
+   "before": "garden-42-0 > restaurant-42-1 > restaurant-42-3 > museum-42-0",
+   "after": "garden-42-0 > restaurant-42-1 > gallery-42-0 > museum-42-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "3.9->4.2"
+  },
+  {
+   "key": "seeded-42|culture+views+food|balanced",
+   "before": "garden-42-0 > restaurant-42-1 > gallery-42-0 > restaurant-42-3 > museum-42-0",
+   "after": "museum-42-0 > gallery-42-0 > restaurant-42-1 > garden-42-0 > park-42-1",
+   "meals": "2->1",
+   "adjacent": "false->false",
+   "km": "4.8->6.1"
+  },
+  {
+   "key": "seeded-42|food+fika+views|calm",
+   "before": "cafe-42-2 > park-42-1 > restaurant-42-1 > restaurant-42-2",
+   "after": "restaurant-42-1 > park-42-1 > cafe-42-0 > cafe-42-2",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "6.6->6.8"
+  },
+  {
+   "key": "seeded-42|food+fika+views|balanced",
+   "before": "cafe-42-2 > cafe-42-0 > park-42-1 > restaurant-42-1 > restaurant-42-2",
+   "after": "cafe-42-2 > cafe-42-0 > garden-42-0 > restaurant-42-1 > park-42-1",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "6.8->7.1"
+  },
+  {
+   "key": "seeded-42|food+fika+views|full",
+   "before": "cafe-42-2 > cafe-42-0 > garden-42-0 > restaurant-42-1 > restaurant-42-2 > park-42-1",
+   "after": "park-42-1 > restaurant-42-1 > garden-42-0 > cafe-42-0 > park-42-0 > cafe-42-2",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "7.1->7.2"
+  },
+  {
+   "key": "seeded-42|food+nightlife|calm",
+   "before": "bar-42-0 > cafe-42-0 > restaurant-42-1 > restaurant-42-2",
+   "after": "restaurant-42-2 > cafe-42-1 > cafe-42-0 > bar-42-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.4->6.7"
+  },
+  {
+   "key": "seeded-43|culture+views+food|balanced",
+   "before": "pizza-43-1 > museum-43-1 > pizza-43-0 > museum-43-0 > viewpoint-43-0",
+   "after": "museum-43-1 > gallery-43-0 > pizza-43-0 > museum-43-0 > viewpoint-43-0",
+   "meals": "2->1",
+   "adjacent": "false->false",
+   "km": "7.8->7"
+  },
+  {
+   "key": "seeded-43|food+culture|calm",
+   "before": "pizza-43-0 > museum-43-0 > pizza-43-1 > museum-43-1",
+   "after": "museum-43-1 > gallery-43-0 > pizza-43-0 > museum-43-0",
+   "meals": "2->1",
+   "adjacent": "false->false",
+   "km": "6.5->5.4"
+  },
+  {
+   "key": "seeded-43|food+nightlife|calm",
+   "before": "bar-43-0 > cafe-43-0 > pizza-43-0 > pizza-43-1",
+   "after": "pizza-43-0 > cafe-43-0 > cafe-43-2 > bar-43-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.5->4.9"
+  },
+  {
+   "key": "seeded-43|food+nightlife|balanced",
+   "before": "cafe-43-2 > bar-43-0 > cafe-43-0 > pizza-43-0 > pizza-43-1",
+   "after": "pizza-43-0 > cafe-43-1 > cafe-43-0 > bar-43-0 > cafe-43-2",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.7->5.2"
+  },
+  {
+   "key": "seeded-44|food+culture|balanced",
+   "before": "museum-44-0 > gallery-44-1 > museum-44-1 > restaurant-44-3 > restaurant-44-0",
+   "after": "museum-44-0 > gallery-44-1 > gallery-44-0 > museum-44-1 > restaurant-44-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "4.6->4.7"
+  },
+  {
+   "key": "seeded-46|food+culture|calm",
+   "before": "gallery-46-0 > restaurant-46-1 > gallery-46-2 > restaurant-46-2",
+   "after": "restaurant-46-1 > gallery-46-0 > restaurant-46-0 > gallery-46-1",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "2.8->4.9"
+  },
+  {
+   "key": "seeded-46|food+fika+views|calm",
+   "before": "viewpoint-46-0 > viewpoint-46-1 > restaurant-46-1 > restaurant-46-0",
+   "after": "viewpoint-46-1 > viewpoint-46-0 > garden-46-0 > restaurant-46-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "7.5->7.1"
+  },
+  {
+   "key": "seeded-47|culture+views+food|calm",
+   "before": "museum-47-0 > viewpoint-47-0 > pizza-47-0 > pizza-47-1",
+   "after": "pizza-47-0 > viewpoint-47-0 > gallery-47-0 > museum-47-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "7.4->5"
+  },
+  {
+   "key": "seeded-47|food+nightlife|calm",
+   "before": "bar-47-0 > bar-47-1 > pizza-47-0 > pizza-47-1",
+   "after": "pizza-47-0 > cafe-47-0 > bar-47-1 > bar-47-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "7.3->5"
+  },
+  {
+   "key": "seeded-48|culture+views+food|calm",
+   "before": "park-48-0 > restaurant-48-2 > restaurant-48-4 > museum-48-0",
+   "after": "park-48-0 > restaurant-48-2 > gallery-48-0 > museum-48-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.7->6.1"
+  },
+  {
+   "key": "seeded-48|culture+views+food|balanced",
+   "before": "park-48-0 > restaurant-48-2 > restaurant-48-4 > gallery-48-3 > museum-48-0",
+   "after": "park-48-0 > restaurant-48-2 > gallery-48-2 > museum-48-0 > gallery-48-3",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "6->6"
+  },
+  {
+   "key": "seeded-48|culture+views+food|full",
+   "before": "gallery-48-1 > park-48-0 > restaurant-48-2 > restaurant-48-4 > gallery-48-2 > museum-48-0",
+   "after": "restaurant-48-3 > park-48-0 > restaurant-48-2 > gallery-48-2 > museum-48-0 > gallery-48-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "7.9->9.1"
+  },
+  {
+   "key": "seeded-48|food+culture|calm",
+   "before": "museum-48-0 > gallery-48-3 > restaurant-48-4 > restaurant-48-2",
+   "after": "restaurant-48-2 > gallery-48-2 > museum-48-0 > gallery-48-3",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.5->5.5"
+  },
+  {
+   "key": "seeded-48|food+culture|balanced",
+   "before": "gallery-48-3 > museum-48-0 > gallery-48-2 > restaurant-48-4 > restaurant-48-2",
+   "after": "restaurant-48-2 > gallery-48-2 > gallery-48-0 > museum-48-0 > gallery-48-3",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "5.5->5.7"
+  },
+  {
+   "key": "seeded-48|food+fika+views|full",
+   "before": "cafe-48-0 > park-48-0 > restaurant-48-2 > restaurant-48-4 > garden-48-0 > restaurant-48-1",
+   "after": "restaurant-48-1 > garden-48-0 > cafe-48-0 > park-48-0 > restaurant-48-2 > restaurant-48-3",
+   "meals": "3->3",
+   "adjacent": "true->true",
+   "km": "5.9->7.6"
+  },
+  {
+   "key": "seeded-50|food+nightlife|calm",
+   "before": "bar-50-2 > bar-50-1 > restaurant-50-1 > restaurant-50-0",
+   "after": "restaurant-50-0 > bar-50-2 > bar-50-1 > bar-50-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "3.8->6.2"
+  },
+  {
+   "key": "seeded-50|food+nightlife|balanced",
+   "before": "restaurant-50-0 > bar-50-2 > restaurant-50-1 > bar-50-1 > bar-50-0",
+   "after": "restaurant-50-0 > cafe-50-0 > restaurant-50-1 > bar-50-1 > bar-50-2",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "7->4.5"
+  },
+  {
+   "key": "seeded-53|culture+views+food|balanced",
+   "before": "restaurant-53-1 > museum-53-0 > museum-53-1 > park-53-0 > restaurant-53-3",
+   "after": "restaurant-53-1 > museum-53-0 > museum-53-1 > park-53-0 > restaurant-53-2",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "3.5->3.8"
+  },
+  {
+   "key": "seeded-53|culture+views+food|full",
+   "before": "restaurant-53-1 > museum-53-0 > museum-53-1 > park-53-0 > restaurant-53-3 > restaurant-53-2",
+   "after": "restaurant-53-4 > museum-53-0 > restaurant-53-1 > museum-53-1 > park-53-0 > restaurant-53-3",
+   "meals": "3->3",
+   "adjacent": "true->false",
+   "km": "4->4.4"
+  },
+  {
+   "key": "seeded-54|food+nightlife|calm",
+   "before": "bar-54-1 > bar-54-0 > restaurant-54-3 > restaurant-54-1",
+   "after": "restaurant-54-1 > bar-54-0 > bar-54-1 > pizza-54-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "5.2->5.8"
+  },
+  {
+   "key": "seeded-55|culture+views+food|calm",
+   "before": "viewpoint-55-1 > restaurant-55-1 > restaurant-55-0 > viewpoint-55-0",
+   "after": "viewpoint-55-1 > restaurant-55-0 > park-55-0 > restaurant-55-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "7.2->5.6"
+  },
+  {
+   "key": "seeded-55|culture+views+food|full",
+   "before": "viewpoint-55-1 > park-55-2 > park-55-1 > restaurant-55-1 > viewpoint-55-0 > restaurant-55-0",
+   "after": "viewpoint-55-1 > park-55-2 > restaurant-55-1 > park-55-0 > restaurant-55-0 > viewpoint-55-0",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "8.2->8"
+  },
+  {
+   "key": "seeded-55|food+fika+views|calm",
+   "before": "viewpoint-55-1 > restaurant-55-1 > restaurant-55-0 > viewpoint-55-0",
+   "after": "viewpoint-55-1 > restaurant-55-0 > park-55-0 > restaurant-55-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "7.2->5.6"
+  },
+  {
+   "key": "seeded-55|food+fika+views|full",
+   "before": "viewpoint-55-1 > park-55-2 > park-55-1 > restaurant-55-1 > viewpoint-55-0 > restaurant-55-0",
+   "after": "viewpoint-55-1 > park-55-2 > restaurant-55-1 > park-55-0 > restaurant-55-0 > viewpoint-55-0",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "8.2->8"
+  },
+  {
+   "key": "seeded-57|culture+views+food|calm",
+   "before": "restaurant-57-2 > museum-57-0 > restaurant-57-0 > garden-57-0",
+   "after": "garden-57-0 > gallery-57-1 > restaurant-57-2 > museum-57-0",
+   "meals": "2->1",
+   "adjacent": "false->false",
+   "km": "5.7->5.8"
+  },
+  {
+   "key": "seeded-57|culture+views+food|balanced",
+   "before": "museum-57-0 > restaurant-57-2 > gallery-57-1 > restaurant-57-0 > garden-57-0",
+   "after": "museum-57-0 > restaurant-57-2 > park-57-1 > restaurant-57-0 > garden-57-0",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "6.7->6.2"
+  },
+  {
+   "key": "seeded-57|culture+views+food|full",
+   "before": "museum-57-0 > restaurant-57-2 > gallery-57-0 > garden-57-0 > gallery-57-1 > restaurant-57-0",
+   "after": "museum-57-0 > restaurant-57-2 > gallery-57-0 > garden-57-0 > gallery-57-1 > restaurant-57-1",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "6.1->8.5"
+  },
+  {
+   "key": "seeded-57|food+fika+views|calm",
+   "before": "park-57-0 > restaurant-57-0 > cafe-57-1 > restaurant-57-4",
+   "after": "cafe-57-1 > restaurant-57-0 > park-57-0 > restaurant-57-3",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "4.4->4.3"
+  },
+  {
+   "key": "seeded-57|food+fika+views|balanced",
+   "before": "cafe-57-0 > cafe-57-1 > restaurant-57-0 > park-57-0 > restaurant-57-4",
+   "after": "cafe-57-0 > cafe-57-1 > restaurant-57-0 > park-57-0 > restaurant-57-3",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "5.6->5.7"
+  },
+  {
+   "key": "seeded-57|food+fika+views|full",
+   "before": "cafe-57-0 > cafe-57-1 > restaurant-57-0 > park-57-0 > park-57-1 > restaurant-57-4",
+   "after": "park-57-0 > restaurant-57-3 > park-57-1 > restaurant-57-0 > cafe-57-1 > cafe-57-0",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "5.7->5.8"
+  },
+  {
+   "key": "seeded-58|culture+views+food|calm",
+   "before": "gallery-58-0 > restaurant-58-1 > restaurant-58-3 > viewpoint-58-0",
+   "after": "restaurant-58-1 > gallery-58-0 > restaurant-58-2 > viewpoint-58-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "7.9->8.1"
+  },
+  {
+   "key": "seeded-58|culture+views+food|balanced",
+   "before": "gallery-58-0 > park-58-0 > restaurant-58-1 > restaurant-58-3 > viewpoint-58-0",
+   "after": "viewpoint-58-0 > restaurant-58-2 > cafe-58-0 > gallery-58-0 > restaurant-58-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "7.9->8.2"
+  },
+  {
+   "key": "seeded-58|culture+views+food|full",
+   "before": "garden-58-0 > gallery-58-0 > park-58-0 > restaurant-58-1 > restaurant-58-3 > viewpoint-58-0",
+   "after": "viewpoint-58-0 > restaurant-58-2 > cafe-58-0 > gallery-58-0 > park-58-0 > restaurant-58-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "8.5->8.2"
+  },
+  {
+   "key": "seeded-58|food+nightlife|calm",
+   "before": "bar-58-1 > bar-58-0 > restaurant-58-4 > restaurant-58-0",
+   "after": "bar-58-1 > restaurant-58-2 > bar-58-0 > restaurant-58-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "5.2->5.3"
+  },
+  {
+   "key": "seeded-59|culture+views+food|calm",
+   "before": "museum-59-0 > viewpoint-59-0 > restaurant-59-0 > restaurant-59-1",
+   "after": "restaurant-59-0 > gallery-59-1 > museum-59-0 > viewpoint-59-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "7.8->7.6"
+  },
+  {
+   "key": "seeded-59|culture+views+food|balanced",
+   "before": "viewpoint-59-0 > museum-59-0 > gallery-59-1 > restaurant-59-0 > restaurant-59-1",
+   "after": "restaurant-59-0 > gallery-59-1 > museum-59-0 > viewpoint-59-0 > gallery-59-0",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "8->7.7"
+  },
+  {
+   "key": "seeded-59|culture+views+food|full",
+   "before": "museum-59-1 > restaurant-59-1 > restaurant-59-0 > gallery-59-0 > viewpoint-59-0 > museum-59-0",
+   "after": "museum-59-1 > restaurant-59-1 > cafe-59-1 > restaurant-59-0 > viewpoint-59-0 > museum-59-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "8.7->9.3"
+  },
+  {
+   "key": "seeded-59|food+culture|calm",
+   "before": "museum-59-0 > gallery-59-1 > restaurant-59-0 > restaurant-59-1",
+   "after": "museum-59-0 > restaurant-59-0 > cafe-59-1 > restaurant-59-1",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6.3->7"
+  },
+  {
+   "key": "seeded-59|food+culture|balanced",
+   "before": "museum-59-1 > restaurant-59-1 > restaurant-59-0 > gallery-59-1 > museum-59-0",
+   "after": "museum-59-0 > gallery-59-1 > gallery-59-0 > restaurant-59-0 > museum-59-1",
+   "meals": "2->1",
+   "adjacent": "true->false",
+   "km": "7.1->9"
+  },
+  {
+   "key": "seeded-59|food+fika+views|calm",
+   "before": "viewpoint-59-0 > cafe-59-1 > restaurant-59-0 > restaurant-59-1",
+   "after": "restaurant-59-0 > cafe-59-1 > pizza-59-0 > viewpoint-59-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6->5.7"
+  },
+  {
+   "key": "seeded-59|food+fika+views|balanced",
+   "before": "viewpoint-59-0 > cafe-59-0 > cafe-59-1 > restaurant-59-0 > restaurant-59-1",
+   "after": "restaurant-59-0 > cafe-59-1 > cafe-59-0 > pizza-59-0 > viewpoint-59-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "6.4->6.2"
+  },
+  {
+   "key": "seeded-59|food+fika+views|full",
+   "before": "cafe-59-2 > restaurant-59-1 > cafe-59-0 > cafe-59-1 > restaurant-59-0 > viewpoint-59-0",
+   "after": "cafe-59-2 > restaurant-59-0 > cafe-59-1 > cafe-59-0 > pizza-59-0 > viewpoint-59-0",
+   "meals": "2->2",
+   "adjacent": "false->false",
+   "km": "7.7->7.3"
+  },
+  {
+   "key": "seeded-59|food+nightlife|calm",
+   "before": "cafe-59-0 > cafe-59-1 > restaurant-59-0 > restaurant-59-1",
+   "after": "pizza-59-0 > cafe-59-0 > cafe-59-1 > restaurant-59-0",
+   "meals": "2->2",
+   "adjacent": "true->false",
+   "km": "3.7->3.3"
+  }
+ ]
+}

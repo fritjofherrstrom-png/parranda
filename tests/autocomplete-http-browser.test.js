@@ -57,6 +57,60 @@ async function landing(t, provider) {
   return { page, field, server };
 }
 
+test('mobile suggestions wrap long names and leave the submit action reachable', async t => {
+  const longName = 'Longplace' + 'x'.repeat(75);
+  const provider = createPlaceSuggestions({ fetcher: async () => ({ ok: true, status: 200, json: async () => ({
+    features: Array.from({ length: 5 }, (_, index) => ({
+      type: 'Feature', geometry: { type: 'Point', coordinates: [13, 55.6] },
+      properties: { name: index ? `Longplace ${index}` : longName, type: 'city', osm_key: 'place', osm_value: 'city',
+        osm_type: 'R', osm_id: 101 + index, state: 'Fixture Region', country: 'Fixture Country' },
+    })),
+  }) }) });
+  const { page, field } = await landing(t, provider);
+  await field.fill('Longplace');
+  const list = page.getByRole('listbox');
+  await list.waitFor();
+  const option = page.getByRole('option').filter({ hasText: longName });
+  const layout = await option.evaluate(element => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
+  assert.ok(layout.scrollWidth <= layout.clientWidth, 'long unbroken place names fit within the suggestion');
+  const listBox = await list.boundingBox();
+  const submitBox = await page.getByRole('button', { name: 'Build my day', exact: true }).boundingBox();
+  assert.ok(submitBox.y >= listBox.y + listBox.height, 'suggestions do not cover the submit action on mobile');
+  for (let index = 0; index < 5; index++) await field.press('ArrowDown');
+  const visibility = await page.evaluate(() => {
+    const input = document.querySelector('[role=combobox]');
+    const selected = document.getElementById(input.getAttribute('aria-activedescendant'));
+    const list = document.querySelector('[role=listbox]');
+    const optionRect = selected.getBoundingClientRect(), listRect = list.getBoundingClientRect();
+    return optionRect.top >= listRect.top && optionRect.bottom <= listRect.bottom;
+  });
+  assert.ok(visibility, 'keyboard selection scrolls into the visible list');
+  await option.click();
+  const selectedLabel = page.getByText(`${longName}, Fixture Region, Fixture Country`, { exact: true });
+  assert.ok(await selectedLabel.isVisible(), 'the full selected name remains readable after the list closes');
+  const selectedLayout = await selectedLabel.evaluate(element => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
+  assert.ok(selectedLayout.scrollWidth <= selectedLayout.clientWidth, 'the selected name wraps on mobile');
+});
+
+test('selected names wrap when the mobile field overflows, including names under forty characters', async t => {
+  const title = 'San Cristóbal de La Laguna';
+  const provider = createPlaceSuggestions({ fetcher: async () => ({ ok: true, status: 200, json: async () => ({ features: [{
+    type: 'Feature', geometry: { type: 'Point', coordinates: [-16.31, 28.49] },
+    properties: { name: title, type: 'city', osm_key: 'place', osm_value: 'city',
+      osm_type: 'R', osm_id: 202, country: 'Spain' },
+  }] }) }) });
+  const { page, field } = await landing(t, provider);
+  await page.setViewportSize({ width: 320, height: 844 });
+  await field.fill('San Cristóbal');
+  await page.getByRole('option').filter({ hasText: title }).click();
+  const value = await field.inputValue();
+  assert.ok(value.length < 40, 'the regression is not an extremely long name');
+  const label = page.getByText(value, { exact: true });
+  await label.waitFor({ state: 'visible' });
+  const box = await label.evaluate(element => ({ width: element.clientWidth, scroll: element.scrollWidth }));
+  assert.ok(box.scroll <= box.width, 'the chosen name wraps within the mobile viewport');
+});
+
 test('built autocomplete displays a valid 4500ms Photon answer through the actual HTTP handler', { timeout: 20000 }, async t => {
   let calls = 0, elapsed;
   const provider = createPlaceSuggestions({ fetcher: async (_url, { signal }) => {
@@ -82,8 +136,9 @@ test('a new built-UI prefix cancels its abandoned HTTP owner and never publishes
   const entered = deferred(), aborted = deferred(), release = deferred();
   const calls = [];
   const provider = createPlaceSuggestions({ fetcher: async (url, { signal }) => {
-    const query = new URL(url).searchParams.get('q');
-    calls.push(query);
+    const parameters = new URL(url).searchParams;
+    const query = parameters.get('q');
+    calls.push({query, language: parameters.get('lang')});
     if (calls.length === 1) {
       signal.addEventListener('abort', () => aborted.resolve(true), { once: true });
       entered.resolve();
@@ -106,7 +161,15 @@ test('a new built-UI prefix cancels its abandoned HTTP owner and never publishes
     assert.equal(await page.getByRole('option').filter({ hasText: 'Obsolete Harbour' }).count(), 0);
     await field.fill('oldport');
     await page.getByRole('option').filter({ hasText: 'Fresh Oldport' }).waitFor();
-    assert.deepEqual(calls, ['oldport', 'newport', 'oldport'], 'late abandoned work must not populate the cache');
+    assert.deepEqual(calls, [
+      {query:'oldport',language:null}, {query:'newport',language:null},
+      {query:'oldport',language:null}, {query:'oldport',language:'en'},
+    ], 'abandoned work is not cached; the fresh fuzzy city also reads its bounded English-name page');
+    await field.fill('newport');
+    await page.getByRole('option').filter({ hasText: 'Newport' }).waitFor();
+    await field.fill('oldport');
+    await page.getByRole('option').filter({ hasText: 'Fresh Oldport' }).waitFor();
+    assert.equal(calls.length,4,'the complete fresh answer, including its alternate-name page, is cached');
   } finally { release.resolve(); }
 });
 

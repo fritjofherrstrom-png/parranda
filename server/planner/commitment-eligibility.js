@@ -1,6 +1,6 @@
 "use strict";
 
-const { plannerUsableOptionsForRole } = require("./candidate-combination");
+const { explicitAdmissionByIdentity } = require("./explicit-selection-admission");
 const { normalizeSelectedDayHoursFact } = require("../place-candidates/opening-hours");
 
 /**
@@ -31,9 +31,10 @@ const { normalizeSelectedDayHoursFact } = require("../place-candidates/opening-h
  * The set is drawn from the three places a pin is resolved against: the
  * candidates actually offered to the composer, the gated role reservoir a pin
  * can hoist from, and the ranked entries just below each role's cut that the
- * pin rescue would re-admit. Reusing plannerUsableOptionsForRole rather than
- * re-deciding admission here is what keeps "eligible" and "pinnable" the same
- * question — if the hoist's rule changes, this changes with it.
+ * pin rescue would re-admit. Rescue and this counterfactual share the same
+ * individual, identity-wide admission rule, including direct-role rejections.
+ * The selector supplies the complete pre-cut answer instead of asking the
+ * incomplete public role surface to reconstruct it.
  *
  * That third source is not an optimisation, it is the difference between an
  * honest answer and a circular one. The per-role ranking cut is pin-aware, so a
@@ -74,20 +75,23 @@ function collectCommitmentUpstreamEligibleIds({ plannerRoles = null, sourceCandi
     if (candidate && candidate.id != null && candidate.id !== "") eligible.add(String(candidate.id));
   }
 
-  for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
-    for (const option of plannerUsableOptionsForRole(roleEntry)) {
-      const id = option?.candidate_id;
+  if (Array.isArray(plannerRoles?.commitment_admissible_ids)) {
+    // This complete verdict supersedes relative surfaced tiers and old tail
+    // metadata; unioning them back in could revive a direct rejection.
+    for (const id of plannerRoles.commitment_admissible_ids) {
       if (id != null && id !== "") eligible.add(String(id));
     }
-  }
-
-  // Below the ranking cut, but a pin would re-admit it AND the hoist would then
-  // accept it. Collected by the role selector, which is the only place that can
-  // see the tail the cut removed.
-  for (const id of Array.isArray(plannerRoles?.commitment_rescuable_ids)
-    ? plannerRoles.commitment_rescuable_ids
-    : []) {
-    if (id != null && id !== "") eligible.add(String(id));
+  } else {
+    const admission = explicitAdmissionByIdentity(plannerRoles?.roles);
+    for (const [id, allowed] of admission) {
+      if (allowed) eligible.add(id);
+    }
+    // Older callers supply only trusted tail ids. A rejection in their supplied
+    // assessments still wins; an absent tail assessment retains that contract.
+    for (const id of Array.isArray(plannerRoles?.commitment_rescuable_ids)
+      ? plannerRoles.commitment_rescuable_ids : []) {
+      if (id != null && id !== "" && admission.get(String(id)) !== false) eligible.add(String(id));
+    }
   }
 
   return eligible;

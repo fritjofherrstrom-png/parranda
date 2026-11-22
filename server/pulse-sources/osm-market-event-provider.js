@@ -29,14 +29,16 @@ function createOsmMarketEventProvider({ anchor, loader, radiusM = 3000, timeoutM
     if (!reference) return result([], "unavailable", "collection_context_unavailable");
     let timer;
     let expired = false;
+    let mappingStarted = false;
     const work = async () => {
       // Existing cached Overpass loader only. Its own bounds/failover apply;
       // this reader neither creates an endpoint nor calls other place sources.
       const places = await loader({ ...anchor, requestedIntents: ["market"], anchorMode: "coordinates" });
       if (!Array.isArray(places) || !/^loaded:\d+$/.test(places.loader_status || "")
         || places.loader_error || places.loader_metadata?.cache?.served_stale) {
-        return result([], "failed", "source_collect_failed");
+        return result([], "failed", loaderFailureReason(places));
       }
+      mappingStarted = true;
       const rows = [];
       const ids = new Set();
       const mappedPlaces = new Set();
@@ -61,7 +63,7 @@ function createOsmMarketEventProvider({ anchor, loader, radiusM = 3000, timeoutM
         timer = setTimeout(() => { expired = true; resolve(result([], "failed", "source_timeout")); },
           Math.min(30000, Math.max(50, Number(timeoutMs) || 30000)));
       })]);
-    } catch { return result([], "failed", "source_collect_failed"); }
+    } catch { return result([], "failed", mappingStarted ? "source_mapping_failed" : "source_collect_failed"); }
     finally { clearTimeout(timer); }
   } }; } };
 }
@@ -109,6 +111,30 @@ function mapOsmMarketSchedule(place, { reference, anchor, radiusM = 3000,
     recurrence: { rule, timezone, label: "OSM weekly market schedule", occurrence_status: "unconfirmed" },
     provenance: { source_url: url, source_label: "OpenStreetMap", license: LICENSE, attribution: CREDIT },
   }));
+}
+
+// Closed diagnostic projection only: never expose exception text or let a
+// loader token attest an event, fresh coverage, geometry or source authority.
+const LOADER_FAILURE_REASONS = new Map([
+  ["timeout_or_abort", "source_timeout"],
+  ["http_non_200", "source_http_not_ok"],
+  ["provider_slot_busy", "source_capacity_unavailable"],
+  ["provider_rate_limited", "source_provider_backoff"],
+  ["provider_rejected_client", "source_provider_rejected"],
+  ["provider_unavailable", "source_provider_unavailable"],
+  ["provider_unreachable", "source_provider_unreachable"],
+  ["provider_timed_out", "source_provider_timeout_hold"],
+  ["parse_error", "source_payload_invalid"],
+  ["fetch_error", "source_fetch_failed"],
+  ["no_endpoint", "source_endpoint_unavailable"],
+]);
+
+function loaderFailureReason(places) {
+  if (!Array.isArray(places)) return "source_collect_failed";
+  if (places.loader_error === "stale_cache_refresh_failed" || places.loader_metadata?.cache?.served_stale) {
+    return "source_stale_unavailable";
+  }
+  return LOADER_FAILURE_REASONS.get(places.loader_error) || "source_collect_failed";
 }
 
 function coordinates(value) {

@@ -12,15 +12,21 @@ export const LIVE_EVENT_TIMES = ["tonight", "this_week"];
 
 const MAX_ROUTE_POINTS = 24;
 const MAX_PREFERENCES = 12;
-export function liveSelectedDate(response) {
-  const value = response?.live_events?.selected_date;
+function validCalendarDate(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const parsed = new Date(`${value}T00:00:00Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value ? value : null;
 }
 
+export function liveSelectedDate(response) {
+  // A dated Live sidecar owns its events. When it has no date, keep the
+  // published day's date rather than shifting the query to the current day.
+  return validCalendarDate(response?.live_events?.selected_date) ??
+    validCalendarDate(response?.days?.[0]?.date);
+}
+
 export function liveDateLabel(date, lang) {
-  const valid = liveSelectedDate({ live_events: { selected_date: date } });
+  const valid = validCalendarDate(date);
   return valid ? new Date(`${valid}T00:00:00Z`).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", {
     weekday: "short", day: "numeric", month: "short", timeZone: "UTC",
   }) : (lang === "en" ? "Today" : "Idag");
@@ -91,10 +97,11 @@ export function buildLiveEventQueryPayload({
   nearMeCoords = null,
 } = {}) {
   if (!LIVE_EVENT_SCOPES.includes(scope) || !LIVE_EVENT_TIMES.includes(time)) return null;
+  const selectedDate = liveSelectedDate(response);
   const base = {
     scope,
     time,
-    ...(liveSelectedDate(response) ? { selected_date: liveSelectedDate(response) } : {}),
+    ...(selectedDate ? { selected_date: selectedDate } : {}),
     preferences: normalizePreferences(preferences),
   };
 

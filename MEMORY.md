@@ -1,5 +1,13 @@
 # Parranda — gemensam arbetshistorik
 
+## Produktprioritet bekräftad av Fritjof — 2026-11-05
+
+- Localhost-layouten i PR #677 avvisades: den ska inte ersätta den publika Linje-vyn. PR:n är stängd utan merge/deploy; gren och bevis bevaras.
+- ”Stort och smått” betyder förbättringar med olika omfattning, inte ett önskemål om förändrad layout eller typografisk skala. Uppenbara UI-fel får rättas, men fokus nu är smartare, mer användbar plats-/dagsintelligens och vad som krävs inför framtida lansering.
+- Nytt avgränsat motorspår från main6a55514: kända öppettider ska hjälpa automatisk besöksordning utan att låna dagens klockslag till framtida dagar. Ingen full schemaläggning eller stärkt öppet-nu-utsaga påstås.
+- Befintliga gränser för källtillit, användarval, gångbudget och betalda tjänster gäller fortsatt.
+
+
 ## Lokal research och modellpilot — 2026-10-27, förberedd kandidat
 
 - Den generella upptäcktsfixen och dess observationsgränser finns i

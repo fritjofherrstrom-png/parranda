@@ -16,6 +16,8 @@ export interface DayChange {
   km: { before: number; after: number } | null;
   hasRoute: boolean;
   routeChanged: boolean;
+  /** Names of stops the reader kept that this day answers and the previous one did not. */
+  pinned: string[];
   cause: "live" | null;
   trigger: "recheck" | null;
 }

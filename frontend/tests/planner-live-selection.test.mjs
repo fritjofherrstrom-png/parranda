@@ -10,7 +10,8 @@ function event(extra = {}) { return { id: 'source-event', title: 'Evening concer
 function live(events = [event()]) { return { coverage: 'covered', selected_date: DATE, pending: false, tonight: events, this_week: events, acquisition: { source_health: { status: 'healthy', result: 'events_found', reasons: [], selected_source_count: 1, responding_source_count: 1, event_bearing_source_count: 1, empty_source_count: 0, failed_source_count: 0, unavailable_source_count: 0, raw_event_count: events.length, normalized_event_count: events.length, accepted_event_count: events.length, surfaced_event_count: events.length, rejected_event_count: 0 } } }; }
 function day({ events = [event()], chosen = null, stops = stable, edit = null, pending = false } = {}) { const occurrence = chosen ? event({ live_occurrence_id: chosen, id: chosen === OTHER ? 'second' : 'source-event', title: chosen === OTHER ? 'Second concert' : 'Evening concert' }) : null; const published = [...stops, ...(occurrence ? [{ ...occurrence, id: `live-event-${occurrence.id}`, label: occurrence.title, is_live_event: true }] : [])]; return { days: [{ date: DATE, experimental_agnostic_route_applied: true, primary_route: { id: '__agnostic_compose__', title: 'Fixture day', estimated_km: 1, main_stops: published, map_route_points: [], map_path_points: [], legs: [] }, alternatives: [] }], place_structure: { provenance: 'agnostic_anchor', area_count: 1, areas: [], district_day: { areas: [], evening_event: occurrence ? { ...occurrence, woven_into_route: true } : null } }, agnostic_route_output_experiment: { intake: { query: 'Fixture Town' }, promotion: { promote: true }, source_status: { anchor: { lat: 59.333, lng: 18.065 } }, ...(edit ? { day_edit: { status: 'applied', ...edit } } : {}) }, live_events: { ...live(events), pending }, ...(pending ? { live_completion: { version: 1, token: 'c'.repeat(48), expires_in_ms: 120000, route_upgrade: 'explicit_request' } } : {}) }; }
 const routes = h => h.fetchMock.calls.filter(c => c.url.includes('route-recommendations'));
-const buttons = (h, label) => [...h.container.querySelectorAll('button')].filter(b => b.textContent.trim() === label || b.getAttribute('aria-label') === label);
+const routeSuggestion = h => h.container.querySelector('[data-live-route-suggestion]');
+const buttons = (h, label) => [...h.container.querySelectorAll('button')].filter(b => b.textContent.trim().replace(/^(See all live|Se allt live), .*$/, '$1') === label || b.getAttribute('aria-label') === label);
 async function click(h, label) { const b = buttons(h, label)[0]; assert.ok(b, `actual '${label}' button`); await h.act(() => b.dispatchEvent(new h.window.MouseEvent('click', { bubbles: true }))); return b; }
 async function start(t, body = day(), options = {}) { t.mock.timers.enable({ apis: ['Date'], now: new Date(`${DATE}T10:00:00Z`) }); const { manualTeardown, ...mountOptions } = options; const h = await mountPlanner({ url: URL, ...mountOptions }); if (!options.manualTeardown)
     t.after(() => h.unmount()); await h.fetchMock.respond(routes(h)[0], body); return h; }
@@ -41,6 +42,32 @@ test('Live occurrence selection closes modal, focuses day status and composes on
     assert.deepEqual(h.readStorage(LAST).commitments, before.commitments);
     assert.doesNotMatch(routeText(h), /Evening concert/);
 });
+test("an existing Live keep does not let a grouped update replace the day with zero interest matches", async t => {
+    const h = await start(t);
+    await open(h);
+    await click(h, 'Plan with this event');
+    await h.clock.advance(400);
+    await h.fetchMock.respond(routes(h).at(-1), day({ chosen: ID }));
+    assert.match(routeText(h), /Fixture Museum/);
+    const kept = h.readStorage(LAST);
+
+    await click(h, 'Adjust');
+    await click(h, 'All interests');
+    await click(h, 'Clear selection');
+    await click(h, 'Swimming spots');
+    await click(h, 'Update day');
+    const update = routes(h).at(-1);
+    assert.deepEqual(update.body.live_event_choices, [{ occurrence_id: ID, action: 'keep' }]);
+    assert.deepEqual(update.body.preferences, ['bathing_places']);
+    const stops = [{ ...stable[0], label: 'Generic replacement museum' }, stable[1]];
+    await h.fetchMock.respond(update, day({ chosen: ID, stops }));
+
+    assert.match(routeText(h), /Fixture Museum/);
+    assert.doesNotMatch(routeText(h), /Generic replacement museum/);
+    assert.match(h.text(), /couldn’t confirm a walkable day with these interests/i);
+    assert.deepEqual(h.readStorage(LAST), kept);
+});
+
 // Parent series and weak/other-day metadata may not manufacture a selectable slot.
 test('series selects exact source slot in both sort modes and hides missing/false/other-day choices', async (t) => {
     const slots = [event(), event({ id: 'second', live_occurrence_id: OTHER, starts_at: `${DATE}T20:00:00Z` })];
@@ -372,4 +399,139 @@ test('a pending explicit choice without server upgrade authorization refuses wit
     await h.clock.advance(3000);
     assert.equal(h.fetchMock.calls.filter(c=>c.url==='/api/planner-live-completion').length,0);
     assert.equal(routes(h).length,2);
+});
+
+test("the finished day offers one nearby evening occurrence and uses the existing choice flow", async (t) => {
+    const stops = [{ ...stable[0], daypart: 'morning' }, { ...stable[1], daypart: 'midday' }];
+    const fit = { preference_match: 'strong', matched_preferences: ['culture'] };
+    const rows = [
+        event({ ...fit, id: 'distant', title: 'Across town', lat: 59.48, live_occurrence_id: `live:${DATE}:${'f'.repeat(32)}` }),
+        event({ ...fit, id: 'midday', title: 'Midday performance', starts_at: `${DATE}T09:00:00Z`, live_occurrence_id: `live:${DATE}:${'e'.repeat(32)}` }),
+        event({ ...fit, id: 'unconfirmed', title: 'Unconfirmed session', live_choice_eligible: false }),
+        event({ ...fit }),
+        event({ ...fit, id: 'second', title: 'Another concert', live_occurrence_id: OTHER }),
+    ];
+    const h = await start(t, day({ stops, events: [], pending: true }));
+    assert.match(routeText(h), /Fixture Museum/);
+    assert.equal(routeSuggestion(h), null, "the day is usable while calendars are still loading");
+
+    await h.clock.advance(2000);
+    const completion = h.fetchMock.calls.find(c => c.url === '/api/planner-live-completion');
+    assert.ok(completion);
+    await h.fetchMock.respond(completion, {
+        live_events: live(rows),
+        live_completion: { version: 1, state: 'ready', route_upgrade: 'explicit_request' },
+    });
+    const upgrade = h.fetchMock.calls.find(c => c.url === '/api/planner-live-route-upgrade');
+    assert.ok(upgrade);
+    assert.equal(routeSuggestion(h), null, "the automatic result must settle before the app offers an optional change");
+    await h.fetchMock.respond(upgrade, { live_route_upgrade: { version: 1, state: 'not_eligible' } });
+    const suggestion = routeSuggestion(h);
+    assert.ok(suggestion);
+    assert.match(suggestion.textContent, /Evening concert/);
+    assert.match(suggestion.textContent, /20:00/);
+    assert.match(suggestion.textContent, /Fixture Lunch/);
+    assert.match(suggestion.textContent, /Matches: Culture/);
+    assert.doesNotMatch(suggestion.textContent, /Across town|Midday performance|Unconfirmed session|Another concert/);
+    assert.equal(routes(h).length, 1, "showing the suggestion does not rebuild the day");
+
+    await click(h, 'Plan with this event');
+    await h.clock.advance(400);
+    const request = routes(h).at(-1);
+    assert.deepEqual(request.body.live_event_choices, [{ occurrence_id: ID, action: 'keep' }]);
+    await h.fetchMock.respond(request, day({ stops, chosen: ID, events: rows }));
+    assert.match(routeText(h), /Evening concert/);
+    assert.equal(routeSuggestion(h), null, "a published evening event is not offered again");
+});
+
+test("a completed day without good date, interest and proximity evidence shows no Live suggestion", async (t) => {
+    const stops = [{ ...stable[0], daypart: 'morning' }, { ...stable[1], daypart: 'midday' }];
+    const fit = { preference_match: 'strong', matched_preferences: ['culture'] };
+    const rows = [
+        event({ ...fit, id: 'other-date', title: 'Different day', occurrence_date: NEXT }),
+        event({ ...fit, id: 'distant', title: 'Too far from the last stop', lng: 18.31 }),
+        event({ id: 'unmatched', title: 'Unmatched concert' }),
+        event({ ...fit, id: 'earlier', title: 'Earlier show', starts_at: `${DATE}T09:00:00Z` }),
+    ];
+    const h = await start(t, day({ stops, events: rows }));
+    assert.match(routeText(h), /Fixture Lunch/);
+    assert.equal(routeSuggestion(h), null);
+    assert.ok(buttons(h, 'See all live').length, "the normal Live list remains available");
+    assert.equal(routes(h).length, 1);
+});
+
+test("verified local source slots can be suggested without repeating that slot in the board", async (t) => {
+    const stops = [{ ...stable[0], daypart: 'morning' }, { ...stable[1], daypart: 'midday' }];
+    const seriesId = 'publisher-series';
+    const slot = event({
+        source_series_id: seriesId, source_provider_id: 'test-calendar', starts_at: undefined,
+        time_window: { kind: 'occurrences', dates: [DATE], local_start: '18:30', timezone: 'Europe/Stockholm' },
+    });
+    const otherSlots = ['19:30', '20:00', '20:30', '21:00'].map((clock, index) => event({
+        id: `slot-${index}`, source_series_id: seriesId, source_provider_id: 'test-calendar',
+        live_occurrence_id: `live:${DATE}:${String(index).repeat(32)}`,
+        starts_at: `${DATE}T${clock}:00+02:00`,
+    }));
+    const series = event({
+        id: seriesId, source_series_id: seriesId, source_provider_id: 'test-calendar', live_occurrence_id: undefined,
+        preference_match: 'strong', matched_preferences: ['culture'],
+        occurrences: [event({
+            id: 'explicit-non-match', source_series_id: seriesId, source_provider_id: 'test-calendar',
+            live_occurrence_id: OTHER, starts_at: `${DATE}T18:00:00+02:00`, preference_match: 'none',
+        }), slot, ...otherSlots],
+    });
+    const unrelated = event({ id: 'market', title: 'Market programme', live_choice_eligible: false, live_occurrence_id: undefined });
+    const h = await start(t, day({ stops, events: [series, unrelated] }));
+    const suggestion = routeSuggestion(h);
+    assert.ok(suggestion);
+    assert.match(suggestion.textContent, /18:30/);
+    assert.match(suggestion.textContent, /Matches: Culture/);
+    const board = suggestion.closest('section');
+    assert.equal(board.textContent.match(/18:30/g)?.length, 1);
+    assert.match(board.textContent, /19:30/, "the other source slot remains visible");
+    assert.match(board.textContent, /Market programme/, "the remaining performances share one board row");
+});
+
+test("an upcoming evening occurrence can end after midnight", async (t) => {
+    const stops = [{ ...stable[0], daypart: 'morning' }, { ...stable[1], daypart: 'midday' }];
+    const row = event({
+        preference_match: 'strong', matched_preferences: ['culture'],
+        ends_at: `${NEXT}T00:30:00+02:00`,
+    });
+    const h = await start(t, day({ stops, events: [row] }));
+    assert.match(routeSuggestion(h)?.textContent || '', /Evening concert/);
+});
+
+test("changing the date removes the old day’s suggestion during the compose debounce", async (t) => {
+    const stops = [{ ...stable[0], daypart: 'morning' }, { ...stable[1], daypart: 'midday' }];
+    const row = event({ preference_match: 'strong', matched_preferences: ['culture'] });
+    const h = await start(t, day({ stops, events: [row] }));
+    assert.ok(routeSuggestion(h));
+    await click(h, 'Adjust');
+    await click(h, 'Tomorrow');
+    assert.equal(routes(h).length, 1, "the new compose has not started yet");
+    assert.equal(routeSuggestion(h), null, "the old action is gone as soon as the date changes");
+    assert.match(routeText(h), /Fixture Museum/);
+});
+
+test("a newer selected-day Live observation replaces the suggestion evidence", async (t) => {
+    const stops = [{ ...stable[0], daypart: 'morning' }, { ...stable[1], daypart: 'midday' }];
+    const row = event({ preference_match: 'strong', matched_preferences: ['culture'] });
+    const h = await start(t, day({ stops, events: [row] }));
+    assert.ok(routeSuggestion(h));
+    await click(h, 'See all live');
+    await click(h, 'Sat 17 Oct');
+    const query = h.fetchMock.calls.filter(c => c.url.startsWith('/api/live-events')).at(-1);
+    assert.equal(query.body.scope, 'around_place');
+    const empty = live([]);
+    Object.assign(empty.acquisition.source_health, { result: 'empty', event_bearing_source_count: 0, empty_source_count: 1 });
+    await h.fetchMock.respond(query, {
+        contract: 'live_event_query_v1', route_mutation: false, day_anchor_mutation: false,
+        query: { scope: 'around_place', time: 'tonight', selected_date: DATE, radius_m: 3000, discovery_scope: 'local' },
+        live_events: empty,
+    });
+    await click(h, 'Close live');
+    assert.match(h.text(), /sources responded but list no events for this period/);
+    assert.equal(routeSuggestion(h), null);
+    assert.equal(routes(h).length, 1);
 });

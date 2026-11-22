@@ -1,10 +1,21 @@
-@import "tailwindcss";
+@import "tailwindcss" source("../");
+
+/* Only application sources produce utilities. Offline test bundles under
+   frontend/.map-selection-* contain third-party code and fixture-only classes;
+   auto-discovering them made production CSS depend on previous test runs. */
 
 /* Tailwind 4, CSS-first: no tailwind.config, no PostCSS. The theme maps the
    role tokens in tokens.css onto utilities. `inline` makes each utility read
    the token itself (rgb(var(--p-color-ink))), so a theme switch on <html>
    re-colours everything without a rebuild — and opacity modifiers
-   (text-parranda-ink/65) still work through color-mix. */
+   (bg-parranda-live/8) still work through color-mix. Ink takes no modifier:
+   its lighter strengths are the named roles below. */
+/* The first daypart and Follow share real flow, not overlapping rows. The
+   rem inset follows text zoom while the crossing remains on the 19px line. */
+.stop-line-heading-row > h3 { display: flex; align-items: center; }
+.stop-line-heading-row > button { margin-left: auto; max-width: 100%; }
+.stop-line-daypart-crossing { left: calc(14px - 3.5rem); }
+
 @theme inline {
   --color-parranda-ink: rgb(var(--p-color-ink));
   --color-parranda-paper: rgb(var(--p-color-paper));
@@ -14,11 +25,30 @@
   --color-parranda-glow: rgb(var(--p-color-glow));
   --color-parranda-live: rgb(var(--p-color-live));
   --color-parranda-on-live: rgb(var(--p-color-on-live));
+  --color-parranda-on-terracotta: rgb(var(--p-color-on-terracotta));
+  --color-parranda-surface: rgb(var(--p-color-surface));
+
+  /* Ink at its named strengths (tokens.css --p-ink-*). */
+  --color-parranda-ink-soft: rgb(var(--p-color-ink) / var(--p-ink-soft));
+  --color-parranda-ink-muted: rgb(var(--p-color-ink) / var(--p-ink-muted));
+  --color-parranda-ink-meta: rgb(var(--p-color-ink) / var(--p-ink-meta));
+  --color-parranda-line-strong: rgb(var(--p-color-ink) / var(--p-ink-line-strong));
+  --color-parranda-line-firm: rgb(var(--p-color-ink) / var(--p-ink-line-firm));
+  --color-parranda-line: rgb(var(--p-color-ink) / var(--p-ink-line));
+  --color-parranda-line-faint: rgb(var(--p-color-ink) / var(--p-ink-line-faint));
+  --color-parranda-fill-strong: rgb(var(--p-color-ink) / var(--p-ink-fill-strong));
+  --color-parranda-fill: rgb(var(--p-color-ink) / var(--p-ink-fill));
+  --color-parranda-fill-faint: rgb(var(--p-color-ink) / var(--p-ink-fill-faint));
+
+  --color-parranda-scrim: var(--p-scrim);
+  --color-parranda-shade: var(--p-shade);
 
   --radius-parranda: var(--p-radius-card);
   --radius-parranda-btn: var(--p-radius-button);
+  --radius-parranda-tag: var(--p-radius-tag);
 
   --shadow-control: var(--p-shadow-control);
+  --shadow-card: var(--p-shadow-card);
   --shadow-pop: var(--p-shadow-pop);
   --shadow-sheet: var(--p-shadow-sheet);
 
@@ -34,7 +64,6 @@
 
   --font-display: var(--p-font-display), "Helvetica Neue", Arial, sans-serif;
   --font-body: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
-  --font-mono: var(--p-font-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 
 @layer base {
@@ -45,7 +74,7 @@
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: rgb(var(--p-color-ink) / 0.14);
+    border-color: rgb(var(--p-color-ink) / var(--p-ink-line-faint));
   }
 
   /* Tailwind 4 gives buttons the default cursor; every Parranda button is an
@@ -68,9 +97,12 @@
   border-left-width: var(--p-line);
 }
 
-/* "Linje" type roles. The display face is Archivo on its width axis — wide and
-   heavy like wayfinding signage; data (times, distances, counts, eyebrows) is
-   set in the mono so numbers line up and read as facts. */
+/* "Linje" type roles: one family, Archivo, on its width axis. Wide and heavy
+   for display, like wayfinding signage; the normal width for reading; narrow
+   for labels and data (times, distances, counts), with lining tabular figures
+   so numbers line up and read as facts. Labels keep the case they are written
+   in: tracked capitals in a second, mono face read as template chrome
+   (Linje 2, Nov 2026), and cost a second font request. */
 @utility type-display {
   font-family: var(--p-font-display), "Helvetica Neue", Arial, sans-serif;
   font-weight: 900;
@@ -90,20 +122,20 @@
 }
 
 @utility type-eyebrow {
-  font-family: var(--p-font-mono), ui-monospace, Menlo, monospace;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
+  font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
+  font-size: 0.8125rem;
+  font-stretch: 88%;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   line-height: 1.3;
-  text-transform: uppercase;
 }
 
 @utility type-data {
-  font-family: var(--p-font-mono), ui-monospace, Menlo, monospace;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums;
-  text-transform: uppercase;
+  font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
+  font-stretch: 88%;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 /* A day that is still composing: every placeholder shape carries one slow,
@@ -228,12 +260,18 @@
 }
 .route-map-frame .maplibregl-ctrl.maplibregl-ctrl-attrib {
   background: rgb(var(--p-color-paper) / 0.85);
-  color: rgb(var(--p-color-ink) / 0.75);
+  color: rgb(var(--p-color-ink) / var(--p-ink-muted));
   font-size: 0.625rem;
   line-height: 1.35;
   padding: 1px 6px;
   border-radius: 6px 0 0 0;
   max-width: calc(100% - 20px);
+}
+/* The corner spans the map, so the attribution's max-width is measured
+   against the map: a shrink-to-fit corner made it 20px narrower than its own
+   text and broke it onto two lines. The corner takes no taps (MapLibre). */
+.route-map-frame .maplibregl-ctrl-bottom-right {
+  left: 0;
 }
 .route-map-frame .maplibregl-ctrl-bottom-right .maplibregl-ctrl {
   margin: 0;
@@ -243,17 +281,17 @@
 }
 .route-map-frame .maplibregl-ctrl-group {
   background: rgb(var(--p-color-paper));
-  border: 1px solid rgb(var(--p-color-ink) / 0.14);
+  border: var(--p-line) solid rgb(var(--p-color-ink) / var(--p-ink-line-faint));
   border-radius: 10px;
   box-shadow: var(--p-shadow-control);
   overflow: hidden;
 }
 .route-map-frame .maplibregl-ctrl-group button + button {
-  border-top: 1px solid rgb(var(--p-color-ink) / 0.14);
+  border-top: var(--p-line) solid rgb(var(--p-color-ink) / var(--p-ink-line-faint));
 }
 .route-map-frame .maplibregl-ctrl-group button:hover,
 .route-map-frame .maplibregl-ctrl-group button:focus-visible {
-  background: rgb(var(--p-color-ink) / 0.08);
+  background: rgb(var(--p-color-ink) / var(--p-ink-fill));
 }
 /* MapLibre's own focus glow is clipped by the group's rounded overflow, so a
    keyboard user saw only a hairline. Draw the shared focus colour inside the
@@ -351,9 +389,11 @@
   border-radius: 999px;
   background: rgb(var(--p-color-paper));
   color: rgb(var(--p-color-ink));
-  font-family: var(--p-font-mono), ui-monospace, Menlo, monospace;
+  font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-stretch: 88%;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 700;
   border: 3px solid rgb(var(--p-color-ink));
   box-shadow: var(--p-shadow-marker);
 }
@@ -384,6 +424,36 @@
   display: none;
 }
 
+/* Current GPS is distinct from route stops; neither marker takes a tap. */
+.route-map-current-position {
+  width: 42px;
+  height: 42px;
+  border: var(--p-line) solid rgb(var(--p-color-location));
+  border-radius: 50%;
+  background: rgb(var(--p-color-location) / 0.12);
+  pointer-events: none;
+  z-index: calc(var(--p-z-map-control) - 1);
+}
+.route-map-current-position::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  border: var(--p-line) solid rgb(var(--p-color-on-location));
+  border-radius: 50%;
+  background: rgb(var(--p-color-location));
+  box-shadow: 0 0 0 var(--p-line) rgb(var(--p-color-location));
+}
+.route-map-position-accuracy {
+  border: var(--p-line) solid rgb(var(--p-color-location));
+  border-radius: 50%;
+  background: rgb(var(--p-color-location) / 0.12);
+  pointer-events: none;
+}
+
 /* A clustered stop's disc is drawn beside its coordinate; this dot marks the
    coordinate. */
 .route-map-marker-origin {
@@ -411,9 +481,11 @@
   border: 0;
   background: transparent;
   color: rgb(var(--p-color-ink));
-  font-family: var(--p-font-mono), ui-monospace, Menlo, monospace;
+  font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-stretch: 88%;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 700;
   box-shadow: none;
   transform: translate(-50%, -50%);
   /* The number is anonymous inline content; isolation keeps it above the
@@ -464,9 +536,41 @@
   color: rgb(var(--p-color-on-live));
 }
 
+/* The open stop in the list uses the same warm station on the map. A group
+   containing that stop is highlighted too, until its members separate. */
+.route-map-marker-shell[data-route-selected="true"] .route-map-marker {
+  color: rgb(var(--p-color-on-terracotta));
+}
+.route-map-marker-shell[data-route-selected="true"] .route-map-marker::before {
+  background: rgb(var(--p-color-terracotta));
+  border-color: rgb(var(--p-color-ink));
+}
+
 /* MapLibre defaults to 29px controls. Keep map zoom usable with a thumb without
    changing the route/map contract or hiding the provider attribution. */
 .route-map-frame .maplibregl-ctrl-group button {
   width: 44px;
   height: 44px;
+}
+
+/* A still overview (RouteMap `still`) takes no zoom, so it shows no zoom
+   buttons: the strip keeps its room for the stops. */
+.route-map-frame[data-still] .maplibregl-ctrl-top-left {
+  display: none;
+}
+
+/* Linje 2 board: on a phone the day's map runs edge to edge, so the line can
+   come straight out of its lower edge. The lines under the frame (status,
+   credit without a drawn map) keep the page's margin. */
+@media (max-width: 639px) {
+  [data-map-overview] {
+    margin-inline: -1rem;
+  }
+  [data-map-overview] .route-map-frame {
+    border-radius: 0;
+    border-inline-width: 0;
+  }
+  [data-map-overview] .route-map-frame ~ * {
+    padding-inline: 1rem;
+  }
 }

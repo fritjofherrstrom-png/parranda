@@ -79,7 +79,9 @@ async function click(h, control) {
   assert.ok(control, 'control exists');
   await h.act(() => control.dispatchEvent(new h.window.Event('click', { bubbles: true })));
 }
-const anchorsTo = (root, href) => [...root.querySelectorAll('a')].filter((a) => a.getAttribute('href') === href);
+// These assertions inspect the explicitly labelled destination link; titles
+// also link to the same destination when a classified URL is available.
+const anchorsTo = (root, href) => [...root.querySelectorAll('a')].filter((a) => a.getAttribute('href') === href && !a.closest('h3,h4,h5'));
 const linkText = (anchor) => anchor.textContent.replace(/\s*↗$/, '');
 // The Live panel's own heading ("Live in Testville"), not the route's woven
 // "Live in your route" block.

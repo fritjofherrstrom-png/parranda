@@ -1,7 +1,49 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { routeMarkerPresentation, routePathIsSketch } from "../src/lib/route-map-presentation.mjs";
+import { routeDisplayPath, routeMarkerPresentation, routePathIsSketch } from "../src/lib/route-map-presentation.mjs";
+
+const walkingGeometry = { geometrySource: "osrm", geometryMode: "walking" };
+
+test("heuristic and unidentified geometry leave an overview with pins only", () => {
+  const stops = [{ lat: 0, lng: 0 }, { lat: 0, lng: 0.01 }, { lat: 0.01, lng: 0.01 }];
+  const before = structuredClone(stops);
+  for (const options of [undefined, { sketch: true, routingSource: "heuristic" },
+    { geometrySource: "heuristic", geometryMode: "walking" }, { geometrySource: "osrm" },
+    { geometrySource: "agnostic_compose", geometryMode: "walking" }]) {
+    assert.deepEqual(routeDisplayPath(stops, options), [], "no display-only connector may imply a walking path");
+  }
+  assert.deepEqual(stops, before, "pins-only fallback preserves source coordinates");
+});
+
+test("dense geometry without an explicit walking mode cannot become a street line", () => {
+  const dense = Array.from({ length: 20 }, (_, i) => ({ lat: 55.6 + i * 0.0002, lng: 13 + (i % 2) * 0.0004 }));
+  assert.deepEqual(routeDisplayPath(dense), []);
+  assert.deepEqual(routeDisplayPath(dense, { geometrySource: "osrm", geometryMode: "driving" }), []);
+  assert.deepEqual(routeDisplayPath(dense, { geometrySource: "osrm", geometryMode: null }), []);
+});
+
+test("explicit pedestrian geometry retains every coordinate without smoothing", () => {
+  const streets = [{ lat: 55.6, lng: 13 }, { lat: 55.6002, lng: 13 },
+    { lat: 55.6002, lng: 13.001 }, { lat: 55.601, lng: 13.001 }];
+  const before = structuredClone(streets);
+  assert.deepEqual(routeDisplayPath(streets, walkingGeometry), streets);
+  assert.deepEqual(streets, before);
+});
+
+test("a short explicit walking segment is real geometry even with only two points", () => {
+  const short = [{ lat: 55.6, lng: 13 }, { lat: 55.6002, lng: 13 }];
+  assert.deepEqual(routeDisplayPath(short, walkingGeometry), short);
+});
+
+test("malformed pedestrian geometry never joins the remaining valid points", () => {
+  const valid = [{ lat: 55.6, lng: 13 }, { lat: 55.6002, lng: 13 }];
+  for (const bad of [null, { lat: NaN, lng: 12 }, { lat: "55", lng: 12 },
+    { lat: 91, lng: 0 }, { lat: 0, lng: 181 }]) {
+    assert.deepEqual(routeDisplayPath([valid[0], bad, valid[1]], walkingGeometry), []);
+  }
+  for (const points of [null, [], [valid[0]]]) assert.deepEqual(routeDisplayPath(points, walkingGeometry), []);
+});
 
 test("a path made only of the route's own waypoints is a sketch, not a street line", () => {
   const stops = [
@@ -13,10 +55,12 @@ test("a path made only of the route's own waypoints is a sketch, not a street li
   assert.equal(routePathIsSketch(stops, 3), true);
   // A published start and end are waypoints too.
   assert.equal(routePathIsSketch([{ lat: 55.6, lng: 13 }, ...stops, { lat: 55.6, lng: 13 }], 3), true);
-  // Street geometry carries the turns between the stops.
+  // Extra points alone never establish a pedestrian path.
   const streets = [];
   for (let i = 0; i < 12; i += 1) streets.push({ lat: 55.6 + i * 0.0005, lng: 13 - i * 0.0004 });
-  assert.equal(routePathIsSketch(streets, 3), false);
+  assert.equal(routePathIsSketch(streets, 3), true);
+  assert.equal(routePathIsSketch(streets, 3, walkingGeometry), false);
+  assert.equal(routePathIsSketch(stops.slice(0, 2), 3, walkingGeometry), false);
 });
 
 test("an unreadable or missing path reads as a sketch — never as street geometry", () => {

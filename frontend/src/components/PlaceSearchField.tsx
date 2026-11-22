@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { LAST_KEY } from "../lib/anywhere-storage.mjs";
-import { SearchIcon } from "./shared/icons";
+import { isPlaceSearchQueryEligible } from "../../../shared/place-search-query.mjs";
 
 export interface PlaceSuggestion {
   title: string;
@@ -39,8 +39,12 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
   const [above, setAbove] = useState(false);
   const [composing, setComposing] = useState(false);
   const [retryGeneration, setRetryGeneration] = useState(0);
+  const [selectedOverflows, setSelectedOverflows] = useState(false);
+  const listRef = useRef<HTMLUListElement>(null);
   const dismissed = useRef(false);
   const sequence = useRef(0);
+  // Set by the reader's own Try again; the server then asks its provider even if it is resting.
+  const explicitRetry = useRef(false);
   const t = (sv: string, en: string) => lang === "sv" ? sv : en;
   // A region and its city can share a name and country; settlements stay unmarked.
   const kindLabel = (kind?: PlaceSuggestion["kind"]) =>
@@ -51,8 +55,10 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
     const query = value.trim();
     dismissed.current = false;
     setChoices([]); setActive(-1); setOpen(false); setStatus("idle");
-    if (selected || composing || query.length < 3 || query.length > 200) return;
+    if (selected || composing || !isPlaceSearchQueryEligible(query)) return;
     const controller = new AbortController();
+    const explicit = explicitRetry.current;
+    explicitRetry.current = false;
     let timer: ReturnType<typeof setTimeout>;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const current = () => generation === sequence.current && !controller.signal.aborted;
@@ -64,14 +70,15 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
       try {
         const response = await fetch(`/api/place-suggestions?lang=${lang}`, {
           method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
-          body: JSON.stringify({ query, context_selection: previousSelection() }),
+          body: JSON.stringify({ query, context_selection: previousSelection(), ...(explicit && !retried ? { retry: true } : {}) }),
         });
         const data = await response.json();
         if (!current()) return;
         clearTimeout(timeout);
         // A provider deadline is a transient unavailable response too. Retry
         // once for this query; repeated failures stay explicit and actionable.
-        if ((data.status === "busy" || response.status === 429 || (response.ok && data.status === "unavailable")) && !retried) {
+        // The server says when a retry cannot help (its provider is resting).
+        if ((data.status === "busy" || response.status === 429 || (response.ok && data.status === "unavailable" && data.retryable !== false)) && !retried) {
           timer = setTimeout(() => search(true), Math.max(500, Math.min(2000, Number(data.retry_after_ms) || 1000)));
           return;
         }
@@ -105,12 +112,34 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
     if (window.matchMedia?.("(pointer: fine)").matches) inputRef.current?.focus({ preventScroll: true });
   }, [inputRef]);
   useEffect(() => {
-    if (shown && active >= 0) document.getElementById(`${listId}-${active}`)?.scrollIntoView?.({ block: "nearest" });
+    if (!shown || active < 0) return;
+    const list = listRef.current;
+    const option = document.getElementById(`${listId}-${active}`);
+    if (!list || !option) return;
+    // Only scroll the results, not the whole page around the focused field.
+    const listRect = list.getBoundingClientRect();
+    const optionRect = option.getBoundingClientRect();
+    if (optionRect.top < listRect.top) list.scrollTop += optionRect.top - listRect.top;
+    else if (optionRect.bottom > listRect.bottom) list.scrollTop += optionRect.bottom - listRect.bottom;
   }, [shown, active, listId]);
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!selected || !input) { setSelectedOverflows(false); return; }
+    let active = true;
+    const measure = () => {
+      if (active) setSelectedOverflows(input.clientWidth > 0 && input.scrollWidth > input.clientWidth + 1);
+    };
+    measure();
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+    observer?.observe(input);
+    void document.fonts?.ready.then(measure);
+    return () => { active = false; observer?.disconnect(); };
+  }, [selected, value, inputRef]);
   return (
     <div className="relative min-w-0 flex-1" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) dismiss(); }}>
-      <div className={"flex min-h-[3.75rem] items-center gap-3 rounded-parranda border-2 bg-parranda-ink/4 px-5 transition focus-within:border-parranda-ember focus-within:ring-3 focus-within:ring-parranda-glow/60 sm:min-h-16 " + (geoDenied ? "border-parranda-glow ring-3 ring-parranda-glow" : "border-parranda-ink")}>
-        <SearchIcon className="h-5 w-5 shrink-0 text-parranda-ink/68" />
+      <div className={"flex min-h-[3.75rem] items-center gap-3 rounded-parranda-btn border-2 bg-parranda-fill-faint px-5 transition focus-within:border-parranda-ember focus-within:ring-3 focus-within:ring-parranda-glow/60 sm:min-h-16 " + (geoDenied ? "border-parranda-glow ring-3 ring-parranda-glow" : "border-parranda-ink")}>
+        {/* Linje 2: the field is the next station: its ember ring. */}
+        <span aria-hidden="true" className="h-[18px] w-[18px] shrink-0 rounded-full border-[4px] border-parranda-ember" />
         <input id="landingCity" ref={inputRef} value={value} onChange={onChange}
           role="combobox" aria-autocomplete="list" aria-expanded={shown} aria-controls={shown ? listId : undefined}
           aria-activedescendant={shown && active >= 0 ? `${listId}-${active}` : undefined}
@@ -125,29 +154,34 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
             }
             if (shown && active >= 0 && event.key === "Enter") { event.preventDefault(); choose(choices[active]); }
           }}
-          placeholder={t("T.ex. Lyon eller Kyoto", "e.g. Lyon or Kyoto")} autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent text-lg text-parranda-ink outline-hidden placeholder:text-parranda-ink/68 focus-visible:outline-hidden sm:text-xl" />
+          autoComplete="off"
+          placeholder={t("Stad eller plats", "City or place")}
+          className="min-w-0 flex-1 bg-transparent text-lg text-parranda-ink outline-hidden placeholder:text-parranda-ink-meta focus-visible:outline-hidden sm:text-xl" />
       </div>
-      {shown && <div className={"absolute inset-x-0 z-(--p-z-popover) overflow-hidden rounded-parranda border border-parranda-ink/20 bg-parranda-paper shadow-pop " + (above ? "bottom-full mb-1" : "top-full mt-1")}>
-        <ul id={listId} role="listbox" aria-label={t("Platsförslag", "Place suggestions")} className="max-h-72 overflow-y-auto py-1">
+      {selected && selectedOverflows && <span aria-hidden="true" className="mt-2 block text-sm leading-snug text-parranda-ink-muted [overflow-wrap:anywhere] sm:hidden">{value}</span>}
+      {shown && <div className={"relative z-(--p-z-popover) mt-1 overflow-hidden rounded-parranda border-line border-parranda-line bg-parranda-paper shadow-pop sm:absolute sm:inset-x-0 " + (above ? "sm:bottom-full sm:mb-1 sm:mt-0" : "sm:top-full")}>
+        <ul ref={listRef} id={listId} role="listbox" aria-label={t("Platsförslag", "Place suggestions")} className="max-h-[min(18rem,40svh)] overflow-y-auto overscroll-contain py-1">
           {choices.map((choice, index) => <li key={choice.selection_id} id={`${listId}-${index}`} role="option" aria-selected={active === index}
             onMouseDown={event => event.preventDefault()} onClick={() => choose(choice)} onMouseEnter={() => setActive(index)}
-            className={"cursor-pointer px-5 py-3 text-parranda-ink " + (active === index ? "bg-parranda-ink/8" : "hover:bg-parranda-ink/4")}>
-            <span className="block text-base font-bold">{choice.title}</span>
-            {(choice.context || kindLabel(choice.kind)) && <span className="block text-sm text-parranda-ink/68">
+            className={"cursor-pointer px-5 py-3 text-parranda-ink " + (active === index ? "bg-parranda-fill" : "hover:bg-parranda-fill-faint")}>
+            <span className="block text-base font-bold [overflow-wrap:anywhere]">{choice.title}</span>
+            {(choice.context || kindLabel(choice.kind)) && <span className="block text-sm text-parranda-ink-meta [overflow-wrap:anywhere]">
               {[kindLabel(choice.kind), choice.context].filter(Boolean).join(" · ")}
             </span>}
           </li>)}
         </ul>
-        {choices.some(choice => choice.attribution) && <div className="border-t border-parranda-ink/10 px-5 py-1.5 text-11 text-parranda-ink/68">
-          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
+        {choices.some(choice => choice.attribution) && <div className="border-t-line border-parranda-line-faint px-5 py-1.5 text-11 text-parranda-ink-meta">
+          {[...new Set(choices.map(choice => choice.attribution === "GeoNames" ? "geonames" : choice.attribution ? "osm" : null).filter(Boolean))].map((source, index) =>
+            <span key={source}>{index > 0 && " · "}{source === "geonames"
+              ? <a href="https://www.geonames.org/" target="_blank" rel="noreferrer">GeoNames (CC BY 4.0)</a>
+              : <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>}</span>)}
         </div>}
       </div>}
-      <span role="status" className={status === "unavailable" ? "mt-1 block text-xs text-parranda-ink/68" : "sr-only"}>
+      <span role="status" className={status === "unavailable" ? "mt-1 block text-xs text-parranda-ink-meta" : "sr-only"}>
         {status === "loading" ? t("Söker platser …", "Finding places …") : status === "unavailable" ? t("Förslag saknas just nu. Du kan ändå söka med Bygg min dag.", "Suggestions are unavailable. You can still search with Build my day.") : ""}
       </span>
       {status === "unavailable" && <button type="button"
-        onClick={() => { setRetryGeneration(generation => generation + 1); inputRef.current?.focus(); }}
+        onClick={() => { explicitRetry.current = true; setRetryGeneration(generation => generation + 1); inputRef.current?.focus(); }}
         className="mt-1 text-xs font-semibold text-parranda-ink underline underline-offset-2">
         {t("Försök igen", "Try again")}
       </button>}

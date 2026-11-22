@@ -60,18 +60,25 @@ export function pulseBrowseBuckets(liveEvents, wovenIds) {
 }
 
 function excludeWovenEvents(list, exclude) {
+  return withoutPulseRows(list, event => event?.id != null && exclude.has(String(event.id)));
+}
+
+export function pulseRowsWithoutOccurrence(rows, occurrenceId) {
+  return occurrenceId ? withoutPulseRows(rows, event => event?.live_occurrence_id === occurrenceId) : rows;
+}
+
+function withoutPulseRows(list, excluded) {
   const kept = [];
-  const isWoven = event => event?.id != null && exclude.has(String(event.id));
   for (const event of Array.isArray(list) ? list : []) {
     if (!event) continue;
     const slots = event.occurrences;
     if (!Array.isArray(slots) || !slots.length) {
-      if (!isWoven(event)) kept.push(event);
+      if (!excluded(event)) kept.push(event);
       continue;
     }
-    // A group represents distinct source occurrences. The route owns only its
-    // exact woven members; the rest keep their original facts and choice ids.
-    const remaining = slots.filter(slot => slot && !isWoven(slot));
+    // A group represents distinct source occurrences. Keep each remaining
+    // member's original facts and choice ID.
+    const remaining = slots.filter(slot => slot && !excluded(slot));
     if (!remaining.length) continue;
     if (remaining.length === slots.length) {
       kept.push(event);
@@ -346,6 +353,35 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
   }
 }
 
+/** The Live card reads like a departures board: a row whose timing is one
+ *  clock on the shown day gets a time column ("20:00" / "to 23:00", or "Now"
+ *  / "to 20:00" while it runs). Anything less certain — a period, a run across
+ *  days, a scheduled-but-unconfirmed session, a date without a clock — returns
+ *  null and keeps its full sentence under the title. Derived from
+ *  eventTiming's own label, so the two can never disagree. */
+export function eventBoardClock(ev, lang, now = new Date(), selectedDate = null) {
+  if (eventTimingNotice(ev, lang)) return null;
+  const label = eventTiming(ev, lang, now, selectedDate);
+  if (!label) return null;
+  const en = lang === "en";
+  const to = (clock) => `${en ? "to" : "till"} ${clock}`;
+  const running = /^(?:on now|pågår nu)(?: · (?:until|till) (\d{1,2}[:.]\d{2}(?::\d{2})?))?$/.exec(label);
+  if (running) return { at: en ? "Now" : "Nu", until: running[1] ? to(running[1]) : null, now: true };
+  // A recurring slot that is only scheduled keeps its qualification in words.
+  if (ev?.recurrence?.occurrence_status === "unconfirmed") return null;
+  const clock = /^([^·–]*?) (\d{1,2}[:.]\d{2}(?::\d{2})?)(?:–(\d{1,2}[:.]\d{2}(?::\d{2})?))?$/.exec(label);
+  if (!clock) return null;
+  // The column drops the date, so the date must be the day the card shows.
+  const nowDate = now instanceof Date ? now : new Date(now);
+  const reference = selectedDate || venueLocalNow(nowDate, ev?.timezone || ev?.time_window?.timezone || null)?.date || null;
+  if (!reference) return null;
+  const shown = new Date(`${reference}T00:00:00Z`);
+  if (Number.isNaN(shown.getTime())) return null;
+  const shownLabel = shown.toLocaleDateString(en ? "en-GB" : "sv-SE", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  if (clock[1] !== shownLabel) return null;
+  return { at: clock[2], until: clock[3] ? to(clock[3]) : null, now: false };
+}
+
 /** A period states a span, not a daily schedule or confirmed sessions. Keep
  *  this qualification separate from the compact date/clock in every surface.
  *  Calendar facts describe dates rather than event sessions. */
@@ -381,6 +417,29 @@ function venueLocalNow(nowDate, timezone) {
   } catch {
     return null;
   }
+}
+
+// The caller already has a server-approved occurrence on the selected date.
+// Compare its start in the venue timezone, independent of display formatting
+// or whether the stated end crosses midnight.
+export function hasUpcomingEveningStart(event, date, now) {
+  const window = event.time_window;
+  const timezone = event.timezone || window?.timezone;
+  if (event.recurrence?.occurrence_status === "unconfirmed") return false;
+  if (window?.kind === "daily" || window?.kind === "occurrences") {
+    const clock = window.local_start;
+    if (typeof clock !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(clock)) return false;
+    const startClock = clock.length === 5 ? clock + ":00" : clock;
+    const localNow = venueLocalNow(now, timezone);
+    return Boolean(localNow && startClock >= "17:00:00" &&
+      (date > localNow.date || (date === localNow.date && startClock > localNow.clock)));
+  }
+  const start = event.starts_at || window?.starts_at;
+  if (typeof start !== "string" || !/(?:Z|[+-]\d\d:\d\d)$/.test(start)) return false;
+  const instant = new Date(start);
+  if (!(instant > now)) return false;
+  const localStart = venueLocalNow(instant, timezone);
+  return Boolean(localStart && localStart.date === date && localStart.clock >= "17:00:00");
 }
 
 /**

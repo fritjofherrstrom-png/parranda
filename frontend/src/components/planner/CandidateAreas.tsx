@@ -8,10 +8,20 @@ import type { ReactNode } from "react";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { ExternalIcon, KeepIcon, MinusIcon, PlusIcon } from "../shared/icons";
 import { buttonClass, Eyebrow, panelCard } from "../shared/ui";
-import { INTENT_LABELS, label, type Lang, type Translate } from "./copy";
+import { interestName, type Lang, type Translate } from "./copy";
 import { canCommitTo, type Commitments } from "./commitments";
 import StopCategory, { stopCategoryLabel } from "./StopCategory";
 import type { DistrictArea } from "./types";
+
+/** Places the candidate areas actually list: the count behind "0 matches". */
+export function candidateMatchCount(areas: Array<DistrictArea> | null | undefined): number {
+  return (areas ?? []).reduce((count, area) => count + (area.stops?.length ?? area.stop_ids?.length ?? 0), 0);
+}
+
+/** Interests named as their chips read; a key this build has no words for is left out. */
+function interestNames(keys: string[] | null | undefined, lang: Lang): string[] {
+  return [...new Set((keys ?? []).map((key) => interestName(key, lang)).filter((name): name is string => Boolean(name)))];
+}
 
 export default function CandidateAreas({
   t,
@@ -40,28 +50,29 @@ export default function CandidateAreas({
   releaseCommitment: (identity: string) => void;
   commit: (identity: string, kind: "exclude" | "pin", commitLabel: string) => void;
 }) {
-  const matchCount = areas.reduce((count, area) => count + (area.stops?.length ?? area.stop_ids?.length ?? 0), 0);
+  const matchCount = candidateMatchCount(areas);
+  const missingNames = interestNames(missingIntents, lang);
   return (
     <section className={`flex flex-col gap-4 p-4 sm:p-5 ${panelCard}`}>
       <div>
         <Eyebrow>{t("Platser i närheten", "Places nearby")}</Eyebrow>
         {structureOnly && matchCount > 0 && (
-          <p className="mt-1.5 text-sm text-parranda-ink/75">
+          <p className="mt-1.5 text-sm text-parranda-ink-muted">
             {t(
-              "Parranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.",
-              "Parranda found place candidates, but not a reliable route yet.",
+              "Parranda hittade platser, men kunde inte bygga en rutt ännu.",
+              "Parranda found places, but couldn't build a route yet.",
             )}
           </p>
         )}
       </div>
 
-      {missingIntents.length > 0 && (
-        <p className="text-sm text-parranda-ink/72">
-          {t("Inga platser för:", "No places for:")} {missingIntents.map((k) => label(INTENT_LABELS, k, lang)).join(", ")}
+      {missingNames.length > 0 && (
+        <p className="text-sm text-parranda-ink-muted">
+          {t("Inga platser för:", "No places for:")} {missingNames.join(", ")}
         </p>
       )}
       {matchCount === 0 && (
-        <p className="text-sm text-parranda-ink/75">
+        <p className="text-sm text-parranda-ink-muted">
           {t("0 matchningar för dina val.", "0 matches for your picks.")}
         </p>
       )}
@@ -70,19 +81,19 @@ export default function CandidateAreas({
 
       <ul className="flex flex-col gap-3">
         {areas.map((area, index) => (
-          <li key={index} className="rounded-parranda border-line border-parranda-ink/12 bg-parranda-paper p-4">
+          <li key={index} className="rounded-parranda border-line border-parranda-line-faint bg-parranda-paper p-4">
             <div className="flex flex-wrap items-center gap-1.5">
-              {(area.covers ?? []).map((axis) => (
-                <span key={axis} className="rounded-full bg-parranda-ink px-2.5 py-0.5 text-xs font-bold text-parranda-paper">
-                  {label(INTENT_LABELS, axis, lang)}
+              {interestNames(area.covers, lang).map((name) => (
+                <span key={name} className="rounded-parranda-tag bg-parranda-ink px-2 py-0.5 text-xs font-bold text-parranda-paper">
+                  {name}
                 </span>
               ))}
-              {(area.partial_covers ?? []).map((axis) => (
-                <span key={`partial-${axis}`} className="rounded-full border border-parranda-ink/30 px-2.5 py-0.5 text-xs font-bold text-parranda-ink">
-                  {label(INTENT_LABELS, axis, lang)} · {t("delvis", "partial")}
+              {interestNames(area.partial_covers, lang).map((name) => (
+                <span key={`partial-${name}`} className="rounded-parranda-tag border-line border-parranda-line-firm px-2 py-0.5 text-xs font-bold text-parranda-ink">
+                  {name} · {t("delvis", "partial")}
                 </span>
               ))}
-              <span className="type-data ml-auto text-11 text-parranda-ink/68">
+              <span className="type-data ml-auto text-13 text-parranda-ink-meta">
                 {(area.stops?.length ?? area.stop_ids?.length ?? 0)} {t("träffar", "places")}
               </span>
             </div>
@@ -100,7 +111,7 @@ export default function CandidateAreas({
                   const expanded = expandedCandidateKey === candidateKey;
                   const facts = [...new Set([stop.address, stop.area].map((value) => String(value || "").trim()).filter(Boolean))];
                   return (
-                    <li key={stop.id ?? si} className="rounded-parranda-btn border-line border-parranda-ink/10 px-3 py-1">
+                    <li key={stop.id ?? si} className="rounded-parranda-btn border-line border-parranda-line-faint px-3 py-1">
                       <button
                         type="button"
                         aria-expanded={expanded}
@@ -109,12 +120,12 @@ export default function CandidateAreas({
                         className="flex min-h-11 w-full items-center justify-between gap-3 text-left font-bold transition hover:text-parranda-clay"
                       >
                         <span>{name}</span>
-                        {expanded ? <MinusIcon className="h-4 w-4 shrink-0 text-parranda-ember" /> : <PlusIcon className="h-4 w-4 shrink-0 text-parranda-ink/68" />}
+                        {expanded ? <MinusIcon className="h-4 w-4 shrink-0 text-parranda-ember" /> : <PlusIcon className="h-4 w-4 shrink-0 text-parranda-ink-meta" />}
                       </button>
                       {kindLabel && <div className="pb-1.5"><StopCategory type={stop.type} label={kindLabel} /></div>}
                       {expanded && (
-                        <div id={candidatePanelId} className="border-t border-parranda-ink/12 pb-2 pt-2">
-                          {facts.length > 0 && <p className="text-xs text-parranda-ink/68">{facts.join(" · ")}</p>}
+                        <div id={candidatePanelId} className="border-t-line border-parranda-line-faint pb-2 pt-2">
+                          {facts.length > 0 && <p className="text-xs text-parranda-ink-meta">{facts.join(" · ")}</p>}
                           {url && (
                             <a
                               href={url}
@@ -137,7 +148,7 @@ export default function CandidateAreas({
                               className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border-line px-4 text-sm font-bold transition sm:ml-2 sm:w-auto ${
                                 commitments[candidateId]?.kind === "pin"
                                   ? "border-parranda-ember/60 bg-parranda-ember/10 text-parranda-ink hover:border-parranda-ember"
-                                  : "border-parranda-ink/20 text-parranda-ink hover:border-parranda-ink/50"
+                                  : "border-parranda-line text-parranda-ink hover:border-parranda-line-strong"
                               }`}
                             >
                               <KeepIcon className="h-4 w-4 text-parranda-ember" />
@@ -147,7 +158,7 @@ export default function CandidateAreas({
                             </button>
                           )}
                           {(!candidateId || (commitments[candidateId]?.kind !== "pin" && !committable)) && (
-                            <p className="mt-2 text-xs leading-relaxed text-parranda-ink/68">
+                            <p className="mt-2 text-xs leading-relaxed text-parranda-ink-meta">
                               {t("Tips att utforska — platsen kan inte läggas till i den här rutten just nu.",
                                 "A nearby tip — this place can't be added to this route right now.")}
                             </p>

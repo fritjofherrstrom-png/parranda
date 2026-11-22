@@ -9,7 +9,7 @@ import { LAST_KEY } from '../src/lib/anywhere-storage.mjs';
 // controlled boundaries; this is not deployed or live-provider acceptance.
 const routes = h => h.fetchMock.calls.filter(call => call.url.includes('route-recommendations'));
 const queries = h => h.fetchMock.calls.filter(call => call.url.startsWith('/api/live-events'));
-const button = (h, label) => [...h.container.querySelectorAll('button')].find(b => b.textContent.trim() === label);
+const button = (h, label) => [...h.container.querySelectorAll('button')].find(b => b.textContent.trim().replace(/^(See all live|Se allt live), .*$/, '$1') === label);
 const pressed = (h, label) => button(h, label)?.getAttribute('aria-pressed');
 async function click(h, label) {
   const target = button(h, label);

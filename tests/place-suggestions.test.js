@@ -20,6 +20,20 @@ test('short prefixes do not fetch; repeated queries coalesce and cache; consente
  assert.equal(urls.length,1);assert.equal(urls[0].searchParams.get('lang'),null);assert.equal(urls[0].searchParams.get('lat'),'51.5');assert.equal(urls[0].searchParams.get('countrycode'),null);
  await p('har',{language:'en'});assert.equal(urls.length,2);
 });
+test('two-character East Asian names reach the provider, but one-character and short Latin queries do not',async()=>{
+ const urls=[];const p=provider(rows,urls);
+ for(const query of ['京都','東京','부산','なは','ソウ','𠮷野'])assert.equal((await p(query)).choices.length,2,query);
+ for(const query of ['京','𠮷','ha','a','  '])assert.deepEqual((await p(query)).choices,[],query);
+ assert.equal(urls.length,6);
+});
+test('the HTTP query guard accepts a two-character city without accepting noisy short Latin input',async()=>{
+ const queries=[];
+ const server=buildApp({placeSuggestions:async query=>{queries.push(query);return {status:'ready',choices:[]};}}).listen(0);
+ try {
+  for(const query of ['京都','부산','ha','京'])await requestJson(server,{path:'/api/place-suggestions?lang=en',body:{query}});
+  assert.deepEqual(queries,['京都','부산']);
+ }finally{await new Promise(resolve=>server.close(resolve));}
+});
 test('stations, malformed geometry and duplicate identities cannot become place choices',async()=>{
  const station=feature('Harbour Station','First City',48.85,3);station.properties.type='other';station.properties.osm_key='railway';station.properties.osm_value='station';
  const bad=feature('Broken','First City',400,4);

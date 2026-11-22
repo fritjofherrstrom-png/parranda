@@ -8,9 +8,8 @@
  *     the background turns to the new paper, every marker stays, the view does
  *     not jump and the day is not composed again;
  *   - survive the tile provider being down: every non-page host is refused
- *     here, so the basemap never loads; the route and all its numbered stops
- *     still draw over plain paper, and one status line says the background is
- *     missing;
+ *     here, so the basemap never loads; the stops still draw over plain paper
+ *     and the status line only mentions a route when walking geometry exists;
  *   - survive a browser that cannot draw it (no WebGL2): the map is replaced
  *     by one line, the day's stops and its Maps route stay usable, nothing
  *     throws and nothing retries.
@@ -24,6 +23,7 @@ const { once } = require("node:events");
 const test = require("node:test");
 
 const { buildApp } = require("../server/app");
+const { waitForRouteMapLayout } = require("./helpers/route-map-ready");
 
 const FIXTURE_DATE = "2026-09-27";
 const FIXED_NOW = new Date(`${FIXTURE_DATE}T10:00:00Z`);
@@ -33,9 +33,9 @@ const STOPS = [
   { id: "c", label: "Stop c", lat: 55.601, lng: 13.004, type: "cafe" },
   { id: "d", label: "Stop d", lat: 55.603, lng: 13.01, type: "restaurant" },
 ];
-const PAPER = { day: [238, 236, 231], night: [17, 16, 18] };
+const PAPER = { day: [232, 226, 215], night: [17, 16, 18] };
 
-function composedDay() {
+function composedDay(confirmedWalking) {
   return {
     days: [{
       date: FIXTURE_DATE,
@@ -48,6 +48,15 @@ function composedDay() {
         map_route_points: [],
         map_path_points: STOPS.map(({ lat, lng }) => ({ lat, lng })),
         confidence: "low",
+        ...(confirmedWalking ? {
+          geometry_source: "osrm",
+          geometry_mode: "walking",
+          geometry_attribution: {
+            label: "FOSSGIS",
+            url: "https://routing.openstreetmap.de/about.html",
+            fixMapUrl: "https://www.openstreetmap.org/fixthemap",
+          },
+        } : { geometry_source: "heuristic" }),
       },
       alternatives: [],
     }],
@@ -100,13 +109,13 @@ async function openRuntime(t) {
   return null;
 }
 
-async function openDay({ browser, origin }, { theme = "day", noWebGL2 = false } = {}) {
+async function openDay({ browser, origin }, { theme = "day", noWebGL2 = false, confirmedWalking = false } = {}) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
   let composes = 0;
   await context.route("**/*", (route) => {
     const url = new URL(route.request().url());
     if (url.origin !== origin) return route.abort();
-    if (url.pathname === "/api/route-recommendations") { composes += 1; return route.fulfill({ json: composedDay() }); }
+    if (url.pathname === "/api/route-recommendations") { composes += 1; return route.fulfill({ json: composedDay(confirmedWalking) }); }
     if (url.pathname.startsWith("/api/")) return route.fulfill({ status: 503, json: { error: "not part of this check" } });
     return route.continue();
   });
@@ -125,15 +134,17 @@ async function openDay({ browser, origin }, { theme = "day", noWebGL2 = false } 
   await page.clock.setFixedTime(FIXED_NOW);
   await page.goto(`${origin}/anywhere?place=Testville&lang=sv`);
   const route = page.getByRole("region", { name: "Rutten" });
-  return { context, page, route, pageErrors, composes: () => composes };
+  // On a phone the map stands in the day's header, above the stops; its
+  // status lines (no tiles, no WebGL2) sit with it.
+  const map = page.locator("header [data-map-overview]");
+  return { context, page, route, map, pageErrors, composes: () => composes };
 }
 
 // The rendered colour of the map's own canvas at a point with no stop, line or
 // control: the basemap's background layer (no tiles load here).
 async function backgroundAt(page) {
-  const canvas = page.locator('section[aria-label="Rutten"] canvas.maplibregl-canvas');
-  // On a phone the map follows the stops, below the first screen: bring it
-  // into view before reading a pixel of it.
+  const canvas = page.locator('header [data-map-overview] canvas.maplibregl-canvas');
+  // Bring the map fully into view before reading a pixel of it.
   await canvas.scrollIntoViewIfNeeded();
   const box = await canvas.boundingBox();
   const shot = await page.screenshot({ clip: { x: box.x + box.width - 60, y: box.y + box.height / 2, width: 4, height: 4 } });
@@ -152,24 +163,40 @@ async function backgroundAt(page) {
 
 const near = (actual, expected) => actual.every((value, i) => Math.abs(value - expected[i]) <= 3);
 
+async function visibleStopPins(map) {
+  const markers = map.locator(".route-map-marker:visible");
+  await markers.first().waitFor();
+  await waitForRouteMapLayout(map);
+  const pins = await markers.evaluateAll((elements) => elements.map((element) => {
+    const box = element.getBoundingClientRect();
+    return { label: element.textContent, x: Math.round(box.left), y: Math.round(box.top) };
+  }));
+  // The map can display a single stop number or a group such as "1–3,5".
+  const numbers = pins.flatMap(({ label }) => label.split(",").flatMap((part) => {
+    const [first, last = first] = part.split("–").map(Number);
+    return Array.from({ length: last - first + 1 }, (_, offset) => first + offset);
+  }));
+  assert.deepEqual(numbers.sort((a, b) => a - b), STOPS.map((_, index) => index + 1), "every stop is visible once");
+  return pins;
+}
+
 test("a theme switch recolours the drawn map without redrawing the day", { timeout: 120_000 }, async (t) => {
   const current = await openRuntime(t);
   if (!current) return;
-  const { context, page, route, pageErrors, composes } = await openDay(current, { theme: "day" });
+  const { context, page, map, pageErrors, composes } = await openDay(current, { theme: "day" });
   try {
-    await route.locator(".route-map-marker").nth(STOPS.length - 1).waitFor();
-    await route.getByText("Ritar kartan …").waitFor({ state: "detached" });
+    const before = await visibleStopPins(map);
+    await map.getByText("Ritar kartan …").waitFor({ state: "detached" });
     await page.waitForTimeout(400);
     const dayPaper = await backgroundAt(page);
     assert.ok(near(dayPaper, PAPER.day), `day background ${dayPaper}`);
-    const before = await route.locator(".route-map-marker").evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [e.textContent, Math.round(r.left), Math.round(r.top)]; }));
     const composed = composes();
 
     await page.getByRole("button", { name: "Kvällsläge" }).click();
     await page.waitForTimeout(400);
     const nightPaper = await backgroundAt(page);
     assert.ok(near(nightPaper, PAPER.night), `night background ${nightPaper}`);
-    const after = await route.locator(".route-map-marker").evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [e.textContent, Math.round(r.left), Math.round(r.top)]; }));
+    const after = await visibleStopPins(map);
     assert.deepEqual(after, before, "every marker stays where it was");
     assert.equal(composes(), composed, "the day is not composed again");
     assert.deepEqual(pageErrors, []);
@@ -178,30 +205,36 @@ test("a theme switch recolours the drawn map without redrawing the day", { timeo
   }
 });
 
-test("with the tile provider down the route still draws over paper, and says so", { timeout: 120_000 }, async (t) => {
-  const current = await openRuntime(t);
-  if (!current) return;
-  const { context, page, route, pageErrors } = await openDay(current);
-  try {
-    await route.locator(".route-map-marker").nth(STOPS.length - 1).waitFor();
-    assert.deepEqual(await route.locator(".route-map-marker").allTextContents(), ["1", "2", "3", "4"]);
-    await route.getByRole("status").filter({ hasText: "Kartbakgrunden kunde inte hämtas" }).waitFor();
-    // The attribution stays visible even without tiles.
-    assert.match(await route.locator(".maplibregl-ctrl-attrib").innerText(), /OpenStreetMap/);
-    assert.deepEqual(pageErrors, []);
-  } finally {
-    await context.close();
-  }
-});
+for (const [confirmedWalking, visibleContent] of [[true, "rutten och stoppen"], [false, "stoppen"]]) {
+  test(`with the tile provider down the map reports ${confirmedWalking ? "route and stops" : "stops only"}`, { timeout: 120_000 }, async (t) => {
+    const current = await openRuntime(t);
+    if (!current) return;
+    const { context, map, pageErrors } = await openDay(current, { confirmedWalking });
+    try {
+      const status = map.getByRole("status").filter({ hasText: "Kartbakgrunden kunde inte hämtas" });
+      await status.waitFor();
+      await visibleStopPins(map);
+      assert.equal(await status.innerText(), `Kartbakgrunden kunde inte hämtas — ${visibleContent} visas ändå.`);
+      // The basemap's credit stays even without tiles. Only an actual walking
+      // line earns the separate router credit inside the same attribution.
+      const attribution = map.locator(".maplibregl-ctrl-attrib");
+      assert.match(await attribution.innerText(), /OpenStreetMap/);
+      assert.equal(await attribution.getByRole("link", { name: "FOSSGIS", exact: true }).count(), confirmedWalking ? 1 : 0);
+      assert.deepEqual(pageErrors, []);
+    } finally {
+      await context.close();
+    }
+  });
+}
 
 test("without WebGL2 the map is one line and the day stays whole", { timeout: 120_000 }, async (t) => {
   const current = await openRuntime(t);
   if (!current) return;
-  const { context, page, route, pageErrors, composes } = await openDay(current, { noWebGL2: true });
+  const { context, page, route, map, pageErrors, composes } = await openDay(current, { noWebGL2: true });
   try {
-    await route.getByRole("status").filter({ hasText: "Kartan kan inte visas i den här webbläsaren" }).waitFor();
-    assert.equal(await route.locator(".maplibregl-map, .route-map-marker").count(), 0, "no half-drawn map");
-    assert.equal(await route.getByText("Ritar kartan …").count(), 0, "no endless loader");
+    await map.getByRole("status").filter({ hasText: "Kartan kan inte visas i den här webbläsaren" }).waitFor();
+    assert.equal(await map.locator(".maplibregl-map, .route-map-marker").count(), 0, "no half-drawn map");
+    assert.equal(await map.getByText("Ritar kartan …").count(), 0, "no endless loader");
     for (const stop of STOPS) assert.equal(await route.getByRole("button", { name: new RegExp(stop.label) }).count(), 1, `${stop.label} is listed`);
     assert.ok(await page.getByRole("link", { name: /Öppna rutten i Maps/ }).count(), "the Maps route is offered");
     const composed = composes();

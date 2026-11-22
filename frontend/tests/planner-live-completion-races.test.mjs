@@ -126,7 +126,7 @@ for (const outcome of ['missing', 'unsupported', 'expired', 'invalid', 'failed',
   assert.equal(stored.includes(token), false, 'no capability in storage');
   assert.equal(stored.includes('live_completion'), false);
   if (['missing', 'unsupported', 'expired', 'invalid', 'failed'].includes(outcome)) assert.match(h.text(), /couldn.t verify|couldn.t be verified/i);
-  if (outcome === 'uncovered') assert.match(h.text(), /No live-events feed reaches this place yet/i);
+  if (outcome === 'uncovered') assert.match(h.text(), /We don.t have verified event sources for this area yet/i);
   if (outcome === 'healthy-empty') assert.doesNotMatch(h.text(), /couldn.t verify|Checking the calendars/i);
   assert.match(h.text(), /Place a/);
 });

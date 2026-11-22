@@ -56,7 +56,7 @@ test("changing the ledger recomposes the day", () => {
   const effect = component.slice(component.indexOf("// AUTO-RECOMPOSE:"), component.indexOf("// The Live sheet behaves"));
   const dependencies = effect.match(/\}, \[([^\]]*)\]\);/)?.[1].split(",").map(value => value.trim());
   assert.ok(dependencies, "the automatic adjustment effect has explicit dependencies");
-  for (const required of ["selected", "dayOffset", "walkKey", "commitments", "preferencePriority", "dayEdit"]) {
+  for (const required of ["selected", "dayOffset", "walkKey", "commitments", "preferencePriority", "dayEdit", "intentMode"]) {
     assert.ok(dependencies.includes(required), `${required} changes must recompose the day`);
   }
 });
@@ -83,7 +83,7 @@ test("the way back is visible without opening anything", () => {
   // is effectively irreversible.
   const ledgerBlock = component.slice(
     component.indexOf("{(excludedCount > 0 || pinnedCount > 0 || liveChoiceCount > 0) && ("),
-    component.indexOf("{phase === \"loading\" && !staleNotice && ("),
+    component.indexOf("<DayPlaceholder part=\"body\""),
   );
   assert.ok(ledgerBlock.includes("Start over without my choices"), "the ledger renders above the day, not inside Adjust");
   assert.ok(ledgerBlock.includes('role="status"'));
@@ -230,7 +230,11 @@ test("exclude and pin cannot contradict each other for the same candidate", () =
 });
 
 test("Keep and Add are the same primitive reached from two places", () => {
-  assert.match(component, /const keepStop = \(identity: string, stopLabel: string\) => commit\(identity, "pin", stopLabel\);/);
+  // Keep writes the same pin. On a settled day that already contains the stop
+  // it is recorded in place (planner-keep-in-place.test.mjs); otherwise it
+  // goes through the very same commit as Add.
+  assert.match(component, /const keepStop = \(identity: string, stopLabel: string\) => \{\s*if \(!keepInPlace\(identity, stopLabel\)\) commit\(identity, "pin", stopLabel\);/);
+  assert.match(component, /setCommitments\(\{ \.\.\.commitments, \[identity\]: \{ kind: "pin", label \} \}\);/);
   // Add, on a candidate the day did not choose, writes the identical commitment.
   assert.match(component, /commit\(candidateId, "pin", name\)/);
 });
@@ -273,8 +277,7 @@ test("a kept stop offers neither Replace nor Remove until it is released", async
   assert.ok(Boolean(button("Replace")) && Boolean(button("Remove")), "an unkept real stop offers both edits");
   await click(button("Keep this one"));
   await h.clock.advance(400);
-  assert.deepEqual(requests().at(-1).body.pinned_candidate_ids, ["museum"]);
-  await h.fetchMock.respond(requests().at(-1), published);
+  assert.equal(requests().length, 1, "a Keep on the settled day composes nothing");
   await expand();
   assert.ok(Boolean(button("Kept — release")), "precondition: the published stop is kept");
   assert.ok(!button("Replace"), "a kept stop cannot be replaced before release");

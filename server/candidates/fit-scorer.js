@@ -205,8 +205,8 @@ function scoreWeather(candidate, context, userModifiers, reasons) {
   const type = String(candidate.type || "").toLowerCase();
   const indoor = INDOOR_TYPES.has(type);
   const exposed = EXPOSED_TYPES.has(type);
-  const rainy = weather.condition === "rain" || Number(weather.precipitationProbabilityMax) >= 60;
-  const sunny = weather.condition === "sun" || weather.pleasant === true;
+  const rainy = isRainyWeather(weather);
+  const sunny = isPleasantWeather(weather);
   let score = 0;
 
   if (rainy) {
@@ -331,8 +331,22 @@ function round(value) {
   return Number(value.toFixed(3));
 }
 
+// One reading of trusted weather, shared with the day-interest choice so the
+// two never disagree about whether it is a rainy day.
+function isRainyWeather(weather) {
+  if (!weather || typeof weather !== "object") return false;
+  return weather.condition === "rain" || Number(weather.precipitationProbabilityMax) >= 60;
+}
+
+function isPleasantWeather(weather) {
+  if (!weather || typeof weather !== "object") return false;
+  return weather.condition === "sun" || weather.pleasant === true;
+}
+
 module.exports = {
   scoreCandidateFit,
+  isRainyWeather,
+  isPleasantWeather,
   CONTEXT_CAP,
   STRONG_MATCH,
 };

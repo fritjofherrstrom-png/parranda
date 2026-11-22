@@ -19,6 +19,7 @@ import {
   savedEntryId,
   upsertSaved,
   removeSaved,
+  isSavedEntryVersion,
   SAVED_CAP,
 } from "../src/lib/anywhere-storage.mjs";
 
@@ -32,6 +33,39 @@ function entry(place, prefs, savedAt = "2026-07-03T10:00:00Z") {
     inputs: { place, mode: "typed", dayOffset: 0, walkKey: "balanced", selected: prefs },
   });
 }
+
+test('Saved follows the exact answer rather than its query ID', () => {
+  const original = entry('Testville', ['culture']);
+  for (const [field, changed] of [
+    ['facts', { ...original, safeResponse: { days: [{ primary_route: { main_stops: [{ id: 'replacement' }] } }] } }],
+    ['classification', { ...original, classification: { status: 'composed_limited' } }],
+    ['choices', { ...original, commitments: { version: 1, entries: { kept: { state: 'keep' } } } }],
+    ['request', { ...original, inputs: { ...original.inputs, placeRef: 'r12345' } }],
+  ]) {
+    assert.equal(changed.id, original.id);
+    assert.equal(isSavedEntryVersion(original, changed), false, `${field} changed inside the same query`);
+  }
+  assert.equal(isSavedEntryVersion(null, original), false);
+  assert.equal(isSavedEntryVersion(original, null), false);
+});
+
+test('save time and Live-sheet sorting do not turn the same answer into an unsaved day', () => {
+  const original = entry('Testville', ['culture']);
+  const saved = JSON.parse(JSON.stringify({ ...original, savedAt: '2026-07-03T11:00:00Z',
+    inputs: { ...original.inputs, liveSheetSort: 'by_time' } }));
+  assert.equal(isSavedEntryVersion(saved, original), true);
+  assert.equal(isSavedEntryVersion(original, saved), true);
+});
+
+test('discarding execution handoffs preserves Saved while source observation facts still matter', () => {
+  const original = entry('Testville', ['culture']);
+  const saved = { ...original, inputs: { ...original.inputs, placeSelection: 'one-shot-receipt' },
+    safeResponse: { ...original.safeResponse, live_completion: { token: 'execution-only' },
+      live_route_upgrade: { token: 'execution-only' }, planner_lifecycle: { token: 'execution-only' } } };
+  assert.equal(isSavedEntryVersion(saved, original), true);
+  assert.equal(isSavedEntryVersion(saved, { ...original, safeResponse: { ...original.safeResponse,
+    weather_summary: { fetched_at: '2026-07-03T12:00:00Z', temperature_max: 20 } } }), false);
+});
 
 test("the id is place + date + sorted preferences (re-saving the same query replaces it)", () => {
   const a = entry("Lyon", ["food", "views"]);

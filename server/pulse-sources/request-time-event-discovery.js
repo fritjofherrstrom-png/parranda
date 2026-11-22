@@ -72,7 +72,7 @@ function createRequestTimeEventDiscovery({
   venueSeeds = null,
   scout = scoutLocalEventSources,
   fetcher,
-  cache = createSourceCache({ namespace: "request-time-event-discovery-v9", ttlMs: FOUND_TTL_MS }),
+  cache = createSourceCache({ namespace: "request-time-event-discovery-v10", ttlMs: FOUND_TTL_MS }),
   timezoneForPoint = coordinateTimezone,
   now = () => Date.now(),
   venueLookupWaitMs = VENUE_LOOKUP_WAIT_MS,
@@ -83,9 +83,9 @@ function createRequestTimeEventDiscovery({
   // Resolves to { status: "found" | "empty" | "failed", reason, feeds }.
   return async function discoverRequestTimeEventFeeds({ anchor, placeLabel = null, placeContext = null } = {}) {
     if (!validPoint(anchor)) return outcome("empty", "invalid_anchor");
-    // Earlier found-source answers cannot attest the dedicated-programme
-    // ranking. Leave old caches intact instead of laundering their selection.
-    const key = `rt-discovery-v9:${anchorBucket(anchor)}`;
+    // Earlier found-source answers cannot attest topic-aware search selection.
+    // Leave old caches intact, including operator-supplied cache entries.
+    const key = `rt-discovery-v10:${anchorBucket(anchor)}`;
     const held = holds.get(key);
     if (held && held.until > now()) return held.outcome;
     let result;

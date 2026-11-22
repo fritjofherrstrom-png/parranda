@@ -59,6 +59,18 @@ function reconcileAgnosticConstraintNegotiation({
   if (!negotiation || typeof negotiation !== "object") return negotiation;
   const coverage = negotiation.preference_coverage || {};
   const routeStops = Array.isArray(experimentalRoute?.main_stops) ? experimentalRoute.main_stops : [];
+  const requested = uniqueStrings(coverage.requested_preferences);
+  let covered = uniqueStrings(coverage.covered_preferences);
+  let partial = uniqueStrings(coverage.partial_preferences);
+  let missing = uniqueStrings(coverage.missing_preferences);
+  if (requested.includes("live_music")) {
+    // Late weaving may add the occurrence, while a withheld trial can never
+    // cover the user's published day. Preserve the other intent verdicts.
+    const hasMusicStop = routeStops.some(stop => stop.is_live_event === true && stop.covered_preferences?.includes("live_music"));
+    covered = requested.filter(intent => intent === "live_music" ? hasMusicStop : covered.includes(intent));
+    partial = partial.filter(intent => intent !== "live_music");
+    missing = requested.filter(intent => !covered.includes(intent) && !partial.includes(intent));
+  }
   const targetKm = Number.isFinite(walkingKmTarget)
     ? walkingKmTarget
     : negotiation.walking?.target_km;
@@ -68,10 +80,10 @@ function reconcileAgnosticConstraintNegotiation({
   });
   return formatNegotiation({
     routePresent: routeStops.length > 0,
-    requested: uniqueStrings(coverage.requested_preferences),
-    covered: uniqueStrings(coverage.covered_preferences),
-    partial: uniqueStrings(coverage.partial_preferences),
-    missing: uniqueStrings(coverage.missing_preferences),
+    requested,
+    covered,
+    partial,
+    missing,
     walking,
     walkingValidation: walkingValidated ? { valid: true } : null,
     blockers: [],

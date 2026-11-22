@@ -8,6 +8,19 @@ async function type(h,value) {
  await h.act(()=>{const input=h.document.querySelector('#landingCity');Object.getOwnPropertyDescriptor(h.window.HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new h.window.Event('input',{bubbles:true}));});
 }
 async function key(h,key) {await h.act(()=>h.document.querySelector('#landingCity').dispatchEvent(new h.window.KeyboardEvent('keydown',{key,bubbles:true})));}
+test('two-character East Asian search waits for IME completion and keeps the short Latin guard',async()=>{
+ const h=await mount();try {
+  const input=h.document.querySelector('#landingCity');
+  await h.act(()=>input.dispatchEvent(new h.window.CompositionEvent('compositionstart',{bubbles:true})));
+  await type(h,'京都');await h.clock.advance(250);
+  assert.equal(h.fetchMock.calls.length,0,'an unfinished IME must not search');
+  await h.act(()=>input.dispatchEvent(new h.window.CompositionEvent('compositionend',{bubbles:true})));
+  await h.clock.advance(200);assert.equal(h.fetchMock.calls.length,1);assert.equal(h.fetchMock.calls[0].body.query,'京都');
+  await h.fetchMock.respond(h.fetchMock.calls[0],{status:'ready',choices:[choice('京都市','Japan')]});
+  assert.equal(h.document.querySelector('[role=option]').textContent,'京都市Japan');
+  await type(h,'ha');await h.clock.advance(250);assert.equal(h.fetchMock.calls.length,1);
+ }finally{await h.unmount();}
+});
 test('typing debounces suggestions attached to a combobox; keyboard choice fills the field',async()=>{
  const h=await mount({injected:{__PARRANDA_CITIES__:{rome:{key:'rome',label:'Rome'}}}});try {
   assert.equal([...h.document.querySelectorAll('a')].some(link=>new URL(link.href).searchParams.has('city')),false);
@@ -64,6 +77,7 @@ test('persistent failure stops automatic retries and offers a same-query retry w
   await type(h,'har');await h.clock.advance(200);
   await h.fetchMock.respond(h.fetchMock.calls[0],{status:'unavailable',choices:[]});
   await h.clock.advance(1000);assert.equal(h.fetchMock.calls.length,2);
+  assert.equal(h.fetchMock.calls[1].body.retry,undefined,'an automatic retry does not claim to be the reader');
   await h.fetchMock.respond(h.fetchMock.calls[1],{status:'unavailable',choices:[]});
   await h.clock.advance(10000);assert.equal(h.fetchMock.calls.length,2);
   const retry=[...h.document.querySelectorAll('button')].find(b=>b.textContent==='Try again');
@@ -72,10 +86,31 @@ test('persistent failure stops automatic retries and offers a same-query retry w
   await h.act(()=>retry.click());await h.clock.advance(200);
   assert.equal(h.fetchMock.calls.length,3);assert.equal(h.fetchMock.calls[2].body.query,'har');
   assert.equal(h.fetchMock.calls[2].body.context_selection,'previous-receipt');
+  assert.equal(h.fetchMock.calls[2].body.retry,true,'the reader’s own retry asks even a resting provider');
   assert.equal(h.document.activeElement.id,'landingCity');
   await h.fetchMock.respond(h.fetchMock.calls[2],{status:'ready',choices:[choice()]});
   assert.equal(h.document.querySelectorAll('[role=option]').length,1);
   assert.ok(h.fetchMock.calls.every(c=>c.url.startsWith('/api/place-suggestions')),'retry must not compose or navigate');
+ }finally{await h.unmount();}
+});
+
+test('a resting provider is not retried automatically, yet the reader can still try again',async()=>{
+ const h=await mount();try{
+  await type(h,'har');await h.clock.advance(200);
+  await h.fetchMock.respond(h.fetchMock.calls[0],{status:'unavailable',choices:[],retryable:false});
+  await h.clock.advance(5000);assert.equal(h.fetchMock.calls.length,1,'the server said a retry cannot help');
+  assert.match(h.text(),/Suggestions are unavailable/);
+  assert.ok([...h.document.querySelectorAll('button')].find(b=>b.textContent==='Try again'));
+ }finally{await h.unmount();}
+});
+
+test('rows from the offline register credit GeoNames, not OpenStreetMap',async()=>{
+ const h=await mount();try{
+  await type(h,'har');await h.clock.advance(200);
+  await h.fetchMock.respond(h.fetchMock.calls[0],{status:'ready',choices:[{...choice(),attribution:'GeoNames',license:'CC-BY-4.0'}]});
+  const footer=h.document.querySelector('a[href="https://www.geonames.org/"]');
+  assert.equal(footer?.textContent,'GeoNames (CC BY 4.0)');
+  assert.equal(h.document.querySelector('a[href="https://www.openstreetmap.org/copyright"]'),null);
  }finally{await h.unmount();}
 });
 
@@ -164,4 +199,33 @@ test('editing the text after choosing a row drops that chosen identity',async()=
   await h.act(()=>h.document.querySelector('form').dispatchEvent(new h.window.Event('submit',{bubbles:true,cancelable:true})));
   assert.equal(h.window.sessionStorage.getItem('parranda:place-choice'),null,'a changed name never travels with the old selection');
  }finally{await h.unmount();}
+});
+
+test('pressing Build my day keeps the open suggestion layout stable until activation', async () => {
+ const h = await mount();
+ try {
+  await type(h, 'Harbour Quarter');
+  await h.clock.advance(200);
+  await h.fetchMock.respond(h.fetchMock.calls[0], {status:'ready', choices:[choice()]});
+  const input = h.document.querySelector('#landingCity');
+  const submit = h.document.querySelector('button[type=submit]');
+  await h.act(() => input.focus());
+  assert.ok(h.document.querySelector('[role=listbox]'));
+  // Browsers focus a pressed submit button before pointer-up. On mobile the
+  // resulting blur used to remove the in-flow list and move the button away
+  // from the pointer, so the click never reached the form. jsdom has no layout;
+  // model only that native focus default, then check the real component state.
+  await h.act(() => {
+   const press = new h.window.MouseEvent('pointerdown', {bubbles:true,cancelable:true,button:0});
+   if (submit.dispatchEvent(press)) submit.focus();
+  });
+  assert.ok(h.document.querySelector('[role=listbox]'), 'the pointer target must not move before release');
+  assert.equal(input.value, 'Harbour Quarter');
+  assert.equal(h.window.sessionStorage.getItem('parranda:place-choice'), null, 'a pointer press must not silently choose the first result');
+  // Keyboard focus still dismisses suggestions normally; the submit button
+  // remains a standard button available to Tab and Enter.
+  await h.act(() => submit.focus());
+  assert.equal(h.document.querySelector('[role=listbox]'), null);
+  assert.equal(h.document.activeElement, submit);
+ } finally { await h.unmount(); }
 });

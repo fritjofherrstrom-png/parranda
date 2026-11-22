@@ -7,7 +7,7 @@
  * own disclosure, while location/calendar/recurrence uncertainty stays open.
  */
 import { eventSourceLink, eventTiming } from "../../lib/pulse-view.mjs";
-import { ExternalLinkText, inlineLinkTarget } from "../shared/ui";
+import { ExternalLinkText } from "../shared/ui";
 import type { Lang } from "./copy";
 import type { PulseEvent } from "./types";
 
@@ -29,7 +29,7 @@ export function liveEventSource(event: PulseEvent, lang: Lang) {
     : { national: "Nationell", regional: "Regional", local: "Lokal" })[holiday.scope];
   if (!listedBy && !link && !credits.length && !recurring && !holiday && !programme && !sourceArea) return null;
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 text-xs leading-relaxed text-parranda-ink/68 [overflow-wrap:anywhere]">
+    <div className="flex min-w-0 flex-col gap-0.5 text-xs leading-relaxed text-parranda-ink-meta [overflow-wrap:anywhere]">
       {programme && <p>{lang === "en" ? "Programme" : "Program"}: {programme.title}
         {programmeDates && <> ({programmeDates})</>}
       </p>}
@@ -44,8 +44,8 @@ export function liveEventSource(event: PulseEvent, lang: Lang) {
       {sourceArea && <p>{lang === "en" ? "Approximate location" : "Ungefärlig plats"}</p>}
       {credits.map(credit => <p key={credit}>{credit}</p>)}
       {(link || listedBy) && <div className="flex min-w-0 flex-wrap items-start gap-x-4">
-        {link && <p className="min-w-0 max-w-full py-3">
-          <a href={link.href} target="_blank" rel="noopener noreferrer" className={`${inlineLinkTarget} underline decoration-parranda-ink/30 underline-offset-2 hover:text-parranda-clay hover:decoration-parranda-clay`}>
+        {link && <p className="min-w-0 max-w-full">
+          <a href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 max-w-full items-center underline decoration-parranda-line-firm underline-offset-2 hover:text-parranda-clay hover:decoration-parranda-clay">
             <ExternalLinkText text={link.text} />
           </a>
         </p>}

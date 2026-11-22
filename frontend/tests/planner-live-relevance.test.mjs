@@ -101,8 +101,8 @@ test('the Live sheet claims picks only for server matches and labels every other
   assert.match(more[1], /Library open house.*Venue h-library/, 'the event keeps its title and place');
   const library = [...sheet(h).querySelectorAll('li')].find(li => li.querySelector('h5')?.textContent === 'Library open house');
   assert.match(library.querySelector('details').textContent, /via\sOfficial calendar/, 'the feed remains attribution');
-  assert.equal(library.querySelector('a').textContent.replace(/\s*↗$/, ''), 'calendar.example', 'link names its actual destination');
-  assert.equal(library.querySelector('a').getAttribute('href'), 'https://calendar.example/h-library');
+  assert.equal(library.querySelector('p a').textContent.replace(/\s*↗$/, ''), 'calendar.example', 'link names its actual destination');
+  assert.equal(library.querySelector('p a').getAttribute('href'), 'https://calendar.example/h-library');
   assert.doesNotMatch(more[1], /Matches:|looser match|local discovery/, 'no server reason, no relevance line');
 });
 
@@ -133,8 +133,8 @@ test('a pick added before the day recomposes is never claimed from the older ran
   assert.match(other[1], /Night swim at the harbour.*Venue g-swim/);
   assert.match(other[1], /via\sOfficial calendar/);
   const swim = [...sheet(h).querySelectorAll('li')].find(li => li.querySelector('h5')?.textContent === 'Night swim at the harbour');
-  assert.equal(swim.querySelector('a').getAttribute('href'), 'https://calendar.example/g-swim');
-  assert.equal(swim.querySelector('a').textContent.replace(/\s*↗$/, ''), 'calendar.example');
+  assert.equal(swim.querySelector('p a').getAttribute('href'), 'https://calendar.example/g-swim');
+  assert.equal(swim.querySelector('p a').textContent.replace(/\s*↗$/, ''), 'calendar.example');
   assert.doesNotMatch(other[1], /beyond your picks|Matches:|looser match/,
     '"beyond your picks" is not established for a pick the server never checked');
 });

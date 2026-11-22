@@ -1,0 +1,74 @@
+{
+  "before": {
+    "build": "2590f540 (staging)",
+    "stopsBefore": [
+      "Konstklubben Skåne",
+      "Ruths",
+      "Galleri Rostrum",
+      "Nguyen's Sandwiches",
+      "Altonaparken"
+    ],
+    "kmBefore": "≈ 1.5 km on foot",
+    "stopsAfter": [
+      "Konstklubben Skåne",
+      "Ruths",
+      "Galleri Rostrum",
+      "Nguyen's Sandwiches",
+      "Altonaparken"
+    ],
+    "kmAfter": "≈ 1.5 km on foot",
+    "composesCausedByKeep": 1,
+    "keepQuery": "lang=en&include_live_completion=1&include_live_route_upgrade=1&include_day_snapshot=1",
+    "receipt": [
+      "1 place keptStart over without my choices",
+      "Changed: same stops and distanceUndo"
+    ]
+  },
+  "after": {
+    "build": "branch (staging replay)",
+    "stopsBefore": [
+      "Konstklubben Skåne",
+      "Ruths",
+      "Galleri Rostrum",
+      "Nguyen's Sandwiches",
+      "Altonaparken"
+    ],
+    "kmBefore": "≈ 1.5 km on foot",
+    "stopsAfter": [
+      "Konstklubben Skåne",
+      "Ruths",
+      "Galleri Rostrum",
+      "Nguyen's Sandwiches",
+      "Altonaparken"
+    ],
+    "kmAfter": "≈ 1.5 km on foot",
+    "composesCausedByKeep": 0,
+    "receipt": [
+      "1 place keptStart over without my choices",
+      "Kept: Konstklubben SkåneUndo"
+    ],
+    "rememberedPins": {
+      "overture-9ab2aea9-583f-4df0-9667-75eb781f3c71": {
+        "kind": "pin",
+        "label": "Konstklubben Skåne"
+      }
+    }
+  },
+  "afterUndo": {
+    "composes": 0,
+    "receipt": [],
+    "stops": [
+      "Konstklubben Skåne",
+      "Ruths",
+      "Galleri Rostrum",
+      "Nguyen's Sandwiches",
+      "Altonaparken"
+    ]
+  },
+  "nextAdjustment": {
+    "composes": 1,
+    "pinned": [
+      "overture-9ab2aea9-583f-4df0-9667-75eb781f3c71"
+    ]
+  }
+}

@@ -129,6 +129,7 @@ function mapDiscoveryEvent(event) {
     lat,
     lng,
     tags: classification ? [String(classification).toLowerCase()] : [],
+    ...(classification === "Music" ? { intents: ["live_music"] } : {}),
     // Event-level timezone from the API — the truest venue-local clock available.
     timezone,
     provenance: {

@@ -2,12 +2,16 @@
 
 // Closed, source-derived constructions; deliberately not a copy of a producer
 // graph and not an interpreter for discovery/ALLOWLIST.json.
+const { PLANNER_PREFERENCE_KEYS, MAX_PLANNER_PREFERENCES } = require('../../shared/planner-intent.mjs');
 const { isRealIsoDate } = require('./requested-dates');
 const { isDeepStrictEqual, types: { isProxy } } = require('node:util');
 const { normalizeSelectedDayHoursFact } = require('../place-candidates/opening-hours');
 const { occurrenceDate, liveOccurrenceId } = require('./live-occurrence-choice');
 const { eventOccurrenceForDate } = require('../candidates/evening-event-weave');
 const { parsePlaceRef } = require('../place-candidates/place-ref');
+const { venueMentionsMatchPlace } = require('../place-candidates/venue-mentions');
+const { isApprovedVenueArticleUrl } = require('../place-candidates/venue-mention-policy');
+const { CANONICAL_INTENTS } = require('../candidates/intent-vocabulary');
 const MAX_BYTES = 1048576;
 // Additional projector policy, NOT source cardinality caps. Refuse, never cut.
 const MAX_NODES = 100000;
@@ -25,19 +29,27 @@ const o = type => rule(type);
 const n = type => rule(type, false, true);
 const array = (item, min = 0, max = Infinity) => ({ item, min, max });
 const enumeration = (...values) => ({ values });
+const preference = enumeration(...PLANNER_PREFERENCE_KEYS);
+const preferences = array(preference, 0, MAX_PLANNER_PREFERENCES);
+// The engine's closed per-stop vocabularies: candidateStatusForRole
+// (role-selector.js) and scoreWeather (fit-scorer.js). A value outside them
+// refuses the share, never disappears from it.
+const CANDIDATE_STATUS = enumeration('filled','partial','fallback','missing');
+const WEATHER_REASON = enumeration('rain_favors_indoor','rain_penalizes_exposed','sun_favors_scenic',
+  'hot_favors_swim','hot_penalizes_shadeless','requested_waterfront');
 const fields = {
   LiveChoice: { occurrence_id: r('liveId'), action: r(enumeration('keep','remove','replace')) },
   RequestEdit: { version: r(enumeration(1)), action: r(enumeration('remove','replace')), candidate_id: r('editId'),
     retained_candidate_ids: r(array('editId',0,6)), target_stop_count: r('count'), slot_index: r('count'),
-    replacement_preference: rule(enumeration('food','culture','views','fika','nightlife','green','second_hand'),true,true),
+    replacement_preference: rule(preference,true,true),
     removed_candidate_ids: r(array('editId',0,12)), preserve_retained: o('bool'), release_extent: o('bool') },
   AcknowledgedIntent: { dateIso: r('date'), place: r('label500'), placeLabel: r('label500'), placeRef: r('placeRef'), mode: r(enumeration('typed')),
-    selected: r(array(enumeration('food','culture','views','fika','nightlife','green','second_hand'),0,7)),
-    preferencePriority: o(array(enumeration('food','culture','views','fika','nightlife','green','second_hand'),0,7)),
+    selected: r(preferences),
+    preferencePriority: o(preferences),
     walkKey: r(enumeration('calm','balanced','full','free')), dayEdit: o('RequestEdit'), excludedCandidateIds: r(array('editId',0,53)),
     pinnedCandidateIds: r(array('candidateInputId',0,12)), liveEventChoices: r(array('LiveChoice',0,52)) },
-  InputIntent: { dateIso: r('date'), preferences: r(array(enumeration('food','culture','views','fika','nightlife','green','second_hand'),0,7)),
-    preferencePriority: r(array(enumeration('food','culture','views','fika','nightlife','green','second_hand'),0,7)),
+  InputIntent: { dateIso: r('date'), preferences: r(preferences),
+    preferencePriority: r(preferences),
     dayRhythm: r(enumeration('calm','balanced','full','free')), excludedCandidateIds: r(array('editId',0,53)),
     pinnedCandidateIds: r(array('candidateInputId',0,12)), liveEventChoices: r(array('LiveChoice',0,52)), dayEdit: rule('RequestEdit',true,true) },
   Point: { lat: r('lat'), lng: r('lng') },
@@ -45,6 +57,8 @@ const fields = {
   Trust: { source_tier: r('string'), confidence: r('string'), human_verified: r('bool'), freshness: r('string') },
   TrustSummary: { source_tiers: r(array('string')), confidence: r('string'), human_verified: r('bool'), freshness: r('string') },
   PlaceDetails: { kind: o('string'), address: o('address') },
+  VisitText: { sv: r('visitText'), en: r('visitText') },
+  VisitContent: { version: r(enumeration(1)), text: r('VisitText'), source_url: r('visitSourceUrl'), checked_on: r('date') },
   HoursWindow: { opens: r('clock'), closes: r('closingClock') },
   SelectedHours: { status: r(enumeration('known','closed','unknown')), all_day: r('bool'), windows: r(array('HoursWindow',0,4)),
     date: o('date'), timezone: o('timezone'), source_url: o('shortUrl'), observed_at: o('instant'),
@@ -52,7 +66,14 @@ const fields = {
   StopSource: { kind: n('string'), label: n('string'), category: n('string'), url: n('url'),
     link_kind: n(enumeration('page','site_home')), link_host: n('string') },
   Attribution: { label: n('string'), url: n('url'), license: n('string') },
-  Provenance: { attribution: o(array('Attribution')) },
+  VenueMentionBinding: { label: r('label500'), lat: r('lat'), lng: r('lng') },
+  VenueMentionEvidence: { document_sha256: r('string'), locator: r('string') },
+  VenueMention: { venue_id: r('id200'), venue_binding: r('VenueMentionBinding'), article_id: r('id200'),
+    publisher_id: r('string'), publisher: r('string'), publisher_group: rule('string',true,true),
+    article_url: r('venueArticleUrl'), article_title: r('label500'), relation_kind: r(enumeration('mentioned','listed','recommended')),
+    published_on: rule('date',true,true), updated_on: rule('date',true,true), verified_at: r('instant'), source_evidence: r('VenueMentionEvidence'),
+    independence: r(enumeration('independent','not_independent','unknown')), sponsorship: r(enumeration('sponsored','not_sponsored','unknown')) },
+  Provenance: { attribution: o(array('Attribution')), venue_mentions: o(array('VenueMention',0,8)) },
   TimeWindow: { label: o('string'), kind: r(enumeration('daily','continuous','all_day','occurrences','period')), starts_at: n('instant'), ends_at: n('instant'),
     starts_on: n('date'), ends_on: n('date'), local_start: n('clock'), local_end: n('clock'), timezone: n('string'),
     dates: o(array('date',0,60)), all_day_explicit: o('bool'), spans_midnight: o('bool') },
@@ -76,21 +97,32 @@ const fields = {
     starts_at: n('instant'), ends_at: n('instant'), starts_on: n('date'), ends_on: n('date'), occurrence_date: n('date'), time_window: n('TimeWindow'), timezone: n('string'),
     lat: r('lat'), lng: r('lng'), type: n('string'), area: n('string'), address: n('string'), daypart: n('string'),
     covered_preferences: n(array('string')), partial_preferences: n(array('string')), missing_preferences: n(array('string')),
+    candidate_status: n(CANDIDATE_STATUS), weather_reasons: o(array(WEATHER_REASON,0,6)),
     source: n('StopSource'), trust: n('Trust'), provisional: o('bool'), origin: n('string'), website: n('shortUrl'),
-    place_details: n('PlaceDetails'), selected_day_hours: n('SelectedHours'), provenance: n('Provenance') },
+    place_details: n('PlaceDetails'), visit_content: o('VisitContent'), selected_day_hours: n('SelectedHours'), provenance: n('Provenance') },
   Leg: { from_label: n('string'), to_label: n('string'), distance_km: n('nonnegative'), estimated_walk_minutes: n('nonnegative') },
+  // Fixed public operator links need no place-source URL witness. The general
+  // URL policy remains closed to arbitrary router-provided destinations.
+  GeometryAttribution: { label: r(enumeration('FOSSGIS routing')),
+    url: r(enumeration('https://routing.openstreetmap.de/about.html')),
+    fixMapUrl: r(enumeration('https://www.openstreetmap.org/fixthemap')) },
   PrimaryRoute: { id: n('string'), main_stops: r(array('Stop',1)), map_route_points: r(array('RoutePoint')),
     map_path_points: r(array('Point')), legs: r(array('Leg')), estimated_km: rule('nonnegative',true,true),
-    routing_source: n('string'), route_shape: n('string'), public_route_scope: n('string'), caveats: n(array('string')),
-    anchored_to_local_time: o('bool'), trust_summary: n('TrustSummary'), credibility_tier: n('string') },
+    routing_source: n('string'), geometry_source: n('string'), geometry_mode: n(enumeration('walking')),
+    geometry_attribution: n('GeometryAttribution'), route_shape: n('string'), public_route_scope: n('string'), caveats: n(array('string')),
+    // Named in the engine's stop vocabulary ("museums"), not the planner's ("culture").
+    anchored_to_local_time: o('bool'), unconfirmed_tonight_preferences: o(array(enumeration(...Object.keys(CANONICAL_INTENTS)),1,MAX_PLANNER_PREFERENCES)),
+    trust_summary: n('TrustSummary'), credibility_tier: n('string') },
   WeatherObserved: { condition: n('string'), max_temp: n('number'), apparent_temp_max: n('number'), precipitation_probability_max: n('number'),
     precipitation_sum: n('number'), wind_speed_max: n('number') },
   WeatherProvenance: { provider_id: n('string'), role: n('string'), signal_type: n('string'), signal_kind: n('string'), confidence: n('string'),
     source: n('string'), stale: o('bool'), observed: n('WeatherObserved') },
   WeatherRead: { provenance: r('WeatherProvenance') },
   Dayflow: { weather: n('WeatherRead') },
+  DayWeatherSummary: { date: r('date'), max_temp: r('number'), condition: n(enumeration('sun','partly_cloudy','clouds','fog','rain','snow','thunderstorm','mixed')),
+    source: n('string'), fetched_at: n('instant'), stale: r('bool') },
   Day: { date: r('date'), primary_route: rule('PrimaryRoute',true,true), experimental_agnostic_route_applied: o('bool'),
-    experimental_agnostic_day: o('bool'), source: o('string'), manual_empty_day: o('bool'), dayflow_context: n('Dayflow') },
+    experimental_agnostic_day: o('bool'), source: o('string'), manual_empty_day: o('bool'), dayflow_context: n('Dayflow'), weather_summary: n('DayWeatherSummary') },
   IntakeResolved: { label: r('label500'), place_ref: r('placeRef'), confidence: r('string'), provenance: n('string'), attribution: n('string'),
     license: n('string'), timezone: n('string') },
   Intake: { mode: r(enumeration('place')), status: r(enumeration('resolved')), resolved: r('IntakeResolved') },
@@ -247,12 +279,23 @@ function budget(privacy) {
     if (type === 'date' && !isRealIsoDate(value)) throw new Error('date');
     if (type === 'placeRef' && !parsePlaceRef(value)) throw new Error('place ref');
     if (type === 'nonblank' && !value.trim()) throw new Error('blank');
+    if (type === 'visitText' && (!value || value !== value.trim() || value.length > 320 || /[\u0000-\u001f\u007f]/.test(value))) throw new Error('visit text');
+    if (type === 'visitSourceUrl') {
+      if (!require('../place-candidates/visit-content').isApprovedVisitSourceUrl(value)) throw new Error('unattested visit source');
+      return value; // Dedicated destination policy; never enlarge unrelated URL witnesses.
+    }
     if (type === 'address' && (value.length > 160 || /[\u0000-\u001f\u007f]/.test(value))) throw new Error('address');
     if (type === 'timezone' && value.length > 80) throw new Error('timezone');
     if (type === 'loaderToken' && !/^[a-z0-9_:-]{1,80}$/.test(value)) throw new Error('loader token');
     if (type === 'instant' && (!/^\d{4}-\d\d-\d\dT(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d)$/i.test(value) || !isRealIsoDate(value.slice(0,10)) || !Number.isFinite(Date.parse(value)))) throw new Error('instant');
     if (type === 'localDateTime' && (!/^\d{4}-\d\d-\d\dT(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(value) || !isRealIsoDate(value.slice(0,10)))) throw new Error('local datetime');
     if (['clock','closingClock'].includes(type) && !/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(value) && !(type === 'closingClock' && value === '24:00')) throw new Error('clock');
+    // This exact reviewed policy applies only to article_url. Do not enlarge
+    // the retained route/source witness bag or attest unrelated website URLs.
+    if (type === 'venueArticleUrl') {
+      if (value.length > 2048 || !isApprovedVenueArticleUrl(value)) throw new Error('unattested article url');
+      return value;
+    }
     if (type === 'shortUrl' && value.length > 2048) throw new Error('short url');
     if (type === 'url' || type === 'shortUrl' || /^(?:[a-z][a-z0-9+.-]*:\/\/|https?:|ftp:|file:|data:|javascript:|\/\/)/i.test(value)) url(value);
     return value;
@@ -261,6 +304,12 @@ function budget(privacy) {
 }
 function validateObject(type,value) {
   const refuse = () => { throw new Error('correlated '+type); };
+  if (type === 'Stop' && value.visit_content &&
+      !require('../place-candidates/visit-content').visitContentMatchesStop(value, value.visit_content)) refuse();
+  if (type === 'Stop' && value.provenance?.venue_mentions &&
+      !venueMentionsMatchPlace(value,value.provenance.venue_mentions)) refuse();
+  if (type === 'PrimaryRoute' && ((value.geometry_mode === 'walking' && value.geometry_source !== 'osrm') ||
+      (value.geometry_attribution && value.geometry_mode !== 'walking'))) refuse();
   if (type === 'Promotion') {
     const readiness = value.promote ? value.qualifying_caps.length ? 'promotable_limited' : 'promotable' : 'non_promotable';
     if (value.readiness !== readiness || !isDeepStrictEqual(value.blocked_caps,value.disqualifying_caps) ||
@@ -292,6 +341,16 @@ function validateObject(type,value) {
       value.starts_on !== value.dates[0] || value.ends_on !== value.dates[value.dates.length-1])) refuse();
   }
   if (type === 'PrimaryRoute') {
+    // An anchored evening names the picks whose hours tonight are unconfirmed:
+    // the list and its caveat travel together, sorted and unique, and every
+    // named pick is served by a stop on this route.
+    const named = value.unconfirmed_tonight_preferences, caveats = value.caveats || [];
+    if (caveats.includes('picks_unconfirmed_tonight') !== Boolean(named)) refuse();
+    if (named) {
+      const served = new Set(value.main_stops.flatMap(stop => [...(stop.covered_preferences || []), ...(stop.partial_preferences || [])]));
+      if (value.anchored_to_local_time !== true || !caveats.includes('day_anchored_to_current_time') ||
+        named.some((pick, i) => (i && pick <= named[i - 1]) || !served.has(pick))) refuse();
+    }
     const stops = value.main_stops;
     if (new Set(stops.map(stop=>stop.id)).size !== stops.length) refuse();
     if (value.public_route_scope === 'selected_stop_chain' && (value.map_route_points.length !== stops.length ||

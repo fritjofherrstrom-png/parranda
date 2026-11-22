@@ -18,10 +18,10 @@ import { routeForInput, inlineCompletion, type CityRegistry } from "../lib/landi
 import { storeAnchorCoords, requestPosition } from "../lib/location-anchor.mjs";
 import PlaceSearchField, { type PlaceSuggestion } from "./PlaceSearchField";
 import { storePlaceChoice } from "../lib/place-choice.mjs";
-import { isComposedEntry, LAST_KEY } from "../lib/anywhere-storage.mjs";
-import { liveDateLabel } from "../lib/live-event-query.mjs";
+import { isComposedEntry, LAST_KEY, SAVED_KEY } from "../lib/anywhere-storage.mjs";
+import { dayStationLine } from "../lib/day-summary.mjs";
 import AppBar from "./shared/AppBar";
-import { ChevronRightIcon, LocationIcon } from "./shared/icons";
+import { ChevronRightIcon, CrosshairIcon } from "./shared/icons";
 import { busyButton, dataLine } from "./shared/ui";
 
 type Lang = "sv" | "en";
@@ -50,16 +50,41 @@ function injectedRegistry(): CityRegistry {
  * The day the planner would restore on its own, if there is one — only enough
  * of it to name it. A stored entry without a composed result is not offered.
  */
-function lastDay(): { place: string | null; dateIso: string | null } | null {
+type Station = { key: string; href: string; place: string | null; dateIso: string | null; safeResponse: any; saved: boolean };
+
+/** The station's name, as on the day's sign: the place's first part. */
+const stationPlace = (place: unknown) =>
+  typeof place === "string" && place.trim() ? place.split(",")[0].trim() || null : null;
+
+function lastDay(lang: Lang): Station | null {
   try {
     const raw = window.localStorage.getItem(LAST_KEY);
     const entry = raw ? JSON.parse(raw) : null;
     if (!isComposedEntry(entry)) return null;
-    const place = typeof entry.place === "string" && entry.place.trim() ? entry.place.trim() : null;
-    const dateIso = typeof entry.dateIso === "string" ? entry.dateIso : null;
-    return { place, dateIso };
+    return { key: "last", href: `/anywhere?restore=last&lang=${lang}`, place: stationPlace(entry.place),
+      dateIso: typeof entry.dateIso === "string" ? entry.dateIso : null, safeResponse: entry.safeResponse, saved: false };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Saved days, newest first, as further stations (Linje 2 board). Each opens
+ * by its own id; the planner restores it as the labelled snapshot it is.
+ */
+function savedDays(lang: Lang, lastId: string | null): Station[] {
+  try {
+    const raw = window.localStorage.getItem(SAVED_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((entry: any) => isComposedEntry(entry) && typeof entry.id === "string" && entry.id && entry.id !== lastId)
+      .slice(0, 4)
+      .map((entry: any) => ({ key: `saved:${entry.id}`, href: `/anywhere?saved=${encodeURIComponent(entry.id)}&lang=${lang}`,
+        place: stationPlace(entry.place), dateIso: typeof entry.dateIso === "string" ? entry.dateIso : null,
+        safeResponse: entry.safeResponse, saved: true }));
+  } catch {
+    return [];
   }
 }
 
@@ -92,11 +117,17 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
   const [registry, setRegistry] = useState<CityRegistry>(EMPTY_REGISTRY);
   // The returning visitor's last day lives in localStorage — the same class of
   // value, adopted the same way.
-  const [resume, setResume] = useState<{ place: string | null; dateIso: string | null } | null>(null);
+  const [stations, setStations] = useState<Station[]>([]);
   useEffect(() => {
     setRegistry(injectedRegistry());
-    setResume(lastDay());
   }, []);
+  // Re-read with the language: the stations' links and lines speak it.
+  useEffect(() => {
+    let lastId: string | null = null;
+    try { lastId = JSON.parse(window.localStorage.getItem(LAST_KEY) || "null")?.id ?? null; } catch { /* unreadable */ }
+    const last = lastDay(lang);
+    setStations([...(last ? [last] : []), ...savedDays(lang, lastId)]);
+  }, [lang]);
 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
 
@@ -168,14 +199,14 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
       <main className="flex flex-1 flex-col justify-center gap-7 py-10 sm:gap-9 sm:py-16">
         <header className="flex flex-col gap-4">
           {/* Signage, not a slogan: the question the whole product answers. */}
-          <h1 className="type-display text-[4rem] leading-[0.86] text-parranda-ink min-[400px]:text-[4.5rem] sm:text-[7rem] lg:text-[10rem]">
+          <h1 className="type-display text-[clamp(3rem,17vw,4rem)] leading-[0.86] text-parranda-ink min-[400px]:text-[4.5rem] sm:text-[7rem] lg:text-[10rem]">
             {t("Nästa ", "Next ")}
             <br className="sm:hidden" />
             {t("stopp", "stop")}
             <em className="not-italic text-parranda-ember">?</em>
           </h1>
-          <p className="max-w-md text-lg leading-relaxed text-parranda-ink/75 sm:text-xl">
-            {t("Skriv en stad eller plats — eller använd din position.", "Type a city or place — or use your location.")}
+          <p className="max-w-md text-lg leading-relaxed text-parranda-ink-muted sm:text-xl">
+            {t("Skriv en stad eller en plats, eller börja där du är.", "Type a city or a place, or start from where you are.")}
           </p>
         </header>
 
@@ -189,28 +220,35 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
               onSelect={choice => { setSelectedPlace(choice); setValue(choice.query); inputRef.current?.focus(); }} />
             <button
               type="submit"
-              className="min-h-[3.75rem] whitespace-nowrap rounded-parranda bg-parranda-terracotta px-8 text-17 font-extrabold text-white transition [font-stretch:110%] hover:brightness-110 sm:min-h-16 sm:text-lg"
+              onPointerDown={event => {
+                // Keep focus in the combobox until the click submits. Blurring
+                // it on pointer-down removes the mobile's in-flow suggestions
+                // and moves this button before pointer-up can activate it.
+                if (event.button === 0) event.preventDefault();
+              }}
+              className="min-h-[3.75rem] whitespace-nowrap rounded-parranda-btn bg-parranda-terracotta px-8 text-17 font-extrabold text-parranda-on-terracotta transition [font-stretch:110%] hover:brightness-110 sm:min-h-16 sm:text-lg"
             >
               {t("Bygg min dag", "Build my day")}
             </button>
           </form>
 
-          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
-            <button
-              type="button"
-              {...busyButton(locating, useLocation)}
-              className="inline-flex min-h-12 items-center gap-2 rounded-full border-line border-parranda-ink/22 px-5 text-15 font-bold text-parranda-ink transition hover:border-parranda-ink/55 aria-disabled:opacity-60 aria-busy:cursor-progress"
-            >
-              <LocationIcon className="h-4 w-4 text-parranda-ember" />
-              {locating ? t("Hämtar position …", "Getting location …") : t("Använd min position", "Use my location")}
-            </button>
-            <span className="text-13 text-parranda-ink/68">
-              {t("Hela dagen planeras runt din position.", "The day is planned around where you are.")}
-            </span>
-          </div>
+          {/* The second way in, in words: no box, the ember mark leads. What
+              it does is its description, not a line of its own. */}
+          <button
+            type="button"
+            {...busyButton(locating, useLocation)}
+            aria-describedby="landingLocationNote"
+            className="-ml-1 inline-flex min-h-11 items-center gap-2 self-start rounded-parranda-btn px-1 text-15 font-bold text-parranda-ink transition hover:text-parranda-ember aria-disabled:opacity-60 aria-busy:cursor-progress"
+          >
+            <CrosshairIcon className="h-[18px] w-[18px] text-parranda-ember" />
+            {locating ? t("Hämtar position …", "Getting location …") : t("Börja där du är", "Start from my location")}
+          </button>
+          <span id="landingLocationNote" className="sr-only">
+            {t("Hela dagen planeras runt din position.", "The day is planned around where you are.")}
+          </span>
 
           {geoDenied && (
-            <p className="text-13 leading-relaxed text-parranda-ink/72" aria-live="polite">
+            <p className="text-13 leading-relaxed text-parranda-ink-muted" aria-live="polite">
               {t(
                 "Positionen blockerades — inga problem. Skriv en stad eller plats i stället.",
                 "Location was blocked — no problem. Type a city or place instead.",
@@ -221,24 +259,40 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
 
         {/* A returning visitor's last day is one tap away; the planner restores
             it as a labelled snapshot and offers a fresh rebuild. */}
-        {resume && (
-          <a
-            href={`/anywhere?restore=last&lang=${lang}`}
-            className="group flex min-h-14 items-center gap-3 self-stretch rounded-parranda-btn bg-parranda-ink px-4 text-sm text-parranda-paper transition hover:brightness-125 sm:self-start"
-          >
-            <span className="type-eyebrow text-parranda-paper/72">{t("Fortsätt", "Continue")}<span className="sr-only"> · </span></span>
-            <span className="min-w-0 flex-1">
-              {resume.place ? t(`En dag i ${resume.place}`, `A day in ${resume.place}`) : t("Din senaste dag", "Your last day")}
-              {resume.dateIso ? <span className="text-parranda-paper/72"> · {liveDateLabel(resume.dateIso, lang)}</span> : ""}
-            </span>
-            <ChevronRightIcon className="h-4 w-4 transition group-hover:translate-x-0.5" />
-          </a>
+        {/* Linje 2 board: the last day and the saved ones wait as stations on
+            a short line, each one tap from being opened again. */}
+        {stations.length > 0 && (
+          <section aria-labelledby="landingPickUp" className="flex flex-col gap-1 border-t-line border-parranda-line-faint pt-5">
+            <h2 id="landingPickUp" className="type-eyebrow text-parranda-glow">{t("Fortsätt en dag", "Pick up a day")}</h2>
+            <ol className="flex flex-col">
+              {stations.map((station) => (
+                <li key={station.key} className="relative before:pointer-events-none before:absolute before:inset-y-0 before:left-[6px] before:w-1 before:bg-parranda-ember first:before:top-1/2 last:before:bottom-1/2">
+                  <a
+                    href={station.href}
+                    className="group relative flex min-h-[3.75rem] items-center gap-3 rounded-parranda-btn py-1.5 transition hover:bg-parranda-fill-faint sm:pr-3"
+                  >
+                    <span aria-hidden="true" className="relative h-4 w-4 shrink-0 rounded-full border-[3px] border-parranda-ink bg-parranda-paper" />
+                    <span className="flex min-w-0 flex-1 flex-col wrap-anywhere">
+                      <span className="text-base font-bold text-parranda-ink">
+                        {station.place ? t(`En dag i ${station.place}`, `A day in ${station.place}`)
+                          : station.saved ? t("Din sparade dag", "Your saved day") : t("Din senaste dag", "Your last day")}
+                      </span>
+                      <span className="text-13 text-parranda-ink-muted">
+                        {station.saved ? null : <span className="sr-only">{t("Fortsätt", "Continue")}: </span>}
+                        {dayStationLine(station, { lang, saved: station.saved })}
+                      </span>
+                    </span>
+                    <ChevronRightIcon className="h-4 w-4 text-parranda-ink-meta transition group-hover:translate-x-0.5" />
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </section>
         )}
       </main>
 
-      <footer className={`${dataLine} flex items-center justify-between border-t-line border-parranda-ink/14 py-4`}>
-        <span>Parranda</span>
-        <span>{t("din rutt, din stad", "your route, your city")}</span>
+      <footer className={`${dataLine} flex items-center justify-between border-t-line border-parranda-line-faint py-4`}>
+        <span>{t("Din rutt, din stad.", "Your route, your city.")}</span>
       </footer>
     </div>
   );

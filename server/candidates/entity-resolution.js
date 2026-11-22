@@ -31,6 +31,7 @@ const { normalizeSourceNameAliases } = require("../place-candidates/source-name-
 const { normalizeOpeningHours } = require("../place-candidates/opening-hours");
 const { normalizeSourceWebsite } = require("../lib/source-website");
 const { evaluateOperationalViability } = require("../place-candidates/operational-viability");
+const { normalizePlaceDetails, normalizeSourcePriceLevel, sourcePlaceDetails } = require("../place-candidates/place-details");
 
 // Thresholds — intentionally tight. Tune up (looser) only with evidence.
 const GEO_MERGE_M = 75; // close enough to be the same place, with a name match
@@ -176,12 +177,16 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
     const existing = survivors[i].candidate;
     const canonical = chooseCanonical(existing, candidate);
     const duplicate = canonical === existing ? candidate : existing;
-    const reconciliation = reconcileFields(canonical, duplicate);
+    // Track the original subtype claims through a merge chain. The canonical
+    // source's family can differ from the family that supplied a filled detail.
+    const museumKinds = [...(survivors[i].museumKinds || museumKindClaims(existing)), ...museumKindClaims(candidate)];
+    const fields = reconcileFields(canonical, duplicate, museumKindIsDisputed(museumKinds));
     // Ambiguity belongs to the survivor, not its replaceable canonical object.
     survivors[i] = { ...survivors[i],
       entityAmbiguous: survivors[i].entityAmbiguous || entityAmbiguous,
       siteAmbiguous: survivors[i].siteAmbiguous || siteAmbiguous,
-      candidate: mergeInto(canonical, duplicate, { now }) };
+      museumKinds,
+      candidate: mergeInto(canonical, duplicate, fields, { now }) };
     // Reconciliation can unlock aliases (notably by filling coordinates). Check
     // the full original universe again, excluding the identity already absorbed.
     // Once blocked, aliases stay blocked even through later canonical switches.
@@ -206,8 +211,8 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
       decision: "merged",
       confidence: verdict.confidence,
       signals: verdict.signals,
-      reconciled_fields: reconciliation.reconciliation.filled,
-      conflicts: reconciliation.reconciliation.conflicts,
+      reconciled_fields: fields.reconciliation.filled,
+      conflicts: fields.reconciliation.conflicts,
     });
   }
 
@@ -324,7 +329,21 @@ function chooseCanonical(a, b) {
   return String(a.id) <= String(b.id) ? a : b;
 }
 
-function mergeInto(canonical, duplicate, { now = null } = {}) {
+function museumKindClaims(candidate) {
+  if (candidate.type !== 'museum') return [];
+  const kind = normalizePlaceDetails(candidate.place_details, candidate.type)?.kind;
+  const curated = candidate.city_pack_owned === true;
+  const family = candidate.source_family;
+  return kind && (curated || family) ? [{ kind, family, curated }] : [];
+}
+
+function museumKindIsDisputed(claims) {
+  const [first] = claims;
+  return claims.length > 1 && !claims.some(claim => claim.curated) &&
+    claims.some(claim => claim.family !== first.family) && claims.some(claim => claim.kind !== first.kind);
+}
+
+function mergeInto(canonical, duplicate, { patch, reconciliation }, { now = null } = {}) {
   const canonicalEvidence = evidenceOf(canonical, now);
   const duplicateEvidence = evidenceOf(duplicate, now);
   const evidence = dedupeEvidence([...canonicalEvidence, ...duplicateEvidence]);
@@ -345,7 +364,6 @@ function mergeInto(canonical, duplicate, { now = null } = {}) {
   // absorbed evidence ledger, a merged_from trail, and a bounded field
   // reconciliation: only SAFE missing/conflicting operational fields are
   // touched (v2: coordinates). Label/type/tags are always preserved.
-  const { patch, reconciliation } = reconcileFields(canonical, duplicate);
   const prior = canonical.reconciliation || { filled: [], conflicts: [] };
   const merged = { ...canonical, ...patch, evidence, merged_from: mergedFrom };
 
@@ -367,7 +385,7 @@ function mergeInto(canonical, duplicate, { now = null } = {}) {
  *
  * @returns {{ patch: object, reconciliation: { filled: string[], conflicts: object[] } }}
  */
-function reconcileFields(canonical, duplicate) {
+function reconcileFields(canonical, duplicate, museumKindDisputed) {
   const patch = {};
   const filled = [];
   const conflicts = [];
@@ -422,16 +440,46 @@ function reconcileFields(canonical, duplicate) {
     filled.push("source_address");
   }
 
-  // These bounded display facts belong to the already matched physical place.
-  // They do not alter its canonical type, preference coverage or source trust.
-  const { sourcePlaceDetails } = require('../place-candidates/place-details');
+  // Type-compatible details belong to the already matched physical place.
+  // They can inform narrow preference fit while canonical type and trust stay
+  // governed by the identity and evidence rules.
   const currentDetails = sourcePlaceDetails(canonical, canonical.type);
   const incomingDetails = sourcePlaceDetails(duplicate, canonical.type);
-  if (incomingDetails) {
+  const withholdMuseumKind = canonical.type === 'museum' && museumKindDisputed;
+  if (incomingDetails || withholdMuseumKind) {
     const details = { ...incomingDetails, ...currentDetails };
-    if (JSON.stringify(details) !== JSON.stringify(currentDetails)) {
-      patch.place_details = details;
-      filled.push('place_details');
+    if (incomingDetails?.kind === 'swimming_prohibited') details.kind = incomingDetails.kind;
+    if (withholdMuseumKind) {
+      delete details.kind;
+      if (!canonical.reconciliation?.conflicts?.some(conflict => conflict.field === 'place_details.kind')) {
+        conflicts.push({ field: 'place_details.kind', kept: null });
+      }
+    }
+    const reconciledDetails = Object.keys(details).length ? details : null;
+    if (JSON.stringify(reconciledDetails) !== JSON.stringify(currentDetails)) {
+      patch.place_details = reconciledDetails;
+      if (!withholdMuseumKind || reconciledDetails?.address !== currentDetails?.address) filled.push('place_details');
+    }
+  }
+
+  // The same fast-food venue may be "restaurant" in a directory and
+  // "street-food" in a publisher or map record. Both describe the meal.
+  // Remember price disagreement even if another duplicate becomes canonical.
+  const priceField = 'source_price_level';
+  const hasPriceConflict = candidate => candidate.reconciliation?.conflicts?.some(conflict => conflict.field === priceField);
+  const compatiblePrices = canonical.type === duplicate.type ||
+    [canonical.type, duplicate.type].every(type => type === 'restaurant' || type === 'street-food');
+  if (compatiblePrices && !hasPriceConflict(canonical)) {
+    const currentPrice = normalizeSourcePriceLevel(canonical.source_price_level);
+    const incomingPrice = duplicate.trust?.freshness === 'fresh' &&
+      sourcePlaceDetails(duplicate, duplicate.type)?.kind !== 'food_establishment'
+      ? normalizeSourcePriceLevel(duplicate.source_price_level) : null;
+    if (hasPriceConflict(duplicate) || (currentPrice && incomingPrice && currentPrice !== incomingPrice)) {
+      patch.source_price_level = null;
+      conflicts.push({ field: priceField, kept: null });
+    } else if (!currentPrice && incomingPrice) {
+      patch.source_price_level = incomingPrice;
+      filled.push(priceField);
     }
   }
 

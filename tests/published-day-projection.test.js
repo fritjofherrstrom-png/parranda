@@ -63,11 +63,39 @@ test('projects a real final promoted typed publication, not its diagnostic trial
   assert.ok(projected, 'a valid authoritative final publication must project');
   assert.deepEqual(projected.result.days[0].primary_route.main_stops.map(s => s.id), published.days[0].primary_route.main_stops.map(s => s.id));
   assert.deepEqual(projected.result.days[0].primary_route.map_path_points, published.days[0].primary_route.map_path_points);
+  assert.equal(published.days[0].primary_route.geometry_source, 'heuristic', 'geometry provenance survives the generic composition label');
+  assert.equal(projected.result.days[0].primary_route.geometry_source, 'heuristic');
   assert.equal(classifyAnywhereResult(projected.result).status, classifyAnywhereResult(published).status);
   assert.equal(projected.intent.place, 'Northport, Testland');
   assert.equal(projected.intent.placeRef, 'r123456');
   assert.equal(projected.result.agnostic_route_output_experiment.experimental_route, undefined);
   captureEvidence('ordinary',published,projected,intent(),privacy());
+});
+
+test('the trusted selected-day forecast survives exact public-day projection with ordinary weather', async () => {
+  const published = await publication({ weather: { maxTemp: 99, rawCode: 95 } }, {
+    weatherProvider: async () => ({ maxTemp: 21, rawCode: 3, condition: 'clouds', source: 'controlled-provider', stale: false,
+      fetched_at: '2026-05-25T09:00:00Z', timezone_resolution: { timezone: 'Europe/Rome', timezone_source: 'weather_provider_auto' } }),
+  });
+  assert.equal(published.days[0].dayflow_context, undefined, 'ordinary weather still has no composition explanation');
+  assert.deepEqual(published.days[0].weather_summary, {
+    date: DATE, max_temp: 21, condition: 'clouds', source: 'controlled-provider', fetched_at: '2026-05-25T09:00:00Z', stale: false,
+  }, 'trusted provider supplies the summary, never request-body weather');
+  const projected = projectPublishedDay({ published, intent: intent(), privacy: privacy(), language: 'en' });
+  assert.ok(projected);
+  assert.deepEqual(projected.result.days[0].weather_summary, published.days[0].weather_summary);
+});
+
+test('exact day projection preserves the closed pedestrian geometry and attribution contract', async () => {
+  const published=await publication();
+  const route=published.days[0].primary_route;
+  route.geometry_source='osrm';
+  route.geometry_mode='walking';
+  route.geometry_attribution={label:'FOSSGIS routing',url:'https://routing.openstreetmap.de/about.html',fixMapUrl:'https://www.openstreetmap.org/fixthemap'};
+  const projected=projectPublishedDay({published,intent:intent(),privacy:privacy(),language:'en'});
+  assert.ok(projected);
+  assert.equal(projected.result.days[0].primary_route.geometry_mode,'walking');
+  assert.deepEqual(projected.result.days[0].primary_route.geometry_attribution,route.geometry_attribution);
 });
 
 for (const [rhythm, count] of [['full', 6], ['calm', 4]]) test(`a released ${rhythm} extent projects and restores date-bound exclusions without a count ceiling`, async () => {
@@ -196,6 +224,90 @@ test('preserves the real candidate context and detours with closed hours and eli
   const closed = projectPublishedDay({published,intent:intent(),privacy:evidence,language:'en'});
   assert.ok(closed); assert.equal(JSON.stringify(closed).includes('private_transport'),false);
   assert.equal(closed.result.place_structure.district_day.areas[0].stops[0].commitment_eligible,false);
+});
+
+test('a shared day keeps each stop\'s engine candidate status and weather reasons', async () => {
+  // Controlled providers, not the stable mock: its forecast dates follow the
+  // host timezone, so a far-east or far-west host would see no weather at all.
+  const forecast = (condition, rawCode, maxTemp) => async () => ({ maxTemp, rawCode, condition, source: 'controlled-provider',
+    stale: false, fetched_at: '2026-05-25T09:00:00Z' });
+  const { parsePublishedDay } = await import('../frontend/src/lib/published-day.mjs');
+  const decision = require('../anywhere-render-decision');
+  const verdicts = stops => stops.map(s => [s.id, s.candidate_status, s.weather_reasons]);
+  for (const weatherProvider of [forecast('sun', 0, 22), forecast('rain', 63, 14)]) {
+    const published = await publication({}, { weatherProvider });
+    const stops = published.days[0].primary_route.main_stops;
+    assert.ok(stops.every(s => typeof s.candidate_status === 'string' && Array.isArray(s.weather_reasons)), 'engine precondition');
+    assert.ok(stops.some(s => s.weather_reasons.length), 'the controlled forecast produces real weather reasons');
+    stops[stops.length - 1].candidate_status = 'partial';
+    const projected = projectPublishedDay({ published, intent: intent(), privacy: privacy(), language: 'en' });
+    assert.ok(projected);
+    assert.deepEqual(verdicts(projected.result.days[0].primary_route.main_stops), verdicts(stops));
+    const now = Date.parse(`${DATE}T10:00:00Z`), ref = 'b'.repeat(48);
+    const parsed = parsePublishedDay({ version: 1, ref, created_at: new Date(now).toISOString(),
+      expires_at: new Date(now + 60000).toISOString(), ...projected }, { ref, decision, now });
+    assert.ok(parsed, 'the actual recipient accepts the envelope');
+    assert.deepEqual(verdicts(parsed.entry.safeResponse.days[0].primary_route.main_stops), verdicts(stops),
+      'the recipient renders the same partial-match and weather facts as the live day');
+  }
+  const published = await publication();
+  const stop = published.days[0].primary_route.main_stops[0];
+  stop.candidate_status = null; stop.weather_reasons = [];
+  const cleared = projectPublishedDay({ published, intent: intent(), privacy: privacy(), language: 'en' });
+  assert.ok(cleared, 'no status and no weather reason are ordinary facts');
+  assert.equal(cleared.result.days[0].primary_route.main_stops[0].candidate_status, null);
+  assert.deepEqual(cleared.result.days[0].primary_route.main_stops[0].weather_reasons, []);
+  delete stop.candidate_status; delete stop.weather_reasons;
+  const absent = projectPublishedDay({ published, intent: intent(), privacy: privacy(), language: 'en' });
+  assert.ok(absent, 'a stop without the fields still shares');
+  assert.equal(Object.hasOwn(absent.result.days[0].primary_route.main_stops[0], 'candidate_status'), false);
+  assert.equal(Object.hasOwn(absent.result.days[0].primary_route.main_stops[0], 'weather_reasons'), false);
+});
+
+test('an unknown candidate status or weather reason refuses the share instead of disappearing', async () => {
+  for (const [key, value] of [['candidate_status', 'confirmed'], ['candidate_status', ''], ['weather_reasons', ['indoor_guess']],
+    ['weather_reasons', 'rain_favors_indoor'], ['weather_reasons', [null]], ['weather_reasons', Array(7).fill('sun_favors_scenic')]]) {
+    const published = await publication();
+    published.days[0].primary_route.main_stops[0][key] = value;
+    assert.equal(projectPublishedDay({ published, intent: intent(), privacy: privacy(), language: 'en' }), null, `${key}=${JSON.stringify(value)}`);
+  }
+});
+
+test('the projector accepts every candidate status and weather reason the engine can emit', () => {
+  const { budget } = require('../server/planner/published-day-fields');
+  const { scoreCandidateFit } = require('../server/candidates/fit-scorer');
+  const { candidateStatusForRole } = require('../server/planner/role-selector');
+  const stop = extra => budget(privacy()).copy('Stop', { id: 'drift', label: 'Drift', lat: 41.9, lng: 12.49, ...extra });
+  const reasons = new Set();
+  const types = ['museum','church','gallery','library','market','event_market','restaurant','pizza','street-food','bakery','cafe','café',
+    'bar','wine-bar','cocktail-bar','vintage-shop','shop','cinema','theatre','viewpoint','beach','promenade','park','garden','bridge',
+    'square','rooftop-bar','castle','landmark','monument'];
+  const weathers = [{ condition: 'rain' }, { precipitationProbabilityMax: 80 }, { condition: 'sun' }, { pleasant: true },
+    { condition: 'sun', hot: true }, { condition: 'clouds', hot: true }, { condition: 'clouds' }];
+  for (const type of types) for (const weather of weathers) for (const userModifiers of [[], ['waterfront']]) {
+    const fit = scoreCandidateFit({ candidate: { id: 'x', name: 'X', type, tags: ['waterfront'] }, userIntents: ['views'], userModifiers,
+      context: { weather } });
+    for (const reason of fit.dimensions.weather.reasons) reasons.add(reason);
+  }
+  const projected = ['hot_favors_swim','hot_penalizes_shadeless','rain_favors_indoor','rain_penalizes_exposed',
+    'requested_waterfront','sun_favors_scenic'];
+  assert.deepEqual([...reasons].sort(), projected, 'a new engine weather reason must be added to the closed projector');
+  // The grid above only reaches branches it drives. Every reason scoreWeather
+  // can push is a literal in its body; a non-literal push would defeat this.
+  const scorer = require('node:fs').readFileSync(require.resolve('../server/candidates/fit-scorer'), 'utf8');
+  const body = scorer.slice(scorer.indexOf('function scoreWeather('), scorer.indexOf('\n}\n', scorer.indexOf('function scoreWeather(')));
+  const literals = [...body.matchAll(/localReasons\.push\("([a-z_]+)"\)/g)].map(match => match[1]);
+  assert.equal(literals.length, body.split('localReasons.push(').length - 1, 'every weather reason is a literal token');
+  assert.deepEqual([...new Set(literals)].sort(), projected, 'every literal weather reason is accepted by the projector');
+  assert.deepEqual(stop({ weather_reasons: [...reasons] }).weather_reasons, [...reasons]);
+  const statuses = new Set();
+  for (const covered of [[], ['views']]) for (const partial of [[], ['views']]) for (const gate of [true, false])
+    for (const influence of [true, false]) for (const nearby of [true, false]) for (const allowed of [null, true])
+      statuses.add(candidateStatusForRole({ fit: { covered_preferences: covered, partial_preferences: partial },
+        gates: { route_gate: gate, may_influence_routes: influence, may_show_as_nearby: nearby },
+        spec: { intents: ['views'], gate: 'route_gate' }, experimentalAdmission: allowed === null ? null : { allowed } }));
+  assert.deepEqual([...statuses].sort(), ['fallback','filled','missing','partial']);
+  for (const status of statuses) assert.equal(stop({ candidate_status: status }).candidate_status, status);
 });
 
 const LIVE_URL = 'https://sources.example/program?edition=1#programme';
@@ -819,3 +931,18 @@ for (const kind of ['daily', 'occurrences']) {
       'a different occurrence date cannot keep the old occurrence identity');
   });
 }
+
+test('a real typed day with a grouped interest preserves its saved priority across projection and reopen', async () => {
+  const inputs = { ...intent(), preferences: ['restaurants', 'fika', 'views'], preferencePriority: ['restaurants', 'views'] };
+  const published = await publication({ preferences: inputs.preferences, preference_priority: inputs.preferencePriority });
+  const projected = projectPublishedDay({ published, intent: inputs, privacy: privacy(), language: 'en' });
+  assert.ok(projected, 'the publisher accepts the same closed interest and order as the composer');
+  const { parsePublishedDay } = await import('../frontend/src/lib/published-day.mjs');
+  const now = Date.parse(`${DATE}T10:00:00Z`), ref = 'a'.repeat(48);
+  const reopened = parsePublishedDay({ version: 1, ref, created_at: new Date(now).toISOString(),
+    expires_at: new Date(now + 60000).toISOString(), ...projected }, { ref, decision: require('../anywhere-render-decision'), now });
+  assert.deepEqual(reopened?.entry.inputs.selected, ['restaurants', 'fika', 'views']);
+  assert.deepEqual(reopened?.entry.inputs.preferencePriority, ['restaurants', 'views']);
+  assert.ok(reopened.entry.safeResponse.days[0].primary_route.main_stops
+    .some(stop => stop.covered_preferences?.includes('restaurants')), 'the exact match also survives');
+});

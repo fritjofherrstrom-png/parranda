@@ -28,6 +28,8 @@ export declare function splitRouteStops<T extends object>(
 
 export declare function wovenEventIds(stops: readonly object[] | null | undefined): Set<string>;
 
+export declare function pulseRowsWithoutOccurrence<E extends object>(rows: E[], occurrenceId?: string): E[];
+
 export declare function pulseEventBuckets<E extends object>(
   liveEvents: { tonight?: E[]; this_week?: E[] } | null | undefined,
   wovenIds?: Set<string>,
@@ -86,6 +88,20 @@ export declare function eventTiming(
   now?: Date,
   selectedDate?: string | null,
 ): string;
+
+/** A departures-board time column, or null when the timing is not one clock. */
+export declare function eventBoardClock(
+  ev: Parameters<typeof eventTiming>[0],
+  lang: "sv" | "en",
+  now?: Date,
+  selectedDate?: string | null,
+): { at: string; until: string | null; now: boolean } | null;
+
+export declare function hasUpcomingEveningStart(
+  ev: { starts_at?: string; timezone?: string; time_window?: PulseTimeWindow | null; recurrence?: { occurrence_status?: string } | null },
+  date: string,
+  now: Date,
+): boolean;
 
 /** Session uncertainty for source periods; rendered separately from timing. */
 export declare function eventTimingNotice(

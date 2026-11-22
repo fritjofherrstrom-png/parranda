@@ -12,7 +12,14 @@ export interface RouteMarkerPresentation {
 export function routePathIsSketch(
   pathPoints: RouteMapPoint[] | null | undefined,
   stopCount: number | null | undefined,
+  geometry?: { geometrySource?: string | null; geometryMode?: string | null },
 ): boolean;
+
+/** Exact validated pedestrian geometry, or no connector for a pins-only overview. */
+export function routeDisplayPath(
+  pathPoints: RouteMapPoint[] | null | undefined,
+  options?: { geometrySource?: string | null; geometryMode?: string | null },
+): Array<{ lat: number; lng: number }>;
 
 export function routeMarkerPresentation(
   stops: RouteMapPoint[] | null | undefined,
