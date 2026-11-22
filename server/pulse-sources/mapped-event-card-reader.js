@@ -12,7 +12,7 @@ function extractMappedEventCards(doc, { sourceUrl, explicitSingleDate, claims = 
   const groups = new Map();
   for (const node of doc.nodes) {
     let owner = owners.get(node.parentNode) || null;
-    if (node.tagName === "article") owner = null;
+    if (node.tagName === "article" || (node.tagName === "div" && hasClass(node, "card") && hasClass(node, "event-card"))) owner = null;
     if (node.tagName === "div" && hasClass(node, "flip-container")) {
       owner = node;
       groups.set(owner, []);

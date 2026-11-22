@@ -81,7 +81,7 @@ function hasClass(node, value) {
 }
 
 function isMappedOwner(node) {
-  return node?.tagName === "div" && hasClass(node, "flip-container");
+  return node?.tagName === "div" && (hasClass(node, "flip-container") || (hasClass(node, "card") && hasClass(node, "event-card")));
 }
 
 // One negative-only carrier survives all supported positive reader lanes.
