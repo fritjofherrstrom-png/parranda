@@ -376,3 +376,67 @@ test("initials ET/OG keep their identity behind generic words and in any order",
   // Initials never stand in for a category or a hard-id conflict.
   assert.equal(matchIdentity(at("osm-a", "OG Aurora"), at("overture-b", "OG Aurora", { type: "museum" })).same, false);
 });
+
+// Connector-only identities need full word agreement, not another positional
+// guess: keep literal names, article prefixes and category-word reordering.
+test("literal connector names still match when their complete words agree", () => {
+  for (const [a, b] of [
+    ["OG Café", "The OG Café"],
+    ["ET Café", "The ET Café"],
+    ["OG Café", "OG Restaurant"],
+    ["Bar ET", "ET Pub"],
+    ["Café OG", "OG"],
+    ["山 och 海 Café", "山 och 海 Restaurant"],
+    ["Bar ET", "ET Bar"],
+    ["Och", "The Och"],
+    ["山 och 海", "山 och 海"],
+    ["Bar and Café", "The Café and Bar"],
+    ["OG Aurora Café", "The OG Aurora Restaurant"],
+  ]) {
+    const one = external({ id: "osm-a", label: a, type: "cafe", evidence: [] });
+    const two = external({ id: "overture-b", label: b, type: "cafe", evidence: [],
+      provider_id: "overture" });
+    assert.equal(matchIdentity(one, two).same, true, `${a} / ${b}`);
+    assert.equal(matchIdentity(two, one).same, true, `${b} / ${a}`);
+    assert.equal(resolveCandidateIdentity([one, two], { now: NOW }).candidates.length, 1);
+  }
+});
+
+// Synthetic #711 review regressions: a retained conjunction must not erase
+// conflicting category words, single-letter initials, or single-character names.
+for (const [a, b, typeB] of [
+  ["Bar and Café", "Restaurant and Bakery", "restaurant"],
+  ["Bar and et Café", "Restaurant and et Bakery", "restaurant"],
+  ["X and Y", "J and K", "cafe"],
+  ["山 och 海", "空 och 雨", "cafe"],
+  ["Bar and Bar", "Café and Café", "cafe"],
+]) {
+  test(`a shared conjunction does not identify ${a} as ${b}`, () => {
+    const operatorUrl = "https://operator.fixture.example/b";
+    const one = curated({ label: a, type: "cafe", lat: 55.6, lng: 13,
+      evidence: [] });
+    const two = external({ label: b, type: typeB, lat: 55.6001, lng: 13,
+      provider_id: "fixture-operator", source_family: "official",
+      opening_hours: "Mo-Fr 10:00-18:00",
+      opening_hours_source: { url: `${operatorUrl}/hours`, observed_at: NOW },
+      evidence: [{ claim_type: "existence", value: true, observed_at: NOW,
+        source_ref: { provider_id: "fixture-operator", source_family: "official",
+          source_tier: "official", url: operatorUrl } }] });
+    const before = JSON.stringify([one, two]);
+    assert.equal(matchIdentity(one, two).same, false, "the conjunction is not sufficient identity");
+    assert.equal(matchIdentity(two, one).same, false, "the guard is symmetric");
+    for (const input of [[one, two], [two, one]]) {
+      const result = resolveCandidateIdentity(input, { now: NOW });
+      assert.equal(result.candidates.length, 2);
+      assert.equal(result.summary.merged_count, 0);
+      const retained = result.candidates.find(candidate => candidate.id === one.id);
+      const donor = result.candidates.find(candidate => candidate.id === two.id);
+      assert.equal(retained.opening_hours, undefined, "no foreign hours");
+      assert.equal(retained.opening_hours_source, undefined, "no foreign hours source");
+      assert.equal(retained.evidence.some(record => record.source_ref.url === operatorUrl), false,
+        "no foreign official corroboration");
+      assert.equal(donor.opening_hours, two.opening_hours, "keep the operator's own hours");
+    }
+    assert.equal(JSON.stringify([one, two]), before, "inputs are unchanged");
+  });
+}
