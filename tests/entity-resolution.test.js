@@ -329,6 +329,114 @@ test("a shared conjunction never joins two different places", () => {
   const a = external({ label: "Lund och Havet", type: "museum", evidence: [] });
   const b = external({ id: "osm-2", label: "Lund och Skogen", type: "museum", evidence: [] });
   assert.equal(matchIdentity(a, b).same, false);
-  assert.equal(matchIdentity({ ...a, label: "Och" }, { ...b, label: "Och" }).same, false,
-    "a name that is only a conjunction is generic and needs a hard id");
 });
+
+// Hermes review of #709: "et" and "og" were dropped wherever they stood, so a
+// name that begins or ends with them lost its distinctive word. A conjunction is
+// a connector only between two other words.
+test("ET or OG that is the name itself stays a distinctive word", () => {
+  const et = external({ label: "ET Sushi Lund", type: "restaurant", evidence: [] });
+  const og = external({ id: "osm-2", label: "OG Sushi Lund", type: "restaurant", evidence: [] });
+  assert.equal(matchIdentity(et, og).same, false, "two different restaurants are not joined");
+
+  const osm = external({ label: "Bar ET", type: "bar", evidence: [] });
+  const overture = external({ id: "overture-et", label: "ET Bar", type: "bar", evidence: [],
+    provider_id: "overture" });
+  assert.equal(matchIdentity(osm, overture).same, true, "one bar named ET is one place");
+  assert.equal(matchIdentity({ ...osm, label: "Och" }, { ...overture, label: "Och" }).same, true,
+    "a one-word name is the name, even when the word is a conjunction");
+});
+
+// Hermes review of #711: a generic word in front ("The", "Café") made "og" look
+// like a connector on one side only, so one place split in two, and "Café OG
+// Aurora" merged with a different "Café Aurora". A conjunction joins only two
+// name words; generic words around it do not count.
+test("initials ET/OG keep their identity behind generic words and in any order", () => {
+  const at = (id, label, over = {}) => external({ id, label, type: "cafe", evidence: [], ...over });
+  for (const initials of ["OG", "ET"]) {
+    for (const [a, b] of [
+      [`${initials} Aurora Café`, `The ${initials} Aurora Café`],
+      [`${initials} Aurora Café`, `Café ${initials} Aurora`],
+      [`The ${initials} Café`, `The ${initials} Café`],
+    ]) {
+      const one = at("osm-a", a);
+      const two = at("overture-b", b, { provider_id: "overture" });
+      assert.equal(matchIdentity(one, two).same, true, `${a} / ${b}: ${JSON.stringify(matchIdentity(one, two))}`);
+      assert.equal(resolveCandidateIdentity([one, two], { now: NOW }).candidates.length, 1, `${a} / ${b}: one stop`);
+    }
+    const initialsPlace = at("osm-a", `Café ${initials} Aurora`);
+    const other = at("overture-b", "Café Aurora", { provider_id: "overture" });
+    assert.equal(matchIdentity(initialsPlace, other).same, false, `Café ${initials} Aurora is not Café Aurora`);
+    assert.equal(resolveCandidateIdentity([initialsPlace, other], { now: NOW }).candidates.length, 2);
+  }
+  // Connectors between two name words still join, behind a generic word too.
+  for (const [a, b] of [["Café Gösta och Havet", "Café Gösta & Havet"], ["The Smith and Wollensky", "Smith & Wollensky"]]) {
+    assert.equal(matchIdentity(at("osm-a", a), at("overture-b", b)).same, true, `${a} / ${b}`);
+  }
+  // Initials never stand in for a category or a hard-id conflict.
+  assert.equal(matchIdentity(at("osm-a", "OG Aurora"), at("overture-b", "OG Aurora", { type: "museum" })).same, false);
+});
+
+// Connector-only identities need full word agreement, not another positional
+// guess: keep literal names, article prefixes and category-word reordering.
+test("literal connector names still match when their complete words agree", () => {
+  for (const [a, b] of [
+    ["OG Café", "The OG Café"],
+    ["ET Café", "The ET Café"],
+    ["OG Café", "OG Restaurant"],
+    ["Bar ET", "ET Pub"],
+    ["Café OG", "OG"],
+    ["山 och 海 Café", "山 och 海 Restaurant"],
+    ["Bar ET", "ET Bar"],
+    ["Och", "The Och"],
+    ["山 och 海", "山 och 海"],
+    ["Bar and Café", "The Café and Bar"],
+    ["OG Aurora Café", "The OG Aurora Restaurant"],
+  ]) {
+    const one = external({ id: "osm-a", label: a, type: "cafe", evidence: [] });
+    const two = external({ id: "overture-b", label: b, type: "cafe", evidence: [],
+      provider_id: "overture" });
+    assert.equal(matchIdentity(one, two).same, true, `${a} / ${b}`);
+    assert.equal(matchIdentity(two, one).same, true, `${b} / ${a}`);
+    assert.equal(resolveCandidateIdentity([one, two], { now: NOW }).candidates.length, 1);
+  }
+});
+
+// Synthetic #711 review regressions: a retained conjunction must not erase
+// conflicting category words, single-letter initials, or single-character names.
+for (const [a, b, typeB] of [
+  ["Bar and Café", "Restaurant and Bakery", "restaurant"],
+  ["Bar and et Café", "Restaurant and et Bakery", "restaurant"],
+  ["X and Y", "J and K", "cafe"],
+  ["山 och 海", "空 och 雨", "cafe"],
+  ["Bar and Bar", "Café and Café", "cafe"],
+]) {
+  test(`a shared conjunction does not identify ${a} as ${b}`, () => {
+    const operatorUrl = "https://operator.fixture.example/b";
+    const one = curated({ label: a, type: "cafe", lat: 55.6, lng: 13,
+      evidence: [] });
+    const two = external({ label: b, type: typeB, lat: 55.6001, lng: 13,
+      provider_id: "fixture-operator", source_family: "official",
+      opening_hours: "Mo-Fr 10:00-18:00",
+      opening_hours_source: { url: `${operatorUrl}/hours`, observed_at: NOW },
+      evidence: [{ claim_type: "existence", value: true, observed_at: NOW,
+        source_ref: { provider_id: "fixture-operator", source_family: "official",
+          source_tier: "official", url: operatorUrl } }] });
+    const before = JSON.stringify([one, two]);
+    assert.equal(matchIdentity(one, two).same, false, "the conjunction is not sufficient identity");
+    assert.equal(matchIdentity(two, one).same, false, "the guard is symmetric");
+    for (const input of [[one, two], [two, one]]) {
+      const result = resolveCandidateIdentity(input, { now: NOW });
+      assert.equal(result.candidates.length, 2);
+      assert.equal(result.summary.merged_count, 0);
+      const retained = result.candidates.find(candidate => candidate.id === one.id);
+      const donor = result.candidates.find(candidate => candidate.id === two.id);
+      assert.equal(retained.opening_hours, undefined, "no foreign hours");
+      assert.equal(retained.opening_hours_source, undefined, "no foreign hours source");
+      assert.equal(retained.evidence.some(record => record.source_ref.url === operatorUrl), false,
+        "no foreign official corroboration");
+      assert.equal(donor.opening_hours, two.opening_hours, "keep the operator's own hours");
+    }
+    assert.equal(JSON.stringify([one, two]), before, "inputs are unchanged");
+  });
+}

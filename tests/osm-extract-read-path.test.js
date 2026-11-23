@@ -400,3 +400,41 @@ test('the data time comes from the file header; a stated time must agree, and is
   assert.deepEqual(resolveDataTimestamp({ headerTimestamp: null, statedTimestamp: '2026-11-14T21:20:00Z' }),
     { dataTimestamp: '2026-11-14T21:20:00.000Z', source: 'operator' });
 });
+
+// Hermes review of #705: the manifest's own counts were never checked, so a
+// manifest that lost its tile list read as a fresh store with nothing in it.
+test('a manifest whose tile list disagrees with its own counts is refused', () => {
+  for (const damage of [
+    manifest => { manifest.tiles = {}; },
+    manifest => { const [key] = Object.keys(manifest.tiles); delete manifest.tiles[key]; },
+    manifest => { manifest.element_count += 1; },
+    manifest => { delete manifest.tile_count; },
+  ]) {
+    const dir = makeStoreDir();
+    const file = path.join(dir, 'testland', 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+    damage(manifest);
+    fs.writeFileSync(file, JSON.stringify(manifest));
+    assert.equal(createOsmExtractStore({ dir, now: () => NOW }), null, String(damage));
+  }
+});
+
+// Hermes review of #705: the tiles to read were chosen with a shorter degree
+// than the distance check uses, so a place just inside the circle, just past
+// a tile edge, was never read.
+test('a place just inside the circle is found when it lies in the next tile', () => {
+  const tileDeg = 0.05;
+  const edge = 1201 * tileDeg; // a tile boundary at about 60.05 N
+  const anchor = { lat: edge - 0.008988, lng: 10.52 };
+  const element = { type: 'node', id: 4242, lat: edge + 0.000002, lon: anchor.lng,
+    tags: { name: 'Kanten', amenity: 'cafe' } };
+  const coverage = [{ outer: [[10, 59.5], [11, 59.5], [11, 60.5], [10, 60.5]], holes: [] }];
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'osm-extract-'));
+  writeExtractStore({ outDir: dir, region: 'edge', dataTimestamp: DATA_TIME, coverage, elements: [element], tileDeg });
+  const answer = createOsmExtractStore({ dir, now: () => NOW }).answer({
+    anchors: [anchor], radiusM: 1000, perCategory: 6,
+    groups: [{ selectors: [{ key: 'amenity', value: 'cafe' }], named: false }],
+  });
+  assert.ok(answer, 'the circle is covered');
+  assert.deepEqual(answer.payload.elements.map(e => e.id), [4242], 'the café about 1 m inside the edge is found');
+});

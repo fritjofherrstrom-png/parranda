@@ -117,6 +117,11 @@ function readManifest(regionDir) {
     if (!TILE_KEY.test(key) || !Number.isInteger(entry?.n) || entry.n < 1 || !SHA256.test(String(entry?.sha256))) return null;
     tiles.set(key, { n: entry.n, sha256: entry.sha256 });
   }
+  // The builder writes both totals beside the inventory. A list that disagrees
+  // with them was damaged, and would otherwise read as a fresh, empty region.
+  let listed = 0;
+  for (const { n } of tiles.values()) listed += n;
+  if (manifest.tile_count !== tiles.size || manifest.element_count !== listed) return null;
   return { region: manifest.region, dataMs, tileDeg: manifest.tile_deg, coverage: manifest.coverage, tiles, dir: regionDir };
 }
 
@@ -189,8 +194,12 @@ function createOsmExtractStore({ dir = null, now = () => Date.now(), maxAgeMs = 
 
     const near = new Map();
     for (const anchor of anchors) {
-      const dLat = radiusM / METRES_PER_DEGREE;
-      const dLng = radiusM / (METRES_PER_DEGREE * Math.max(0.01, Math.cos((anchor.lat * Math.PI) / 180)));
+      // The tiles to read must hold the whole circle as distanceM measures it:
+      // degrees on the same sphere, widened by the containment margin, and the
+      // longitude span taken at the edge nearest the pole, where it is widest.
+      const dLat = (radiusM * CONTAINMENT_MARGIN) / ((EARTH_RADIUS_M * Math.PI) / 180);
+      const poleward = Math.min(89, Math.abs(anchor.lat) + dLat);
+      const dLng = dLat / Math.max(0.01, Math.cos((poleward * Math.PI) / 180));
       const y0 = Math.floor((anchor.lat - dLat) / region.tileDeg);
       const y1 = Math.floor((anchor.lat + dLat) / region.tileDeg);
       const x0 = Math.floor((anchor.lng - dLng) / region.tileDeg);
