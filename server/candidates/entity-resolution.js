@@ -566,17 +566,25 @@ function nameTokens(value) {
 
 // Conjunctions. "&" is already dropped by normalizeName, so "X och Y" and
 // "X & Y" must not differ by a distinctive word. A conjunction is a connector
-// only between two other words: at the start or end ("ET Bar", "Kebab OG") or
-// alone it is the name itself and stays distinctive.
+// only when it joins two name words: a distinctive word somewhere before it
+// and somewhere after it ("Gösta Werner och Havet"). Otherwise it is the name
+// itself and stays distinctive, whatever generic words surround it: "OG Aurora
+// Café", "The OG Aurora Café" and "Café OG Aurora" all keep "og".
 const CONNECTOR_TOKENS = new Set(["and", "och", "og", "und", "et"]);
+
+function isNameWord(token) {
+  return !GENERIC_NAME_TOKENS.has(token) && (token.length > 1 || /^\d+$/.test(token));
+}
 
 function distinctiveTokens(value) {
   const normalized = normalizeName(value);
   const words = normalized ? normalized.split(" ") : [];
+  const content = words.map(token => isNameWord(token) && !CONNECTOR_TOKENS.has(token));
   const out = new Set();
   words.forEach((token, index) => {
-    if (CONNECTOR_TOKENS.has(token) && index > 0 && index < words.length - 1) return;
-    if (!GENERIC_NAME_TOKENS.has(token) && (token.length > 1 || /^\d+$/.test(token))) out.add(token);
+    if (CONNECTOR_TOKENS.has(token) &&
+        content.slice(0, index).includes(true) && content.slice(index + 1).includes(true)) return;
+    if (isNameWord(token)) out.add(token);
   });
   return out;
 }

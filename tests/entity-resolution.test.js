@@ -346,3 +346,33 @@ test("ET or OG that is the name itself stays a distinctive word", () => {
   assert.equal(matchIdentity({ ...osm, label: "Och" }, { ...overture, label: "Och" }).same, true,
     "a one-word name is the name, even when the word is a conjunction");
 });
+
+// Hermes review of #711: a generic word in front ("The", "Café") made "og" look
+// like a connector on one side only, so one place split in two, and "Café OG
+// Aurora" merged with a different "Café Aurora". A conjunction joins only two
+// name words; generic words around it do not count.
+test("initials ET/OG keep their identity behind generic words and in any order", () => {
+  const at = (id, label, over = {}) => external({ id, label, type: "cafe", evidence: [], ...over });
+  for (const initials of ["OG", "ET"]) {
+    for (const [a, b] of [
+      [`${initials} Aurora Café`, `The ${initials} Aurora Café`],
+      [`${initials} Aurora Café`, `Café ${initials} Aurora`],
+      [`The ${initials} Café`, `The ${initials} Café`],
+    ]) {
+      const one = at("osm-a", a);
+      const two = at("overture-b", b, { provider_id: "overture" });
+      assert.equal(matchIdentity(one, two).same, true, `${a} / ${b}: ${JSON.stringify(matchIdentity(one, two))}`);
+      assert.equal(resolveCandidateIdentity([one, two], { now: NOW }).candidates.length, 1, `${a} / ${b}: one stop`);
+    }
+    const initialsPlace = at("osm-a", `Café ${initials} Aurora`);
+    const other = at("overture-b", "Café Aurora", { provider_id: "overture" });
+    assert.equal(matchIdentity(initialsPlace, other).same, false, `Café ${initials} Aurora is not Café Aurora`);
+    assert.equal(resolveCandidateIdentity([initialsPlace, other], { now: NOW }).candidates.length, 2);
+  }
+  // Connectors between two name words still join, behind a generic word too.
+  for (const [a, b] of [["Café Gösta och Havet", "Café Gösta & Havet"], ["The Smith and Wollensky", "Smith & Wollensky"]]) {
+    assert.equal(matchIdentity(at("osm-a", a), at("overture-b", b)).same, true, `${a} / ${b}`);
+  }
+  // Initials never stand in for a category or a hard-id conflict.
+  assert.equal(matchIdentity(at("osm-a", "OG Aurora"), at("overture-b", "OG Aurora", { type: "museum" })).same, false);
+});
