@@ -329,6 +329,20 @@ test("a shared conjunction never joins two different places", () => {
   const a = external({ label: "Lund och Havet", type: "museum", evidence: [] });
   const b = external({ id: "osm-2", label: "Lund och Skogen", type: "museum", evidence: [] });
   assert.equal(matchIdentity(a, b).same, false);
-  assert.equal(matchIdentity({ ...a, label: "Och" }, { ...b, label: "Och" }).same, false,
-    "a name that is only a conjunction is generic and needs a hard id");
+});
+
+// Hermes review of #709: "et" and "og" were dropped wherever they stood, so a
+// name that begins or ends with them lost its distinctive word. A conjunction is
+// a connector only between two other words.
+test("ET or OG that is the name itself stays a distinctive word", () => {
+  const et = external({ label: "ET Sushi Lund", type: "restaurant", evidence: [] });
+  const og = external({ id: "osm-2", label: "OG Sushi Lund", type: "restaurant", evidence: [] });
+  assert.equal(matchIdentity(et, og).same, false, "two different restaurants are not joined");
+
+  const osm = external({ label: "Bar ET", type: "bar", evidence: [] });
+  const overture = external({ id: "overture-et", label: "ET Bar", type: "bar", evidence: [],
+    provider_id: "overture" });
+  assert.equal(matchIdentity(osm, overture).same, true, "one bar named ET is one place");
+  assert.equal(matchIdentity({ ...osm, label: "Och" }, { ...overture, label: "Och" }).same, true,
+    "a one-word name is the name, even when the word is a conjunction");
 });

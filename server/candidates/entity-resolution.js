@@ -49,10 +49,6 @@ const GENERIC_NAME_TOKENS = new Set([
   // articles / connectors
   "the", "a", "an", "la", "le", "il", "lo", "gli", "los", "las", "el", "der",
   "die", "das", "den", "det", "en", "ett", "of", "de", "di", "da", "del", "dei",
-  // Conjunctions. "&" is already dropped by normalizeName, so "X och Y" and
-  // "X & Y" must not differ by a distinctive word. A name made only of
-  // connectors stays generic and never merges on geo+name.
-  "and", "och", "og", "und", "et",
   // category nouns
   "bar", "pub", "cafe", "caffe", "kafe", "cafeteria", "restaurant", "ristorante",
   "trattoria", "osteria", "pizzeria", "pizza", "bakery", "forno", "museo",
@@ -568,12 +564,20 @@ function nameTokens(value) {
   return normalized ? new Set(normalized.split(" ")) : new Set();
 }
 
+// Conjunctions. "&" is already dropped by normalizeName, so "X och Y" and
+// "X & Y" must not differ by a distinctive word. A conjunction is a connector
+// only between two other words: at the start or end ("ET Bar", "Kebab OG") or
+// alone it is the name itself and stays distinctive.
+const CONNECTOR_TOKENS = new Set(["and", "och", "og", "und", "et"]);
+
 function distinctiveTokens(value) {
-  const tokens = nameTokens(value);
+  const normalized = normalizeName(value);
+  const words = normalized ? normalized.split(" ") : [];
   const out = new Set();
-  for (const token of tokens) {
+  words.forEach((token, index) => {
+    if (CONNECTOR_TOKENS.has(token) && index > 0 && index < words.length - 1) return;
     if (!GENERIC_NAME_TOKENS.has(token) && (token.length > 1 || /^\d+$/.test(token))) out.add(token);
-  }
+  });
   return out;
 }
 
