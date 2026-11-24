@@ -49,6 +49,16 @@ Measured for Slovenia on a laptop (17 Nov 2026): 314 MB extract, 13 s build, 2.3
 
 Measured for Sweden on the same laptop (22 Nov 2026): 1.0 GB extract (data time 2026-11-21T21:20:51Z), 46 s build with `--memory-limit 6GB`, 41,199 places in 7,956 tiles, 38 MB on disk. DuckDB spilled about 1.5 GB of temporary files beside the output during the build, so plan for the extract plus about 1.5 times its size free while building. The extract and the temporary files can be deleted afterwards; the server reads only the store.
 
+## Refresh every region before it ages out
+A store older than 30 days is not used, and the day falls back to Overpass. Rebuild all regions well inside that window:
+```bash
+node scripts/refresh-osm-extracts.js --out /path/to/osm-extracts --work /path/to/downloads
+```
+- `REGIONS` in the script lists the held regions: Sweden, Denmark, Norway, the Netherlands, the United Kingdom, Portugal, Spain, Italy, Slovenia, and the Geofabrik sub-regions Île-de-France, Rhône-Alpes and Berlin. `--regions a,b` rebuilds only those.
+- It works one region at a time: download the Geofabrik extract and boundary file, check the extract against Geofabrik's MD5, build, delete the extract, then check the new store (totals agree with the tile inventory, every listed tile is on disk with its hash). It prints one JSON line per region and exits non-zero if any region was not rebuilt.
+- Disk: a region is skipped unless free space covers the extract, 1.5 times its size for DuckDB's temporary files, and the floor (`--min-free-gb`, default 2.5). A running build is stopped when free space falls below the floor. A failed or stopped build leaves the old store in place.
+- Run it on a machine with room, then copy the finished region directories to the server and restart it. The server itself only reads.
+
 ## Differences from an Overpass answer
 - **Age.** The data is as old as the extract. Geofabrik rebuilds extracts once a day.
 - **Unnamed elements.** Overpass counts them toward a group's size before the mapper drops them. The store holds named places only, so a group can carry more usable places.
@@ -57,9 +67,9 @@ Measured for Sweden on the same laptop (22 Nov 2026): 1.0 GB extract (data time 
 
 ## Not done
 - **Showing the label.** The label is in the response and the shared day, not in the interface.
-- **Fetching and refreshing extracts.** Which regions to hold, when to fetch them and the disk budget are operator decisions. Nothing in the server downloads an extract.
+- **Scheduled refresh.** `scripts/refresh-osm-extracts.js` rebuilds the stores, but nothing runs it on a timer. Nothing in the server downloads an extract.
 - **Hot refresh.** A rebuild needs a restart; see the operating contract.
-- **Large countries.** France and Germany are almost 5 GB each. The build is tested up to 1.0 GB (Sweden); sub-regions are the expected unit above that.
+- **Large countries.** France and Germany are almost 5 GB each. They are held as Geofabrik sub-regions (Île-de-France, Rhône-Alpes, Berlin).
 
 ## Attribution
 © OpenStreetMap contributors, ODbL 1.0. The records keep their `openstreetmap.org` source URLs, as with Overpass.
