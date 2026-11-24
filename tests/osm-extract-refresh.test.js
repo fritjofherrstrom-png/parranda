@@ -113,9 +113,9 @@ test('refreshRegion builds, deletes the extract and checks the new store', async
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'osm-refresh-work-'));
   const { fetchImpl } = fakeGeofabrik();
   let seen = null;
-  const build = async ({ pbf, poly, region }) => {
+  const build = async ({ pbf, poly, region, out: buildOut }) => {
     seen = { pbf: fs.readFileSync(pbf, 'utf8'), poly: fs.existsSync(poly) };
-    writeExtractStore({ outDir: out, region, dataTimestamp: '2026-11-23T21:00:00Z', coverage: COVERAGE, elements: elements() });
+    writeExtractStore({ outDir: buildOut, region, dataTimestamp: '2026-11-23T21:00:00Z', coverage: COVERAGE, elements: elements() });
     return { seconds: 1, lowest_free_gb: 5 };
   };
   const result = await refreshRegion({ region: 'testland', geofabrik: 'europe/testland' }, { out, work, minFree: 0, fetchImpl, build });
@@ -152,9 +152,9 @@ test('a failed build keeps the old store and clears what the build left', async 
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'osm-refresh-work-'));
   const before = fs.readFileSync(path.join(regionDir, 'manifest.json'), 'utf8');
   const { fetchImpl } = fakeGeofabrik();
-  const build = async () => {
-    fs.mkdirSync(path.join(out, '.build-tmp'));
-    fs.mkdirSync(path.join(out, '.testland.building-1-2'));
+  const build = async ({ out: buildOut }) => {
+    fs.mkdirSync(path.join(buildOut, '.build-tmp'));
+    fs.mkdirSync(path.join(buildOut, '.testland.building-1-2'));
     throw new Error('build stopped: free space fell to 2.40 GB');
   };
   const result = await refreshRegion({ region: 'testland', geofabrik: 'europe/testland' }, { out, work, minFree: 0, fetchImpl, build });
@@ -164,4 +164,25 @@ test('a failed build keeps the old store and clears what the build left', async 
   assert.deepEqual(fs.readdirSync(out), ['testland']);
   removeBuildLeftovers(out, 'testland');
   assert.deepEqual(fs.readdirSync(out), ['testland']);
+});
+
+test('a builder interrupted after retiring its previous output cannot erase the held store', async () => {
+  const { out, regionDir } = makeStore();
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'osm-refresh-interrupted-'));
+  const before = fs.readFileSync(path.join(regionDir, 'manifest.json'), 'utf8');
+  const { fetchImpl } = fakeGeofabrik();
+  const build = async ({ out: buildOut, region }) => {
+    const previous = path.join(buildOut, region);
+    if (fs.existsSync(previous)) {
+      fs.renameSync(previous, path.join(buildOut, `.${region}.retired-123-456`));
+    }
+    throw new Error('builder killed between retiring and publishing');
+  };
+  const result = await refreshRegion({ region: 'testland', geofabrik: 'europe/testland' },
+    { out, work, minFree: 0, fetchImpl, build });
+  assert.equal(result.status, 'failed');
+  assert.equal(fs.existsSync(path.join(regionDir, 'manifest.json')), true,
+    'interrupted builder must not erase the previously held store');
+  assert.equal(fs.readFileSync(path.join(regionDir, 'manifest.json'), 'utf8'), before);
+  assert.equal(verifyStore(regionDir).ok, true);
 });

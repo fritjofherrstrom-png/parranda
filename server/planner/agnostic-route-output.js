@@ -1405,6 +1405,9 @@ async function composeAgnosticRouteOutputCore({
       walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
       walkingFitSelection: synthesizeVia === "engine",
       experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
+      // Private caller-owned scope: registered-city fill shares admission but
+      // must keep its established reservoir selection, not this type policy.
+      agnosticTypeOptions: true,
       mealContext: preferencePriority?.[0] === 'food' && ctx?.timezoneKnown && ctx.timeAppliesToRequestedDate
         ? { date: effectiveDate, nowLocalIso: ctx.now, fullDay: dayRhythm === 'full' } : null,
     };
@@ -1952,6 +1955,8 @@ async function composeAgnosticRouteViaEngine({
       mealContext: contextBlock?.time?.timezone_known === true && contextBlock.time.requested_date_is_today === true
         ? { date: effectiveDate, nowLocalIso: contextBlock.time.now, fullDay: dayRhythm === 'full' } : null,
       mealSpacing,
+      // Same condition as the public projection in sanitizeAgnosticEngineRoute.
+      orderOnStopChain: normalizeAnchorMode(anchorMode) === "place",
     });
     const engineResult = await generateAgnosticRecommendations({
       cityConfig: engineCityConfig,

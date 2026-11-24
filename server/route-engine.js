@@ -4342,7 +4342,25 @@ function betterStopOrder(geometry, bestGeometry, preferNearbyStart) {
     geometry.firstGap < bestGeometry.firstGap;
 }
 
+// A typed place's centre is a search point, not a user start or end: the
+// published day is the selected stop chain alone (route-public-geometry.js).
+// Its order is judged on that chain — walking km plus the same leg-pacing
+// penalty an arc gets — and never on legs to and from the hidden centre. The
+// chain reads the same both ways, so an exact tie walks from the end nearer
+// the centre. Rounded so a reversed sum cannot break that tie by a few ulps.
+function stopChainOrderScore(orderedStops, start, legPacing, lang) {
+  const legs = buildRouteLegs(orderedStops);
+  const objective = walkingKm(orderedStops) + buildLegMetrics(legs, legPacing, { shape: "arc", lang }).penalty;
+  return {
+    objective: Math.round(objective * 1e6) / 1e6,
+    firstGap: orderedStops[0] ? haversineKm(start, orderedStops[0]) : 0,
+  };
+}
+
 function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing = "balanced", lang = "sv", orderOptions = null) {
+  if (orderOptions?.orderOnStopChain === true && selectedStops.length > 1) {
+    return optimizeStopChainOrder(selectedStops, shape, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing, lang);
+  }
   const preferNearbyStart = shape === "loop" && orderOptions?.preferNearbyStart === true;
   if (selectedStops.length <= 1) {
     const summary =
@@ -4403,6 +4421,31 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
     orderedStops: bestOrder,
     geometry: bestGeometry,
   };
+}
+
+// Same search as optimizeStopOrder, scored on the published stop chain. The
+// geometry handed back is still the engine's own summary of the chosen order,
+// so every later pass (daypart arc, bridges, capacity repair) reads the shape
+// it always has.
+function optimizeStopChainOrder(selectedStops, shape, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing, lang) {
+  const scoreFor = (candidate) => stopChainOrderScore(candidate, start, legPacing, lang);
+  let bestOrder = selectedStops;
+  if (selectedStops.length > MAX_EXHAUSTIVE_STOP_ORDER) {
+    bestOrder = refineStopOrder(selectedStops, start, scoreFor, true).orderedStops;
+  } else {
+    let bestScore = null;
+    permuteStops(selectedStops).forEach((candidate) => {
+      const score = scoreFor(candidate);
+      if (betterStopOrder(score, bestScore, true)) {
+        bestScore = score;
+        bestOrder = candidate;
+      }
+    });
+  }
+  const geometry = shape === "loop"
+    ? summarizeLoopGeometry(bestOrder, start, end, startProfile, targetKm, distanceMode, legPacing, lang)
+    : summarizeArcGeometry(bestOrder, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing, lang);
+  return { orderedStops: bestOrder, geometry };
 }
 
 // Deterministic ordering for stop sets too large to enumerate: nearest-neighbour
@@ -5532,7 +5575,11 @@ function buildRouteFromTemplate(
     distanceMode,
     legPacing,
     lang,
-    { preferNearbyStart: template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID && !dayEdit },
+    {
+      preferNearbyStart: template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID && !dayEdit,
+      orderOnStopChain: template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID &&
+        getActiveCityConfig().__orderOnStopChain === true,
+    },
   );
 
   // Agnostic_compose daypart post-pass (gated). Reorder the geometry-optimal

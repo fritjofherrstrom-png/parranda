@@ -18,8 +18,9 @@
 // --min-free-gb free, and a running build is stopped when free space falls
 // below it. The extract is deleted whether the build succeeded or not.
 //
-// The old store for a region stays in place until its new build is complete
-// (the builder swaps it in with one rename). Restart the server afterwards.
+// The builder writes only into an attempt-owned staging directory. The old
+// region is replaced only after validation. Use an offline output generation,
+// never a directory currently served by the application, then install/restart.
 //
 // The default region list is the one the QA sweep uses. France and Germany are
 // listed as Geofabrik sub-regions; the whole countries are about 5 GB each.
@@ -195,7 +196,9 @@ function runBuild({ pbf, poly, region, out, memoryLimit, minFree, watchDir }) {
 function removeBuildLeftovers(out, region) {
   fs.rmSync(path.join(out, ".build-tmp"), { recursive: true, force: true });
   for (const name of fs.existsSync(out) ? fs.readdirSync(out) : []) {
-    if (name.startsWith(`.${region}.building-`) || name.startsWith(`.${region}.retired-`)) {
+    // A retired directory may be the only remaining complete generation.
+    // Never delete it as an unqualified build leftover.
+    if (name.startsWith(`.${region}.building-`)) {
       fs.rmSync(path.join(out, name), { recursive: true, force: true });
     }
   }
@@ -212,8 +215,8 @@ async function refreshRegion(entry, {
     return { region: entry.region, status: "skipped_disk", pbf_gb: +(pbfBytes / GB).toFixed(2),
       needed_gb: +(plan.needed / GB).toFixed(2), free_gb: +(plan.free / GB).toFixed(2) };
   }
-  const regionWork = path.join(work, entry.region);
-  fs.mkdirSync(regionWork, { recursive: true });
+  const regionWork = fs.mkdtempSync(path.join(work, `.${entry.region}.download-`));
+  const buildOut = fs.mkdtempSync(path.join(out, `.${entry.region}.refresh-`));
   const pbf = path.join(regionWork, `${entry.region}.osm.pbf`);
   const poly = path.join(regionWork, `${entry.region}.poly`);
   const started = Date.now();
@@ -225,9 +228,33 @@ async function refreshRegion(entry, {
     if (md5 !== expectedMd5) throw new Error(`MD5 ${md5} does not match Geofabrik's ${expectedMd5}`);
     const downloadSeconds = (Date.now() - started) / 1000;
     log(`${entry.region}: building`);
-    const built = await build({ pbf, poly, region: entry.region, out, memoryLimit, minFree, watchDir: out });
+    const built = await build({ pbf, poly, region: entry.region, out: buildOut, memoryLimit, minFree, watchDir: out });
     fs.rmSync(regionWork, { recursive: true, force: true });
-    const check = verifyStore(path.join(out, entry.region), { region: entry.region });
+    const stagedRegion = path.join(buildOut, entry.region);
+    const check = verifyStore(stagedRegion, { region: entry.region });
+    if (check.ok) {
+      const regionDir = path.join(out, entry.region);
+      // Keep the previous generation outside the disposable build directory:
+      // even a failed recovery must not lose it in the finally cleanup.
+      const previous = `${buildOut}.previous`;
+      const hadPrevious = fs.existsSync(regionDir);
+      if (hadPrevious) fs.renameSync(regionDir, previous);
+      try {
+        fs.renameSync(stagedRegion, regionDir);
+      } catch (error) {
+        if (hadPrevious) {
+          try { fs.renameSync(previous, regionDir); }
+          catch (recovery) {
+            throw new Error(`${error.message}; previous store retained at ${previous}: ${recovery.message}`);
+          }
+        }
+        throw error;
+      }
+      if (hadPrevious) {
+        try { fs.rmSync(previous, { recursive: true, force: true }); }
+        catch (error) { check.cleanup_warning = `previous store retained at ${previous}: ${error.message}`; }
+      }
+    }
     return {
       region: entry.region,
       status: check.ok ? "ok" : "store_invalid",
@@ -238,10 +265,10 @@ async function refreshRegion(entry, {
       ...check,
     };
   } catch (error) {
-    removeBuildLeftovers(out, entry.region);
     return { region: entry.region, status: "failed", error: String(error?.message || error) };
   } finally {
     fs.rmSync(regionWork, { recursive: true, force: true });
+    fs.rmSync(buildOut, { recursive: true, force: true });
   }
 }
 
@@ -263,7 +290,9 @@ async function main() {
   }
   const out = path.resolve(args.out);
   const work = path.resolve(args.work || path.join(out, "..", "osm-extract-downloads"));
-  const minFree = (Number(args["min-free-gb"]) || DEFAULT_MIN_FREE_BYTES / GB) * GB;
+  const minFreeGb = args["min-free-gb"] === undefined ? DEFAULT_MIN_FREE_BYTES / GB : Number(args["min-free-gb"]);
+  if (!Number.isFinite(minFreeGb) || minFreeGb < 0) throw new Error("--min-free-gb must be a finite non-negative number");
+  const minFree = minFreeGb * GB;
   const regions = selectRegions(args.regions);
   fs.mkdirSync(out, { recursive: true });
   fs.mkdirSync(work, { recursive: true });
