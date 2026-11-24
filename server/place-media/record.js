@@ -35,8 +35,8 @@ function isCommonsFilePageUrl(value) {
     /^https:\/\/commons\.wikimedia\.org\/wiki\/File:[^/?#\s]+$/.test(value);
 }
 function isAuthor(value) {
-  // Commons' "No machine-readable author provided" placeholder is never a credit.
-  return cleanText(value, 200) && !/^(?:https?|www\.|\/\/)/i.test(value) && !/^No machine-readable author provided\b/i.test(value);
+  // Commons' "No machine-readable author|source provided" placeholders are never a credit.
+  return cleanText(value, 200) && !/^(?:https?|www\.|\/\/)/i.test(value) && !/^No machine-readable (?:author|source) provided\b/i.test(value);
 }
 function isUrlFree(text) {
   return !/(?:https?:\/\/|www\.|\/\/[a-z0-9])/i.test(text);

@@ -130,8 +130,13 @@ test("Commons' no-author placeholder is not a credit; talk-page signatures keep 
     const page = withMeta(commonsPage('File:Exterior Medicinhistoriska museet Göteborg.jpg'), { Artist: artist });
     assert.equal(gateCommonsPage(page, { via: 'p18' }).author, name, artist);
   }
-  // A record (or a shared day) carrying the placeholder as an author is refused too.
+  // The same placeholder for the source lands in Credit; it is no author either.
+  const sourcePlaceholder = 'No machine-readable source provided. Own work assumed (based on copyright claims).';
+  const credit = withMeta(commonsPage('File:Exterior Medicinhistoriska museet Göteborg.jpg'), { Artist: undefined, Credit: sourcePlaceholder });
+  assert.deepEqual(gateCommonsPage(credit, { via: 'p18' }), { rejected: 'author' });
+  // A record (or a shared day) carrying a placeholder as an author is refused too.
   assert.equal(isAuthor(placeholder), false);
+  assert.equal(isAuthor(sourcePlaceholder), false);
 });
 
 test('Credit is the last fallback for the author', () => {

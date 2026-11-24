@@ -38,7 +38,7 @@ function isoDate(value) {
 const isQid = value => typeof value === 'string' && QID.test(value);
 const isMediaId = value => typeof value === 'string' && SHA1.test(value);
 const isAuthor = value => cleanText(value, 200) && !/^(?:https?|www\.|\/\/|javascript:)/i.test(value) &&
-  !/^No machine-readable author provided\b/i.test(value);
+  !/^No machine-readable (?:author|source) provided\b/i.test(value);
 const isCommonsFilePageUrl = value => typeof value === 'string' && value.length <= 2048 && COMMONS_FILE_PAGE.test(value);
 const isExcerptText = value => cleanText(value, 320) && value.length >= 40 && urlFree(value) && /[.!?…]["'”’»)]?$/.test(value);
 const isSubtitleText = value => cleanText(value, 80) && urlFree(value);
