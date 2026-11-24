@@ -19,6 +19,12 @@ const VIAS = new Set(['p18', 'p5775', 'osm_commons', 'page_image']);
 // place, whatever their licence. Matched as whole words in the file title, in
 // the languages Parranda's regions name files in.
 const NOT_A_PHOTO = /(?:^|[^\p{L}\p{N}])(?:map|maps|mapa|karta|kartta|kort|carte|karte|stadtplan|plan|plano|planta|pianta|grundriss|floor ?plan|site ?plan|logo|logotyp|logotype|logotipo|flag|flagga|flagge|bandera|drapeau|bandiera|coat of arms|arms|vapen|vapensköld|wappen|escudo|blason|stemma|emblem|emblema|seal|diagram|diagramm|schema|scheme|locator|location)(?=$|[^\p{L}\p{N}])/iu;
+const NO_MACHINE_READABLE_AUTHOR = /^No machine-readable author provided\b/i;
+const SIGNATURE_STAMP = /\s*(?:--\s*)?\d{1,2}:\d{2},\s+\d{1,2}\s+[A-Za-z]+\s+\d{4}\s+\(UTC\)\s*$/;
+const SIGNATURE_TALK = /\s*\((?:talk|diskussion)\)\s*$/i;
+function withoutSignature(text) {
+  return text.replace(SIGNATURE_STAMP, '').replace(SIGNATURE_TALK, '').trim();
+}
 const OWN_WORK = /^(?:own work|self-photographed|eget arbete|egen bild|travail personnel|trabajo propio|eigenes werk|opera propria|treball propi)\.?$/i;
 
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'" };
@@ -120,7 +126,15 @@ function gateCommonsPage(page, { via } = {}) {
     if (!text) continue;
     // "Own work" is a source note, not a name; it never credits anyone.
     if (OWN_WORK.test(text)) continue;
-    author = text;
+    // Commons' own placeholder when a file names no author ("No machine-readable
+    // author provided. X assumed (based on copyright claims).") is a guess, not a
+    // credit: treated as no author (stricter than crediting the guessed uploader).
+    if (NO_MACHINE_READABLE_AUTHOR.test(text)) continue;
+    // Old talk-page signatures leave "Name 15:22, 28 March 2007 (UTC)" or
+    // "Name (talk)" in Artist; the credit is the name.
+    const name = withoutSignature(text);
+    if (!name) continue;
+    author = name;
     break;
   }
   if (author !== null && !validAuthor(author)) return { rejected: 'author' };

@@ -6,6 +6,7 @@ const {
   normalizeCommonsLicense, isMediaLicenseUrl, isMediaLicenseId, mediaLicenseLabel, MEDIA_LICENSE_IDS,
 } = require('../shared/media-licenses.mjs');
 const { commonsPage } = require('./helpers/place-media-fixtures');
+const { isAuthor } = require('../server/place-media/record');
 
 function withMeta(page, changes) {
   const ii = page.imageinfo[0];
@@ -112,6 +113,25 @@ test('Attribution wins over Artist; "I, <user>" credits the user', () => {
   const hafreborg = gateCommonsPage(commonsPage('File:Hafreborg, Simrishamn.jpg'), { via: 'osm_commons' });
   assert.equal(hafreborg.author, 'Jorchr');
   assert.equal(hafreborg.license_url, 'https://creativecommons.org/licenses/by-sa/3.0/', 'http upgraded to https');
+});
+
+test("Commons' no-author placeholder is not a credit; talk-page signatures keep only the name", () => {
+  // Real Artist values seen in the Sweden index build (2026-11-24).
+  const placeholder = 'No machine-readable author provided. Kalle1~commonswiki assumed (based on copyright claims).';
+  const ccBy = withMeta(commonsPage('File:Exterior Medicinhistoriska museet Göteborg.jpg'), { Artist: placeholder, Credit: undefined });
+  assert.deepEqual(gateCommonsPage(ccBy, { via: 'p18' }), { rejected: 'author' }, 'CC BY needs a real author');
+  const pd = withMeta(commonsPage('File:Ørstedsparken sommer 1.jpg'), { Artist: placeholder, Credit: undefined, Attribution: undefined });
+  assert.equal(gateCommonsPage(pd, { via: 'p18' }).author, null, 'PD keeps the photo without the guessed author');
+  for (const [artist, name] of [
+    ['<a href="//commons.wikimedia.org/wiki/User:Mats_Halldin">Mats Halldin</a> 15:22, 28 March 2007 (UTC)', 'Mats Halldin'],
+    ['Kristian Peters -- Fabelfroh 10:24, 12 January 2007 (UTC)', 'Kristian Peters -- Fabelfroh'],
+    ['Walter Siegmund (talk)', 'Walter Siegmund'],
+  ]) {
+    const page = withMeta(commonsPage('File:Exterior Medicinhistoriska museet Göteborg.jpg'), { Artist: artist });
+    assert.equal(gateCommonsPage(page, { via: 'p18' }).author, name, artist);
+  }
+  // A record (or a shared day) carrying the placeholder as an author is refused too.
+  assert.equal(isAuthor(placeholder), false);
 });
 
 test('Credit is the last fallback for the author', () => {
