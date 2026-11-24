@@ -214,7 +214,9 @@ test('cold original acquisition publishes once and status replays original inten
   const final = await request(h.server, { pathname: '/api/planner-status?include_day_snapshot=0',
     body: { token, preferences: ['food'], dates: ['2030-01-01'], pinned_candidate_ids: ['forged'], day_snapshot: { ref: 'f'.repeat(48) } } });
   assert.equal(final.status, 200);
-  accepted(final.body, [...IDS.slice(0, 4), 'orto-botanico', IDS[4]]);
+  // Typed-place days are ordered for the visible chain (#712): Navona before
+  // Orto botanico walks 5.4 km on the fixture's catalogue points, against 5.9 km.
+  accepted(final.body, [...IDS, 'orto-botanico']);
   assert.equal(final.body.day_snapshot?.state, 'ready', 'original cold operation must publish its accepted final day');
   await persisted.promise;
   const intent = { ...INTENT, preferencePriority: ['culture'], excludedCandidateIds: ['not-a-stop'], pinnedCandidateIds: ['mercato-monti'] };
