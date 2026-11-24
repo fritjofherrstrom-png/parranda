@@ -25,7 +25,9 @@ const ROUTE = '/api/route-recommendations?lang=en&experimental_agnostic_route_ou
 const BODY = { place: 'Roma', dates: [DATE], preferences: ['culture'], day_rhythm: 'balanced', include_external_candidates: 1 };
 const INTENT = { dateIso: DATE, preferences: ['culture'], preferencePriority: [], dayRhythm: 'balanced',
   excludedCandidateIds: [], pinnedCandidateIds: [], liveEventChoices: [], dayEdit: null };
-const IDS = ['mercato-monti', 'piazza-vittorio', 'colosseum', 'teatro-di-marcello', 'piazza-navona'];
+// A typed place orders its stops for the walked chain: 3.35 km, against
+// 3.74 km for the earlier order planned as a loop through the hidden centre.
+const IDS = ['piazza-vittorio', 'mercato-monti', 'colosseum', 'teatro-di-marcello', 'piazza-navona'];
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const turn = () => new Promise(resolve => setImmediate(resolve));
 function request(server, { method = 'POST', pathname = ROUTE, body = BODY, headers = {}, rawBody } = {}) {
