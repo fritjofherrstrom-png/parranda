@@ -1952,6 +1952,8 @@ async function composeAgnosticRouteViaEngine({
       mealContext: contextBlock?.time?.timezone_known === true && contextBlock.time.requested_date_is_today === true
         ? { date: effectiveDate, nowLocalIso: contextBlock.time.now, fullDay: dayRhythm === 'full' } : null,
       mealSpacing,
+      // Same condition as the public projection in sanitizeAgnosticEngineRoute.
+      orderOnStopChain: normalizeAnchorMode(anchorMode) === "place",
     });
     const engineResult = await generateAgnosticRecommendations({
       cityConfig: engineCityConfig,
