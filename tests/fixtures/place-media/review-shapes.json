@@ -1,0 +1,210 @@
+{
+ "_source": "Real API responses captured 2026-11-24 during the place-media review: sv.wikipedia action=query&prop=extracts|pageprops|revisions (exintro, explaintext; text CC BY-SA 4.0, sv.wikipedia.org contributors) and commons.wikimedia.org prop=imageinfo with extmetadata. Used for the hatnote, unknown-author and footnote-credit regressions.",
+ "svwiki_extracts": {
+  "batchcomplete": true,
+  "query": {
+   "pages": [
+    {
+     "pageid": 2758,
+     "ns": 0,
+     "title": "Rosendals slott",
+     "extract": "För slottet i Helsingborg, se Rosendals slott, Helsingborg.\n\nRosendals slott är en slottsbyggnad på Djurgården i Stockholm som ursprungligen fungerade som kung Karl XIV Johans lustslott. Huset uppfördes 1823–1826 efter ritningar av arkitekt Fredrik Blom. Rosendal är det enda slott som Karl XIV Johan lät bygga för egen räkning och utgör ett vackert exempel på den strama svenska empiren som även kallas Karl Johanstilen. Rosendal var på Karl XIV Johans tid inte avsett som bostad för den kungliga familjen utan nyttjades uteslutande för representation ofta i samband med militära tillställningar vid Kungliga borgen på Ladugårdsgärdet.\nSlottsbyggnaden ställdes 1911 under Kungliga Djurgårdsförvaltningens inseende. Rosendals slott är ett museum sedan 1913 och statligt byggnadsminne sedan 1935. Utöver slottet är flera byggnader på slottsområdet blåmärkta av Stadsmuseet i Stockholm, bland dem Drottningens paviljong, Vaktstugan, Rosendals iskällare och Rosendals stall. Blåmärkning är den högsta klassen och innebär \"att bebyggelsen bedöms ha synnerligen höga kulturhistoriska värden\".\n\n",
+     "pageprops": {
+      "wikibase_item": "Q59482"
+     },
+     "revisions": [
+      {
+       "revid": 59142872,
+       "parentid": 57457430
+      }
+     ]
+    },
+    {
+     "pageid": 151947,
+     "ns": 0,
+     "title": "Sjöhistoriska museet",
+     "extract": "För andra sjöfartsmuseer, se Sjöfartsmuseet.\n\nStatens Sjöhistoriska museum är ett svenskt statligt sjöfartsmuseum, som ligger i Museiparken vid Djurgårdsbrunnsvägen på Ladugårdsgärdet i Stockholm. Museet behandlar sjöfartens och örlogsflottans historia och invigdes den 28 maj 1938.\nSjöhistoriska museet uppfördes efter ritningar av arkitekt Ragnar Östberg och är ett av hans sista betydande verk. Det är beläget inom Kungliga nationalstadsparken.\nSedan 1 januari 2026 ingår museet i myndigheten Statens museer för maritim-, transport- och försvarshistoria.",
+     "pageprops": {
+      "wikibase_item": "Q1647895"
+     },
+     "revisions": [
+      {
+       "revid": 59850636,
+       "parentid": 59740267
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "commons_imageinfo": {
+  "batchcomplete": true,
+  "query": {
+   "pages": [
+    {
+     "pageid": 3017396,
+     "ns": 6,
+     "title": "File:Astridmuseum.jpg",
+     "imagerepository": "local",
+     "imageinfo": [
+      {
+       "size": 228092,
+       "width": 800,
+       "height": 600,
+       "url": "https://upload.wikimedia.org/wikipedia/commons/c/c8/Astridmuseum.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+       "descriptionurl": "https://commons.wikimedia.org/wiki/File:Astridmuseum.jpg",
+       "descriptionshorturl": "https://commons.wikimedia.org/wiki/Special:Redirect/page/3017396",
+       "sha1": "34d6d5979959dce96cc64b5e1292849b554c2dbf",
+       "extmetadata": {
+        "Credit": {
+         "value": "<a class=\"external autonumber\" data-mw-original-href=\"http://en.wikipedia.org/wiki/Image:Astridmuseum.jpg\" href=\"https://en.wikipedia.org/wiki/Image:Astridmuseum.jpg\">[1]</a>",
+         "source": "commons-desc-page"
+        },
+        "LicenseShortName": {
+         "value": "Public domain",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "AttributionRequired": {
+         "value": "false",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Copyrighted": {
+         "value": "False",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Restrictions": {
+         "value": "",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "License": {
+         "value": "pd",
+         "source": "commons-templates",
+         "hidden": ""
+        }
+       },
+       "mime": "image/jpeg"
+      }
+     ]
+    },
+    {
+     "pageid": 33253497,
+     "ns": 6,
+     "title": "File:Sundbyholms slott.jpg",
+     "imagerepository": "local",
+     "imageinfo": [
+      {
+       "size": 728890,
+       "width": 1738,
+       "height": 1259,
+       "url": "https://upload.wikimedia.org/wikipedia/commons/7/72/Sundbyholms_slott.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+       "descriptionurl": "https://commons.wikimedia.org/wiki/File:Sundbyholms_slott.jpg",
+       "descriptionshorturl": "https://commons.wikimedia.org/wiki/Special:Redirect/page/33253497",
+       "sha1": "239f8853765bd65d20f9c345bbd648ba1886993a",
+       "extmetadata": {
+        "Credit": {
+         "value": "<a rel=\"nofollow\" class=\"external free\" href=\"http://www.mynewsdesk.com/se/eskilstuna_nu/images/sundbyholms-slott-237388\">http://www.mynewsdesk.com/se/eskilstuna_nu/images/sundbyholms-slott-237388</a>",
+         "source": "commons-desc-page"
+        },
+        "Artist": {
+         "value": "Unknown author<span style=\"display: none;\">Unknown author</span>",
+         "source": "commons-desc-page"
+        },
+        "LicenseShortName": {
+         "value": "CC BY 3.0",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "AttributionRequired": {
+         "value": "true",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "LicenseUrl": {
+         "value": "https://creativecommons.org/licenses/by/3.0",
+         "source": "commons-desc-page"
+        },
+        "Copyrighted": {
+         "value": "True",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Restrictions": {
+         "value": "",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "License": {
+         "value": "cc-by-3.0",
+         "source": "commons-templates",
+         "hidden": ""
+        }
+       },
+       "mime": "image/jpeg"
+      }
+     ]
+    },
+    {
+     "pageid": 63213322,
+     "ns": 6,
+     "title": "File:Hässelby strandbad 1913.jpg",
+     "imagerepository": "local",
+     "imageinfo": [
+      {
+       "size": 362281,
+       "width": 1204,
+       "height": 832,
+       "url": "https://upload.wikimedia.org/wikipedia/commons/1/11/H%C3%A4sselby_strandbad_1913.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+       "descriptionurl": "https://commons.wikimedia.org/wiki/File:H%C3%A4sselby_strandbad_1913.jpg",
+       "descriptionshorturl": "https://commons.wikimedia.org/wiki/Special:Redirect/page/63213322",
+       "sha1": "47ad20a95e43b16e93f856aa4627333815770cb8",
+       "extmetadata": {
+        "Credit": {
+         "value": "<a rel=\"nofollow\" class=\"external free\" href=\"https://stockholmskallan.stockholm.se/post/6457\">https://stockholmskallan.stockholm.se/post/6457</a>",
+         "source": "commons-desc-page"
+        },
+        "Artist": {
+         "value": "Fotograf okänd, 1913, (Fotonummer F 49340) Stockholms stadsmuseum",
+         "source": "commons-desc-page"
+        },
+        "LicenseShortName": {
+         "value": "CC BY 4.0",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "AttributionRequired": {
+         "value": "true",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "LicenseUrl": {
+         "value": "https://creativecommons.org/licenses/by/4.0",
+         "source": "commons-desc-page"
+        },
+        "Copyrighted": {
+         "value": "True",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Restrictions": {
+         "value": "",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "License": {
+         "value": "cc-by-4.0",
+         "source": "commons-templates",
+         "hidden": ""
+        }
+       },
+       "mime": "image/jpeg"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

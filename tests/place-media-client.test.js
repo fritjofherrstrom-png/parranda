@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const {
   createWikimediaClient, cutExcerpt, parseExtractPage, parseEntity, USER_AGENT,
 } = require('../server/place-media/wikimedia-client');
-const { normalizeMediaRecord } = require('../server/place-media/record');
+const { normalizeMediaRecord, isExcerptText } = require('../server/place-media/record');
 const {
   samples, clone, createFixtureFetcher, extractPage, jsonResponse,
 } = require('./helpers/place-media-fixtures');
@@ -193,7 +193,7 @@ test('a redirected or missing entity becomes a definitive record without facts',
   assert.equal(parseEntity('Q5555', moved), null, 'entity id must equal the QID asked for');
 });
 
-test('photo order: P18 first, then P5775 only for venue entities, then OSM commons, then the page image', async () => {
+test('photo order: P18 first, then P5775 only for venue entities, then OSM commons; never the Wikipedia page image', async () => {
   const base = clone(samples.wbgetentities.entities.Q1331646);
   // P18 points at a refused file (600 px), P5775 at a good one.
   base.claims.P18[0].mainsnak.datavalue.value = 'Skiss Biologiska stor.jpg';
@@ -218,8 +218,8 @@ test('photo order: P18 first, then P5775 only for venue entities, then OSM commo
     extracts: { 'sv|Medelhavsmuseet': { ...extractPage('sv', 'Medelhavsmuseet'), pageprops: { wikibase_item: 'Q1331646', page_image_free: 'GUSTAVIANUM_1.jpg' } } },
   });
   const pageRecord = (await createWikimediaClient({ fetcher: page.fetcher }).fetchRecords(['Q1331646'])).get('Q1331646');
-  assert.equal(pageRecord.photo.via, 'page_image');
-  assert.equal(pageRecord.photo.file_title, 'File:GUSTAVIANUM 1.jpg');
+  assert.equal(pageRecord.photo, null, 'a page image is never a photo candidate');
+  assert.ok(!page.calls.some(call => /GUSTAVIANUM/.test(decodeURIComponent(call.url))), 'not even looked up');
 });
 
 test('deprecated P18 is never used; preferred rank goes first', () => {
@@ -247,4 +247,98 @@ test('non-places are not worth text or images: a street gets a record without ex
   assert.equal(calls.length, 1);
   assert.equal(records.get('Q11489180').photo, null);
   assert.deepEqual(records.get('Q11489180').entity.p31, ['Q79007']);
+});
+
+// ---------- review 2026-11-25: hatnotes and maintenance markers ----------
+
+const reviewShapes = require('./fixtures/place-media/review-shapes.json');
+
+test('a svwiki hatnote paragraph is skipped: Rosendals slott gets its own intro, not "För slottet i Helsingborg, se …"', () => {
+  const [rosendal, sjohistoriska] = reviewShapes.svwiki_extracts.query.pages;
+  const text = cutExcerpt(rosendal.extract);
+  assert.ok(text.startsWith('Rosendals slott är en slottsbyggnad på Djurgården i Stockholm'), text);
+  assert.ok(rosendal.extract.includes(text), 'verbatim');
+  assert.ok(!/Helsingborg, se/.test(text));
+  const parsed = parseExtractPage(rosendal, { qid: 'Q59482', lang: 'sv' });
+  assert.equal(parsed.excerpt.text, text);
+  assert.ok(cutExcerpt(sjohistoriska.extract).startsWith('Statens Sjöhistoriska museum är ett svenskt statligt sjöfartsmuseum'));
+});
+
+test('hatnote shapes from the Sweden index never become an excerpt', () => {
+  const intro = 'Platsen är en park i centrala staden med gamla träd och en damm. Den anlades på 1800-talet.';
+  for (const hatnote of [
+    'För slottet i Helsingborg, se Rosendals slott, Helsingborg.',
+    'För Varvsberget i Västergötland se Varvsberget (Västergötland).',
+    'Ej att förväxla med naturreservatet Lustigkulle-Rågåstjärn i Malingsbo, Smedjebackens kommun.',
+    'Denna sida handlar om Charlottenlunds slott i Skåne.',
+    'Den här artikeln handlar om slottet Rosendal utanför Helsingborg. För slottet Rosendal i Stockholm, se Rosendals slott Stockholm.',
+    'Trolleholm är även namnet på en ort vid Trolleholms slott, se Trolleholm (småort). För fartyget, se M/S Trolleholm.',
+    'Se även det traditionsrika värdshuset Zum Franziskaner i centrala München.',
+    'Se berggrund för det geologiska begreppet.',
+    'För andra reservat med samma namn, se Ekholmen (förgreningssida).',
+    'This article is about the palace in Stockholm. For the castle in Helsingborg, see Rosendal Castle.',
+    'Not to be confused with Näs Castle, the ruin on Visingsö.',
+    'For other uses, see Kungsberget (disambiguation).',
+  ]) {
+    assert.equal(cutExcerpt(hatnote), null, hatnote);
+    assert.equal(cutExcerpt(`${hatnote}\n\n${intro}`), intro, hatnote);
+    assert.equal(isExcerptText(hatnote), false, hatnote);
+  }
+});
+
+test('an excerpt stops before a maintenance marker and never carries one', () => {
+  // Real svwiki intro (Fäbodmossen, Q10500671): the second sentence carries "[källa behövs]".
+  const fabod = 'Fäbodmossen är ett naturreservat i Uppsala kommun, 5 km väster om Jumkils kyrka och cirka 20 km nordväst om Uppsala. Carl von Linné sägs ha använt området vid sina exkursioner[källa behövs] I områdets norra del går vandringsleden Linnéstigen.';
+  assert.equal(cutExcerpt(fabod), 'Fäbodmossen är ett naturreservat i Uppsala kommun, 5 km väster om Jumkils kyrka och cirka 20 km nordväst om Uppsala.');
+  // Bältespännarparken (Q10438504): the marker sits in the first sentence, so there is no excerpt.
+  assert.equal(cutExcerpt('Bältespännarparken är en cirka 6 000 kvadratmeter[källa behövs] stor del av parken Kungsparken i centrala Göteborg.'), null);
+  assert.equal(isExcerptText('Parken är en cirka 6 000 kvadratmeter[källa behövs] stor del av parken.'), false);
+  assert.equal(isExcerptText('The park was laid out in 1850.[citation needed] It has a pond and old trees.'), false);
+  // Bracketed IPA is part of the text and stays.
+  const ipa = 'Almedalen (Swedish pronunciation: [ˈalmɛˈdɑːlɛn]) is a park in the city of Visby on Gotland, Sweden.';
+  assert.equal(cutExcerpt(ipa), ipa);
+});
+
+test('an index record whose excerpt is a hatnote is dropped on load, so it is fetched again', () => {
+  const record = { v: 1, qid: 'Q59482', checked_on: '2026-11-24', entity: null, photo: null, subtitle: {},
+    about: { sv: { text: 'För slottet i Helsingborg, se Rosendals slott, Helsingborg.', title: 'Rosendals slott', rev: 59142872, lang: 'sv' } } };
+  assert.equal(normalizeMediaRecord(record), null);
+});
+
+test('gold set: a nature reserve or park whose only image is the Wikipedia page image gets no photo (Stavsbjär, Bältespännarparken)', async () => {
+  // Shapes from the Sweden index (2026-11-24): no P18, and PageImages picks the
+  // infobox's species or a nearby building.
+  for (const [qid, label, p31, pageImage] of [
+    ['Q18332839', 'Stavsbjär', 'Q179049', 'Wespenbussard Pernis apivorus 02.jpg'],
+    ['Q10438504', 'Bältespännarparken', 'Q22698', 'Göteborg Stora Teatern 2012.jpg'],
+  ]) {
+    const raw = clone(samples.wbgetentities.entities.Q1331646);
+    raw.id = qid;
+    raw.labels = { sv: { language: 'sv', value: label } };
+    raw.aliases = {};
+    raw.sitelinks = { svwiki: { site: 'svwiki', title: label } };
+    raw.claims.P31 = [{ mainsnak: { snaktype: 'value', property: 'P31', datavalue: { value: { 'entity-type': 'item', id: p31 }, type: 'wikibase-entityid' } }, rank: 'normal' }];
+    delete raw.claims.P18;
+    delete raw.claims.P5775;
+    const page = createFixtureFetcher({
+      entities: { [qid]: raw },
+      extracts: { [`sv|${label}`]: { pageid: 1, ns: 0, title: label, extract: `${label} är ett naturreservat i Sverige med gammal skog och rika fågelmarker.`,
+        pageprops: { wikibase_item: qid, page_image_free: pageImage }, revisions: [{ revid: 100, parentid: 99 }] } },
+      files: { [`File:${pageImage}`]: { ...clone(samples.commons_imageinfo.query.pages[0]), title: `File:${pageImage}` } },
+    });
+    const record = (await createWikimediaClient({ fetcher: page.fetcher }).fetchRecords([qid])).get(qid);
+    assert.ok(record, label);
+    assert.equal(record.photo, null, label);
+    assert.ok(record.about.sv, `${label} keeps its excerpt`);
+  }
+});
+
+test('an index record whose photo came from the page image is dropped on load, so it is fetched again', () => {
+  const photo = { media_id: '1ca0883b'.padEnd(40, '0'), file_title: 'File:Lobaria pulmonaria 010108c.jpg',
+    file_url: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Lobaria_pulmonaria_010108c.jpg', width: 1600, height: 1200,
+    via: 'page_image', author: 'Bernd Haynold', license: 'CC-BY-SA-3.0', license_url: 'https://creativecommons.org/licenses/by-sa/3.0/',
+    file_page_url: 'https://commons.wikimedia.org/wiki/File:Lobaria_pulmonaria_010108c.jpg' };
+  const record = { v: 1, qid: 'Q18332839', checked_on: '2026-11-24', entity: null, photo, subtitle: {}, about: {} };
+  assert.equal(normalizeMediaRecord(record), null);
+  assert.ok(normalizeMediaRecord({ ...record, photo: { ...photo, via: 'p18' } }));
 });

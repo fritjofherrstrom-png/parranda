@@ -1,7 +1,7 @@
 import type { MediaLicenseId } from '../../../shared/media-licenses.mjs';
 
 export type MediaLang = 'sv' | 'en';
-export type MediaVia = 'p18' | 'p5775' | 'osm_commons' | 'page_image';
+export type MediaVia = 'p18' | 'p5775' | 'osm_commons';
 
 export interface StopMedia {
   version: 1;

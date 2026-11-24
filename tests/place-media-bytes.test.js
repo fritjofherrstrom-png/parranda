@@ -15,7 +15,7 @@ const { createWikimediaClient } = require('../server/place-media/wikimedia-clien
 const {
   createMediaBytes, setMediaBytesForTests, upstreamUrl, etagFor, MAX_FILE_BYTES, CACHE_SUBDIR,
 } = require('../server/place-media/media-bytes');
-const { createPublicAccessGuard, UPSTREAM_MISS_ADMISSION, upstreamCostPrefix } = require('../server/lib/public-access-guard');
+const { createPublicAccessGuard, UPSTREAM_MISS_ADMISSION, upstreamCostPrefix, routedPath } = require('../server/lib/public-access-guard');
 const { createFixtureFetcher } = require('./helpers/place-media-fixtures');
 
 const MEDELHAVS = 'Q1331646';
@@ -372,4 +372,73 @@ test('sw.js serves /media/ network-first from a bounded cache and drops 404/410'
     'the media rule runs before the generic same-origin cache-first rule');
   assert.match(source, /response\.status === 404 \|\| response\.status === 410\) \{\s*await cache\.delete\(request\)/);
   assert.match(source, /key !== CACHE_NAME && key !== MEDIA_CACHE_NAME/);
+});
+
+// ---------- review 2026-11-25: spelling of the path, fail closed, global pacing ----------
+
+test('a case-variant or trailing-slash path meets the same media allowance (Express routes them alike)', async t => {
+  const { service, medelhavs, rohsska } = await seededPlaceMedia(t);
+  const upstream = upstreamSpy();
+  const get = await serve(t, createMediaBytes({ placeMedia: service, cacheDir: tempDir(t), fetcher: upstream.fetcher }), {
+    guardEnv: { PARRANDA_PUBLIC_GUARD: 'enabled', PARRANDA_PUBLIC_GUARD_MEDIA_MAX: '1' },
+  });
+  assert.equal((await get(`/media/c/${medelhavs.media_id}/250`)).status, 200);
+  assert.equal((await get(`/media/c/${rohsska.media_id}/250`)).status, 429);
+  assert.equal((await get(`/MEDIA/c/${rohsska.media_id}/250`)).status, 429, 'upper case is the same route and the same allowance');
+  assert.equal((await get(`/Media/c/${medelhavs.media_id}/500`)).status, 429);
+  assert.equal(upstream.calls.length, 1, 'no second upstream call');
+  assert.equal(upstreamCostPrefix('/MEDIA/c/x/250'), '/media/');
+  assert.equal(routedPath('/API/Geocode/'), '/api/geocode');
+});
+
+test('the guard counts upstream-cost API paths however they are spelled', () => {
+  const env = { PARRANDA_PUBLIC_GUARD: 'enabled', PARRANDA_PUBLIC_GUARD_MAX: '1' };
+  const guard = createPublicAccessGuard({ env });
+  const statuses = [];
+  for (const requestPath of ['/api/geocode', '/API/geocode', '/api/Geocode/']) {
+    const request = { path: requestPath, headers: {}, socket: { remoteAddress: '203.0.113.7' } };
+    const response = { status(code) { statuses.push(code); return this; }, set() { return this; }, json() { return this; }, once() {} };
+    guard(request, response, () => statuses.push('next'));
+  }
+  assert.deepEqual(statuses, ['next', 429, 429]);
+});
+
+test('with the guard on, a miss that arrives without an admission check never goes upstream (fail closed)', async t => {
+  const { service, medelhavs } = await seededPlaceMedia(t);
+  const upstream = upstreamSpy();
+  const get = await serve(t, createMediaBytes({ placeMedia: service, cacheDir: tempDir(t), fetcher: upstream.fetcher, guardEnabled: () => true }));
+  const refused = await get(`/media/c/${medelhavs.media_id}/250`);
+  assert.equal(refused.status, 503);
+  assert.equal(refused.headers.get('cache-control'), 'no-store');
+  assert.equal(upstream.calls.length, 0);
+  const open = await serve(t, createMediaBytes({ placeMedia: service, cacheDir: tempDir(t), fetcher: upstream.fetcher, guardEnabled: () => false }));
+  assert.equal((await open(`/media/c/${medelhavs.media_id}/250`)).status, 200, 'guard off: the route serves as before');
+});
+
+test('upstream starts are paced for the whole process, so one client cannot provoke the 429 that blocks everyone', async t => {
+  const { service, medelhavs, rohsska } = await seededPlaceMedia(t);
+  // A Wikimedia-like upstream: more than 2 starts inside 200 ms answers 429 (Retry-After 11).
+  const starts = [];
+  const upstream = upstreamSpy(() => {
+    const at = Date.now();
+    starts.push(at);
+    if (starts.filter(time => at - time < 200).length > 2) return new Response('', { status: 429, headers: { 'retry-after': '11' } });
+    return imageResponse();
+  });
+  const bytes = createMediaBytes({ placeMedia: service, cacheDir: tempDir(t), fetcher: upstream.fetcher,
+    startBurst: 2, startIntervalMs: 400, maxQueueWaitMs: 500, guardEnabled: () => false });
+  const get = await serve(t, bytes);
+  // One client asks for six cold thumbnails at once.
+  const keys = [medelhavs, rohsska].flatMap(photo => [250, 500, 960].map(w => `/media/c/${photo.media_id}/${w}`));
+  const results = await Promise.all(keys.map(key => get(key)));
+  const statuses = results.map(response => response.status);
+  assert.ok(statuses.filter(status => status === 200).length >= 2, statuses.join(','));
+  assert.ok(statuses.every(status => status === 200 || status === 503), statuses.join(','));
+  assert.equal(bytes.health().breaker_open, false, 'the breaker never opened');
+  assert.ok(bytes.health().paced_out >= 1, 'starts beyond the queue wait are fast 503s, not upstream calls');
+  assert.equal(upstream.calls.length, statuses.filter(status => status === 200).length, 'no upstream 429 was ever provoked');
+  // Another viewer, a moment later, still gets an uncached photo.
+  await new Promise(resolve => setTimeout(resolve, 900));
+  const missing = keys.find((key, index) => statuses[index] === 503);
+  assert.equal((await get(missing)).status, 200);
 });

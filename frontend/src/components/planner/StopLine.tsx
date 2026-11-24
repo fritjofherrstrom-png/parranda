@@ -542,7 +542,7 @@ export default function StopLine({
                 <div id={panelId} className="mb-1 ml-14 mt-1 flex flex-col gap-3">
                   {/* What the place looks like and is, in sourced words, before
                       the facts: the photo, the kicker, then the excerpt. */}
-                  {media && <StopPhotoFigure key={media.media_id} media={media} name={name} t={t} lang={lang} />}
+                  {media && <StopPhotoFigure key={media.media_id} media={media} name={name} type={stop?.type} t={t} lang={lang} />}
                   {(subtitle || about) && <StopAbout subtitle={subtitle} about={about} t={t} lang={lang} />}
                   {(panelKindLabel || matchedLabels.length > 0 || partialLabels.length > 0) && (
                     <p className="text-15 leading-snug text-parranda-ink-soft">

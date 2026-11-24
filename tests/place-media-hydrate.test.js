@@ -234,3 +234,40 @@ test('schema matchers', () => {
   assert.ok(matchers.subtitleText('museum i Stockholm'));
   assert.equal(matchers.subtitleText('x'.repeat(81)), false);
 });
+
+test('a branch whose OSM wikidata tag is its brand:wikidata gets no media, through the loader and the engine stop', async t => {
+  // Review 2026-11-25: the build skips such elements, so at runtime the brand
+  // QID is an index miss fetched on demand; a venue P31 without a chain class
+  // (here the museum fixture) must still not give the branch the brand's photo.
+  const { mapOsmElement } = require('../server/place-candidates/open-data-loader');
+  const { mapAdmittedSelectionToSourceCandidates } = require('../server/planner/agnostic-engine-compose');
+  const element = { type: 'node', id: 304609719, lat: 59.3294531, lon: 18.0672982,
+    tags: { name: 'Medelhavsmuseet', tourism: 'museum', wikidata: 'Q1331646', 'brand:wikidata': 'Q1331646' } };
+  const toStop = record => {
+    // The role selector's rich candidate (formatRoleCandidate) under the engine's experiment seam.
+    const rich = { candidate_id: record.id, label: record.name, type: record.type, candidate_kind: 'draft_place',
+      confidence: 'needs_review', coordinates: { lat: record.lat, lng: record.lng },
+      provenance: { provider_id: 'overpass', source_family: 'openstreetmap', source_tier: 'inferred', human_verified: false,
+        attribution: record.sources, corroborated_by_external: false },
+      local_feel_rank: record.chain ? 2 : 0, chain: record.chain === true, brand: record.brand };
+    const [stop] = mapAdmittedSelectionToSourceCandidates({
+      selected: [{ role: 'culture_anchor', candidate_id: record.id, label: record.name, coordinates: rich.coordinates }],
+      plannerRoles: { city: 'agnostic-engine-area', roles: [{ role: 'culture_anchor', slot: 'anchor', candidates: [rich] }] },
+    });
+    return { ...stop, label: record.name };
+  };
+  const branded = mapOsmElement(element);
+  assert.equal(branded.chain, true);
+  const { service } = await seededService(t, ['Q1331646']);
+  const chainRoute = { main_stops: [toStop(branded)] };
+  await hydratePlaceMedia(chainRoute, { lang: 'sv', placeMedia: service });
+  assert.equal(chainRoute.main_stops[0].media, undefined, 'no brand photo on the branch');
+  assert.equal(chainRoute.main_stops[0].wikidata_id, undefined);
+  assert.equal(service.health().gate.brand, 1);
+  // The same element without the brand tag is the place itself and gets its photo.
+  const own = mapOsmElement({ ...element, tags: { name: 'Medelhavsmuseet', tourism: 'museum', wikidata: 'Q1331646' } });
+  const ownRoute = { main_stops: [toStop(own)] };
+  await hydratePlaceMedia(ownRoute, { lang: 'sv', placeMedia: service });
+  assert.equal(ownRoute.main_stops[0].wikidata_id, 'Q1331646');
+  assert.ok(ownRoute.main_stops[0].media);
+});

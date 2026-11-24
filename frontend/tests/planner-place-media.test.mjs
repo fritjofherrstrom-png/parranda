@@ -282,6 +282,12 @@ test('normalizers refuse forged or odd objects whole', () => {
     withMedia({ kind: 'video' }),
     withMedia({ version: 2 }),
     withMedia({ via: 'p154' }),
+    // Review 2026-11-25: placeholders, a bare footnote link and the Wikipedia page image are no photo.
+    withMedia({ author: 'Unknown author' }),
+    withMedia({ author: 'Okänd Okänd' }),
+    withMedia({ author: '[1]' }),
+    withMedia({ author: 'A' }),
+    withMedia({ via: 'page_image' }),
     withMedia({ checked_on: '2026-02-30' }),
     { ...base, media: [base.media] },
     { ...base, wikidata_id: 'not-a-qid' },
@@ -300,6 +306,10 @@ test('normalizers refuse forged or odd objects whole', () => {
     withAbout({ lang: 'fr' }),
     withAbout({ article_title: 'A [[link]]' }),
     withAbout({ subject_qid: 'Q42' }),
+    // A svwiki hatnote and a maintenance marker are never the place's text.
+    withAbout({ text: 'För slottet i Helsingborg, se Rosendals slott, Helsingborg.' }),
+    withAbout({ text: 'Ej att förväxla med Näs slott, borgruinen på Visingsö i Jönköpings kommun.' }),
+    withAbout({ text: 'Parken är en cirka 6 000 kvadratmeter[källa behövs] stor del av Kungsparken.' }),
     { ...base, visit_content: note },
   ];
   for (const stop of about) assert.equal(normalizeStopAbout(stop), null, JSON.stringify(stop.about).slice(0, 120));
@@ -329,4 +339,47 @@ test('credit strings: public domain needs no author and has no licence link; por
   const about = normalizeStopAbout(HYDRATED.medelhavsmuseet_en);
   assert.deepEqual(excerptCredit(about, 'sv'), { lead: 'Utdrag ur', source: 'Wikipedia (engelska)', sourceHref: about.article_url,
     license: 'CC BY-SA 4.0', licenseHref: 'https://creativecommons.org/licenses/by-sa/4.0/' });
+});
+
+test('an image that fails keeps its box: the tile turns to the glyph, the open stop keeps a 3:2 frame without a credit, and both retry once', async t => {
+  const h = await mounted(t, 'en', [museum('en'), GARDEN]);
+  const museumRow = row(h, 'Medelhavsmuseet');
+  const tileImg = museumRow.querySelector('[data-stop-photo="tile"] img');
+  assert.ok(tileImg);
+  await h.act(() => tileImg.dispatchEvent(new h.window.Event('error')));
+  assert.ok(museumRow.querySelector('[data-stop-photo="glyph"]'), 'a failed tile is the quiet glyph tile, same 56×56 box');
+  assert.equal(museumRow.querySelector('img'), null);
+
+  const panel = await open(h, 'Medelhavsmuseet');
+  const figureImg = panel.querySelector('figure[data-stop-photo="figure"] img');
+  assert.ok(figureImg, 'the figure is there before the error');
+  const boxClass = figureImg.parentElement.className;
+  const firstAfter = panel.querySelector('[data-stop-photo="figure"]').nextElementSibling;
+  await h.act(() => figureImg.dispatchEvent(new h.window.Event('error')));
+  const fallback = panel.querySelector('[data-stop-photo="figure-fallback"]');
+  assert.ok(fallback, 'the frame stays after the error');
+  assert.match(fallback.firstElementChild.className, /aspect-\[3\/2\]/, 'same 3:2 box, so the panel does not jump');
+  assert.match(boxClass, /aspect-\[3\/2\]/);
+  assert.equal(fallback.getAttribute('aria-hidden'), 'true');
+  assert.equal(fallback.querySelector('img'), null);
+  assert.equal(panel.querySelector('[data-photo-credit]'), null, 'no credit for a photo that is not shown');
+  assert.equal(fallback.nextElementSibling, firstAfter, 'the content under it keeps its place');
+
+});
+
+test('a failed tile is asked for once more after the upstream throttle window, then stays a glyph', async t => {
+  const h = await mounted(t, 'en', [museum('en'), GARDEN]);
+  const museumRow = () => row(h, 'Medelhavsmuseet');
+  const fail = () => h.act(() => museumRow().querySelector('[data-stop-photo="tile"] img').dispatchEvent(new h.window.Event('error')));
+  await fail();
+  assert.ok(museumRow().querySelector('[data-stop-photo="glyph"]'));
+  await h.clock.advance(11_000);
+  assert.ok(museumRow().querySelector('[data-stop-photo="glyph"]'), 'not before the window has passed');
+  await h.clock.advance(1_000);
+  const retried = museumRow().querySelector('[data-stop-photo="tile"] img');
+  assert.ok(retried, 'one more try');
+  assert.equal(retried.getAttribute('src'), `/media/c/${ID}/250`, 'the same same-origin URL');
+  await fail();
+  await h.clock.advance(60_000);
+  assert.ok(museumRow().querySelector('[data-stop-photo="glyph"]'), 'only once: then the glyph stays');
 });

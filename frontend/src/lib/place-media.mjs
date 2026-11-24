@@ -11,6 +11,7 @@
  * browser never talks to Wikimedia. Text is shown verbatim, never translated.
  */
 import { MEDIA_LICENSES, WIKIPEDIA_TEXT_LICENSE, WIKIDATA_DATA_LICENSE, isMediaLicenseId, isMediaLicenseUrl, mediaLicenseLabel, mediaLicenseNeedsAuthor } from '../../../shared/media-licenses.mjs';
+import { isCreditName, isHatnoteText, hasMaintenanceMarker } from '../../../shared/place-media-text.mjs';
 
 /** The widths `/media/c/:media_id/:w` serves. */
 export const MEDIA_WIDTHS = Object.freeze([250, 500, 960]);
@@ -20,7 +21,7 @@ export const TILE_WIDTH = 250;
 export const PANEL_WIDTH = 500;
 
 const LANGS = ['sv', 'en'];
-const VIAS = ['p18', 'p5775', 'osm_commons', 'page_image'];
+const VIAS = ['p18', 'p5775', 'osm_commons'];
 const QID = /^Q[1-9]\d{0,11}$/;
 const SHA1 = /^[0-9a-f]{40}$/;
 const COMMONS_FILE_PAGE = /^https:\/\/commons\.wikimedia\.org\/wiki\/File:[^/?#\s"'<>\\]+$/;
@@ -37,10 +38,12 @@ function isoDate(value) {
 }
 const isQid = value => typeof value === 'string' && QID.test(value);
 const isMediaId = value => typeof value === 'string' && SHA1.test(value);
-const isAuthor = value => cleanText(value, 200) && !/^(?:https?|www\.|\/\/|javascript:)/i.test(value) &&
-  !/^No machine-readable (?:author|source) provided\b/i.test(value);
+// No link, no "Unknown author"/"Okänd" placeholder, no bare "[1]" footnote (shared/place-media-text.mjs).
+const isAuthor = value => cleanText(value, 200) && isCreditName(value);
 const isCommonsFilePageUrl = value => typeof value === 'string' && value.length <= 2048 && COMMONS_FILE_PAGE.test(value);
-const isExcerptText = value => cleanText(value, 320) && value.length >= 40 && urlFree(value) && /[.!?…]["'”’»)]?$/.test(value);
+// Never a hatnote to another article, never a "[källa behövs]" marker.
+const isExcerptText = value => cleanText(value, 320) && value.length >= 40 && urlFree(value) && /[.!?…]["'”’»)]?$/.test(value) &&
+  !isHatnoteText(value) && !hasMaintenanceMarker(value);
 const isSubtitleText = value => cleanText(value, 80) && urlFree(value);
 const isArticleTitle = value => cleanText(value, 255) && !/[<>[\]{}|#]/.test(value);
 const dimension = (value, min) => Number.isInteger(value) && value >= min && value <= 100000;

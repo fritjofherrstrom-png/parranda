@@ -39,11 +39,11 @@ test('NonFree files are refused (a Guernica-like local non-free upload)', () => 
   // A file that only exists on a Wikipedia (non-free fair use) is not on Commons.
   const local = commonsPage('File:Medelhavsmuseet 2007.jpg');
   local.imagerepository = 'shared';
-  assert.deepEqual(gateCommonsPage(local, { via: 'page_image' }), { rejected: 'not_commons' });
+  assert.deepEqual(gateCommonsPage(local, { via: 'p18' }), { rejected: 'not_commons' });
   const enwiki = commonsPage('File:Medelhavsmuseet 2007.jpg');
   enwiki.imageinfo[0].url = 'https://upload.wikimedia.org/wikipedia/en/d/da/Guernica.jpg';
-  assert.deepEqual(gateCommonsPage(enwiki, { via: 'page_image' }), { rejected: 'not_commons' });
-  assert.deepEqual(gateCommonsPage({ ns: 6, title: 'File:Guernica.jpg', missing: true }, { via: 'page_image' }), { rejected: 'missing' });
+  assert.deepEqual(gateCommonsPage(enwiki, { via: 'p18' }), { rejected: 'not_commons' });
+  assert.deepEqual(gateCommonsPage({ ns: 6, title: 'File:Guernica.jpg', missing: true }, { via: 'p18' }), { rejected: 'missing' });
 });
 
 test('GFDL-only, FAL, plain "Attribution", NC and unreadable multi-licences are refused', () => {
@@ -180,6 +180,8 @@ test('missing sha1, foreign description page or unknown via are refused', () => 
   otherPage.imageinfo[0].descriptionurl = 'https://commons.wikimedia.org/wiki/File:Something_else.jpg';
   assert.deepEqual(gateCommonsPage(otherPage, { via: 'p18' }), { rejected: 'not_commons' });
   assert.deepEqual(gateCommonsPage(commonsPage('File:Röhsska museet.jpg'), { via: 'p154' }), { rejected: 'via' });
+  // The Wikipedia page image is no route to a photo any more.
+  assert.deepEqual(gateCommonsPage(commonsPage('File:Röhsska museet.jpg'), { via: 'page_image' }), { rejected: 'via' });
 });
 
 test('stripHtml drops hidden duplicates, tags and entities', () => {
@@ -202,4 +204,50 @@ test('media-licenses: one list, normalisation and URL checks', () => {
   assert.equal(isMediaLicenseUrl('CC-BY-SA-3.0', 'https://creativecommons.org/licenses/by/3.0/'), false);
   assert.equal(isMediaLicenseUrl('PD', null), true);
   assert.equal(isMediaLicenseUrl('CC-BY-4.0', 'https://evil.example/licenses/by/4.0/'), false);
+});
+
+// ---------- review 2026-11-25: placeholders and footnote links are not credits ----------
+
+const reviewShapes = require('./fixtures/place-media/review-shapes.json');
+function reviewPage(title) {
+  const page = reviewShapes.commons_imageinfo.query.pages.find(row => row.title === title);
+  if (!page) throw new Error(`no review page ${title}`);
+  return { ...JSON.parse(JSON.stringify(page)), ns: 6, imagerepository: 'local' };
+}
+
+test('"Unknown author" is no credit: a CC BY 3.0 photo with only that placeholder is refused (Sundbyholms slott)', () => {
+  // Live metadata: Artist "Unknown author<span hidden>…", Credit a mynewsdesk URL.
+  assert.deepEqual(gateCommonsPage(reviewPage('File:Sundbyholms slott.jpg'), { via: 'p18' }), { rejected: 'author' });
+  // The same placeholder on a public-domain file keeps the photo without an author.
+  const pd = withMeta(commonsPage('File:Ørstedsparken sommer 1.jpg'), {
+    Artist: 'Unknown author<span style="display: none;">Unknown author</span>', Credit: undefined, Attribution: undefined });
+  assert.equal(gateCommonsPage(pd, { via: 'p18' }).author, null);
+  for (const placeholder of ['Unknown author', 'Unknown', 'Anonymous', 'Okänd', 'Okänd Okänd', 'Okänd fotograf', 'unbekannt',
+    'Unknown illustrator and xylographer', 'Unknown photographer.']) {
+    assert.equal(isAuthor(placeholder), false, placeholder);
+    const ccBy = withMeta(commonsPage('File:Exterior Medicinhistoriska museet Göteborg.jpg'), { Artist: placeholder, Credit: undefined });
+    assert.deepEqual(gateCommonsPage(ccBy, { via: 'p18' }), { rejected: 'author' }, placeholder);
+  }
+  // Names that merely contain such a word still credit someone.
+  for (const name of ['Fotograf okänd, 1913, (Fotonummer F 49340) Stockholms stadsmuseum', 'Anonym user 1', 'C316097', 'J 1982']) {
+    assert.equal(isAuthor(name), true, name);
+  }
+  assert.equal(gateCommonsPage(reviewPage('File:Hässelby strandbad 1913.jpg'), { via: 'p18' }).author,
+    'Fotograf okänd, 1913, (Fotonummer F 49340) Stockholms stadsmuseum');
+});
+
+test('a footnote link in Credit is no author: a PD photo keeps author null, never "[1]" (Astridmuseum)', () => {
+  const photo = gateCommonsPage(reviewPage('File:Astridmuseum.jpg'), { via: 'p18' });
+  assert.equal(photo.rejected, undefined);
+  assert.equal(photo.license, 'PD');
+  assert.equal(photo.author, null);
+  // A URL-only Credit no longer refuses a public-domain photo either.
+  const urlCredit = withMeta(commonsPage('File:Ørstedsparken sommer 1.jpg'), {
+    Artist: undefined, Attribution: undefined, Credit: '<a href="https://example.org/x">https://example.org/x</a>' });
+  assert.equal(gateCommonsPage(urlCredit, { via: 'p18' }).author, null);
+  // …but it never stands in for a CC credit.
+  const ccUrl = withMeta(commonsPage('File:Exterior Medicinhistoriska museet Göteborg.jpg'), {
+    Artist: undefined, Credit: '<a class="external autonumber" href="https://example.org/x">[1]</a>' });
+  assert.deepEqual(gateCommonsPage(ccUrl, { via: 'p18' }), { rejected: 'author' });
+  for (const value of ['[1]', '[12]', 'A', '.', '1']) assert.equal(isAuthor(value), false, value);
 });

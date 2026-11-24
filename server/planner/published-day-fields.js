@@ -37,7 +37,7 @@ const preferences = array(preference, 0, MAX_PLANNER_PREFERENCES);
 const CANDIDATE_STATUS = enumeration('filled','partial','fallback','missing');
 // Place media (docs/PLACE_MEDIA.md). Closed vocabularies of the producer in
 // server/place-media; a value outside them refuses, never disappears.
-const MEDIA_VIA = enumeration('p18','p5775','osm_commons','page_image');
+const MEDIA_VIA = enumeration('p18','p5775','osm_commons');
 const MEDIA_LANG = enumeration('sv','en');
 const WEATHER_REASON = enumeration('rain_favors_indoor','rain_penalizes_exposed','sun_favors_scenic',
   'hot_favors_swim','hot_penalizes_shadeless','requested_waterfront');

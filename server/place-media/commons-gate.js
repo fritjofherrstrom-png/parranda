@@ -9,23 +9,22 @@ const {
   normalizeCommonsLicense,
   mediaLicenseNeedsAuthor,
 } = require('../../shared/media-licenses.mjs');
+const { isCreditName, isPlaceholderCredit } = require('../../shared/place-media-text.mjs');
 
 const MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MIN_WIDTH = 800;
 const MAX_AUTHOR = 200;
 const SHA1 = /^[0-9a-f]{40}$/;
-const VIAS = new Set(['p18', 'p5775', 'osm_commons', 'page_image']);
+const VIAS = new Set(['p18', 'p5775', 'osm_commons']);
 // Maps, plans, logos, flags, coats of arms and diagrams are not a photo of the
 // place, whatever their licence. Matched as whole words in the file title, in
 // the languages Parranda's regions name files in.
 const NOT_A_PHOTO = /(?:^|[^\p{L}\p{N}])(?:map|maps|mapa|karta|kartta|kort|carte|karte|stadtplan|plan|plano|planta|pianta|grundriss|floor ?plan|site ?plan|logo|logotyp|logotype|logotipo|flag|flagga|flagge|bandera|drapeau|bandiera|coat of arms|arms|vapen|vapensköld|wappen|escudo|blason|stemma|emblem|emblema|seal|diagram|diagramm|schema|scheme|locator|location)(?=$|[^\p{L}\p{N}])/iu;
-const NO_MACHINE_READABLE_AUTHOR = /^No machine-readable (?:author|source) provided\b/i;
 const SIGNATURE_STAMP = /\s*(?:--\s*)?\d{1,2}:\d{2},\s+\d{1,2}\s+[A-Za-z]+\s+\d{4}\s+\(UTC\)\s*$/;
 const SIGNATURE_TALK = /\s*\((?:talk|diskussion)\)\s*$/i;
 function withoutSignature(text) {
   return text.replace(SIGNATURE_STAMP, '').replace(SIGNATURE_TALK, '').trim();
 }
-const OWN_WORK = /^(?:own work|self-photographed|eget arbete|egen bild|travail personnel|trabajo propio|eigenes werk|opera propria|treball propi)\.?$/i;
 
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'" };
 function decodeEntities(value) {
@@ -58,8 +57,7 @@ function meta(ii, key) {
 }
 
 function validAuthor(value) {
-  return typeof value === 'string' && value.length > 0 && value.length <= MAX_AUTHOR &&
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value) && !/^(?:https?|www\.|\/\/)/i.test(value);
+  return typeof value === 'string' && value.length <= MAX_AUTHOR && isCreditName(value);
 }
 
 /** The commons file path "a/ab/Name.jpg" of an upload URL, query dropped. */
@@ -85,7 +83,7 @@ function commonsFilePageUrl(value, title) {
 
 /**
  * imageinfo page → photo, or { rejected: reason }. `via` names the route the
- * candidate came by (p18, p5775, osm_commons, page_image).
+ * candidate came by (p18, p5775, osm_commons).
  */
 function gateCommonsPage(page, { via } = {}) {
   if (!VIAS.has(via)) return { rejected: 'via' };
@@ -124,16 +122,18 @@ function gateCommonsPage(page, { via } = {}) {
     // {{self}} writes the uploader's own credit as "I, <name>"; the name is the credit.
     const text = stripHtml(meta(ii, key)).replace(/^I,\s+(?=\S)/, '');
     if (!text) continue;
-    // "Own work" is a source note, not a name; it never credits anyone.
-    if (OWN_WORK.test(text)) continue;
-    // Commons' own placeholder when a file names no author ("No machine-readable
-    // author provided. X assumed (based on copyright claims).") is a guess, not a
-    // credit: treated as no author (stricter than crediting the guessed uploader).
-    if (NO_MACHINE_READABLE_AUTHOR.test(text)) continue;
+    // Placeholders name nobody (shared/place-media-text.mjs): "Own work" is a
+    // source note; "Unknown author", "Okänd Okänd" and Commons' "No
+    // machine-readable author provided. X assumed …" are not credits. Treated as
+    // no author, so a licence that needs a credit is refused below.
+    if (isPlaceholderCredit(text)) continue;
     // Old talk-page signatures leave "Name 15:22, 28 March 2007 (UTC)" or
     // "Name (talk)" in Artist; the credit is the name.
     const name = withoutSignature(text);
     if (!name) continue;
+    // Credit is the file's source, not its author: it stands in for the author
+    // only when it reads as a name (a footnote link "[1]" or a URL does not).
+    if (key === 'Credit' && !validAuthor(name)) continue;
     author = name;
     break;
   }

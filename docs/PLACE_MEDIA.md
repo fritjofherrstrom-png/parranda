@@ -47,7 +47,7 @@ Rejections carry a reason code (`brand`, `p31_rejected`, `name`, `distance`, `ve
 { v: 1, qid: 'Q1234', checked_on: '2026-11-24',
   entity: { p31: ['Q33506'], labels: { sv: '…', en: '…' }, aliases: ['…'], coord: { lat, lng } },
   photo: null | { media_id: '<40-hex sha1 of the Commons file>', file_title: 'File:X.jpg', file_url: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/X.jpg',
-                  width, height, via: 'p18'|'p5775'|'osm_commons'|'page_image', author: '…',
+                  width, height, via: 'p18'|'p5775'|'osm_commons', author: '…',
                   license: '<id from shared/media-licenses.mjs>', license_url: null | 'https://creativecommons.org/…',
                   file_page_url: 'https://commons.wikimedia.org/wiki/File:X.jpg' },
   subtitle: { sv?: '…', en?: '…' },                  // Wikidata descriptions, <= 80 chars, CC0
@@ -55,20 +55,25 @@ Rejections carry a reason code (`brand`, `p31_rejected`, `name`, `distance`, `ve
 ```
 
 **Photo order:** P18 (preferred rank first, never deprecated) → P5775 (only for venue stops) →
-OSM `wikimedia_commons=File:…` when known → the QID's own Wikipedia page image if it is a Commons file → none.
+OSM `wikimedia_commons=File:…` when known → none. Never the Wikipedia page image (see "As built").
 Never P154, P94, P41, P242, P15. Never Wikipedia `summary.thumbnail` (may be a local non-free file).
 
 **Commons gate** (`server/place-media/commons-gate.js`, pure): file on commons.wikimedia.org; `NonFree` not set;
 `Restrictions` empty; mime jpeg/png/webp; original width >= 800; title not a map/plan/logo/flag/coat of arms/diagram;
 licence normalises to an id in `shared/media-licenses.mjs`; real `LicenseUrl` kept (ported "3.0 de" stays ported);
-author from `Attribution`, else `Artist` (HTML stripped), else `Credit`; author required unless PD/CC0;
-author <= 200 chars, no control chars, must not start like a URL (`http`, `www.`, `//`). Anything else → no photo.
+author from `Attribution`, else `Artist` (HTML stripped), else `Credit` only when it reads as a name; author
+required unless PD/CC0; author <= 200 chars, no control chars, must not start like a URL (`http`, `www.`, `//`), at
+least one letter and two letters or digits, and not a placeholder ("Unknown author", "Okänd", "Anonymous", "Own work",
+Commons' "No machine-readable author provided"). The rules live in `shared/place-media-text.mjs`, shared by the gate,
+the record, the published schema and the frontend. Anything else → no photo.
 
 `shared/media-licenses.mjs` is the ONE licence list (CC0-1.0, PD, CC-BY-1.0…4.0, CC-BY-SA-1.0…4.0, generic
 over jurisdiction ports via the URL). GFDL-only, FAL, plain "Attribution", unreadable multi-licence: refused.
 
 **Excerpt rules:** from the QID's own article (`wikibase_item` must equal the QID); not a disambiguation page;
-plain text intro; cut only at a sentence end, 40–320 chars; no URL inside; stored verbatim with revision id.
+plain text intro; the first paragraph that is not a hatnote ("För slottet i Helsingborg, se …", "Ej att förväxla med …",
+"This article is about …"); cut only at a sentence end before any maintenance marker ("[källa behövs]",
+"[citation needed]"), 40–320 chars; no URL inside; stored verbatim with revision id.
 Languages: `sv` and `en` only in v1. The response picks the request language; an `en` excerpt is shown to `sv`
 readers only behind "Visa beskrivningen på engelska" (never translated).
 
@@ -137,7 +142,8 @@ Upstream down and not cached → fast 503. `public-access-guard.js`: prefix rule
 - `frontend/src/lib/place-media.mjs` (+ `.d.mts`, generics `T extends object`): normalizers mirroring the schema,
   `mediaSrc(media, w)`, `dayHasPhotos(stops)`, credit strings.
 - `StopPhoto.tsx`: 56×56 row tile (radius 10, `alt=""`, fades in 180 ms, none under reduced motion, paper-2 placeholder,
-  `onError` → glyph tile); panel figure 3:2 full width, `alt="Foto av {name}"`/"Photo of {name}", credit line 11 px:
+  `onError` → glyph tile); panel figure 3:2 full width (`onError` → the same 3:2 box with a quiet glyph, no credit;
+  either image is tried once more after 12 s), `alt="Foto av {name}"`/"Photo of {name}", credit line 11 px:
   `Foto: {author} · {licence} · Wikimedia Commons` (each part a link, `rel="noopener noreferrer"`, ellipsis, tap expands
   with "beskuren"/"cropped").
 - Rows get the tile only when the day has ≥1 photo; rows without one on such a day get a quiet glyph tile. A day with
@@ -176,14 +182,30 @@ Where the implementation is stricter than or differs from the contract above:
   10 min), transient ones 503, the guard's media allowance 429. Without `PARRANDA_CACHE_DIR` the byte cache is
   memory-only (64 MB). The route answers 404 for everything while the feature is off.
 
+- **Review fixes (2026-11-25).** No Wikipedia page-image candidate: on svwiki a nature reserve's or park's infobox
+  shows a typical species or a nearby building, and about 240 of the 306 page-image photos in the Sweden index showed a
+  bird, plant, lichen or another place. Hatnote paragraphs are skipped and maintenance markers end the cut. "Unknown
+  author" and other placeholders are no credit, and a footnote link such as "[1]" in `Credit` is no author. Records
+  in an older index that break these rules (via `page_image`, a hatnote excerpt, a placeholder author) are dropped on
+  load and fetched again on demand; re-running the build without `--refresh` rebuilds exactly those. Shared days that
+  carry such objects lose them in the pre-copy step. A chain stop (`chain: true`, from the OSM `brand` /
+  `brand:wikidata` tag) gets no media (gate reason `brand`): its wikidata tag often names the brand.
+- **Upstream pacing.** `/media/` starts at most a burst of 6 upstream thumbnails, then one per 2 s, for the whole
+  process; a start that would wait longer than the 3 s queue is a fast 503. No caller can provoke the upload.wikimedia.org
+  429 that would open the breaker for every viewer. The per-client media allowance is 20 misses per guard window.
+  The guard matches paths the way Express routes them (case-insensitive, trailing slash ignored), and with the guard on,
+  a media miss that arrives without its admission check is refused (503) instead of going upstream uncounted.
+  Remaining exposure: one client can still spend the shared pace for its window, so other viewers' cold photos wait or
+  show the glyph until the cache warms; warming the byte cache in the background is still a follow-up.
+
 Settings: `PARRANDA_PLACE_MEDIA_DIR` (feature switch; `index-v1.jsonl` + writable `learned-v1.jsonl`),
 `PARRANDA_CACHE_DIR` (byte cache in `place-media-bytes/`), `PARRANDA_MEDIA_CACHE_MAX_MB` (default 1024),
-`PARRANDA_PUBLIC_GUARD_MEDIA_MAX` (upstream misses per client per guard window, default 120).
+`PARRANDA_PUBLIC_GUARD_MEDIA_MAX` (upstream misses per client per guard window, default 20).
 
 Build an index: `node scripts/build-place-media.js --extract-dir <osm extract store> --out <dir> [--limit N] [--refresh]`
 (serial, polite; Sweden: 7283 QIDs in 6–9 minutes, 2994 photos). Re-running without `--refresh` only fetches what is missing.
 
-Known limit (measured 2026-11-24): upload.wikimedia.org answers 429 (Retry-After about 11 s) after roughly ten
-rapid cold thumbnail requests from one IP. The route then serves fast 503s until the window passes and the row
-tile falls back to its glyph; paced at one request per 2 s every thumb was served. Warming the byte cache at a
-polite pace is left for a follow-up.
+Known limit (measured 2026-11-24): upload.wikimedia.org answers 429 (Retry-After about 11 s) after roughly ten rapid
+cold thumbnail requests from one IP; paced at one request per 2 s every thumb was served. The route now paces its
+starts (above), so on a cold cache a day's later tiles may show the glyph first and fill in on their one retry.
+Warming the byte cache at a polite pace is left for a follow-up.

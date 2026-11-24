@@ -12,16 +12,23 @@
 //     (PARRANDA_MEDIA_CACHE_MAX_MB, default 1024); memory only without a dir;
 //   - at most 2 upstream fetches at once, 1.5 s timeout, 2 MB cap, and only
 //     image/jpeg, image/png or image/webp whose first bytes match the type;
+//   - upstream starts are paced for the whole process (a burst of 6, then one
+//     per 2 s): upload.wikimedia.org answers 429 after about ten rapid cold
+//     thumbnails, and that 429 would open the breaker for every viewer, so no
+//     caller (one client or many) can provoke it; a start that would wait longer
+//     than the queue allows is a fast 503 instead;
 //   - upstream down and not cached: a fast 503 (circuit breaker, bounded queue);
 //   - the public-access guard counts only real upstream misses
 //     (`request[UPSTREAM_MISS_ADMISSION]`, set by server/lib/public-access-guard.js).
+//     With the guard on, a request that reaches the route without that check
+//     (a path spelled in a way the guard did not see) never goes upstream.
 
 const fs = require('node:fs');
 const path = require('node:path');
 const { isMediaId, isCommonsUploadUrl } = require('./record');
 const { USER_AGENT } = require('./wikimedia-client');
 const { getPlaceMedia } = require('./index');
-const { UPSTREAM_MISS_ADMISSION } = require('../lib/public-access-guard');
+const { UPSTREAM_MISS_ADMISSION, publicGuardEnabled } = require('../lib/public-access-guard');
 
 const MEDIA_WIDTHS = Object.freeze([250, 500, 960]);
 const CACHE_SUBDIR = 'place-media-bytes';
@@ -33,6 +40,10 @@ const UPSTREAM_TIMEOUT_MS = 1500;
 const MAX_PARALLEL_UPSTREAM = 2;
 const MAX_QUEUED_UPSTREAM = 32;
 const MAX_QUEUE_WAIT_MS = 3000;
+// Measured 2026-11-24: about ten rapid cold thumbnails from one IP, then 429
+// (Retry-After ~11 s); one request per 2 s was always served.
+const UPSTREAM_START_BURST = 6;
+const UPSTREAM_START_INTERVAL_MS = 2000;
 const BREAKER_THRESHOLD = 3;
 const BREAKER_OPEN_MS = 60 * 1000;
 const MAX_RETRY_AFTER_MS = 10 * 60 * 1000;
@@ -157,6 +168,10 @@ function createMediaBytes({
   maxFileBytes = MAX_FILE_BYTES,
   breakerThreshold = BREAKER_THRESHOLD,
   breakerOpenMs = BREAKER_OPEN_MS,
+  startBurst = UPSTREAM_START_BURST,
+  startIntervalMs = UPSTREAM_START_INTERVAL_MS,
+  guardEnabled = () => publicGuardEnabled(process.env),
+  sleep = ms => new Promise(resolve => { const t = setTimeout(resolve, ms); t.unref?.(); }),
 } = {}) {
   const now = () => { const value = clock(); return value instanceof Date ? value.getTime() : Number(value); };
   const service = () => (typeof placeMedia === 'function' ? placeMedia() : placeMedia) || null;
@@ -172,9 +187,12 @@ function createMediaBytes({
   let active = 0;
   let consecutiveFailures = 0;
   let breakerOpenUntil = 0;
+  // Pacing of upstream starts (GCRA): the theoretical arrival time of the next start.
+  let nextStartAt = 0;
   const counters = {
     hits: 0, misses: 0, not_modified: 0, served_upstream: 0, joined_in_flight: 0,
-    unknown: 0, bad_width: 0, rate_limited: 0, unavailable: 0, breaker_open: 0, queue_full: 0,
+    unknown: 0, bad_width: 0, rate_limited: 0, unavailable: 0, breaker_open: 0, queue_full: 0, paced: 0, paced_out: 0,
+    unadmitted: 0,
     upstream_gone: 0, refused_mime: 0, refused_size: 0, upstream_errors: 0, evicted: 0, cache_write_failures: 0,
   };
 
@@ -344,6 +362,22 @@ function createMediaBytes({
     if (active > 0) active -= 1;
   }
 
+  /**
+   * Reserve the next upstream start: { waitMs } (0 = now), or { refusedMs }
+   * when it would wait longer than a queued request may.
+   */
+  function reserveStart() {
+    const interval = Math.max(0, Number(startIntervalMs) || 0);
+    if (!interval) return { waitMs: 0 };
+    const t = now();
+    const tolerance = Math.max(0, Math.floor(Number(startBurst) || 1) - 1) * interval;
+    const base = Math.max(nextStartAt, t);
+    const waitMs = Math.max(0, base - tolerance - t);
+    if (waitMs > maxQueueWaitMs) return { refusedMs: waitMs };
+    nextStartAt = base + interval;
+    return { waitMs };
+  }
+
   /** One upstream fetch → { ok, type, bytes } | { kind: 'gone'|'refused'|'unavailable', retryAfterSec? }. */
   async function fetchUpstream(url) {
     if (!(await acquire())) {
@@ -352,6 +386,16 @@ function createMediaBytes({
     }
     try {
       if (breakerRemainingMs() > 0) return { kind: 'unavailable', retryAfterSec: Math.ceil(breakerRemainingMs() / 1000) };
+      const pace = reserveStart();
+      if (pace.refusedMs !== undefined) {
+        counters.paced_out += 1;
+        return { kind: 'unavailable', retryAfterSec: Math.max(1, Math.ceil(pace.refusedMs / 1000)) };
+      }
+      if (pace.waitMs > 0) {
+        counters.paced += 1;
+        await sleep(pace.waitMs);
+        if (breakerRemainingMs() > 0) return { kind: 'unavailable', retryAfterSec: Math.ceil(breakerRemainingMs() / 1000) };
+      }
       const controller = new AbortController();
       let timer;
       // The deadline covers headers and body, and holds even for a fetcher that ignores the signal.
@@ -513,7 +557,13 @@ function createMediaBytes({
         return sendError(response, 503, 'media_unavailable', breakerRemainingMs() / 1000);
       }
       // Only a fetch that really goes upstream is counted against the caller.
+      // With the guard on and no admission check handed over (a path the guard
+      // did not recognise), the miss is refused: fail closed, never uncounted.
       const admit = request[UPSTREAM_MISS_ADMISSION];
+      if (typeof admit !== 'function' && guardEnabled()) {
+        counters.unadmitted += 1;
+        return sendError(response, 503, 'media_unavailable', 5);
+      }
       const verdict = typeof admit === 'function' ? admit() : { allowed: true };
       if (!verdict?.allowed) {
         counters.rate_limited += 1;
@@ -592,4 +642,6 @@ module.exports = {
   MAX_FILE_BYTES,
   UPSTREAM_TIMEOUT_MS,
   MAX_PARALLEL_UPSTREAM,
+  UPSTREAM_START_BURST,
+  UPSTREAM_START_INTERVAL_MS,
 };

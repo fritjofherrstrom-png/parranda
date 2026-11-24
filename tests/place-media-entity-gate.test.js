@@ -70,9 +70,9 @@ test('gold set: a brand or chain QID is refused', () => {
   for (const p31 of ['Q431289', 'Q507619', 'Q18534542', 'Q4830453']) {
     assert.equal(gateEntityForStop(cafe, { ...chain, entity: { ...chain.entity, p31: ['Q30022', p31] } }).reason, 'brand', p31);
   }
-  // The OSM brand:wikidata of the element itself.
+  // A chain stop (OSM brand / brand:wikidata tag) never gets media, even on a venue P31.
   const venue = { ...chain, entity: { ...chain.entity, p31: ['Q30022'] } };
-  assert.equal(gateEntityForStop({ ...cafe, brand_wikidata: 'Q100' }, venue).reason, 'brand');
+  assert.equal(gateEntityForStop({ ...cafe, chain: true }, venue).reason, 'brand');
   assert.deepEqual(gateEntityForStop(cafe, venue), { ok: true });
 });
 

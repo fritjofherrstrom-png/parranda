@@ -286,6 +286,11 @@ test('media that break a scalar rule are dropped before the copy, so the share s
     ['excerpt permalink elsewhere', stop => { stop.about.article_url = 'https://example.org/w/index.php?oldid=1'; }, ['about']],
     ['kicker with a URL', stop => { stop.subtitle.text = 'se https://example.org'; }, ['subtitle']],
     ['malformed wikidata_id', stop => { stop.wikidata_id = 'q1331646'; }, MEDIA_KEYS],
+    // Review 2026-11-25: placeholders, footnotes, page images and hatnotes from older days are dropped, not shared.
+    ['"Unknown author" as the credit', stop => { stop.media.author = 'Unknown author'; }, ['media']],
+    ['a footnote link "[1]" as the credit', stop => { stop.media.author = '[1]'; }, ['media']],
+    ['a photo that came from the Wikipedia page image', stop => { stop.media.via = 'page_image'; }, ['media']],
+    ['a hatnote as the excerpt', stop => { stop.about.text = 'För andra sjöfartsmuseer, se Sjöfartsmuseet och Marinmuseum.'; }, ['about']],
   ]) {
     const result = project(variant(mutate));
     assert.ok(result, name);

@@ -5,11 +5,14 @@
 // anything malformed is dropped whole, never repaired.
 
 const { isMediaLicenseId, isMediaLicenseUrl, mediaLicenseNeedsAuthor } = require('../../shared/media-licenses.mjs');
+const { isCreditName, isHatnoteText, hasMaintenanceMarker } = require('../../shared/place-media-text.mjs');
 
 const QID = /^Q[1-9]\d{0,11}$/;
 const SHA1 = /^[0-9a-f]{40}$/;
 const LANGS = ['sv', 'en'];
-const VIAS = new Set(['p18', 'p5775', 'osm_commons', 'page_image']);
+// No Wikipedia page image: it often shows a species or another building. A
+// record from an older index that used one is dropped on load and fetched again.
+const VIAS = new Set(['p18', 'p5775', 'osm_commons']);
 const MAX_SUBTITLE = 80;
 const MIN_EXCERPT = 40;
 const MAX_EXCERPT = 320;
@@ -35,14 +38,18 @@ function isCommonsFilePageUrl(value) {
     /^https:\/\/commons\.wikimedia\.org\/wiki\/File:[^/?#\s]+$/.test(value);
 }
 function isAuthor(value) {
-  // Commons' "No machine-readable author|source provided" placeholders are never a credit.
-  return cleanText(value, 200) && !/^(?:https?|www\.|\/\/)/i.test(value) && !/^No machine-readable (?:author|source) provided\b/i.test(value);
+  // shared/place-media-text.mjs: no link, no "Unknown author"/"Okänd" or Commons
+  // "No machine-readable author provided" placeholder, no bare "[1]" footnote.
+  return Boolean(cleanText(value, 200)) && isCreditName(value);
 }
 function isUrlFree(text) {
   return !/(?:https?:\/\/|www\.|\/\/[a-z0-9])/i.test(text);
 }
 function isExcerptText(value) {
-  return cleanText(value, MAX_EXCERPT) && value.length >= MIN_EXCERPT && isUrlFree(value) && /[.!?…]["'”’»)]?$/.test(value);
+  // A hatnote ("För slottet i Helsingborg, se …") is about another article and a
+  // maintenance marker ("[källa behövs]") is not the place's text.
+  return Boolean(cleanText(value, MAX_EXCERPT)) && value.length >= MIN_EXCERPT && isUrlFree(value) &&
+    /[.!?…]["'”’»)]?$/.test(value) && !isHatnoteText(value) && !hasMaintenanceMarker(value);
 }
 function isSubtitleText(value) {
   return cleanText(value, MAX_SUBTITLE) && isUrlFree(value);

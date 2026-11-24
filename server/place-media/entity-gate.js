@@ -205,7 +205,12 @@ function gateEntityForStop(stop, record) {
   if (!stop || typeof stop !== 'object') return { ok: false, reason: 'no_facts' };
   if (!hasFacts(record)) return { ok: false, reason: 'no_facts' };
   const { entity } = record;
-  if (typeof stop.brand_wikidata === 'string' && stop.brand_wikidata.trim() === record.qid) return { ok: false, reason: 'brand' };
+  // A chain stop (the OSM element carries a brand or brand:wikidata tag; the
+  // loader marks it chain:true and the agnostic engine keeps that on the stop)
+  // gets no media: its wikidata tag often names the brand, not this branch
+  // (Myrorna Q10592609), and the build skips those elements, so at runtime the
+  // brand QID would otherwise be fetched on demand and pass on a venue P31.
+  if (stop.chain === true) return { ok: false, reason: 'brand' };
   for (const q of entity.p31) {
     const reject = REJECT_CLASSES.get(q);
     if (reject) return { ok: false, reason: reject.reason };

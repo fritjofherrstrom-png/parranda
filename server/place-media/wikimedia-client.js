@@ -7,7 +7,8 @@
 // Only QIDs and file/article titles ever leave the server.
 
 const { gateCommonsPage } = require('./commons-gate');
-const { normalizeMediaRecord, isQid, MIN_EXCERPT, MAX_EXCERPT, MAX_SUBTITLE, MAX_ALIASES } = require('./record');
+const { normalizeMediaRecord, isQid, isExcerptText, MIN_EXCERPT, MAX_EXCERPT, MAX_SUBTITLE, MAX_ALIASES } = require('./record');
+const { isHatnoteText, maintenanceMarkerIndex } = require('../../shared/place-media-text.mjs');
 const { REJECT_CLASSES, VENUE_CLASSES } = require('./entity-gate');
 
 const USER_AGENT = 'Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda) place-media';
@@ -84,25 +85,31 @@ function isSentenceEnd(paragraph, start, end) {
 }
 
 /**
- * Verbatim excerpt from a plain-text intro: the first paragraph, cut only at a
- * sentence end, MIN_EXCERPT..MAX_EXCERPT characters, no URL inside. null when
- * no such cut exists.
+ * Verbatim excerpt from a plain-text intro: the first paragraph that is not a
+ * hatnote, cut only at a sentence end before any maintenance marker
+ * ("[källa behövs]"), MIN_EXCERPT..MAX_EXCERPT characters, no URL inside.
+ * null when no such cut exists. svwiki keeps the hatnote ("För slottet i
+ * Helsingborg, se …") as the intro's own first paragraph: it points to another
+ * article and is never about this place.
  */
 function cutExcerpt(text) {
   if (typeof text !== 'string') return null;
-  const paragraph = text.split(/\n+/).map(part => part.replace(/[ \t ]+/g, ' ').trim()).find(Boolean);
+  const paragraph = text.split(/\n+/).map(part => part.replace(/[ \t ]+/g, ' ').trim()).filter(Boolean)
+    .find(part => !isHatnoteText(part));
   if (!paragraph || /[\u0000-\u001f\u007f-\u009f]/.test(paragraph)) return null;
+  const marker = maintenanceMarkerIndex(paragraph);
+  const limit = marker === -1 ? MAX_EXCERPT : Math.min(MAX_EXCERPT, marker);
   let best = null;
   const ends = /[.!?…]["'”’»)]*(?=\s|$)/g;
   let match;
   while ((match = ends.exec(paragraph))) {
     const end = match.index + match[0].length;
-    if (end > MAX_EXCERPT) break;
+    if (end > limit) break;
     if (end < MIN_EXCERPT) continue;
     if (!isSentenceEnd(paragraph, match.index, end)) continue;
     best = paragraph.slice(0, end);
   }
-  if (!best || /(?:https?:\/\/|www\.|\/\/[a-z0-9])/i.test(best)) return null;
+  if (!best || /(?:https?:\/\/|www\.|\/\/[a-z0-9])/i.test(best) || !isExcerptText(best)) return null;
   return best;
 }
 
@@ -169,19 +176,18 @@ function parseEntity(qid, raw) {
   return { entity: { p31, labels, aliases, coord }, subtitle, sitelinks, p18, p5775 };
 }
 
-/** Wikipedia extracts page → { excerpt, pageImage } or { rejected }. */
+/** Wikipedia extracts page → { excerpt } or { rejected }. */
 function parseExtractPage(page, { qid, lang }) {
   if (!page || typeof page !== 'object' || page.missing !== undefined || page.invalid !== undefined || page.ns !== 0) return { rejected: 'missing' };
   const props = page.pageprops || {};
   if (props.disambiguation !== undefined) return { rejected: 'disambiguation' };
   if (props.wikibase_item !== qid) return { rejected: 'wikibase_item' };
-  const pageImage = typeof props.page_image_free === 'string' ? fileTitle(props.page_image_free) : null;
   const title = cleanString(page.title, 255);
   const rev = Number(page.revisions?.[0]?.revid ?? page.lastrevid);
-  if (!title || !Number.isSafeInteger(rev) || rev < 1) return { rejected: 'revision', pageImage };
+  if (!title || !Number.isSafeInteger(rev) || rev < 1) return { rejected: 'revision' };
   const text = cutExcerpt(page.extract);
-  if (!text) return { rejected: 'excerpt', pageImage };
-  return { excerpt: { text, title, rev, lang }, pageImage };
+  if (!text) return { rejected: 'excerpt' };
+  return { excerpt: { text, title, rev, lang } };
 }
 
 function pagesOf(body) {
@@ -357,7 +363,7 @@ function createWikimediaClient({
       try {
         body = await request(apiUrl(`https://${lang}.wikipedia.org/w/api.php`, {
           action: 'query', prop: 'extracts|pageprops|revisions', exintro: '1', explaintext: '1', exlimit: String(EXTRACT_BATCH),
-          ppprop: 'disambiguation|wikibase_item|page_image_free', rvprop: 'ids', redirects: '1', titles: batch.join('|'),
+          ppprop: 'disambiguation|wikibase_item', rvprop: 'ids', redirects: '1', titles: batch.join('|'),
         }));
       } catch (error) { errors.push(error); continue; }
       for (const [title, page] of pagesByRequestedTitle(body, batch)) out.set(title, page);
@@ -391,7 +397,6 @@ function createWikimediaClient({
       !facts.entity.p31.some(q => REJECT_CLASSES.has(q)));
 
     const excerpts = new Map();
-    const pageImages = new Map();
     for (const lang of LANGS) {
       const titles = useful.map(([, facts]) => facts.sitelinks[lang]).filter(Boolean);
       if (!titles.length) continue;
@@ -403,7 +408,6 @@ function createWikimediaClient({
         const result = parseExtractPage(pages.get(title), { qid, lang });
         if (result.excerpt) excerpts.set(`${qid}|${lang}`, result.excerpt);
         else count('excerpt_rejections', result.rejected);
-        if (result.pageImage && !pageImages.has(qid)) pageImages.set(qid, result.pageImage);
       }
     }
 
@@ -415,7 +419,11 @@ function createWikimediaClient({
       if (facts.entity.p31.some(q => VENUE_CLASSES.has(q))) list.push(...facts.p5775.map(title => ({ title, via: 'p5775' })));
       const hint = fileTitle(typeof hints.get(qid) === 'string' && /^File:/i.test(hints.get(qid)) ? hints.get(qid) : '');
       if (hint) list.push({ title: hint, via: 'osm_commons' });
-      if (pageImages.has(qid)) list.push({ title: pageImages.get(qid), via: 'page_image' });
+      // No Wikipedia page image (review 2026-11-25): on svwiki the infobox of a
+      // nature reserve or park shows a typical species or a nearby building, and
+      // PageImages picks it — about 240 of 306 such photos in the Sweden index
+      // showed a bird, plant, lichen or another place. Only the item's own
+      // statements and the element's own OSM tag name a photo of the place.
       candidates.set(qid, list);
     }
     const allTitles = [...candidates.values()].flatMap(list => list.map(row => row.title));
