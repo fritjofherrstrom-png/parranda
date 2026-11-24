@@ -38,6 +38,19 @@ test('the region list is well formed and keeps Sweden, which staging serves', ()
   assert.ok(!REGIONS.some(entry => entry.geofabrik === 'europe/france' || entry.geofabrik === 'europe/germany'));
 });
 
+test('a build gives the same tiles and hashes whatever order the places arrive in', () => {
+  const build = (list) => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'osm-refresh-order-'));
+    writeExtractStore({ outDir: out, region: 'testland', dataTimestamp: '2026-11-23T21:00:00Z', coverage: COVERAGE, elements: list,
+      builtAt: '2026-11-24T00:00:00Z' });
+    return fs.readFileSync(path.join(out, 'testland', 'manifest.json'), 'utf8');
+  };
+  const many = [...elements(),
+    { type: 'way', id: 9, center: { lat: 46.0501, lon: 14.5001 }, tags: { name: 'Grad', historic: 'castle' } },
+    { type: 'node', id: 7, lat: 46.0502, lon: 14.5002, tags: { name: 'Bar', amenity: 'bar' } }];
+  assert.equal(build(many), build([...many].reverse()));
+});
+
 test('selectRegions keeps the list order and refuses unknown names', () => {
   assert.deepEqual(selectRegions('spain,sweden').map(entry => entry.region), ['sweden', 'spain']);
   assert.throws(() => selectRegions('sweden,atlantis'), /atlantis/);
@@ -47,8 +60,9 @@ test('selectRegions keeps the list order and refuses unknown names', () => {
 
 test('diskPlan counts the extract, DuckDB temp files and the free-space floor', () => {
   assert.equal(diskPlan({ free: 8 * GB, pbfBytes: 1 * GB, minFree: 2.5 * GB }).fits, true);
-  // 2.3 GB extract: 2.3 + 3.45 temp + 2.5 floor = 8.25 GB.
-  assert.equal(diskPlan({ free: 8 * GB, pbfBytes: 2.3 * GB, minFree: 2.5 * GB }).fits, false);
+  // 2.3 GB extract: 2.3 + 1.15 temp + 2.5 floor = 5.95 GB.
+  assert.equal(diskPlan({ free: 6 * GB, pbfBytes: 2.3 * GB, minFree: 2.5 * GB }).fits, true);
+  assert.equal(diskPlan({ free: 5.9 * GB, pbfBytes: 2.3 * GB, minFree: 2.5 * GB }).fits, false);
 });
 
 test('verifyStore accepts a store as the builder wrote it', () => {

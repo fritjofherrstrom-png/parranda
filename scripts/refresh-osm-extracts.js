@@ -13,8 +13,8 @@
 // new store: its totals agree with its tile inventory and every listed tile is
 // on disk with the listed hash.
 //
-// Disk: a build needs the extract plus about 1.5 times its size of DuckDB
-// temporary files. A region is skipped when that would leave less than
+// Disk: a build needs the extract plus headroom for DuckDB temporary files
+// (half the extract's size). A region is skipped when that would leave less than
 // --min-free-gb free, and a running build is stopped when free space falls
 // below it. The extract is deleted whether the build succeeded or not.
 //
@@ -35,8 +35,10 @@ const { OSM_EXTRACT_FORMAT } = require("../server/place-candidates/osm-extract-s
 const GEOFABRIK_BASE = "https://download.geofabrik.de";
 const GB = 1024 ** 3;
 const DEFAULT_MIN_FREE_BYTES = 2.5 * GB;
-// DuckDB spilled about 1.5 GB for the 1.0 GB Sweden extract.
-const TEMP_FACTOR = 1.5;
+// Headroom for DuckDB temporary files beside the extract. The builder keeps
+// its joins small and measured no spill on Denmark (0.5 GB); before that fix
+// it spilled two to three times the extract. The watchdog still guards it.
+const TEMP_FACTOR = 0.5;
 const WATCH_INTERVAL_MS = 2000;
 const USER_AGENT = "parranda-osm-extract-refresh";
 
