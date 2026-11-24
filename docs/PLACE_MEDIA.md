@@ -153,3 +153,37 @@ Upstream down and not cached → fast 503. `public-access-guard.js`: prefix rule
 
 Ratings, reviews, AI text, translations, stock/AI images, food photos not of the venue, keyword or geo image search,
 Openverse/Flickr/Mapillary, Wikivoyage, hotlinking Wikimedia, a hero image or carousel, fact grids.
+
+## As built in PR 1 (deviations and settings)
+
+Where the implementation is stricter than or differs from the contract above:
+
+- **Class QIDs corrected** (checked on wikidata.org): restaurant chain is Q18534542 (Q18534524 does not exist),
+  "store Q11410" is *game* and is left out, second-hand shop is Q2925872 (Q1758825 is a list). Both class lists
+  are longer than above (more chain/company/admin/transport/Wikimedia-meta classes rejected; winery, distillery,
+  commercial establishment, chain location and market types accepted as venues) and read-only at runtime.
+- `wbgetentities` is called without `languages=` so the name gate sees labels and aliases in every language;
+  subtitles and excerpts stay sv/en (`sitefilter=svwiki|enwiki`). The REST-summary fallback is not built.
+- Media fields arriving with a request are always dropped. A stop with two different attributed QIDs gets no
+  identity. P5775 only for venue entities. A subtitle is given only in the request language.
+- Commons author: "Own work" and Commons' "No machine-readable author/source provided. X assumed" placeholders
+  are not credits; talk-page signature stamps ("Name 15:22, 28 March 2007 (UTC)", "Name (talk)") keep only the name.
+- Hydration runs once at the exit of `composeAgnosticRouteOutput` (not inside each engine trial), so one request
+  never spends the wait budget twice. Legacy (non-engine) days are not hydrated.
+- Shared days: a bare `wikidata_id` must equal the stop's own QID, `about` with `visit_content` is refused,
+  licence and licence URL must agree, an author is required unless PD/CC0, width >= 800.
+- `/media/c/:media_id/:w`: only jpeg/png/webp with matching magic bytes; permanent refusals answer 404 (remembered
+  10 min), transient ones 503, the guard's media allowance 429. Without `PARRANDA_CACHE_DIR` the byte cache is
+  memory-only (64 MB). The route answers 404 for everything while the feature is off.
+
+Settings: `PARRANDA_PLACE_MEDIA_DIR` (feature switch; `index-v1.jsonl` + writable `learned-v1.jsonl`),
+`PARRANDA_CACHE_DIR` (byte cache in `place-media-bytes/`), `PARRANDA_MEDIA_CACHE_MAX_MB` (default 1024),
+`PARRANDA_PUBLIC_GUARD_MEDIA_MAX` (upstream misses per client per guard window, default 120).
+
+Build an index: `node scripts/build-place-media.js --extract-dir <osm extract store> --out <dir> [--limit N] [--refresh]`
+(serial, polite; Sweden: 7283 QIDs in 6–9 minutes, 2994 photos). Re-running without `--refresh` only fetches what is missing.
+
+Known limit (measured 2026-11-24): upload.wikimedia.org answers 429 (Retry-After about 11 s) after roughly ten
+rapid cold thumbnail requests from one IP. The route then serves fast 503s until the window passes and the row
+tile falls back to its glyph; paced at one request per 2 s every thumb was served. Warming the byte cache at a
+polite pace is left for a follow-up.
