@@ -28,6 +28,7 @@ const { OSM_TAG_MAP } = require("../server/place-candidates/open-data-loader");
 const { OSM_EXTRACT_FORMAT } = require("../server/place-candidates/osm-extract-store");
 
 const TILE_DEG = 0.05;
+const KIND_ORDER = { node: 0, way: 1, relation: 2 };
 const ATTRIBUTION = "© OpenStreetMap contributors, ODbL 1.0";
 
 function parsePolyFile(text) {
@@ -182,8 +183,12 @@ function writeExtractStore({
     tiles.get(key).push(element);
     count += 1;
   }
+  // Tiles are written in key order, each sorted by kind then id, so the same
+  // data gives the same files and hashes whatever order DuckDB returned it in.
   const inventory = {};
-  for (const [key, tile] of tiles) {
+  for (const key of [...tiles.keys()].sort()) {
+    const tile = tiles.get(key).sort((a, b) =>
+      (KIND_ORDER[a.type] ?? 3) - (KIND_ORDER[b.type] ?? 3) || Number(a.id) - Number(b.id));
     const raw = Buffer.from(JSON.stringify(tile));
     fs.writeFileSync(path.join(tilesDir, `${key}.json`), raw);
     inventory[key] = { n: tile.length, sha256: createHash("sha256").update(raw).digest("hex") };
@@ -225,7 +230,13 @@ async function readPlaces(pbfPath, { memoryLimit = "2GB", tempDir }) {
   const instance = await DuckDBInstance.create(":memory:");
   const conn = await instance.connect();
   const sqlPath = value => String(value).replace(/'/g, "''");
-  await conn.run(`INSTALL spatial; LOAD spatial; SET memory_limit='${memoryLimit}'; SET temp_directory='${sqlPath(tempDir)}'`);
+  // DuckDB cannot estimate the size of st_readosm, so it may put the whole
+  // file on the hash side of a join and spill it to disk (about 1.3 GB for a
+  // 0.5 GB extract, more than the extract for larger ones). With the build/probe
+  // swap turned off, the right side of each join below stays the hash side, and
+  // it is always the short list of what the picked places need.
+  await conn.run(`INSTALL spatial; LOAD spatial; SET memory_limit='${memoryLimit}'; SET temp_directory='${sqlPath(tempDir)}';
+    SET preserve_insertion_order=false; SET disabled_optimizers='build_side_probe_side'`);
   const source = `st_readosm('${sqlPath(pbfPath)}')`;
   await conn.run(`CREATE TABLE picked AS SELECT kind::VARCHAR AS kind, id, tags, lat, lon, refs, ref_types
     FROM ${source} WHERE tags IS NOT NULL AND tags['name'] IS NOT NULL AND (${tagFilterSql()})`);
@@ -237,12 +248,18 @@ async function readPlaces(pbfPath, { memoryLimit = "2GB", tempDir }) {
     SELECT owner, 'relation', way_id FROM (
       SELECT id AS owner, unnest(refs) AS way_id, unnest(ref_types)::VARCHAR AS ref_type FROM picked WHERE kind = 'relation'
     ) WHERE ref_type = 'way'`);
+  // Only the ways and nodes the picked places need are kept from each scan,
+  // through a semi-join whose hash side is that short list.
+  await conn.run(`CREATE TABLE needed_ways AS
+    SELECT id, refs FROM ${source} WHERE kind = 'way' AND id IN (SELECT way_id FROM member_ways)`);
   await conn.run(`CREATE TABLE way_nodes AS
     SELECT m.owner, m.owner_kind, unnest(w.refs) AS node_id
-    FROM member_ways m JOIN (SELECT id, refs FROM ${source} WHERE kind = 'way') w ON w.id = m.way_id`);
+    FROM member_ways m JOIN needed_ways w ON w.id = m.way_id`);
+  await conn.run(`CREATE TABLE needed_nodes AS
+    SELECT id, lat, lon FROM ${source} WHERE kind = 'node' AND id IN (SELECT node_id FROM way_nodes)`);
   await conn.run(`CREATE TABLE centres AS
     SELECT x.owner, x.owner_kind, (min(n.lat) + max(n.lat)) / 2 AS lat, (min(n.lon) + max(n.lon)) / 2 AS lon
-    FROM way_nodes x JOIN (SELECT id, lat, lon FROM ${source} WHERE kind = 'node') n ON n.id = x.node_id
+    FROM way_nodes x JOIN needed_nodes n ON n.id = x.node_id
     GROUP BY x.owner, x.owner_kind`);
   const reader = await conn.runAndReadAll(`
     SELECT kind, id::VARCHAR AS id, lat, lon, to_json(tags)::VARCHAR AS tags FROM picked WHERE kind = 'node'
