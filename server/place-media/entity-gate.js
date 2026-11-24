@@ -69,11 +69,22 @@ const REJECT_ENTRIES = [
   ['Q13406463', 'Wikimedia list article', 'p31_rejected'],
   ['Q4167836', 'Wikimedia category', 'p31_rejected'],
 ];
-const REJECT_CLASSES = new Map(REJECT_ENTRIES.map(([qid, label, reason]) => [qid, Object.freeze({ label, reason })]));
-Object.freeze(REJECT_CLASSES);
+// Object.freeze does not freeze a Map's entries: block its mutators too, so no
+// caller can widen or narrow the gate at runtime.
+function readOnlyMap(entries) {
+  const map = new Map(entries);
+  for (const method of ['set', 'delete', 'clear']) {
+    Object.defineProperty(map, method, { value: () => { throw new TypeError('place-media class lists are read-only'); } });
+  }
+  return Object.freeze(map);
+}
+const REJECT_CLASSES = readOnlyMap(REJECT_ENTRIES.map(([qid, label, reason]) => [qid, Object.freeze({ label, reason })]));
 
 // P31 classes that are a venue (the business in front of the reader, not the
-// building around it). Direct P31 match only. Labels checked on wikidata.org.
+// building around it). Direct P31 match only. Labels checked on wikidata.org
+// (2026-11-24). Two contract QIDs are wrong and deliberately left out: Q11410
+// is "game" (not "store") and Q1758825 is "list of Italian composers" (not
+// "second-hand shop"; the real item is Q2925872).
 const VENUE_ENTRIES = [
   ['Q11707', 'restaurant'], ['Q30022', 'café'], ['Q4236467', 'coffeehouse'], ['Q187456', 'bar'],
   ['Q212198', 'pub'], ['Q274393', 'bakery'], ['Q213441', 'shop'], ['Q57334497', 'retail outlet'],
@@ -86,6 +97,9 @@ const VENUE_ENTRIES = [
   ['Q858012', 'beer hall'], ['Q1690553', 'trattoria'], ['Q1581509', 'brasserie'], ['Q866742', 'bistro'],
   ['Q1501212', 'pizzeria'], ['Q1751429', 'fast food restaurant'], ['Q1311064', 'ice cream parlor'],
   ['Q27979885', 'sandwich shop'], ['Q622425', 'nightclub'],
+  // Overture maps winery and distillery categories to stop type "bar"; like a
+  // brewery, the producer is the venue a visitor walks into.
+  ['Q156362', 'winery'], ['Q1251750', 'distillery'],
   // One branch of a chain is still that one venue; the brand QID is not.
   ['Q124656585', 'restaurant chain location'],
   // "Granja M. Viader" (Barcelona) is typed only as a commercial establishment.
@@ -94,8 +108,7 @@ const VENUE_ENTRIES = [
   ['Q330284', 'marketplace'], ['Q132510', 'market'], ['Q2080521', 'market hall'], ['Q385870', 'flea market'],
   ['Q18355750', 'food hall'],
 ];
-const VENUE_CLASSES = new Map(VENUE_ENTRIES);
-Object.freeze(VENUE_CLASSES);
+const VENUE_CLASSES = readOnlyMap(VENUE_ENTRIES);
 
 // Parranda stop types (server/place-candidates/open-data-loader.js OSM_TAG_MAP,
 // overture-source.js, catalog kinds) that are food, drink or shops.

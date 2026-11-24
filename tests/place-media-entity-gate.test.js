@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  REJECT_CLASSES, VENUE_CLASSES, normalizeName, gateEntityForStop, stopMediaQid, dropAmbiguous, isVenueStop,
+  REJECT_CLASSES, VENUE_CLASSES, normalizeName, gateEntityForStop, stopMediaQid, dropAmbiguous, isVenueStop, isNatureStop,
 } = require('../server/place-media/entity-gate');
 const { recordFromEntity } = require('./helpers/place-media-fixtures');
 
@@ -165,4 +165,44 @@ test('class lists: brand/chain/settlement/street/transport rejected, venues are 
     assert.ok(isVenueStop({ type }), type);
   for (const type of ['museum', 'gallery', 'park', 'viewpoint', 'historic-site', 'castle', 'monument'])
     assert.equal(isVenueStop({ type }), false, type);
+});
+
+test('contract class QIDs that name something else never enter the lists', () => {
+  // Checked on wikidata.org 2026-11-24: Q11410 is "game", Q1758825 is a list
+  // article and Q18534524 does not exist. The real items are used instead.
+  for (const q of ['Q11410', 'Q1758825', 'Q18534524']) {
+    assert.equal(VENUE_CLASSES.has(q), false, q);
+    assert.equal(REJECT_CLASSES.has(q), false, q);
+  }
+  assert.ok(VENUE_CLASSES.has('Q2925872'), 'second-hand shop');
+  assert.ok(REJECT_CLASSES.has('Q18534542'), 'restaurant chain');
+});
+
+test('every stop type the planner emits is classed: venues, nature, or neither', () => {
+  // Types from open-data-loader OSM_TAG_MAP, overture-source and the catalogs.
+  const venues = ['cafe', 'bar', 'restaurant', 'market', 'vintage-shop', 'bakery', 'street-food', 'cocktail-bar'];
+  const others = ['museum', 'gallery', 'park', 'garden', 'beach', 'viewpoint', 'promenade', 'castle', 'historic-site',
+    'monument', 'lighthouse', 'landmark'];
+  for (const type of venues) assert.ok(isVenueStop({ type }), type);
+  for (const type of others) assert.equal(isVenueStop({ type }), false, type);
+  for (const type of ['park', 'garden', 'beach']) assert.ok(isNatureStop({ type }), type);
+  for (const type of ['promenade', 'museum', 'viewpoint', 'cafe']) assert.equal(isNatureStop({ type }), false, type);
+});
+
+test('a winery typed "bar" by Overture passes the venue gate as a winery', () => {
+  // Synthetic winery entity shaped like wbgetentities output.
+  const record = { v: 1, qid: 'Q102', checked_on: '2026-11-24',
+    entity: { p31: ['Q156362'], labels: { sv: 'Vingården i Klagshamn' }, aliases: [], coord: { lat: 55.5203, lng: 12.9122 } },
+    photo: null, subtitle: {}, about: {} };
+  const bar = stop({ id: 'overture-klagshamn', label: 'Vingården i Klagshamn', lat: 55.5204, lng: 12.9121, type: 'bar', qid: 'Q102' });
+  assert.deepEqual(gateEntityForStop(bar, record), { ok: true });
+  const building = { ...record, entity: { ...record.entity, p31: ['Q41176'] } };
+  assert.deepEqual(gateEntityForStop(bar, building), { ok: false, reason: 'venue_class' });
+});
+
+test('class lists cannot be changed at runtime', () => {
+  assert.throws(() => REJECT_CLASSES.set('Q1', {}), TypeError);
+  assert.throws(() => VENUE_CLASSES.delete('Q11707'), TypeError);
+  assert.throws(() => VENUE_CLASSES.clear(), TypeError);
+  assert.ok(VENUE_CLASSES.has('Q11707'));
 });
