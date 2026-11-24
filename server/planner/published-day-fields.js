@@ -35,6 +35,10 @@ const preferences = array(preference, 0, MAX_PLANNER_PREFERENCES);
 // (role-selector.js) and scoreWeather (fit-scorer.js). A value outside them
 // refuses the share, never disappears from it.
 const CANDIDATE_STATUS = enumeration('filled','partial','fallback','missing');
+// Place media (docs/PLACE_MEDIA.md). Closed vocabularies of the producer in
+// server/place-media; a value outside them refuses, never disappears.
+const MEDIA_VIA = enumeration('p18','p5775','osm_commons','page_image');
+const MEDIA_LANG = enumeration('sv','en');
 const WEATHER_REASON = enumeration('rain_favors_indoor','rain_penalizes_exposed','sun_favors_scenic',
   'hot_favors_swim','hot_penalizes_shadeless','requested_waterfront');
 const fields = {
@@ -99,7 +103,16 @@ const fields = {
     covered_preferences: n(array('string')), partial_preferences: n(array('string')), missing_preferences: n(array('string')),
     candidate_status: n(CANDIDATE_STATUS), weather_reasons: o(array(WEATHER_REASON,0,6)),
     source: n('StopSource'), trust: n('Trust'), provisional: o('bool'), origin: n('string'), website: n('shortUrl'),
-    place_details: n('PlaceDetails'), visit_content: o('VisitContent'), selected_day_hours: n('SelectedHours'), provenance: n('Provenance') },
+    place_details: n('PlaceDetails'), visit_content: o('VisitContent'), selected_day_hours: n('SelectedHours'), provenance: n('Provenance'),
+    wikidata_id: n('qid'), media: o('StopMedia'), subtitle: o('StopSubtitle'), about: o('StopAbout') },
+  // Same key order as server/place-media/hydrate.js builds them, so a shared
+  // day serialises exactly like the live one.
+  StopMedia: { version: r(enumeration(1)), kind: r(enumeration('photo')), media_id: r('mediaId'), width: r('count'), height: r('count'),
+    subject_qid: r('qid'), via: r(MEDIA_VIA), author: rule('creditText',true,true), license: r('mediaLicense'),
+    license_url: rule('ccLicenseUrl',true,true), file_page_url: r('commonsFilePageUrl'), modified: r(enumeration('cropped')), checked_on: r('date') },
+  StopSubtitle: { text: r('subtitleText'), lang: r(MEDIA_LANG), subject_qid: r('qid'), source: r(enumeration('wikidata')) },
+  StopAbout: { version: r(enumeration(1)), kind: r(enumeration('excerpt')), text: r('aboutText'), lang: r(MEDIA_LANG), subject_qid: r('qid'),
+    article_url: r('wikipediaPermalink'), article_title: r('articleTitle'), license: r(enumeration('CC-BY-SA-4.0')), checked_on: r('date') },
   Leg: { from_label: n('string'), to_label: n('string'), distance_km: n('nonnegative'), estimated_walk_minutes: n('nonnegative') },
   // Fixed public operator links need no place-source URL witness. The general
   // URL policy remains closed to arbitrary router-provided destinations.
@@ -269,6 +282,13 @@ function budget(privacy) {
     }
     if (typeof value !== 'string') throw new Error('string');
     string(value);
+    // Place-media scalars return BEFORE the generic URL sniff below: their
+    // destinations (Commons file page, Wikipedia permalink, CC licence) are
+    // fixed by these exact rules and never enlarge publicSourceUrls.
+    if (Object.hasOwn(MEDIA_SCALARS, type)) {
+      if (!placeMediaMatchers()[MEDIA_SCALARS[type]](value)) throw new Error('place media '+type);
+      return value;
+    }
     if (type === 'editId' && (!value || value.length > 200 || value !== value.trim() || /[\u0000-\u001f\u007f]/.test(value))) throw new Error('edit id');
     // Match the actual recipient's identity contract before persistence; an
     // unreadable source value refuses optional sharing, never gets truncated.
@@ -304,8 +324,36 @@ function budget(privacy) {
   }
   return { copy, charge, string };
 }
+// Schema type -> matcher in server/place-media/hydrate.js (one source of truth).
+const MEDIA_SCALARS = Object.freeze({ __proto__: null, qid: 'qid', mediaId: 'mediaId', commonsFilePageUrl: 'commonsFilePageUrl',
+  wikipediaPermalink: 'wikipediaPermalink', ccLicenseUrl: 'ccLicenseUrl', creditText: 'creditText', aboutText: 'aboutText',
+  subtitleText: 'subtitleText', articleTitle: 'articleTitle', mediaLicense: 'licenseId' });
+const MEDIA_OBJECTS = Object.freeze({ media: 'StopMedia', subtitle: 'StopSubtitle', about: 'StopAbout' });
+// Lazy: the place-media service is only loaded when a share carries media.
+const placeMediaMatchers = () => require('../place-media/hydrate').matchers;
 function validateObject(type,value) {
   const refuse = () => { throw new Error('correlated '+type); };
+  if (type === 'StopMedia') {
+    // Licence and its URL tell one story (PD has none); an author is only
+    // optional where the licence needs none; Commons originals are >= 800 px.
+    const { mediaLicenseNeedsAuthor, isMediaLicenseUrl } = require('../../shared/media-licenses.mjs');
+    if (!isMediaLicenseUrl(value.license, value.license_url)) refuse();
+    if (value.author === null && mediaLicenseNeedsAuthor(value.license)) refuse();
+    if (value.width < 800 || value.height < 1) refuse();
+  }
+  if (type === 'Stop') {
+    const kinds = Object.keys(MEDIA_OBJECTS).filter(kind => Object.hasOwn(value, kind));
+    if (Object.hasOwn(value, 'wikidata_id') && value.wikidata_id !== null &&
+        require('../place-media/entity-gate').stopMediaQid(value) !== value.wikidata_id) refuse();
+    if (kinds.length) {
+      // Bound to this stop's own identity and to an object this server
+      // produced for it (attested, or re-derived from the current record).
+      if (!value.wikidata_id || kinds.some(kind => value[kind].subject_qid !== value.wikidata_id)) refuse();
+      if (!require('../place-media/hydrate').isAttestedStopMedia(value)) refuse();
+    }
+    // A curated visit note wins over an excerpt; both together is not ours.
+    if (value.about && value.visit_content) refuse();
+  }
   if (type === 'Stop' && value.visit_content &&
       !require('../place-candidates/visit-content').visitContentMatchesStop(value, value.visit_content)) refuse();
   if (type === 'Stop' && value.provenance?.venue_mentions &&
@@ -380,4 +428,4 @@ function validateObject(type,value) {
     }
   }
 }
-module.exports = { budget, MAX_BYTES, own };
+module.exports = { budget, MAX_BYTES, own, MEDIA_OBJECTS };

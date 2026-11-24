@@ -1112,7 +1112,35 @@ function withCandidateHours(composition, snapshot, requestedDate) {
   return { ...composition, candidateHours: facts };
 }
 
+// The single exit of every any-place composition: original compose, day edits
+// (Keep/Replace/Remove), the Live route upgrade replay and the async planner
+// status worker all return through here. Place media are hydrated exactly once,
+// on the final composed day, after hydrateVisitContent ran inside the engine
+// pass and before any caller can publish or share the day. Hydrating each
+// intermediate trial (focus fallback, enrichment replay) instead would spend the
+// wait budget more than once per request.
 async function composeAgnosticRouteOutput(args) {
+  const composition = await composeFinalAgnosticRouteOutput(args);
+  await hydrateComposedPlaceMedia(composition, args?.lang);
+  return composition;
+}
+
+// Display only: never changes which stops a day has or their order. With the
+// feature off (PARRANDA_PLACE_MEDIA_DIR unset) the route is left untouched.
+async function hydrateComposedPlaceMedia(composition, lang) {
+  const experiment = composition?.experiment;
+  const route = composition?.result?.days?.[0]?.primary_route;
+  if (experiment?.synthesized_via !== "agnostic_compose_engine" || experiment.route_mutation !== true ||
+      !route || !Array.isArray(route.main_stops)) return;
+  try {
+    await require("../place-media/hydrate").hydratePlaceMedia(route, { lang });
+  } catch (_error) {
+    // Media never fail a day; the stops keep what they had (request-supplied
+    // media fields were already dropped before anything could throw).
+  }
+}
+
+async function composeFinalAgnosticRouteOutput(args) {
   if (args.synthesizeVia !== 'engine' || typeof args.openDataLoader?.enrichSelected !== 'function') {
     let retained;
     const composition = await composeAgnosticRouteOutputOnce({ ...args, onRetainComposition: value => {
@@ -2379,6 +2407,8 @@ async function composeAgnosticRouteViaEngine({
   // Display-only notes bind to finalized catalog identities, never ranking or
   // request-supplied descriptions. Do this after final walking/event selection.
   require("../place-candidates/visit-content").hydrateVisitContent(engineRoute);
+  // Place media (photo, kicker, excerpt) follow on the FINAL composition only:
+  // see hydrateComposedPlaceMedia, called once from composeAgnosticRouteOutput.
 
   // Engine geometry owns the actual stop order. Daypart rhythm (#274–278) is a
   // label here, not the sequencer — promoting it into compose ordering is a

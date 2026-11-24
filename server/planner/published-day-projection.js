@@ -1,5 +1,5 @@
 'use strict';
-const { budget, MAX_BYTES, own } = require('./published-day-fields');
+const { budget, MAX_BYTES, own, MEDIA_OBJECTS } = require('./published-day-fields');
 const { normalizePreferencePriority, normalizeDayEdit } = require('../../shared/planner-intent.mjs');
 const { normalizeUserIntents } = require('../candidates/intent-vocabulary');
 const { dayEditOutcome } = require('./day-composition-policy');
@@ -35,7 +35,7 @@ function projectPublishedDay(input = {}) {
         new Set(intent.excludedCandidateIds).size !== intent.excludedCandidateIds.length ||
         !parseLiveEventChoices(intent.liveEventChoices).valid ||
         (intent.dayEdit !== null && !normalizeDayEdit(intent.dayEdit))) return null;
-    const result = bounded.copy('Result', published);
+    const result = bounded.copy('Result', withoutUnreadableStopMedia(published, privacy));
     const experiment = result.agnostic_route_output_experiment;
     const day = result.days[0];
     if (!isRealIsoDate(intent?.dateIso) || day.date !== intent.dateIso ||
@@ -101,6 +101,54 @@ function projectPublishedDay(input = {}) {
     const projection = { intent: projectedIntent, result, language };
     return Buffer.byteLength(JSON.stringify(projection), 'utf8') <= MAX_BYTES ? projection : null;
   } catch (_) { return null; }
+}
+// Display-only place media must never refuse a whole share. Before the closed
+// copy, a media/subtitle/about object that breaks a rule of its own type (an
+// author that reads like a URL, an overlong excerpt, a licence/URL mismatch) is
+// dropped from its stop, and a malformed wikidata_id takes every media object
+// with it. A well-formed object this server did not produce for the stop
+// (unattested, or about another subject) is kept, so validateObject('Stop')
+// still refuses it. Never mutates the input; anything structurally unusual is
+// left to the closed copy, which refuses it.
+function withoutUnreadableStopMedia(published, privacy) {
+  try {
+    const days = own(published,'days').value;
+    if (!Array.isArray(days) || days.length !== 1) return published;
+    const day = own(days,'0').value;
+    const route = day && typeof day === 'object' ? own(day,'primary_route').value : null;
+    const stops = route && typeof route === 'object' ? own(route,'main_stops').value : null;
+    if (!Array.isArray(stops)) return published;
+    let changed = false;
+    const next = [];
+    for (let i = 0; i < stops.length; i++) {
+      const atom = own(stops,String(i));
+      if (!atom.present) return published;
+      const stop = atom.value;
+      const drop = stop && typeof stop === 'object' ? unreadableStopMedia(stop, privacy) : [];
+      if (drop.length) changed = true;
+      next.push(drop.length ? rebuilt(stop, drop.map(key => [key, DROP])) : stop);
+    }
+    if (!changed) return published;
+    return rebuilt(published, [['days', [rebuilt(day, [['primary_route', rebuilt(route, [['main_stops', next]])]])]]]);
+  } catch (_) { return published; }
+}
+const DROP = Symbol('drop');
+function unreadableStopMedia(stop, privacy) {
+  const readable = (type, value) => { try { budget(privacy).copy(type, value); return true; } catch (_) { return false; } };
+  const kinds = Object.keys(MEDIA_OBJECTS);
+  const id = own(stop,'wikidata_id');
+  if (id.present && id.value !== null && !readable('qid', id.value)) return ['wikidata_id', ...kinds.filter(kind => own(stop,kind).present)];
+  return kinds.filter(kind => { const atom = own(stop,kind); return atom.present && !readable(MEDIA_OBJECTS[kind], atom.value); });
+}
+// A copy with the same prototype and the same own descriptors (accessors stay
+// accessors, so the closed copy still refuses them), except the given keys.
+function rebuilt(value, changes) {
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  for (const [key, next] of changes) {
+    if (next === DROP) delete descriptors[key];
+    else descriptors[key] = { value: next, enumerable: true, writable: true, configurable: true };
+  }
+  return Object.create(Object.getPrototypeOf(value), descriptors);
 }
 function commitmentsFit(input,result) {
   const entries = Object.create(null);
