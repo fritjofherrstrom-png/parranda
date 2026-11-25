@@ -288,6 +288,7 @@ function withOwnerCorrections(loader, store) {
 
 module.exports = {
   FILE_NAME,
+  TARGET_ID,
   createOwnerCorrectionStore,
   foldEvents,
   typeForOsmTag,

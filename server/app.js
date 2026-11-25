@@ -40,6 +40,9 @@ const {
   withoutExcludedCandidates,
 } = require("./planner/excluded-candidates");
 const { createOwnerCorrectionStore, withOwnerCorrections } = require("./planner/owner-corrections");
+const { createOwnerAuth } = require("./owner/owner-auth");
+const { createPlaceReportStore } = require("./owner/place-reports");
+const { createOwnerRoutes } = require("./owner/owner-routes");
 const {
   parsePinnedCandidateIds,
   summarizePinnedOutcome,
@@ -1524,6 +1527,14 @@ function buildApp({
   // The owner's durable place corrections (hide / re-type). Off unless
   // PARRANDA_CORRECTIONS_DIR names a directory; never reachable from a payload.
   ownerCorrections = createOwnerCorrectionStore({ directory: process.env.PARRANDA_CORRECTIONS_DIR }),
+  // The owner's sign-in and the public report queue. Both stay off (every
+  // owner route 404s) unless PARRANDA_OWNER_KEY_HASH and the corrections
+  // directory are set.
+  ownerAuth = createOwnerAuth({
+    keyHash: process.env.PARRANDA_OWNER_KEY_HASH,
+    directory: process.env.PARRANDA_CORRECTIONS_DIR,
+  }),
+  placeReports = createPlaceReportStore({ directory: process.env.PARRANDA_CORRECTIONS_DIR }),
   walkingRouter,
   walkingConfig,
   weatherProvider = null,
@@ -1574,6 +1585,7 @@ function buildApp({
   // from the open data the whole app depends on. On by default, generous
   // enough that a person planning days never notices it.
   app.use(createPublicAccessGuard({ env: process.env }));
+  app.use(createOwnerRoutes({ auth: ownerAuth, corrections: ownerCorrections, reports: placeReports, env: process.env }));
   app.use('/api/shared-days', createPublishedDayReadHandler(publishedDayStore));
   app.post('/api/place-suggestions', async (request, response) => {
     const query = typeof request.body?.query === 'string' ? request.body.query.trim().replace(/\s+/g, ' ') : '';
