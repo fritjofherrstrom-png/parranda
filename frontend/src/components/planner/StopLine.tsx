@@ -44,6 +44,10 @@ import { canCommitTo, type Commitments } from "./commitments";
 import StopCategory, { stopCategoryLabel } from "./StopCategory";
 import type { PositionSession } from "./useFollowPosition";
 import WalkingContinuation from "./WalkingContinuation";
+import { dayHasPhotos, normalizeStopAbout, normalizeStopMedia, normalizeStopSubtitle } from "../../lib/place-media.mjs";
+import { StopPhotoFigure, StopPhotoTile } from "./StopPhoto";
+import StopAbout from "./StopAbout";
+import DayCredits from "./DayCredits";
 
 type Leg = { km: number | null; minutes: number | null };
 
@@ -54,8 +58,11 @@ const NO_NEW_STOPS: ReadonlySet<string> = new Set();
  * qualifies. Every fact is still on the page (and read by assistive tech when
  * opened). How Maps walks the route is said beside the Maps action.
  */
-function AboutDayAndMap({ t, assemblyNotes = [], routeLineIsSketch, dayContextNote }: {
+function AboutDayAndMap({ t, lang, stops, assemblyNotes = [], routeLineIsSketch, dayContextNote }: {
   t: Translate;
+  lang: Lang;
+  /** The day's stops: their photo and excerpt credits close the list. */
+  stops: readonly object[];
   assemblyNotes?: string[];
   routeLineIsSketch: boolean;
   dayContextNote: string | null | undefined;
@@ -71,6 +78,7 @@ function AboutDayAndMap({ t, assemblyNotes = [], routeLineIsSketch, dayContextNo
         {routeLineIsSketch && <li>{t("Nålarna visar stoppen. Ingen gångväg har bekräftats på kartan.", "The pins show the stops. A walking path has not been confirmed on the map.")}</li>}
         <li>{t("Avstånd och gångtider är uppskattningar.", "Distances and walking times are estimates.")}</li>
         {dayContextNote && <li>{dayContextNote}</li>}
+        <DayCredits stops={stops} t={t} lang={lang} />
       </ul>
     </details>
   );
@@ -176,6 +184,9 @@ export default function StopLine({
   const legLabel = (leg: Leg) =>
     `${leg.minutes != null ? `${leg.minutes} min` : ""}${leg.minutes != null && leg.km != null ? " · " : ""}${leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}`;
   const lastCoreIndex = split.core.length - 1;
+  // Place media (docs/PLACE_MEDIA.md): rows carry a tile only on a day with at
+  // least one photo; a day without photos renders exactly as before.
+  const withPhotos = dayHasPhotos(split.core);
 
   // The orchestrator owns one opt-in location session. This line only reads
   // it for today's stations; the map can also orient a future-day reader.
@@ -213,7 +224,7 @@ export default function StopLine({
   // them. On a phone the map's still overview stands in the day's header,
   // between the title and the facts; wide screens keep the map beside the day.
   const about = (
-    <AboutDayAndMap t={t} assemblyNotes={assemblyNotes} routeLineIsSketch={routeLineIsSketch} dayContextNote={dayContextNote} />
+    <AboutDayAndMap t={t} lang={lang} stops={split.core} assemblyNotes={assemblyNotes} routeLineIsSketch={routeLineIsSketch} dayContextNote={dayContextNote} />
   );
 
   const detours = (routeContextSuggestions.length > 0 && (
@@ -411,6 +422,10 @@ export default function StopLine({
           const website = stopWebsiteUrl(stop);
           const placeDetails = stopPlaceDetails(stop, lang);
           const visitContent = normalizeVisitContent(stop?.visit_content);
+          const media = normalizeStopMedia(stop);
+          const subtitle = normalizeStopSubtitle(stop);
+          // A curated visit note wins over the excerpt (the normalizer agrees).
+          const about = visitContent ? null : normalizeStopAbout(stop);
           const partialLabels = partialPreferenceLabels(stop, selected, lang);
           const matchedLabels = stopMatchedPreferences(stop, selected).map((key) => pickLabel(key, lang));
           const stopKindLabel = stopRowKindLabel(stop, stopCategoryLabel(stop, lang), lang);
@@ -508,6 +523,13 @@ export default function StopLine({
                     </span>
                   )}
                 </span>
+                {/* The photo sits between the name and the chevron; the
+                    station and the chevron stay where they are. */}
+                {withPhotos && (
+                  <span className={"shrink-0 transition-opacity" + (stale ? " opacity-45" : "")}>
+                    <StopPhotoTile key={media?.media_id ?? "glyph"} media={media} type={stop?.type} muted={behind} />
+                  </span>
+                )}
                 <ChevronRightIcon
                   className={"h-4 w-4 shrink-0 transition " + (expanded ? "rotate-90 text-parranda-ember" : "text-parranda-ink-meta group-hover:text-parranda-ink")}
                 />
@@ -518,6 +540,10 @@ export default function StopLine({
                 // two kinds of action. Going there leads, outlined; changing
                 // the day follows, in quiet fills. No card of its own.
                 <div id={panelId} className="mb-1 ml-14 mt-1 flex flex-col gap-3">
+                  {/* What the place looks like and is, in sourced words, before
+                      the facts: the photo, the kicker, then the excerpt. */}
+                  {media && <StopPhotoFigure key={media.media_id} media={media} name={name} type={stop?.type} t={t} lang={lang} />}
+                  {(subtitle || about) && <StopAbout subtitle={subtitle} about={about} t={t} lang={lang} />}
                   {(panelKindLabel || matchedLabels.length > 0 || partialLabels.length > 0) && (
                     <p className="text-15 leading-snug text-parranda-ink-soft">
                       {[

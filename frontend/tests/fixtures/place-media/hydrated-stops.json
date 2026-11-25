@@ -1,0 +1,191 @@
+{
+  "_source": "Produced offline by server/place-media/hydrate.js from tests/fixtures/place-media/wikimedia-samples.json (real Wikidata/Commons/Wikipedia answers, checked 2026-11-24). Keys: <place>_<request lang>.",
+  "medelhavsmuseet_sv": {
+    "id": "osm-node-304609719",
+    "label": "Medelhavsmuseet",
+    "lat": 59.3294531,
+    "lng": 18.0672982,
+    "type": "museum",
+    "provenance": {
+      "attribution": [
+        {
+          "url": "https://www.wikidata.org/wiki/Q1331646"
+        }
+      ]
+    },
+    "wikidata_id": "Q1331646",
+    "media": {
+      "version": 1,
+      "kind": "photo",
+      "media_id": "46ed26391833b2c6f1251831f4fdce668b4b0321",
+      "width": 1780,
+      "height": 2355,
+      "subject_qid": "Q1331646",
+      "via": "p18",
+      "author": "Holger Ellgaard",
+      "license": "CC-BY-SA-3.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "file_page_url": "https://commons.wikimedia.org/wiki/File:Medelhavsmuseet_2007.jpg",
+      "modified": "cropped",
+      "checked_on": "2026-11-24"
+    },
+    "subtitle": {
+      "text": "museum i Stockholm",
+      "lang": "sv",
+      "subject_qid": "Q1331646",
+      "source": "wikidata"
+    },
+    "about": {
+      "version": 1,
+      "kind": "excerpt",
+      "text": "Medelhavsmuseet är ett svenskt statligt arkeologiskt kulturhistoriskt museum med inriktning på samlingar från medelhavsländerna och Främre Orienten. Museets samlingar är sedan 1982 utställda i Inteckningsbankens gamla lokaler vid Gustav Adolfs torg i Stockholm.",
+      "lang": "sv",
+      "subject_qid": "Q1331646",
+      "article_url": "https://sv.wikipedia.org/w/index.php?oldid=59023844",
+      "article_title": "Medelhavsmuseet",
+      "license": "CC-BY-SA-4.0",
+      "checked_on": "2026-11-24"
+    }
+  },
+  "medelhavsmuseet_en": {
+    "id": "osm-node-304609719",
+    "label": "Medelhavsmuseet",
+    "lat": 59.3294531,
+    "lng": 18.0672982,
+    "type": "museum",
+    "provenance": {
+      "attribution": [
+        {
+          "url": "https://www.wikidata.org/wiki/Q1331646"
+        }
+      ]
+    },
+    "wikidata_id": "Q1331646",
+    "media": {
+      "version": 1,
+      "kind": "photo",
+      "media_id": "46ed26391833b2c6f1251831f4fdce668b4b0321",
+      "width": 1780,
+      "height": 2355,
+      "subject_qid": "Q1331646",
+      "via": "p18",
+      "author": "Holger Ellgaard",
+      "license": "CC-BY-SA-3.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "file_page_url": "https://commons.wikimedia.org/wiki/File:Medelhavsmuseet_2007.jpg",
+      "modified": "cropped",
+      "checked_on": "2026-11-24"
+    },
+    "subtitle": {
+      "text": "museum in Stockholm, Sweden",
+      "lang": "en",
+      "subject_qid": "Q1331646",
+      "source": "wikidata"
+    },
+    "about": {
+      "version": 1,
+      "kind": "excerpt",
+      "text": "Medelhavsmuseet is a museum in central Stockholm focused around collections of mainly ancient objects from the Mediterranean area and the Near East. Since 1999 the museum is one of four composing the National Museums of World Culture, Sweden.",
+      "lang": "en",
+      "subject_qid": "Q1331646",
+      "article_url": "https://en.wikipedia.org/w/index.php?oldid=1363329100",
+      "article_title": "Medelhavsmuseet",
+      "license": "CC-BY-SA-4.0",
+      "checked_on": "2026-11-24"
+    }
+  },
+  "rohsska_sv": {
+    "id": "osm-way-1",
+    "label": "Röhsska museet",
+    "lat": 57.7,
+    "lng": 11.97333333,
+    "type": "museum",
+    "provenance": {
+      "attribution": [
+        {
+          "url": "https://www.wikidata.org/wiki/Q3107443"
+        }
+      ]
+    },
+    "wikidata_id": "Q3107443",
+    "media": {
+      "version": 1,
+      "kind": "photo",
+      "media_id": "426b18d3eb6e01f928ce3a09996671bd1d12c788",
+      "width": 2592,
+      "height": 1944,
+      "subject_qid": "Q3107443",
+      "via": "p18",
+      "author": "Henrik Sendelbach",
+      "license": "CC-BY-SA-3.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "file_page_url": "https://commons.wikimedia.org/wiki/File:R%C3%B6hsska_museet.jpg",
+      "modified": "cropped",
+      "checked_on": "2026-11-24"
+    },
+    "subtitle": {
+      "text": "museum i Göteborg för mode, design och konsthantverk",
+      "lang": "sv",
+      "subject_qid": "Q3107443",
+      "source": "wikidata"
+    },
+    "about": {
+      "version": 1,
+      "kind": "excerpt",
+      "text": "Röhsska museet, tidigare Röhsska konstslöjdmuseet, är ett kommunägt museum i Göteborg för mode, design och konsthantverk. Museet invigdes 1916. Det är Sveriges enda specialmuseum inriktat på konsthantverk, konstindustri och design.",
+      "lang": "sv",
+      "subject_qid": "Q3107443",
+      "article_url": "https://sv.wikipedia.org/w/index.php?oldid=58715222",
+      "article_title": "Röhsska museet",
+      "license": "CC-BY-SA-4.0",
+      "checked_on": "2026-11-24"
+    }
+  },
+  "rohsska_en": {
+    "id": "osm-way-1",
+    "label": "Röhsska museet",
+    "lat": 57.7,
+    "lng": 11.97333333,
+    "type": "museum",
+    "provenance": {
+      "attribution": [
+        {
+          "url": "https://www.wikidata.org/wiki/Q3107443"
+        }
+      ]
+    },
+    "wikidata_id": "Q3107443",
+    "media": {
+      "version": 1,
+      "kind": "photo",
+      "media_id": "426b18d3eb6e01f928ce3a09996671bd1d12c788",
+      "width": 2592,
+      "height": 1944,
+      "subject_qid": "Q3107443",
+      "via": "p18",
+      "author": "Henrik Sendelbach",
+      "license": "CC-BY-SA-3.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "file_page_url": "https://commons.wikimedia.org/wiki/File:R%C3%B6hsska_museet.jpg",
+      "modified": "cropped",
+      "checked_on": "2026-11-24"
+    },
+    "subtitle": {
+      "text": "museum in Gothenburg, Sweden",
+      "lang": "en",
+      "subject_qid": "Q3107443",
+      "source": "wikidata"
+    },
+    "about": {
+      "version": 1,
+      "kind": "excerpt",
+      "text": "The Röhsska Museum, also known as Design Museum, is located in Gothenburg, Sweden. It is a museum focused on design, fashion and applied arts.",
+      "lang": "en",
+      "subject_qid": "Q3107443",
+      "article_url": "https://en.wikipedia.org/w/index.php?oldid=1380606354",
+      "article_title": "Röhsska Museum",
+      "license": "CC-BY-SA-4.0",
+      "checked_on": "2026-11-24"
+    }
+  }
+}

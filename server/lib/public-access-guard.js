@@ -26,7 +26,8 @@
 
 // Endpoints whose work reaches donated upstream infrastructure (Nominatim,
 // Overpass, Wikidata, municipal feeds) or costs real CPU. Exact paths only —
-// a prefix match would quietly cover future routes nobody weighed.
+// a prefix match would quietly cover future routes nobody weighed. The one
+// prefix rule (`/media/`, below) was weighed on its own and counts differently.
 const { isIP } = require("node:net");
 
 const UPSTREAM_COST_PATHS = new Set([
@@ -38,6 +39,36 @@ const UPSTREAM_COST_PATHS = new Set([
   "/api/place-details",
   "/api/blitz",
 ]);
+
+// Prefix rules, each weighed on its own. `/media/` serves place photos from our
+// own origin (server/place-media/media-bytes.js): a cache hit costs nothing
+// upstream, so the guard does not count requests here. It hands the route an
+// admission check instead, and the route calls it only when it is about to
+// fetch from Wikimedia — only real upstream misses spend the caller's budget.
+// Media misses have their own allowance (a day loads up to ~10 photos at a
+// time) and their own upstream concurrency cap inside the route, so they never
+// take day-composition slots.
+const UPSTREAM_COST_PREFIXES = Object.freeze(["/media/"]);
+const UPSTREAM_MISS_ADMISSION = "parrandaAdmitUpstreamMiss";
+// A cold day asks for up to ~10 row tiles plus the figures of the stops a
+// reader opens. Well under the ~10-a-burst Wikimedia allows one IP, and the
+// route paces every upstream start for the whole process on top of this.
+const DEFAULT_MEDIA_MISSES_PER_WINDOW = 20;
+
+/**
+ * The path as Express routes it: Express matches case-insensitively and
+ * ignores a trailing slash, so "/MEDIA/c/…" and "/api/geocode/" reach the same
+ * handlers and must meet the same rules.
+ */
+function routedPath(path) {
+  const value = String(path || "").toLowerCase().replace(/\/+$/, "");
+  return value || "/";
+}
+
+function upstreamCostPrefix(path) {
+  const value = String(path || "").toLowerCase();
+  return UPSTREAM_COST_PREFIXES.find((prefix) => value.startsWith(prefix)) || null;
+}
 
 const DEFAULT_WINDOW_MS = 60 * 1000;
 const DEFAULT_MAX_PER_WINDOW = 20;
@@ -176,6 +207,11 @@ function createConcurrencyGate({ max = DEFAULT_MAX_CONCURRENT } = {}) {
   };
 }
 
+/** Whether PARRANDA_PUBLIC_GUARD turns the guard on. */
+function publicGuardEnabled(env = {}) {
+  return guardSettings(env).enabled;
+}
+
 function guardSettings(env = {}) {
   const enabled = String(env.PARRANDA_PUBLIC_GUARD ?? "").trim().toLowerCase();
   const requestedIdentity = String(env.PARRANDA_PUBLIC_CLIENT_IDENTITY ?? "direct").trim().toLowerCase();
@@ -185,6 +221,7 @@ function guardSettings(env = {}) {
     enabled: enabled === "enabled" || enabled === "1" || enabled === "true",
     windowMs: positiveInt(env.PARRANDA_PUBLIC_GUARD_WINDOW_MS, DEFAULT_WINDOW_MS),
     max: positiveInt(env.PARRANDA_PUBLIC_GUARD_MAX, DEFAULT_MAX_PER_WINDOW),
+    mediaMax: positiveInt(env.PARRANDA_PUBLIC_GUARD_MEDIA_MAX, DEFAULT_MEDIA_MISSES_PER_WINDOW),
     maxConcurrent: positiveInt(env.PARRANDA_PUBLIC_GUARD_CONCURRENCY, DEFAULT_MAX_CONCURRENT),
     trustedHops: nonNegativeInt(env.PARRANDA_TRUST_PROXY_HOPS, 0),
     identityMode,
@@ -202,9 +239,22 @@ function createPublicAccessGuard({ env = process.env, now = () => Date.now() } =
   // Prefix lookups have their own budget; typing must not spend day-composition allowances.
   const suggestionLimiter = createFixedWindowLimiter({ windowMs: settings.windowMs, max: 60, now });
   const gate = createConcurrencyGate({ max: settings.maxConcurrent });
+  const mediaLimiter = createFixedWindowLimiter({ windowMs: settings.windowMs, max: settings.mediaMax, now });
 
   function middleware(request, response, next) {
-    if (!settings.enabled || !UPSTREAM_COST_PATHS.has(request.path)) {
+    if (settings.enabled && upstreamCostPrefix(request.path) === "/media/") {
+      const key = clientKey(request, { mode: settings.identityMode, trustedHops: settings.trustedHops });
+      let verdict = null;
+      // Called by the route only for a real upstream miss; at most one count per request.
+      request[UPSTREAM_MISS_ADMISSION] = () => {
+        verdict ??= mediaLimiter.check(key);
+        return verdict;
+      };
+      next();
+      return;
+    }
+    const routed = routedPath(request.path);
+    if (!settings.enabled || !UPSTREAM_COST_PATHS.has(routed)) {
       next();
       return;
     }
@@ -221,7 +271,7 @@ function createPublicAccessGuard({ env = process.env, now = () => Date.now() } =
       return;
     }
 
-    const verdict = (request.path === '/api/place-suggestions' ? suggestionLimiter : limiter).check(clientKey(request, {
+    const verdict = (routed === '/api/place-suggestions' ? suggestionLimiter : limiter).check(clientKey(request, {
       mode: settings.identityMode,
       trustedHops: settings.trustedHops,
     }));
@@ -255,11 +305,17 @@ function createPublicAccessGuard({ env = process.env, now = () => Date.now() } =
   middleware.settings = settings;
   middleware.gate = gate;
   middleware.limiter = limiter;
+  middleware.mediaLimiter = mediaLimiter;
   return middleware;
 }
 
 module.exports = {
   UPSTREAM_COST_PATHS,
+  UPSTREAM_COST_PREFIXES,
+  UPSTREAM_MISS_ADMISSION,
+  upstreamCostPrefix,
+  routedPath,
+  publicGuardEnabled,
   clientKey,
   createFixedWindowLimiter,
   createConcurrencyGate,
