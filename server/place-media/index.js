@@ -47,8 +47,8 @@ function retainedLine(photo, retiredAtMs) {
   return `${JSON.stringify({ v: 1, retired_at: new Date(retiredAtMs).toISOString(), photo })}\n`;
 }
 
-/** retained-v1.jsonl → Map media_id → { photo, retiredAt }, expired and broken lines dropped. */
-function readRetained(file, nowMs) {
+/** Bounded retirement history. Keep expired timestamps until learned replay completes. */
+function readRetained(file) {
   const retained = new Map();
   let text = '';
   try { text = fs.readFileSync(file, 'utf8'); } catch { return retained; }
@@ -58,7 +58,7 @@ function readRetained(file, nowMs) {
     try { raw = JSON.parse(line); } catch { continue; }
     const retiredAt = Date.parse(raw?.retired_at);
     const photo = raw?.v === 1 ? normalizePhoto(raw.photo) : null;
-    if (!photo || !Number.isFinite(retiredAt) || nowMs - retiredAt > RETAIN_MS) continue;
+    if (!photo || !Number.isFinite(retiredAt)) continue;
     retained.delete(photo.media_id); // the latest retirement wins and moves to the end
     retained.set(photo.media_id, { photo, retiredAt });
   }
@@ -85,7 +85,8 @@ function createPlaceMedia({ dir, fetcher, waitMs = DEFAULT_WAIT_MS, clock = () =
   const records = new Map();
   // media_id → { photo, qids }: a photo stays current while any record uses it.
   const photos = new Map();
-  const retained = readRetained(path.join(dir, RETAINED_FILE), now());
+  const retained = readRetained(path.join(dir, RETAINED_FILE));
+  const loadingRetirements = [];
   let loading = true;
   const inFlight = new Map();
   const failedUntil = new Map();
@@ -97,11 +98,14 @@ function createPlaceMedia({ dir, fetcher, waitMs = DEFAULT_WAIT_MS, clock = () =
   let learnedInMemory = 0;
 
   function retire(photo) {
+    // Reconstructing a replacement is not a new retirement, even after expiry.
+    if (loading && retained.has(photo.media_id)) return;
+    const retiredAt = now();
     retained.delete(photo.media_id);
-    retained.set(photo.media_id, { photo, retiredAt: now() });
+    retained.set(photo.media_id, { photo, retiredAt });
     while (retained.size > MAX_RETAINED) retained.delete(retained.keys().next().value);
-    // While loading, the replaced photo is still in the files it came from.
-    if (!loading) persistRetained(photo);
+    if (loading) loadingRetirements.push(retainedLine(photo, retiredAt));
+    else persistRetained(photo, retiredAt);
   }
 
   function put(record) {
@@ -130,11 +134,18 @@ function createPlaceMedia({ dir, fetcher, waitMs = DEFAULT_WAIT_MS, clock = () =
     for (const record of loaded.records) put(record);
     counters[key] = loaded.records.length;
   }
+  // Persist first-observed retirements before exposing the reconstructed service.
+  // Legacy learned files get one grace window, not a fresh window on every boot.
+  if (loadingRetirements.length) {
+    try { fs.appendFileSync(path.join(dir, RETAINED_FILE), loadingRetirements.join(''), 'utf8'); }
+    catch { counters.persist_failures += loadingRetirements.length; }
+  }
+  for (const [id, old] of retained) if (now() - old.retiredAt > RETAIN_MS) retained.delete(id);
   loading = false;
 
   let persistQueue = Promise.resolve();
-  function persistRetained(photo) {
-    const line = retainedLine(photo, now());
+  function persistRetained(photo, retiredAt) {
+    const line = retainedLine(photo, retiredAt);
     persistQueue = persistQueue.then(() => fs.promises.appendFile(path.join(dir, RETAINED_FILE), line, 'utf8'))
       .catch(() => { counters.persist_failures += 1; });
   }

@@ -1,0 +1,57 @@
+{
+  "_source": "Two public-domain illustrations from the actually supplied Sweden index (SHA256 9d56a3d9534b7fd74386d6d21cce5d57049196b170e61536607835f17f07ad49); controlled mounted-UI copy regression, not a fresh provider or photographic-subject test. Image metadata and credits unchanged.",
+  "stops": [
+    {
+      "id": "illustration-Q79220",
+      "label": "Uraniborg",
+      "type": "historic",
+      "lat": 55.907861111111,
+      "lng": 12.696611111111,
+      "covered_preferences": [
+        "culture"
+      ],
+      "wikidata_id": "Q79220",
+      "media": {
+        "version": 1,
+        "kind": "photo",
+        "subject_qid": "Q79220",
+        "media_id": "eef846edb37538b244f80ba3284f7ff0268dbeac",
+        "width": 1000,
+        "height": 821,
+        "via": "p18",
+        "author": "Stanlekub",
+        "license": "PD",
+        "license_url": null,
+        "file_page_url": "https://commons.wikimedia.org/wiki/File:Uraniborgskiss_45.jpg",
+        "modified": "cropped",
+        "checked_on": "2026-11-24"
+      }
+    },
+    {
+      "id": "illustration-Q372141",
+      "label": "Älvsborg",
+      "type": "historic",
+      "lat": 57.69,
+      "lng": 11.90694444,
+      "covered_preferences": [
+        "culture"
+      ],
+      "wikidata_id": "Q372141",
+      "media": {
+        "version": 1,
+        "kind": "photo",
+        "subject_qid": "Q372141",
+        "media_id": "85e20fe8cd5098509fb2d101184d191b3b752222",
+        "width": 2646,
+        "height": 1288,
+        "via": "p18",
+        "author": null,
+        "license": "PD",
+        "license_url": null,
+        "file_page_url": "https://commons.wikimedia.org/wiki/File:Suecia_3-046_;_%C3%84lvsborg.jpg",
+        "modified": "cropped",
+        "checked_on": "2026-11-24"
+      }
+    }
+  ]
+}

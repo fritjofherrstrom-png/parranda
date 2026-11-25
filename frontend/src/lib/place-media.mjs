@@ -124,9 +124,9 @@ export function dayHasPlaceMedia(stops) {
 
 const pick = (lang, sv, en) => (lang === 'sv' ? sv : en);
 
-/** "Foto av {name}" / "Photo of {name}". */
+/** Neutral wording: accepted place images can also be historical illustrations. */
 export function photoAlt(name, lang) {
-  return pick(lang, `Foto av ${name}`, `Photo of ${name}`);
+  return pick(lang, `Bild av ${name}`, `Image of ${name}`);
 }
 
 /** A licence's short label; public domain is said in the reader's language. */
@@ -142,11 +142,11 @@ function licenseHref(id, url) {
 
 /**
  * The photo credit as parts, each its own link where it has one:
- * `Foto: {author} · {licence} · Wikimedia Commons` (+ "beskuren" when expanded).
+ * `Bild: {author} · {licence} · Wikimedia Commons` (+ "beskuren" when expanded).
  */
 export function photoCredit(media, lang) {
   return {
-    lead: pick(lang, 'Foto', 'Photo'),
+    lead: pick(lang, 'Bild', 'Image'),
     author: media.author ?? null,
     authorHref: media.file_page_url,
     license: licenseLabel(media.license, lang),

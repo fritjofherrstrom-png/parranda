@@ -106,6 +106,11 @@ an index rebuild dropped it or a learned record replaced it, moves to `retained-
 (published-day-store `ttlMs`, 7 days by default), then is forgotten. `scripts/build-place-media.js` appends the
 photos a rebuild drops. Unknown ids are still 404: retention never accepts a hash that was not once a gated photo.
 
+Startup replay preserves the durable original `retired_at`, including expired timestamps while reconstructing
+learned replacements; a restart does not renew the window. Legacy replacements without a retirement stamp get
+one window from their first observed retirement, persisted before the service is exposed. Storage write failures
+are counted in `persist_failures`; they do not crash the service or make unknown ids available.
+
 **One file per photo.** `file_title`, `file_page_url` and `file_url` must name the same Commons file, and the
 upload path must be the md5 bucket of that name (`photoFilesAgree` in `record.js`, used by the gate and on load).
 A public-domain code with a licence URL other than the PD mark is refused as a contradiction.
@@ -154,9 +159,11 @@ Upstream down and not cached → fast 503. `public-access-guard.js`: prefix rule
   `mediaSrc(media, w)`, `dayHasPhotos(stops)`, credit strings.
 - `StopPhoto.tsx`: 56×56 row tile (radius 10, `alt=""`, fades in 180 ms, none under reduced motion, paper-2 placeholder,
   `onError` → glyph tile); panel figure 3:2 full width (`onError` → the same 3:2 box with a quiet glyph, no credit;
-  either image is tried once more after 12 s), `alt="Foto av {name}"`/"Photo of {name}", credit line 11 px:
-  `Foto: {author} · {licence} · Wikimedia Commons` (each part a link, `rel="noopener noreferrer"`, ellipsis, tap expands
+  either image is tried once more after 12 s), `alt="Bild av {name}"`/"Image of {name}", credit line 11 px:
+  `Bild: {author} · {licence} · Wikimedia Commons` (each part a link, `rel="noopener noreferrer"`, ellipsis, tap expands
   with "beskuren"/"cropped").
+  Wording is neutral because accepted place depictions can also be historical illustrations. The existing
+  `kind: 'photo'` wire schema, source gates, exact credits and licence links are unchanged.
 - Rows get the tile only when the day has ≥1 photo; rows without one on such a day get a quiet glyph tile. A day with
   no photos renders exactly as today. Station and chevron stay.
 - `StopAbout.tsx`: kicker (subtitle) + excerpt as a quote (2 px ember rule, `lang` attribute, 4-line clamp + "Mer"),

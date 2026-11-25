@@ -114,7 +114,7 @@ export function StopPhotoTile({ media, type, muted = false }: { media: StopMedia
 const creditLink = "underline decoration-parranda-line-firm underline-offset-2 hover:text-parranda-ink";
 
 /**
- * `Foto: {author} · {licence} · Wikimedia Commons`, each part a link. One line
+ * `Bild: {author} · {licence} · Wikimedia Commons`, each part a link. One line
  * with an ellipsis; a tap expands it in full and says the photo is cropped.
  */
 export function PhotoCreditLine({ media, t, lang, full = false }: { media: StopMedia; t: Translate; lang: Lang; full?: boolean }) {
@@ -152,7 +152,7 @@ export function PhotoCreditLine({ media, t, lang, full = false }: { media: StopM
         <button
           type="button"
           aria-expanded={open}
-          aria-label={t("Visa hela fotokrediten", "Show the full photo credit")}
+          aria-label={t("Visa hela bildkrediten", "Show the full image credit")}
           onClick={() => setOpen((cur) => !cur)}
           className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center text-parranda-ink-meta before:absolute before:-inset-3.5 before:content-[''] hover:text-parranda-ink"
         >

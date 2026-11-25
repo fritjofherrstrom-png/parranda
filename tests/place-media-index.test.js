@@ -159,3 +159,69 @@ test('a photo two places use stays current when one of them gets another photo',
   assert.deepEqual(service.byMediaId(shared.media_id), shared, 'still used by Q1331646');
   assert.deepEqual(service.byMediaId(other.photo.media_id), other.photo);
 });
+
+test('replaying a learned replacement does not revive its retired photo after absolute expiry', async t => {
+  const dir = tempDir(t);
+  const records = await fixtureRecords(['Q1331646', 'Q1506922']);
+  const original = records.get('Q1331646');
+  const replacement = { ...original, photo: records.get('Q1506922').photo };
+  const oldId = original.photo.media_id;
+  assert.notEqual(oldId, replacement.photo.media_id);
+  fs.writeFileSync(path.join(dir, 'index-v1.jsonl'), `${JSON.stringify(original)}\n`);
+  fs.writeFileSync(path.join(dir, 'learned-v1.jsonl'), `${JSON.stringify(replacement)}\n`);
+  const retiredAt = Date.parse('2026-11-25T10:00:00Z');
+  let now = retiredAt;
+  const service = () => createPlaceMedia({ dir, clock: () => now,
+    fetcher: async () => { throw new Error('no network'); } });
+  const first = service();
+  assert.deepEqual(first.byMediaId(oldId), original.photo, 'valid shares retain their original image');
+  await first.flush();
+  now += 7 * 24 * 60 * 60 * 1000 - 1;
+  const duringShare = service();
+  assert.deepEqual(duringShare.byMediaId(oldId), original.photo, 'restart within share lifetime keeps the image');
+  await duringShare.flush();
+  now = retiredAt + RETAIN_MS + 1;
+  assert.equal(first.byMediaId(oldId), undefined, 'absolute expiry in the original instance');
+  const afterExpiry = service();
+  assert.equal(afterExpiry.byMediaId(oldId), undefined, 'restart must not start another thirty-day window');
+  assert.deepEqual(afterExpiry.byMediaId(replacement.photo.media_id), replacement.photo);
+  assert.equal(afterExpiry.byMediaId('0'.repeat(40)), undefined, 'unknown ids stay refused');
+  await afterExpiry.flush();
+  const retired = fs.readFileSync(path.join(dir, RETAINED_FILE), 'utf8').trim().split('\n').map(JSON.parse);
+  assert.equal(retired.length, 1, 'replays never append another retirement');
+  assert.equal(Date.parse(retired[0].retired_at), retiredAt, 'the first observed retirement is durable');
+});
+
+test('an expired durable retirement stays expired when the learned file replaces the index photo', async t => {
+  const dir = tempDir(t);
+  const records = await fixtureRecords(['Q1331646', 'Q1506922']);
+  const original = records.get('Q1331646');
+  const replacement = { ...original, photo: records.get('Q1506922').photo };
+  const retiredAt = Date.parse('2026-10-01T00:00:00Z');
+  appendRetainedPhotos(dir, [original.photo], retiredAt);
+  const history = fs.readFileSync(path.join(dir, RETAINED_FILE), 'utf8');
+  fs.writeFileSync(path.join(dir, 'index-v1.jsonl'), `${JSON.stringify(original)}\n`);
+  fs.writeFileSync(path.join(dir, 'learned-v1.jsonl'), `${JSON.stringify(replacement)}\n`);
+  const service = createPlaceMedia({ dir, clock: () => retiredAt + RETAIN_MS + 1,
+    fetcher: async () => { throw new Error('no network'); } });
+  assert.equal(service.byMediaId(original.photo.media_id), undefined);
+  assert.deepEqual(service.byMediaId(replacement.photo.media_id), replacement.photo);
+  assert.equal(service.health().retained_photos, 0, 'expired history is not exposed as retained media');
+  await service.flush();
+  assert.equal(fs.readFileSync(path.join(dir, RETAINED_FILE), 'utf8'), history, 'no renewal or duplicate writes');
+});
+
+test('a startup retirement write failure is counted while current images remain usable', async t => {
+  const dir = tempDir(t);
+  const records = await fixtureRecords(['Q1331646', 'Q1506922']);
+  const original = records.get('Q1331646');
+  const replacement = { ...original, photo: records.get('Q1506922').photo };
+  fs.writeFileSync(path.join(dir, 'index-v1.jsonl'), `${JSON.stringify(original)}\n`);
+  fs.writeFileSync(path.join(dir, 'learned-v1.jsonl'), `${JSON.stringify(replacement)}\n`);
+  fs.mkdirSync(path.join(dir, RETAINED_FILE)); // deterministic EISDIR, not permission-dependent
+  const service = createPlaceMedia({ dir, fetcher: async () => { throw new Error('no network'); } });
+  assert.deepEqual(service.byMediaId(replacement.photo.media_id), replacement.photo);
+  assert.equal(service.health().persist_failures, 1);
+  assert.equal(service.byMediaId('0'.repeat(40)), undefined);
+  await service.flush();
+});

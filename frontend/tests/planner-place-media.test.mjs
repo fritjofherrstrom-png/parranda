@@ -11,6 +11,7 @@ import {
 // Stops exactly as server/place-media/hydrate.js produces them from real
 // Wikidata/Commons/Wikipedia answers (see the fixture's _source).
 const HYDRATED = JSON.parse(readFileSync(new URL('./fixtures/place-media/hydrated-stops.json', import.meta.url), 'utf8'));
+const ILLUSTRATIONS = JSON.parse(readFileSync(new URL('./fixtures/place-media/illustration-stops.json', import.meta.url), 'utf8')).stops;
 const clone = value => JSON.parse(JSON.stringify(value));
 const DATE = '2026-11-17';
 const ID = HYDRATED.medelhavsmuseet_sv.media.media_id;
@@ -87,13 +88,13 @@ for (const lang of ['sv', 'en']) {
     assert.ok(figure);
     assert.equal(panel.firstElementChild, figure, 'the photo opens the panel');
     const img = figure.querySelector('img');
-    assert.equal(img.getAttribute('alt'), lang === 'sv' ? 'Foto av Medelhavsmuseet' : 'Photo of Medelhavsmuseet');
+    assert.equal(img.getAttribute('alt'), lang === 'sv' ? 'Bild av Medelhavsmuseet' : 'Image of Medelhavsmuseet');
     assert.equal(img.getAttribute('src'), `/media/c/${ID}/500`);
     assert.equal(img.getAttribute('srcset'), `/media/c/${ID}/500 500w, /media/c/${ID}/960 960w`);
     assert.match(img.parentElement.className, /aspect-\[3\/2\]/, 'a fixed 3:2 box');
     const credit = figure.querySelector('figcaption');
     assert.equal(credit.querySelector('[data-photo-credit]').textContent,
-      `${lang === 'sv' ? 'Foto' : 'Photo'}: Holger Ellgaard · CC BY-SA 3.0 · Wikimedia Commons`);
+      `${lang === 'sv' ? 'Bild' : 'Image'}: Holger Ellgaard · CC BY-SA 3.0 · Wikimedia Commons`);
     const links = [...credit.querySelectorAll('a')];
     assert.deepEqual(links.map(a => a.getAttribute('href')), [
       'https://commons.wikimedia.org/wiki/File:Medelhavsmuseet_2007.jpg',
@@ -134,10 +135,10 @@ for (const lang of ['sv', 'en']) {
     assert.ok(credits);
     assert.equal(credits.closest('details')?.querySelector('summary')?.textContent,
       lang === 'sv' ? 'Om dagen och kartan' : 'About this day and map');
-    assert.match(credits.textContent, lang === 'sv' ? /Foton och texter/ : /Photos and text/);
+    assert.match(credits.textContent, lang === 'sv' ? /Bilder och texter/ : /Images and text/);
     assert.match(credits.textContent, lang === 'sv'
-      ? /Medelhavsmuseet.*Foto: Holger Ellgaard · CC BY-SA 3\.0 · Wikimedia Commons · beskuren/
-      : /Medelhavsmuseet.*Photo: Holger Ellgaard · CC BY-SA 3\.0 · Wikimedia Commons · cropped/);
+      ? /Medelhavsmuseet.*Bild: Holger Ellgaard · CC BY-SA 3\.0 · Wikimedia Commons · beskuren/
+      : /Medelhavsmuseet.*Image: Holger Ellgaard · CC BY-SA 3\.0 · Wikimedia Commons · cropped/);
     assert.match(credits.textContent, lang === 'sv'
       ? /Utdrag ur Wikipedia \(svenska\): Medelhavsmuseet · CC BY-SA 4\.0/
       : /Excerpt from Wikipedia \(English\): Medelhavsmuseet · CC BY-SA 4\.0/);
@@ -237,9 +238,41 @@ test('a shared day shows the same photos and credits', async t => {
   });
   assert.equal(row(h, 'Medelhavsmuseet').querySelector('[data-stop-photo="tile"] img')?.getAttribute('src'), `/media/c/${ID}/250`);
   assert.ok(row(h, 'Fixture Garden').querySelector('[data-stop-photo="glyph"]'));
-  assert.match(h.container.querySelector('[data-day-credits]')?.textContent || '', /Photo: Holger Ellgaard · CC BY-SA 3\.0 · Wikimedia Commons/);
+  assert.match(h.container.querySelector('[data-day-credits]')?.textContent || '', /Image: Holger Ellgaard · CC BY-SA 3\.0 · Wikimedia Commons/);
   for (const url of imageRequests(h.container)) assert.match(url, /^\/media\/c\//);
 });
+
+// The media wire kind stays unchanged; valid illustrated place depictions must
+// not be asserted to be photographs in visible copy or accessible names.
+for (const lang of ['sv', 'en']) {
+  for (const illustration of ILLUSTRATIONS) {
+    test(`${lang}: ${illustration.wikidata_id} illustration has neutral image wording and unchanged credit`, async t => {
+      const stop = clone(illustration);
+      const h = await mounted(t, lang, [stop, GARDEN]);
+      const panel = await open(h, stop.label);
+      const figure = panel.querySelector('figure[data-stop-photo="figure"]');
+      assert.ok(figure, 'the accepted place illustration remains available');
+      const image = figure.querySelector('img');
+      assert.equal(image.getAttribute('src'), `/media/c/${stop.media.media_id}/500`);
+      assert.equal(image.getAttribute('alt'), `${lang === 'sv' ? 'Bild av' : 'Image of'} ${stop.label}`);
+      const credit = figure.querySelector('figcaption');
+      const label = lang === 'sv' ? 'Bild' : 'Image';
+      assert.ok(credit.textContent.startsWith(label + ':'));
+      assert.equal(credit.querySelector('button').getAttribute('aria-label'),
+        lang === 'sv' ? 'Visa hela bildkrediten' : 'Show the full image credit');
+      const links = [...credit.querySelectorAll('a')].map(a => a.getAttribute('href'));
+      assert.deepEqual(links, stop.media.author
+        ? [stop.media.file_page_url, stop.media.file_page_url] : [stop.media.file_page_url]);
+      assert.match(credit.textContent, lang === 'sv' ? /Allmän egendom/ : /Public domain/);
+      if (stop.media.author) assert.ok(credit.textContent.includes(stop.media.author));
+      const credits = h.container.querySelector('[data-day-credits]');
+      assert.match(credits.textContent, lang === 'sv' ? /Bilder och texter/ : /Images and text/);
+      assert.doesNotMatch(credit.textContent + credits.textContent, /Foto|Photo|Photographer|Fotograf/);
+      assert.equal(routes(h).length, 1, 'reading and crediting the image never recomposes');
+      assert.deepEqual(normalizeStopMedia(stop), stop.media, 'no licence, identity or wire-schema relaxation');
+    });
+  }
+}
 
 // ---------- normalizers ----------
 
@@ -331,7 +364,7 @@ test('credit strings: public domain needs no author and has no licence link; por
   const base = HYDRATED.medelhavsmuseet_sv;
   const pd = normalizeStopMedia({ ...base, media: { ...base.media, author: null, license: 'PD', license_url: null } });
   assert.ok(pd);
-  assert.deepEqual(photoCredit(pd, 'sv'), { lead: 'Foto', author: null, authorHref: pd.file_page_url, license: 'Allmän egendom',
+  assert.deepEqual(photoCredit(pd, 'sv'), { lead: 'Bild', author: null, authorHref: pd.file_page_url, license: 'Allmän egendom',
     licenseHref: null, source: 'Wikimedia Commons', sourceHref: pd.file_page_url, modified: 'beskuren' });
   assert.equal(photoCredit(pd, 'en').license, 'Public domain');
   const ported = normalizeStopMedia({ ...base, media: { ...base.media, license_url: 'https://creativecommons.org/licenses/by-sa/3.0/de/' } });

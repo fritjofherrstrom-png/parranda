@@ -17,7 +17,7 @@ export default function DayCredits({ stops, t, lang }: { stops: readonly object[
   const wikidata = wikidataCredit(lang);
   return (
     <li data-day-credits="" className="mt-1 flex flex-col gap-1.5">
-      <span className="font-semibold text-parranda-ink-muted">{t("Foton och texter", "Photos and text")}</span>
+      <span className="font-semibold text-parranda-ink-muted">{t("Bilder och texter", "Images and text")}</span>
       {rows.length > 0 && (
         <ul className="flex flex-col gap-1.5">
           {rows.map((row) => (
