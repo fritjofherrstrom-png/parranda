@@ -14,6 +14,7 @@ const { buildClientI18nPayload, normalizeLanguage, translate } = require("./ui-i
 const { buildCityPulse } = require("./pulse-engine");
 const { buildCandidateIntelligenceInspect } = require("./candidates");
 const { createPublicAccessGuard } = require("./lib/public-access-guard");
+const { handleMediaBytesRequest } = require("./place-media/media-bytes");
 const { buildAgnosticCityContext } = require("./candidates/agnostic-context");
 const { isExternalCandidatesEnabled } = require("./candidates/blitz-candidate-mode");
 const { classifyCatalogDensity } = require("./candidates/source-calibration");
@@ -1683,6 +1684,8 @@ function buildApp({
   app.get([...publicRootFiles].map((assetName) => `/${assetName}`), servePublicRootAsset);
   app.use("/assets", express.static(path.join(appRoot, "assets"), { index: false, dotfiles: "ignore" }));
   app.use("/vendor", express.static(path.join(appRoot, "vendor"), { index: false, dotfiles: "ignore" }));
+  // Place photos from our own origin (docs/PLACE_MEDIA.md, "Image bytes"); 404 while the feature is off.
+  app.get("/media/c/:media_id/:w", handleMediaBytesRequest);
 
   app.get("/api/health", (_request, response) => {
     const rawBuildSha = process.env.PARRANDA_BUILD_SHA || process.env.RENDER_GIT_COMMIT || "";

@@ -241,6 +241,9 @@ function sanitizeLoaderCollectionMetadata(value) {
     initial_day_capacity: capacity(value.initial_day_capacity),
     selected_day_capacity: capacity(value.selected_day_capacity),
     cache: sanitizeLoaderCacheSummary(value.cache),
+    // Set when the map evidence was read from a local regional extract and
+    // not from a live provider answer: which extract, and when its data ends.
+    map_snapshot: sanitizeMapSnapshot(value.map_snapshot),
     // How the primary map source took part. Absent when it was awaited live.
     //   cached_supply              answered from this request's own cache entry
     //   first_pass_while_expanding its first pass answered; only the wider
@@ -287,6 +290,25 @@ function sanitizeLoaderCacheSummary(value) {
       : null,
     refresh_reason: safeToken(value.refresh_reason),
   };
+}
+
+// Every extract whose records the day keeps, oldest first, and whether a live
+// provider answer is mixed in. A label that is present but cannot be read in
+// full is not shortened: it publishes as `unreadable`, which a shared day
+// refuses, rather than as a day with no snapshot.
+const MAX_MAP_SNAPSHOT_EXTRACTS = 4;
+function sanitizeMapSnapshot(value) {
+  if (value === undefined || value === null) return null;
+  const extracts = value && typeof value === "object" && Array.isArray(value.extracts) ? value.extracts : null;
+  const read = extracts && extracts.length >= 1 && extracts.length <= MAX_MAP_SNAPSHOT_EXTRACTS
+    ? extracts.map(extract => {
+        const region = safeToken(extract?.region);
+        const dataMs = typeof extract?.data_timestamp === "string" ? Date.parse(extract.data_timestamp) : NaN;
+        return region && Number.isFinite(dataMs) ? { region, data_timestamp: new Date(dataMs).toISOString() } : null;
+      })
+    : null;
+  if (!read || read.includes(null) || typeof value.includes_live_answer !== "boolean") return { unreadable: true };
+  return { extracts: read, includes_live_answer: value.includes_live_answer };
 }
 
 function sanitizeSpatialScopeSummary(value) {
@@ -1090,7 +1112,35 @@ function withCandidateHours(composition, snapshot, requestedDate) {
   return { ...composition, candidateHours: facts };
 }
 
+// The single exit of every any-place composition: original compose, day edits
+// (Keep/Replace/Remove), the Live route upgrade replay and the async planner
+// status worker all return through here. Place media are hydrated exactly once,
+// on the final composed day, after hydrateVisitContent ran inside the engine
+// pass and before any caller can publish or share the day. Hydrating each
+// intermediate trial (focus fallback, enrichment replay) instead would spend the
+// wait budget more than once per request.
 async function composeAgnosticRouteOutput(args) {
+  const composition = await composeFinalAgnosticRouteOutput(args);
+  await hydrateComposedPlaceMedia(composition, args?.lang);
+  return composition;
+}
+
+// Display only: never changes which stops a day has or their order. With the
+// feature off (PARRANDA_PLACE_MEDIA_DIR unset) the route is left untouched.
+async function hydrateComposedPlaceMedia(composition, lang) {
+  const experiment = composition?.experiment;
+  const route = composition?.result?.days?.[0]?.primary_route;
+  if (experiment?.synthesized_via !== "agnostic_compose_engine" || experiment.route_mutation !== true ||
+      !route || !Array.isArray(route.main_stops)) return;
+  try {
+    await require("../place-media/hydrate").hydratePlaceMedia(route, { lang });
+  } catch (_error) {
+    // Media never fail a day; the stops keep what they had (request-supplied
+    // media fields were already dropped before anything could throw).
+  }
+}
+
+async function composeFinalAgnosticRouteOutput(args) {
   if (args.synthesizeVia !== 'engine' || typeof args.openDataLoader?.enrichSelected !== 'function') {
     let retained;
     const composition = await composeAgnosticRouteOutputOnce({ ...args, onRetainComposition: value => {
@@ -1383,6 +1433,9 @@ async function composeAgnosticRouteOutputCore({
       walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
       walkingFitSelection: synthesizeVia === "engine",
       experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
+      // Private caller-owned scope: registered-city fill shares admission but
+      // must keep its established reservoir selection, not this type policy.
+      agnosticTypeOptions: true,
       mealContext: preferencePriority?.[0] === 'food' && ctx?.timezoneKnown && ctx.timeAppliesToRequestedDate
         ? { date: effectiveDate, nowLocalIso: ctx.now, fullDay: dayRhythm === 'full' } : null,
     };
@@ -1930,6 +1983,8 @@ async function composeAgnosticRouteViaEngine({
       mealContext: contextBlock?.time?.timezone_known === true && contextBlock.time.requested_date_is_today === true
         ? { date: effectiveDate, nowLocalIso: contextBlock.time.now, fullDay: dayRhythm === 'full' } : null,
       mealSpacing,
+      // Same condition as the public projection in sanitizeAgnosticEngineRoute.
+      orderOnStopChain: normalizeAnchorMode(anchorMode) === "place",
     });
     const engineResult = await generateAgnosticRecommendations({
       cityConfig: engineCityConfig,
@@ -2355,6 +2410,8 @@ async function composeAgnosticRouteViaEngine({
   // Display-only notes bind to finalized catalog identities, never ranking or
   // request-supplied descriptions. Do this after final walking/event selection.
   require("../place-candidates/visit-content").hydrateVisitContent(engineRoute);
+  // Place media (photo, kicker, excerpt) follow on the FINAL composition only:
+  // see hydrateComposedPlaceMedia, called once from composeAgnosticRouteOutput.
 
   // Engine geometry owns the actual stop order. Daypart rhythm (#274–278) is a
   // label here, not the sequencer — promoting it into compose ordering is a

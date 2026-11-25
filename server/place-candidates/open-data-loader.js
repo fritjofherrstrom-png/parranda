@@ -44,6 +44,7 @@ const { normalizeOpeningHours, evaluateOpeningHoursForWindow } = require("./open
 const { normalizeUserIntents, matchCandidateToIntent, STABLE_PLACE_INTEREST_ROLES,
   exactInterestRepresentatives } = require("../candidates/intent-vocabulary");
 const { normalizePlaceDetails } = require("./place-details");
+const { createOsmExtractStore } = require("./osm-extract-store");
 const {
   sanitizeTrustedSpatialScope,
   deriveSecondaryAnchors,
@@ -381,6 +382,9 @@ function createOpenDataLoader({
   staleIfErrorMs = 0,
   now = () => Date.now(),
   elapsedNow = () => performance.now(),
+  // Optional local read path (`osm-extract-store.js`). It answers the same
+  // grouped question from a regional extract on disk when it covers the place.
+  localSource = null,
 } = {}) {
   if (typeof fetcher !== "function") {
     return null; // honest fail closed: no fetcher → no loader
@@ -405,6 +409,42 @@ function createOpenDataLoader({
         : [DEFAULT_OVERPASS_ENDPOINT, ...DEFAULT_OVERPASS_FALLBACKS];
 
   const gate = createOverpassGate({ now, maxWaitMs: boundedTimeoutMs });
+
+  // A covered place is answered from the local extract and no provider is
+  // asked. A store that cannot answer (not covered, too old, unreadable)
+  // returns null and the provider is asked exactly as before.
+  function answerLocally(question) {
+    if (!localSource || typeof localSource.answer !== "function") return null;
+    try {
+      const { groups, perCategory } = planOverpassGroups(question);
+      const answered = localSource.answer({
+        anchors: question.anchors,
+        radiusM: question.radiusM,
+        perCategory,
+        groups: [...groups].map(([category, selectors]) => ({ selectors, named: OSM_OUTDOOR_INTERESTS.has(category) })),
+      });
+      if (!answered || !Array.isArray(answered.payload?.elements)) return null;
+      return { payload: answered.payload, snapshot: answered.snapshot || null };
+    } catch (_error) {
+      return null;
+    }
+  }
+  // Every answered pass records where it came from: the extract snapshot, or
+  // null for a live provider answer. The day's label is built from the
+  // records it keeps, never from the first pass alone.
+  const withSnapshot = (records, local) => {
+    Object.defineProperty(records, "loader_snapshot", { value: local?.snapshot || null, enumerable: false, configurable: true });
+    return records;
+  };
+  // A cached answer that was read from an extract is replayed only while the
+  // configured store would still answer from that snapshot itself.
+  const replayable = (metadata) => {
+    const label = metadata && typeof metadata === "object" ? metadata.map_snapshot : null;
+    if (!label) return true;
+    const extracts = Array.isArray(label.extracts) ? label.extracts : null;
+    if (!extracts || !extracts.length || typeof localSource?.acceptsSnapshot !== "function") return false;
+    return extracts.every(extract => localSource.acceptsSnapshot(extract));
+  };
 
   // One attempt against one mirror. Returns { ok, payload } on a usable response,
   // or { ok:false, status, error } so the caller can fail over to the next mirror.
@@ -492,19 +532,21 @@ function createOpenDataLoader({
   // centre) survive, then balance down to `boundedLimit` client-side.
   async function fetchAtRadius(lat, lng, radiusM, { queryIntents = [], requestedIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
     const fetchBreadth = Math.min(boundedLimit * 6, OVERPASS_FETCH_CAP);
-    const query = buildOverpassQuery({
-      lat,
-      lng,
+    const question = {
+      anchors: [{ lat, lng }],
       radiusM,
       limit: fetchBreadth,
       mappings: mappingsForRequestedIntents(queryIntents),
       focusedIntents: queryIntents.length ? queryIntents : requestedIntents,
-    });
+    };
+    const local = answerLocally(question);
+    const localPayload = local?.payload || null;
+    const query = buildOverpassQueryForAnchors(question);
     // Try each mirror in order; fail over ONLY on a transport/parse error — a
     // genuine 200 (even with zero elements) is a real answer, not a failure.
     let last = { status: "error_failed_closed", error: "no_endpoint" };
-    for (const targetEndpoint of resolvedEndpoints) {
-      const attempt = await attemptOverpass(targetEndpoint, query);
+    for (const targetEndpoint of localPayload ? [null] : resolvedEndpoints) {
+      const attempt = localPayload ? { ok: true, payload: localPayload } : await attemptOverpass(targetEndpoint, query);
       if (attempt.ok) {
         const records = mapOverpassResponse(attempt.payload, boundedLimit, {
           origin: { lat, lng },
@@ -512,7 +554,7 @@ function createOpenDataLoader({
           walkingTargetBand,
           availabilityWindow,
         });
-        return withLoaderStatus(attestPublicPlaceRecords(records, 'osm'), records.length > 0 ? `loaded:${records.length}` : "loaded:0", null);
+        return withSnapshot(withLoaderStatus(attestPublicPlaceRecords(records, 'osm'), records.length > 0 ? `loaded:${records.length}` : "loaded:0", null), local);
       }
       last = attempt;
     }
@@ -525,16 +567,19 @@ function createOpenDataLoader({
       .slice(0, 2);
     if (!boundedAnchors.length) return { status: "loaded:0", error: null, clusters: [] };
     const fetchBreadth = Math.min(boundedLimit * 6 * boundedAnchors.length, OVERPASS_FETCH_CAP);
-    const query = buildOverpassQueryForAnchors({
+    const question = {
       anchors: boundedAnchors,
       radiusM,
       limit: fetchBreadth,
       mappings: OSM_TAG_MAP,
       focusedIntents: requestedIntents,
-    });
+    };
+    const local = answerLocally(question);
+    const localPayload = local?.payload || null;
+    const query = buildOverpassQueryForAnchors(question);
     let last = { status: "error_failed_closed", error: "no_endpoint" };
-    for (const targetEndpoint of resolvedEndpoints) {
-      const attempt = await attemptOverpass(targetEndpoint, query);
+    for (const targetEndpoint of localPayload ? [null] : resolvedEndpoints) {
+      const attempt = localPayload ? { ok: true, payload: localPayload } : await attemptOverpass(targetEndpoint, query);
       if (!attempt.ok) {
         last = attempt;
         continue;
@@ -569,7 +614,7 @@ function createOpenDataLoader({
           null,
         ),
       }));
-      return { status: `loaded:${mapped.length}`, error: null, clusters };
+      return { status: `loaded:${mapped.length}`, error: null, clusters, snapshot: local?.snapshot || null };
     }
     return { status: last.status, error: last.error, clusters: [] };
   }
@@ -616,6 +661,7 @@ function createOpenDataLoader({
       availabilityWindow: normalizedWindow,
     });
     let selected = first;
+    let wider = null;
     let selectedRadiusKm = requestRadiusKm;
     let selectionReason = expansion
       ? "wider_supply_not_richer"
@@ -654,6 +700,7 @@ function createOpenDataLoader({
           expansion_applied: false,
           expansion_trigger: expansion.trigger,
           selection_reason: "expansion_outstanding",
+          map_snapshot: mapSnapshotLabel(first, [{ records: first, snapshot: first.loader_snapshot }]),
           anchor_mode: normalizeAnchorMode(anchorMode),
           requested_intents: normalizedRequestedIntents,
           expansion_query_intents: expansionQueryIntents,
@@ -664,7 +711,7 @@ function createOpenDataLoader({
           selected_day_capacity: initialDayCapacity,
         }));
       }
-      const wider = await fetchAtRadius(lat, lng, Math.round(widerKm * 1000), {
+      wider = await fetchAtRadius(lat, lng, Math.round(widerKm * 1000), {
         queryIntents: expansionQueryIntents,
         requestedIntents: selectionIntents,
         walkingTargetBand: normalizedWalkingTargetBand,
@@ -699,6 +746,10 @@ function createOpenDataLoader({
       expansion_applied: selectedRadiusKm > requestRadiusKm,
       expansion_trigger: expansion?.trigger || null,
       selection_reason: selectionReason,
+      map_snapshot: mapSnapshotLabel(selected, [
+        { records: first, snapshot: first.loader_snapshot },
+        { records: wider, snapshot: wider?.loader_snapshot },
+      ]),
       anchor_mode: normalizeAnchorMode(anchorMode),
       requested_intents: normalizedRequestedIntents,
       expansion_query_intents: expansion?.trigger === "requested_opening_gap"
@@ -804,6 +855,7 @@ function createOpenDataLoader({
             expansion_applied: true,
             expansion_trigger: "regional_scope_gap",
             selection_reason: "richer_regional_cluster",
+            map_snapshot: mapSnapshotLabel(selected, [{ records: selected, snapshot: regional.snapshot }]),
             selected_profile: supplyProfile(selected, requestedIntents),
             selected_day_capacity: dayCapacityProfile(selected, {
               origin: selectedAnchor,
@@ -934,7 +986,7 @@ function createOpenDataLoader({
     const best = [...budgets.values()]
       .map((entry) => ({ entry, value: cache.peek(entry.key) }))
       .filter(({ value }) =>
-        Array.isArray(value?.records) && value.records.length > 0 &&
+        Array.isArray(value?.records) && value.records.length > 0 && replayable(value.metadata) &&
         typeof value.status === "string" && !value.status.startsWith("error") &&
         [undefined, null, "primary"].includes(value.metadata?.regional_scout?.selected_anchor))
       .sort((a, b) =>
@@ -974,6 +1026,9 @@ function createOpenDataLoader({
       },
       {
         shouldStore: (value) => value && typeof value.status === "string" && !value.status.startsWith("error"),
+        // Fresh, stored on disk or kept as the outage fallback: an answer read
+        // from an extract obeys the extract's age limit on every replay.
+        validateCached: (value) => replayable(value?.metadata),
         staleIfErrorMs: boundedStaleIfErrorMs,
         onStale: (stale, info) => {
           const refreshReason = safeLoaderToken(
@@ -995,6 +1050,7 @@ function createOpenDataLoader({
         },
       },
     );
+    if (request.cacheOnly === true && entry && !replayable(entry.metadata)) entry = null;
     // Preserve the existing outage safety net during a query-contract upgrade.
     // Only a failed refresh may retain positive previous-contract map facts;
     // they keep their original age, are never stored under the new contract,
@@ -1004,6 +1060,7 @@ function createOpenDataLoader({
       const old = cache.inspect(requestIdentity(request, true).key);
       const age = Number.isFinite(old?.expiresAt) ? Math.max(0, now() - old.expiresAt) : Infinity;
       if (age <= boundedStaleIfErrorMs && Array.isArray(old?.value?.records) && old.value.records.length > 0 &&
+          replayable(old.value.metadata) &&
           typeof old.value.status === 'string' && !old.value.status.startsWith('error') &&
           old.value.error !== 'stale_cache_refresh_failed') {
         // This validated predecessor read bypasses get/peek. Retain the same
@@ -1049,7 +1106,10 @@ function buildOverpassQuery({ lat, lng, radiusM, limit, mappings = OSM_TAG_MAP, 
   });
 }
 
-function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_TAG_MAP, focusedIntents = [] }) {
+// The grouped question behind one map query: which selectors form each
+// category group and how many elements each group may return. Overpass and
+// the local extract are both asked this same question.
+function planOverpassGroups({ limit, mappings = OSM_TAG_MAP, focusedIntents = [] }) {
   // Per-category `out` budgets. Overpass outputs nodes before ways, so a single
   // combined `out center N` lets food/bar/cafe NODES exhaust N before park/
   // castle WAYS are ever emitted — scarce area-typed scenic places vanished
@@ -1072,6 +1132,11 @@ function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_
   }
   const perCategory = groups.size === broadGroupCount ? Math.max(6, Math.ceil(limit / groups.size))
     : Math.max(1, Math.floor(limit / groups.size));
+  return { groups, perCategory };
+}
+
+function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_TAG_MAP, focusedIntents = [] }) {
+  const { groups, perCategory } = planOverpassGroups({ limit, mappings, focusedIntents });
   const blocks = [];
   let i = 0;
   for (const [category, entries] of groups) {
@@ -1193,6 +1258,39 @@ function mappingsForRequestedIntents(requestedIntents = []) {
     ),
   );
   return mappings.length ? mappings : OSM_TAG_MAP;
+}
+
+// Which extract snapshots the kept map records came from. `passes` lists the
+// answered passes in the order their records were merged; a record that two
+// passes share is the first pass's record. Null when no kept record came
+// from an extract.
+function mapSnapshotLabel(selected, passes) {
+  const origin = new Map();
+  for (const pass of passes) {
+    for (const record of Array.isArray(pass?.records) ? pass.records : []) {
+      if (record && !origin.has(record.id)) origin.set(record.id, pass.snapshot || null);
+    }
+  }
+  const extracts = new Map();
+  let live = false;
+  for (const record of Array.isArray(selected) ? selected : []) {
+    if (!record || !origin.has(record.id)) continue;
+    const snapshot = origin.get(record.id);
+    if (!snapshot) {
+      live = true;
+      continue;
+    }
+    extracts.set(`${snapshot.region}|${snapshot.data_timestamp}`, {
+      region: snapshot.region,
+      data_timestamp: snapshot.data_timestamp,
+    });
+  }
+  if (!extracts.size) return null;
+  return {
+    extracts: [...extracts.values()].sort((a, b) =>
+      a.data_timestamp.localeCompare(b.data_timestamp) || a.region.localeCompare(b.region)),
+    includes_live_answer: live,
+  };
 }
 
 function mergeLoaderRecords(first, wider, limit, origin, { requestedIntents = [], walkingTargetBand = null, availabilityWindow = null } = {}) {
@@ -1668,10 +1766,24 @@ function resolveDefaultOpenDataLoader(env = process.env) {
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
+  // Optional local OpenStreetMap read path, off unless a directory built by
+  // `scripts/build-osm-extract.js` is configured. Places it does not cover
+  // are asked from Overpass as before. A store answers however old it is;
+  // PARRANDA_OSM_EXTRACT_MAX_AGE_DAYS sets a limit only when given.
+  const extractDir = String(env?.PARRANDA_OSM_EXTRACT_DIR || "").trim();
+  const extractMaxAgeDays = Number(env?.PARRANDA_OSM_EXTRACT_MAX_AGE_DAYS);
+  const localSource = extractDir
+    ? createOsmExtractStore({
+        dir: extractDir,
+        ...(Number.isFinite(extractMaxAgeDays) && extractMaxAgeDays > 0
+          ? { maxAgeMs: extractMaxAgeDays * 24 * 60 * 60 * 1000 } : {}),
+      })
+    : null;
   const osmLoader = createOpenDataLoader({
     cache,
     staleIfErrorMs,
     ...(endpointsRaw.length ? { endpoints: endpointsRaw } : {}),
+    ...(localSource ? { localSource } : {}),
   });
 
   // Optional SECOND open source family: Wikidata notable places. When enabled,

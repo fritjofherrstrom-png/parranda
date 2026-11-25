@@ -45,14 +45,12 @@ const COORD_CONFLICT_M = 100; // curated vs external coords farther apart than t
 // generic category nouns across the languages Parranda touches. A name with no
 // distinctive token left (e.g. "The Bar", "Cafe") is treated as generic and
 // will not merge on geo+name alone.
-const GENERIC_NAME_TOKENS = new Set([
-  // articles / connectors
+const NAME_ARTICLES = new Set([
   "the", "a", "an", "la", "le", "il", "lo", "gli", "los", "las", "el", "der",
   "die", "das", "den", "det", "en", "ett", "of", "de", "di", "da", "del", "dei",
-  // Conjunctions. "&" is already dropped by normalizeName, so "X och Y" and
-  // "X & Y" must not differ by a distinctive word. A name made only of
-  // connectors stays generic and never merges on geo+name.
-  "and", "och", "og", "und", "et",
+]);
+const GENERIC_NAME_TOKENS = new Set([
+  ...NAME_ARTICLES,
   // category nouns
   "bar", "pub", "cafe", "caffe", "kafe", "cafeteria", "restaurant", "ristorante",
   "trattoria", "osteria", "pizzeria", "pizza", "bakery", "forno", "museo",
@@ -312,6 +310,16 @@ function matchIdentity(a, b) {
     return no("distinctive_name_conflict", { distance_m: round(dist), name_similarity: round2(sim) });
   }
 
+  // Literal conjunctions can be names, but cannot erase conflicting short
+  // words or stand in for two different generic category phrases.
+  if ([...distinctA].every(token => CONNECTOR_TOKENS.has(token))) {
+    const wordsA = connectorOnlyNameContext(a.label);
+    const wordsB = connectorOnlyNameContext(b.label);
+    if (wordsA.size !== wordsB.size || intersectionSize(wordsA, wordsB) !== wordsA.size) {
+      return no("connector_only_name_conflict", { distance_m: round(dist), name_similarity: round2(sim) });
+    }
+  }
+
   if (dist <= GEO_MERGE_M && sim >= NAME_SIM_MIN && distinctiveOverlap >= 1) {
     return yes("geo_name", { distance_m: round(dist), name_similarity: round2(sim), distinctive_overlap: distinctiveOverlap });
   }
@@ -568,12 +576,44 @@ function nameTokens(value) {
   return normalized ? new Set(normalized.split(" ")) : new Set();
 }
 
+// Conjunctions. "&" is already dropped by normalizeName, so "X och Y" and
+// "X & Y" must not differ by a distinctive word. A conjunction is a connector
+// only when it joins two name words: a distinctive word somewhere before it
+// and somewhere after it ("Gösta Werner och Havet"). Otherwise it is the name
+// itself and stays distinctive, whatever generic words surround it: "OG Aurora
+// Café", "The OG Aurora Café" and "Café OG Aurora" all keep "og".
+const CONNECTOR_TOKENS = new Set(["and", "och", "og", "und", "et"]);
+
+function connectorOnlyNameContext(value) {
+  const normalized = normalizeName(value);
+  const words = normalized ? normalized.split(" ").filter(token => !NAME_ARTICLES.has(token)) : [];
+  // Do not discard single-letter initials or single-character names here.
+  const specific = words.filter(token => !GENERIC_NAME_TOKENS.has(token) && !CONNECTOR_TOKENS.has(token));
+  if (specific.length) return new Set(specific);
+
+  // If only generic words surround a conjunction, compare the full phrase.
+  // Otherwise keep ordinary category aliases of literal names: "ET Bar" /
+  // "Pub ET", "The OG Café" / "OG Restaurant", and the one-word name "Och".
+  const categoryPhrase = words.some((token, index) => CONNECTOR_TOKENS.has(token) &&
+    words.slice(0, index).some(word => !CONNECTOR_TOKENS.has(word)) &&
+    words.slice(index + 1).some(word => !CONNECTOR_TOKENS.has(word)));
+  return new Set(categoryPhrase ? words : []);
+}
+
+function isNameWord(token) {
+  return !GENERIC_NAME_TOKENS.has(token) && (token.length > 1 || /^\d+$/.test(token));
+}
+
 function distinctiveTokens(value) {
-  const tokens = nameTokens(value);
+  const normalized = normalizeName(value);
+  const words = normalized ? normalized.split(" ") : [];
+  const content = words.map(token => isNameWord(token) && !CONNECTOR_TOKENS.has(token));
   const out = new Set();
-  for (const token of tokens) {
-    if (!GENERIC_NAME_TOKENS.has(token) && (token.length > 1 || /^\d+$/.test(token))) out.add(token);
-  }
+  words.forEach((token, index) => {
+    if (CONNECTOR_TOKENS.has(token) &&
+        content.slice(0, index).includes(true) && content.slice(index + 1).includes(true)) return;
+    if (isNameWord(token)) out.add(token);
+  });
   return out;
 }
 

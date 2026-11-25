@@ -1,0 +1,2087 @@
+{
+ "_source": "Trimmed real API responses captured 2026-11-24 by the place-media coverage study (wbgetentities, Commons imageinfo, Wikipedia REST summary). Wikidata data CC0; Wikipedia text CC BY-SA 4.0 (en/sv.wikipedia.org contributors); Commons metadata from the file pages. Only the claims P31/P625/P18/P5775 and a few label languages are kept.",
+ "_synthetic": "imageinfo mime and sha1 were not in the captured iiprop; mime is derived from the file extension and sha1 is sha1(title) so tests have stable 40-hex media ids. Extracts pages are rebuilt in the action=query&prop=extracts|pageprops|revisions formatversion=2 shape from the captured REST summaries (same intro text, wikibase_item and revision id).",
+ "wbgetentities": {
+  "entities": {
+   "Q41660931": {
+    "type": "item",
+    "id": "Q41660931",
+    "labels": {
+     "sv": {
+      "language": "sv",
+      "value": "Wallérs plats"
+     },
+     "en": {
+      "language": "en",
+      "value": "Wallérs plats"
+     }
+    },
+    "descriptions": {
+     "sv": {
+      "language": "sv",
+      "value": "torg i Visby"
+     },
+     "en": {
+      "language": "en",
+      "value": "square in Visby, Sweden"
+     },
+     "de": {
+      "language": "de",
+      "value": "platz in Visby, Schweden"
+     }
+    },
+    "aliases": {},
+    "claims": {
+     "P31": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P31",
+        "datavalue": {
+         "value": {
+          "entity-type": "item",
+          "numeric-id": 174782,
+          "id": "Q174782"
+         },
+         "type": "wikibase-entityid"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P625": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P625",
+        "datavalue": {
+         "value": {
+          "latitude": 57.6387,
+          "longitude": 18.2958,
+          "altitude": null,
+          "precision": 0.0001,
+          "globe": "http://www.wikidata.org/entity/Q2"
+         },
+         "type": "globecoordinate"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ]
+    },
+    "sitelinks": {}
+   },
+   "Q56733243": {
+    "type": "item",
+    "id": "Q56733243",
+    "labels": {
+     "fr": {
+      "language": "fr",
+      "value": "arrêt Solférino"
+     }
+    },
+    "descriptions": {
+     "fr": {
+      "language": "fr",
+      "value": "arrêt de bus RATP Solférino situé Saint-Germain (223 Boulevard) - 75107"
+     }
+    },
+    "aliases": {
+     "fr": [
+      {
+       "language": "fr",
+       "value": "Solférino"
+      }
+     ]
+    },
+    "claims": {
+     "P31": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P31",
+        "datavalue": {
+         "value": {
+          "entity-type": "item",
+          "numeric-id": 953806,
+          "id": "Q953806"
+         },
+         "type": "wikibase-entityid"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P625": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P625",
+        "datavalue": {
+         "value": {
+          "latitude": 48.8585333595,
+          "longitude": 2.32308924879,
+          "altitude": null,
+          "precision": 0.000001,
+          "globe": "http://www.wikidata.org/entity/Q2"
+         },
+         "type": "globecoordinate"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ]
+    },
+    "sitelinks": {}
+   },
+   "Q28303": {
+    "type": "item",
+    "id": "Q28303",
+    "labels": {
+     "fr": {
+      "language": "fr",
+      "value": "Campo de' Fiori"
+     },
+     "es": {
+      "language": "es",
+      "value": "Campo de' Fiori"
+     },
+     "en": {
+      "language": "en",
+      "value": "Campo de' Fiori"
+     },
+     "it": {
+      "language": "it",
+      "value": "Campo de' Fiori"
+     },
+     "de": {
+      "language": "de",
+      "value": "Campo de’ Fiori"
+     },
+     "sv": {
+      "language": "sv",
+      "value": "Piazza Campo dei Fiori"
+     },
+     "da": {
+      "language": "da",
+      "value": "Campo de' Fiori"
+     },
+     "ja": {
+      "language": "ja",
+      "value": "カンポ・デ・フィオーリ"
+     }
+    },
+    "descriptions": {
+     "en": {
+      "language": "en",
+      "value": "square in Rome, Italy"
+     },
+     "es": {
+      "language": "es",
+      "value": "plaza de Roma"
+     },
+     "it": {
+      "language": "it",
+      "value": "piazza di Roma"
+     },
+     "de": {
+      "language": "de",
+      "value": "Platz in Rom, Italien"
+     },
+     "fr": {
+      "language": "fr",
+      "value": "place de Rome"
+     },
+     "sv": {
+      "language": "sv",
+      "value": "öppen plats i Rom, Italien"
+     }
+    },
+    "aliases": {
+     "fr": [
+      {
+       "language": "fr",
+       "value": "Campo Dei Fiori"
+      }
+     ],
+     "es": [
+      {
+       "language": "es",
+       "value": "Campo dei Fiori"
+      },
+      {
+       "language": "es",
+       "value": "Campo de Fiori"
+      }
+     ],
+     "de": [
+      {
+       "language": "de",
+       "value": "Campo de' Fiori"
+      },
+      {
+       "language": "de",
+       "value": "Campo dei Fiori"
+      }
+     ],
+     "sv": [
+      {
+       "language": "sv",
+       "value": "Campo dei Fiori"
+      }
+     ],
+     "ja": [
+      {
+       "language": "ja",
+       "value": "カンポ・デイ・フィオーリ"
+      },
+      {
+       "language": "ja",
+       "value": "カンポ・デ・フィオーリ広場"
+      },
+      {
+       "language": "ja",
+       "value": "カンポ・ディ・フィオーリ"
+      }
+     ],
+     "it": [
+      {
+       "language": "it",
+       "value": "Campo dei Fiori"
+      }
+     ]
+    },
+    "claims": {
+     "P31": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P31",
+        "datavalue": {
+         "value": {
+          "entity-type": "item",
+          "numeric-id": 174782,
+          "id": "Q174782"
+         },
+         "type": "wikibase-entityid"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P625": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P625",
+        "datavalue": {
+         "value": {
+          "latitude": 41.89566377507976,
+          "longitude": 12.472046538447032,
+          "altitude": null,
+          "precision": 1e-8,
+          "globe": "http://www.wikidata.org/entity/Q2"
+         },
+         "type": "globecoordinate"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P18": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P18",
+        "datavalue": {
+         "value": "Il Valle delle Rose ....JPG",
+         "type": "string"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ]
+    },
+    "sitelinks": {
+     "svwiki": {
+      "site": "svwiki",
+      "title": "Campo de' Fiori",
+      "badges": []
+     },
+     "enwiki": {
+      "site": "enwiki",
+      "title": "Campo de' Fiori",
+      "badges": []
+     }
+    }
+   },
+   "Q60970028": {
+    "type": "item",
+    "id": "Q60970028",
+    "labels": {
+     "sv": {
+      "language": "sv",
+      "value": "Valvet"
+     },
+     "en": {
+      "language": "en",
+      "value": "Valvet"
+     }
+    },
+    "descriptions": {
+     "en": {
+      "language": "en",
+      "value": "building in Lund Municipality, Sweden"
+     }
+    },
+    "aliases": {},
+    "claims": {
+     "P31": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P31",
+        "datavalue": {
+         "value": {
+          "entity-type": "item",
+          "numeric-id": 41176,
+          "id": "Q41176"
+         },
+         "type": "wikibase-entityid"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P625": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P625",
+        "datavalue": {
+         "value": {
+          "latitude": 55.708126420999605,
+          "longitude": 13.196046069096319,
+          "altitude": null,
+          "precision": 1e-8,
+          "globe": "http://www.wikidata.org/entity/Q2"
+         },
+         "type": "globecoordinate"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P18": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P18",
+        "datavalue": {
+         "value": "DSC 9149 Valvet Lund.jpg",
+         "type": "string"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ]
+    },
+    "sitelinks": {
+     "svwiki": {
+      "site": "svwiki",
+      "title": "Valvet, Lund",
+      "badges": []
+     }
+    }
+   },
+   "Q7296420": {
+    "type": "item",
+    "id": "Q7296420",
+    "labels": {
+     "en": {
+      "language": "en",
+      "value": "Raven Row"
+     }
+    },
+    "descriptions": {
+     "en": {
+      "language": "en",
+      "value": "UK art exhibition centre"
+     }
+    },
+    "aliases": {},
+    "claims": {
+     "P31": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P31",
+        "datavalue": {
+         "value": {
+          "entity-type": "item",
+          "numeric-id": 1007870,
+          "id": "Q1007870"
+         },
+         "type": "wikibase-entityid"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      },
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P31",
+        "datavalue": {
+         "value": {
+          "entity-type": "item",
+          "numeric-id": 708676,
+          "id": "Q708676"
+         },
+         "type": "wikibase-entityid"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P625": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P625",
+        "datavalue": {
+         "value": {
+          "latitude": 51.5185,
+          "longitude": -0.0777,
+          "altitude": null,
+          "precision": 0.0001,
+          "globe": "http://www.wikidata.org/entity/Q2"
+         },
+         "type": "globecoordinate"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P18": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P18",
+        "datavalue": {
+         "value": "56 & 58 Artillery Lane.JPG",
+         "type": "string"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ]
+    },
+    "sitelinks": {
+     "enwiki": {
+      "site": "enwiki",
+      "title": "Raven Row",
+      "badges": []
+     }
+    }
+   },
+   "Q3107443": {
+    "type": "item",
+    "id": "Q3107443",
+    "labels": {
+     "fr": {
+      "language": "fr",
+      "value": "musée Röhss"
+     },
+     "en": {
+      "language": "en",
+      "value": "Röhsska Museum"
+     },
+     "sv": {
+      "language": "sv",
+      "value": "Röhsska museet"
+     },
+     "de": {
+      "language": "de",
+      "value": "Röhßsches Museum"
+     },
+     "ja": {
+      "language": "ja",
+      "value": "ルスカ美術館"
+     },
+     "es": {
+      "language": "es",
+      "value": "Röhsska Museum"
+     },
+     "it": {
+      "language": "it",
+      "value": "Röhsska Museum"
+     }
+    },
+    "descriptions": {
+     "sv": {
+      "language": "sv",
+      "value": "museum i Göteborg för mode, design och konsthantverk"
+     },
+     "en": {
+      "language": "en",
+      "value": "museum in Gothenburg, Sweden"
+     },
+     "de": {
+      "language": "de",
+      "value": "Museum für Kunsthandwerk, Mode und Design in Göteborg"
+     },
+     "fr": {
+      "language": "fr",
+      "value": "musée consacré au design et aux arts appliqués"
+     }
+    },
+    "aliases": {
+     "fr": [
+      {
+       "language": "fr",
+       "value": "Musee Rohss"
+      }
+     ],
+     "ja": [
+      {
+       "language": "ja",
+       "value": "レースカ美術館"
+      }
+     ],
+     "en": [
+      {
+       "language": "en",
+       "value": "Röhsska museet"
+      }
+     ]
+    },
+    "claims": {
+     "P31": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P31",
+        "datavalue": {
+         "value": {
+          "entity-type": "item",
+          "numeric-id": 1575307,
+          "id": "Q1575307"
+         },
+         "type": "wikibase-entityid"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      },
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P31",
+        "datavalue": {
+         "value": {
+          "entity-type": "item",
+          "numeric-id": 1200701,
+          "id": "Q1200701"
+         },
+         "type": "wikibase-entityid"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P625": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P625",
+        "datavalue": {
+         "value": {
+          "latitude": 57.7,
+          "longitude": 11.97333333,
+          "altitude": null,
+          "precision": 0.00027777777777778,
+          "globe": "http://www.wikidata.org/entity/Q2"
+         },
+         "type": "globecoordinate"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P18": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P18",
+        "datavalue": {
+         "value": "Röhsska museet.jpg",
+         "type": "string"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ]
+    },
+    "sitelinks": {
+     "svwiki": {
+      "site": "svwiki",
+      "title": "Röhsska museet",
+      "badges": []
+     },
+     "enwiki": {
+      "site": "enwiki",
+      "title": "Röhsska Museum",
+      "badges": []
+     }
+    }
+   },
+   "Q2686981": {
+    "type": "item",
+    "id": "Q2686981",
+    "labels": {
+     "da": {
+      "language": "da",
+      "value": "Ørstedsparken"
+     },
+     "en": {
+      "language": "en",
+      "value": "Ørstedsparken"
+     },
+     "fr": {
+      "language": "fr",
+      "value": "Ørstedsparken"
+     },
+     "sv": {
+      "language": "sv",
+      "value": "Ørstedsparken"
+     },
+     "de": {
+      "language": "de",
+      "value": "Ørstedsparken"
+     },
+     "it": {
+      "language": "it",
+      "value": "Ørstedsparken"
+     }
+    },
+    "descriptions": {
+     "da": {
+      "language": "da",
+      "value": "park i København"
+     },
+     "de": {
+      "language": "de",
+      "value": "Park in Kopenhagen, Dänemark"
+     },
+     "en": {
+      "language": "en",
+      "value": "park in Copenhagen"
+     },
+     "sv": {
+      "language": "sv",
+      "value": "park i Köpenhamns kommun"
+     },
+     "fr": {
+      "language": "fr",
+      "value": "jardin public de Copenhague, au Danemark"
+     }
+    },
+    "aliases": {},
+    "claims": {
+     "P31": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P31",
+        "datavalue": {
+         "value": {
+          "entity-type": "item",
+          "numeric-id": 22698,
+          "id": "Q22698"
+         },
+         "type": "wikibase-entityid"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P625": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P625",
+        "datavalue": {
+         "value": {
+          "latitude": 55.68083,
+          "longitude": 12.56639,
+          "altitude": null,
+          "precision": 0.0001,
+          "globe": "http://www.wikidata.org/entity/Q2"
+         },
+         "type": "globecoordinate"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P18": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P18",
+        "datavalue": {
+         "value": "Ørstedsparken sommer 1.jpg",
+         "type": "string"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ]
+    },
+    "sitelinks": {
+     "svwiki": {
+      "site": "svwiki",
+      "title": "Ørstedsparken",
+      "badges": []
+     },
+     "enwiki": {
+      "site": "enwiki",
+      "title": "Ørstedsparken",
+      "badges": []
+     }
+    }
+   },
+   "Q1331646": {
+    "type": "item",
+    "id": "Q1331646",
+    "labels": {
+     "de": {
+      "language": "de",
+      "value": "Archäologisches Museum für die Mittelmeerländer und den Nahen Osten"
+     },
+     "en": {
+      "language": "en",
+      "value": "Museum of Mediterranean and Near Eastern Antiquities"
+     },
+     "sv": {
+      "language": "sv",
+      "value": "Medelhavsmuseet"
+     },
+     "fr": {
+      "language": "fr",
+      "value": "musée archéologique des pays méditerranéens et du Proche-Orient"
+     },
+     "es": {
+      "language": "es",
+      "value": "Museo Arqueológico del Mediterráneo y del Medio Oriente"
+     },
+     "da": {
+      "language": "da",
+      "value": "Medelhavsmuseet"
+     },
+     "ja": {
+      "language": "ja",
+      "value": "地中海・中近東古美術博物館"
+     }
+    },
+    "descriptions": {
+     "fr": {
+      "language": "fr",
+      "value": "musée à Stockholm, Suède"
+     },
+     "en": {
+      "language": "en",
+      "value": "museum in Stockholm, Sweden"
+     },
+     "de": {
+      "language": "de",
+      "value": "Museum in Stockholm, Schweden"
+     },
+     "es": {
+      "language": "es",
+      "value": "museo en Estocolmo, Suecia"
+     },
+     "sv": {
+      "language": "sv",
+      "value": "museum i Stockholm"
+     }
+    },
+    "aliases": {
+     "sv": [
+      {
+       "language": "sv",
+       "value": "Stockholms medelhavsmuseum"
+      }
+     ],
+     "en": [
+      {
+       "language": "en",
+       "value": "Medelhavsmuseet"
+      }
+     ],
+     "de": [
+      {
+       "language": "de",
+       "value": "Medelhavsmuseet"
+      }
+     ],
+     "fr": [
+      {
+       "language": "fr",
+       "value": "Medelhavsmuseet"
+      }
+     ],
+     "es": [
+      {
+       "language": "es",
+       "value": "Medelhavsmuseet"
+      },
+      {
+       "language": "es",
+       "value": "Museo Arqueologico del Mediterraneo y del Medio Oriente"
+      }
+     ]
+    },
+    "claims": {
+     "P31": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P31",
+        "datavalue": {
+         "value": {
+          "entity-type": "item",
+          "numeric-id": 3329412,
+          "id": "Q3329412"
+         },
+         "type": "wikibase-entityid"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P625": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P625",
+        "datavalue": {
+         "value": {
+          "latitude": 59.32939444,
+          "longitude": 18.06740278,
+          "altitude": null,
+          "precision": 0.00000277777777778,
+          "globe": "http://www.wikidata.org/entity/Q2"
+         },
+         "type": "globecoordinate"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P18": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P18",
+        "datavalue": {
+         "value": "Medelhavsmuseet 2007.jpg",
+         "type": "string"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ]
+    },
+    "sitelinks": {
+     "svwiki": {
+      "site": "svwiki",
+      "title": "Medelhavsmuseet",
+      "badges": []
+     },
+     "enwiki": {
+      "site": "enwiki",
+      "title": "Medelhavsmuseet",
+      "badges": []
+     }
+    }
+   },
+   "Q11489180": {
+    "type": "item",
+    "id": "Q11489180",
+    "labels": {
+     "ja": {
+      "language": "ja",
+      "value": "御池通"
+     },
+     "en": {
+      "language": "en",
+      "value": "Oike Street"
+     },
+     "fr": {
+      "language": "fr",
+      "value": "rue Oike"
+     }
+    },
+    "descriptions": {
+     "en": {
+      "language": "en",
+      "value": "street in Kyoto, Japan"
+     },
+     "ja": {
+      "language": "ja",
+      "value": "京都市の通り"
+     },
+     "de": {
+      "language": "de",
+      "value": "Innerortsstraße in Japan"
+     },
+     "fr": {
+      "language": "fr",
+      "value": "rue à Kyoto, au Japon"
+     }
+    },
+    "aliases": {
+     "ja": [
+      {
+       "language": "ja",
+       "value": "三条坊門"
+      },
+      {
+       "language": "ja",
+       "value": "三条坊門小路"
+      },
+      {
+       "language": "ja",
+       "value": "おいけどおり"
+      }
+     ],
+     "en": [
+      {
+       "language": "en",
+       "value": "Oike-dori Street"
+      },
+      {
+       "language": "en",
+       "value": "Oike-dōri Street"
+      }
+     ],
+     "fr": [
+      {
+       "language": "fr",
+       "value": "Oike-dōri"
+      }
+     ]
+    },
+    "claims": {
+     "P31": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P31",
+        "datavalue": {
+         "value": {
+          "entity-type": "item",
+          "numeric-id": 79007,
+          "id": "Q79007"
+         },
+         "type": "wikibase-entityid"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P18": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P18",
+        "datavalue": {
+         "value": "Oike dori kyoto.JPG",
+         "type": "string"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ]
+    },
+    "sitelinks": {
+     "enwiki": {
+      "site": "enwiki",
+      "title": "Oike Street",
+      "badges": []
+     }
+    }
+   },
+   "Q1506922": {
+    "type": "item",
+    "id": "Q1506922",
+    "labels": {
+     "de": {
+      "language": "de",
+      "value": "Gustavianum"
+     },
+     "fr": {
+      "language": "fr",
+      "value": "Gustavianum"
+     },
+     "en": {
+      "language": "en",
+      "value": "Gustavianum"
+     },
+     "sv": {
+      "language": "sv",
+      "value": "Gustavianum"
+     },
+     "da": {
+      "language": "da",
+      "value": "Gustavianum"
+     },
+     "it": {
+      "language": "it",
+      "value": "Gustavianum"
+     },
+     "es": {
+      "language": "es",
+      "value": "Gustavianum"
+     }
+    },
+    "descriptions": {
+     "en": {
+      "language": "en",
+      "value": "university building in Uppsala, Sweden, containing the university museum of Uppsala University and an early modern anatomical theatre"
+     },
+     "de": {
+      "language": "de",
+      "value": "Universitätsgebäude mit frühneuzeitlichem anatomischem Theater in Uppsala, Schweden, das das Universitätsmuseum der Universität Uppsala beherbergt"
+     },
+     "sv": {
+      "language": "sv",
+      "value": "universitetsmuseum till Uppsala universitet"
+     },
+     "it": {
+      "language": "it",
+      "value": "edificio dell'Università di Uppsala"
+     },
+     "es": {
+      "language": "es",
+      "value": "museo de la Universidad de Upsala, en Suecia"
+     }
+    },
+    "aliases": {
+     "fr": [
+      {
+       "language": "fr",
+       "value": "Museum Gustavianum"
+      }
+     ],
+     "sv": [
+      {
+       "language": "sv",
+       "value": "Museum Gustavianum"
+      },
+      {
+       "language": "sv",
+       "value": "Anatomisk Teatern"
+      }
+     ],
+     "en": [
+      {
+       "language": "en",
+       "value": "Museum Gustavianum"
+      },
+      {
+       "language": "en",
+       "value": "Theatrum Anatomicum Gustavianum"
+      }
+     ],
+     "de": [
+      {
+       "language": "de",
+       "value": "Museum Gustavianum"
+      }
+     ]
+    },
+    "claims": {
+     "P31": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P31",
+        "datavalue": {
+         "value": {
+          "entity-type": "item",
+          "numeric-id": 866133,
+          "id": "Q866133"
+         },
+         "type": "wikibase-entityid"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      },
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P31",
+        "datavalue": {
+         "value": {
+          "entity-type": "item",
+          "numeric-id": 488444,
+          "id": "Q488444"
+         },
+         "type": "wikibase-entityid"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      },
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P31",
+        "datavalue": {
+         "value": {
+          "entity-type": "item",
+          "numeric-id": 19844914,
+          "id": "Q19844914"
+         },
+         "type": "wikibase-entityid"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P625": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P625",
+        "datavalue": {
+         "value": {
+          "latitude": 59.85797222,
+          "longitude": 17.63172222,
+          "altitude": null,
+          "precision": 0.00002777777777778,
+          "globe": "http://www.wikidata.org/entity/Q2"
+         },
+         "type": "globecoordinate"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P18": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P18",
+        "datavalue": {
+         "value": "GUSTAVIANUM 1.jpg",
+         "type": "string"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P5775": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P5775",
+        "datavalue": {
+         "value": "Anatomiska teatern Gustavianum.jpg",
+         "type": "string"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ]
+    },
+    "sitelinks": {
+     "svwiki": {
+      "site": "svwiki",
+      "title": "Gustavianum",
+      "badges": []
+     },
+     "enwiki": {
+      "site": "enwiki",
+      "title": "Gustavianum",
+      "badges": []
+     }
+    }
+   },
+   "Q955344": {
+    "type": "item",
+    "id": "Q955344",
+    "labels": {
+     "en": {
+      "language": "en",
+      "value": "Gothenburg"
+     },
+     "es": {
+      "language": "es",
+      "value": "Gothenburg"
+     },
+     "sv": {
+      "language": "sv",
+      "value": "Gothenburg"
+     },
+     "it": {
+      "language": "it",
+      "value": "Gothenburg"
+     },
+     "fr": {
+      "language": "fr",
+      "value": "Gothenburg"
+     },
+     "da": {
+      "language": "da",
+      "value": "Gothenburg"
+     }
+    },
+    "descriptions": {
+     "en": {
+      "language": "en",
+      "value": "city in Nebraska, USA"
+     },
+     "de": {
+      "language": "de",
+      "value": "Stadt im US-Bundesstaat Nebraska"
+     },
+     "fr": {
+      "language": "fr",
+      "value": "ville américaine de l'État du Nebraska"
+     },
+     "sv": {
+      "language": "sv",
+      "value": "stad i Nebraska, USA"
+     }
+    },
+    "aliases": {
+     "en": [
+      {
+       "language": "en",
+       "value": "Gothenburg, Nebraska"
+      },
+      {
+       "language": "en",
+       "value": "Gothenburg, NE"
+      }
+     ]
+    },
+    "claims": {
+     "P31": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P31",
+        "datavalue": {
+         "value": {
+          "entity-type": "item",
+          "numeric-id": 1093829,
+          "id": "Q1093829"
+         },
+         "type": "wikibase-entityid"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P625": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P625",
+        "datavalue": {
+         "value": {
+          "latitude": 40.931666666667,
+          "longitude": -100.15944444444,
+          "altitude": null,
+          "precision": 0.00027777777777778,
+          "globe": "http://www.wikidata.org/entity/Q2"
+         },
+         "type": "globecoordinate"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ],
+     "P18": [
+      {
+       "mainsnak": {
+        "snaktype": "value",
+        "property": "P18",
+        "datavalue": {
+         "value": "Gothenburg Pony Express Station from SW.JPG",
+         "type": "string"
+        }
+       },
+       "type": "statement",
+       "rank": "normal"
+      }
+     ]
+    },
+    "sitelinks": {
+     "svwiki": {
+      "site": "svwiki",
+      "title": "Gothenburg",
+      "badges": []
+     },
+     "enwiki": {
+      "site": "enwiki",
+      "title": "Gothenburg, Nebraska",
+      "badges": []
+     }
+    }
+   }
+  }
+ },
+ "commons_imageinfo": {
+  "batchcomplete": true,
+  "query": {
+   "pages": [
+    {
+     "ns": 6,
+     "title": "File:Castelo Sao Jorge Lisboa 1.JPG",
+     "imagerepository": "local",
+     "imageinfo": [
+      {
+       "size": 65240,
+       "width": 394,
+       "height": 525,
+       "url": "https://upload.wikimedia.org/wikipedia/commons/3/37/Castelo_Sao_Jorge_Lisboa_1.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+       "descriptionurl": "https://commons.wikimedia.org/wiki/File:Castelo_Sao_Jorge_Lisboa_1.JPG",
+       "descriptionshorturl": "https://commons.wikimedia.org/wiki/Special:Redirect/page/161828",
+       "mime": "image/jpeg",
+       "sha1": "663e3127705a809fc224fd5055936668807fce1c",
+       "extmetadata": {
+        "License": {
+         "value": "cc-by-sa-2.0",
+         "source": "commons-templates",
+         "hidden": ""
+        },
+        "LicenseShortName": {
+         "value": "CC BY-SA 2.0",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "LicenseUrl": {
+         "value": "https://creativecommons.org/licenses/by-sa/2.0",
+         "source": "commons-desc-page"
+        },
+        "Restrictions": {
+         "value": "",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "AttributionRequired": {
+         "value": "true",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Copyrighted": {
+         "value": "True",
+         "source": "commons-desc-page",
+         "hidden": ""
+        }
+       }
+      }
+     ]
+    },
+    {
+     "ns": 6,
+     "title": "File:Hafreborg, Simrishamn.jpg",
+     "imagerepository": "local",
+     "imageinfo": [
+      {
+       "size": 1622711,
+       "width": 992,
+       "height": 2076,
+       "url": "https://upload.wikimedia.org/wikipedia/commons/f/fa/Hafreborg%2C_Simrishamn.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+       "descriptionurl": "https://commons.wikimedia.org/wiki/File:Hafreborg,_Simrishamn.jpg",
+       "descriptionshorturl": "https://commons.wikimedia.org/wiki/Special:Redirect/page/2440923",
+       "mime": "image/jpeg",
+       "sha1": "c4c39daa3b589ddc5b739d5168900f8d0b8bbe7e",
+       "extmetadata": {
+        "License": {
+         "value": "cc-by-sa-3.0",
+         "source": "commons-templates",
+         "hidden": ""
+        },
+        "LicenseShortName": {
+         "value": "CC BY-SA 3.0",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "LicenseUrl": {
+         "value": "http://creativecommons.org/licenses/by-sa/3.0/",
+         "source": "commons-desc-page"
+        },
+        "Artist": {
+         "value": "jorchr",
+         "source": "commons-desc-page"
+        },
+        "Attribution": {
+         "value": "I, <a href=\"//commons.wikimedia.org/wiki/User:Jorchr\" title=\"User:Jorchr\">Jorchr</a>",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Credit": {
+         "value": "<span class=\"int-own-work\">Self-photographed</span>",
+         "source": "commons-desc-page"
+        },
+        "Restrictions": {
+         "value": "",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "AttributionRequired": {
+         "value": "true",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Copyrighted": {
+         "value": "True",
+         "source": "commons-desc-page",
+         "hidden": ""
+        }
+       }
+      }
+     ]
+    },
+    {
+     "ns": 6,
+     "title": "File:Medelhavsmuseet 2007.jpg",
+     "imagerepository": "local",
+     "imageinfo": [
+      {
+       "size": 799121,
+       "width": 1780,
+       "height": 2355,
+       "url": "https://upload.wikimedia.org/wikipedia/commons/d/da/Medelhavsmuseet_2007.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+       "descriptionurl": "https://commons.wikimedia.org/wiki/File:Medelhavsmuseet_2007.jpg",
+       "descriptionshorturl": "https://commons.wikimedia.org/wiki/Special:Redirect/page/2625548",
+       "mime": "image/jpeg",
+       "sha1": "46ed26391833b2c6f1251831f4fdce668b4b0321",
+       "extmetadata": {
+        "License": {
+         "value": "cc-by-sa-3.0",
+         "source": "commons-templates",
+         "hidden": ""
+        },
+        "LicenseShortName": {
+         "value": "CC BY-SA 3.0",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "LicenseUrl": {
+         "value": "https://creativecommons.org/licenses/by-sa/3.0",
+         "source": "commons-desc-page"
+        },
+        "Artist": {
+         "value": "<a href=\"https://www.wikidata.org/wiki/Q44371417\" class=\"extiw\" title=\"d:Q44371417\"><span title=\"German-Swedish architect and photographer (1943–2023)\">Holger Ellgaard</span></a> <span class=\"mw-valign-text-top noprint\" typeof=\"mw:File/Frameless\"><a href=\"//commons.wikimedia.org/wiki/File:Medelhavsmuseet_2007.jpg#P170\" title=\"Edit this at Structured Data on Commons\"><img alt=\"Edit this at Structured Data on Commons\" src=\"https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8a/OOjs_UI_icon_edit-ltr-progressive.svg/20px-OOjs_UI_icon_edit-ltr-progressive.svg.png?utm_source=commons.wikimedia.org&amp;utm_campaign=parser&amp;utm_content=thumbnail\" decoding=\"async\" loading=\"lazy\" width=\"10\" height=\"10\" class=\"mw-file-element\" data-file-width=\"20\" data-file-height=\"20\"></a></span>",
+         "source": "commons-desc-page"
+        },
+        "Credit": {
+         "value": "<span class=\"int-own-work\" lang=\"en\">Own work</span> <span class=\"mw-valign-text-top noprint\" typeof=\"mw:File/Frameless\"><a href=\"//commons.wikimedia.org/wiki/File:Medelhavsmuseet_2007.jpg#P7482\" title=\"Edit this at Structured Data on Commons\"><img alt=\"Edit this at Structured Data on Commons\" src=\"https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8a/OOjs_UI_icon_edit-ltr-progressive.svg/20px-OOjs_UI_icon_edit-ltr-progressive.svg.png?utm_source=commons.wikimedia.org&amp;utm_campaign=parser&amp;utm_content=thumbnail\" decoding=\"async\" loading=\"lazy\" width=\"10\" height=\"10\" class=\"mw-file-element\" data-file-width=\"20\" data-file-height=\"20\"></a></span>",
+         "source": "commons-desc-page"
+        },
+        "Restrictions": {
+         "value": "",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "AttributionRequired": {
+         "value": "true",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Copyrighted": {
+         "value": "True",
+         "source": "commons-desc-page",
+         "hidden": ""
+        }
+       }
+      }
+     ]
+    },
+    {
+     "ns": 6,
+     "title": "File:Ørstedsparken sommer 1.jpg",
+     "imagerepository": "local",
+     "imageinfo": [
+      {
+       "size": 1277020,
+       "width": 1600,
+       "height": 1200,
+       "url": "https://upload.wikimedia.org/wikipedia/commons/f/f0/%C3%98rstedsparken_sommer_1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+       "descriptionurl": "https://commons.wikimedia.org/wiki/File:%C3%98rstedsparken_sommer_1.jpg",
+       "descriptionshorturl": "https://commons.wikimedia.org/wiki/Special:Redirect/page/2802650",
+       "mime": "image/jpeg",
+       "sha1": "b17a72b66051c1c6120998d522538318f4f14908",
+       "extmetadata": {
+        "License": {
+         "value": "pd",
+         "source": "commons-templates",
+         "hidden": ""
+        },
+        "LicenseShortName": {
+         "value": "Public domain",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Artist": {
+         "value": "<a href=\"//commons.wikimedia.org/wiki/User:Thue\" title=\"User:Thue\">Thue</a>",
+         "source": "commons-desc-page"
+        },
+        "Credit": {
+         "value": "<span class=\"int-own-work\" lang=\"en\">Own work</span>",
+         "source": "commons-desc-page"
+        },
+        "Restrictions": {
+         "value": "",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "AttributionRequired": {
+         "value": "false",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Copyrighted": {
+         "value": "False",
+         "source": "commons-desc-page",
+         "hidden": ""
+        }
+       }
+      }
+     ]
+    },
+    {
+     "ns": 6,
+     "title": "File:Charles I, Trafalgar Square.jpg",
+     "imagerepository": "local",
+     "imageinfo": [
+      {
+       "size": 1009789,
+       "width": 1866,
+       "height": 2800,
+       "url": "https://upload.wikimedia.org/wikipedia/commons/3/36/Charles_I%2C_Trafalgar_Square.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+       "descriptionurl": "https://commons.wikimedia.org/wiki/File:Charles_I,_Trafalgar_Square.jpg",
+       "descriptionshorturl": "https://commons.wikimedia.org/wiki/Special:Redirect/page/7180835",
+       "mime": "image/jpeg",
+       "sha1": "dabaaa18b0db8f1afd3d3f4e14cef48088332732",
+       "extmetadata": {
+        "License": {
+         "value": "cc-by-2.0",
+         "source": "commons-templates",
+         "hidden": ""
+        },
+        "LicenseShortName": {
+         "value": "CC BY 2.0",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "LicenseUrl": {
+         "value": "https://creativecommons.org/licenses/by/2.0",
+         "source": "commons-desc-page"
+        },
+        "Artist": {
+         "value": "Flickr: L'habitant / Tony",
+         "source": "commons-desc-page"
+        },
+        "Credit": {
+         "value": "<a rel=\"nofollow\" class=\"external free\" href=\"https://www.flickr.com/photos/32445100@N03/3587152744/\">https://www.flickr.com/photos/32445100@N03/3587152744/</a>",
+         "source": "commons-desc-page"
+        },
+        "Restrictions": {
+         "value": "",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "AttributionRequired": {
+         "value": "true",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Copyrighted": {
+         "value": "True",
+         "source": "commons-desc-page",
+         "hidden": ""
+        }
+       }
+      }
+     ]
+    },
+    {
+     "ns": 6,
+     "title": "File:Mendelssohn-Remise.Hof.1.jpg",
+     "imagerepository": "local",
+     "imageinfo": [
+      {
+       "size": 1273203,
+       "width": 2112,
+       "height": 2816,
+       "url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/Mendelssohn-Remise.Hof.1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+       "descriptionurl": "https://commons.wikimedia.org/wiki/File:Mendelssohn-Remise.Hof.1.jpg",
+       "descriptionshorturl": "https://commons.wikimedia.org/wiki/Special:Redirect/page/26799307",
+       "mime": "image/jpeg",
+       "sha1": "63f8f662f2a7cff88f98ac4bdec4f53f4698ec42",
+       "extmetadata": {
+        "License": {
+         "value": "cc0",
+         "source": "commons-templates",
+         "hidden": ""
+        },
+        "LicenseShortName": {
+         "value": "CC0",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "LicenseUrl": {
+         "value": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+         "source": "commons-desc-page"
+        },
+        "Artist": {
+         "value": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Membeth&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Membeth (page does not exist)\">Membeth</a>",
+         "source": "commons-desc-page"
+        },
+        "Credit": {
+         "value": "<span class=\"int-own-work\" lang=\"en\">Own work</span>",
+         "source": "commons-desc-page"
+        },
+        "Restrictions": {
+         "value": "",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "AttributionRequired": {
+         "value": "false",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Copyrighted": {
+         "value": "True",
+         "source": "commons-desc-page",
+         "hidden": ""
+        }
+       }
+      }
+     ]
+    },
+    {
+     "ns": 6,
+     "title": "File:Museum of World Culture Göteborg entrance.jpeg",
+     "imagerepository": "local",
+     "imageinfo": [
+      {
+       "size": 2088308,
+       "width": 2316,
+       "height": 2953,
+       "url": "https://upload.wikimedia.org/wikipedia/commons/e/e8/Museum_of_World_Culture_G%C3%B6teborg_entrance.jpeg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+       "descriptionurl": "https://commons.wikimedia.org/wiki/File:Museum_of_World_Culture_G%C3%B6teborg_entrance.jpeg",
+       "descriptionshorturl": "https://commons.wikimedia.org/wiki/Special:Redirect/page/441404",
+       "mime": "image/jpeg",
+       "sha1": "48db3dcf526df1c64e1a41eb873fe1cbae37a5ad",
+       "extmetadata": {
+        "LicenseShortName": {
+         "value": "Attribution",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Artist": {
+         "value": "Photographer: Hélène Binet, <a rel=\"nofollow\" class=\"external free\" href=\"http://www.varldskulturmuseet.se\">http://www.varldskulturmuseet.se</a>",
+         "source": "commons-desc-page"
+        },
+        "Restrictions": {
+         "value": "",
+         "source": "commons-desc-page",
+         "hidden": ""
+        }
+       }
+      }
+     ]
+    },
+    {
+     "ns": 6,
+     "title": "File:Röhsska museet.jpg",
+     "imagerepository": "local",
+     "imageinfo": [
+      {
+       "size": 1284234,
+       "width": 2592,
+       "height": 1944,
+       "url": "https://upload.wikimedia.org/wikipedia/commons/6/62/R%C3%B6hsska_museet.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+       "descriptionurl": "https://commons.wikimedia.org/wiki/File:R%C3%B6hsska_museet.jpg",
+       "descriptionshorturl": "https://commons.wikimedia.org/wiki/Special:Redirect/page/913428",
+       "mime": "image/jpeg",
+       "sha1": "426b18d3eb6e01f928ce3a09996671bd1d12c788",
+       "extmetadata": {
+        "License": {
+         "value": "cc-by-sa-3.0",
+         "source": "commons-templates",
+         "hidden": ""
+        },
+        "LicenseShortName": {
+         "value": "CC BY-SA 3.0",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "LicenseUrl": {
+         "value": "https://creativecommons.org/licenses/by-sa/3.0",
+         "source": "commons-desc-page"
+        },
+        "Artist": {
+         "value": "<a href=\"//commons.wikimedia.org/wiki/User:Sendelbach\" title=\"User:Sendelbach\">Henrik Sendelbach</a>",
+         "source": "commons-desc-page"
+        },
+        "Attribution": {
+         "value": "Henrik Sendelbach",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Credit": {
+         "value": "<span class=\"int-own-work\" lang=\"en\">Own work</span>",
+         "source": "commons-desc-page"
+        },
+        "Restrictions": {
+         "value": "",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "AttributionRequired": {
+         "value": "true",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Copyrighted": {
+         "value": "True",
+         "source": "commons-desc-page",
+         "hidden": ""
+        }
+       }
+      }
+     ]
+    },
+    {
+     "ns": 6,
+     "title": "File:Skiss Biologiska stor.jpg",
+     "imagerepository": "local",
+     "imageinfo": [
+      {
+       "size": 224627,
+       "width": 600,
+       "height": 436,
+       "url": "https://upload.wikimedia.org/wikipedia/commons/9/99/Skiss_Biologiska_stor.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+       "descriptionurl": "https://commons.wikimedia.org/wiki/File:Skiss_Biologiska_stor.jpg",
+       "descriptionshorturl": "https://commons.wikimedia.org/wiki/Special:Redirect/page/3154617",
+       "mime": "image/jpeg",
+       "sha1": "beb2b52d9c52872da3295944d82e950ad600dc78",
+       "extmetadata": {
+        "License": {
+         "value": "pd",
+         "source": "commons-templates",
+         "hidden": ""
+        },
+        "LicenseShortName": {
+         "value": "Public domain",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Artist": {
+         "value": "Unknown author<span style=\"display: none;\">Unknown author</span>",
+         "source": "commons-desc-page"
+        },
+        "Credit": {
+         "value": "press (vykort)",
+         "source": "commons-desc-page"
+        },
+        "Restrictions": {
+         "value": "",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "AttributionRequired": {
+         "value": "false",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Copyrighted": {
+         "value": "False",
+         "source": "commons-desc-page",
+         "hidden": ""
+        }
+       }
+      }
+     ]
+    },
+    {
+     "ns": 6,
+     "title": "File:GUSTAVIANUM 1.jpg",
+     "imagerepository": "local",
+     "imageinfo": [
+      {
+       "size": 2688957,
+       "width": 4288,
+       "height": 2848,
+       "url": "https://upload.wikimedia.org/wikipedia/commons/6/6c/GUSTAVIANUM_1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+       "descriptionurl": "https://commons.wikimedia.org/wiki/File:GUSTAVIANUM_1.jpg",
+       "descriptionshorturl": "https://commons.wikimedia.org/wiki/Special:Redirect/page/16317932",
+       "mime": "image/jpeg",
+       "sha1": "bfe69b56a53e82baf5e9fed6498f6513c5d90811",
+       "extmetadata": {
+        "License": {
+         "value": "cc-by-sa-3.0",
+         "source": "commons-templates",
+         "hidden": ""
+        },
+        "LicenseShortName": {
+         "value": "CC BY-SA 3.0",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "LicenseUrl": {
+         "value": "https://creativecommons.org/licenses/by-sa/3.0",
+         "source": "commons-desc-page"
+        },
+        "Artist": {
+         "value": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Jarvis&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Jarvis (page does not exist)\">Jarvis</a>",
+         "source": "commons-desc-page"
+        },
+        "Credit": {
+         "value": "<span class=\"int-own-work\" lang=\"en\">Own work</span>",
+         "source": "commons-desc-page"
+        },
+        "Restrictions": {
+         "value": "",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "AttributionRequired": {
+         "value": "true",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Copyrighted": {
+         "value": "True",
+         "source": "commons-desc-page",
+         "hidden": ""
+        }
+       }
+      }
+     ]
+    },
+    {
+     "ns": 6,
+     "title": "File:DSC 9149 Valvet Lund.jpg",
+     "imagerepository": "local",
+     "imageinfo": [
+      {
+       "size": 2742422,
+       "width": 5501,
+       "height": 3535,
+       "url": "https://upload.wikimedia.org/wikipedia/commons/0/01/DSC_9149_Valvet_Lund.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+       "descriptionurl": "https://commons.wikimedia.org/wiki/File:DSC_9149_Valvet_Lund.jpg",
+       "descriptionshorturl": "https://commons.wikimedia.org/wiki/Special:Redirect/page/85630599",
+       "mime": "image/jpeg",
+       "sha1": "7145337c49de643bf401fd1fe6af7f61e46e6e1f",
+       "extmetadata": {
+        "License": {
+         "value": "cc-by-sa-4.0",
+         "source": "commons-templates",
+         "hidden": ""
+        },
+        "LicenseShortName": {
+         "value": "CC BY-SA 4.0",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "LicenseUrl": {
+         "value": "https://creativecommons.org/licenses/by-sa/4.0",
+         "source": "commons-desc-page"
+        },
+        "Artist": {
+         "value": "<a href=\"//commons.wikimedia.org/wiki/User:Boberger\" title=\"User:Boberger\">Bengt Oberger</a>",
+         "source": "commons-desc-page"
+        },
+        "Credit": {
+         "value": "<span class=\"int-own-work\" lang=\"en\">Own work</span>",
+         "source": "commons-desc-page"
+        },
+        "Restrictions": {
+         "value": "",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "AttributionRequired": {
+         "value": "true",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Copyrighted": {
+         "value": "True",
+         "source": "commons-desc-page",
+         "hidden": ""
+        }
+       }
+      }
+     ]
+    },
+    {
+     "ns": 6,
+     "title": "File:Exterior Medicinhistoriska museet Göteborg.jpg",
+     "imagerepository": "local",
+     "imageinfo": [
+      {
+       "size": 4267744,
+       "width": 2876,
+       "height": 2049,
+       "url": "https://upload.wikimedia.org/wikipedia/commons/9/9a/Exterior_Medicinhistoriska_museet_G%C3%B6teborg.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+       "descriptionurl": "https://commons.wikimedia.org/wiki/File:Exterior_Medicinhistoriska_museet_G%C3%B6teborg.jpg",
+       "descriptionshorturl": "https://commons.wikimedia.org/wiki/Special:Redirect/page/173299724",
+       "mime": "image/jpeg",
+       "sha1": "a05c2f327f4d4f7c850e8137f9b56cce84a7405f",
+       "extmetadata": {
+        "License": {
+         "value": "cc-by-4.0",
+         "source": "commons-templates",
+         "hidden": ""
+        },
+        "LicenseShortName": {
+         "value": "CC BY 4.0",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "LicenseUrl": {
+         "value": "https://creativecommons.org/licenses/by/4.0",
+         "source": "commons-desc-page"
+        },
+        "Artist": {
+         "value": "Annika Engström",
+         "source": "commons-desc-page"
+        },
+        "Credit": {
+         "value": "Från Medicinhistoriska museets samlingar",
+         "source": "commons-desc-page"
+        },
+        "Restrictions": {
+         "value": "",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "AttributionRequired": {
+         "value": "true",
+         "source": "commons-desc-page",
+         "hidden": ""
+        },
+        "Copyrighted": {
+         "value": "True",
+         "source": "commons-desc-page",
+         "hidden": ""
+        }
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "wikipedia_summaries": [
+  {
+   "lang": "en",
+   "title": "Medelhavsmuseet",
+   "pageid": 21190900,
+   "wikibase_item": "Q1331646",
+   "revision": 1363329100,
+   "extract": "Medelhavsmuseet is a museum in central Stockholm focused around collections of mainly ancient objects from the Mediterranean area and the Near East. Since 1999 the museum is one of four composing the National Museums of World Culture, Sweden."
+  },
+  {
+   "lang": "en",
+   "title": "Ørstedsparken",
+   "pageid": 22639415,
+   "wikibase_item": "Q2686981",
+   "revision": 1355149210,
+   "extract": "Ørstedsparken is a public park in central Copenhagen, Denmark. One in a series of parks which were laid out on the grounds of the old fortification ring after it was decommissioned in the 1870s, the park still retains elements from the old fortifications in its topography—a section of the moat now serve as an elongated lake and former bastions appear in the landscape as small hills. The park is named for the brothers Ørsted, the politician and jurist Anders Sandøe Ørsted, and the physicist Hans Christian Ørsted, who both are commemorated with monuments in the park."
+  },
+  {
+   "lang": "en",
+   "title": "Gustavianum",
+   "pageid": 3460408,
+   "wikibase_item": "Q1506922",
+   "revision": 1383386330,
+   "extract": "Gustavianum is the oldest standing building at Uppsala University. It was built between 1622 and 1625, and was used as the main building of the university between 1778 and 1887. Since 1997, it has been used as the university's museum."
+  },
+  {
+   "lang": "sv",
+   "title": "Valvet, Lund",
+   "pageid": 8253854,
+   "wikibase_item": "Q60970028",
+   "revision": 53697682,
+   "extract": "Valvet är en byggnad som spänner över Allhelgona kyrkogata i Lund. Det är en del av en ovanjordisk kulvert ovan gatuplanet som förbinder byggnader på förutvarande norra och södra lasarettsområdena. Valvet förband kliniker som låg på norra och södra lasarettsområdena på den tiden när Lunds lasarett hade verksamhet i området. Valvet byggdes 1918 och inhyser numera (2018) det medicinhistoriska museet Livets museum."
+  },
+  {
+   "lang": "sv",
+   "title": "Gustavianum",
+   "pageid": 3628,
+   "wikibase_item": "Q1506922",
+   "revision": 59062060,
+   "extract": "Gustavianum är Uppsala universitets äldsta bevarade byggnad, uppförd under 1620-talet. Den ligger mittemot Uppsala domkyrka i korsningen Biskopsgatan och Domkyrkoplan i stadsdelen Fjärdingen i Uppsala. Byggnaden inrymmer idag Gustavianum, Uppsala universitetsmuseum och har ännu den anatomiska teatern på taket."
+  },
+  {
+   "lang": "sv",
+   "title": "Röhsska museet",
+   "pageid": 1272,
+   "wikibase_item": "Q3107443",
+   "revision": 58715222,
+   "extract": "Röhsska museet, tidigare Röhsska konstslöjdmuseet, är ett kommunägt museum i Göteborg för mode, design och konsthantverk. Museet invigdes 1916. Det är Sveriges enda specialmuseum inriktat på konsthantverk, konstindustri och design."
+  },
+  {
+   "lang": "sv",
+   "title": "Medelhavsmuseet",
+   "pageid": 14266,
+   "wikibase_item": "Q1331646",
+   "revision": 59023844,
+   "extract": "Medelhavsmuseet är ett svenskt statligt arkeologiskt kulturhistoriskt museum med inriktning på samlingar från medelhavsländerna och Främre Orienten. Museets samlingar är sedan 1982 utställda i Inteckningsbankens gamla lokaler vid Gustav Adolfs torg i Stockholm."
+  },
+  {
+   "lang": "en",
+   "title": "Röhsska Museum",
+   "pageid": 3586084,
+   "wikibase_item": "Q3107443",
+   "revision": 1380606354,
+   "extract": "The Röhsska Museum, also known as Design Museum, is located in Gothenburg, Sweden. It is a museum focused on design, fashion and applied arts."
+  }
+ ]
+}

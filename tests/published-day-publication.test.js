@@ -25,7 +25,9 @@ const ROUTE = '/api/route-recommendations?lang=en&experimental_agnostic_route_ou
 const BODY = { place: 'Roma', dates: [DATE], preferences: ['culture'], day_rhythm: 'balanced', include_external_candidates: 1 };
 const INTENT = { dateIso: DATE, preferences: ['culture'], preferencePriority: [], dayRhythm: 'balanced',
   excludedCandidateIds: [], pinnedCandidateIds: [], liveEventChoices: [], dayEdit: null };
-const IDS = ['mercato-monti', 'piazza-vittorio', 'colosseum', 'teatro-di-marcello', 'piazza-navona'];
+// A typed place orders its stops for the walked chain: 3.35 km, against
+// 3.74 km for the earlier order planned as a loop through the hidden centre.
+const IDS = ['piazza-vittorio', 'mercato-monti', 'colosseum', 'teatro-di-marcello', 'piazza-navona'];
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const turn = () => new Promise(resolve => setImmediate(resolve));
 function request(server, { method = 'POST', pathname = ROUTE, body = BODY, headers = {}, rawBody } = {}) {
@@ -134,6 +136,35 @@ for (const [name, label, portable] of [
   });
 }
 
+test('a day labelled as read from map extracts keeps the label through storage, read and the recipient parser', async t => {
+  const snapshot = { extracts: [{ region: 'b-large', data_timestamp: '2026-05-01T00:00:00.000Z' },
+    { region: 'a-small', data_timestamp: '2026-05-20T00:00:00.000Z' }], includes_live_answer: true };
+  let loads = 0;
+  const h = await setup(t);
+  const labelled = await listen(t, { ...h.options, openDataLoader: async () => {
+    loads++;
+    const rows = [...h.records];
+    Object.defineProperty(rows, 'loader_status', { value: `loaded:${rows.length}` });
+    Object.defineProperty(rows, 'loader_error', { value: null });
+    Object.defineProperty(rows, 'loader_metadata', { value: { map_snapshot: snapshot } });
+    return rows;
+  } });
+  const result = await request(labelled, { pathname: `${ROUTE}&include_day_snapshot=1` });
+  assert.equal(result.status, 200);
+  accepted(result.body);
+  assert.deepEqual(result.body.agnostic_route_output_experiment.source_status.collection.map_snapshot, snapshot);
+  assert.equal(result.body.day_snapshot?.state, 'ready');
+  const { ref } = result.body.day_snapshot;
+  const before = loads;
+  const read = await request(labelled, { method: 'GET', pathname: `/api/shared-days/${ref}`, body: null });
+  assert.equal(read.status, 200);
+  assert.deepEqual(read.body.result.agnostic_route_output_experiment.source_status.collection.map_snapshot, snapshot);
+  const { parsePublishedDay } = await import('../frontend/src/lib/published-day.mjs');
+  const parsed = parsePublishedDay(read.body, { ref, decision: require('../anywhere-render-decision'), now: Date.parse(NOW) });
+  assert.ok(parsed, 'the recipient parser accepts the labelled day');
+  assert.equal(loads, before, 'reading the shared day acquires nothing');
+});
+
 test('direct accepted Roma day persists and reads identically after app/store restart without acquisition', async t => {
   const h = await setup(t);
   const result = await request(h.server, { pathname: `${ROUTE}&include_day_snapshot=1` });
@@ -183,7 +214,9 @@ test('cold original acquisition publishes once and status replays original inten
   const final = await request(h.server, { pathname: '/api/planner-status?include_day_snapshot=0',
     body: { token, preferences: ['food'], dates: ['2030-01-01'], pinned_candidate_ids: ['forged'], day_snapshot: { ref: 'f'.repeat(48) } } });
   assert.equal(final.status, 200);
-  accepted(final.body, [...IDS.slice(0, 4), 'orto-botanico', IDS[4]]);
+  // Typed-place days are ordered for the visible chain (#712): Navona before
+  // Orto botanico walks 5.4 km on the fixture's catalogue points, against 5.9 km.
+  accepted(final.body, [...IDS, 'orto-botanico']);
   assert.equal(final.body.day_snapshot?.state, 'ready', 'original cold operation must publish its accepted final day');
   await persisted.promise;
   const intent = { ...INTENT, preferencePriority: ['culture'], excludedCandidateIds: ['not-a-stop'], pinnedCandidateIds: ['mercato-monti'] };

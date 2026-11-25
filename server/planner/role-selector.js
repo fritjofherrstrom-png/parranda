@@ -148,6 +148,58 @@ function retainMealPeriods(entries, limit, pins, format, context) {
   return out;
 }
 
+// A cap must not let ID ties erase the source's different place types before
+// whole-day selection sees them. Keep each exact evidence/ranking stratum's
+// original top-N quota; diversity never takes a slot from a different stratum.
+function retainEquivalentTypeOptions(entries, limit) {
+  if (entries.length <= limit || limit < 2) return entries;
+  const groups = new Map();
+  for (const [index, entry] of entries.entries()) {
+    const { candidate, fit, derived, availability, calibration, gates } = entry;
+    const hours = availability?.selected_day_hours;
+    const key = JSON.stringify([
+      entry.candidate_status, entry.local_feel_rank, fit.coverage_rank, fit.primary_score,
+      fit.covered_preferences, fit.partial_preferences, fit.missing_preferences,
+      operationalViabilityRank(entry), availability?.status, availability?.eligible,
+      hours?.status, hours?.date, hours?.timezone, hours?.all_day, hours?.windows,
+      hours?.ordinary_status, hours?.ordinary_windows, hours?.uncertainty,
+      candidate.city_pack_owned === true, candidateOrigin(candidate), candidate.source_family,
+      candidate.trust?.source_tier, candidate.trust?.confidence, candidate.trust?.human_verified,
+      derived?.existence_confidence, derived?.human_verified, calibration?.influence,
+      gates.may_anchor_route, gates.may_influence_routes, gates.may_show_as_nearby,
+      entry.experimental_admission?.allowed === true,
+    ]);
+    if (!groups.has(key)) groups.set(key, { entries: [], quota: 0 });
+    const group = groups.get(key);
+    group.entries.push(entry);
+    if (index < limit) group.quota += 1;
+  }
+  const typeOf = entry => {
+    const type = typeof entry.candidate.type === 'string' ? entry.candidate.type.trim().toLowerCase() : '';
+    return ['', 'unknown', 'other', 'place', 'poi', 'venue'].includes(type) ? null : type;
+  };
+  const selected = new Set();
+  for (const group of groups.values()) {
+    const prefix = group.entries.slice(0, group.quota);
+    const representatives = new Map();
+    for (const entry of group.entries) {
+      const type = typeOf(entry);
+      if (type && !representatives.has(type)) representatives.set(type, entry);
+    }
+    const prefixTypes = new Set(prefix.map(typeOf).filter(Boolean));
+    const canImprove = group.quota > 1 && prefixTypes.size < Math.min(group.quota, representatives.size);
+    const kept = canImprove ? [...representatives.values()].slice(0, group.quota) : prefix;
+    for (const entry of kept) selected.add(entry);
+    for (const entry of group.entries) {
+      if (kept.length >= group.quota) break;
+      if (!selected.has(entry)) { kept.push(entry); selected.add(entry); }
+    }
+  }
+  // Keep ordinary rank order inside the chosen set and retain the entire tail
+  // for the existing meal/interest/pin rescue policies, with no new surface.
+  return [...entries.filter(entry => selected.has(entry)), ...entries.filter(entry => !selected.has(entry))];
+}
+
 function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   const limitPerRole = clampLimit(payload.limitPerRole ?? payload.limit_per_role);
   const pinnedIds = new Set(
@@ -202,10 +254,15 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   const rescuableByRole = [];
   const roles = activeRoleOrder.map((role) => {
     const spec = activeRoleSpec[role];
-    const ranked = spec.intents.includes('food')
-      ? retainMealPeriods(roleEntries[role], limitPerRole, pinnedIds,
-        entry => formatRoleCandidate(entry, role, roleEntries, activeRoleSpec), helpers.mealContext)
+    // Retained edit IDs use pinnedIds too; leave explicit user commitments on
+    // their established ranking/rescue path rather than reshaping that day.
+    const reservoir = localFeelActive && helpers.agnosticTypeOptions === true && pinnedIds.size === 0
+      ? retainEquivalentTypeOptions(roleEntries[role], limitPerRole)
       : roleEntries[role];
+    const ranked = spec.intents.includes('food')
+      ? retainMealPeriods(reservoir, limitPerRole, pinnedIds,
+        entry => formatRoleCandidate(entry, role, roleEntries, activeRoleSpec), helpers.mealContext)
+      : reservoir;
     const entries = spec.focusIntents ? retainRoleInterestRepresentatives(ranked, spec.focusIntents) : ranked;
     const candidates = keepPinnedEntriesInRole(entries, limitPerRole, pinnedIds).map((entry) =>
       formatRoleCandidate(entry, role, roleEntries, activeRoleSpec),

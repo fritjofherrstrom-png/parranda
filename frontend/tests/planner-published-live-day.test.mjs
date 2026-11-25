@@ -251,7 +251,11 @@ for (const cause of ['intent', 'navigation', 'restore', 'new-result', 'unmount']
 test('a later actual applied upgrade cannot reuse the previous events-only Share or mutate its immutable record', async t => {
   let nonempty = false;
   const today = new Date().toISOString().slice(0,10);
-  const backend = await setup(t, { rows: options => nonempty ? eventRows(options) : [],
+  // The venue sits within the weave's 2.5 km hop of the day's last stop, so the
+  // upgrade can really apply; the shared fixture venue is 2.7 km from it (#712).
+  const reachable = options => eventRows(options).map(row => ({ ...row,
+    location: { ...row.location, position: { coordinates: [12.485, 41.903] } } }));
+  const backend = await setup(t, { rows: options => nonempty ? reachable(options) : [],
     appOptions: { clock: { now: () => `${today}T10:00:00.000Z` } } });
   const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Roma&prefs=culture&lang=en' });
   try {
