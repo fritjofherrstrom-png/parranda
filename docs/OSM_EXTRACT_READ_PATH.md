@@ -12,7 +12,7 @@ The public Overpass endpoint is the only source of OpenStreetMap places today. O
 
 The store answers only when all of these hold. Otherwise the loader asks Overpass exactly as before.
 - **Coverage:** every asked circle lies wholly inside one area of the extract's boundary. The centre is inside the outer ring and outside every hole, and no edge of the ring or of any hole comes within the radius (plus 1% and 25 m). A circle across two adjacent areas is refused.
-- **Age:** the snapshot is at most 30 days old (`PARRANDA_OSM_EXTRACT_MAX_AGE_DAYS`). Where several regions cover a place, the newest wins.
+- **Age is not a condition.** A store keeps answering however old its snapshot is. The fallback is a public Overpass instance that often fails, and no map evidence is worse than old map evidence. Where several regions cover a place, the newest wins. An operator who wants a limit sets `PARRANDA_OSM_EXTRACT_MAX_AGE_DAYS`; without it there is none. Every day already carries the snapshot's data time (see below).
 - **Integrity:** every tile it needs is either absent from the manifest's inventory (an area without places) or present with the listed element count and SHA-256. A listed tile that is missing, unreadable or different refuses the answer.
 
 ## The snapshot's data time
@@ -30,8 +30,8 @@ A day whose kept map records came from an extract carries `source_status.collect
 - The field is `null` when no kept record came from an extract.
 - A label that is present but cannot be read in full is published as `{ "unreadable": true }`, which a shared day refuses. It is never shortened to "no snapshot".
 
-## Replays obey the age limit
-A cached answer that was read from an extract is replayed only while the configured store would still answer from that snapshot. This holds for the request cache (memory and disk, so also after a restart), its outage fallback, the cache-only read, the neighbouring-budget read and the previous-contract fallback. A server without the extract configured does not replay such an answer.
+## Replays obey a configured age limit
+When `PARRANDA_OSM_EXTRACT_MAX_AGE_DAYS` is set, a cached answer that was read from an extract is replayed only while the configured store would still answer from that snapshot. This holds for the request cache (memory and disk, so also after a restart), its outage fallback, the cache-only read, the neighbouring-budget read and the previous-contract fallback. A server without the extract configured does not replay such an answer.
 
 ## Build and replace a region
 ```bash
@@ -51,8 +51,8 @@ Measured for Sweden on the same laptop (22 Nov 2026): 1.0 GB extract (data time 
 
 The spill came from DuckDB putting the whole file on the hash side of the way and node joins, because it cannot estimate `st_readosm`. Since 24 Nov the builder reads only the ways and nodes the picked places need through semi-joins whose hash side is that short list, with DuckDB's build/probe swap turned off. On Denmark (0.5 GB, `--memory-limit 512MB`) peak temporary space went from 1.3 GB to 0 and the build from 22 s to 13 s, with element-for-element the same store. Tiles are now written sorted, so the same extract gives the same hashes. The extract can be deleted after the build; the server reads only the store.
 
-## Refresh every region before it ages out
-A store older than 30 days is not used, and the day falls back to Overpass. Rebuild all regions well inside that window:
+## Keep the regions fresh
+A store does not stop working when it ages; a refresh only makes its data newer. Rebuild the regions now and then, for example once a month:
 ```bash
 node scripts/refresh-osm-extracts.js --out /path/to/osm-extracts --work /path/to/downloads
 ```
