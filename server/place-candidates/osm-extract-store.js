@@ -11,8 +11,14 @@
 // listed tile that is missing, unreadable or different is a broken store.
 //
 // A place is answered only when every asked circle lies wholly inside the
-// region's coverage polygon and the snapshot is not older than the allowed
-// age. Anything else returns null and the caller asks its provider as before.
+// region's coverage polygon. Anything else returns null and the caller asks
+// its provider as before.
+//
+// Age is information, not a switch: a snapshot keeps answering however old
+// it is, because the fallback (a public Overpass instance that often fails)
+// gives no map evidence at all. Where several regions cover a place, the
+// newest wins, so a refresh takes over as soon as it is in place. An operator
+// can still set a limit (maxAgeMs); without one there is none.
 //
 // Operating contract: a region directory is immutable while a server reads
 // it. Replace it as a whole (the builder swaps it in with one rename) and
@@ -24,7 +30,7 @@ const path = require("node:path");
 const { createHash } = require("node:crypto");
 
 const FORMAT = "parranda-osm-extract-v2";
-const DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_CACHED_TILES = 64;
 const KIND_ORDER = { node: 0, way: 1, relation: 2 };
 const EARTH_RADIUS_M = 6371000;
@@ -130,7 +136,7 @@ function matchesSelector(tags, { key, value, and }) {
   return Object.entries(and || {}).every(([andKey, andValue]) => tags[andKey] === andValue);
 }
 
-function createOsmExtractStore({ dir = null, now = () => Date.now(), maxAgeMs = DEFAULT_MAX_AGE_MS } = {}) {
+function createOsmExtractStore({ dir = null, now = () => Date.now(), maxAgeMs = null } = {}) {
   if (!dir || typeof dir !== "string") return null;
   let regions = [];
   try {
@@ -142,11 +148,13 @@ function createOsmExtractStore({ dir = null, now = () => Date.now(), maxAgeMs = 
     return null;
   }
   if (!regions.length) return null;
-  const boundedMaxAgeMs = Number.isFinite(maxAgeMs) && maxAgeMs > 0 ? maxAgeMs : DEFAULT_MAX_AGE_MS;
+  // No limit unless one is given: see the header.
+  const limitMs = Number.isFinite(maxAgeMs) && maxAgeMs > 0 ? maxAgeMs : null;
   const tiles = new Map();
 
-  function isFreshMs(dataMs) {
-    return Number.isFinite(dataMs) && now() - dataMs <= boundedMaxAgeMs;
+  function withinLimit(dataMs) {
+    if (!Number.isFinite(dataMs)) return false;
+    return limitMs === null || now() - dataMs <= limitMs;
   }
 
   function readTile(region, key) {
@@ -173,10 +181,10 @@ function createOsmExtractStore({ dir = null, now = () => Date.now(), maxAgeMs = 
     return elements;
   }
 
-  // The newest fresh region that wholly covers every asked circle.
+  // The newest usable region that wholly covers every asked circle.
   function regionFor(anchors, radiusM) {
     return regions
-      .filter(region => isFreshMs(region.dataMs) &&
+      .filter(region => withinLimit(region.dataMs) &&
         anchors.every(anchor => circleInCoverage(region.coverage, anchor.lat, anchor.lng, radiusM)))
       .sort((a, b) => b.dataMs - a.dataMs || a.region.localeCompare(b.region))[0] || null;
   }
@@ -239,10 +247,10 @@ function createOsmExtractStore({ dir = null, now = () => Date.now(), maxAgeMs = 
   }
 
   // Whether an answer recorded earlier from an extract may still be replayed:
-  // the same age limit applies to a cached answer as to a direct one.
+  // a configured age limit applies to a cached answer as to a direct one.
   function acceptsSnapshot(snapshot) {
     return Boolean(snapshot) && typeof snapshot.data_timestamp === "string" &&
-      isFreshMs(Date.parse(snapshot.data_timestamp));
+      withinLimit(Date.parse(snapshot.data_timestamp));
   }
 
   return {
@@ -251,7 +259,9 @@ function createOsmExtractStore({ dir = null, now = () => Date.now(), maxAgeMs = 
     describe: () => regions.map(region => ({
       region: region.region,
       data_timestamp: new Date(region.dataMs).toISOString(),
-      fresh: isFreshMs(region.dataMs),
+      age_days: Math.floor((now() - region.dataMs) / DAY_MS),
+      // Whether it answers: always, unless a configured limit has passed.
+      fresh: withinLimit(region.dataMs),
     })),
   };
 }
@@ -260,5 +270,4 @@ module.exports = {
   createOsmExtractStore,
   circleInCoverage,
   OSM_EXTRACT_FORMAT: FORMAT,
-  DEFAULT_OSM_EXTRACT_MAX_AGE_MS: DEFAULT_MAX_AGE_MS,
 };

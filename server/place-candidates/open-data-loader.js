@@ -1768,7 +1768,8 @@ function resolveDefaultOpenDataLoader(env = process.env) {
     .filter(Boolean);
   // Optional local OpenStreetMap read path, off unless a directory built by
   // `scripts/build-osm-extract.js` is configured. Places it does not cover
-  // are asked from Overpass as before.
+  // are asked from Overpass as before. A store answers however old it is;
+  // PARRANDA_OSM_EXTRACT_MAX_AGE_DAYS sets a limit only when given.
   const extractDir = String(env?.PARRANDA_OSM_EXTRACT_DIR || "").trim();
   const extractMaxAgeDays = Number(env?.PARRANDA_OSM_EXTRACT_MAX_AGE_DAYS);
   const localSource = extractDir

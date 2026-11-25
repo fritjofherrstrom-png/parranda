@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 
-// Rebuilds the local OpenStreetMap stores, one region at a time, before the
-// read path's 30-day age limit refuses them.
+// Rebuilds the local OpenStreetMap stores, one region at a time, so their data
+// stays recent. A store keeps working however old it is; this only renews it.
 //
 //   node scripts/refresh-osm-extracts.js --out <store dir> [--work <dir>] \
 //     [--regions sweden,spain] [--min-free-gb 2.5] [--memory-limit 2GB] [--dry-run]
