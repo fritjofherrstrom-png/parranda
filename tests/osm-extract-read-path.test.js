@@ -66,16 +66,31 @@ test('a selector with a qualifier matches only elements that carry it', () => {
   assert.deepEqual(answered.payload.elements.map(element => element.tags.name), ['Rabljeno']);
 });
 
-test('the store does not answer a circle that leaves its coverage, an old snapshot, or a broken tile', () => {
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+test('a store keeps answering however old its snapshot is, unless an age limit is set', () => {
+  const dir = makeStoreDir();
+  // No limit by default: an old snapshot is still far better than no map
+  // evidence, which is what the provider fallback gives when Overpass fails.
+  const yearLater = createOsmExtractStore({ dir, now: () => NOW + 400 * DAY_MS });
+  assert.ok(yearLater.answer(plan()), 'a 400-day-old snapshot still answers');
+  assert.equal(yearLater.describe()[0].fresh, true);
+  assert.equal(yearLater.describe()[0].age_days, 400);
+  assert.equal(yearLater.acceptsSnapshot({ region: 'testland', data_timestamp: DATA_TIME }), true);
+
+  // An operator who wants a limit still gets one.
+  const limited = createOsmExtractStore({ dir, now: () => NOW + 31 * DAY_MS, maxAgeMs: 30 * DAY_MS });
+  assert.equal(limited.answer(plan()), null, 'older than the configured age');
+  assert.equal(limited.describe()[0].fresh, false);
+  assert.equal(limited.acceptsSnapshot({ region: 'testland', data_timestamp: DATA_TIME }), false);
+});
+
+test('the store does not answer a circle that leaves its coverage, or a broken tile', () => {
   const dir = makeStoreDir();
   const store = createOsmExtractStore({ dir, now: () => NOW });
   assert.equal(store.answer(plan({ anchors: [{ lat: 45.905, lng: 14.5 }] })), null, 'circle crosses the edge');
   assert.equal(store.answer(plan({ anchors: [{ lat: 59.33, lng: 18.07 }] })), null, 'another country');
   assert.equal(store.answer(plan({ anchors: [CENTRE, { lat: 59.33, lng: 18.07 }] })), null, 'one of two anchors outside');
-
-  const old = createOsmExtractStore({ dir, now: () => NOW + 31 * 24 * 60 * 60 * 1000 });
-  assert.equal(old.answer(plan()), null, 'older than the allowed age');
-  assert.equal(old.describe()[0].fresh, false);
 
   const tiles = path.join(dir, 'testland', 'tiles');
   for (const file of fs.readdirSync(tiles)) fs.writeFileSync(path.join(tiles, file), '{not json');
@@ -139,6 +154,27 @@ test('the default loader uses the extract only when its directory is configured'
     const asked = await without({ lat: CENTRE.lat, lng: CENTRE.lng });
     assert.ok(calls >= 1, 'without the directory the provider is asked, as today');
     assert.equal(asked.length, 0);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('the default loader keeps a year-old extract unless PARRANDA_OSM_EXTRACT_MAX_AGE_DAYS says otherwise', async () => {
+  const realFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls += 1; return { ok: false, status: 502 }; };
+  try {
+    const dir = makeStoreDir({ dataTimestamp: new Date(Date.now() - 365 * DAY_MS).toISOString() });
+    const kept = resolveDefaultOpenDataLoader({ PARRANDA_OPEN_DATA_LOADER: 'enabled', PARRANDA_OSM_EXTRACT_DIR: dir });
+    const covered = await kept({ lat: CENTRE.lat, lng: CENTRE.lng });
+    assert.equal(calls, 0, 'no limit by default: the old extract answers and no provider is asked');
+    assert.ok(covered.length >= 12);
+
+    const limited = resolveDefaultOpenDataLoader({
+      PARRANDA_OPEN_DATA_LOADER: 'enabled', PARRANDA_OSM_EXTRACT_DIR: dir, PARRANDA_OSM_EXTRACT_MAX_AGE_DAYS: '30',
+    });
+    await limited({ lat: CENTRE.lat, lng: CENTRE.lng });
+    assert.ok(calls >= 1, 'an explicit limit sends an older place to the provider');
   } finally {
     globalThis.fetch = realFetch;
   }
@@ -264,7 +300,7 @@ test('a day mixing an extract with a live provider answer says both', async () =
     : null);
 });
 
-test('an answer read from an extract is not replayed after the extract passes its age limit', async () => {
+test('with an age limit set, an answer read from an extract is not replayed after the extract passes it', async () => {
   const { createSourceCache } = require('../server/place-candidates/source-cache');
   const dataMs = Date.parse(DATA_TIME);
   const limitMs = 30 * 24 * 60 * 60 * 1000;
@@ -278,7 +314,7 @@ test('an answer read from an extract is not replayed after the extract passes it
     cache: createSourceCache({ namespace: 'overpass', dir: cacheDir, now: () => clock }),
     staleIfErrorMs: 7 * 24 * 60 * 60 * 1000,
     now: () => clock,
-    localSource: createOsmExtractStore({ dir: storeDir, now: () => clock }),
+    localSource: createOsmExtractStore({ dir: storeDir, now: () => clock, maxAgeMs: limitMs }),
   });
   const loader = build();
   const request = { lat: CENTRE.lat, lng: CENTRE.lng, walkingTargetBand: { targetKm: 4, floorKm: 2.4, ceilingKm: 4.7 } };

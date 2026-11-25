@@ -1433,6 +1433,9 @@ async function composeAgnosticRouteOutputCore({
       walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
       walkingFitSelection: synthesizeVia === "engine",
       experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
+      // Private caller-owned scope: registered-city fill shares admission but
+      // must keep its established reservoir selection, not this type policy.
+      agnosticTypeOptions: true,
       mealContext: preferencePriority?.[0] === 'food' && ctx?.timezoneKnown && ctx.timeAppliesToRequestedDate
         ? { date: effectiveDate, nowLocalIso: ctx.now, fullDay: dayRhythm === 'full' } : null,
     };
