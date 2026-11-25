@@ -93,7 +93,7 @@ export function StopPhotoTile({ media, type, muted = false }: { media: StopMedia
   return (
     <span
       data-stop-photo="tile"
-      className={"relative h-14 w-14 shrink-0 overflow-hidden rounded-parranda-btn bg-parranda-fill" + (muted ? " opacity-70" : "")}
+      className={"relative block h-14 w-14 shrink-0 overflow-hidden rounded-parranda-btn bg-parranda-fill" + (muted ? " opacity-70" : "")}
     >
       <img
         key={attempt}
