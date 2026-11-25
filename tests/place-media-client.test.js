@@ -126,12 +126,20 @@ test('circuit breaker: 5 failures in a row open it for 10 minutes', async () => 
 });
 
 test('each call times out after the timeout', async () => {
-  const client = createWikimediaClient({ fetcher: () => new Promise(() => {}), timeoutMs: 20 });
-  const started = Date.now();
-  const { errors } = await client.getEntities(['Q1']);
-  assert.equal(errors[0].code, 'timeout');
-  assert.ok(Date.now() - started < 1000);
-  assert.equal(client.health().timeouts, 1);
+  // The client unrefs its timer so it never holds a server process open. A
+  // fetch that never settles holds nothing either, so this test keeps the
+  // event loop alive itself; the timeout must still fire on its own.
+  const keepAlive = setInterval(() => {}, 1000);
+  try {
+    const client = createWikimediaClient({ fetcher: () => new Promise(() => {}), timeoutMs: 20 });
+    const started = Date.now();
+    const { errors } = await client.getEntities(['Q1']);
+    assert.equal(errors[0].code, 'timeout');
+    assert.ok(Date.now() - started < 1000);
+    assert.equal(client.health().timeouts, 1);
+  } finally {
+    clearInterval(keepAlive);
+  }
 });
 
 test('excerpts are cut only at a sentence end, 40–320 characters, verbatim', () => {
@@ -335,7 +343,7 @@ test('gold set: a nature reserve or park whose only image is the Wikipedia page 
 
 test('an index record whose photo came from the page image is dropped on load, so it is fetched again', () => {
   const photo = { media_id: '1ca0883b'.padEnd(40, '0'), file_title: 'File:Lobaria pulmonaria 010108c.jpg',
-    file_url: 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Lobaria_pulmonaria_010108c.jpg', width: 1600, height: 1200,
+    file_url: 'https://upload.wikimedia.org/wikipedia/commons/d/da/Lobaria_pulmonaria_010108c.jpg', width: 1600, height: 1200,
     via: 'page_image', author: 'Bernd Haynold', license: 'CC-BY-SA-3.0', license_url: 'https://creativecommons.org/licenses/by-sa/3.0/',
     file_page_url: 'https://commons.wikimedia.org/wiki/File:Lobaria_pulmonaria_010108c.jpg' };
   const record = { v: 1, qid: 'Q18332839', checked_on: '2026-11-24', entity: null, photo, subtitle: {}, about: {} };

@@ -88,3 +88,25 @@ test('buildPlaceMediaIndex writes index-v1.jsonl atomically, reuses records and 
   assert.equal(limited.selected, 1);
   assert.equal(limited.coverage.records, 1);
 });
+
+test('a rebuild retires photos the new index no longer uses, so live shares keep them', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'place-media-build-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  writeStore(path.join(root, 'extract'));
+  const out = path.join(root, 'media');
+  const client = createWikimediaClient({ fetcher: createFixtureFetcher().fetcher, clock: () => Date.parse('2026-11-24T10:00:00Z') });
+  await buildPlaceMediaIndex({ extractDir: path.join(root, 'extract'), outDir: out, client });
+  // Pretend the earlier index showed another version of the file (another sha1).
+  const file = path.join(out, 'index-v1.jsonl');
+  const records = fs.readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  const oldId = 'a'.repeat(40);
+  records[0].photo.media_id = oldId;
+  fs.writeFileSync(file, `${records.map(record => JSON.stringify(record)).join('\n')}\n`);
+  const summary = await buildPlaceMediaIndex({ extractDir: path.join(root, 'extract'), outDir: out, client, refresh: true });
+  assert.equal(summary.retained, 1);
+  const service = createPlaceMedia({ dir: out, fetcher: async () => { throw new Error('offline'); } });
+  assert.notEqual(service.peek(records[0].qid).photo.media_id, oldId, 'new days get the current file');
+  assert.equal(service.byMediaId(oldId)?.media_id, oldId, 'the old version stays servable');
+  const unchanged = await buildPlaceMediaIndex({ extractDir: path.join(root, 'extract'), outDir: out, client });
+  assert.equal(unchanged.retained, 0, 'nothing is retired when nothing changed');
+});

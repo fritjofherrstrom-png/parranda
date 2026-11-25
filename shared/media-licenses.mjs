@@ -47,6 +47,7 @@ export function mediaLicenseNeedsAuthor(id) {
 const CC_CODE = /^cc-(by|by-sa)-(1\.0|2\.0|2\.5|3\.0|4\.0)(?:-([a-z]{2,3}(?:-[a-z]{2,8})?))?$/;
 const CC_URL = /^https:\/\/creativecommons\.org\/licenses\/(by|by-sa)\/(1\.0|2\.0|2\.5|3\.0|4\.0)\/(?:([a-z]{2,3}(?:-[a-z]{2,8})?)\/)?(?:deed\.[a-z]{2,3}(?:[-_][a-z]{2,4})?)?$/i;
 const CC0_URL = /^https:\/\/creativecommons\.org\/publicdomain\/zero\/1\.0\/(?:deed\.[a-z]{2,3}(?:[-_][a-z]{2,4})?)?$/i;
+const PD_MARK_URL = /^https?:\/\/creativecommons\.org\/publicdomain\/mark\/1\.0\/?(?:deed\.[a-z-]+)?$/i;
 
 function httpsUrl(value) {
   if (typeof value !== 'string') return null;
@@ -89,7 +90,13 @@ export function normalizeCommonsLicense({ code, shortName, url } = {}) {
     const parsed = parseShortName(shortName);
     if (!parsed || parsed.id !== id || (parsed.port && parsed.port !== port)) return null;
   }
-  if (id === 'PD') return { id, url: null };
+  if (id === 'PD') {
+    // Public domain carries no licence URL, or at most the PD mark. Any other
+    // URL (say CC BY 4.0) contradicts the code and would drop a needed credit.
+    const stated = url === undefined || url === null ? '' : String(url).trim();
+    if (stated && !PD_MARK_URL.test(stated)) return null;
+    return { id, url: null };
+  }
   const given = url === undefined || url === null || url === '' ? null : httpsUrl(url);
   if (url && !given) return null;
   if (id === 'CC0-1.0') {

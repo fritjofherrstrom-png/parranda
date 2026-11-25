@@ -99,6 +99,17 @@ getPlaceMedia()  // singleton from env PARRANDA_PLACE_MEDIA_DIR, null when unset
 setPlaceMediaForTests(instance|null)
 ```
 
+**Photo lifetime (Hermes review of #715).** `byMediaId` answers for a photo while any record uses it
+(a photo shared by two places stays current until neither uses it). A photo that stops being current, because
+an index rebuild dropped it or a learned record replaced it, moves to `retained-v1.jsonl`
+(`{v:1, retired_at, photo}`) and stays servable for `RETAIN_MS` = 30 days, longer than any share
+(published-day-store `ttlMs`, 7 days by default), then is forgotten. `scripts/build-place-media.js` appends the
+photos a rebuild drops. Unknown ids are still 404: retention never accepts a hash that was not once a gated photo.
+
+**One file per photo.** `file_title`, `file_page_url` and `file_url` must name the same Commons file, and the
+upload path must be the md5 bucket of that name (`photoFilesAgree` in `record.js`, used by the gate and on load).
+A public-domain code with a licence URL other than the PD mark is refused as a contradiction.
+
 ## Hydration (`server/place-media/hydrate.js`)
 
 `await hydratePlaceMedia(route, { lang, placeMedia })` runs after `hydrateVisitContent` in

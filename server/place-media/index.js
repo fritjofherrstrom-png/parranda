@@ -7,12 +7,19 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { normalizeMediaRecord, isQid, isMediaId } = require('./record');
+const { normalizeMediaRecord, normalizePhoto, isQid, isMediaId } = require('./record');
 const { createWikimediaClient } = require('./wikimedia-client');
 const { GATE_REASONS } = require('./entity-gate');
 
 const INDEX_FILE = 'index-v1.jsonl';
 const LEARNED_FILE = 'learned-v1.jsonl';
+// Photos that stopped being a place's current photo (index rebuilt, record
+// relearned). A shared day keeps showing the photo it was published with, so
+// a retired photo stays servable well past the longest share lifetime
+// (published-day-store ttlMs, 7 days by default), then is forgotten.
+const RETAINED_FILE = 'retained-v1.jsonl';
+const RETAIN_MS = 30 * 24 * 60 * 60 * 1000;
+const MAX_RETAINED = 50000;
 const DEFAULT_WAIT_MS = 1500;
 const MAX_ENSURE_QIDS = 50;
 const FAILURE_BACKOFF_MS = 5 * 60 * 1000;
@@ -36,6 +43,36 @@ function readJsonl(file) {
   return { records, skipped, missing: false, error: null };
 }
 
+function retainedLine(photo, retiredAtMs) {
+  return `${JSON.stringify({ v: 1, retired_at: new Date(retiredAtMs).toISOString(), photo })}\n`;
+}
+
+/** retained-v1.jsonl → Map media_id → { photo, retiredAt }, expired and broken lines dropped. */
+function readRetained(file, nowMs) {
+  const retained = new Map();
+  let text = '';
+  try { text = fs.readFileSync(file, 'utf8'); } catch { return retained; }
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    let raw;
+    try { raw = JSON.parse(line); } catch { continue; }
+    const retiredAt = Date.parse(raw?.retired_at);
+    const photo = raw?.v === 1 ? normalizePhoto(raw.photo) : null;
+    if (!photo || !Number.isFinite(retiredAt) || nowMs - retiredAt > RETAIN_MS) continue;
+    retained.delete(photo.media_id); // the latest retirement wins and moves to the end
+    retained.set(photo.media_id, { photo, retiredAt });
+  }
+  while (retained.size > MAX_RETAINED) retained.delete(retained.keys().next().value);
+  return retained;
+}
+
+/** Builder: remember photos a rebuilt index no longer uses, so live shares keep them. */
+function appendRetainedPhotos(dir, photos, nowMs = Date.now()) {
+  const list = (photos || []).map(normalizePhoto).filter(Boolean);
+  if (list.length) fs.appendFileSync(path.join(dir, RETAINED_FILE), list.map(photo => retainedLine(photo, nowMs)).join(''), 'utf8');
+  return list.length;
+}
+
 /**
  * createPlaceMedia({ dir, fetcher, waitMs = 1500, clock, client }) → service.
  * `client` (a createWikimediaClient instance) may be injected; otherwise one
@@ -46,7 +83,10 @@ function createPlaceMedia({ dir, fetcher, waitMs = DEFAULT_WAIT_MS, clock = () =
   const now = () => { const value = clock(); return value instanceof Date ? value.getTime() : Number(value); };
   const upstream = client || createWikimediaClient({ fetcher: fetcher || globalThis.fetch, clock });
   const records = new Map();
+  // media_id → { photo, qids }: a photo stays current while any record uses it.
   const photos = new Map();
+  const retained = readRetained(path.join(dir, RETAINED_FILE), now());
+  let loading = true;
   const inFlight = new Map();
   const failedUntil = new Map();
   const counters = {
@@ -56,14 +96,30 @@ function createPlaceMedia({ dir, fetcher, waitMs = DEFAULT_WAIT_MS, clock = () =
   };
   let learnedInMemory = 0;
 
+  function retire(photo) {
+    retained.delete(photo.media_id);
+    retained.set(photo.media_id, { photo, retiredAt: now() });
+    while (retained.size > MAX_RETAINED) retained.delete(retained.keys().next().value);
+    // While loading, the replaced photo is still in the files it came from.
+    if (!loading) persistRetained(photo);
+  }
+
   function put(record) {
     const previous = records.get(record.qid);
-    if (previous?.photo) {
-      const owner = photos.get(previous.photo.media_id);
-      if (owner && owner.qid === record.qid) photos.delete(previous.photo.media_id);
+    const previousId = previous?.photo?.media_id;
+    if (previousId && previousId !== record.photo?.media_id) {
+      const entry = photos.get(previousId);
+      if (entry) {
+        entry.qids.delete(record.qid);
+        if (!entry.qids.size) { photos.delete(previousId); retire(entry.photo); }
+      }
     }
     records.set(record.qid, record);
-    if (record.photo) photos.set(record.photo.media_id, { qid: record.qid, photo: record.photo });
+    if (record.photo) {
+      const entry = photos.get(record.photo.media_id);
+      if (entry) entry.qids.add(record.qid);
+      else photos.set(record.photo.media_id, { photo: record.photo, qids: new Set([record.qid]) });
+    }
   }
 
   for (const [file, key] of [[INDEX_FILE, 'index_records'], [LEARNED_FILE, 'learned_records']]) {
@@ -74,8 +130,14 @@ function createPlaceMedia({ dir, fetcher, waitMs = DEFAULT_WAIT_MS, clock = () =
     for (const record of loaded.records) put(record);
     counters[key] = loaded.records.length;
   }
+  loading = false;
 
   let persistQueue = Promise.resolve();
+  function persistRetained(photo) {
+    const line = retainedLine(photo, now());
+    persistQueue = persistQueue.then(() => fs.promises.appendFile(path.join(dir, RETAINED_FILE), line, 'utf8'))
+      .catch(() => { counters.persist_failures += 1; });
+  }
   function persist(list) {
     const lines = list.map(record => `${JSON.stringify(record)}\n`).join('');
     persistQueue = persistQueue.then(() => fs.promises.appendFile(path.join(dir, LEARNED_FILE), lines, 'utf8'))
@@ -151,7 +213,11 @@ function createPlaceMedia({ dir, fetcher, waitMs = DEFAULT_WAIT_MS, clock = () =
 
   function byMediaId(mediaId) {
     if (!isMediaId(mediaId)) return undefined;
-    return photos.get(mediaId)?.photo;
+    const current = photos.get(mediaId);
+    if (current) return current.photo;
+    // A retired photo still serves the shares published with it, for a bounded time.
+    const old = retained.get(mediaId);
+    return old && now() - old.retiredAt <= RETAIN_MS ? old.photo : undefined;
   }
 
   function countGate(reason) {
@@ -174,6 +240,7 @@ function createPlaceMedia({ dir, fetcher, waitMs = DEFAULT_WAIT_MS, clock = () =
       gate: { ...counters.gate },
       records: records.size,
       photos: photos.size,
+      retained_photos: retained.size,
       in_flight: inFlight.size,
       backing_off: [...failedUntil.values()].filter(until => until > now()).length,
       client: typeof upstream.health === 'function' ? upstream.health() : null,
@@ -208,5 +275,8 @@ module.exports = {
   setPlaceMediaForTests,
   INDEX_FILE,
   LEARNED_FILE,
+  RETAINED_FILE,
+  RETAIN_MS,
   DEFAULT_WAIT_MS,
+  appendRetainedPhotos,
 };

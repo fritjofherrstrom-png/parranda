@@ -20,7 +20,7 @@ const { createHash } = require("node:crypto");
 const { OSM_EXTRACT_FORMAT } = require("../server/place-candidates/osm-extract-store");
 const { createWikimediaClient, ENTITY_BATCH } = require("../server/place-media/wikimedia-client");
 const { normalizeMediaRecord } = require("../server/place-media/record");
-const { INDEX_FILE } = require("../server/place-media/index");
+const { INDEX_FILE, appendRetainedPhotos } = require("../server/place-media/index");
 
 const QID = /^Q[1-9]\d{0,11}$/;
 const TILE_KEY = /^-?\d{1,5}_-?\d{1,5}$/;
@@ -143,7 +143,8 @@ async function buildPlaceMediaIndex({ extractDir, outDir, limit = Infinity, refr
   const { qids, stats } = scanExtract(extractDir, { log });
   const ordered = [...qids.keys()].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
   const selected = Number.isFinite(limit) && limit >= 0 ? ordered.slice(0, limit) : ordered;
-  const existing = refresh ? new Map() : readExistingIndex(path.join(outDir, INDEX_FILE));
+  const previous = readExistingIndex(path.join(outDir, INDEX_FILE));
+  const existing = refresh ? new Map() : previous;
   const records = new Map();
   let reused = 0;
   for (const qid of selected) if (existing.has(qid)) { records.set(qid, existing.get(qid)); reused += 1; }
@@ -168,8 +169,17 @@ async function buildPlaceMediaIndex({ extractDir, outDir, limit = Infinity, refr
     const photos = [...records.values()].filter(record => record.photo).length;
     log(`[${Math.min(i + ENTITY_BATCH, todo.length)}/${todo.length}] records ${records.size}, photos ${photos}`);
   }
+  // Photos the old index served that the new one drops stay servable for live
+  // shares (server/place-media/index.js RETAINED_FILE), never silently 404.
+  const kept = new Set([...records.values()].map(record => record.photo?.media_id).filter(Boolean));
+  const dropped = new Map();
+  for (const record of previous.values()) {
+    if (record.photo && !kept.has(record.photo.media_id)) dropped.set(record.photo.media_id, record.photo);
+  }
+  fs.mkdirSync(outDir, { recursive: true });
+  const retained = appendRetainedPhotos(outDir, [...dropped.values()]);
   const file = writeIndexAtomically(outDir, records);
-  return { file, scan: stats, qids: qids.size, selected: selected.length, reused, fetched, failed, stopped,
+  return { file, retained, scan: stats, qids: qids.size, selected: selected.length, reused, fetched, failed, stopped,
     coverage: coverage(records), client: typeof client.health === "function" ? client.health() : null };
 }
 

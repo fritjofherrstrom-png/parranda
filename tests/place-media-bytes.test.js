@@ -442,3 +442,17 @@ test('upstream starts are paced for the whole process, so one client cannot prov
   const missing = keys.find((key, index) => statuses[index] === 503);
   assert.equal((await get(missing)).status, 200);
 });
+
+test('after an index rebuild, a shared day\'s old photo still loads over HTTP while new days get the new one (Hermes #715 F1)', async t => {
+  const { service, medelhavs, rohsska } = await seededPlaceMedia(t);
+  const { appendRetainedPhotos } = require('../server/place-media');
+  const record = service.peek(MEDELHAVS);
+  appendRetainedPhotos(service.dir, [medelhavs]);
+  fs.writeFileSync(path.join(service.dir, 'index-v1.jsonl'), `${JSON.stringify({ ...record, photo: rohsska })}\n`);
+  const rebuilt = createPlaceMedia({ dir: service.dir, fetcher: async () => { throw new Error('offline'); } });
+  const bytes = createMediaBytes({ placeMedia: rebuilt, cacheDir: tempDir(t), fetcher: upstreamSpy().fetcher });
+  const get = await serve(t, bytes);
+  for (const width of [250, 500]) assert.equal((await get(`/media/c/${medelhavs.media_id}/${width}`)).status, 200, `old photo at ${width}`);
+  assert.equal((await get(`/media/c/${rohsska.media_id}/500`)).status, 200);
+  assert.equal((await get(`/media/c/${UNKNOWN_SHA1}/500`)).status, 404, 'still no open proxy');
+});

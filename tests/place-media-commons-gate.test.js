@@ -17,6 +17,12 @@ function withMeta(page, changes) {
   return page;
 }
 
+// Commons stores a file under the md5 bucket of its underscored name.
+function uploadUrlFor(name) {
+  const md5 = require('node:crypto').createHash('md5').update(name, 'utf8').digest('hex');
+  return `https://upload.wikimedia.org/wikipedia/commons/${md5[0]}/${md5.slice(0, 2)}/${encodeURIComponent(name)}`;
+}
+
 test('a real CC BY-SA 3.0 photo passes with its real credit and canonical Commons URLs', () => {
   const photo = gateCommonsPage(commonsPage('File:Medelhavsmuseet 2007.jpg'), { via: 'p18' });
   assert.deepEqual(photo, {
@@ -88,6 +94,7 @@ test('maps, plans, logos, flags, coats of arms and diagrams are refused by title
   const ok = commonsPage('File:Röhsska museet.jpg');
   ok.title = 'File:Planetarium Mapleton.jpg';
   ok.imageinfo[0].descriptionurl = 'https://commons.wikimedia.org/wiki/File:Planetarium_Mapleton.jpg';
+  ok.imageinfo[0].url = uploadUrlFor('Planetarium_Mapleton.jpg');
   assert.equal(gateCommonsPage(ok, { via: 'p18' }).rejected, undefined);
 });
 
@@ -250,4 +257,35 @@ test('a footnote link in Credit is no author: a PD photo keeps author null, neve
     Artist: undefined, Credit: '<a class="external autonumber" href="https://example.org/x">[1]</a>' });
   assert.deepEqual(gateCommonsPage(ccUrl, { via: 'p18' }), { rejected: 'author' });
   for (const value of ['[1]', '[12]', 'A', '.', '1']) assert.equal(isAuthor(value), false, value);
+});
+
+// Hermes #715: a public-domain code with a contradicting licence URL is refused,
+// and a photo's title, description page and upload URL must name one file.
+test('public domain with a CC licence URL is a contradiction, not a credit-free photo', async () => {
+  const { normalizeCommonsLicense } = await import('../shared/media-licenses.mjs');
+  assert.deepEqual(normalizeCommonsLicense({ code: 'pd', shortName: 'Public domain', url: '' }), { id: 'PD', url: null });
+  assert.deepEqual(normalizeCommonsLicense({ code: 'pd', shortName: 'Public domain', url: 'https://creativecommons.org/publicdomain/mark/1.0/' }), { id: 'PD', url: null });
+  assert.equal(normalizeCommonsLicense({ code: 'pd', shortName: 'Public domain', url: 'https://creativecommons.org/licenses/by/4.0' }), null);
+  assert.equal(normalizeCommonsLicense({ code: 'pd', shortName: 'Public domain', url: 'https://creativecommons.org/publicdomain/zero/1.0/' }), null);
+  const page = withMeta(commonsPage('File:Röhsska museet.jpg'), {
+    License: 'pd', LicenseShortName: 'Public domain', LicenseUrl: 'https://creativecommons.org/licenses/by/4.0', Artist: undefined,
+  });
+  assert.deepEqual(gateCommonsPage(page, { via: 'p18' }), { rejected: 'license' });
+});
+
+test('an upload URL or description page of another file is refused, in the gate and in a stored record', () => {
+  const { normalizePhoto, photoFilesAgree } = require('../server/place-media/record');
+  const page = commonsPage('File:Röhsska museet.jpg');
+  const good = gateCommonsPage(page, { via: 'p18' });
+  assert.ok(good.media_id, 'the real file passes');
+  assert.ok(photoFilesAgree(good.file_title, good.file_url, good.file_page_url));
+  const otherUpload = uploadUrlFor('Medelhavsmuseet_2007.jpg');
+  const mixed = commonsPage('File:Röhsska museet.jpg');
+  mixed.imageinfo[0].url = otherUpload;
+  assert.deepEqual(gateCommonsPage(mixed, { via: 'p18' }), { rejected: 'not_commons' });
+  assert.equal(normalizePhoto({ ...good, file_url: otherUpload }), null);
+  assert.equal(normalizePhoto({ ...good, file_page_url: 'https://commons.wikimedia.org/wiki/File:Medelhavsmuseet_2007.jpg' }), null);
+  // Right name, wrong md5 bucket.
+  assert.equal(normalizePhoto({ ...good, file_url: good.file_url.replace(/\/commons\/[0-9a-f]\/[0-9a-f]{2}\//, '/commons/0/00/') }), null);
+  assert.deepEqual(normalizePhoto(good), good);
 });

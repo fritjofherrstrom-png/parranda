@@ -37,6 +37,26 @@ function isCommonsFilePageUrl(value) {
   return typeof value === 'string' && value.length <= 2048 &&
     /^https:\/\/commons\.wikimedia\.org\/wiki\/File:[^/?#\s]+$/.test(value);
 }
+/**
+ * The upload URL and the description page must both belong to the titled file:
+ * same name, and the upload path is Commons' md5 bucket of that name. A photo
+ * never mixes one file's credit with another file's bytes.
+ */
+function photoFilesAgree(title, fileUrl, pageUrl) {
+  if (typeof title !== 'string' || !title.startsWith('File:') || typeof fileUrl !== 'string' || typeof pageUrl !== 'string') return false;
+  const name = title.slice(5).replace(/ /g, '_');
+  const pagePrefix = 'https://commons.wikimedia.org/wiki/File:';
+  if (!name || !pageUrl.startsWith(pagePrefix)) return false;
+  let uploadName;
+  let pageName;
+  try {
+    uploadName = decodeURIComponent(fileUrl.slice(fileUrl.lastIndexOf('/') + 1));
+    pageName = decodeURIComponent(pageUrl.slice(pagePrefix.length)).replace(/ /g, '_');
+  } catch { return false; }
+  if (uploadName !== name || pageName !== name) return false;
+  const md5 = require('node:crypto').createHash('md5').update(name, 'utf8').digest('hex');
+  return fileUrl.startsWith(`https://upload.wikimedia.org/wikipedia/commons/${md5[0]}/${md5.slice(0, 2)}/`);
+}
 function isAuthor(value) {
   // shared/place-media-text.mjs: no link, no "Unknown author"/"Okänd" or Commons
   // "No machine-readable author provided" placeholder, no bare "[1]" footnote.
@@ -64,7 +84,8 @@ function normalizePhoto(photo) {
   if (!isMediaId(media_id) || !cleanText(file_title, 255) || !file_title.startsWith('File:') ||
       !isCommonsUploadUrl(file_url) || !isCommonsFilePageUrl(file_page_url) ||
       !Number.isInteger(width) || width < 800 || !Number.isInteger(height) || height < 1 || !VIAS.has(via) ||
-      !isMediaLicenseId(license) || !isMediaLicenseUrl(license, license_url)) return null;
+      !isMediaLicenseId(license) || !isMediaLicenseUrl(license, license_url) ||
+      !photoFilesAgree(file_title, file_url, file_page_url)) return null;
   if (author === null ? mediaLicenseNeedsAuthor(license) : !isAuthor(author)) return null;
   return { media_id, file_title, file_url, width, height, via, author, license, license_url, file_page_url };
 }
@@ -131,6 +152,7 @@ function normalizeMediaRecord(raw) {
 module.exports = {
   normalizeMediaRecord,
   normalizePhoto,
+  photoFilesAgree,
   isQid,
   isMediaId,
   isIsoDate: isoDate,

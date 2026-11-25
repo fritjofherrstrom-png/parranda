@@ -10,6 +10,7 @@ const {
   mediaLicenseNeedsAuthor,
 } = require('../../shared/media-licenses.mjs');
 const { isCreditName, isPlaceholderCredit } = require('../../shared/place-media-text.mjs');
+const { photoFilesAgree } = require('./record');
 
 const MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MIN_WIDTH = 800;
@@ -108,6 +109,7 @@ function gateCommonsPage(page, { via } = {}) {
   if (!fileUrl) return { rejected: 'not_commons' };
   const filePageUrl = commonsFilePageUrl(ii.descriptionurl, title);
   if (!filePageUrl) return { rejected: 'not_commons' };
+  if (!photoFilesAgree(title, fileUrl, filePageUrl)) return { rejected: 'not_commons' };
   const nonFree = meta(ii, 'NonFree').trim().toLowerCase();
   if (nonFree && nonFree !== 'false' && nonFree !== '0') return { rejected: 'nonfree' };
   if (stripHtml(meta(ii, 'Restrictions'))) return { rejected: 'restrictions' };
