@@ -115,7 +115,7 @@ for (const lang of ['sv', 'en']) {
     const quote = about.querySelector('blockquote[data-stop-excerpt]');
     assert.equal(quote.getAttribute('lang'), lang);
     assert.equal(quote.textContent, museum(lang).about.text, 'the excerpt is verbatim');
-    assert.match(quote.className, /border-l-2 border-parranda-ember/);
+    assert.match(quote.className, /border-l-2 border-parranda-line-firm/, 'a quiet rule: ember is the route');
     assert.match(quote.querySelector('p').className, /line-clamp-4/);
     const excerptCredit = quote.parentElement.querySelector(':scope > p');
     assert.match(excerptCredit.textContent, lang === 'sv'

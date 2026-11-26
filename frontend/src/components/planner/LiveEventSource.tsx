@@ -29,7 +29,7 @@ export function liveEventSource(event: PulseEvent, lang: Lang) {
     : { national: "Nationell", regional: "Regional", local: "Lokal" })[holiday.scope];
   if (!listedBy && !link && !credits.length && !recurring && !holiday && !programme && !sourceArea) return null;
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 text-xs leading-relaxed text-parranda-ink-meta [overflow-wrap:anywhere]">
+    <div className="flex min-w-0 flex-col gap-0.5 text-13 leading-snug text-parranda-ink-meta [overflow-wrap:anywhere]">
       {programme && <p>{lang === "en" ? "Programme" : "Program"}: {programme.title}
         {programmeDates && <> ({programmeDates})</>}
       </p>}
@@ -45,12 +45,12 @@ export function liveEventSource(event: PulseEvent, lang: Lang) {
       {credits.map(credit => <p key={credit}>{credit}</p>)}
       {(link || listedBy) && <div className="flex min-w-0 flex-wrap items-start gap-x-4">
         {link && <p className="min-w-0 max-w-full">
-          <a href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 max-w-full items-center underline decoration-parranda-line-firm underline-offset-2 hover:text-parranda-clay hover:decoration-parranda-clay">
+          <a href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 max-w-full items-center underline decoration-parranda-line-firm underline-offset-2 transition-colors duration-150 ease-out hover:text-parranda-clay hover:decoration-parranda-clay">
             <ExternalLinkText text={link.text} />
           </a>
         </p>}
         {listedBy && <details className="min-w-0 max-w-full">
-          <summary className="min-h-11 cursor-pointer py-3 font-medium">{lang === "en" ? "Source details" : "Källinformation"}</summary>
+          <summary className="min-h-11 cursor-pointer py-3 font-medium transition-colors duration-150 ease-out hover:text-parranda-ink">{lang === "en" ? "Source details" : "Källinformation"}</summary>
           <p className="pb-2">via&nbsp;{listedBy}</p>
         </details>}
       </div>}

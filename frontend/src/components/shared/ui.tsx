@@ -14,23 +14,40 @@ import { ExternalIcon } from "./icons";
 
 type ButtonTone = "primary" | "secondary" | "quiet" | "live" | "dashed";
 
+/**
+ * Press feedback for a button or a pill: a quick, small give under the finger
+ * (taps on a phone got no answer at all), off under reduced motion. Only the
+ * named properties move, never `transition-all`. Tailwind 4's `scale-*` sets
+ * the `scale` property, not `transform`, so `scale` is what is transitioned.
+ */
+export const pressable =
+  "transition-[scale,background-color,color,filter] duration-150 ease-out motion-safe:active:scale-[0.97]";
+
+/**
+ * Press feedback for a full-width row (a stop, an aside row): the fill
+ * deepens, nothing scales, because a whole row shrinking reads as the page
+ * moving. For a row on paper; a row that already sits on `bg-parranda-fill`
+ * presses to `active:bg-parranda-fill-strong` instead.
+ */
+export const pressRow = "transition-[background-color,color] duration-150 ease-out active:bg-parranda-fill";
+
 const TONES: Record<ButtonTone, string> = {
   // The one filled action on a surface: white on terracotta, 5.2:1 in both themes.
-  primary: "bg-parranda-terracotta font-extrabold text-parranda-on-terracotta hover:brightness-110",
+  primary: "bg-parranda-terracotta font-extrabold text-parranda-on-terracotta hover:brightness-110 active:brightness-95",
   // Tonal, not outlined: a soft fill reads as a surface you can press, and a
   // page of hairline frames read as a wireframe (Linje 2, Nov 2026).
-  secondary: "bg-parranda-fill font-bold text-parranda-ink hover:bg-parranda-fill-strong",
+  secondary: "bg-parranda-fill font-bold text-parranda-ink hover:bg-parranda-fill-strong active:bg-parranda-fill-strong",
   // Words alone, for the actions that come second on a surface (a stop's
   // Keep, Replace and Remove). The fill appears under the pointer.
-  quiet: "font-bold text-parranda-ink hover:bg-parranda-fill",
-  live: "bg-parranda-live font-extrabold text-parranda-on-live hover:brightness-110",
+  quiet: "font-bold text-parranda-ink hover:bg-parranda-fill active:bg-parranda-fill-strong",
+  live: "bg-parranda-live font-extrabold text-parranda-on-live hover:brightness-110 active:brightness-95",
   // Optional, explicitly not part of the day.
-  dashed: "border-line border-dashed border-parranda-line-firm font-bold text-parranda-ink hover:border-parranda-line-strong",
+  dashed: "border-line border-dashed border-parranda-line-firm font-bold text-parranda-ink hover:border-parranda-line-strong active:bg-parranda-fill-faint",
 };
 
 /**
  * Class string for a button, or a link styled as one. The tone is the system's;
- * the size stays at the call site (`"min-h-11 px-4 text-sm"`), so every
+ * the size stays at the call site (`"min-h-11 px-4 text-13"`), so every
  * control's touch target is visible where it is drawn.
  */
 export function buttonClass(tone: ButtonTone, size: string): string {
@@ -38,7 +55,7 @@ export function buttonClass(tone: ButtonTone, size: string): string {
   // a chevron) must not also get `justify-center`: Tailwind orders the two by
   // name, not by position in the class string, so center won.
   const justify = /(^|\s)justify-/.test(size) ? "" : "justify-center ";
-  return `inline-flex items-center ${justify}gap-2 rounded-parranda-btn transition disabled:opacity-60 aria-disabled:opacity-60 aria-busy:cursor-progress ${TONES[tone]} ${size}`;
+  return `inline-flex items-center ${justify}gap-2 rounded-parranda-btn ${pressable} disabled:opacity-60 aria-disabled:opacity-60 aria-busy:cursor-progress ${TONES[tone]} ${size}`;
 }
 
 /**
@@ -60,15 +77,26 @@ export function busyButton(busy: boolean, onClick: () => void) {
  * line's stations and the ring in the wordmark; a control is a soft rectangle.
  */
 /** A chosen choice: the system's one "selected" fill, ink. */
-export const choiceOn = "bg-parranda-ink font-bold text-parranda-paper";
-/** A choice not taken: a soft fill that deepens under the pointer. */
-export const choiceOff = "bg-parranda-fill font-semibold text-parranda-ink-soft hover:bg-parranda-fill-strong hover:text-parranda-ink";
+export const choiceOn = `bg-parranda-ink font-bold text-parranda-paper ${pressable}`;
+/** A choice not taken: a soft fill that deepens under the pointer and the finger. */
+export const choiceOff =
+  `bg-parranda-fill font-semibold text-parranda-ink-soft hover:bg-parranda-fill-strong hover:text-parranda-ink active:bg-parranda-fill-strong ${pressable}`;
 /** A standalone control that is not the surface's one filled action (Change, Adjust, Follow). */
-export const controlTone = "bg-parranda-fill font-bold text-parranda-ink hover:bg-parranda-fill-strong";
+export const controlTone =
+  `bg-parranda-fill font-bold text-parranda-ink hover:bg-parranda-fill-strong active:bg-parranda-fill-strong ${pressable}`;
+
+/**
+ * The day's control pill, 44px tall itself: Change place, Adjust, Follow,
+ * See all live, Expand map. One look for every control of that rank. A call
+ * site whose own prefix is test-locked (`"inline-flex min-h-11 …`) writes the
+ * same classes after it rather than importing this.
+ */
+export const controlPill44 =
+  `inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-parranda-btn px-3 text-13 ${controlTone}`;
 
 export function pillClass(active = false, extra = ""): string {
   return (
-    "inline-flex min-h-11 items-center gap-1.5 rounded-parranda-btn px-4 text-13 transition " +
+    `inline-flex min-h-11 items-center gap-1.5 rounded-parranda-btn px-4 text-13 ${pressable} ` +
     (active ? choiceOn : choiceOff) +
     (extra ? ` ${extra}` : "")
   );
@@ -81,7 +109,7 @@ export function pillClass(active = false, extra = ""): string {
  * size, padding and colours are the caller's.
  */
 export const compactPillTarget =
-  "relative inline-flex min-h-9 items-center rounded-parranda-btn text-13 transition before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']";
+  "relative inline-flex min-h-9 items-center rounded-parranda-btn text-13 transition-[scale,background-color,color,filter] duration-150 ease-out motion-safe:active:scale-[0.97] before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']";
 
 /**
  * A row of mutually exclusive choices drawn as one control (Today / Tomorrow,
@@ -94,8 +122,12 @@ export const segmentGroup = "inline-flex self-start rounded-parranda-btn bg-parr
 /** One segment of `segmentGroup`. Selected is the system's one "chosen" fill: ink. */
 export function segmentClass(active: boolean, extra = ""): string {
   return (
-    "inline-flex min-h-11 items-center justify-center rounded-parranda-btn px-[18px] text-13 transition " +
-    (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink-muted hover:text-parranda-ink") +
+    "inline-flex min-h-11 items-center justify-center rounded-parranda-btn px-[18px] text-13 " +
+    pressable +
+    " " +
+    (active
+      ? "bg-parranda-ink font-bold text-parranda-paper"
+      : "font-semibold text-parranda-ink-muted hover:text-parranda-ink active:bg-parranda-fill-strong") +
     (extra ? ` ${extra}` : "")
   );
 }
@@ -133,13 +165,17 @@ export function ExternalLinkText({ text }: { text: string }) {
  * categories. A quiet fill, so it never reads as a selected chip (ink fill).
  */
 export const labelChip =
-  "inline-flex items-center gap-1.5 rounded-parranda-tag bg-parranda-fill px-2 py-1 text-xs font-semibold text-parranda-ink-soft";
+  "inline-flex items-center gap-1.5 rounded-parranda-tag bg-parranda-fill px-2 py-1 text-13 font-semibold text-parranda-ink-soft";
 
-/** A plain informational card: notices, refusals, errors. */
+/** A plain informational card: notices, refusals, errors. Body text. */
 export const noticeCard =
-  "rounded-parranda bg-parranda-surface p-4 text-sm leading-relaxed text-parranda-ink-soft shadow-card";
+  "rounded-parranda bg-parranda-surface p-4 text-15 leading-relaxed text-parranda-ink-soft shadow-card";
 
-/** The surface every grouped panel sits on. */
+/**
+ * The surface every grouped panel sits on (Adjust, the Live card, the Blitz
+ * result): one of the system's two surface recipes; the other is a control's
+ * `bg-parranda-fill`. Never `overflow-hidden` on it: focus rings sit outside.
+ */
 export const panelCard = "rounded-parranda bg-parranda-surface shadow-card";
 
 type EyebrowTone = "muted" | "glow" | "live";
@@ -175,7 +211,9 @@ export function Eyebrow({
   return (
     <Tag id={id} className={`type-eyebrow flex items-center gap-2 ${EYEBROW_TONES[tone]} ${className}`.trim()}>
       {line && <span aria-hidden="true" className="h-1 w-5 shrink-0 rounded-full bg-parranda-ember" />}
-      {dot && <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-current motion-safe:animate-pulse" />}
+      {/* Live: the dot rings once as it appears, then holds still. A dot
+          pulsing for as long as the page is open drew the eye from the line. */}
+      {dot && <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-current [--p-ring-rgb:var(--p-color-live)] motion-safe:animate-ring-once" />}
       {children}
     </Tag>
   );

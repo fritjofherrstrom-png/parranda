@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState, type MouseEvent } from "react";
 /**
  * A stop's photo, in the two places Linje shows it (docs/PLACE_MEDIA.md):
  *   - the ROW TILE, 56×56 between the name column and the chevron. On a day
- *     with photos every row has a tile; a stop without one, or whose image
- *     fails, gets a quiet glyph tile, so the rows never jump;
+ *     with photos every row keeps the slot; a stop without one, or whose image
+ *     fails, shows only its bare family sign there, so the rows never jump;
  *   - the PANEL FIGURE, 3:2 at the top of the open stop, with its credit. An
  *     image that fails keeps its 3:2 box with a quiet glyph and no credit, so
  *     the text under it never jumps.
@@ -17,20 +17,26 @@ import { useCallback, useEffect, useState, type MouseEvent } from "react";
  * our own origin, `/media/c/{media_id}/{w}`.
  */
 import { mediaSrc, mediaSrcSet, photoAlt, photoCredit, PANEL_WIDTH, TILE_WIDTH, type StopMedia } from "../../lib/place-media.mjs";
-import { stopCategoryFamily } from "../../lib/stop-category.mjs";
-import { ChevronDownIcon, CultureIcon, DrinkIcon, FoodIcon, NatureIcon, ShopIcon, SightIcon } from "../shared/icons";
+import { ChevronDownIcon } from "../shared/icons";
 import type { Lang, Translate } from "./copy";
+import { CategoryGlyph } from "./StopCategory";
 
-const FAMILY_ICONS = {
-  food: FoodIcon,
-  drink: DrinkIcon,
-  culture: CultureIcon,
-  nature: NatureIcon,
-  sight: SightIcon,
-  shop: ShopIcon,
-} as const;
+const fade = "opacity-0 motion-safe:transition-opacity motion-safe:duration-180 motion-safe:ease-out data-[loaded]:opacity-100";
 
-const fade = "opacity-0 motion-safe:transition-opacity motion-safe:duration-180 data-[loaded]:opacity-100";
+/**
+ * The open stop's photo fades in and settles from a hair larger, inside its
+ * clipped box, so it arrives instead of popping. `scale` is its own CSS
+ * property in Tailwind 4, so it is named in the transition, not `transform`.
+ */
+const figureFade =
+  "opacity-0 motion-safe:scale-[1.02] motion-safe:transition-[opacity,scale] motion-safe:duration-200 motion-safe:ease-out data-[loaded]:opacity-100 data-[loaded]:scale-100";
+
+/**
+ * The photo's own edge: a hairline drawn inside the box, over the image, so a
+ * pale sky or a white façade does not dissolve into the paper around it.
+ */
+const innerEdge =
+  "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:border-line after:border-parranda-line-faint after:content-['']";
 
 /** One more try after a failed image: a little longer than the upstream Retry-After. */
 export const IMAGE_RETRY_MS = 12_000;
@@ -66,21 +72,19 @@ function useImageState() {
   };
 }
 
-function StopGlyph({ type, className }: { type: unknown; className: string }) {
-  const family = stopCategoryFamily(type) as keyof typeof FAMILY_ICONS | null;
-  const Glyph = family ? FAMILY_ICONS[family] : null;
-  return Glyph ? <Glyph className={className} /> : <span className="h-2 w-2 rounded-full bg-parranda-line-firm" />;
-}
-
-/** The quiet tile for a row without a photo on a day that has photos. */
+/**
+ * A row without a photo on a day that has photos: the same 56px slot holds the
+ * bare family sign, no fill and no box. It is a category sign, not a stand-in
+ * image; a grey square read as a photo that failed to load.
+ */
 function GlyphTile({ type }: { type: unknown }) {
   return (
     <span
       aria-hidden="true"
       data-stop-photo="glyph"
-      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-parranda-btn bg-parranda-fill text-parranda-ink-meta"
+      className="flex h-14 w-14 shrink-0 items-center justify-center text-parranda-ink-meta"
     >
-      <StopGlyph type={type} className="h-5 w-5" />
+      <CategoryGlyph type={type} className="h-5 w-5" />
     </span>
   );
 }
@@ -93,7 +97,7 @@ export function StopPhotoTile({ media, type, muted = false }: { media: StopMedia
   return (
     <span
       data-stop-photo="tile"
-      className={"relative block h-14 w-14 shrink-0 overflow-hidden rounded-parranda-btn bg-parranda-fill" + (muted ? " opacity-70" : "")}
+      className={`relative block h-14 w-14 shrink-0 overflow-hidden rounded-parranda-btn bg-parranda-fill ${innerEdge}` + (muted ? " opacity-70" : "")}
     >
       <img
         key={attempt}
@@ -154,14 +158,23 @@ export function PhotoCreditLine({ media, t, lang, full = false }: { media: StopM
           aria-expanded={open}
           aria-label={t("Visa hela bildkrediten", "Show the full image credit")}
           onClick={() => setOpen((cur) => !cur)}
-          className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center text-parranda-ink-meta before:absolute before:-inset-3.5 before:content-[''] hover:text-parranda-ink"
+          className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center text-parranda-ink-meta transition-colors before:absolute before:-inset-3.5 before:content-[''] hover:text-parranda-ink"
         >
-          <ChevronDownIcon className={"h-3 w-3 motion-safe:transition-transform " + (open ? "rotate-180" : "")} />
+          <ChevronDownIcon className={"h-3 w-3 motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out " + (open ? "rotate-180" : "")} />
         </button>
       )}
     </span>
   );
 }
+
+/**
+ * On a phone the open stop's photo runs on to the screen's right edge: the
+ * panel ends at the page gutter (16px), so 1rem more reaches the edge without
+ * widening the page. Only the image bleeds; its credit stays in the column, so
+ * the credit's expand control never sits on the screen edge. Wider screens keep
+ * the photo inside.
+ */
+const bleed = "w-full max-sm:-mr-4 max-sm:w-[calc(100%+1rem)] max-sm:rounded-r-none";
 
 /**
  * The open stop's 3:2 figure, full width of its column, with the credit under
@@ -175,29 +188,29 @@ export function StopPhotoFigure({ media, name, type, t, lang }: { media: StopMed
   if (!src) return null;
   if (failed) {
     return (
-      <div data-stop-photo="figure-fallback" aria-hidden="true" className="m-0 flex w-full max-w-lg flex-col gap-1.5">
-        <span className="flex aspect-[3/2] w-full items-center justify-center rounded-parranda-btn bg-parranda-fill text-parranda-ink-meta">
-          <StopGlyph type={type} className="h-6 w-6" />
+      <div data-stop-photo="figure-fallback" aria-hidden="true" className="m-0 flex w-full max-w-lg flex-col gap-1">
+        <span className={`flex aspect-[3/2] items-center justify-center rounded-parranda-btn bg-parranda-fill text-parranda-ink-meta ${bleed}`}>
+          <CategoryGlyph type={type} className="h-6 w-6" />
         </span>
       </div>
     );
   }
   return (
-    <figure data-stop-photo="figure" className="m-0 flex w-full max-w-lg flex-col gap-1.5">
-      <span className="relative block aspect-[3/2] w-full overflow-hidden rounded-parranda-btn bg-parranda-fill">
+    <figure data-stop-photo="figure" className="m-0 flex w-full max-w-lg flex-col gap-1">
+      <span className={`relative block aspect-[3/2] overflow-hidden rounded-parranda-btn bg-parranda-fill ${bleed} ${innerEdge}`}>
         <img
           key={attempt}
           {...imgProps}
           src={src}
           srcSet={srcSet ?? undefined}
-          sizes="(min-width: 640px) 512px, calc(100vw - 88px)"
+          sizes="(min-width: 640px) 512px, calc(100vw - 72px)"
           alt={photoAlt(name, lang)}
           width={media.width}
           height={media.height}
           loading="lazy"
           decoding="async"
           draggable={false}
-          className={`absolute inset-0 h-full w-full object-cover ${fade}`}
+          className={`absolute inset-0 h-full w-full object-cover ${figureFade}`}
         />
       </span>
       <figcaption className="min-w-0">

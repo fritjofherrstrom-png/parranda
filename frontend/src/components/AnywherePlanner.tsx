@@ -91,7 +91,7 @@ import {
 import { anywhereDecision, type AnywhereClassification } from "../lib/anywhere-decision";
 import AppBar from "./shared/AppBar";
 import { KeepIcon, LocationIcon, MinusIcon, UndoIcon } from "./shared/icons";
-import { busyButton, buttonClass, noticeCard } from "./shared/ui";
+import { busyButton, buttonClass, noticeCard, pressable } from "./shared/ui";
 import { useMediaQuery } from "./shared/useMediaQuery";
 import AnchorCard, { ChangePlaceLink, type AdjustRebuild } from "./planner/AnchorCard";
 import type { InterestSelection } from "./planner/InterestChooser";
@@ -101,7 +101,7 @@ import DayHeader, { DayActions, dayAssemblyNotes, PickSummary } from "./planner/
 import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
 import { useFollowPosition } from "./planner/useFollowPosition";
-import DayPlaceholder, { DayMapPlaceholder } from "./planner/DayPlaceholder";
+import DayPlaceholder, { DayMapPlaceholder, MAP_PANE } from "./planner/DayPlaceholder";
 import { RingMark } from "./shared/RingMark";
 import LiveSheet from "./planner/LiveSheet";
 import { selectedDayEmpty, useLiveFallback } from "./planner/useLiveFallback";
@@ -3142,7 +3142,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       onToggleExpanded={splitLayout ? undefined : () => setMapExpanded((cur) => !cur)}
       // On a phone the map is a short overview above the facts, still until
       // expanded, so it never catches the thumb that scrolls the day.
-      heightClass={splitLayout ? "h-full" : mapExpanded ? "h-[min(70vh,36rem)]" : "h-52"}
+      heightClass={splitLayout ? "h-full" : mapExpanded ? "h-[min(70vh,36rem)]" : "h-60"}
       still={!splitLayout && !mapExpanded}
       regionLabel={splitLayout ? t("Interaktiv karta", "Interactive map") : undefined}
       positionSession={positionSession}
@@ -3161,6 +3161,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {routeMap}
     </div>
   ) : null;
+  // Said once, quietly, under the Share it qualifies (DayActions), or in the
+  // empty day's notice, which has no actions of its own.
+  const sharingUnavailableNote = t("Exakt delning är inte tillgänglig för den här dagen. Dagen och dina andra val finns kvar.", "Exact sharing is unavailable for this day. Your day and other actions remain available.");
+  const saveFailed = savedWriteError?.action === "save" && savedWriteError.entry === lastEntryRef.current;
   // Before a day is on screen the card names the place and the day; once it
   // is, the day's heading names the place and the card keeps which day, the
   // picks and Adjust. "Today" belongs to the shown date only when it is
@@ -3252,11 +3256,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     <div
       className={
         splitLayout
-          ? "grid w-full grid-cols-[minmax(0,34rem)_minmax(0,1fr)] items-start gap-x-10 gap-y-8 xl:grid-cols-[minmax(0,36rem)_minmax(0,1fr)] xl:gap-x-14"
-          : "mx-auto flex w-full max-w-2xl flex-col gap-5"
+          ? "grid w-full grid-cols-[minmax(0,38rem)_minmax(0,1fr)] grid-rows-[auto_1fr] xl:grid-cols-[minmax(0,40rem)_minmax(0,1fr)]"
+          : "mx-auto flex w-full max-w-2xl flex-col gap-6 lg:pb-16 lg:pt-3"
       }
     >
-      <div className={splitLayout ? "col-span-full" : ""}>
+      <div className={splitLayout ? "col-start-1 row-start-1 px-8 pt-3 xl:px-10" : ""}>
         <AppBar
           lang={lang}
           homeLabel={t("Parranda — till startsidan", "Parranda — home")}
@@ -3264,13 +3268,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           onNavigate={leavePlanner}
           languageHref={languageHref}
         />
-        {exactLanguageUnavailable && navigationWriteFailure === lastEntryRef.current && <p role="status" className="mt-2 text-xs leading-relaxed text-parranda-ink-muted">
+        {exactLanguageUnavailable && navigationWriteFailure === lastEntryRef.current && <p role="status" className="mt-2 text-13 leading-relaxed text-parranda-ink-meta">
           {t("Språkbyte är inte tillgängligt eftersom webbläsaren inte kunde behålla exakt den här dagen. Dagen finns kvar på skärmen.",
             "Language switching is unavailable because this browser could not keep this exact day. Your day remains on screen.")}
         </p>}
       </div>
 
-      <main className="flex min-w-0 flex-col gap-10 sm:gap-12">
+      <main className={"flex min-w-0 flex-col gap-12" + (splitLayout ? " col-start-1 row-start-2 px-8 pb-16 pt-6 xl:px-10" : "")}>
       {/* The day leads, compact: "A day in Lyon" with Change, which day and
           the picks with Adjust, on a phone the map's short overview, the
           facts — then the route's stops. While a day composes, its heading's
@@ -3313,7 +3317,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           status={
             // Where "Your day" will stand, with the drawing ring: the day
             // lands under the line the reader is already looking at.
-            <p className="flex items-start gap-2.5 text-sm text-parranda-ink-muted" aria-live="polite">
+            <p className="flex items-start gap-2 text-15 text-parranda-ink-muted" aria-live="polite">
               <RingMark className="mt-[3px] h-3.5 w-3.5" />
               <span>
                 {supplyPending && t("Letar platser och bygger din dag …", "Finding places and building your day …")}
@@ -3373,7 +3377,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 : conflictingPlaceLink
                 ? t("Länken har motstridiga platsankare. Välj en plats på startsidan — ingen annan plats väljs automatiskt.", "This link has conflicting place anchors. Choose a place on the home page — no other place is selected automatically.")
                 : t("Ingen sparad dag finns här. Välj en plats på startsidan.", "No saved day is available here. Choose a place on the home page.")}</p>
-              <a href={`/?lang=${lang}`} onClick={() => leavePlanner("home")} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+              <a href={`/?lang=${lang}`} onClick={() => leavePlanner("home")} className={buttonClass("secondary", "min-h-11 px-4 text-13")}>
                 {t("Till startsidan", "Go to home")}
               </a>
             </>
@@ -3395,7 +3399,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           <button
             type="button"
             {...busyButton(relocating, useLocationAgain)}
-            className={buttonClass("primary", "min-h-11 px-4 text-sm")}
+            className={buttonClass("primary", "min-h-11 px-4 text-13")}
           >
             <LocationIcon className="h-4 w-4" />
             {relocating ? t("Hämtar position …", "Getting location …") : t("Använd min position", "Use my location")}
@@ -3426,7 +3430,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           {liveChoiceCount > 0 && <span>{t("Live-valet behålls för sitt tillfälle", "Live choice saved for its occurrence")}</span>}
           {pinnedCount > 0 && (
             <span className="inline-flex items-center gap-1.5">
-              <KeepIcon className="h-3.5 w-3.5 text-parranda-ember" />
+              <KeepIcon className="h-3.5 w-3.5 text-parranda-clay" />
               {pinnedCount === 1
                 ? t("1 plats behålls", "1 place kept")
                 : t(`${pinnedCount} platser behålls`, `${pinnedCount} places kept`)}
@@ -3455,7 +3459,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           screen is the evidence. Silently dropping it would let the ledger
           claim something the day does not show. */}
       {unkept.count > 0 && (
-        <div className="flex flex-col gap-1.5 rounded-parranda border-line border-parranda-glow/40 bg-parranda-glow/8 px-4 py-3 text-13 text-parranda-ink-soft" role="status">
+        <div className="flex flex-col gap-2 rounded-parranda bg-parranda-glow/8 px-4 py-3 text-13 leading-relaxed text-parranda-ink-soft" role="status">
           {unkept.reasons.map((entry: { id: string; label: string; reason: string | null }) => (
             <p key={entry.id}>{isLiveOccurrenceId(entry.id) ? t(`${entry.label || "Det valda tillfället"} kunde inte bekräftas som stopp i den här dagen. Ditt val finns kvar.`, `${entry.label || "The chosen occurrence"} could not be confirmed as a stop in this day. Your choice is retained.`) : unkeptReasonSentence(entry, t)}</p>
           ))}
@@ -3469,7 +3473,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           <p>{navigationInterrupted
             ? t("Planeringen pausades när du lämnade sidan. Dina val finns kvar.", "Planning paused when you left. Your choices are still here.")
             : t("Parranda kunde inte bygga din dag just nu.", "Parranda couldn't build your day right now.")}</p>
-          <button type="button" onClick={() => retryPlan()} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
+          <button type="button" onClick={() => retryPlan()} className={buttonClass("primary", "min-h-11 px-4 text-13")}>
             {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök bygga dagen igen", "Try building the day again")}
           </button>
         </div>
@@ -3531,7 +3535,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   cancelActivePlannerForNavigation();
                 }
               }}
-              className={buttonClass("secondary", "min-h-11 px-4 text-sm")}
+              className={buttonClass("secondary", "min-h-11 px-4 text-13")}
             >
               {t("Välj en annan plats", "Choose another place")}
             </a>
@@ -3545,14 +3549,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           answers, and it is gone as soon as it stops being true. */}
       {stopEditError && !dayChange && <p className={noticeCard} role="status">{stopEditErrorMessage}</p>}
       {stopEditError === "live_not_preserved" && <button type="button" onClick={() => retryPlan({ sameDate: true })}
-        className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+        className={buttonClass("secondary", "min-h-11 px-4 text-13")}>
         {t("Försök planera med evenemanget igen", "Try planning with this event again")}
       </button>}
       {dayChange && (phase === "done" || (phase === "error" && canUndoFailedEdit)) &&
         (!dayIsStale || canUndoFailedEdit) && (dayChangeLine.length > 0 || keptNames.length > 0 || stopEditFeedback || stopEditError) && (
         <div
           role="status"
-          className="flex items-center gap-x-2 rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint py-0.5 pl-4 pr-1"
+          className="flex items-center gap-x-2 rounded-parranda bg-parranda-fill py-0.5 pl-4 pr-1"
         >
           <p className="min-w-0 flex-1 break-words text-13 leading-snug text-parranda-ink-muted">
             {stopEditError ? stopEditErrorMessage : stopEditFeedback ? stopEditFeedbackMessage : <>
@@ -3575,7 +3579,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             type="button"
             onClick={undoDayChange}
             aria-label={t("Ångra ändringen", "Undo this change")}
-            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-parranda-btn px-3 text-xs font-bold text-parranda-ink transition hover:bg-parranda-fill"
+            className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-parranda-btn px-3 text-13 font-bold text-parranda-ink hover:bg-parranda-fill-strong active:bg-parranda-fill-strong ${pressable}`}
           >
             <UndoIcon className="h-3.5 w-3.5" />
             {t("Ångra", "Undo")}
@@ -3586,17 +3590,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {classification?.status === "edited_empty" && phase === "done" && (
         <section className={noticeCard} role="status">
           <h2 className="font-bold text-parranda-ink">{t("Dagen är tom", "Your day is empty")}</h2>
-          <p className="mt-1 text-sm text-parranda-ink-muted">{t("Du har tagit bort alla stopp.", "You removed every stop.")}</p>
-          {restoredAt && <p className="text-xs text-parranda-ink-meta">
+          <p className="mt-1 text-15 text-parranda-ink-muted">{t("Du har tagit bort alla stopp.", "You removed every stop.")}</p>
+          {restoredAt && <p className="text-13 text-parranda-ink-meta">
             {t("Sparad dag", "Saved day")} · {navigationDay?.label}
-            {canUpdateSaved && <button type="button" onClick={() => resolveAndRun()} className={buttonClass("secondary", "min-h-11 px-3 text-sm")}>
+            {canUpdateSaved && <button type="button" onClick={() => resolveAndRun()} className={buttonClass("secondary", "min-h-11 px-3 text-13")}>
               {t("bygg om för färska events", "rebuild for fresh events")}
             </button>}
           </p>}
-          {canShare && <button type="button" onClick={shareDay} className={buttonClass("secondary", "min-h-11 px-3 text-sm")}>
+          {canShare && <button type="button" onClick={shareDay} className={buttonClass("secondary", "min-h-11 px-3 text-13")}>
             {shareCopied ? t("Kopierad", "Copied") : t("Dela dagen", "Share this day")}
           </button>}
-          <button type="button" onClick={clearCommitments} className={buttonClass("secondary", "mt-3 min-h-11 px-4 text-sm")}>
+          {!canShare && <p className="mt-2 text-13 leading-relaxed text-parranda-ink-meta">{sharingUnavailableNote}</p>}
+          <button type="button" onClick={clearCommitments} className={buttonClass("secondary", "mt-3 min-h-11 px-4 text-13")}>
             {t("Börja om", "Start over")}
           </button>
         </section>
@@ -3609,10 +3614,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           next step: no second headline, no second rebuild action. */}
       {showStructure && structure && !(showDay && routeStops.length > 0) && !noDay &&
         (structure.provenance === "agnostic_anchor" || restoredAt) && (
-        <section className="rounded-parranda border-line border-parranda-glow/40 bg-parranda-glow/8 p-4">
+        <section className="rounded-parranda bg-parranda-glow/8 p-4">
           <div className="min-w-0 flex-1">
             {structure.provenance === "agnostic_anchor" && (
-              <p className="text-sm font-bold text-parranda-clay">
+              <p className="text-15 font-bold text-parranda-clay">
                 {t(
                   "Hittade platser — ingen rutt ännu",
                   "Places found — no route yet",
@@ -3620,7 +3625,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               </p>
             )}
             {restoredAt && (
-              <p className="mt-1 text-xs text-parranda-ink-meta">
+              <p className="mt-1 text-13 text-parranda-ink-meta">
                 {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", { day: "numeric", month: "short", year: "numeric" })} —{" "}
                 {canUpdateSaved ? (
                   <button type="button" onClick={() => retryPlan({ sameDate: true })} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-parranda-clay">
@@ -3709,22 +3714,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               publishedStart={publishedStart}
               publishedEnd={publishedEnd}
               stale={staleNotice === "updating"}
+              sharingNote={canShare ? undefined : sharingUnavailableNote}
+              saveError={saveFailed ? t("Dagen kunde inte sparas på den här enheten. Frigör utrymme eller tillåt lagring och försök igen.", "Couldn't save this day on this device. Free up space or allow storage, then try again.") : undefined}
             />
           }
         />
       )}
 
-      {/* Said once, quietly, after the actions it qualifies. */}
-      {(dayWithRoute || (classification?.status === "edited_empty" && phase === "done")) && !canShare && (
-        <p className="text-xs leading-relaxed text-parranda-ink-meta" role="status">
-          {t("Exakt delning är inte tillgänglig för den här dagen. Dagen och dina andra val finns kvar.", "Exact sharing is unavailable for this day. Your day and other actions remain available.")}
-        </p>
-      )}
-      {savedWriteError?.action === "save" && savedWriteError.entry === lastEntryRef.current && (
-        <p role="status" className="text-sm leading-relaxed text-parranda-ink-muted">
-          {t("Dagen kunde inte sparas på den här enheten. Frigör utrymme eller tillåt lagring och försök igen.", "Couldn't save this day on this device. Free up space or allow storage, then try again.")}
-        </p>
-      )}
 
       {/* Without a primary route, the broader place structure remains useful —
           but it is explicitly candidates, never a second itinerary. */}
@@ -3768,68 +3764,77 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         />
       )}
 
-      {phase === "done" &&
-        ((liveEvents && ["covered", "uncovered", "unavailable"].includes(liveEvents.coverage ?? "")) ||
-          (showDay && dayflow?.weather?.headline) ||
-          aroundPlaceScopeAvailable) && (
-        <LiveCard
-          t={t}
-          lang={lang}
-          mode={mode}
-          anchorLabel={anchorLabel}
-          liveEvents={cardLiveEvents}
-          liveDayLabel={liveDayLabel}
-          showDay={showDay}
-          dayflow={dayflow}
-          clothing={clothing}
-          wovenNames={split.woven.map((s: any) => String(s?.label || s?.name || "").trim()).filter(Boolean)}
-          includedInRoute={includedInRoute}
-          pulseState={pulseState}
-          liveFailure={liveFailure}
-          liveFailureSentence={liveFailureSentence}
-          pulseBuckets={pulseBuckets}
-          showExplore={pulseBuckets.tonight.length > 0 || pulseBuckets.thisWeek.length > 0 || aroundPlaceScopeAvailable}
-          startsWithWeek={!liveSheetOpenedRef.current && liveSheetEntryTime === "week"}
-          pulseSources={pulseSources}
-          liveSheetTriggerRef={liveSheetTriggerRef}
-          openLiveSheet={openLiveSheet}
-          suggestion={liveSuggestionAvailable ? {
-            live: cardLiveEvents,
-            date: lastComposeDateIsoRef.current,
-            stops: routeStops,
-            selected: shownInterests,
-            commitments,
-            onPlan: planWithLiveOccurrence,
-          } : undefined}
-        />
+      {/* Now: what is on around the day, and a day of its own in a hurry.
+          One group, so the two read as a pair after the route. */}
+      <div className="flex flex-col gap-4 empty:hidden">
+        {phase === "done" &&
+          ((liveEvents && ["covered", "uncovered", "unavailable"].includes(liveEvents.coverage ?? "")) ||
+            (showDay && dayflow?.weather?.headline) ||
+            aroundPlaceScopeAvailable) && (
+          <LiveCard
+            t={t}
+            lang={lang}
+            mode={mode}
+            anchorLabel={anchorLabel}
+            liveEvents={cardLiveEvents}
+            liveDayLabel={liveDayLabel}
+            showDay={showDay}
+            dayflow={dayflow}
+            clothing={clothing}
+            wovenNames={split.woven.map((s: any) => String(s?.label || s?.name || "").trim()).filter(Boolean)}
+            includedInRoute={includedInRoute}
+            pulseState={pulseState}
+            liveFailure={liveFailure}
+            liveFailureSentence={liveFailureSentence}
+            pulseBuckets={pulseBuckets}
+            showExplore={pulseBuckets.tonight.length > 0 || pulseBuckets.thisWeek.length > 0 || aroundPlaceScopeAvailable}
+            startsWithWeek={!liveSheetOpenedRef.current && liveSheetEntryTime === "week"}
+            pulseSources={pulseSources}
+            liveSheetTriggerRef={liveSheetTriggerRef}
+            openLiveSheet={openLiveSheet}
+            suggestion={liveSuggestionAvailable ? {
+              live: cardLiveEvents,
+              date: lastComposeDateIsoRef.current,
+              stops: routeStops,
+              selected: shownInterests,
+              commitments,
+              onPlan: planWithLiveOccurrence,
+            } : undefined}
+          />
+        )}
+
+        {/* Blitz uses the trusted day anchor for every place. */}
+        {phase === "done" && hasAnchor && !serviceRefusal && !anchorUnresolved && (
+          <BlitzCard
+            t={t}
+            lang={lang}
+            mode={mode}
+            anchorLabel={anchorLabel}
+            dayOnScreen={dayOnScreen}
+            blitz={() => blitz()}
+            sharePositionForBlitz={sharePositionForBlitz}
+            blitzPositionFailed={blitzPositionFailed}
+            blitzPhase={blitzPhase}
+            blitzResult={blitzResult}
+            typedPlaceLabel={typedPlaceLabel}
+          />
+        )}
+      </div>
+
+      {/* Beyond the route: the optional detours, then how the day and its
+          map were made. Both are filled from StopLine through a portal. */}
+      {dayWithRoute && (
+        <div className="flex flex-col gap-4">
+          <div ref={setDetoursHost} data-route-detours="" className="empty:hidden [&>div]:mt-0" />
+          <div ref={setAboutHost} data-route-about="" className="empty:hidden" />
+        </div>
       )}
-
-      {dayWithRoute && <div ref={setDetoursHost} data-route-detours="" className="empty:hidden [&>div]:mt-0" />}
-
-      {/* Blitz uses the trusted day anchor for every place. */}
-      {phase === "done" && hasAnchor && !serviceRefusal && !anchorUnresolved && (
-        <BlitzCard
-          t={t}
-          lang={lang}
-          mode={mode}
-          anchorLabel={anchorLabel}
-          dayOnScreen={dayOnScreen}
-          blitz={() => blitz()}
-          sharePositionForBlitz={sharePositionForBlitz}
-          blitzPositionFailed={blitzPositionFailed}
-          blitzPhase={blitzPhase}
-          blitzResult={blitzResult}
-          typedPlaceLabel={typedPlaceLabel}
-        />
-      )}
-
-      {dayWithRoute && <div ref={setAboutHost} data-route-about="" className="-mt-6 empty:hidden" />}
 
       {savedDays.length > 0 && (
         <SavedDays t={t} lang={lang} savedDays={savedDays} restoreEntry={restoreEntry} removeSavedDay={removeSavedDay} />
       )}
       {savedWriteError?.action === "remove" && savedDays.some(entry => entry.id === savedWriteError.id) && (
-        <p role="status" className="text-sm leading-relaxed text-parranda-ink-muted">
+        <p role="status" className="text-13 leading-relaxed text-parranda-ink-muted">
           {t("Den sparade dagen kunde inte tas bort. Försök igen när lagring är tillgänglig.", "Couldn't remove this saved day. Try again when storage is available.")}
         </p>
       )}
@@ -3837,9 +3842,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {/* The wide-screen map column is the "Map of the day" landmark; the
           map's own canvas region inside it is named "Interactive map", so
-          the two are not one name twice. */}
+          the two are not one name twice. It is a pane, not a card: it runs
+          the window's full height from its top edge, so its controls and
+          credit are in view at once, and stays put while the day scrolls
+          beside it. Its one hairline is its left edge (`data-map-pane`
+          flattens the frame inside it, tailwind.css). */}
       {splitLayout && (dayWithRoute ? (
-        <aside aria-label={t("Karta över dagen", "Map of the day")} className="sticky top-4 h-[calc(100dvh-2rem)] min-h-[30rem]">
+        <aside aria-label={t("Karta över dagen", "Map of the day")} data-map-pane="" className={MAP_PANE}>
           {routeMap}
         </aside>
       ) : (

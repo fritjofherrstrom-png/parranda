@@ -13,7 +13,7 @@ import { useLiveClock } from "./useLiveClock";
  */
 import type { Ref } from "react";
 import { ChevronRightIcon } from "../shared/icons";
-import { buttonClass } from "../shared/ui";
+import { buttonClass, panelCard, pressable } from "../shared/ui";
 import { liveRelevanceSentence, type Lang, type Translate } from "./copy";
 import LiveEventSummary from "./LiveEventSummary";
 import EventOccurrences from "./EventOccurrences";
@@ -21,6 +21,9 @@ import { liveRejectedSentence } from "../../lib/live-empty-copy.mjs";
 import { suggestLiveRouteEnd, type LiveRouteSuggestionContext } from "../../lib/live-stop-choice.mjs";
 import { eventBoardClock, pulseBrowseBuckets, pulseRowsWithoutOccurrence } from "../../lib/pulse-view.mjs";
 import type { LiveEvents, PulseEvent } from "./types";
+
+/** A source-health or empty state: a sentence, in the body size. */
+const stateCopy = "mt-4 text-15 leading-relaxed text-parranda-ink-muted";
 
 export default function LiveCard({
   t,
@@ -94,35 +97,53 @@ export default function LiveCard({
     : boardRows.length > 0 || pulseBuckets.thisWeek.length > 0
       ? t("Se allt live", "See all live")
       : t("Utforska live", "Explore live");
+  // One control opens the sheet: a pill in the heading row, in Live's colour,
+  // never a second filled button. The card's one filled action is "Plan with
+  // this event", and only when that offer exists.
+  const explore = showExplore ? (
+    <button
+      type="button"
+      ref={liveSheetTriggerRef}
+      onClick={openLiveSheet}
+      className={`group inline-flex min-h-11 shrink-0 items-center gap-1 rounded-parranda-btn bg-parranda-fill pl-3 pr-2 text-13 font-bold whitespace-nowrap text-parranda-live hover:bg-parranda-fill-strong active:bg-parranda-fill-strong ${pressable}`}
+    >
+      {exploreLabel}
+      <ChevronRightIcon className="h-4 w-4 shrink-0 transition-transform duration-200 ease-out motion-safe:group-hover:translate-x-0.5" />
+    </button>
+  ) : null;
   return (
     <section
-      className="rounded-parranda bg-parranda-live/8 p-5 sm:p-6"
+      className={`${panelCard} relative p-5 sm:p-6 before:absolute before:left-5 before:top-0 before:h-[3px] before:w-16 before:rounded-full before:bg-parranda-live before:content-[''] sm:before:left-6`}
     >
-      {/* A departures board: what is on, then when, in one glance. The day
-          sits on the right so the heading reads as a place. */}
-      <h2 className="flex items-baseline justify-between gap-3 text-19 font-extrabold leading-tight text-parranda-ink">
-        <span className="flex min-w-0 items-center gap-2.5 wrap-anywhere">
-          <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-parranda-live" />
-          {boardTitle}
-        </span>
-        {liveEvents?.selected_date ? (
-          <span className="type-data shrink-0 text-13 font-semibold text-parranda-ink-meta">
-            <span className="sr-only"> · </span>{boardWhen}
+      {/* A departures board: the place, then when, and the way into the full
+          board on the right. Blue marks live data; the card itself is the
+          system's one panel. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <h2 className="flex min-w-0 grow basis-40 flex-col gap-1">
+          <span className="type-title flex min-w-0 items-center gap-2.5 text-xl leading-tight text-parranda-ink wrap-anywhere">
+            <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-parranda-live [--p-ring-rgb:var(--p-color-live)] motion-safe:animate-ring-once" />
+            {boardTitle}
           </span>
-        ) : null}
-      </h2>
+          {liveEvents?.selected_date ? (
+            <span className="type-data pl-5 text-13 normal-case text-parranda-ink-meta">
+              <span className="sr-only"> · </span>{boardWhen}
+            </span>
+          ) : null}
+        </h2>
+        {explore}
+      </div>
 
       {((showDay && dayflow?.weather?.headline) || clothing) && (
-        <div className="mt-3 flex flex-col gap-1">
+        <div className="mt-4 flex flex-col gap-1">
           {showDay && dayflow?.weather?.headline && (
-            <p className="text-15 font-bold leading-snug text-parranda-ink">
+            <p className="text-15 font-semibold leading-relaxed text-parranda-ink">
               {dayflow.weather.headline}
-              {dayflow.weather.pitch ? <span className="font-medium text-parranda-ink-muted"> — {dayflow.weather.pitch}</span> : null}
+              {dayflow.weather.pitch ? <span className="font-normal text-parranda-ink-muted"> — {dayflow.weather.pitch}</span> : null}
             </p>
           )}
           {clothing && (
-            <p className="text-sm text-parranda-ink">
-              <span className="font-bold">{clothing.headline}</span>
+            <p className="text-15 leading-relaxed text-parranda-ink">
+              <span className="font-semibold">{clothing.headline}</span>
               <span className="text-parranda-ink-muted"> — {clothing.advice}</span>
             </p>
           )}
@@ -130,7 +151,7 @@ export default function LiveCard({
       )}
 
       {wovenNames.length > 0 && (
-        <p className="mt-3 text-13 text-parranda-ink-muted">
+        <p className="type-data mt-3 text-13 text-parranda-ink-meta">
           {wovenNames.map((n: string) => `${n} · ${includedInRoute}`).join(" · ")}
         </p>
       )}
@@ -139,49 +160,49 @@ export default function LiveCard({
           pulseHealthState says whether collection actually succeeded. Raw
           backend reason tokens never reach product copy. */}
       {pulseState === "uncovered" && (
-        <p className="mt-3 text-sm text-parranda-ink-muted">
+        <p className={stateCopy}>
           {t("Vi har inga verifierade evenemangskällor för området ännu. Det kan ändå hända saker här.", "We don't have verified event sources for this area yet. There may still be events here.")}
         </p>
       )}
       {pulseState === "pending" && (
-        <p className="mt-3 text-sm text-parranda-ink-muted">{t("Kollar kalendrarna — uppdateras automatiskt strax.", "Checking the calendars — updates automatically in a moment.")}</p>
+        <p className={stateCopy}>{t("Kollar kalendrarna — uppdateras automatiskt strax.", "Checking the calendars — updates automatically in a moment.")}</p>
       )}
       {pulseState === "soft_empty" && (
-        <p className="mt-3 text-sm text-parranda-ink-muted">
+        <p className={stateCopy}>
           {t("Källorna svarade men listar inga händelser för perioden.", "The sources responded but list no events for this period.")}
         </p>
       )}
       {pulseState === "rejected_empty" && (
-        <p className="mt-3 text-sm text-parranda-ink-muted">
+        <p className={stateCopy}>
           {liveRejectedSentence(liveEvents, lang)}
         </p>
       )}
       {pulseState === "unavailable" && (
-        <p className="mt-3 text-sm text-parranda-ink-muted">
+        <p className={stateCopy}>
           {liveFailure
             ? liveFailureSentence(liveFailure)
             : t("Parranda kunde inte verifiera händelser just nu — försök igen om en stund.", "Parranda couldn't verify events right now — try again shortly.")}
         </p>
       )}
       {showSelectedDayStatus && (
-        <p className="mt-3 text-sm text-parranda-ink-muted">
+        <p className={stateCopy}>
           {t("Inga verifierade evenemang för den valda dagen.", "No verified events for the selected day.")}
         </p>
       )}
 
       {offer && suggestion && (
-        <div data-live-route-suggestion="" className="mt-4 flex flex-col gap-1.5 border-t-line border-parranda-live/25 pt-3">
-          <p className="wrap-anywhere text-sm font-bold text-parranda-ink">
+        <div data-live-route-suggestion="" className="mt-4 flex flex-col gap-2 border-t-line border-parranda-live/15 pt-4">
+          <p className="wrap-anywhere text-15 font-semibold leading-snug text-parranda-ink">
             {t(`Föreslaget kvällsstopp nära ${offer.lastLabel}`, `Suggested evening stop near ${offer.lastLabel}`)}
           </p>
           <LiveEventSummary event={offer.event} lang={lang} now={now} selectedDate={suggestion.date} compact />
-          <p className="text-xs text-parranda-ink-meta">{liveRelevanceSentence(offer.relevance, lang, t)}</p>
-          <p className="text-sm text-parranda-ink-muted">
+          <p className="type-data text-13 text-parranda-ink-meta">{liveRelevanceSentence(offer.relevance, lang, t)}</p>
+          <p className="text-13 leading-relaxed text-parranda-ink-muted">
             {t("Parranda prövar en ny gångrutt med evenemanget sist. Andra stopp kan ändras.",
               "Parranda checks a new walking route ending at the event. Other stops may change.")}
           </p>
           <button type="button" onClick={() => suggestion.onPlan(offer.event, offer.event.title || "")}
-            className={buttonClass("live", "mt-1 min-h-11 self-start px-4 py-2 text-left text-sm")}>
+            className={buttonClass("live", "mt-1 min-h-11 self-start px-4 py-2 text-left text-15")}>
             {t("Planera med evenemanget", "Plan with this event")}
           </button>
         </div>
@@ -189,15 +210,15 @@ export default function LiveCard({
 
       {boardRows.length > 0 && (
         <div className="mt-4">
-          {!liveEvents?.selected_date && <p className="mb-2 text-sm font-bold text-parranda-ink">{liveDayLabel}</p>}
-          <ul className="flex flex-col border-b-line border-parranda-live/25">
+          {!liveEvents?.selected_date && <p className="type-data mb-2 text-13 text-parranda-ink-meta">{liveDayLabel}</p>}
+          <ul className="flex flex-col">
             {boardRows.map((ev: PulseEvent, i: number) => {
               const clock = eventBoardClock(ev, lang, now, liveEvents?.selected_date);
               return (
-                <li key={ev.id ?? i} className={`${clock ? "grid grid-cols-[4.25rem_minmax(0,1fr)] gap-x-3" : "flex flex-col"} min-w-0 border-t-line border-parranda-live/25 py-3 text-sm leading-relaxed text-parranda-ink-soft`}>
+                <li key={ev.id ?? i} className={`${clock ? "grid grid-cols-[3.5rem_minmax(0,1fr)] items-baseline gap-x-3" : "flex flex-col"} min-w-0 border-t-line border-parranda-live/15 py-2.5`}>
                   {clock && (
-                    <p className="type-data flex flex-col pt-0.5 leading-tight">
-                      <span className="text-base font-extrabold text-parranda-live">{clock.at}</span>
+                    <p className="type-data flex w-14 flex-col leading-tight">
+                      <span className="text-15 font-bold text-parranda-live">{clock.at}</span>
                       {clock.until && <span className="text-13 text-parranda-ink-meta"><span className="sr-only">, </span>{clock.until}</span>}
                     </p>
                   )}
@@ -211,19 +232,8 @@ export default function LiveCard({
           </ul>
         </div>
       )}
-      {showExplore && (
-        <button
-          type="button"
-          ref={liveSheetTriggerRef}
-          onClick={openLiveSheet}
-          className={buttonClass(offer ? "quiet" : "live", "mt-4 min-h-12 w-full px-4 text-sm")}
-        >
-          {exploreLabel}
-          <ChevronRightIcon className="h-4 w-4" />
-        </button>
-      )}
       {pulseState === "partial" && (
-        <p className="mt-2 text-xs text-parranda-ink-meta">
+        <p className="mt-3 text-13 leading-relaxed text-parranda-ink-meta">
           {liveEvents?.acquisition?.source_health?.reasons?.includes("source_collection_truncated")
             ? t("Vissa kalendrar kunde bara läsas delvis — fler händelser kan finnas hos källan.", "Some calendars were only partly read — more events may be listed at the source.")
             : t("Några källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
@@ -231,7 +241,7 @@ export default function LiveCard({
       )}
 
       {pulseSources && (
-        <p className="mt-3 text-xs text-parranda-ink-meta">
+        <p className="mt-4 text-11 leading-relaxed text-parranda-ink-meta">
           {t("Källa", "Source")}: {pulseSources}
         </p>
       )}

@@ -5,6 +5,7 @@
  * renders the same line, so a recipient sees the same credits.
  */
 import { dayHasPlaceMedia, dayMediaCredits, wikidataCredit } from "../../lib/place-media.mjs";
+import { Eyebrow } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 import { PhotoCreditLine } from "./StopPhoto";
 import { ExcerptCreditLine } from "./StopAbout";
@@ -16,10 +17,12 @@ export default function DayCredits({ stops, t, lang }: { stops: readonly object[
   const rows = dayMediaCredits(stops);
   const wikidata = wikidataCredit(lang);
   return (
-    <li data-day-credits="" className="mt-1 flex flex-col gap-1.5">
-      <span className="font-semibold text-parranda-ink-muted">{t("Bilder och texter", "Images and text")}</span>
+    // One of the two parts of "About this day and map", under its own label
+    // (not a heading: the page's heading outline stays as it is).
+    <div data-day-credits="" className="flex flex-col gap-1.5">
+      <Eyebrow>{t("Bilder och texter", "Images and text")}</Eyebrow>
       {rows.length > 0 && (
-        <ul className="flex flex-col gap-1.5">
+        <ul className="flex flex-col gap-2">
           {rows.map((row) => (
             <li key={row.key} className="flex flex-col gap-0.5">
               <span className="font-semibold text-parranda-ink-soft">{row.name}</span>
@@ -39,6 +42,6 @@ export default function DayCredits({ stops, t, lang }: { stops: readonly object[
           : wikidata.license}
         {")"}
       </span>
-    </li>
+    </div>
   );
 }

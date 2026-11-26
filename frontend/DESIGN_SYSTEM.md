@@ -17,7 +17,8 @@ source of truth; this is the map.
 | Elevation | `--p-shadow-control`, `-card`, `-marker`, `-pop`, `-sheet` | `shadow-control`, `shadow-card`, `shadow-pop`, `shadow-sheet` |
 | Darkness | `--p-scrim` (behind a modal sheet), `--p-shade` (deepens terracotta under a white digit) | `bg-parranda-scrim`, `bg-parranda-shade` |
 | Stacking | `--p-z-raised`, `-popover`, `-map-control`, `-map-tooltip`, `-map-overlay`, `-sheet`, low to high | `z-(--p-z-…)` |
-| Text sizes | `text-10/11/13/15/17` in `tailwind.css` (rem) | next to Tailwind's `text-xs`, `sm`, `base`, `lg` |
+| Text sizes | `text-10/11/13/15/17` in `tailwind.css` (rem) | a numbered size with no `--text-N` in `@theme` produces no CSS; a contract test fails on one |
+| Motion | `--p-ease-out` (the one entrance curve); keyframes `parranda-panel-in`, `parranda-ring-once` | `ease-parranda`, `motion-safe:animate-panel-in`, `motion-safe:animate-ring-once` |
 | Type roles | `type-display`, `type-title`, `type-eyebrow`, `type-data` — one family, Archivo: wide for display, narrow (88 %) with lining tabular figures for labels and data, in the case they are written in | |
 
 Never write an ink percentage (`parranda-ink/68`), an arbitrary opacity
@@ -30,19 +31,91 @@ test fails if one appears. Other roles keep Tailwind's opacity modifiers
 
 | Helper | Use for |
 |---|---|
-| `buttonClass(tone, size)` | Buttons and button-looking links. Tones: `primary` (the one filled action), `secondary` (a soft fill), `quiet` (words only; a fill under the pointer), `live`, `dashed` (optional, not part of the day). |
+| `buttonClass(tone, size)` | Buttons and button-looking links. Tones: `primary` (the one filled action), `secondary` (a soft fill), `quiet` (words only; a fill under the pointer), `live`, `dashed` (optional, not part of the day). Press feedback is built in. |
+| `pressable` | Press feedback for a button or pill: named-property transition, `motion-safe:active:scale-[0.97]`. In every helper below; write it yourself only on a hand-built control. |
+| `pressRow` | Press feedback for a full-width row on paper: the fill deepens, nothing scales. |
+| `controlPill44` | The 44px control pill: Change place, Adjust, Follow, See all live, Expand map. |
 | `busyButton(busy, onClick)` | A button that is working. Spread it instead of `disabled`. |
 | `pillClass(active)`, `choiceOn` / `choiceOff` | A choice among several (Live's Where, interests): ink when chosen, a soft fill when not. |
-| `controlTone` | A standalone control that is not the surface's filled action (Change, Adjust, Follow). |
+| `controlTone` | The colours and press of `controlPill44`, for a control that sizes itself. |
 | `segmentGroup` + `segmentClass(active)` | Mutually exclusive choices drawn as one control (Today/Tomorrow, rhythm, When, Order). |
 | `compactPillTarget` | A 36px control that keeps a 44px target. |
 | `labelChip` | A fact or status, never a control: day facts, pick coverage, Live tags. |
 | `inlineLinkTarget` + `ExternalLinkText` | A link inside running text that leaves Parranda. |
 | `noticeCard`, `panelCard` | Notices and grouped panels. |
-| `Eyebrow`, `DataLine` / `dataLine` | Section labels and mono fact lines. |
+| `Eyebrow`, `DataLine` / `dataLine` | Section labels (`dot`: the live dot, which rings once) and narrow fact lines. |
+
+## Type — five roles
+
+Every element is one of these. `text-sm` and `font-extrabold` are retired
+outside the primary action.
+
+| Role | Classes | Used for |
+|---|---|---|
+| Title | `type-title`; section titles `type-title text-xl` | the day's h1, "Live in …" |
+| Name | `text-17 font-bold leading-tight` | stop names, live event names, aside-row titles |
+| Body | `text-15 leading-relaxed` (600 for a kicker or emphasis) | the facts sentence, the idea, an excerpt, a fit sentence |
+| Meta | `type-data text-13 text-parranda-ink-meta` (`dataLine`); a number may be `text-parranda-ink` | date and weather, walk legs, subtitles, facts, the picks rhythm |
+| Micro | `text-11 text-parranda-ink-meta` | photo and excerpt credits only |
+
+Controls are `text-13 font-bold`. The one exception is the terracotta
+action, `text-17 font-extrabold`. The landing keeps `type-display`.
+
+## Surfaces — two recipes on paper
+
+| Recipe | Classes | Used for |
+|---|---|---|
+| Panel | `panelCard`: `bg-parranda-surface shadow-card rounded-parranda` | the Adjust panel, the Live card, the Blitz result, notices (`noticeCard`) |
+| Fill | `bg-parranda-fill`, `fill-strong` under the pointer | controls and aside rows |
+
+Exceptions carry a meaning: a dashed `border-parranda-line-firm` frame is
+"not in the day" (detours only); the woven live stop keeps its live tint; the
+open stop sits on a `fill-faint` backdrop. A hairline (`border-t-line`,
+`border-y-line`, `line-faint`) only divides, or edges a photo. No other
+outlined boxes. Map controls (`.maplibregl-ctrl-group`, RouteMap's own
+buttons) are a raised `surface` on `shadow-control`, without a frame.
+
+## Buttons — one filled action per surface
+
+| Rank | Look | Examples |
+|---|---|---|
+| Primary | `buttonClass("primary")`, terracotta; on the Live card `live` | Open route in Maps, Build my day; Plan with this event |
+| Secondary | `buttonClass("secondary")`, a soft fill | Open in Maps, Website, Save, Share |
+| Control pill | `controlPill44` (44px) | Change place, Adjust, Follow, See all live, Expand map |
+| Quiet | `buttonClass("quiet")`, words with a fill under the pointer | Keep this one, Replace, Remove |
+| Inline link | text with `inlineLinkTarget` | More |
+
+## Photos
+
+| Where | Shape |
+|---|---|
+| Stop row | 56×56 (`h-14 w-14`), 1:1, `rounded-parranda-btn` |
+| Open stop | 3:2, full panel width, `rounded-parranda-btn`; on a phone it runs to the right screen edge |
+| Both | an inner hairline: `after:absolute after:inset-0 after:rounded-[inherit] after:border-line after:border-parranda-line-faint after:content-['']`, so a pale sky never dissolves into paper |
+| No photo, on a day with photos | the same 56px slot holds only the bare 20px family glyph in `ink-meta`: a sign, not a fake image |
+| A day with no photos | no media column at all |
+
+Never pad with stand-ins, a grey tile or a city's stock image: absence is honest.
+
+## Motion
+
+Everything moves under `motion-safe:`, and only named properties
+transition: never bare `transition` or `transition-all`. Tailwind 4's
+`scale-*`, `rotate-*` and `translate-*` set their own CSS properties, so
+transition `scale` (or use `transition-transform`, which covers all three),
+not `transform` alone.
+
+| What | How |
+|---|---|
+| Press | `pressable` on buttons and pills (150ms, `active:scale-[0.97]`); `pressRow` on full-width rows (the fill deepens, no scale) |
+| Enter | `motion-safe:animate-panel-in`: opacity and the last 4px, 180ms on `--p-ease-out`, when the Adjust panel or an open stop mounts. Enter only. |
+| Chevrons | `transition-transform duration-200 ease-out`. A disclosure that opens in place points down and turns 180°; a row that runs an action points right and nudges `group-hover:translate-x-0.5`; stop rows turn 90°. |
+| Once, not forever | `motion-safe:animate-ring-once`: a ring leaves a mark once (600ms) and fades: the current station, the live dot. A mark of another colour than ember sets `--p-ring-rgb`. No new infinite animation; the loading sheen, breathing stations, drawing ring and route redraw are the existing exceptions. |
 
 ## Rules
 
+- **Ember is the route.** Ember draws the line, its stations and the live
+  dot, and nothing else: no ember text, chevron, check, quote rule or frame.
 - **Circles are stations.** The day's stations, the map's stop markers and
   the ring in the wordmark are the only circles. Everything you press or read
   as a label is a soft rectangle: controls `rounded-parranda-btn`, tags and
