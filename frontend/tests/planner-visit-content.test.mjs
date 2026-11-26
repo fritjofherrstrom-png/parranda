@@ -28,7 +28,8 @@ for (const lang of ['sv', 'en']) test(`${lang} source-backed visit content is av
   const factualNote = lang === 'sv' ? /Picassos tidiga utveckling/ : /Picasso’s early work/;
   const category = row.querySelector('[data-stop-category]');
   assert.ok(category);
-  assert.match(category.className, /rounded-parranda-tag/);
+  assert.match(category.className, /\btype-data\b/, 'the kind is a meta fact line');
+  assert.doesNotMatch(category.className, /\bbg-parranda-fill\b/, 'not a filled chip');
   assert.doesNotMatch(row.textContent, factualNote);
   await h.act(() => row.dispatchEvent(new h.window.MouseEvent('click', { bubbles: true })));
   const panel = h.container.querySelector('#' + row.getAttribute('aria-controls'));

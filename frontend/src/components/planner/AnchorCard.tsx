@@ -7,7 +7,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { MAX_PLANNER_PREFERENCES, normalizePreferencePriority } from "../../../../shared/planner-intent.mjs";
 import { CheckIcon, ChevronDownIcon, LocationIcon, UndoIcon } from "../shared/icons";
-import { buttonClass, compactPillTarget, controlTone, Eyebrow, noticeCard, panelCard, segmentClass, segmentGroup } from "../shared/ui";
+import { buttonClass, choiceOff, choiceOn, compactPillTarget, controlTone, Eyebrow, noticeCard, panelCard, pressable, segmentClass, segmentGroup } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
 import InterestChooser, { type InterestSelection } from "./InterestChooser";
@@ -172,7 +172,7 @@ export default function AnchorCard({
       className={compact && summary ? rowControl : controlPill}
     >
       {t("Klar", "Done")}
-      {compact && summary && <ChevronDownIcon className="h-3.5 w-3.5 rotate-180" />}
+      {compact && summary && <ChevronDownIcon className="h-3.5 w-3.5 rotate-180 transition-transform duration-200 ease-out" />}
     </button>
   );
   return (
@@ -183,11 +183,12 @@ export default function AnchorCard({
           Change, so only which day, the picks and Adjust stay here: one
           plain row under the heading, no card of its own. */}
       {!compact && (
-        <div className="flex min-h-14 flex-wrap items-center gap-2.5 py-1.5 pl-4 pr-1.5">
-          <LocationIcon className="h-4 w-4 text-parranda-ember" />
+        <div className="flex min-h-14 flex-wrap items-center gap-2 py-2 pl-4 pr-2">
+          {/* Ember is the route's alone: the place's pin is ink. */}
+          <LocationIcon className="h-4 w-4 text-parranda-ink-soft" />
           {/* Wraps rather than truncates: at large text sizes "· tomorrow" was
               cut off. Below ~10rem the row wraps and Change moves under it. */}
-          <span className="min-w-[min(100%,10rem)] flex-1 break-words text-base font-extrabold text-parranda-ink">
+          <span className="min-w-[min(100%,10rem)] flex-1 break-words text-17 font-bold leading-tight text-parranda-ink">
             {anchorLabel}
             <span className="font-medium text-parranda-ink-meta">
               {" · "}
@@ -204,11 +205,12 @@ export default function AnchorCard({
       {(compact || !adjustOpen) && (
         <div className={compact
           ? summary
-            // Linje 2 board: a framed row, and the whole row is Adjust (the
-            // button's ::after stretches over it; the picks stay a list).
-            ? "group relative flex min-h-14 items-center gap-2 rounded-parranda-btn border-line border-parranda-line bg-parranda-fill-faint py-2 pl-3.5 pr-1.5 transition press-within hover:bg-parranda-fill"
+            // A settings line, not a form field: no frame, no fill, and the
+            // whole row is Adjust (the button's ::after stretches over it;
+            // the picks stay a list). The pill alone answers the pointer.
+            ? "group relative flex min-h-12 items-start gap-2 py-1"
             : "flex min-h-9 items-center justify-between gap-3"
-          : "flex min-h-12 flex-wrap items-center gap-2.5 border-t-line border-parranda-line-faint py-1.5 pl-4 pr-1.5"}>
+          : "flex min-h-12 flex-wrap items-center gap-2 border-t-line border-parranda-line-faint py-2 pl-4 pr-2"}>
           {/* Compact, one even line in the title's quiet voice: the day, then
               the picks and the rhythm. The card form keeps the picks in bold
               under the place it names. */}
@@ -234,7 +236,7 @@ export default function AnchorCard({
               className={compact && summary ? rowControl : controlPill}
             >
               {t("Justera", "Adjust")}
-              {compact && summary && <ChevronDownIcon className="h-3.5 w-3.5" />}
+              {compact && summary && <ChevronDownIcon className="h-3.5 w-3.5 transition-transform duration-200 ease-out" />}
             </button>
           )}
         </div>
@@ -245,7 +247,7 @@ export default function AnchorCard({
           {notice.announce
             ? <p role="status" ref={interestNotice} tabIndex={hasInterestSuggestion ? -1 : undefined}>{notice.message}</p>
             : <div>{notice.message}</div>}
-          {notice.attemptedLabels && <p className="text-xs text-parranda-ink-muted">{notice.attemptedLabels}</p>}
+          {notice.attemptedLabels && <p className="text-13 text-parranda-ink-muted">{notice.attemptedLabels}</p>}
           {notice.action === "restart" && notice.restartHref && (
             <p>{t("Den sparade dagen kan inte uppdateras säkert. ", "We cannot safely update this saved day. ")}
               <a href={notice.restartHref} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">
@@ -260,25 +262,25 @@ export default function AnchorCard({
                   interestTrigger.current = retryInterestsButton.current;
                   setAdjustOpen(true);
                   setInterestChooserOpen(true);
-                }} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                }} className={buttonClass("secondary", "min-h-11 px-4 text-13")}>
                   {t("Ändra intressen", "Edit interests")}
                 </button>
               )}
               {notice.action === "retry" && notice.onRetry && (
-                <button type="button" onClick={notice.onRetry} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
+                <button type="button" onClick={notice.onRetry} className={buttonClass("primary", "min-h-11 px-4 text-13")}>
                   {t("Försök igen", "Try again")}
                 </button>
               )}
               {notice.onUndo && (
                 <button type="button" onClick={notice.onUndo}
                   aria-label={hasInterestSuggestion ? undefined : t("Ångra ändringen", "Undo this change")}
-                  className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                  className={buttonClass("secondary", "min-h-11 px-4 text-13")}>
                   {!hasInterestSuggestion && <UndoIcon className="h-3.5 w-3.5" />}
                   {hasInterestSuggestion ? t("Behåll min dag", "Keep current day") : t("Ångra", "Undo")}
                 </button>
               )}
               {notice.onUseSuggestion && (
-                <button type="button" onClick={notice.onUseSuggestion} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                <button type="button" onClick={notice.onUseSuggestion} className={buttonClass("secondary", "min-h-11 px-4 text-13")}>
                   {t("Använd förslaget", "Use suggested day")}
                 </button>
               )}
@@ -288,7 +290,7 @@ export default function AnchorCard({
       )}
 
       {adjustOpen && (
-        <div id={panelId} className={compact ? `reveal ${panelCard} mt-2 flex flex-col gap-5 p-4` : "reveal flex flex-col gap-5 border-t-line border-parranda-line-faint p-4"}>
+        <div id={panelId} className={compact ? `${panelCard} mt-2 flex flex-col gap-5 p-4 motion-safe:animate-panel-in` : "flex flex-col gap-5 border-t-line border-parranda-line-faint p-4"}>
           {/* The status line, then Done (in the card form; compact, Done
               stands in the line above): the panel needs no title of its own,
               the row it opened from says what it adjusts. */}
@@ -298,24 +300,24 @@ export default function AnchorCard({
                   this line is where the reader learns the day is rebuilding,
                   then what the rebuild changed. */}
               {rebuild?.state === "updating" ? (
-                <p data-adjust-rebuild="updating" className="flex items-center gap-2 text-xs font-bold text-parranda-clay">
+                <p data-adjust-rebuild="updating" className="flex items-center gap-2 text-13 font-bold text-parranda-clay">
                   <RingMark className="h-3 w-3" />
                   {t("Uppdaterar dagen …", "Updating your day …")}
                 </p>
               ) : rebuild?.state === "updated" ? (
-                <p data-adjust-rebuild="updated" className="flex items-start gap-1.5 text-xs leading-snug text-parranda-ink-muted">
-                  <CheckIcon className="mt-px h-3 w-3 shrink-0 text-parranda-ember" />
+                <p data-adjust-rebuild="updated" className="flex items-start gap-1.5 text-13 leading-snug text-parranda-ink-muted">
+                  <CheckIcon className="mt-0.5 h-3 w-3 shrink-0 text-parranda-ink-soft" />
                   <span>
                     <span className="font-bold text-parranda-ink">{t("Uppdaterad", "Updated")}: </span>
                     {rebuild.summary}
                   </span>
                 </p>
               ) : rebuild?.state === "failed" ? (
-                <p data-adjust-rebuild="failed" className="text-xs font-semibold text-parranda-clay">
+                <p data-adjust-rebuild="failed" className="text-13 font-semibold text-parranda-clay">
                   {t("Kunde inte uppdatera — din förra dag visas.", "Couldn't update — your previous day is shown.")}
                 </p>
               ) : (
-                <p className="text-xs text-parranda-ink-meta">
+                <p className="text-13 text-parranda-ink-meta">
                   {onApplyInterests
                     ? t("Snabbval, datum och rytm uppdaterar dagen direkt.", "Quick choices, date and rhythm update the day as you change them.")
                     : t("Dagen byggs om direkt när du ändrar.", "The day rebuilds as you change it.")}
@@ -346,7 +348,7 @@ export default function AnchorCard({
                 {t("Alla intressen", "All interests")}
               </button>}
             </div>
-            <p id={priorityHelpId} className="text-xs text-parranda-ink-meta">
+            <p id={priorityHelpId} className="text-13 leading-snug text-parranda-ink-meta">
               {priority.length > 0
                 ? t("Siffrorna visar ordningen du valde i. Ettan väger tyngst.", "Numbers show the order you picked. 1 weighs most.")
                 : t("Tryck av och på ett intresse för att låta det väga tyngst.", "Tap an interest off and on to make it weigh most.")}
@@ -371,9 +373,7 @@ export default function AnchorCard({
                       }}
                       className={
                         `${compactPillTarget} gap-1.5 px-3.5${ring(`pick:${pref.key}`)} aria-disabled:opacity-60 ` +
-                        (active
-                          ? "bg-parranda-ink font-bold text-parranda-paper"
-                          : "bg-parranda-fill font-semibold text-parranda-ink-soft hover:bg-parranda-fill-strong hover:text-parranda-ink")
+                        (active ? choiceOn : choiceOff)
                       }
                     >
                       {active && (rank
@@ -389,7 +389,7 @@ export default function AnchorCard({
               <button
                 type="button"
                 onClick={onClearPriority}
-                className="inline-flex min-h-11 self-start items-center text-xs font-semibold text-parranda-ink-muted underline underline-offset-2 hover:text-parranda-clay"
+                className="inline-flex min-h-11 self-start items-center text-13 font-semibold text-parranda-ink-muted underline underline-offset-2 transition-[color] duration-150 ease-out hover:text-parranda-ink"
               >
                 {t("Rensa ordningen", "Clear order")}
               </button>
@@ -430,9 +430,7 @@ export default function AnchorCard({
                     `${compactPillTarget} shrink-0 gap-1.5 px-3${ring(`rhythm:${free.key}`)} ` +
                     // A choice like the moods above. The dashed tone means
                     // "optional, not part of the day" (ui.tsx), which a rhythm is not.
-                    (walkKey === free.key
-                      ? "bg-parranda-ink font-bold text-parranda-paper"
-                      : "bg-parranda-fill font-semibold text-parranda-ink-soft hover:bg-parranda-fill-strong hover:text-parranda-ink")
+                    (walkKey === free.key ? choiceOn : choiceOff)
                   }
                 >
                   {walkKey === free.key && <CheckIcon className="h-3 w-3" />}
@@ -457,8 +455,8 @@ export default function AnchorCard({
                       onSetRhythm(preset.key);
                     }}
                     className={
-                      "min-h-11 rounded-parranda-btn px-2 text-13 leading-tight transition" + ring(`rhythm:${preset.key}`) + " " +
-                      (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink-muted hover:text-parranda-ink")
+                      `min-h-11 rounded-parranda-btn px-2 text-13 leading-tight ${pressable}` + ring(`rhythm:${preset.key}`) + " " +
+                      (active ? "bg-parranda-ink font-bold text-parranda-paper" : "font-semibold text-parranda-ink-muted hover:text-parranda-ink active:bg-parranda-fill-strong")
                     }
                   >
                     {lang === "en" ? preset.en : preset.sv}
@@ -467,7 +465,7 @@ export default function AnchorCard({
               })}
             </div>
             {current && (
-              <p className="text-13 leading-snug text-parranda-ink-muted" aria-live="polite">
+              <p className="text-13 leading-relaxed text-parranda-ink-muted" aria-live="polite">
                 <strong className="font-bold text-parranda-ink">{lang === "en" ? current.en : current.sv}:</strong>{" "}
                 {lang === "en" ? current.noteEn : current.noteSv}
               </p>
@@ -482,19 +480,44 @@ export default function AnchorCard({
 }
 
 /**
- * Change, Adjust and Done are the day's controls; they look alike: plain words
- * on a soft 36px rectangle with a 44px touch target, like the stops' Follow.
+ * Adjust and Done where there is no picks row (the card before a day, a day
+ * without a summary), and All interests: plain words on a soft 36px rectangle
+ * with a 44px touch target. Same tone as the 44px pills, one rank of control.
  */
 const controlPill = `${compactPillTarget} shrink-0 gap-1.5 px-3.5 ${controlTone}`;
+
+/**
+ * Adjust and Done inside the picks row: the same 44px pill as Change place,
+ * and the whole row is its target (::after stretches over the row). The row
+ * has no fill of its own, so the pill answers the pointer anywhere on it.
+ * No press scale here: a scaled button becomes the ::after's containing
+ * block, so the row-wide target would shrink to the pill mid-press and a
+ * release over the picks would lose the click. The fill deepens instead.
+ */
+const rowControl = "inline-flex min-h-11 shrink-0 items-center gap-1.5 self-start rounded-parranda-btn bg-parranda-fill px-3 text-13 font-bold text-parranda-ink " +
+  "transition-[background-color,color] duration-150 ease-out group-hover:bg-parranda-fill-strong active:bg-parranda-fill-strong " +
+  "after:absolute after:inset-0 after:rounded-parranda-btn after:content-['']";
+
+/** Change place's mark: one way there, one way back. Decorative; the link says it in words. */
+function SwapIcon() {
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+      strokeLinecap="round" strokeLinejoin="round" className="inline-block h-3.5 w-3.5 shrink-0">
+      <path d="M7 4 3 8l4 4" />
+      <path d="M3 8h14" />
+      <path d="m17 20 4-4-4-4" />
+      <path d="M21 16H7" />
+    </svg>
+  );
+}
 
 /**
  * "Change": back to the landing for another place. A plain left-click lets the
  * planner cancel work it no longer needs; the link still works on its own.
  * Beside the day's title once a day is on screen, in the card before that.
+ * A pill like Adjust, never an underline: it changes this page's place, it
+ * does not read as navigating away. 44px tall itself.
  */
-/** Adjust and Done inside the picks row: words and a chevron, the row is the surface. */
-const rowControl = "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-parranda-btn px-3 text-15 font-extrabold text-parranda-ink after:absolute after:inset-0 after:rounded-parranda-btn after:content-['']";
-
 export function ChangePlaceLink({ t, lang, onChangePlace }: { t: Translate; lang: Lang; onChangePlace: () => void }) {
   return (
     <a
@@ -505,9 +528,22 @@ export function ChangePlaceLink({ t, lang, onChangePlace }: { t: Translate; lang
         }
       }}
       aria-label={t("Byt plats", "Change place")}
-      className="inline-flex min-h-11 shrink-0 items-center text-sm font-bold text-parranda-ink-soft underline decoration-[1.5px] underline-offset-4 transition hover:text-parranda-ink"
+      className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-parranda-btn px-3 text-13 bg-parranda-fill font-bold text-parranda-ink hover:bg-parranda-fill-strong active:bg-parranda-fill-strong transition-[scale,background-color,color,filter] duration-150 ease-out motion-safe:active:scale-[0.97]"
     >
-      {t("Byt plats", "Change place")}
+      <SwapIcon />
+      {/* Beside the day's title (an @container row), a row narrower than
+          20rem keeps only the glyph: on a 320px phone the words left
+          "UPPSALA" too narrow for itself (it broke as "UPPSAL A"), and at
+          200% text the title had no room at all. The name stays for
+          assistive tech; the rem threshold tracks the text size. */}
+      {/* The visible word is always the short one ("Change" / "Byt"), so a
+          long single-word place like GOTHENBURG keeps its title on one
+          line on desktop as well as on a phone. The second word stays for
+          assistive tech, so the link's text is still "Change place". */}
+      <span className="@max-[20rem]:sr-only">
+        {t("Byt", "Change")}
+        <span className="sr-only">{t(" plats", " place")}</span>
+      </span>
     </a>
   );
 }

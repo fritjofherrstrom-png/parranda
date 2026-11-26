@@ -198,12 +198,25 @@ test('native composed day preserves dominance, removal/reload, replacement, refu
     const beforeRemoval = ids(saved);
     const list = page.locator('ol[aria-label="Stoppen i ordning"]');
     await list.locator(':scope > li > button').first().click();
-    // The open stop settles into place (a CSS transition; the page's looping
-    // indicators keep running): measure it where it lands.
-    await page.waitForFunction(() => document.getAnimations().every(animation => !(animation instanceof CSSTransition) || animation.playState !== 'running'));
-    const removeBox = await page.getByRole('button', { name: 'Ta bort', exact: true }).boundingBox();
-    const replaceBox = await page.getByRole('button', { name: 'Byt', exact: true }).boundingBox();
-    assert.ok(removeBox && replaceBox && Math.abs(removeBox.y - replaceBox.y) <= 1, 'mobile edit controls share a row');
+    // The opened panel rises 4px as it fades in, carrying both controls with
+    // it. Read both boxes in one frame, once that entry has settled, so the
+    // row check compares layout rather than two moments of the same motion.
+    const removeHandle = await page.getByRole('button', { name: 'Ta bort', exact: true }).elementHandle();
+    const replaceHandle = await page.getByRole('button', { name: 'Byt', exact: true }).elementHandle();
+    const [removeBox, replaceBox] = await page.evaluate(async controls => {
+      const animations = controls.flatMap(control => {
+        const found = [];
+        for (let node = control; node; node = node.parentElement) found.push(...node.getAnimations());
+        return found;
+      });
+      await Promise.allSettled(animations.map(animation => animation.finished));
+      return controls.map(control => {
+        const rect = control.getBoundingClientRect();
+        return { y: rect.y, height: rect.height };
+      });
+    }, [removeHandle, replaceHandle]);
+    assert.ok(Math.abs(removeBox.y - replaceBox.y) <= 1,
+      `mobile edit controls share a row (Ta bort y=${removeBox.y}, Byt y=${replaceBox.y})`);
     assert.ok(removeBox.height >= 44 && replaceBox.height >= 44);
     if (evidence) await list.locator(':scope > li').first().screenshot({ path: path.join(evidence, 'stop-actions-mobile.png') });
     await page.getByRole('button', { name: 'Ta bort', exact: true }).click();

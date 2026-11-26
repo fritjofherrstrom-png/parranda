@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 
 /**
  * The shape of the day that is coming, in the order the day lands: the
- * compact title, then — on a phone — the map's short overview, the day's
- * facts and the stops on their line. Wide screens hold the map's column with
+ * compact title, the day's facts, then — on a phone — the map's short
+ * overview, and the stops on their line. Wide screens hold the map's column with
  * DayMapPlaceholder instead, so the day arrives where its shape stood rather
  * than jumping down or sideways.
  *
@@ -42,23 +42,21 @@ export default function DayPlaceholder({ status, inlineMap = true, part = "all" 
 
   const body = (
       <div aria-hidden="true" className={"flex flex-col" + (part === "body" ? "" : " mt-4")}>
-        {/* On a phone the map's overview comes first, the strip it will be. */}
-        {inlineMap && <div data-day-shape="map" className={`${shape} mb-4 h-52 rounded-parranda`} />}
-        <div className="flex flex-wrap gap-1.5">
-          <div className={`${bar} h-6 w-28`} />
-          <div className={`${bar} h-6 w-16`} />
+        {/* The day's facts: its sentence, then the date and weather line. A
+            note on missing sources only stands when a source fell short, so
+            the shape leaves it out: it is the healthy day that should land
+            without moving. */}
+        <div className="flex flex-col gap-2">
+          <div className={`${bar} h-4 w-3/4`} />
+          <div className={`${bar} h-3 w-1/2`} />
         </div>
-        {/* What the day did for each pick. A note on missing sources only
-            stands when a source fell short, so the shape leaves it out: it
-            is the healthy day that should land without moving. */}
-        <div className="mt-1.5 flex flex-wrap gap-2">
-          <div className={`${bar} h-6 w-28`} />
-          <div className={`${bar} h-6 w-20`} />
-          <div className={`${bar} h-6 w-24`} />
-        </div>
-        <div className="mb-2 mt-4 flex min-h-9 items-center justify-between gap-3">
-          <div className={`${bar} h-3 w-36`} />
-          <div className={`${bar} h-9 w-32`} />
+        {/* On a phone the map's overview follows, the strip it will be: the
+            same height, and below 640px the same edge-to-edge band. */}
+        {inlineMap && <div data-day-shape="map" className={`${shape} mt-6 h-60 rounded-parranda max-sm:-mx-4 max-sm:rounded-none`} />}
+        {/* The line's heading row: the daypart, Follow beside it. */}
+        <div className="mb-1 mt-4 flex min-h-11 items-center justify-between gap-3 pl-14">
+          <div className={`${bar} h-3 w-24`} />
+          <div className={`${bar} h-9 w-28`} />
         </div>
         <div
           data-day-shape="stations"
@@ -67,23 +65,26 @@ export default function DayPlaceholder({ status, inlineMap = true, part = "all" 
           {NAME_WIDTHS.map((width, index) => (
             <div key={index} className="flex flex-col">
               {index > 0 && (
-                <div className="flex min-h-10 items-center pl-14">
-                  <div className={`${bar} h-2.5 w-24`} />
+                <div className="flex min-h-8 items-center pl-14">
+                  <div className={`${bar} h-2.5 w-20`} />
                 </div>
               )}
-              <div className="flex min-h-16 items-center gap-3.5 py-2">
-                {/* Paper under the disc, so the line stops at the station. Each
-                    disc breathes, a beat after the one above it. */}
-                <div className="relative z-(--p-z-raised) h-11 w-11 shrink-0 rounded-full bg-parranda-paper">
-                  <div
-                    data-day-station=""
-                    className="h-full w-full rounded-full bg-parranda-fill motion-safe:animate-[parranda-breathe_2.8s_ease-in-out_infinite]"
-                    style={{ animationDelay: `${index * 300}ms` }}
-                  />
+              <div className="flex min-h-16 items-center gap-3 py-2">
+                {/* The station the row will hold: a 32px disc in its 44px
+                    slot, on paper so the line stops at it. Each disc
+                    breathes, a beat after the one above it. */}
+                <div className="relative z-(--p-z-raised) flex h-11 w-11 shrink-0 items-center justify-center rounded-full">
+                  <div className="h-8 w-8 rounded-full bg-parranda-paper">
+                    <div
+                      data-day-station=""
+                      className="h-full w-full rounded-full bg-parranda-fill motion-safe:animate-[parranda-breathe_2.8s_ease-in-out_infinite]"
+                      style={{ animationDelay: `${index * 300}ms` }}
+                    />
+                  </div>
                 </div>
-                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <div className="flex min-w-0 flex-1 flex-col gap-2 pl-2">
                   <div className={`${bar} h-4`} style={{ width }} />
-                  <div className={`${bar} h-5 w-20`} />
+                  <div className={`${bar} h-3 w-24`} />
                 </div>
               </div>
             </div>
@@ -102,13 +103,22 @@ export default function DayPlaceholder({ status, inlineMap = true, part = "all" 
   );
 }
 
-/** The wide-screen map column while the day composes: the same sticky frame the map will fill. */
+/**
+ * The wide-screen map pane: the grid's second column, from the window's top
+ * edge to its bottom, held still while the day scrolls beside it. Its one
+ * hairline is its left edge. The planner's "Map of the day" aside and the
+ * pane's placeholder share it, so the map lands exactly where its shape stood.
+ */
+export const MAP_PANE =
+  "col-start-2 row-span-2 row-start-1 sticky top-0 h-dvh self-start border-l-line border-parranda-line-faint";
+
+/** The wide-screen map pane while the day composes: the same pane the map will fill. */
 export function DayMapPlaceholder() {
   return (
     <div
       aria-hidden="true"
       data-day-shape="map-column"
-      className={`${shape} sticky top-4 h-[calc(100dvh-2rem)] min-h-[30rem] rounded-parranda`}
+      className={`${shape} ${MAP_PANE}`}
     />
   );
 }

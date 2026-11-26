@@ -11,7 +11,8 @@ import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { eventSourceLink } from "../../lib/pulse-view.mjs";
 import LiveEventTiming from "./LiveEventTiming";
 import { BoltIcon, ChevronRightIcon, ExternalIcon } from "../shared/icons";
-import { busyButton, buttonClass, Eyebrow } from "../shared/ui";
+import { useId } from "react";
+import { busyButton, buttonClass, dataLine, Eyebrow, panelCard } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 
 function placeHoursNote(move: BlitzMoveView, t: Translate) {
@@ -45,56 +46,69 @@ export default function BlitzCard({
   blitzResult: AnywhereBlitzView | null;
   typedPlaceLabel: string;
 }) {
+  const captionId = useId();
+  const caption = blitzPhase === "idle"
+    ? (mode === "near_me"
+        ? t("Ett förslag nära dig, just nu", "One idea near you, right now")
+        : t(`Ett förslag i ${anchorLabel}, just nu`, `One idea in ${anchorLabel}, right now`)) +
+      (dayOnScreen ? t(" — din dag ändras inte.", " — your day stays as it is.") : ".")
+    : null;
   return (
     <div className="flex flex-col gap-3 wrap-anywhere">
-      {/* A row, not a call to action: Blitz is an aside to the day. */}
-      <button
-        type="button"
-        {...busyButton(blitzPhase === "loading" || blitzPhase === "locating", blitz)}
-        className="flex min-h-13 w-full items-center gap-2.5 rounded-parranda-btn bg-parranda-fill px-4 text-left text-15 font-bold text-parranda-ink transition hover:bg-parranda-fill-strong aria-disabled:opacity-60"
-      >
-        <BoltIcon className="h-4 w-4 shrink-0 text-parranda-glow" />
-        <span className="min-w-0 flex-1">{blitzPhase === "loading" ? t("Läser läget …", "Reading the moment …") : t("Blitz just nu", "Blitz right now")}</span>
-        <ChevronRightIcon className="h-4 w-4 shrink-0 text-parranda-ink-meta" />
-      </button>
-      {blitzPhase === "idle" && (
-        <p className="-mt-1.5 px-4 text-13 text-parranda-ink-meta">
-          {mode === "near_me"
-            ? t("Ett förslag nära dig, just nu", "One idea near you, right now")
-            : t(`Ett förslag i ${anchorLabel}, just nu`, `One idea in ${anchorLabel}, right now`)}
-          {dayOnScreen ? t(" — din dag ändras inte.", " — your day stays as it is.") : "."}
-        </p>
-      )}
+      {/* A row, not a call to action: Blitz is an aside to the day. The row
+          is one button (bolt, name, a chevron that nudges toward the action);
+          its caption sits right under it as the button's description, the
+          same Meta line Detours carries under its row. The button's text
+          stays its name alone. */}
+      <div className="flex flex-col gap-1">
+        <button
+          type="button"
+          {...busyButton(blitzPhase === "loading" || blitzPhase === "locating", blitz)}
+          className="group flex min-h-13 w-full items-center gap-3 rounded-parranda-btn bg-parranda-fill px-4 py-3 text-left transition-[background-color,color] duration-150 ease-out hover:bg-parranda-fill-strong active:bg-parranda-fill-strong aria-disabled:opacity-60 aria-busy:cursor-progress"
+          aria-describedby={caption ? captionId : undefined}
+        >
+          <BoltIcon className="h-5 w-5 shrink-0 text-parranda-glow" />
+          <span className="min-w-0 flex-1 text-17 font-bold leading-tight text-parranda-ink">
+            {blitzPhase === "loading" ? t("Läser läget …", "Reading the moment …") : t("Blitz just nu", "Blitz right now")}
+          </span>
+          <ChevronRightIcon className="h-4 w-4 shrink-0 text-parranda-ink-meta transition-transform duration-200 ease-out motion-safe:group-hover:translate-x-0.5" />
+        </button>
+        {caption && (
+          <p id={captionId} className={`${dataLine} px-4 text-pretty`}>
+            {caption}
+          </p>
+        )}
+      </div>
       {blitzPhase !== "idle" && (
-        <section className="rounded-parranda border-line border-parranda-line-faint bg-parranda-fill-faint p-4" aria-live="polite">
+        <section className={`${panelCard} p-4 motion-safe:animate-panel-in`} aria-live="polite">
           <div className="flex items-center gap-2">
             <BoltIcon className="h-3.5 w-3.5 text-parranda-glow" />
             <Eyebrow tone="glow">{t("Blitz just nu", "Blitz right now")}</Eyebrow>
           </div>
           {blitzPhase === "loading" && (
-            <p className="mt-2 text-sm text-parranda-ink-muted">
+            <p className="mt-2 text-15 leading-relaxed text-parranda-ink-muted">
               {t("Läser tiden, platsen och vad som händer nära dig …", "Reading the time, place and what is happening nearby …")}
             </p>
           )}
           {(blitzPhase === "position_needed" || blitzPhase === "locating") && (
             <div className="mt-2 flex flex-col items-start gap-3">
-              <p className="text-sm text-parranda-ink-muted">
+              <p className="text-15 leading-relaxed text-parranda-ink-muted">
                 {t("Blitz behöver din position. Den sparas inte när dagen öppnas igen. Dela den för ett förslag nära dig.", "Blitz needs your location. It isn't kept when a saved day is reopened. Share it for an idea near you.")}
               </p>
-              <button type="button" {...busyButton(blitzPhase === "locating", sharePositionForBlitz)} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+              <button type="button" {...busyButton(blitzPhase === "locating", sharePositionForBlitz)} className={buttonClass("secondary", "min-h-11 px-4 text-13")}>
                 {blitzPhase === "locating" ? t("Hämtar position …", "Getting location …") : t("Dela position för Blitz", "Share position for Blitz")}
               </button>
-              {blitzPositionFailed && <p className="text-sm text-parranda-ink-muted">{t("Positionen kunde inte delas. Försök igen eller välj en plats på startsidan.", "Your position could not be shared. Try again or choose a place on the home page.")}</p>}
+              {blitzPositionFailed && <p className="text-15 leading-relaxed text-parranda-ink-muted">{t("Positionen kunde inte delas. Försök igen eller välj en plats på startsidan.", "Your position could not be shared. Try again or choose a place on the home page.")}</p>}
             </div>
           )}
           {blitzPhase === "error" && (
-            <p className="mt-2 text-sm text-parranda-ink-muted">
+            <p className="mt-2 text-15 leading-relaxed text-parranda-ink-muted">
               {t("Blitz kunde inte läsa läget just nu.", "Blitz could not read the moment right now.")}
               {dayOnScreen ? t(" Din plan är oförändrad.", " Your day is unchanged.") : ""}
             </p>
           )}
           {blitzPhase === "done" && blitzResult?.state === "blocked" && (
-            <p className="mt-2 text-sm text-parranda-ink-muted">
+            <p className="mt-2 text-15 leading-relaxed text-parranda-ink-muted">
               {mode === "near_me"
                 ? t("Inget tillräckligt säkert förslag nära dig just nu.", "No reliable idea near you right now.")
                 : t(
@@ -122,18 +136,18 @@ export default function BlitzCard({
             return (
               <div className="mt-2 flex flex-col gap-3">
                 <div>
-                  <p className="type-title text-2xl text-parranda-ink">{move.title}</p>
+                  <p className="type-title text-xl leading-tight text-parranda-ink">{move.title}</p>
                   {move.kind === "live_event" && <LiveEventTiming event={move} lang={lang} />}
-                  <div className="type-data mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-13 text-parranda-ink-muted">
+                  <div className="type-data mt-2 flex flex-wrap gap-x-3 gap-y-1 text-13 text-parranda-ink-meta">
                     {move.kind === "live_event" && <span>{t("Live-händelse", "Live event")}</span>}
                     {Number.isFinite(move.walking_minutes) && <span>{move.walking_minutes} {t("min till fots", "min walk")}</span>}
                     {move.source.label && <span>{move.source.label}</span>}
                   </div>
                 </div>
                 {move.kind === "place" && (
-                  <p className="text-sm text-parranda-ink-soft">{placeHoursNote(move, t)}</p>
+                  <p className="text-15 leading-relaxed text-parranda-ink-soft">{placeHoursNote(move, t)}</p>
                 )}
-                <p className="text-xs text-parranda-ink-meta">
+                <p className="text-13 leading-relaxed text-parranda-ink-meta">
                   {move.kind === "place"
                     ? dayOnScreen
                       ? t("Ett platsförslag som inte ändrar dagens rutt.", "A place suggestion that doesn't change today's route.")
@@ -144,27 +158,27 @@ export default function BlitzCard({
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {mapsUrl && (
-                    <a href={mapsUrl} target="_blank" rel="noreferrer" className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
+                    <a href={mapsUrl} target="_blank" rel="noreferrer" className={buttonClass("secondary", "min-h-11 px-4 text-13")}>
                       {t("Öppna i Maps", "Open in Maps")}
                       <ExternalIcon />
                     </a>
                   )}
                   {move.kind === "live_event"
                     ? liveSourceLink && (
-                        <a href={liveSourceLink.href} target="_blank" rel="noreferrer" className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                        <a href={liveSourceLink.href} target="_blank" rel="noreferrer" className={buttonClass("secondary", "min-h-11 px-4 text-13")}>
                           <span>{liveSourceLink.text}</span>
                           <ExternalIcon />
                         </a>
                       )
                     : move.source.url && (
-                        <a href={move.source.url} target="_blank" rel="noreferrer" className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+                        <a href={move.source.url} target="_blank" rel="noreferrer" className={buttonClass("secondary", "min-h-11 px-4 text-13")}>
                           {t("Källa", "Source")}
                           <ExternalIcon />
                         </a>
                       )}
                 </div>
                 {secondary && (
-                  <p className="border-t-line border-parranda-line-faint pt-2 text-xs text-parranda-ink-meta">
+                  <p className="border-t-line border-parranda-line-faint pt-3 text-13 leading-relaxed text-parranda-ink-meta">
                     {secondary.kind === "live_event" ? t("Senare i närheten: ", "Later nearby: ") : t("Annars i närheten: ", "Otherwise nearby: ")}
                     <span className="font-bold text-parranda-ink-soft">{secondary.title}</span>
                     {secondary.kind === "place" && <span className="mt-1 block">{placeHoursNote(secondary, t)}</span>}

@@ -60,12 +60,14 @@ test('map chrome follows the theme even when the MapLibre CSS loads last', { tim
         return {
           ink: token('--p-color-ink'),
           paper: token('--p-color-paper'),
+          surface: token('--p-color-surface'),
           container: getComputedStyle(document.getElementById('map')).backgroundColor,
           attribution: style('attribution').color,
           attributionBackground: getComputedStyle(document.querySelector('.maplibregl-ctrl-attrib')).backgroundColor,
           expectedAttributionBackground: `rgba(${getComputedStyle(document.documentElement).getPropertyValue('--p-color-paper').trim().split(/\s+/).join(', ')}, 0.85)`,
           attributionRules: [...document.styleSheets].flatMap(sheet => [...sheet.cssRules].filter(rule => rule.selectorText && document.querySelector('.maplibregl-ctrl-attrib').matches(rule.selectorText)).map(rule => rule.cssText)),
           group: getComputedStyle(document.querySelector('.maplibregl-ctrl-group')).backgroundColor,
+          groupShadow: getComputedStyle(document.querySelector('.maplibregl-ctrl-group')).boxShadow,
           zoomGlyph: style('zoomIcon').backgroundColor,
           zoomSize: [style('zoom').width, style('zoom').height],
           tooltipBackground: style('tooltip').backgroundColor,
@@ -76,7 +78,11 @@ test('map chrome follows the theme even when the MapLibre CSS loads last', { tim
       assert.equal(seen.attributionBackground, seen.expectedAttributionBackground, `${theme}: attribution background is themed paper, not translucent white`);
       assert.equal(seen.container, seen.paper, `${theme}: map background is paper`);
       assert.equal(seen.attribution, seen.ink, `${theme}: attribution links are ink, not MapLibre grey`);
-      assert.equal(seen.group, seen.paper, `${theme}: zoom control is paper, not MapLibre white`);
+      // Map controls are the raised surface (tailwind.css `map-control`), not
+      // paper: night paper is near the tiles' own black, so a paper control
+      // vanished on a night map. The inset hairline keeps the edge there.
+      assert.equal(seen.group, seen.surface, `${theme}: zoom control is the raised surface, not MapLibre white`);
+      assert.match(seen.groupShadow, /inset/, `${theme}: zoom control keeps an inset hairline edge`);
       assert.equal(seen.zoomGlyph, seen.ink, `${theme}: zoom glyph is ink`);
       assert.deepEqual(seen.zoomSize, ['44px', '44px'], `${theme}: zoom buttons are a thumb's size`);
       assert.equal(seen.tooltipBackground, seen.ink, `${theme}: a stop's name is ink`);

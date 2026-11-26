@@ -124,7 +124,7 @@ export default function CandidateAreas({
                       </button>
                       {kindLabel && <div className="pb-1.5"><StopCategory type={stop.type} label={kindLabel} /></div>}
                       {expanded && (
-                        <div id={candidatePanelId} className="reveal border-t-line border-parranda-line-faint pb-2 pt-2">
+                        <div id={candidatePanelId} className="border-t-line border-parranda-line-faint pb-2 pt-2 motion-safe:animate-panel-in">
                           {facts.length > 0 && <p className="text-xs text-parranda-ink-meta">{facts.join(" · ")}</p>}
                           {url && (
                             <a

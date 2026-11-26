@@ -1,7 +1,7 @@
 import { buildWalkingContinuation } from '../../lib/walking-continuation.mjs';
 import type { RouteEnd, RoutePoint } from '../../lib/maps-links.mjs';
 import { buttonClass } from '../shared/ui';
-import { ExternalIcon, WalkIcon } from '../shared/icons';
+import { ChevronDownIcon, ExternalIcon, WalkIcon } from '../shared/icons';
 import type { Translate } from './copy';
 import type { PositionSession } from './useFollowPosition';
 
@@ -25,9 +25,10 @@ export default function WalkingContinuation({ t, stops, follow, enabled, destina
     : String(end.point.label || end.point.name || '').trim()
       || (end.kind === 'destination' ? t('Dagens slut', "The day's finish") : t('Stopp', 'Stop'));
   const linkClass = buttonClass('secondary', 'min-h-11 px-3 text-13');
+  // In the stops' own column, beside the line it continues.
   return (
-    <div data-walking-continuation className="mb-3 flex flex-col items-start gap-1.5">
-      <p className="text-13 text-parranda-ink-muted">
+    <div data-walking-continuation className="mb-3 flex flex-col items-start gap-2 pl-14">
+      <p className="text-13 leading-snug text-parranda-ink-muted">
         {stopName
           ? t(`Från ${stopName} vidare. Dagen ändras inte.`, `From ${stopName} onward. Your day stays unchanged.`)
           : t('Fortsätt med den här delen av dagen. Dagen ändras inte.', 'Continue with this part of the day. Your day stays unchanged.')}
@@ -40,10 +41,11 @@ export default function WalkingContinuation({ t, stops, follow, enabled, destina
         </a>
       ) : (
         <details className="group">
-          <summary className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 text-13 font-semibold text-parranda-ink-soft">
+          <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-13 font-bold text-parranda-ink transition-colors hover:text-parranda-ink-soft [&::-webkit-details-marker]:hidden">
             <WalkIcon className="h-4 w-4" />{t('Fortsätt härifrån i Maps', 'Continue from here in Maps')}
+            <ChevronDownIcon className="h-3.5 w-3.5 transition-transform duration-200 ease-out group-open:rotate-180" />
           </summary>
-          <p className="max-w-prose text-xs text-parranda-ink-meta">
+          <p className="max-w-prose text-13 leading-snug text-parranda-ink-meta">
             {t('Gå sträckorna i ordning. Varje sträcka fortsätter där den förra slutar.', 'Walk these stretches in order. Each continues where the previous one ends.')}
           </p>
           <ol className="mt-1 flex flex-col items-start gap-1">

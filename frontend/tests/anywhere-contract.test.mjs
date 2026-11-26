@@ -388,9 +388,10 @@ test("on a phone the map is a short, still overview until the reader expands it"
   // A tall map above the stops once kept them off the first screen and caught
   // the thumb that meant to scroll. The overview is short, takes no pan or
   // zoom gesture while collapsed, and shows no zoom buttons; its stops still
-  // open on a tap, and Expand gives the full interactive map.
+  // open on a tap, and Expand gives the full interactive map. 240px, not 208:
+  // under a two-line attribution, 208 was too little to read five stations.
   const routeMap = componentSource("planner/RouteMap.tsx");
-  assert.match(anywherePlannerSource, /mapExpanded \? "h-\[min\(70vh,36rem\)\]" : "h-52"/);
+  assert.match(anywherePlannerSource, /mapExpanded \? "h-\[min\(70vh,36rem\)\]" : "h-60"/);
   assert.match(anywherePlannerSource, /still=\{!splitLayout && !mapExpanded\}/);
   assert.match(routeMap, /function applyStill\(map: any, still: boolean\)/);
   assert.match(routeMap, /\[map\.dragPan, map\.touchZoomRotate, map\.doubleClickZoom, map\.boxZoom, map\.keyboard\]/);
@@ -550,6 +551,20 @@ test("frames, elevation, layers and small text come from Linje tokens", () => {
   assert.doesNotMatch(anywhereStyles, /border(-top|-right|-bottom|-left)?: 1px/);
   assert.doesNotMatch(anywhereStyles, /font-size: \d+px/);
   assert.match(anywhereStyles, /z-index: var\(--p-z-map-tooltip\)/);
+});
+
+test("every numbered text size on the Linje surface is a size the theme defines", () => {
+  // Tailwind silently drops a class it has no token for: "Live in Uppsala"
+  // was set in text-19, which produced no CSS, so the heading fell back to
+  // the inherited 16px. A numbered size is a Linje token (@theme --text-N)
+  // or it is a bug.
+  const theme = anywhereStyles.match(/@theme inline \{[\s\S]*?\n\}/)?.[0] ?? "";
+  assert.ok(theme, "tailwind.css has its @theme block");
+  const defined = new Set([...theme.matchAll(/--text-(\d+):/g)].map((m) => m[1]));
+  const used = new Set([...linjeSurface().matchAll(/(?<![\w-])text-(\d+)(?![\w.[-])/g)].map((m) => m[1]));
+  assert.ok(used.size > 0, "the surface uses numbered sizes");
+  const missing = [...used].filter((size) => !defined.has(size)).map((size) => `text-${size}`);
+  assert.deepEqual(missing, [], "used without a --text-N token in @theme");
 });
 
 test("the map's own focusable parts keep a visible ring inside its clipped frame", () => {
@@ -790,30 +805,27 @@ test("a partially covered request stays composed_limited and names the missing i
 });
 
 test("motion answers a touch on Linje's own curve, and only movement yields to reduced motion", () => {
-  // Nov 2026 polish audit (staging 65d5d37d): Adjust opened 515px and a stop
-  // 275px in one frame, no control answered a press, every transition ran on
+  // Nov 2026 polish audit (staging 65d5d37d): every transition ran on
   // Tailwind's ease-in-out, icons drew 1.2–1.3px strokes beside bold labels,
-  // and the Live sheet appeared at once inside a 85vh cap.
+  // swapped icons in one frame, and the Live sheet appeared at once inside a
+  // 85vh cap.
   const day = tokenBlock(":root");
   assert.equal(tokenValue(day, "--p-ease-out"), "cubic-bezier(0.23, 1, 0.32, 1)");
   assert.match(tokenValue(day, "--p-icon-stroke"), /px$/);
   assert.match(anywhereStyles, /--default-transition-timing-function: var\(--p-ease-out\)/);
-  // A press settles under the finger; a disabled, finished or working one does not.
-  const ui = componentSource("shared/ui.tsx");
-  for (const name of ["buttonClass", "pillClass", "compactPillTarget", "segmentClass"]) {
-    const block = ui.split(new RegExp(`export (?:const|function) ${name}\\b`))[1]?.split(/\nexport /)[0] ?? "";
-    assert.match(block, /\bpress\b/, `${name} answers a press`);
+  // An icon that changes meaning swaps through a blur (IconSwap) instead of
+  // trading places in one frame; the press and the panel entry are #719's
+  // `pressable` and `animate-panel-in`.
+  for (const name of ["planner/DayHeader.tsx", "planner/RouteMap.tsx", "planner/StopLine.tsx", "planner/CandidateAreas.tsx"]) {
+    assert.match(componentSource(name), /<IconSwap state=/, `${name} swaps its icons through IconSwap`);
   }
-  assert.match(anywhereStyles, /&:active:not\(:disabled, \[aria-disabled="true"\], \[aria-busy="true"\]\)/);
-  // What a tap opens arrives; the Live sheet rises within the visible height.
-  assert.match(componentSource("planner/AnchorCard.tsx"), /id=\{panelId\} className=\{compact \? `reveal /);
-  assert.match(componentSource("planner/StopLine.tsx"), /id=\{panelId\} className="reveal /);
+  // The Live sheet rises within the visible height.
   const sheet = componentSource("planner/LiveSheet.tsx");
   assert.match(sheet, /live-sheet-panel [^"]*max-h-\[85dvh\]/);
   assert.doesNotMatch(sheet, /\d+vh\]/);
   // Movement (translate, scale) sits under no-preference; fades are allowed for everyone.
   const starts = [...anywhereStyles.matchAll(/(@media ([^{]*)\{\s*)?@starting-style\s*\{([^{}]*\{[^}]*\})/g)];
-  assert.ok(starts.length >= 6, "the reveal, icon swap and sheet entries are declared");
+  assert.ok(starts.length >= 6, "the icon swap and sheet entries are declared");
   for (const [, , media = "", rules] of starts) {
     if (/transform:/.test(rules)) assert.match(media, /prefers-reduced-motion: no-preference/, `movement waits for no-preference: ${rules.trim()}`);
   }

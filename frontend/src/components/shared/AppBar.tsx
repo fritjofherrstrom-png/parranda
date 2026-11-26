@@ -24,6 +24,7 @@ function currentTheme(): Theme {
 }
 import { useEffect, useState } from "react";
 import { MoonIcon, SunIcon } from "./icons";
+import { pressable } from "./ui";
 
 type Lang = "sv" | "en";
 export type AppBarTarget = "home" | "language";
@@ -81,26 +82,29 @@ export default function AppBar({
 
   return (
     // Wraps when the reader's text size outgrows one row (200 % text zoom),
-    // instead of pushing the language switch off screen.
-    <nav className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-1" aria-label="Parranda">
+    // instead of pushing the language switch off screen. The gaps are tight
+    // enough that a 320px phone at 100 % keeps the bar on one row: the 44px
+    // boxes already space the glyphs apart.
+    <nav className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 py-1" aria-label="Parranda">
       <a
         href={`/?lang=${lang}`}
         onClick={leaving("home")}
         aria-label={homeLabel}
-        className="group inline-flex min-h-11 items-center gap-2.5 text-parranda-ink transition hover:text-parranda-clay"
+        className="group inline-flex min-h-11 items-center gap-2.5 text-parranda-ink transition-[color] duration-150 ease-out hover:text-parranda-clay"
       >
         {/* The mark: a station ring on the route colour. */}
-        <span aria-hidden="true" className="h-[18px] w-[18px] rounded-full border-4 border-parranda-ember transition group-hover:scale-110" />
+        <span aria-hidden="true" className="h-[18px] w-[18px] rounded-full border-4 border-parranda-ember transition-[scale] duration-200 ease-out motion-safe:group-hover:scale-110" />
         <span className="type-display text-15 tracking-[0.02em] min-[360px]:text-17">Parranda</span>
       </a>
-      {/* Keep the header controls at 44px without adding visual weight. */}
-      <div className="flex items-center gap-2">
+      {/* Keep the header controls at 44px without adding visual weight: the
+          chrome is quieter than the day, in the meta ink until pointed at. */}
+      <div className="flex items-center gap-1">
         <button
           type="button"
           onClick={toggleTheme}
           aria-pressed={night}
           aria-label={lang === "sv" ? "Kvällsläge" : "Night mode"}
-          className="relative inline-flex h-11 w-11 items-center justify-center rounded-parranda-btn text-parranda-ink transition hover:bg-parranda-fill"
+          className={`relative inline-flex h-11 w-11 items-center justify-center rounded-parranda-btn text-parranda-ink-meta hover:bg-parranda-fill hover:text-parranda-ink active:bg-parranda-fill-strong ${pressable}`}
         >
           <span data-theme-glyph="day"><SunIcon className="h-4 w-4" /></span>
           <span data-theme-glyph="night"><MoonIcon className="h-4 w-4" /></span>
@@ -120,7 +124,7 @@ export default function AppBar({
               onClick={href === null ? (event) => event.preventDefault() : leaving("language")}
               aria-current={lang === option ? "true" : undefined}
               className={
-                "type-data relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-parranda-btn px-2 text-sm font-bold transition " +
+                "type-data relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-parranda-btn px-2 text-13 font-bold transition-[color] duration-150 ease-out " +
                 (lang === option ? "text-parranda-ink underline decoration-2 underline-offset-[6px]" : "text-parranda-ink-meta hover:text-parranda-ink") +
                 (href === null ? " cursor-not-allowed opacity-50" : "")
               }

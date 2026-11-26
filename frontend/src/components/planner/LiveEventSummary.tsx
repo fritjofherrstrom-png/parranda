@@ -36,16 +36,19 @@ export default function LiveEventSummary({ event, lang, now, selectedDate, timin
   const sourceLink = eventSourceLink(event, lang);
   return (
     <div className={"flex min-w-0 max-w-full flex-col [overflow-wrap:anywhere] " + (compact ? "gap-0.5" : "gap-1")}>
-      <Heading aria-label={event.title} className={`text-base leading-snug text-parranda-ink ${titleClassName}`}>
+      {/* The Name role: a board row's title at 15px beside its clock, the
+          sheet's at 17px. The link is the whole title line, 44px tall. */}
+      <Heading aria-label={event.title} className={`${compact ? "text-15 leading-snug" : "text-17 leading-tight"} text-parranda-ink ${titleClassName}`}>
         {sourceLink ? <a href={sourceLink.href} target="_blank" rel="noopener noreferrer"
           aria-label={sourceLink.kind === "site_home" ? `${event.title} — ${sourceLink.text}` : event.title}
-          className="flex min-h-11 items-center gap-1.5 no-underline hover:text-parranda-live focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-parranda-live">
-          <span className="min-w-0">{event.title}</span>
-          <ExternalIcon className="h-3.5 w-3.5 text-parranda-ink-meta" />
+          className="flex min-h-11 items-center no-underline transition-colors duration-150 ease-out hover:text-parranda-live focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-parranda-live">
+          {/* The mark follows the title's last word, not the row's far edge. */}
+          <span className="min-w-0">{event.title}<ExternalIcon className="ml-1 inline-block h-3.5 w-3.5 align-baseline text-parranda-ink-meta" /></span>
         </a> : event.title}
       </Heading>
       <LiveEventTiming event={event} lang={lang} now={now} selectedDate={selectedDate} timing={timing} />
-      {(place || distance) && <p className={compact ? "text-sm leading-snug text-parranda-ink-muted" : "text-sm leading-relaxed text-parranda-ink-muted"}>
+      {/* One Meta line: where, and how far when it is known. */}
+      {(place || distance) && <p className={`type-data text-13 text-parranda-ink-meta ${compact ? "leading-snug" : "leading-relaxed"}`}>
         {place}{place && distance ? " · " : ""}{distance && <span className="font-semibold text-parranda-live">{distance}</span>}
       </p>}
       {liveEventSource(event, lang)}
