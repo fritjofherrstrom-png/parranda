@@ -97,20 +97,48 @@ export default function LiveCard({
     : boardRows.length > 0 || pulseBuckets.thisWeek.length > 0
       ? t("Se allt live", "See all live")
       : t("Utforska live", "Explore live");
+  // The card is the system's one panel only when it has something to hold:
+  // board rows, an offer, woven names, the weather read or clothing advice, or
+  // a source-health sentence. With none of those it is an aside row like
+  // Blitz's — dot, name, the way into the sheet — and makes no claim about
+  // listings ("hidden" means no query has run yet).
+  const hasBody = boardRows.length > 0 || Boolean(offer && suggestion) || wovenNames.length > 0 ||
+    Boolean(showDay && dayflow?.weather?.headline) || Boolean(clothing) ||
+    ["uncovered", "pending", "soft_empty", "rejected_empty", "unavailable", "partial"].includes(pulseState) ||
+    Boolean(showSelectedDayStatus) || Boolean(pulseSources);
   // One control opens the sheet: a pill in the heading row, in Live's colour,
   // never a second filled button. The card's one filled action is "Plan with
-  // this event", and only when that offer exists.
+  // this event", and only when that offer exists. Inside the aside row the
+  // row is already the fill, so the pill only fills under the pointer.
   const explore = showExplore ? (
     <button
       type="button"
       ref={liveSheetTriggerRef}
       onClick={openLiveSheet}
-      className={`group inline-flex min-h-11 shrink-0 items-center gap-1 rounded-parranda-btn bg-parranda-fill pl-3 pr-2 text-13 font-bold whitespace-nowrap text-parranda-live hover:bg-parranda-fill-strong active:bg-parranda-fill-strong ${pressable}`}
+      className={`group inline-flex min-h-11 shrink-0 items-center gap-1 rounded-parranda-btn ${hasBody ? "bg-parranda-fill" : "-my-2 -mr-2"} pl-3 pr-2 text-13 font-bold whitespace-nowrap text-parranda-live hover:bg-parranda-fill-strong active:bg-parranda-fill-strong ${pressable}`}
     >
       {exploreLabel}
       <ChevronRightIcon className="h-4 w-4 shrink-0 transition-transform duration-200 ease-out motion-safe:group-hover:translate-x-0.5" />
     </button>
   ) : null;
+  const dot = <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-parranda-live [--p-ring-rgb:var(--p-color-live)] motion-safe:animate-ring-once" />;
+  const when = liveEvents?.selected_date ? (
+    <span className="type-data text-13 font-normal normal-case text-parranda-ink-meta">
+      <span className="sr-only"> · </span>{boardWhen}
+    </span>
+  ) : null;
+  if (!hasBody) {
+    return (
+      <section className="flex min-h-13 items-center gap-3 rounded-parranda-btn bg-parranda-fill px-4 py-3">
+        {dot}
+        <h2 className="flex min-w-0 flex-1 flex-col gap-0.5 text-17 font-bold leading-tight text-parranda-ink wrap-anywhere">
+          <span>{boardTitle}</span>
+          {when}
+        </h2>
+        {explore}
+      </section>
+    );
+  }
   return (
     <section
       className={`${panelCard} relative p-5 sm:p-6`}
@@ -121,14 +149,10 @@ export default function LiveCard({
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <h2 className="flex min-w-0 grow basis-40 flex-col gap-1">
           <span className="flex min-w-0 items-center gap-2.5 text-17 font-bold leading-tight text-parranda-ink wrap-anywhere">
-            <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-parranda-live [--p-ring-rgb:var(--p-color-live)] motion-safe:animate-ring-once" />
+            {dot}
             {boardTitle}
           </span>
-          {liveEvents?.selected_date ? (
-            <span className="type-data pl-5 text-13 normal-case text-parranda-ink-meta">
-              <span className="sr-only"> · </span>{boardWhen}
-            </span>
-          ) : null}
+          {when ? <span className="pl-5">{when}</span> : null}
         </h2>
         {explore}
       </div>

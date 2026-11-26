@@ -66,9 +66,7 @@
   --font-body: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
 
   /* Motion (keyframes below). Always applied through `motion-safe:`, so
-     reduced motion gets the end state at once. `ease-parranda` is the
-     system's one entrance curve: quick to start, long to settle. */
-  --ease-parranda: var(--p-ease-out);
+     reduced motion gets the end state at once. */
   --animate-panel-in: parranda-panel-in 180ms var(--p-ease-out);
   --animate-ring-once: parranda-ring-once 600ms var(--p-ease-out) 1;
 }
@@ -102,6 +100,16 @@
 }
 @utility border-l-line {
   border-left-width: var(--p-line);
+}
+
+/* A control floating on the map (RouteMap `mapButton` and MapLibre's zoom
+   bar, one look): the raised surface on the control shadow, with a faint ink
+   hairline drawn inside it so the edge holds on night tiles, where the
+   surface is only a step lighter than the map. Inset, so it adds no size and
+   moves nothing; on day tiles it all but disappears. */
+@utility map-control {
+  background-color: rgb(var(--p-color-surface));
+  box-shadow: var(--p-shadow-control), inset 0 0 0 var(--p-line) rgb(var(--p-color-ink) / var(--p-ink-line-faint));
 }
 
 /* "Linje" type roles: one family, Archivo, on its width axis. Wide and heavy
@@ -319,14 +327,14 @@
   color: rgb(var(--p-color-ink));
 }
 /* Map controls have one look on every surface, the same as the planner's own
-   map buttons (RouteMap `mapButton`): paper raised on the control shadow, no
-   frame. `:not(:empty)` out-specifies MapLibre's own grey ring. */
+   map buttons (RouteMap `mapButton`): the `map-control` surface, raised on the
+   control shadow with a faint inset hairline, and no outer frame.
+   `:not(:empty)` out-specifies MapLibre's own grey ring. */
 .route-map-frame .maplibregl-ctrl-group,
 .route-map-frame .maplibregl-ctrl-group:not(:empty) {
-  background: rgb(var(--p-color-paper));
+  @apply map-control;
   border: 0;
   border-radius: var(--p-radius-button);
-  box-shadow: var(--p-shadow-control);
   overflow: hidden;
 }
 .route-map-frame .maplibregl-ctrl-group button + button {

@@ -140,9 +140,10 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
     <div className="relative min-w-0 flex-1" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) dismiss(); }}>
       {/* One edge at a time: a filled well at rest, a surface with an ember
           edge while typing (the field is the next station). A blocked location
-          keeps its glow edge, focused or not, so the way forward stays marked. */}
+          marks the field with a glow edge at rest, so the way forward stays
+          marked; focus still hands the edge to ember, as on every field. */}
       <div className={"flex min-h-[3.75rem] items-center gap-3 rounded-parranda-btn border-2 bg-parranda-fill px-5 transition-[background-color,border-color] duration-150 ease-out focus-within:bg-parranda-surface sm:min-h-16 " +
-        (geoDenied ? "border-parranda-glow" : "border-transparent hover:not-focus-within:bg-parranda-fill-strong focus-within:border-parranda-ember")}>
+        (geoDenied ? "border-parranda-glow focus-within:border-parranda-ember" : "border-transparent hover:not-focus-within:bg-parranda-fill-strong focus-within:border-parranda-ember")}>
         <span aria-hidden="true" className="h-[18px] w-[18px] shrink-0 rounded-full border-[4px] border-parranda-ember" />
         <input id="landingCity" ref={inputRef} value={value} onChange={onChange}
           role="combobox" aria-autocomplete="list" aria-expanded={shown} aria-controls={shown ? listId : undefined}

@@ -12,7 +12,7 @@ import { eventSourceLink } from "../../lib/pulse-view.mjs";
 import LiveEventTiming from "./LiveEventTiming";
 import { BoltIcon, ChevronRightIcon, ExternalIcon } from "../shared/icons";
 import { useId } from "react";
-import { busyButton, buttonClass, Eyebrow, panelCard } from "../shared/ui";
+import { busyButton, buttonClass, dataLine, Eyebrow, panelCard } from "../shared/ui";
 import type { Lang, Translate } from "./copy";
 
 function placeHoursNote(move: BlitzMoveView, t: Translate) {
@@ -57,8 +57,9 @@ export default function BlitzCard({
     <div className="flex flex-col gap-3 wrap-anywhere">
       {/* A row, not a call to action: Blitz is an aside to the day. The row
           is one button (bolt, name, a chevron that nudges toward the action);
-          its caption sits right under it as the button's description. The
-          button's text stays its name alone. */}
+          its caption sits right under it as the button's description, the
+          same Meta line Detours carries under its row. The button's text
+          stays its name alone. */}
       <div className="flex flex-col gap-1">
         <button
           type="button"
@@ -73,7 +74,7 @@ export default function BlitzCard({
           <ChevronRightIcon className="h-4 w-4 shrink-0 text-parranda-ink-meta transition-transform duration-200 ease-out motion-safe:group-hover:translate-x-0.5" />
         </button>
         {caption && (
-          <p id={captionId} className="px-4 text-13 leading-relaxed text-parranda-ink-meta">
+          <p id={captionId} className={`${dataLine} px-4 text-pretty`}>
             {caption}
           </p>
         )}

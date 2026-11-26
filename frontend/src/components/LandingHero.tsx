@@ -118,6 +118,11 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
   // The returning visitor's last day lives in localStorage — the same class of
   // value, adopted the same way.
   const [stations, setStations] = useState<Station[]>([]);
+  // Whether storage has been read yet. Until it has, the build and the first
+  // client render cannot know if this is a first visit, so the first-visit
+  // section only holds its place (invisible) rather than being painted and
+  // then swapped for "Pick up a day" on a returning visitor's screen.
+  const [stationsRead, setStationsRead] = useState(false);
   useEffect(() => {
     setRegistry(injectedRegistry());
   }, []);
@@ -127,6 +132,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
     try { lastId = JSON.parse(window.localStorage.getItem(LAST_KEY) || "null")?.id ?? null; } catch { /* unreadable */ }
     const last = lastDay(lang);
     setStations([...(last ? [last] : []), ...savedDays(lang, lastId)]);
+    setStationsRead(true);
   }, [lang]);
 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
@@ -295,9 +301,12 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
 
         {/* A first visit: how a day works, drawn as the line a day becomes.
             Three stations, no city and no link (the landing advertises no
-            place). Vertical on a phone, across the page from sm. */}
-        {stations.length === 0 && (
-          <section aria-labelledby="landingHowItWorks" className="flex flex-col gap-2 border-t-line border-parranda-line-faint pt-6">
+            place). Vertical on a phone, across the page from sm. Before
+            storage is read it is only a placeholder of the same height, so a
+            first visit does not reflow the centred hero when it appears. */}
+        {(!stationsRead || stations.length === 0) && (
+          <section aria-labelledby={stationsRead ? "landingHowItWorks" : undefined} aria-hidden={stationsRead ? undefined : true}
+            className={"flex flex-col gap-2 border-t-line border-parranda-line-faint pt-6" + (stationsRead ? "" : " invisible")}>
             <p id="landingHowItWorks" className="type-eyebrow text-parranda-ink-meta">{t("Så blir en dag till", "How a day works")}</p>
             <ol className="flex flex-col sm:grid sm:max-w-2xl sm:grid-cols-3">
               {[

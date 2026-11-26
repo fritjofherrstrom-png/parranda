@@ -3600,7 +3600,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           {canShare && <button type="button" onClick={shareDay} className={buttonClass("secondary", "min-h-11 px-3 text-13")}>
             {shareCopied ? t("Kopierad", "Copied") : t("Dela dagen", "Share this day")}
           </button>}
-          {!canShare && <p className="mt-2 text-13 leading-relaxed text-parranda-ink-meta">{sharingUnavailableNote}</p>}
+          {!canShare && <p className="mt-2 text-13 leading-relaxed text-parranda-ink-meta" role="status">{sharingUnavailableNote}</p>}
           <button type="button" onClick={clearCommitments} className={buttonClass("secondary", "mt-3 min-h-11 px-4 text-13")}>
             {t("Börja om", "Start over")}
           </button>

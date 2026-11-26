@@ -168,15 +168,6 @@ export function PhotoCreditLine({ media, t, lang, full = false }: { media: StopM
 }
 
 /**
- * On a phone the open stop's photo runs on to the screen's right edge: the
- * panel ends at the page gutter (16px), so 1rem more reaches the edge without
- * widening the page. Only the image bleeds; its credit stays in the column, so
- * the credit's expand control never sits on the screen edge. Wider screens keep
- * the photo inside.
- */
-const bleed = "w-full";
-
-/**
  * The open stop's 3:2 figure, full width of its column, with the credit under
  * it. If the image fails the box stays (a quiet glyph, no credit for nothing),
  * so the kicker, excerpt and facts under it do not jump.
@@ -189,7 +180,7 @@ export function StopPhotoFigure({ media, name, type, t, lang }: { media: StopMed
   if (failed) {
     return (
       <div data-stop-photo="figure-fallback" aria-hidden="true" className="m-0 flex w-full max-w-lg flex-col gap-1">
-        <span className={`flex aspect-[3/2] items-center justify-center rounded-parranda-btn bg-parranda-fill text-parranda-ink-meta ${bleed}`}>
+        <span className="flex aspect-[3/2] w-full items-center justify-center rounded-parranda-btn bg-parranda-fill text-parranda-ink-meta">
           <CategoryGlyph type={type} className="h-6 w-6" />
         </span>
       </div>
@@ -197,7 +188,7 @@ export function StopPhotoFigure({ media, name, type, t, lang }: { media: StopMed
   }
   return (
     <figure data-stop-photo="figure" className="m-0 flex w-full max-w-lg flex-col gap-1">
-      <span className={`relative block aspect-[3/2] overflow-hidden rounded-parranda-btn bg-parranda-fill ${bleed} ${innerEdge}`}>
+      <span className={`relative block aspect-[3/2] overflow-hidden rounded-parranda-btn bg-parranda-fill w-full ${innerEdge}`}>
         <img
           key={attempt}
           {...imgProps}

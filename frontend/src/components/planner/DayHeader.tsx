@@ -121,13 +121,16 @@ export function dayAssemblyNotes(t: Translate, { sourceBackedDay, timeAnchoring,
 /**
  * What the day did for each pick, in one line inside the Adjust row (Linje 2):
  * the pick's name after its mark (in the day, partly, not in it, still
- * looking), then the rhythm as the line's quiet last word ("· Balanced").
+ * looking), then the rhythm as the line's quiet last word ("Balanced").
  * Status, never selection: no ink fill, no chip, and no ember: the route's
  * colour belongs to the line just below.
  *
  * The list and the rhythm flow as one run of inline items, so the rhythm
  * follows the last pick on the same line instead of taking a line of its own.
  * The rhythm stays outside the list: the list is the picks, and only them.
+ * No visible separator: the picks' own gap and the rhythm's quieter colour
+ * and weight set it apart, so a narrow row that wraps it never starts a
+ * line with a stray dot.
  */
 export function PickSummary({ t, lang, pickCoverage, rhythmLabel }: {
   t: Translate; lang: Lang; pickCoverage: PickCoverage[];
@@ -141,7 +144,7 @@ export function PickSummary({ t, lang, pickCoverage, rhythmLabel }: {
     // Padded so the first line sits centred on the 44px Adjust pill beside it.
     // Every item is an inline-flex box aligned to the line's top: an icon-led
     // flex box takes its baseline from the icon, so baseline alignment would
-    // drop "· Balanced" below the picks it follows.
+    // drop "Balanced" below the picks it follows.
     <span className="min-w-0 flex-1 py-2.5 text-13 font-semibold leading-6 text-parranda-ink">
       <ul className="inline" aria-label={t("Dina val i dagen", "Your picks in this day")}>
         {pickCoverage.map(({ key, state }) => (
@@ -160,7 +163,6 @@ export function PickSummary({ t, lang, pickCoverage, rhythmLabel }: {
         ))}
       </ul>
       <span className="inline-flex items-center whitespace-nowrap align-top font-medium text-parranda-ink-meta">
-        <span aria-hidden="true">{"·\u00a0"}</span>
         {rhythmName && <span className="sr-only">{rhythmName}</span>}
         {rhythmValue}
       </span>
@@ -369,7 +371,7 @@ export default function DayHeader({
         {staleNotice === "updating" && (
           <span
             aria-live="polite"
-            className="inline-flex min-h-7 items-center gap-2 rounded-parranda-tag bg-parranda-fill px-2.5 text-13 font-bold text-parranda-clay"
+            className="inline-flex min-h-7 items-center gap-2 rounded-parranda-tag bg-parranda-fill px-2.5 text-13 font-bold text-parranda-ink"
           >
             <RingMark className="h-3 w-3" />
             {t("Uppdaterar dagen …", "Updating your day …")}
@@ -379,7 +381,7 @@ export default function DayHeader({
           <>
             <span
               aria-live="polite"
-              className="inline-flex items-center gap-1.5 rounded-parranda-tag bg-parranda-fill px-2.5 py-1 text-13 font-bold text-parranda-clay"
+              className="inline-flex items-center gap-1.5 rounded-parranda-tag bg-parranda-fill px-2.5 py-1 text-13 font-bold text-parranda-ink"
             >
               {navigationInterrupted
                 ? t("Planeringen pausades när du lämnade sidan — visar din förra dag", "Planning paused when you left — showing your previous day")
@@ -436,7 +438,7 @@ export default function DayHeader({
             quietly under the facts: "Culture, food and history. From
             Postmuseum to Strömparterren." */}
         {idea && (
-          <p data-day-idea="" className="mt-2 line-clamp-2 text-15 leading-relaxed text-parranda-ink-muted [overflow-wrap:anywhere]">
+          <p data-day-idea="" className="mt-2 text-pretty text-15 leading-relaxed text-parranda-ink-muted [overflow-wrap:anywhere]">
             <span className="font-semibold text-parranda-ink-soft">{idea.headline}.</span>
             {idea.journey ? <> {idea.journey}</> : null}
           </p>
@@ -519,6 +521,23 @@ export function DayActions({
   saveError?: ReactNode;
 }) {
   const showSharingNote = !canShare && Boolean(sharingNote);
+  // Share leaves the row when the day stops being shareable (a published
+  // link can lapse while the day is open). If it held focus then, focus
+  // would fall to the top of the page; hand it to Save, beside it, instead.
+  const saveRef = useRef<HTMLButtonElement>(null);
+  const shareHadFocus = useRef(false);
+  const shareRef = useCallback((node: HTMLButtonElement | null) => {
+    if (!node) return;
+    return () => {
+      // React detaches the ref before it removes the node, so focus is
+      // still on it here when it was the focused element.
+      shareHadFocus.current = node.ownerDocument.activeElement === node;
+    };
+  }, []);
+  useLayoutEffect(() => {
+    if (!canShare && shareHadFocus.current) saveRef.current?.focus();
+    shareHadFocus.current = false;
+  }, [canShare]);
   return (
     <section
       aria-label={t("Ta med dagen", "Take the day with you")}
@@ -632,8 +651,12 @@ export function DayActions({
           {t("Google Maps beräknar gångvägen när du öppnar rutten.", "Google Maps works out the walking path when you open the route.")}
         </p>
       )}
-      <div className="mt-2 flex gap-2 [&>*]:flex-1">
+      {/* Save always holds the left half, Share the right: a day that cannot
+          be shared keeps Save where it is, half width and quiet, never a
+          full-width second CTA under the route. */}
+      <div className="mt-2 grid grid-cols-2 gap-2">
         <button
+          ref={saveRef}
           type="button"
           // Saved stays focusable: a disabled button would drop the focus
           // that just pressed it to the top of the page.
@@ -647,6 +670,7 @@ export function DayActions({
         </button>
         {canShare && (
           <button
+            ref={shareRef}
             type="button"
             onClick={shareDay}
             aria-label={t("Dela dagen", "Share this day")}
@@ -657,12 +681,12 @@ export function DayActions({
           </button>
         )}
       </div>
-      {/* A standing explanation, not news: no live region (as before). */}
-      {showSharingNote && (
-        <p className="text-13 leading-snug text-parranda-ink-meta">
-          {sharingNote}
-        </p>
-      )}
+      {/* One live region, always mounted, so the note is announced when
+          sharing becomes unavailable while the day is open (a status
+          region, as before this layout). Empty, it takes no room. */}
+      <p role="status" className="text-13 leading-snug text-parranda-ink-meta empty:-mt-2">
+        {showSharingNote ? sharingNote : null}
+      </p>
       {saveError && (
         <p role="status" className="text-13 leading-snug text-parranda-ink-muted">
           {saveError}

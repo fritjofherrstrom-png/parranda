@@ -66,11 +66,12 @@ type Tip = { name: string; x: number; y: number; direction: "left" | "right" } |
 let maplibreModule: Promise<MapLibre> | null = null;
 /** MapLibre and its worker, loaded once and only when a map is drawn. */
 // The entire 44px square is the touch target. One look with MapLibre's zoom
-// bar (tailwind.css .maplibregl-ctrl-group): a raised surface on the control
-// shadow, no frame and no frosted glass. Under the pointer the same ink fill
+// bar (tailwind.css `map-control`): a raised surface on the control shadow
+// with a faint inset hairline that keeps its edge on night tiles, no outer
+// frame and no frosted glass. Under the pointer the same ink fill
 // as the zoom bar's buttons lies over the surface (a layer, so the button
 // stays opaque over the tiles), a step stronger under the finger.
-const mapButton = "inline-flex h-11 min-w-11 items-center justify-center rounded-parranda-btn bg-parranda-paper text-parranda-ink shadow-control " +
+const mapButton = "inline-flex h-11 min-w-11 items-center justify-center rounded-parranda-btn map-control text-parranda-ink " +
   "relative before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-parranda-fill before:opacity-0 before:transition-opacity before:duration-150 before:content-[''] " +
   "hover:before:opacity-100 active:before:bg-parranda-fill-strong active:before:opacity-100 [&>svg]:relative aria-disabled:opacity-60 " + pressable;
 

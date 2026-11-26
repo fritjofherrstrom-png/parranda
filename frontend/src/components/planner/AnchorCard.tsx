@@ -536,11 +536,13 @@ export function ChangePlaceLink({ t, lang, onChangePlace }: { t: Translate; lang
           "UPPSALA" too narrow for itself (it broke as "UPPSAL A"), and at
           200% text the title had no room at all. The name stays for
           assistive tech; the rem threshold tracks the text size. */}
-      {/* Below 24rem of row the second word goes ("Change" / "Byt"), so a
-          long single-word place like GOTHENBURG keeps its line on a phone. */}
+      {/* The visible word is always the short one ("Change" / "Byt"), so a
+          long single-word place like GOTHENBURG keeps its title on one
+          line on desktop as well as on a phone. The second word stays for
+          assistive tech, so the link's text is still "Change place". */}
       <span className="@max-[20rem]:sr-only">
         {t("Byt", "Change")}
-        <span className="@max-[24rem]:sr-only">{t(" plats", " place")}</span>
+        <span className="sr-only">{t(" plats", " place")}</span>
       </span>
     </a>
   );

@@ -80,12 +80,13 @@ const statusChip = (tone: string) =>
  * their signs, written out so all three fit one row at phone width (a 6px gap
  * to the sign, no gap between words; each word's own fill keeps them apart
  * under the pointer). Remove, the one edit that only takes away, sits in a
- * quieter ink that turns clay under the pointer.
+ * quieter ink that comes up to full ink under the pointer (never clay text on
+ * the hover fill: that falls under 4.5:1 in day mode).
  */
 const editAction =
   `inline-flex min-h-11 items-center gap-1.5 rounded-parranda-btn px-2 text-13 font-bold ${pressable} aria-disabled:opacity-60 aria-busy:cursor-progress hover:bg-parranda-fill active:bg-parranda-fill-strong`;
 const editQuiet = `${editAction} text-parranda-ink`;
-const editRemove = `${editAction} text-parranda-ink-muted hover:text-parranda-clay`;
+const editRemove = `${editAction} text-parranda-ink-muted hover:text-parranda-ink`;
 
 /**
  * Where an open stop's backdrop starts in its list item: below the walk into
@@ -305,32 +306,33 @@ export default function StopLine({
   );
 
   const detours = (routeContextSuggestions.length > 0 && (
-      // One aside row: a sign, a name and its caption, a chevron. Dashed,
+      // One aside row, the same anatomy as Blitz beside it: a sign, a name, a
+      // chevron, and its caption as one Meta line right under the row. Dashed,
       // because these ideas are explicitly not in the day.
       <div className="flex flex-col gap-2">
-        <button
-          type="button"
-          aria-expanded={detoursOpen}
-          onClick={() => setDetoursOpen((cur) => !cur)}
-          className={buttonClass("dashed", "min-h-16 w-full justify-between px-4 py-3 text-left")}
-        >
-          <RouteIcon className="mr-1 h-5 w-5 text-parranda-ink-meta" />
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-17 font-bold leading-tight text-parranda-ink">
+        <div className="flex flex-col gap-1">
+          <button
+            type="button"
+            aria-expanded={detoursOpen}
+            onClick={() => setDetoursOpen((cur) => !cur)}
+            className={buttonClass("dashed", "min-h-13 w-full justify-between px-4 py-3 text-left")}
+          >
+            <RouteIcon className="mr-1 h-5 w-5 shrink-0 text-parranda-ink-meta" />
+            <span className="min-w-0 flex-1 text-17 font-bold leading-tight text-parranda-ink">
               {routeContextSuggestions.length}{" "}
               {routeContextSuggestions.length === 1
                 ? t("idé nära din rutt", "detour idea near your route")
                 : t("idéer nära din rutt", "detour ideas near your route")}
             </span>
-            <span className={dataLine}>
-              {t(
-                "Fler idéer som inte ingår i dagens rutt.",
-                "More ideas outside today's route.",
-              )}
-            </span>
-          </span>
-          <ChevronDownIcon className={"h-4 w-4 shrink-0 text-parranda-ink-meta transition-transform duration-200 ease-out " + (detoursOpen ? "rotate-180" : "")} />
-        </button>
+            <ChevronDownIcon className={"h-4 w-4 shrink-0 text-parranda-ink-meta transition-transform duration-200 ease-out " + (detoursOpen ? "rotate-180" : "")} />
+          </button>
+          <p className={`${dataLine} px-4 text-pretty`}>
+            {t(
+              "Fler idéer som inte ingår i dagens rutt.",
+              "More ideas outside today's route.",
+            )}
+          </p>
+        </div>
         {detoursOpen && (
           <ul className="grid gap-2 motion-safe:animate-panel-in sm:grid-cols-2">
             {routeContextSuggestions.map((stop, index) => {
@@ -436,7 +438,10 @@ export default function StopLine({
           ("Evening") sits on the line beside Follow the day. */}
       <div className={"stop-line-heading-row relative mb-1 flex min-h-11 flex-wrap items-center justify-between gap-x-3 pl-14 " +
         (continuesFromMap || opensWithDaypart ? "before:pointer-events-none before:absolute before:-bottom-2 before:left-[19px] before:w-1.5 before:content-[''] " +
-          (continuesFromMap ? "before:-top-4 " : "before:top-1/2 ") +
+          // Only the phone's map band is full-bleed (below sm), so only there
+          // does the line come out of it; from sm the map is a rounded card
+          // and the line starts at the first daypart, as on desktop.
+          (continuesFromMap ? "max-sm:before:-top-4 sm:before:top-1/2 " : "before:top-1/2 ") +
           (stale ? "before:bg-parranda-line-faint " : "before:bg-parranda-ember ") : "")}>
         <h2 className="sr-only">{t("Stoppen i ordning", "The stops, in order")}</h2>
         {/* The daypart crosses the line as a notch cut into it (paper), not
@@ -498,6 +503,7 @@ export default function StopLine({
           if (!name) return null;
           const routeNumber = routeStops.indexOf(stop) + 1;
           const leg = routeNumber === 1 ? null : legForStop(stop);
+          const prevName = routeNumber > 1 ? String((split.core[i - 1] as any)?.label || (split.core[i - 1] as any)?.name || "").trim() : "";
           const pin = mapsPlaceUrl(stop, mapsPlaceContext);
           const daypart = String(stop?.daypart || "");
           const previousDaypart = i > 0 ? String((split.core[i - 1] as any)?.daypart || "") : "";
@@ -539,10 +545,14 @@ export default function StopLine({
             : expanded
             ? "border-parranda-ink bg-parranda-terracotta text-parranda-on-terracotta"
             : isCurrent
-              ? "border-parranda-ember bg-parranda-paper text-parranda-ink shadow-[0_0_0_4px_rgb(var(--p-color-paper)),0_0_0_6px_rgb(var(--p-color-ember))] motion-safe:animate-ring-once"
+              ? "border-parranda-ember bg-parranda-paper text-parranda-ink shadow-[0_0_0_4px_rgb(var(--p-color-paper)),0_0_0_6px_rgb(var(--p-color-ember))]"
               : behind
                 ? "border-parranda-line-firm bg-parranda-paper text-parranda-ink-meta"
                 : "border-parranda-ink bg-parranda-paper text-parranda-ink";
+          // The ring plays once when progress reaches this station. It stays
+          // on the current station in every state (open, closed, rebuilding),
+          // so opening and closing the stop never takes it off and replays it.
+          const ring = isCurrent ? " motion-safe:animate-ring-once" : "";
           const legShown = Boolean(leg && (leg.minutes != null || leg.km != null));
           const laterDaypart = Boolean(daypartHeading && i > 0);
           return (
@@ -559,9 +569,14 @@ export default function StopLine({
               {legShown && leg && (
                 // Linje 2 board: the walk between stations as one quiet fact,
                 // "9 min · 700 m". Under a kilometre in metres, to the nearest
-                // hundred the estimate already has.
+                // hundred the estimate already has. The sign is hidden from
+                // screen readers, so they hear what the numbers are: a walk,
+                // and where it starts.
                 <span className={`${dataLine} flex h-8 items-center gap-1.5 pl-14 transition-opacity${stale ? " opacity-45" : ""}`}>
                   <WalkIcon className="h-3.5 w-3.5" />
+                  <span className="sr-only">
+                    {prevName ? t(`Promenad från ${prevName}: `, `Walk from ${prevName}: `) : t("Till fots: ", "On foot: ")}
+                  </span>
                   {leg.minutes != null && <span>{leg.minutes} min</span>}
                   {leg.minutes != null && leg.km != null ? <><span className="sr-only"> · </span><span aria-hidden="true">·</span></> : null}
                   {leg.km != null ? <span>{leg.km < 1 && leg.km > 0 ? `${Math.max(100, Math.round(leg.km * 10) * 100)} m` : walkingDistanceLabel(leg.km, lang)}</span> : null}
@@ -598,7 +613,7 @@ export default function StopLine({
               >
                 <span className="type-data relative z-(--p-z-raised) flex h-11 w-11 shrink-0 items-center justify-center rounded-full">
                   <span
-                    className={`flex h-8 w-8 items-center justify-center rounded-full border-3 text-13 font-bold transition-[background-color,border-color,color,scale] duration-150 ease-out motion-safe:group-active:scale-95 ${disc}`}
+                    className={`flex h-8 w-8 items-center justify-center rounded-full border-3 text-13 font-bold transition-[background-color,border-color,color,scale] duration-150 ease-out motion-safe:group-active:scale-95 ${disc}${ring}`}
                   >
                     {behind ? <CheckIcon className="h-3.5 w-3.5" /> : routeNumber}
                     {behind && <span className="sr-only">{routeNumber}</span>}
@@ -625,10 +640,12 @@ export default function StopLine({
                       hours wait inside the place. */}
                   {(stopKindLabel || kept) && (
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      {stopKindLabel && <StopCategory type={stop?.type} label={stopKindLabel} muted={behind} glyph={!withPhotos} />}
+                      {stopKindLabel && <StopCategory type={stop?.type} label={stopKindLabel} glyph={!withPhotos} />}
                       {kept && (
-                        <span className={statusChip("text-parranda-clay")}>
-                          <KeepIcon className="h-3.5 w-3.5" />
+                        // Clay only on the sign: clay text on the chip's fill
+                        // falls under 4.5:1 in day mode; an icon needs 3:1.
+                        <span className={statusChip("text-parranda-ink")}>
+                          <KeepIcon className="h-3.5 w-3.5 text-parranda-clay" />
                           {t("Behålls", "Kept")}
                         </span>
                       )}
@@ -667,27 +684,30 @@ export default function StopLine({
                       the facts: the photo, the kicker, then the excerpt. */}
                   {media && <StopPhotoFigure key={media.media_id} media={media} name={name} type={stop?.type} t={t} lang={lang} />}
                   {(subtitle || about) && <StopAbout subtitle={subtitle} about={about} t={t} lang={lang} />}
-                  {/* What it does for the picks, as one sentence, marked with
-                      the header's own check. */}
-                  {(panelKindLabel || matchedLabels.length > 0 || partialLabels.length > 0) && (
-                    <p className="flex items-start gap-2 text-15 leading-snug text-parranda-ink-soft">
-                      {matchedLabels.length > 0 && <CheckIcon className="mt-1 h-3.5 w-3.5 shrink-0 text-parranda-ink-soft" />}
-                      {matchedLabels.length === 0 && partialLabels.length > 0 && <HalfCircleIcon className="mt-1 h-3.5 w-3.5 shrink-0 text-parranda-glow" />}
-                      <span className="min-w-0">
-                        {[
-                          panelKindLabel ? `${panelKindLabel}.` : "",
-                          matchedLabels.length > 0 ? `${t("Matchar dina val:", "Matches your picks:")} ${matchedLabels.join(", ")}.` : "",
-                          partialLabels.length > 0 ? `${t("Lösare träff för:", "A looser match for:")} ${partialLabels.join(", ")}.` : "",
-                        ].filter(Boolean).join(" ")}
-                      </span>
-                    </p>
-                  )}
-                  {/* Facts only, each beside its sign. The schedule row is a
-                      bounded source fact for the selected local day, never an
-                      "open now" claim. The walk into the stop is already on
-                      the line above the row. */}
-                  {(placeDetails.address || hoursLabel || hoursUnknown) && (
+                  {/* Facts only, each beside its sign, at one size: first what
+                      it does for the picks, as a Meta line marked with the
+                      header's own 12px check, then the address and hours. The
+                      schedule row is a bounded source fact for the selected
+                      local day, never an "open now" claim. The walk into the
+                      stop is already on the line above the row, read out with
+                      where it starts. */}
+                  {(panelKindLabel || matchedLabels.length > 0 || partialLabels.length > 0 || placeDetails.address || hoursLabel || hoursUnknown) && (
                     <div className="grid grid-cols-[1rem_minmax(0,1fr)] items-start gap-x-2 gap-y-1.5 text-13 leading-snug text-parranda-ink-soft">
+                      {(panelKindLabel || matchedLabels.length > 0 || partialLabels.length > 0) && (
+                        <>
+                          <span aria-hidden="true" className="flex h-4 w-4 items-center justify-center">
+                            {matchedLabels.length > 0 && <CheckIcon className="h-3 w-3 shrink-0 text-parranda-ink-soft" />}
+                            {matchedLabels.length === 0 && partialLabels.length > 0 && <HalfCircleIcon className="h-3 w-3 shrink-0 text-parranda-glow" />}
+                          </span>
+                          <span className="type-data min-w-0 text-13 leading-snug text-parranda-ink-soft">
+                            {[
+                              panelKindLabel ? `${panelKindLabel}.` : "",
+                              matchedLabels.length > 0 ? `${t("Matchar dina val:", "Matches your picks:")} ${matchedLabels.join(", ")}.` : "",
+                              partialLabels.length > 0 ? `${t("Lösare träff för:", "A looser match for:")} ${partialLabels.join(", ")}.` : "",
+                            ].filter(Boolean).join(" ")}
+                          </span>
+                        </>
+                      )}
                       {placeDetails.address && <LocationIcon className="mt-px h-4 w-4 text-parranda-ink-meta" />}
                       {placeDetails.address && <span>{placeDetails.address}</span>}
                       {hoursLabel && <ClockIcon className="mt-px h-4 w-4 text-parranda-ink-meta" />}

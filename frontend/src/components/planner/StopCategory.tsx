@@ -36,13 +36,12 @@ export function CategoryGlyph({ type, className }: { type: unknown; className: s
  * What kind of place, as one quiet fact under its name: the family's sign,
  * then the kind. A fact, not a chip: a filled tag under every stop read as a
  * column of buttons. `glyph={false}` when the row's own tile already holds the
- * sign, so it is never drawn twice. `muted` (a stop already behind you) keeps
- * the same meta tone; the name beside it does the dimming.
+ * sign, so it is never drawn twice. A stop already behind you keeps the same
+ * meta tone here; the name beside it does the dimming.
  */
 export default function StopCategory({ type, label, glyph = true }: {
   type: unknown;
   label: string;
-  muted?: boolean;
   glyph?: boolean;
 }) {
   const family = stopCategoryFamily(type);

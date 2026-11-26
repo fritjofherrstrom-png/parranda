@@ -18,7 +18,7 @@ source of truth; this is the map.
 | Darkness | `--p-scrim` (behind a modal sheet), `--p-shade` (deepens terracotta under a white digit) | `bg-parranda-scrim`, `bg-parranda-shade` |
 | Stacking | `--p-z-raised`, `-popover`, `-map-control`, `-map-tooltip`, `-map-overlay`, `-sheet`, low to high | `z-(--p-z-…)` |
 | Text sizes | `text-10/11/13/15/17` in `tailwind.css` (rem) | a numbered size with no `--text-N` in `@theme` produces no CSS; a contract test fails on one |
-| Motion | `--p-ease-out` (the one entrance curve); keyframes `parranda-panel-in`, `parranda-ring-once` | `ease-parranda`, `motion-safe:animate-panel-in`, `motion-safe:animate-ring-once` |
+| Motion | `--p-ease-out`, the curve inside the `parranda-panel-in` and `parranda-ring-once` keyframes | transitions use `ease-out`; entrances `motion-safe:animate-panel-in`, `motion-safe:animate-ring-once` |
 | Type roles | `type-display`, `type-title`, `type-eyebrow`, `type-data` — one family, Archivo: wide for display, narrow (88 %) with lining tabular figures for labels and data, in the case they are written in | |
 
 Never write an ink percentage (`parranda-ink/68`), an arbitrary opacity
@@ -65,15 +65,18 @@ action, `text-17 font-extrabold`. The landing keeps `type-display`.
 
 | Recipe | Classes | Used for |
 |---|---|---|
-| Panel | `panelCard`: `bg-parranda-surface shadow-card rounded-parranda` | the Adjust panel, the Live card, the Blitz result, notices (`noticeCard`) |
-| Fill | `bg-parranda-fill`, `fill-strong` under the pointer | controls and aside rows |
+| Panel | `panelCard`: `bg-parranda-surface shadow-card rounded-parranda` | the Adjust panel, the Live card when it has something to show, the Blitz result, notices (`noticeCard`) |
+| Fill | `bg-parranda-fill`, `fill-strong` under the pointer | controls and aside rows (Blitz, and the Live card while it has no rows, state or offer: an empty panel would be the loudest thing below the line) |
 
 Exceptions carry a meaning: a dashed `border-parranda-line-firm` frame is
 "not in the day" (detours only); the woven live stop keeps its live tint; the
 open stop sits on a `fill-faint` backdrop. A hairline (`border-t-line`,
 `border-y-line`, `line-faint`) only divides, or edges a photo. No other
 outlined boxes. Map controls (`.maplibregl-ctrl-group`, RouteMap's own
-buttons) are a raised `surface` on `shadow-control`, without a frame.
+buttons) share the `map-control` utility: a raised `surface` on
+`shadow-control` with a faint inset `line-faint` hairline, so the edge holds on
+night tiles. The hairline is inset, so it adds no size, and there is no outer
+frame.
 
 ## Buttons — one filled action per surface
 
@@ -90,7 +93,7 @@ buttons) are a raised `surface` on `shadow-control`, without a frame.
 | Where | Shape |
 |---|---|
 | Stop row | 56×56 (`h-14 w-14`), 1:1, `rounded-parranda-btn` |
-| Open stop | 3:2, full panel width, `rounded-parranda-btn`; on a phone it runs to the right screen edge |
+| Open stop | 3:2, full panel width, `rounded-parranda-btn`; it stays inside its column on every width |
 | Both | an inner hairline: `after:absolute after:inset-0 after:rounded-[inherit] after:border-line after:border-parranda-line-faint after:content-['']`, so a pale sky never dissolves into paper |
 | No photo, on a day with photos | the same 56px slot holds only the bare 20px family glyph in `ink-meta`: a sign, not a fake image |
 | A day with no photos | no media column at all |
