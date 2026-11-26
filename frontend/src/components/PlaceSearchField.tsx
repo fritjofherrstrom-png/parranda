@@ -42,6 +42,14 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
   const [retryGeneration, setRetryGeneration] = useState(0);
   const [selectedOverflows, setSelectedOverflows] = useState(false);
   const listRef = useRef<HTMLUListElement>(null);
+  // Only a pointer that really moves picks a suggestion. When the list
+  // scrolls under a resting pointer (arrow keys), the browser reports the
+  // pointer over a new row with no movement; that must not undo the
+  // keyboard's choice.
+  const pointerPicks = (event: { movementX: number; movementY: number }, index: number) => {
+    if (!event.movementX && !event.movementY) return;
+    setActive(index);
+  };
   const dismissed = useRef(false);
   const sequence = useRef(0);
   // Set by the reader's own Try again; the server then asks its provider even if it is resting.
@@ -169,7 +177,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
       {shown && <div className={"relative z-(--p-z-popover) mt-2 rounded-parranda bg-parranda-surface shadow-pop motion-safe:animate-panel-in sm:absolute sm:inset-x-0 " + (above ? "sm:bottom-full sm:mb-2 sm:mt-0" : "sm:top-full")}>
         <ul ref={listRef} id={listId} role="listbox" aria-label={t("Platsförslag", "Place suggestions")} className="max-h-[min(18rem,40svh)] overflow-y-auto overscroll-contain p-1">
           {choices.map((choice, index) => <li key={choice.selection_id} id={`${listId}-${index}`} role="option" aria-selected={active === index}
-            onMouseDown={event => event.preventDefault()} onClick={() => choose(choice)} onMouseEnter={() => setActive(index)}
+            onMouseDown={event => event.preventDefault()} onClick={() => choose(choice)} onMouseMove={event => pointerPicks(event, index)}
             className={"cursor-pointer rounded-parranda-btn px-4 py-3 text-parranda-ink transition-[background-color] duration-150 ease-out active:bg-parranda-fill-strong " + (active === index ? "bg-parranda-fill" : "hover:bg-parranda-fill-faint")}>
             <span className="block text-17 font-bold leading-tight [overflow-wrap:anywhere]">{choice.title}</span>
             {(choice.context || kindLabel(choice.kind)) && <span className="mt-1 block text-13 text-parranda-ink-meta [overflow-wrap:anywhere]">

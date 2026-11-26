@@ -249,8 +249,13 @@ export default function StopLine({
   // paint, the page scrolls by however far the row moved, so it stays under
   // the finger. Then the opened stop is brought into view only as far as it
   // must ("nearest"), smoothly unless the reader asked for less motion.
+  // At the top of the page there is nothing to scroll back into: closing a
+  // stop above can still move the tapped row up. Then every item the page
+  // could not hold starts where it stood and glides to its new place (FLIP),
+  // so nothing jumps; the opened stop is brought into view after the glide.
+  // Under reduced motion the items settle at once, without the glide.
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
-  const rowAnchor = useRef<{ key: string; top: number; opening: boolean } | null>(null);
+  const rowAnchor = useRef<{ key: string; top: number; opening: boolean; items: Map<Element, number> } | null>(null);
   useLayoutEffect(() => {
     const anchor = rowAnchor.current;
     rowAnchor.current = null;
@@ -259,12 +264,36 @@ export default function StopLine({
     if (!row || !row.isConnected) return;
     const moved = row.getBoundingClientRect().top - anchor.top;
     if (Math.abs(moved) >= 1) window.scrollBy({ top: moved, left: 0, behavior: "instant" });
+    const reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const glides: Animation[] = [];
+    if (!reduce) {
+      for (const [item, before] of anchor.items) {
+        if (!item.isConnected || typeof (item as HTMLElement).animate !== "function") continue;
+        const dy = before - item.getBoundingClientRect().top;
+        if (Math.abs(dy) < 1) continue;
+        glides.push((item as HTMLElement).animate(
+          [{ transform: `translateY(${dy}px)` }, { transform: "translateY(0)" }],
+          // A long way gets a little longer and an even curve, so no single
+          // frame carries the item far (a steep ease-out moved ~200px in one).
+          { duration: Math.min(440, 240 + Math.abs(dy) * 0.25), easing: "cubic-bezier(0.45, 0, 0.2, 1)" },
+        ));
+      }
+    }
     if (!anchor.opening) return;
     const item = row.closest("li");
     if (!item || typeof item.scrollIntoView !== "function") return;
-    const reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    item.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+    const reveal = () => { if (item.isConnected) item.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" }); };
+    if (glides.length) Promise.allSettled(glides.map((glide) => glide.finished)).then(reveal);
+    else reveal();
   }, [expandedStopKey]);
+
+  /** Where each item of the line stood when a row was tapped. */
+  const lineItemTops = (from: Element) => {
+    const list = from.closest("ol");
+    const tops = new Map<Element, number>();
+    if (list) for (const child of Array.from(list.children)) tops.set(child, child.getBoundingClientRect().top);
+    return tops;
+  };
 
   // The orchestrator owns one opt-in location session. This line only reads
   // it for today's stations; the map can also orient a future-day reader.
@@ -605,7 +634,7 @@ export default function StopLine({
                   else rowRefs.current.delete(stopKey);
                 }}
                 onClick={(event) => {
-                  rowAnchor.current = { key: stopKey, top: event.currentTarget.getBoundingClientRect().top, opening: !expanded };
+                  rowAnchor.current = { key: stopKey, top: event.currentTarget.getBoundingClientRect().top, opening: !expanded, items: lineItemTops(event.currentTarget) };
                   setExpandedStopKey(expanded ? null : stopKey);
                 }}
                 className={"group relative flex min-h-16 w-full items-center gap-3 py-2 pr-1 text-left before:pointer-events-none before:absolute before:inset-y-0 before:-right-2 before:left-12 before:rounded-parranda-btn before:transition-[background-color] before:duration-150 before:ease-out before:content-['']" +
