@@ -40,7 +40,7 @@ import type { DistrictArea } from "./types";
 import type { Translate } from "./copy";
 import type { PositionSession } from "./useFollowPosition";
 import { CollapseIcon, ExpandIcon, LocationIcon, RouteIcon } from "../shared/icons";
-import { busyButton } from "../shared/ui";
+import { busyButton, pressable } from "../shared/ui";
 
 // Footprints the fit keeps clear of the controls, in px. A route marker's
 // visible disc is 30px (tailwind.css: the 44px `.route-map-marker`, its
@@ -65,8 +65,15 @@ type Tip = { name: string; x: number; y: number; direction: "left" | "right" } |
 
 let maplibreModule: Promise<MapLibre> | null = null;
 /** MapLibre and its worker, loaded once and only when a map is drawn. */
-// The entire 44px square is the touch target.
-const mapButton = "inline-flex h-11 min-w-11 items-center justify-center rounded-parranda-btn border-line border-parranda-line-firm bg-parranda-paper/85 text-parranda-ink backdrop-blur-sm transition hover:bg-parranda-paper aria-disabled:opacity-60";
+// The entire 44px square is the touch target. One look with MapLibre's zoom
+// bar (tailwind.css `map-control`): a raised surface on the control shadow
+// with a faint inset hairline that keeps its edge on night tiles, no outer
+// frame and no frosted glass. Under the pointer the same ink fill
+// as the zoom bar's buttons lies over the surface (a layer, so the button
+// stays opaque over the tiles), a step stronger under the finger.
+const mapButton = "inline-flex h-11 min-w-11 items-center justify-center rounded-parranda-btn map-control text-parranda-ink " +
+  "relative before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-parranda-fill before:opacity-0 before:transition-opacity before:duration-150 before:content-[''] " +
+  "hover:before:opacity-100 active:before:bg-parranda-fill-strong active:before:opacity-100 [&>svg]:relative aria-disabled:opacity-60 " + pressable;
 
 function loadMapLibre(): Promise<MapLibre> {
   maplibreModule ??= Promise.all([
@@ -947,7 +954,7 @@ export default function RouteMap({
 
   const locationState = positionSession?.state;
   const locationStatus = positionEnabled && locationState && (
-    <div className="mt-1 flex min-h-11 flex-wrap items-center gap-x-3 text-xs text-parranda-ink-meta">
+    <div className="mt-1 flex min-h-11 flex-wrap items-center gap-x-3 text-13 text-parranda-ink-meta">
       <span role="status">{locationState.status === "tracking"
         ? t("Din position visas", "Your location is shown")
         : locationState.status === "paused"
@@ -972,7 +979,7 @@ export default function RouteMap({
   // A failed map can leave a detached attribution host behind. Render the
   // same credit below the error, never into that no-longer-visible host.
   const walkingLegend = hasPrimaryRoute && (
-    <p className="mt-1 break-words text-xs leading-relaxed text-parranda-ink-meta">
+    <p className="mt-1 break-words text-13 leading-relaxed text-parranda-ink-meta">
       {hasWalkingPath
         ? t("Gångväg", "Walking route")
         : t("Stoppöversikt · gångväg saknas", "Stop overview · walking path unavailable")}
@@ -980,18 +987,20 @@ export default function RouteMap({
     </p>
   );
   if (mapFailed) {
-    return (
-      <><p role="status" className="rounded-parranda border-line border-parranda-line-faint px-4 py-3 text-sm text-parranda-ink-muted">
+    const failed = (
+      <><p role="status" className="rounded-parranda bg-parranda-fill px-4 py-3 text-15 leading-relaxed text-parranda-ink-muted">
         {hasPrimaryRoute
           ? t("Kartan kan inte visas i den här webbläsaren. Stoppen och Maps-rutten fungerar som vanligt.", "The map can't be shown in this browser. The stops and the Maps route work as usual.")
           : t("Kartan kan inte visas i den här webbläsaren. Platser i närheten finns kvar i listan.", "The map can't be shown in this browser. Nearby places are still listed.")}
       </p>{locationStatus}{walkingLegend}</>
     );
+    // In the wide-screen pane the notice keeps a margin from the window's edges.
+    return heightClass === "h-full" ? <div className="p-4">{failed}</div> : failed;
   }
 
   return (
-    <div className={heightClass === "h-full" ? "flex h-full min-h-0 flex-col" : undefined}>
-    <div ref={frameRef} data-route-map="" data-still={still || undefined} className={`route-map-frame relative w-full overflow-hidden rounded-parranda border-line border-parranda-line-faint transition-all ${heightClass === "h-full" ? "min-h-0 flex-1" : heightClass}`}>
+    <div className={heightClass === "h-full" ? "flex h-full min-h-0 flex-col [&>.route-map-frame~*]:px-4 [&>.route-map-frame~*:last-child]:pb-2" : undefined}>
+    <div ref={frameRef} data-route-map="" data-still={still || undefined} className={`route-map-frame relative w-full overflow-hidden rounded-parranda border-line border-parranda-line-faint motion-safe:transition-[height] motion-safe:duration-300 motion-safe:ease-in-out ${heightClass === "h-full" ? "min-h-0 flex-1" : heightClass}`}>
       {/* Screen layout keeps each numbered touch footprint independently visible. */}
       <div ref={mapRef} className="h-full w-full" />
       {groupPicker && (
@@ -1037,7 +1046,7 @@ export default function RouteMap({
         </div>
       )}
       {!mapDrawn && (
-        <div className="absolute inset-0 flex items-center justify-center bg-parranda-fill text-sm text-parranda-ink-meta">
+        <div className="absolute inset-0 flex items-center justify-center bg-parranda-fill text-13 text-parranda-ink-meta">
           {t("Ritar kartan …", "Drawing the map …")}
         </div>
       )}
@@ -1084,7 +1093,7 @@ export default function RouteMap({
         map" says whether the path was confirmed. */}
     {!creditHost && walkingLegend}
     {tilesFailed && (
-      <p role="status" className="mt-1 text-xs text-parranda-ink-meta">
+      <p role="status" className="mt-1 text-13 text-parranda-ink-meta">
         {hasWalkingPath
           ? t("Kartbakgrunden kunde inte hämtas — rutten och stoppen visas ändå.", "The map background couldn't be loaded — the route and stops are still shown.")
           : hasPrimaryRoute
@@ -1092,7 +1101,7 @@ export default function RouteMap({
           : t("Kartbakgrunden kunde inte hämtas. Platser i närheten visas ändå.", "The map background couldn't be loaded. Nearby places are still shown.")}
       </p>
     )}
-    {layoutCrowded && <p role="status" className="mt-1 text-xs text-parranda-ink-meta">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}
+    {layoutCrowded && <p role="status" className="mt-1 text-13 text-parranda-ink-meta">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}
     </div>
   );
 }

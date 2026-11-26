@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
 import { routeUnconfirmedTonightPicks, walkingDistanceLabel } from "../../lib/route-context-view.mjs";
-import { CheckIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, MinusIcon, RainIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
+import { CheckIcon, ClockIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, MinusIcon, RainIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
 import { busyButton, buttonClass, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
@@ -82,7 +82,7 @@ export function DayWhen({ t, lang, date, relativeDay }: {
 
 /** A day-shape caveat under the facts: one plain line, like the facts' own voice. */
 function Note({ children }: { children: ReactNode }) {
-  return <p className="text-13 leading-relaxed text-parranda-ink-muted">{children}</p>;
+  return <p className="text-13 leading-snug text-parranda-ink-muted">{children}</p>;
 }
 
 /**
@@ -121,20 +121,38 @@ export function dayAssemblyNotes(t: Translate, { sourceBackedDay, timeAnchoring,
 /**
  * What the day did for each pick, in one line inside the Adjust row (Linje 2):
  * the pick's name after its mark (in the day, partly, not in it, still
- * looking). Status, never selection: no ink fill, no chip.
+ * looking), then the rhythm as the line's quiet last word ("Balanced").
+ * Status, never selection: no ink fill, no chip, and no ember: the route's
+ * colour belongs to the line just below.
+ *
+ * The list and the rhythm flow as one run of inline items, so the rhythm
+ * follows the last pick on the same line instead of taking a line of its own.
+ * The rhythm stays outside the list: the list is the picks, and only them.
+ * No visible separator: the picks' own gap and the rhythm's quieter colour
+ * and weight set it apart, so a narrow row that wraps it never starts a
+ * line with a stray dot.
  */
 export function PickSummary({ t, lang, pickCoverage, rhythmLabel }: {
-  t: Translate; lang: Lang; pickCoverage: PickCoverage[]; rhythmLabel: string;
+  t: Translate; lang: Lang; pickCoverage: PickCoverage[];
+  /** "Day rhythm: Balanced": the words before the colon are said to assistive tech only. */
+  rhythmLabel: string;
 }) {
+  const colon = rhythmLabel.indexOf(": ");
+  const rhythmName = colon > 0 ? rhythmLabel.slice(0, colon + 2) : "";
+  const rhythmValue = colon > 0 ? rhythmLabel.slice(colon + 2) : rhythmLabel;
   return (
-    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-      <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm font-semibold text-parranda-ink" aria-label={t("Dina val i dagen", "Your picks in this day")}>
+    // Padded so the first line sits centred on the 44px Adjust pill beside it.
+    // Every item is an inline-flex box aligned to the line's top: an icon-led
+    // flex box takes its baseline from the icon, so baseline alignment would
+    // drop "Balanced" below the picks it follows.
+    <span className="min-w-0 flex-1 py-2.5 text-13 font-semibold leading-6 text-parranda-ink">
+      <ul className="inline" aria-label={t("Dina val i dagen", "Your picks in this day")}>
         {pickCoverage.map(({ key, state }) => (
-          <li key={key} className="inline-flex items-center gap-1.5 whitespace-nowrap">
-            {state === "covered" && <CheckIcon className="h-3.5 w-3.5 text-parranda-ember" />}
-            {state === "partial" && <HalfCircleIcon className="h-3.5 w-3.5 text-parranda-glow" />}
-            {state === "missing" && <MinusIcon className="h-3.5 w-3.5 text-parranda-ink-meta" />}
-            {state === "pending" && <RingMark className="h-3.5 w-3.5" />}
+          <li key={key} className="mr-3 inline-flex items-center gap-1.5 whitespace-nowrap align-top">
+            {state === "covered" && <CheckIcon className="h-3 w-3 text-parranda-ink-soft" />}
+            {state === "partial" && <HalfCircleIcon className="h-3 w-3 text-parranda-glow" />}
+            {state === "missing" && <MinusIcon className="h-3 w-3 text-parranda-ink-meta" />}
+            {state === "pending" && <RingMark className="h-3 w-3" />}
             <span className={state === "missing" || state === "unanswered" ? "text-parranda-ink-muted" : ""}>{pickLabel(key, lang)}</span>
             {state === "covered" && <span className="sr-only">{t(" — med i dagen", " — in this day")}</span>}
             {state === "partial" && <span className="font-medium text-parranda-ink-meta">{t(" · delvis", " · partly")}</span>}
@@ -144,7 +162,10 @@ export function PickSummary({ t, lang, pickCoverage, rhythmLabel }: {
           </li>
         ))}
       </ul>
-      <span className="text-13 text-parranda-ink-meta">{rhythmLabel}</span>
+      <span className="inline-flex items-center whitespace-nowrap align-top font-medium text-parranda-ink-meta">
+        {rhythmName && <span className="sr-only">{rhythmName}</span>}
+        {rhythmValue}
+      </span>
     </span>
   );
 }
@@ -274,14 +295,14 @@ export default function DayHeader({
   // is said before the picks and the map, so the map is the last thing in
   // the header and the line can come straight out of it (Linje 2).
   const tail = (
-      <div className="flex flex-col gap-1.5 empty:hidden">
+      <div className="flex flex-col gap-2 empty:hidden">
         {pickCoverage.length > 0 && !picksInControls && (
           <ul className="flex flex-wrap gap-2" aria-label={t("Dina val i dagen", "Your picks in this day")}>
             {pickCoverage.map(({ key, state }) => (
               <li key={key} className={state === "missing"
-                ? "inline-flex items-center gap-1.5 rounded-parranda-tag border-line border-dashed border-parranda-line-firm px-2 py-1 text-xs font-semibold text-parranda-ink-muted"
+                ? "inline-flex items-center gap-1.5 rounded-parranda-tag border-line border-dashed border-parranda-line-firm px-2 py-1 text-13 font-semibold text-parranda-ink-muted"
                 : labelChip}>
-                {state === "covered" && <CheckIcon className="h-3 w-3 text-parranda-ember" />}
+                {state === "covered" && <CheckIcon className="h-3 w-3 text-parranda-ink-soft" />}
                 {state === "partial" && <HalfCircleIcon className="h-3 w-3 text-parranda-glow" />}
                 {state === "missing" && <MinusIcon className="h-3 w-3" />}
                 {state === "pending" && <RingMark className="h-3 w-3" />}
@@ -296,7 +317,7 @@ export default function DayHeader({
           </ul>
         )}
         {priorityShortfall && (
-          <p className="text-13 leading-relaxed text-parranda-ink-muted" role="status">
+          <p className="text-13 leading-snug text-parranda-ink-muted" role="status">
             {priorityShortfall.state === "partial"
               ? t(`Ditt förstaval ${pickLabel(priorityShortfall.key, lang)} finns bara delvis med i den här dagen.`,
                   `Your first choice ${pickLabel(priorityShortfall.key, lang)} is only partly represented in this day.`)
@@ -305,7 +326,10 @@ export default function DayHeader({
           </p>
         )}
         {unconfirmedTonight.length > 0 && (
-          <p className="text-13 leading-relaxed text-parranda-ink-muted" role="status">
+          // A caveat on the clock, said in one quiet line with the clock's mark.
+          <p className="type-data flex items-start gap-1.5 text-13 leading-snug text-parranda-ink-meta" role="status">
+            <ClockIcon className="mt-px h-3.5 w-3.5 text-parranda-glow" />
+            <span className="min-w-0">
             {eveningIsTonight
               ? t(`${unconfirmedList}: öppettiderna i kväll är okända – kontrollera innan du går.`,
                 `${unconfirmedList}: tonight's opening hours are unknown — check before you go.`)
@@ -314,13 +338,14 @@ export default function DayHeader({
                   `${unconfirmedList}: opening hours on the evening of ${dayDateLabel(displayedDate, lang)} are unknown — check before you go.`)
                 : t(`${unconfirmedList}: kvällens öppettider är okända – kontrollera innan du går.`,
                   `${unconfirmedList}: the evening's opening hours are unknown — check before you go.`)}
+            </span>
           </p>
         )}
         {/* What the day CONTAINS stays under the title (a thin day says so);
             how it was ASSEMBLED is one "About this day" line beside the map. */}
         {dayLimitationNote && <Note>{dayLimitationNote}</Note>}
         {restoredAt && (
-          <p className="text-xs text-parranda-ink-meta">
+          <p className="text-13 leading-snug text-parranda-ink-meta">
             {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", { day: "numeric", month: "short", year: "numeric" })} —{" "}
             {canUpdateSaved ? (
               <button type="button" onClick={() => resolveAndRun()} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-parranda-clay">
@@ -346,7 +371,7 @@ export default function DayHeader({
         {staleNotice === "updating" && (
           <span
             aria-live="polite"
-            className="inline-flex min-h-7 items-center gap-2 rounded-parranda-tag border-line border-parranda-ember/60 px-2.5 text-xs font-bold text-parranda-clay"
+            className="inline-flex min-h-7 items-center gap-2 rounded-parranda-tag bg-parranda-fill px-2.5 text-13 font-bold text-parranda-ink"
           >
             <RingMark className="h-3 w-3" />
             {t("Uppdaterar dagen …", "Updating your day …")}
@@ -356,7 +381,7 @@ export default function DayHeader({
           <>
             <span
               aria-live="polite"
-              className="inline-flex items-center gap-1.5 rounded-parranda-tag bg-parranda-ember/12 px-2.5 py-1 text-xs font-bold text-parranda-clay"
+              className="inline-flex items-center gap-1.5 rounded-parranda-tag bg-parranda-fill px-2.5 py-1 text-13 font-bold text-parranda-ink"
             >
               {navigationInterrupted
                 ? t("Planeringen pausades när du lämnade sidan — visar din förra dag", "Planning paused when you left — showing your previous day")
@@ -365,7 +390,7 @@ export default function DayHeader({
             <button
               type="button"
               onClick={retryPlan}
-              className="inline-flex min-h-11 items-center rounded-parranda-btn border-line border-parranda-ember/50 px-3.5 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
+              className={buttonClass("secondary", "min-h-11 px-3 text-13")}
             >
               {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök uppdatera igen", "Try updating again")}
             </button>
@@ -373,19 +398,24 @@ export default function DayHeader({
         )}
       </div>}
       <div className="flex flex-col">
-        <div className="flex items-start justify-between gap-3">
-          <h1 ref={headingRef} tabIndex={-1} className="type-title min-w-0 wrap-anywhere pt-2 text-[1.625rem] text-parranda-ink sm:pt-1.5 sm:text-[2rem]">
+        {/* Change place's 44px pill is centred on the title's FIRST line
+            (the title's line box is 0.95 of its size), so a title that
+            wraps keeps the pill beside its opening words, not its middle.
+            The row is a size container: Change place drops to its glyph
+            when the row is too narrow for its words (AnchorCard). */}
+        <div className="@container flex items-start justify-between gap-3 [&>a]:mt-[calc((1.625rem*0.95_-_2.75rem)/2)] sm:[&>a]:mt-[calc((2rem*0.95_-_2.75rem)/2)]">
+          <h1 ref={headingRef} tabIndex={-1} className="type-title min-w-0 wrap-anywhere text-[1.625rem] text-parranda-ink sm:text-[2rem]">
             {mode === "near_me" && !placeLabel
               ? t("En dag nära dig", "A day near you")
               : `${t("En dag i", "A day in")} ${anchorLabel}`}
           </h1>
           {titleAction}
         </div>
-        <div data-day-facts="" className="mt-2.5 flex flex-col gap-0.5 [overflow-wrap:anywhere]">
-          <p className="text-17 font-semibold leading-snug text-parranda-ink">
+        <div data-day-facts="" className="mt-2 flex flex-col gap-1 [overflow-wrap:anywhere]">
+          <p className="text-15 font-semibold leading-snug text-parranda-ink">
             {daySummary({ stops: coreCount, live: wovenCount, distance: distance ? walkingDistanceLabel(primaryRoute.estimated_km, lang) : null, lang })}
           </p>
-          <p className="text-15 text-parranda-ink-muted">
+          <p className="type-data text-13 text-parranda-ink-meta">
             {displayedDate && <time dateTime={date!}>{relativeDay === 0 ? t("Idag", "Today") : relativeDay === 1 ? t("Imorgon", "Tomorrow") : dayDateLabel(displayedDate, lang)}</time>}
             {/* The selected date's forecast, said after the date: the sky's
                 icon, the high and the sky in words. Only a fresh reading. */}
@@ -393,10 +423,10 @@ export default function DayHeader({
               <>
                 {/* Said as a sentence, as on the board: "Today, 5° and rain." */}
                 {displayedDate ? <span aria-hidden="true">{", "}</span> : null}
-                <span role="img" className="inline-flex items-center gap-1 align-[-0.15em]"
+                <span role="img" className="whitespace-nowrap text-parranda-ink"
                   aria-label={t(`Prognosens högsta temperatur: ${weatherChip}C${condition ? `. ${condition[0]}` : ""}`, `Forecast high: ${weatherChip}C${condition ? `. ${condition[1]}` : ""}`)}
                   title={condition ? t(condition[0], condition[1]) : t("Prognosens högsta temperatur", "Forecast high")}>
-                  {WeatherIcon && <WeatherIcon className="h-4 w-4" />}
+                  {WeatherIcon && <WeatherIcon className="mr-1 h-3.5 w-3.5 align-[-0.125em]" />}
                   {weatherChip}
                 </span>
                 <span aria-hidden="true">{condition ? ` ${t("och", "and")} ${t(condition[0], condition[1]).toLowerCase()}.` : "."}</span>
@@ -408,7 +438,7 @@ export default function DayHeader({
             quietly under the facts: "Culture, food and history. From
             Postmuseum to Strömparterren." */}
         {idea && (
-          <p data-day-idea="" className="mt-1.5 text-13 leading-snug text-parranda-ink-muted [overflow-wrap:anywhere]">
+          <p data-day-idea="" className="mt-2 text-pretty text-15 leading-relaxed text-parranda-ink-muted [overflow-wrap:anywhere]">
             <span className="font-semibold text-parranda-ink-soft">{idea.headline}.</span>
             {idea.journey ? <> {idea.journey}</> : null}
           </p>
@@ -443,6 +473,13 @@ export default function DayHeader({
  * TAKING THE DAY WITH YOU — Maps, save and share. They follow the stops: the
  * page leads with the day itself, and these act on the day once it has been
  * read. Maps computes the real walking path, so that is said here, beside it.
+ *
+ * One filled action (the walk in Maps), then Save and Share as two equal
+ * tonal buttons in a two-column grid. When the day cannot be shared exactly
+ * there is no Share at all (a Share that cannot share is a promise the page
+ * cannot keep, and tests hold that no "Share…" control exists then), but Save
+ * keeps its half-width cell, so it does not move between a shareable day and
+ * one that is not, and the reason is said directly under it.
  */
 export function DayActions({
   t,
@@ -460,6 +497,8 @@ export function DayActions({
   publishedStart,
   publishedEnd,
   stale = false,
+  sharingNote = null,
+  saveError = null,
 }: {
   t: Translate;
   routeParts: RoutePart[];
@@ -476,22 +515,44 @@ export function DayActions({
   publishedStart: any;
   publishedEnd: any;
   stale?: boolean;
+  /** Why this day cannot be shared exactly; shown under Share while it is unavailable. */
+  sharingNote?: ReactNode;
+  /** The day could not be saved on this device; shown under Save. */
+  saveError?: ReactNode;
 }) {
+  const showSharingNote = !canShare && Boolean(sharingNote);
+  // Share leaves the row when the day stops being shareable (a published
+  // link can lapse while the day is open). If it held focus then, focus
+  // would fall to the top of the page; hand it to Save, beside it, instead.
+  const saveRef = useRef<HTMLButtonElement>(null);
+  const shareHadFocus = useRef(false);
+  const shareRef = useCallback((node: HTMLButtonElement | null) => {
+    if (!node) return;
+    return () => {
+      // React detaches the ref before it removes the node, so focus is
+      // still on it here when it was the focused element.
+      shareHadFocus.current = node.ownerDocument.activeElement === node;
+    };
+  }, []);
+  useLayoutEffect(() => {
+    if (!canShare && shareHadFocus.current) saveRef.current?.focus();
+    shareHadFocus.current = false;
+  }, [canShare]);
   return (
     <section
       aria-label={t("Ta med dagen", "Take the day with you")}
-      className={`${stale ? "opacity-60 motion-safe:transition-opacity" : ""} flex flex-col gap-1.5`}
+      className={`${stale ? "opacity-60 motion-safe:transition-opacity" : ""} flex flex-col gap-2`}
     >
       {/* THE WALK IN MAPS. One link when Maps can take the whole walk. When
           it can't (Maps takes a few stops per link), a numbered sequence of
           named stretches: only the first is the primary action, the rest
           are the next steps of the same walk — never alternatives to it. */}
       {routeParts.length > 1 && (
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-2">
           <Eyebrow>
             {t(`Promenaden i Maps · ${routeParts.length} delar`, `The walk in Maps · ${routeParts.length} parts`)}
           </Eyebrow>
-          <ol className="flex flex-col gap-1.5">
+          <ol className="flex flex-col gap-2">
             {routeParts.map((part, index) => {
               const newStops = part.stopIndexes.length;
               const first = index === 0;
@@ -502,10 +563,11 @@ export function DayActions({
                     target="_blank"
                     rel="noopener noreferrer"
                     className={
-                      "flex min-h-14 items-center gap-3 rounded-parranda-btn px-3.5 py-2 text-left text-15 transition " +
+                      // Full-width rows: no press scale, the fill answers instead.
+                      "flex min-h-14 items-center gap-3 rounded-parranda-btn px-4 py-2 text-left text-15 transition-[background-color,filter] duration-150 ease-out " +
                       (first
-                        ? "bg-parranda-terracotta font-extrabold text-parranda-on-terracotta hover:brightness-110"
-                        : "bg-parranda-fill font-bold text-parranda-ink hover:bg-parranda-fill-strong")
+                        ? "bg-parranda-terracotta font-extrabold text-parranda-on-terracotta hover:brightness-110 active:brightness-95"
+                        : "bg-parranda-fill font-bold text-parranda-ink hover:bg-parranda-fill-strong active:bg-parranda-fill-strong")
                     }
                   >
                     <span
@@ -533,7 +595,7 @@ export function DayActions({
               );
             })}
           </ol>
-          <p className="text-xs leading-relaxed text-parranda-ink-meta">
+          <p className="text-13 leading-snug text-parranda-ink-meta">
             {t(
               "Google Maps tar bara några stopp per länk, så promenaden öppnas i delar. Ta dem i ordning — varje del börjar där den förra slutar.",
               "Google Maps takes only a few stops per link, so the walk opens in parts. Take them in order — each part starts where the previous one ends.",
@@ -542,13 +604,14 @@ export function DayActions({
         </div>
       )}
       {/* One walk, one card: the action, then where it starts and ends.
-          The line of stops above leads into it. */}
+          The line of stops above leads into it. A full-width row, so it
+          answers a press with its fill, never a scale. */}
       {routeParts.length === 1 && (
         <a
           href={routeUrls[0]}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex min-h-16 items-center gap-3 rounded-parranda-btn bg-parranda-terracotta px-4 py-3 text-parranda-on-terracotta transition hover:brightness-110"
+          className="flex min-h-16 items-center gap-3 rounded-parranda-btn bg-parranda-terracotta px-4 py-3 text-parranda-on-terracotta transition-[filter] duration-150 ease-out hover:brightness-110 active:brightness-95"
         >
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="text-17 font-extrabold leading-tight">{t("Öppna rutten i Maps", "Open route in Maps")}</span>
@@ -569,47 +632,64 @@ export function DayActions({
           <ExternalIcon className="h-[18px] w-[18px]" />
         </a>
       )}
-      <div className="flex flex-wrap gap-x-5">
-        <button
-          type="button"
-          // Saved stays focusable: a disabled button would drop the focus
-          // that just pressed it to the top of the page.
-          onClick={isSaved ? undefined : saveDay}
-          aria-disabled={isSaved || undefined}
-          aria-label={isSaved ? t("Dagen är sparad", "Day is saved") : t("Spara dagen", "Save this day")}
-          className={buttonClass("quiet", "min-h-11 -ml-2 px-2 text-15 aria-disabled:text-parranda-clay aria-disabled:opacity-100")}
-        >
-          <StarIcon filled={isSaved} />
-          {isSaved ? t("Sparad", "Saved") : t("Spara", "Save")}
-        </button>
-        {canShare && (
-          <button
-            type="button"
-            onClick={shareDay}
-            aria-label={t("Dela dagen", "Share this day")}
-            className={buttonClass("quiet", "min-h-11 px-2 text-15")}
-          >
-            {shareCopied ? <CheckIcon className="h-4 w-4 text-parranda-ember" /> : <ShareIcon />}
-            {shareCopied ? t("Länk kopierad", "Link copied") : t("Dela", "Share")}
-          </button>
-        )}
-      </div>
       {/* A split walk names its start and finish in the sequence, one walk in its card. */}
       {routeParts.length === 0 && Boolean(routeOrigin || routeDestination) && (
-        <p className="text-xs text-parranda-ink-meta">
+        <p className="type-data text-13 text-parranda-ink-meta">
           {Boolean(routeOrigin) && `${t("Start", "Start")}: ${anchorIsPosition ? t("Din position", "Your position") : String(publishedStart?.label || t("kartans startpunkt", "map start point"))}`}
           {routeOrigin && routeDestination ? " · " : ""}
           {Boolean(routeDestination) && `${t("Slut", "Finish")}: ${anchorIsPosition ? t("Din position", "Your position") : String(publishedEnd?.label || t("kartans slutpunkt", "map end point"))}`}
         </p>
       )}
       {routeUrls.length === 0 && (
-        <p className="text-xs text-parranda-ink-meta">
+        <p className="text-13 leading-snug text-parranda-ink-meta">
           {t("Hela rutten kan inte öppnas i Maps. Öppna platserna var för sig där kartlänk finns.", "The whole route cannot be opened in Maps. Open places individually where a map link is available.")}
         </p>
       )}
+      {/* The CTA's own small print, directly under it. */}
       {routeUrls.length > 0 && (
-        <p className="text-xs text-parranda-ink-meta">
+        <p className="text-11 leading-snug text-parranda-ink-meta">
           {t("Google Maps beräknar gångvägen när du öppnar rutten.", "Google Maps works out the walking path when you open the route.")}
+        </p>
+      )}
+      {/* Save always holds the left half, Share the right: a day that cannot
+          be shared keeps Save where it is, half width and quiet, never a
+          full-width second CTA under the route. */}
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <button
+          ref={saveRef}
+          type="button"
+          // Saved stays focusable: a disabled button would drop the focus
+          // that just pressed it to the top of the page.
+          onClick={isSaved ? undefined : saveDay}
+          aria-disabled={isSaved || undefined}
+          aria-label={isSaved ? t("Dagen är sparad", "Day is saved") : t("Spara dagen", "Save this day")}
+          className={buttonClass("secondary", "min-h-11 px-4 text-13 font-bold aria-disabled:cursor-default aria-disabled:opacity-100")}
+        >
+          <StarIcon filled={isSaved} className={`h-4 w-4 ${isSaved ? "text-parranda-clay" : ""}`.trim()} />
+          {isSaved ? t("Sparad", "Saved") : t("Spara", "Save")}
+        </button>
+        {canShare && (
+          <button
+            ref={shareRef}
+            type="button"
+            onClick={shareDay}
+            aria-label={t("Dela dagen", "Share this day")}
+            className={buttonClass("secondary", "min-h-11 px-4 text-13 font-bold")}
+          >
+            {shareCopied ? <CheckIcon className="h-4 w-4" /> : <ShareIcon />}
+            {shareCopied ? t("Länk kopierad", "Link copied") : t("Dela", "Share")}
+          </button>
+        )}
+      </div>
+      {/* One live region, always mounted, so the note is announced when
+          sharing becomes unavailable while the day is open (a status
+          region, as before this layout). Empty, it takes no room. */}
+      <p role="status" className="text-13 leading-snug text-parranda-ink-meta empty:-mt-2">
+        {showSharingNote ? sharingNote : null}
+      </p>
+      {saveError && (
+        <p role="status" className="text-13 leading-snug text-parranda-ink-muted">
+          {saveError}
         </p>
       )}
     </section>

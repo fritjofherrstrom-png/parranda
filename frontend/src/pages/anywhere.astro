@@ -4,7 +4,9 @@
 // the request-time <html lang> contract for /anywhere because static Astro
 // output cannot read query params directly. The island draws its own <main>
 // after the app bar, so navigation is not part of the page's main content
-// (the same order as the landing).
+// (the same order as the landing). From 64rem the wrapper steps aside
+// (no width cap, no padding): the planner draws its own two columns, the day
+// with its own gutters and the map as a pane to the window's edges.
 import Shell from "../layouts/Shell.astro";
 import AnywherePlanner from "../components/AnywherePlanner";
 ---
@@ -13,7 +15,7 @@ import AnywherePlanner from "../components/AnywherePlanner";
   title="Parranda — any city"
   description="Type any city. Parranda builds a day with the right rhythm, neighborhoods and timing — extra curated in Barcelona and Rome."
 >
-  <div class="mx-auto flex w-full max-w-2xl flex-col px-4 pb-16 pt-3 sm:px-6 lg:max-w-[88rem] lg:px-8">
+  <div class="mx-auto flex w-full max-w-2xl flex-col px-4 pb-16 pt-3 sm:px-6 lg:max-w-none lg:px-0 lg:pb-0 lg:pt-0">
     <AnywherePlanner client:load />
   </div>
 </Shell>

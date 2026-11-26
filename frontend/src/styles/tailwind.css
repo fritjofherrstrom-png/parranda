@@ -64,6 +64,11 @@
 
   --font-display: var(--p-font-display), "Helvetica Neue", Arial, sans-serif;
   --font-body: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
+
+  /* Motion (keyframes below). Always applied through `motion-safe:`, so
+     reduced motion gets the end state at once. */
+  --animate-panel-in: parranda-panel-in 180ms var(--p-ease-out);
+  --animate-ring-once: parranda-ring-once 600ms var(--p-ease-out) 1;
 }
 
 @layer base {
@@ -95,6 +100,16 @@
 }
 @utility border-l-line {
   border-left-width: var(--p-line);
+}
+
+/* A control floating on the map (RouteMap `mapButton` and MapLibre's zoom
+   bar, one look): the raised surface on the control shadow, with a faint ink
+   hairline drawn inside it so the edge holds on night tiles, where the
+   surface is only a step lighter than the map. Inset, so it adds no size and
+   moves nothing; on day tiles it all but disappears. */
+@utility map-control {
+  background-color: rgb(var(--p-color-surface));
+  box-shadow: var(--p-shadow-control), inset 0 0 0 var(--p-line) rgb(var(--p-color-ink) / var(--p-ink-line-faint));
 }
 
 /* "Linje" type roles: one family, Archivo, on its width axis. Wide and heavy
@@ -219,6 +234,38 @@
   }
 }
 
+/* A panel that opens in place (Adjust, an open stop) arrives: it fades in
+   and settles the last 4px, so the eye follows where it came from. Enter
+   only: panels stay conditionally mounted, so there is nothing to collapse.
+   `motion-safe:animate-panel-in`. */
+@keyframes parranda-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* "You are here", said once: a ring leaves the mark and fades, then the mark
+   holds still (its static halo, if it has one, is its own box-shadow, which
+   this outline never touches). It replaces a ping that never stopped. The
+   ring is ember, the station's colour; a mark of another role sets
+   `--p-ring-rgb` (the live dot: `[--p-ring-rgb:var(--p-color-live)]`).
+   `motion-safe:animate-ring-once`. */
+@keyframes parranda-ring-once {
+  from {
+    outline: 2px solid rgb(var(--p-ring-rgb, var(--p-color-ember)) / 0.6);
+    outline-offset: 0;
+  }
+  to {
+    outline: 2px solid rgb(var(--p-ring-rgb, var(--p-color-ember)) / 0);
+    outline-offset: 8px;
+  }
+}
+
 /* While an adjustment rebuilds the day, its line goes quiet and one soft
    ember wash slides slowly down it, then rests: the route drawn again, in
    the loading day's calm tempo rather than stations flashing in turn. */
@@ -279,19 +326,29 @@
 .route-map-frame .maplibregl-ctrl-attrib a {
   color: rgb(var(--p-color-ink));
 }
-.route-map-frame .maplibregl-ctrl-group {
-  background: rgb(var(--p-color-paper));
-  border: var(--p-line) solid rgb(var(--p-color-ink) / var(--p-ink-line-faint));
-  border-radius: 10px;
-  box-shadow: var(--p-shadow-control);
+/* Map controls have one look on every surface, the same as the planner's own
+   map buttons (RouteMap `mapButton`): the `map-control` surface, raised on the
+   control shadow with a faint inset hairline, and no outer frame.
+   `:not(:empty)` out-specifies MapLibre's own grey ring. */
+.route-map-frame .maplibregl-ctrl-group,
+.route-map-frame .maplibregl-ctrl-group:not(:empty) {
+  @apply map-control;
+  border: 0;
+  border-radius: var(--p-radius-button);
   overflow: hidden;
 }
 .route-map-frame .maplibregl-ctrl-group button + button {
   border-top: var(--p-line) solid rgb(var(--p-color-ink) / var(--p-ink-line-faint));
 }
+.route-map-frame .maplibregl-ctrl-group button {
+  transition: background-color 150ms ease-out;
+}
 .route-map-frame .maplibregl-ctrl-group button:hover,
 .route-map-frame .maplibregl-ctrl-group button:focus-visible {
   background: rgb(var(--p-color-ink) / var(--p-ink-fill));
+}
+.route-map-frame .maplibregl-ctrl-group button:active {
+  background: rgb(var(--p-color-ink) / var(--p-ink-fill-strong));
 }
 /* MapLibre's own focus glow is clipped by the group's rounded overflow, so a
    keyboard user saw only a hairline. Draw the shared focus colour inside the
@@ -560,8 +617,10 @@
 }
 
 /* Linje 2 board: on a phone the day's map runs edge to edge, so the line can
-   come straight out of its lower edge. The lines under the frame (status,
-   credit without a drawn map) keep the page's margin. */
+   come straight out of its lower edge. The band is cut clean: no corners and
+   no side frame, only the hairlines above and below it, where it meets the
+   paper. The lines under the frame (status, credit without a drawn map) keep
+   the page's margin. */
 @media (max-width: 639px) {
   [data-map-overview] {
     margin-inline: -1rem;
@@ -573,4 +632,12 @@
   [data-map-overview] .route-map-frame ~ * {
     padding-inline: 1rem;
   }
+}
+
+/* The desktop map pane (AnywherePlanner's aside, `data-map-pane`) runs to
+   the window's top, right and bottom edges; its one hairline is the pane's
+   own left edge, so the frame inside it draws no corners and no frame. */
+[data-map-pane] .route-map-frame {
+  border-radius: 0;
+  border-width: 0;
 }

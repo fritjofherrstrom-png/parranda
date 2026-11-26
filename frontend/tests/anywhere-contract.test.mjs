@@ -388,9 +388,10 @@ test("on a phone the map is a short, still overview until the reader expands it"
   // A tall map above the stops once kept them off the first screen and caught
   // the thumb that meant to scroll. The overview is short, takes no pan or
   // zoom gesture while collapsed, and shows no zoom buttons; its stops still
-  // open on a tap, and Expand gives the full interactive map.
+  // open on a tap, and Expand gives the full interactive map. 240px, not 208:
+  // under a two-line attribution, 208 was too little to read five stations.
   const routeMap = componentSource("planner/RouteMap.tsx");
-  assert.match(anywherePlannerSource, /mapExpanded \? "h-\[min\(70vh,36rem\)\]" : "h-52"/);
+  assert.match(anywherePlannerSource, /mapExpanded \? "h-\[min\(70vh,36rem\)\]" : "h-60"/);
   assert.match(anywherePlannerSource, /still=\{!splitLayout && !mapExpanded\}/);
   assert.match(routeMap, /function applyStill\(map: any, still: boolean\)/);
   assert.match(routeMap, /\[map\.dragPan, map\.touchZoomRotate, map\.doubleClickZoom, map\.boxZoom, map\.keyboard\]/);
@@ -550,6 +551,20 @@ test("frames, elevation, layers and small text come from Linje tokens", () => {
   assert.doesNotMatch(anywhereStyles, /border(-top|-right|-bottom|-left)?: 1px/);
   assert.doesNotMatch(anywhereStyles, /font-size: \d+px/);
   assert.match(anywhereStyles, /z-index: var\(--p-z-map-tooltip\)/);
+});
+
+test("every numbered text size on the Linje surface is a size the theme defines", () => {
+  // Tailwind silently drops a class it has no token for: "Live in Uppsala"
+  // was set in text-19, which produced no CSS, so the heading fell back to
+  // the inherited 16px. A numbered size is a Linje token (@theme --text-N)
+  // or it is a bug.
+  const theme = anywhereStyles.match(/@theme inline \{[\s\S]*?\n\}/)?.[0] ?? "";
+  assert.ok(theme, "tailwind.css has its @theme block");
+  const defined = new Set([...theme.matchAll(/--text-(\d+):/g)].map((m) => m[1]));
+  const used = new Set([...linjeSurface().matchAll(/(?<![\w-])text-(\d+)(?![\w.[-])/g)].map((m) => m[1]));
+  assert.ok(used.size > 0, "the surface uses numbered sizes");
+  const missing = [...used].filter((size) => !defined.has(size)).map((size) => `text-${size}`);
+  assert.deepEqual(missing, [], "used without a --text-N token in @theme");
 });
 
 test("the map's own focusable parts keep a visible ring inside its clipped frame", () => {

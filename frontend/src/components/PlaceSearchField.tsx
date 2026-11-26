@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { LAST_KEY } from "../lib/anywhere-storage.mjs";
 import { isPlaceSearchQueryEligible } from "../../../shared/place-search-query.mjs";
+import { buttonClass } from "./shared/ui";
 
 export interface PlaceSuggestion {
   title: string;
@@ -41,6 +42,14 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
   const [retryGeneration, setRetryGeneration] = useState(0);
   const [selectedOverflows, setSelectedOverflows] = useState(false);
   const listRef = useRef<HTMLUListElement>(null);
+  // Only a pointer that really moves picks a suggestion. When the list
+  // scrolls under a resting pointer (arrow keys), the browser reports the
+  // pointer over a new row with no movement; that must not undo the
+  // keyboard's choice.
+  const pointerPicks = (event: { movementX: number; movementY: number }, index: number) => {
+    if (!event.movementX && !event.movementY) return;
+    setActive(index);
+  };
   const dismissed = useRef(false);
   const sequence = useRef(0);
   // Set by the reader's own Try again; the server then asks its provider even if it is resting.
@@ -119,8 +128,10 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
     // Only scroll the results, not the whole page around the focused field.
     const listRect = list.getBoundingClientRect();
     const optionRect = option.getBoundingClientRect();
-    if (optionRect.top < listRect.top) list.scrollTop += optionRect.top - listRect.top;
-    else if (optionRect.bottom > listRect.bottom) list.scrollTop += optionRect.bottom - listRect.bottom;
+    // Round outward: scrollTop snaps to whole pixels, and a fractional
+    // row edge would otherwise stay a sub-pixel outside the list.
+    if (optionRect.top < listRect.top) list.scrollTop += Math.floor(optionRect.top - listRect.top);
+    else if (optionRect.bottom > listRect.bottom) list.scrollTop += Math.ceil(optionRect.bottom - listRect.bottom);
   }, [shown, active, listId]);
   useEffect(() => {
     const input = inputRef.current;
@@ -137,8 +148,12 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
   }, [selected, value, inputRef]);
   return (
     <div className="relative min-w-0 flex-1" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) dismiss(); }}>
-      <div className={"flex min-h-[3.75rem] items-center gap-3 rounded-parranda-btn border-2 bg-parranda-fill-faint px-5 transition focus-within:border-parranda-ember focus-within:ring-3 focus-within:ring-parranda-glow/60 sm:min-h-16 " + (geoDenied ? "border-parranda-glow ring-3 ring-parranda-glow" : "border-parranda-ink")}>
-        {/* Linje 2: the field is the next station: its ember ring. */}
+      {/* One edge at a time: a filled well at rest, a surface with an ember
+          edge while typing (the field is the next station). A blocked location
+          marks the field with a glow edge at rest, so the way forward stays
+          marked; focus still hands the edge to ember, as on every field. */}
+      <div className={"flex min-h-[3.75rem] items-center gap-3 rounded-parranda-btn border-2 bg-parranda-fill px-5 transition-[background-color,border-color] duration-150 ease-out focus-within:bg-parranda-surface sm:min-h-16 " +
+        (geoDenied ? "border-parranda-glow focus-within:border-parranda-ember" : "border-transparent hover:not-focus-within:bg-parranda-fill-strong focus-within:border-parranda-ember")}>
         <span aria-hidden="true" className="h-[18px] w-[18px] shrink-0 rounded-full border-[4px] border-parranda-ember" />
         <input id="landingCity" ref={inputRef} value={value} onChange={onChange}
           role="combobox" aria-autocomplete="list" aria-expanded={shown} aria-controls={shown ? listId : undefined}
@@ -156,33 +171,33 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
           }}
           autoComplete="off"
           placeholder={t("Stad eller plats", "City or place")}
-          className="min-w-0 flex-1 bg-transparent text-lg text-parranda-ink outline-hidden placeholder:text-parranda-ink-meta focus-visible:outline-hidden sm:text-xl" />
+          className="min-w-0 flex-1 bg-transparent text-17 text-parranda-ink outline-hidden placeholder:text-parranda-ink-meta focus-visible:outline-hidden sm:text-xl" />
       </div>
-      {selected && selectedOverflows && <span aria-hidden="true" className="mt-2 block text-sm leading-snug text-parranda-ink-muted [overflow-wrap:anywhere] sm:hidden">{value}</span>}
-      {shown && <div className={"relative z-(--p-z-popover) mt-1 overflow-hidden rounded-parranda border-line border-parranda-line bg-parranda-paper shadow-pop sm:absolute sm:inset-x-0 " + (above ? "sm:bottom-full sm:mb-1 sm:mt-0" : "sm:top-full")}>
-        <ul ref={listRef} id={listId} role="listbox" aria-label={t("Platsförslag", "Place suggestions")} className="max-h-[min(18rem,40svh)] overflow-y-auto overscroll-contain py-1">
+      {selected && selectedOverflows && <span aria-hidden="true" className="mt-2 block text-15 leading-snug text-parranda-ink-muted [overflow-wrap:anywhere] sm:hidden">{value}</span>}
+      {shown && <div className={"relative z-(--p-z-popover) mt-2 rounded-parranda bg-parranda-surface shadow-pop motion-safe:animate-panel-in sm:absolute sm:inset-x-0 " + (above ? "sm:bottom-full sm:mb-2 sm:mt-0" : "sm:top-full")}>
+        <ul ref={listRef} id={listId} role="listbox" aria-label={t("Platsförslag", "Place suggestions")} className="max-h-[min(18rem,40svh)] overflow-y-auto overscroll-contain p-1">
           {choices.map((choice, index) => <li key={choice.selection_id} id={`${listId}-${index}`} role="option" aria-selected={active === index}
-            onMouseDown={event => event.preventDefault()} onClick={() => choose(choice)} onMouseEnter={() => setActive(index)}
-            className={"cursor-pointer px-5 py-3 text-parranda-ink " + (active === index ? "bg-parranda-fill" : "hover:bg-parranda-fill-faint")}>
-            <span className="block text-base font-bold [overflow-wrap:anywhere]">{choice.title}</span>
-            {(choice.context || kindLabel(choice.kind)) && <span className="block text-sm text-parranda-ink-meta [overflow-wrap:anywhere]">
+            onMouseDown={event => event.preventDefault()} onClick={() => choose(choice)} onMouseMove={event => pointerPicks(event, index)}
+            className={"cursor-pointer rounded-parranda-btn px-4 py-3 text-parranda-ink transition-[background-color] duration-150 ease-out active:bg-parranda-fill-strong " + (active === index ? "bg-parranda-fill" : "hover:bg-parranda-fill-faint")}>
+            <span className="block text-17 font-bold leading-tight [overflow-wrap:anywhere]">{choice.title}</span>
+            {(choice.context || kindLabel(choice.kind)) && <span className="mt-1 block text-13 text-parranda-ink-meta [overflow-wrap:anywhere]">
               {[kindLabel(choice.kind), choice.context].filter(Boolean).join(" · ")}
             </span>}
           </li>)}
         </ul>
-        {choices.some(choice => choice.attribution) && <div className="border-t-line border-parranda-line-faint px-5 py-1.5 text-11 text-parranda-ink-meta">
+        {choices.some(choice => choice.attribution) && <div className="border-t-line border-parranda-line-faint px-5 py-2 text-11 text-parranda-ink-meta">
           {[...new Set(choices.map(choice => choice.attribution === "GeoNames" ? "geonames" : choice.attribution ? "osm" : null).filter(Boolean))].map((source, index) =>
             <span key={source}>{index > 0 && " · "}{source === "geonames"
               ? <a href="https://www.geonames.org/" target="_blank" rel="noreferrer">GeoNames (CC BY 4.0)</a>
               : <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>}</span>)}
         </div>}
       </div>}
-      <span role="status" className={status === "unavailable" ? "mt-1 block text-xs text-parranda-ink-meta" : "sr-only"}>
+      <span role="status" className={status === "unavailable" ? "mt-2 block text-13 text-parranda-ink-meta" : "sr-only"}>
         {status === "loading" ? t("Söker platser …", "Finding places …") : status === "unavailable" ? t("Förslag saknas just nu. Du kan ändå söka med Bygg min dag.", "Suggestions are unavailable. You can still search with Build my day.") : ""}
       </span>
       {status === "unavailable" && <button type="button"
         onClick={() => { explicitRetry.current = true; setRetryGeneration(generation => generation + 1); inputRef.current?.focus(); }}
-        className="mt-1 text-xs font-semibold text-parranda-ink underline underline-offset-2">
+        className={buttonClass("quiet", "-ml-3 min-h-11 px-3 text-13 underline underline-offset-2")}>
         {t("Försök igen", "Try again")}
       </button>}
     </div>
