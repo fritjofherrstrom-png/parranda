@@ -803,3 +803,32 @@ test("a partially covered request stays composed_limited and names the missing i
   assert.ok(!note.toLowerCase().includes("scenic"));
   assert.ok(!note.toLowerCase().includes("views"));
 });
+
+test("motion answers a touch on Linje's own curve, and only movement yields to reduced motion", () => {
+  // Nov 2026 polish audit (staging 65d5d37d): every transition ran on
+  // Tailwind's ease-in-out, icons drew 1.2–1.3px strokes beside bold labels,
+  // swapped icons in one frame, and the Live sheet appeared at once inside a
+  // 85vh cap.
+  const day = tokenBlock(":root");
+  assert.equal(tokenValue(day, "--p-ease-out"), "cubic-bezier(0.23, 1, 0.32, 1)");
+  assert.match(tokenValue(day, "--p-icon-stroke"), /px$/);
+  assert.match(anywhereStyles, /--default-transition-timing-function: var\(--p-ease-out\)/);
+  // An icon that changes meaning swaps through a blur (IconSwap) instead of
+  // trading places in one frame; the press and the panel entry are #719's
+  // `pressable` and `animate-panel-in`.
+  for (const name of ["planner/DayHeader.tsx", "planner/RouteMap.tsx", "planner/StopLine.tsx", "planner/CandidateAreas.tsx"]) {
+    assert.match(componentSource(name), /<IconSwap state=/, `${name} swaps its icons through IconSwap`);
+  }
+  // The Live sheet rises within the visible height.
+  const sheet = componentSource("planner/LiveSheet.tsx");
+  assert.match(sheet, /live-sheet-panel [^"]*max-h-\[85dvh\]/);
+  assert.doesNotMatch(sheet, /\d+vh\]/);
+  // Movement (translate, scale) sits under no-preference; fades are allowed for everyone.
+  const starts = [...anywhereStyles.matchAll(/(@media ([^{]*)\{\s*)?@starting-style\s*\{([^{}]*\{[^}]*\})/g)];
+  assert.ok(starts.length >= 6, "the icon swap and sheet entries are declared");
+  for (const [, , media = "", rules] of starts) {
+    if (/transform:/.test(rules)) assert.match(media, /prefers-reduced-motion: no-preference/, `movement waits for no-preference: ${rules.trim()}`);
+  }
+  assert.doesNotMatch(anywhereStyles, /transition-all|transition: all/);
+  assert.doesNotMatch(componentSource("planner/RouteMap.tsx"), /transition-all/);
+});

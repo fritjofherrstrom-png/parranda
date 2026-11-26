@@ -65,6 +65,11 @@
   --font-display: var(--p-font-display), "Helvetica Neue", Arial, sans-serif;
   --font-body: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
 
+  /* Every `transition` utility answers on Linje's own curve (tokens.css):
+     Tailwind's default ease-in-out started each hover and press slowly. */
+  --default-transition-timing-function: var(--p-ease-out);
+  --ease-out: var(--p-ease-out);
+
   /* Motion (keyframes below). Always applied through `motion-safe:`, so
      reduced motion gets the end state at once. */
   --animate-panel-in: parranda-panel-in 180ms var(--p-ease-out);
@@ -631,6 +636,77 @@
   }
   [data-map-overview] .route-map-frame ~ * {
     padding-inline: 1rem;
+  }
+}
+
+/* Icons (shared/icons.tsx) draw their stroke at one screen weight, whatever
+   their size: see --p-icon-stroke. */
+.parranda-icon {
+  stroke-width: var(--p-icon-stroke);
+}
+.parranda-icon :where(path, circle, line, polyline, polygon, rect, ellipse) {
+  vector-effect: non-scaling-stroke;
+}
+
+/* An icon that changes meaning (saved, copied, open, expanded) swaps
+   through a short blur, so the eye reads one mark turning into the next
+   rather than two marks trading places (IconSwap in shared/ui.tsx). */
+.icon-swap {
+  transition:
+    opacity 200ms var(--p-ease-out),
+    filter 200ms var(--p-ease-out),
+    transform 200ms var(--p-ease-out);
+}
+@starting-style {
+  .icon-swap {
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  @starting-style {
+    .icon-swap {
+      transform: scale(0.5);
+    }
+  }
+}
+
+/* The Live sheet rises from the bottom edge on the iOS sheet curve while
+   the page behind it dims; from a wider screen it lifts a little into
+   place. It leaves at once when closed. Reduced motion keeps the fades. */
+.live-sheet-scrim {
+  transition: opacity 300ms var(--p-ease-out);
+}
+@starting-style {
+  .live-sheet-scrim {
+    opacity: 0;
+  }
+}
+.live-sheet-panel {
+  transition:
+    transform 400ms var(--p-ease-drawer),
+    opacity 300ms var(--p-ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  @starting-style {
+    .live-sheet-panel {
+      opacity: 0;
+    }
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  @starting-style {
+    .live-sheet-panel {
+      transform: translateY(100%);
+    }
+  }
+}
+@media (prefers-reduced-motion: no-preference) and (min-width: 640px) {
+  @starting-style {
+    .live-sheet-panel {
+      opacity: 0;
+      transform: translateY(24px);
+    }
   }
 }
 

@@ -60,6 +60,11 @@
   --p-radius-tag: 7px;
   /* The weight of every hairline frame: cards, pills, segments, notices. */
   --p-line: 1.5px;
+  /* The weight of an icon's stroke, drawn the same at every icon size, so a
+     chevron or a star beside bold 13–17px labels reads as heavy as the
+     letters next to it. A 24-unit stroke of 2 shrank to 1.2–1.3px at the
+     14–16px icons most controls use and looked thinner than its label. */
+  --p-icon-stroke: 1.75px;
   /* Live device position is distinct from route and event colours. */
   --p-color-location: 37 99 235;
   --p-color-on-location: 255 255 255;
@@ -85,8 +90,10 @@
   --p-z-sheet: 1100;
   /* Motion: the one entrance curve (a panel arriving, the map growing),
      quick to start and long to settle. Durations stay short: 150ms for a
-     press, 180ms for a panel, 200ms for a chevron, 300ms for the map. */
+     press, 180ms for a panel, 200ms for a chevron, 300ms for the map.
+     `drawer` is the iOS sheet curve, for the Live sheet rising (400ms). */
   --p-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --p-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --p-font-display: "Archivo";
   --p-font-body: "Archivo";
 }
@@ -131,6 +138,8 @@ html {
 
 body {
   min-height: 100vh;
+  /* The visible height on a phone, whether or not the browser's bars show. */
+  min-height: 100dvh;
   margin: 0;
   font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
   color: rgb(var(--p-color-ink));

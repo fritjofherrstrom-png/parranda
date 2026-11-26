@@ -34,6 +34,7 @@ import {
   ClockIcon,
   ExternalIcon,
   HalfCircleIcon,
+  IconSwap,
   KeepIcon,
   LocationIcon,
   MinusIcon,
@@ -403,14 +404,14 @@ export default function StopLine({
                     className="flex min-h-11 w-full items-center justify-between gap-3 text-left text-15 font-bold leading-tight text-parranda-ink transition-colors hover:text-parranda-clay"
                   >
                     <span>{name}</span>
-                    {expanded ? <MinusIcon className="h-4 w-4 shrink-0 text-parranda-ink" /> : <PlusIcon className="h-4 w-4 shrink-0 text-parranda-ink-meta" />}
+                    <IconSwap state={expanded ? "open" : "closed"}>{expanded ? <MinusIcon className="h-4 w-4 shrink-0 text-parranda-ink" /> : <PlusIcon className="h-4 w-4 shrink-0 text-parranda-ink-meta" />}</IconSwap>
                   </button>
                   {kindLabel && <div className="pb-1.5"><StopCategory type={stop.type} label={kindLabel} /></div>}
                   <p className={`${dataLine} pb-1.5`}>
                     {walkingDistanceLabel(stop.distance_km, lang)} {t("från", "from")} {stop.route_stop_name}
                   </p>
                   {expanded && (
-                    <div id={candidatePanelId} className="mb-1.5 mt-1 border-t-line border-parranda-line-faint pt-3">
+                    <div id={candidatePanelId} className="mb-1.5 mt-1 motion-safe:animate-panel-in border-t-line border-parranda-line-faint pt-3">
                       {/* Secondary: the page has one filled action, the walk in Maps. */}
                       {url && (
                         <a
