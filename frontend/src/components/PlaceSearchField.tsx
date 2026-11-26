@@ -120,8 +120,10 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
     // Only scroll the results, not the whole page around the focused field.
     const listRect = list.getBoundingClientRect();
     const optionRect = option.getBoundingClientRect();
-    if (optionRect.top < listRect.top) list.scrollTop += optionRect.top - listRect.top;
-    else if (optionRect.bottom > listRect.bottom) list.scrollTop += optionRect.bottom - listRect.bottom;
+    // Round outward: scrollTop snaps to whole pixels, and a fractional
+    // row edge would otherwise stay a sub-pixel outside the list.
+    if (optionRect.top < listRect.top) list.scrollTop += Math.floor(optionRect.top - listRect.top);
+    else if (optionRect.bottom > listRect.bottom) list.scrollTop += Math.ceil(optionRect.bottom - listRect.bottom);
   }, [shown, active, listId]);
   useEffect(() => {
     const input = inputRef.current;
