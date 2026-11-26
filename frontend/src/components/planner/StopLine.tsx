@@ -267,15 +267,29 @@ export default function StopLine({
     const reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const glides: Animation[] = [];
     if (!reduce) {
+      // The opened stop and everything after it move as one block, by the
+      // opened stop's own offset: its new panel is part of that block, so
+      // no row below is ever drawn over the photo while the glide runs. On
+      // a plain open (nothing closed above) that offset is 0 and nothing
+      // glides: the rows below take their place under the panel's fade.
+      // The line's own item (a direct child of the list) that holds the row.
+      let openedItem: Element | null = anchor.opening ? row : null;
+      while (openedItem && openedItem.parentElement && !anchor.items.has(openedItem)) openedItem = openedItem.parentElement;
+      if (openedItem && !anchor.items.has(openedItem)) openedItem = null;
+      const blockDy = openedItem && anchor.items.has(openedItem)
+        ? anchor.items.get(openedItem)! - openedItem.getBoundingClientRect().top
+        : null;
       for (const [item, before] of anchor.items) {
         if (!item.isConnected || typeof (item as HTMLElement).animate !== "function") continue;
-        const dy = before - item.getBoundingClientRect().top;
+        const inBlock = openedItem != null && blockDy != null &&
+          (item === openedItem || Boolean(openedItem.compareDocumentPosition(item) & Node.DOCUMENT_POSITION_FOLLOWING));
+        const dy = inBlock ? blockDy! : before - item.getBoundingClientRect().top;
         if (Math.abs(dy) < 1) continue;
         glides.push((item as HTMLElement).animate(
           [{ transform: `translateY(${dy}px)` }, { transform: "translateY(0)" }],
           // A long way gets a little longer and an even curve, so no single
-          // frame carries the item far (a steep ease-out moved ~200px in one).
-          { duration: Math.min(440, 240 + Math.abs(dy) * 0.25), easing: "cubic-bezier(0.45, 0, 0.2, 1)" },
+          // frame carries the item far; never past ~340ms.
+          { duration: Math.min(340, 200 + Math.abs(dy) * 0.2), easing: "cubic-bezier(0.45, 0, 0.2, 1)" },
         ));
       }
     }
