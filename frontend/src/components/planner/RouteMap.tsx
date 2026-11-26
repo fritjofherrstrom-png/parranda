@@ -39,7 +39,7 @@ import type { RouteContextSuggestion } from "../../lib/route-context-view.mjs";
 import type { DistrictArea } from "./types";
 import type { Translate } from "./copy";
 import type { PositionSession } from "./useFollowPosition";
-import { CollapseIcon, ExpandIcon, LocationIcon, RouteIcon } from "../shared/icons";
+import { CollapseIcon, ExpandIcon, IconSwap, LocationIcon, RouteIcon } from "../shared/icons";
 import { busyButton, pressable } from "../shared/ui";
 
 // Footprints the fit keeps clear of the controls, in px. A route marker's
@@ -1079,7 +1079,7 @@ export default function RouteMap({
           title={mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
           className={`${mapButton} w-11`}
         >
-          {mapExpanded ? <CollapseIcon className="h-[18px] w-[18px]" /> : <ExpandIcon className="h-[18px] w-[18px]" />}
+          <IconSwap state={mapExpanded ? "collapse" : "expand"}>{mapExpanded ? <CollapseIcon className="h-[18px] w-[18px]" /> : <ExpandIcon className="h-[18px] w-[18px]" />}</IconSwap>
         </button>}
       </div>
     </div>

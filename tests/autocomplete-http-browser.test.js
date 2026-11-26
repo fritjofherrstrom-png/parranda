@@ -246,3 +246,47 @@ test('actual route handlers preserve cooldown failure health, suppress traffic, 
   t.diagnostic(JSON.stringify({ calls_during_hold: 1, calls_after_recovery: calls - 1,
     recovered_status: block.source_status.status }));
 });
+
+test('a slow lookup on a phone narrows the field instead of covering the typed text and caret', async t => {
+  const query = 'Sankt Petersburg Vasilyevsky Is'; // 31 characters
+  for (const [width, lang, label] of [[390, 'en', 'Finding …'], [320, 'sv', 'Söker …']]) {
+    const gate = deferred();
+    const provider = createPlaceSuggestions({ fetcher: async () => { await gate.promise; return photon('Saint Petersburg'); } });
+    const { origin } = await serve(t, { placeSuggestions: provider });
+    const context = await browser.newContext({ viewport: { width, height: 844 }, hasTouch: true, isMobile: true });
+    await context.route(url => url.origin !== origin, route => route.abort());
+    const page = await context.newPage(), errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(`${origin}/?lang=${lang}`);
+    await page.waitForFunction(() => !document.querySelector('[role=combobox]')?.closest('astro-island')?.hasAttribute('ssr'));
+    const field = page.locator('#landingCity');
+    await field.tap();
+    await page.keyboard.type(query);
+    const wait = page.locator('[data-place-wait]');
+    await wait.waitFor({ state: 'visible' });
+    assert.equal(await wait.textContent(), label);
+    // Measure in one frame: where the caret and the end of the text are drawn
+    // against the visible label, in the browser's own layout.
+    const geometry = await field.evaluate((input, waitSelector) => {
+      const style = getComputedStyle(input);
+      const context2d = document.createElement('canvas').getContext('2d');
+      context2d.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      const box = input.getBoundingClientRect();
+      const contentLeft = box.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+      const innerRight = box.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
+      const caretX = contentLeft + context2d.measureText(input.value.slice(0, input.selectionStart)).width - input.scrollLeft;
+      const labelLeft = document.querySelector(waitSelector).getBoundingClientRect().left;
+      return { caretX, innerRight, labelLeft, atEnd: input.selectionStart === input.value.length,
+        statuses: document.querySelectorAll('[role=status]').length };
+    }, '[data-place-wait]');
+    assert.ok(geometry.atEnd, 'the caret is at the end of what was typed');
+    assert.ok(geometry.caretX <= geometry.innerRight + 1, `caret stays inside the narrowed input at ${width}px (${JSON.stringify(geometry)})`);
+    assert.ok(geometry.caretX < geometry.labelLeft, `caret stays left of the wait label at ${width}px (${JSON.stringify(geometry)})`);
+    assert.equal(geometry.statuses, 1, 'one status announces the wait');
+    gate.resolve();
+    await page.getByRole('listbox').waitFor();
+    assert.equal(await wait.count(), 0, 'the wait gives way to the suggestions');
+    assert.deepEqual(errors, []);
+    await context.close();
+  }
+});

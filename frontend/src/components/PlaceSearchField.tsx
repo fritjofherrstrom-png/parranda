@@ -1,7 +1,7 @@
-import { useEffect, useId, useRef, useState, type RefObject } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { LAST_KEY } from "../lib/anywhere-storage.mjs";
 import { isPlaceSearchQueryEligible } from "../../../shared/place-search-query.mjs";
-import { buttonClass } from "./shared/ui";
+import { buttonClass, dataLine } from "./shared/ui";
 
 export interface PlaceSuggestion {
   title: string;
@@ -22,6 +22,18 @@ function previousSelection(): string | undefined {
   } catch { return undefined; }
 }
 
+/** How long a lookup may run before the field says it is still looking. */
+const WAIT_SHOWN_MS = 300;
+
+/** The visible wait from sm up: a one-line popover where the list will open.
+    Below sm the same live region stays sr-only and a short in-flow label
+    inside the box shows the wait instead (see phoneWait). */
+const waitLine = `max-sm:sr-only sm:pointer-events-none sm:absolute sm:inset-x-0 sm:z-(--p-z-popover) sm:block sm:rounded-parranda-btn sm:bg-parranda-surface sm:px-5 sm:py-2.5 sm:shadow-pop ${dataLine} motion-safe:sm:animate-panel-in`;
+
+/** The phone's visible wait: a flex sibling after the input, so the input
+    narrows and the typed text is never painted over. */
+const phoneWait = `shrink-0 whitespace-nowrap ${dataLine} motion-safe:animate-panel-in sm:hidden`;
+
 /** Prefix search stays at the field. Choosing a row commits identity, not navigation. */
 export default function PlaceSearchField({ value, lang, selected, inputRef, onChange, onSelect, geoDenied }: {
   value: string;
@@ -41,6 +53,13 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
   const [composing, setComposing] = useState(false);
   const [retryGeneration, setRetryGeneration] = useState(0);
   const [selectedOverflows, setSelectedOverflows] = useState(false);
+  // A lookup that answers quickly shows nothing; one still pending after
+  // WAIT_SHOWN_MS says so at the field, so a slow network is
+  // never silence after typing.
+  const [waitShown, setWaitShown] = useState(false);
+  // Set once the current lookup has been pending WAIT_SHOWN_MS, whether or
+  // not the field had focus then, so focusing mid-lookup can show the wait.
+  const pendingLong = useRef(false);
   const listRef = useRef<HTMLUListElement>(null);
   // Only a pointer that really moves picks a suggestion. When the list
   // scrolls under a resting pointer (arrow keys), the browser reports the
@@ -103,16 +122,39 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
     return () => { controller.abort(); clearTimeout(timer); clearTimeout(timeout); };
   }, [value, lang, selected, composing, retryGeneration]);
 
-  function dismiss() { dismissed.current = true; setOpen(false); setActive(-1); }
+  useEffect(() => {
+    setWaitShown(false);
+    pendingLong.current = false;
+    if (status !== "loading") return;
+    const timer = setTimeout(() => {
+      pendingLong.current = true;
+      if (!dismissed.current && document.activeElement === inputRef.current) setWaitShown(true);
+    }, WAIT_SHOWN_MS);
+    return () => clearTimeout(timer);
+  }, [status, inputRef]);
+
+  function dismiss() { dismissed.current = true; setOpen(false); setActive(-1); setWaitShown(false); }
   function choose(choice: PlaceSuggestion) { dismiss(); onSelect(choice); }
   const shown = open && choices.length > 0;
-  useEffect(() => {
-    if (!shown) return;
+  const waiting = waitShown && status === "loading" && !shown;
+  // Measured again whenever either layer appears, including the wait line
+  // handing over to the list, and before paint, so neither opens on a stale side.
+  useLayoutEffect(() => {
+    if (!shown && !waiting) return;
     const rect = inputRef.current?.getBoundingClientRect();
     const height = window.visualViewport?.height ?? window.innerHeight;
     const offset = window.visualViewport?.offsetTop ?? 0;
     if (rect) setAbove(height + offset - rect.bottom < 220 && rect.top - offset > 220);
-  }, [shown, inputRef]);
+  }, [shown, waiting, inputRef]);
+  // On a phone the wait narrows the input, which by itself leaves the caret
+  // where it was, now behind the label. A caret at the end stays in view.
+  // A caret moved back inside the text is left where the reader put it, even
+  // if the narrowing hides it until the lookup answers (accepted, Nov 2026).
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!waiting || !input || document.activeElement !== input) return;
+    if (input.selectionStart === input.value.length && input.selectionEnd === input.value.length) input.scrollLeft = input.scrollWidth;
+  }, [waiting, inputRef]);
   // Typing a place is the landing's one task, so a reader with a mouse and
   // keyboard starts in the field. On touch an autofocused field raises the
   // on-screen keyboard over the page (it once caught a tap meant for
@@ -152,13 +194,19 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
           edge while typing (the field is the next station). A blocked location
           marks the field with a glow edge at rest, so the way forward stays
           marked; focus still hands the edge to ember, as on every field. */}
-      <div className={"flex min-h-[3.75rem] items-center gap-3 rounded-parranda-btn border-2 bg-parranda-fill px-5 transition-[background-color,border-color] duration-150 ease-out focus-within:bg-parranda-surface sm:min-h-16 " +
+      {/* The whole box is the field: a press on the pin or the padding puts
+          the caret in the input. preventDefault keeps focus from leaving
+          first (no blur, so no dismiss); the click repeats the focus for a
+          touch browser that only raises its keyboard from a click. */}
+      <div onMouseDown={event => { if (event.target !== inputRef.current) { event.preventDefault(); inputRef.current?.focus(); } }}
+        onClick={event => { if (event.target !== inputRef.current) inputRef.current?.focus(); }}
+        className={"flex min-h-[3.75rem] cursor-text items-center gap-3 rounded-parranda-btn border-2 bg-parranda-fill px-5 transition-[background-color,border-color] duration-150 ease-out focus-within:bg-parranda-surface sm:min-h-16 " +
         (geoDenied ? "border-parranda-glow focus-within:border-parranda-ember" : "border-transparent hover:not-focus-within:bg-parranda-fill-strong focus-within:border-parranda-ember")}>
         <span aria-hidden="true" className="h-[18px] w-[18px] shrink-0 rounded-full border-[4px] border-parranda-ember" />
         <input id="landingCity" ref={inputRef} value={value} onChange={onChange}
           role="combobox" aria-autocomplete="list" aria-expanded={shown} aria-controls={shown ? listId : undefined}
           aria-activedescendant={shown && active >= 0 ? `${listId}-${active}` : undefined}
-          onFocus={() => { dismissed.current = false; setOpen(choices.length > 0); }}
+          onFocus={() => { dismissed.current = false; setOpen(choices.length > 0); if (pendingLong.current && status === "loading") setWaitShown(true); }}
           onCompositionStart={() => setComposing(true)} onCompositionEnd={() => setComposing(false)}
           onKeyDown={event => {
             if (event.nativeEvent.isComposing) return;
@@ -171,7 +219,8 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
           }}
           autoComplete="off"
           placeholder={t("Stad eller plats", "City or place")}
-          className="min-w-0 flex-1 bg-transparent text-17 text-parranda-ink outline-hidden placeholder:text-parranda-ink-meta focus-visible:outline-hidden sm:text-xl" />
+          className="min-w-0 flex-1 self-stretch bg-transparent text-17 text-parranda-ink outline-hidden placeholder:text-parranda-ink-meta focus-visible:outline-hidden sm:text-xl" />
+        {waiting && <span aria-hidden="true" data-place-wait="" className={phoneWait}>{t("Söker …", "Finding …")}</span>}
       </div>
       {selected && selectedOverflows && <span aria-hidden="true" className="mt-2 block text-15 leading-snug text-parranda-ink-muted [overflow-wrap:anywhere] sm:hidden">{value}</span>}
       {shown && <div className={"relative z-(--p-z-popover) mt-2 rounded-parranda bg-parranda-surface shadow-pop motion-safe:animate-panel-in sm:absolute sm:inset-x-0 " + (above ? "sm:bottom-full sm:mb-2 sm:mt-0" : "sm:top-full")}>
@@ -192,7 +241,16 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
               : <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>}</span>)}
         </div>}
       </div>}
-      <span role="status" className={status === "unavailable" ? "mt-2 block text-13 text-parranda-ink-meta" : "sr-only"}>
+      {/* One live region: a slow lookup only makes the same sentence visible,
+          so it is never announced twice, and it floats, so nothing moves. From
+          sm up it floats where the popover list will open. On a phone the
+          list arrives in flow above Build my day, and a floating line there
+          would cover that button, so this region stays sr-only and the short
+          aria-hidden label inside the box shows the wait, narrowing the input
+          rather than covering its text. An unavailable lookup's sentence wins. */}
+      <span role="status" className={status === "unavailable" ? "mt-2 block text-13 text-parranda-ink-meta"
+        : waiting ? `${waitLine} ` + (above ? "sm:top-auto sm:bottom-full sm:mb-2 sm:mt-0" : "sm:top-full sm:mt-2")
+        : "sr-only"}>
         {status === "loading" ? t("Söker platser …", "Finding places …") : status === "unavailable" ? t("Förslag saknas just nu. Du kan ändå söka med Bygg min dag.", "Suggestions are unavailable. You can still search with Build my day.") : ""}
       </span>
       {status === "unavailable" && <button type="button"

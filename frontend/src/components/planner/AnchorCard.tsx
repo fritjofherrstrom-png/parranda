@@ -50,6 +50,7 @@ export default function AnchorCard({
   onSetRhythm,
   onChangePlace,
   rebuild = null,
+  pendingRecompose = false,
   compact = false,
   dayWhen = null,
   summary = null,
@@ -92,13 +93,20 @@ export default function AnchorCard({
     onUseSuggestion?: () => void;
     announce?: boolean;
   };
-  onSetDay: (offset: 0 | 1) => void;
+  /** Returns false when the tap changed nothing (that day is already the one asked for). */
+  onSetDay: (offset: 0 | 1) => boolean | void;
   rhythms: RhythmOption[];
   walkKey: string;
-  onSetRhythm: (key: string) => void;
+  /** Returns false when the tap changed nothing (that rhythm is already set). */
+  onSetRhythm: (key: string) => boolean | void;
   /** A plain left-click on "Change": the planner cancels work it no longer needs. */
   onChangePlace: () => void;
   rebuild?: AdjustRebuild;
+  /**
+   * An adjustment is queued behind the planner's debounce and its compose not
+   * yet sent. Only the tapped control says so; the day is not stale yet.
+   */
+  pendingRecompose?: boolean;
   /** A day is on screen: its heading names the place above this card. */
   compact?: boolean;
   /** Compact: which day is on screen, said first in the picks line. */
@@ -145,14 +153,39 @@ export default function AnchorCard({
     if (!open) setInterestChooserOpen?.(false);
     setAdjustOpen(open);
   };
-  // The control the reader just tapped carries the rebuild's ring until the
-  // new day is on screen, so the wait is tied to the choice that caused it.
-  const [touched, setTouched] = useState<string | null>(null);
+  // The control the reader just tapped carries the ring from the tap itself —
+  // while its compose is still queued behind the debounce — until the new day
+  // is on screen, so the wait is tied to the choice that caused it. The ring
+  // plays a finite number of times; the panel's status line carries the rest.
+  // Only a tap that changes something sets it: a no-op tap left a key behind
+  // for a later wait it did not cause to light (review, Nov 2026).
+  const [touched, setTouched] = useState<{ key: string; tap: number } | null>(null);
+  const tapCount = useRef(0);
+  const touch = (key: string) => setTouched({ key, tap: ++tapCount.current });
+  // The last tap a wait has been seen for. A tap's own commit comes before
+  // the wait it arms (the planner queues it in an effect), so that one commit
+  // may be "not waiting" without ending the tap; any later "not waiting"
+  // commit does: its wait is over, or it never began (the tap armed nothing,
+  // e.g. on a restored day) and must not light a later wait it did not cause.
+  // Runs every commit (refs and one comparison) so that second commit counts
+  // even when neither `waiting` nor `touched` changes in it.
+  const waitSeenFor = useRef(0);
+  const graceFor = useRef(0);
   const rebuilding = rebuild?.state === "updating";
+  const waiting = rebuilding || pendingRecompose;
   useEffect(() => {
-    if (rebuild?.state !== "updating") setTouched(null);
-  }, [rebuild?.state]);
-  const ring = (key: string) => (rebuilding && touched === key ? " motion-safe:animate-[parranda-ring_2.4s_ease-out_infinite]" : "");
+    if (!touched) return;
+    if (waiting) {
+      waitSeenFor.current = touched.tap;
+      return;
+    }
+    if (waitSeenFor.current !== touched.tap && graceFor.current !== touched.tap) {
+      graceFor.current = touched.tap;
+      return;
+    }
+    setTouched(null);
+  });
+  const ring = (key: string) => (waiting && touched?.key === key ? " motion-safe:animate-ring-pending" : "");
   const scale = rhythms.filter((preset) => preset.key !== "free");
   const atLimit = selected.length >= MAX_PLANNER_PREFERENCES;
   const priority = normalizePreferencePriority(preferencePriority, selected);
@@ -298,13 +331,15 @@ export default function AnchorCard({
             <div className="flex min-w-0 flex-col gap-1">
               {/* With the panel open on a phone, the day is below the screen:
                   this line is where the reader learns the day is rebuilding,
-                  then what the rebuild changed. */}
+                  then what the rebuild changed. While a newer change is
+                  queued, that result is no longer the day being asked for:
+                  the neutral hint stands in until the rebuild is sent. */}
               {rebuild?.state === "updating" ? (
                 <p data-adjust-rebuild="updating" className="flex items-center gap-2 text-13 font-bold text-parranda-clay">
                   <RingMark className="h-3 w-3" />
                   {t("Uppdaterar dagen …", "Updating your day …")}
                 </p>
-              ) : rebuild?.state === "updated" ? (
+              ) : rebuild?.state === "updated" && !pendingRecompose ? (
                 <p data-adjust-rebuild="updated" className="flex items-start gap-1.5 text-13 leading-snug text-parranda-ink-muted">
                   <CheckIcon className="mt-0.5 h-3 w-3 shrink-0 text-parranda-ink-soft" />
                   <span>
@@ -332,7 +367,7 @@ export default function AnchorCard({
               handsBackChoice={parrandaChoosing}
               onCancel={closeInterestChooser}
               onApply={draft => {
-                setTouched("all-interests");
+                touch("all-interests");
                 closeInterestChooser();
                 onApplyInterests(draft);
               }} />
@@ -368,7 +403,7 @@ export default function AnchorCard({
                       aria-disabled={blocked || undefined}
                       onClick={() => {
                         if (blocked) return;
-                        setTouched(`pick:${pref.key}`);
+                        touch(`pick:${pref.key}`);
                         onToggleMood(pref.key);
                       }}
                       className={
@@ -403,7 +438,7 @@ export default function AnchorCard({
             <Eyebrow tone="glow">{t("När", "When")}</Eyebrow>
             <div className={segmentGroup} role="group" aria-label={t("Vilken dag", "Which day")}>
               {([0, 1] as const).map((offset) => (
-                <button type="button" key={offset} aria-pressed={(activeDayOffset === undefined ? dayOffset : activeDayOffset) === offset} onClick={() => { setTouched(`day:${offset}`); onSetDay(offset); }} className={segmentClass((activeDayOffset === undefined ? dayOffset : activeDayOffset) === offset) + ring(`day:${offset}`)}>
+                <button type="button" key={offset} aria-pressed={(activeDayOffset === undefined ? dayOffset : activeDayOffset) === offset} onClick={() => { if (onSetDay(offset) !== false) touch(`day:${offset}`); }} className={segmentClass((activeDayOffset === undefined ? dayOffset : activeDayOffset) === offset) + ring(`day:${offset}`)}>
                   {offset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")}
                 </button>
               ))}
@@ -423,8 +458,7 @@ export default function AnchorCard({
                   type="button"
                   aria-pressed={walkKey === free.key}
                   onClick={() => {
-                    setTouched(`rhythm:${free.key}`);
-                    onSetRhythm(free.key);
+                    if (onSetRhythm(free.key) !== false) touch(`rhythm:${free.key}`);
                   }}
                   className={
                     `${compactPillTarget} shrink-0 gap-1.5 px-3${ring(`rhythm:${free.key}`)} ` +
@@ -451,8 +485,7 @@ export default function AnchorCard({
                     key={preset.key}
                     aria-pressed={active}
                     onClick={() => {
-                      setTouched(`rhythm:${preset.key}`);
-                      onSetRhythm(preset.key);
+                      if (onSetRhythm(preset.key) !== false) touch(`rhythm:${preset.key}`);
                     }}
                     className={
                       `min-h-11 rounded-parranda-btn px-2 text-13 leading-tight ${pressable}` + ring(`rhythm:${preset.key}`) + " " +

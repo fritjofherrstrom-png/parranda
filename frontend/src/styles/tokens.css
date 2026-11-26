@@ -83,10 +83,13 @@
   --p-z-map-tooltip: 1002;
   --p-z-map-overlay: 1003;
   --p-z-sheet: 1100;
-  /* Motion: the one entrance curve (a panel arriving, the map growing),
-     quick to start and long to settle. Durations stay short: 150ms for a
-     press, 180ms for a panel, 200ms for a chevron, 300ms for the map. */
+  /* Motion: the one entrance curve (a panel arriving, the map growing, an
+     icon changing), quick to start and long to settle, and the drawer curve
+     a sheet rises on (the iOS sheet curve). Durations stay short: 150ms for
+     a press, 180ms for a panel, 200ms for a chevron or an icon swap, 300ms
+     for the map, 400ms for the Live sheet. */
   --p-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --p-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --p-font-display: "Archivo";
   --p-font-body: "Archivo";
 }

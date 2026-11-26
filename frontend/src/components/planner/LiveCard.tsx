@@ -22,6 +22,9 @@ import { suggestLiveRouteEnd, type LiveRouteSuggestionContext } from "../../lib/
 import { eventBoardClock, pulseBrowseBuckets, pulseRowsWithoutOccurrence } from "../../lib/pulse-view.mjs";
 import type { LiveEvents, PulseEvent } from "./types";
 
+/** The aside row's pill: no scale on press, and a stretched ::after target. */
+const rowTarget = "transition-[background-color,color] duration-150 ease-out after:absolute after:inset-0 after:rounded-parranda-btn after:content-['']";
+
 /** A source-health or empty state: a sentence, in the body size. */
 const stateCopy = "mt-4 text-15 leading-relaxed text-parranda-ink-muted";
 
@@ -109,13 +112,17 @@ export default function LiveCard({
   // One control opens the sheet: a pill in the heading row, in Live's colour,
   // never a second filled button. The card's one filled action is "Plan with
   // this event", and only when that offer exists. Inside the aside row the
-  // row is already the fill, so the pill only fills under the pointer.
+  // row is already the fill, and the whole row is the target: an ::after
+  // layer stretches the pill over the row, so the row opens the sheet and
+  // deepens under the pointer like Blitz's, while focus still rings the
+  // pill. That pill must not scale on press: a scaled button would contain
+  // the layer and shrink the target under the finger.
   const explore = showExplore ? (
     <button
       type="button"
       ref={liveSheetTriggerRef}
       onClick={openLiveSheet}
-      className={`group inline-flex min-h-11 shrink-0 items-center gap-1 rounded-parranda-btn ${hasBody ? "bg-parranda-fill" : "-my-2 -mr-2"} pl-3 pr-2 text-13 font-bold whitespace-nowrap text-parranda-live hover:bg-parranda-fill-strong active:bg-parranda-fill-strong ${pressable}`}
+      className={`group inline-flex min-h-11 shrink-0 items-center gap-1 rounded-parranda-btn ${hasBody ? `bg-parranda-fill ${pressable}` : `-my-2 -mr-2 ${rowTarget}`} pl-3 pr-2 text-13 font-bold whitespace-nowrap text-parranda-live hover:bg-parranda-fill-strong active:bg-parranda-fill-strong`}
     >
       {exploreLabel}
       <ChevronRightIcon className="h-4 w-4 shrink-0 transition-transform duration-200 ease-out motion-safe:group-hover:translate-x-0.5" />
@@ -129,7 +136,7 @@ export default function LiveCard({
   ) : null;
   if (!hasBody) {
     return (
-      <section className="flex min-h-13 items-center gap-3 rounded-parranda-btn bg-parranda-fill px-4 py-3">
+      <section className="relative flex min-h-13 items-center gap-3 rounded-parranda-btn bg-parranda-fill px-4 py-3 transition-[background-color] duration-150 ease-out hover:bg-parranda-fill-strong active:bg-parranda-fill-strong">
         {dot}
         <h2 className="flex min-w-0 flex-1 flex-col gap-0.5 text-17 font-bold leading-tight text-parranda-ink wrap-anywhere">
           <span>{boardTitle}</span>

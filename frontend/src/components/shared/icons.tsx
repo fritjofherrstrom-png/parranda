@@ -9,10 +9,29 @@
  * Every icon is decorative: it is hidden from assistive technology, and the
  * control it decorates carries its own text or aria-label.
  */
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 
 interface IconProps {
   className?: string;
+}
+
+/**
+ * An icon that changes meaning with `state` (saved, copied, expanded). When
+ * the state changes, the new mark arrives through a short blur (`.icon-swap`
+ * in tailwind.css), so the eye reads one mark turning into the next rather
+ * than two marks trading places. The first render does not animate: only a
+ * change does. Decorative like every icon here: the control it sits in
+ * carries the text or aria-label.
+ */
+export function IconSwap({ state, children }: { state: string; children: ReactNode }) {
+  const first = useRef(state);
+  const changed = useRef(false);
+  if (state !== first.current) changed.current = true;
+  return (
+    <span key={state} aria-hidden="true" className={`inline-flex shrink-0${changed.current ? " icon-swap" : ""}`}>
+      {children}
+    </span>
+  );
 }
 
 function Icon({ className, children, fill = "none" }: IconProps & { children: ReactNode; fill?: string }) {
