@@ -113,14 +113,14 @@ export default function LiveCard({
   ) : null;
   return (
     <section
-      className={`${panelCard} relative p-5 sm:p-6 before:absolute before:left-5 before:top-0 before:h-[3px] before:w-16 before:rounded-full before:bg-parranda-live before:content-[''] sm:before:left-6`}
+      className={`${panelCard} relative p-5 sm:p-6`}
     >
       {/* A departures board: the place, then when, and the way into the full
           board on the right. Blue marks live data; the card itself is the
           system's one panel. */}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <h2 className="flex min-w-0 grow basis-40 flex-col gap-1">
-          <span className="type-title flex min-w-0 items-center gap-2.5 text-xl leading-tight text-parranda-ink wrap-anywhere">
+          <span className="flex min-w-0 items-center gap-2.5 text-17 font-bold leading-tight text-parranda-ink wrap-anywhere">
             <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-parranda-live [--p-ring-rgb:var(--p-color-live)] motion-safe:animate-ring-once" />
             {boardTitle}
           </span>

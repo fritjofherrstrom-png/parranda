@@ -632,7 +632,7 @@ export function DayActions({
           {t("Google Maps beräknar gångvägen när du öppnar rutten.", "Google Maps works out the walking path when you open the route.")}
         </p>
       )}
-      <div className="mt-2 grid grid-cols-2 gap-2">
+      <div className="mt-2 flex gap-2 [&>*]:flex-1">
         <button
           type="button"
           // Saved stays focusable: a disabled button would drop the focus

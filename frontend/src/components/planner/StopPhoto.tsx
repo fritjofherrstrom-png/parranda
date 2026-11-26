@@ -174,7 +174,7 @@ export function PhotoCreditLine({ media, t, lang, full = false }: { media: StopM
  * the credit's expand control never sits on the screen edge. Wider screens keep
  * the photo inside.
  */
-const bleed = "w-full max-sm:-mr-4 max-sm:w-[calc(100%+1rem)] max-sm:rounded-r-none";
+const bleed = "w-full";
 
 /**
  * The open stop's 3:2 figure, full width of its column, with the credit under
