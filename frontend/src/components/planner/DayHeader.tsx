@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
 import { routeUnconfirmedTonightPicks, walkingDistanceLabel } from "../../lib/route-context-view.mjs";
-import { CheckIcon, ClockIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, MinusIcon, RainIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
+import { CheckIcon, ClockIcon, CloudIcon, CloudSunIcon, ExternalIcon, FogIcon, HalfCircleIcon, IconSwap, MinusIcon, RainIcon, ShareIcon, SnowIcon, StarIcon, SunIcon, ThunderstormIcon, WalkIcon } from "../shared/icons";
 import { busyButton, buttonClass, Eyebrow, labelChip } from "../shared/ui";
 import { pickLabel, type Lang, type Translate } from "./copy";
 import { RingMark } from "../shared/RingMark";
@@ -665,7 +665,7 @@ export function DayActions({
           aria-label={isSaved ? t("Dagen är sparad", "Day is saved") : t("Spara dagen", "Save this day")}
           className={buttonClass("secondary", "min-h-11 px-4 text-13 font-bold aria-disabled:cursor-default aria-disabled:opacity-100")}
         >
-          <StarIcon filled={isSaved} className={`h-4 w-4 ${isSaved ? "text-parranda-clay" : ""}`.trim()} />
+          <IconSwap state={isSaved ? "saved" : "save"}><StarIcon filled={isSaved} className={`h-4 w-4 ${isSaved ? "text-parranda-clay" : ""}`.trim()} /></IconSwap>
           {isSaved ? t("Sparad", "Saved") : t("Spara", "Save")}
         </button>
         {canShare && (
@@ -676,7 +676,7 @@ export function DayActions({
             aria-label={t("Dela dagen", "Share this day")}
             className={buttonClass("secondary", "min-h-11 px-4 text-13 font-bold")}
           >
-            {shareCopied ? <CheckIcon className="h-4 w-4" /> : <ShareIcon />}
+            <IconSwap state={shareCopied ? "copied" : "share"}>{shareCopied ? <CheckIcon className="h-4 w-4" /> : <ShareIcon />}</IconSwap>
             {shareCopied ? t("Länk kopierad", "Link copied") : t("Dela", "Share")}
           </button>
         )}

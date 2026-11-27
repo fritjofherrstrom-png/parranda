@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { liveStopChoiceId } from "../../lib/live-stop-choice.mjs";
 import { stopIdentity as changeStopIdentity } from "../../lib/day-change.mjs";
 /**
@@ -98,6 +98,45 @@ function backdropTop(hasLeg: boolean, hasHeading: boolean): string {
   if (hasHeading) return "before:top-14";
   if (hasLeg) return "before:top-8";
   return "before:top-0";
+}
+
+/** The New-station ring's stagger: 60ms a station, in line order, never past 180ms. */
+const NEW_RING_STEP_MS = 60;
+const NEW_RING_MAX_DELAY_MS = 180;
+/** The ring's @keyframes (styles/tailwind.css), as animationend names it. */
+const RING_ONCE_ANIMATION = "parranda-ring-once";
+
+/**
+ * SHOW WHAT CHANGED. When an adjustment lands, each station whose stop carries
+ * the New chip sends out one ink ring (ink: a change, not progress, which is
+ * ember), one after another down the line. Per station index: the ring's delay
+ * in ms, or null for no ring. Nothing rings while the day rebuilds, when nothing
+ * is new, or when every station is new (a full replace: the change line already
+ * says so). The current station keeps its own ember ring and takes no ink one.
+ * Same input, same answer: the class and delay hold for as long as the chip
+ * stands, so a re-render, an open or a close never re-applies the animation.
+ */
+function newStationRingDelays(
+  stops: readonly any[],
+  newStopIdentities: ReadonlySet<string>,
+  stale: boolean,
+  currentIndex: number | null,
+): (number | null)[] {
+  const delays: (number | null)[] = stops.map(() => null);
+  if (stale || newStopIdentities.size === 0) return delays;
+  // The stations the line draws: a stop without a name is not drawn.
+  const stations = stops
+    .map((stop, index) => ({ stop, index }))
+    .filter(({ stop }) => String(stop?.label || stop?.name || "").trim());
+  const isNew = (stop: any) => newStopIdentities.has(changeStopIdentity(stop) ?? "");
+  if (stations.length === 0 || stations.every(({ stop }) => isNew(stop))) return delays;
+  let order = 0;
+  for (const { stop, index } of stations) {
+    if (!isNew(stop) || index === currentIndex) continue;
+    delays[index] = Math.min(order * NEW_RING_STEP_MS, NEW_RING_MAX_DELAY_MS);
+    order += 1;
+  }
+  return delays;
 }
 
 /**
@@ -317,6 +356,31 @@ export default function StopLine({
     : null;
   const currentIndex = progress?.state === "at" ? progress.index : progress?.state === "toward" ? progress.next : null;
   const coreName = (index: number) => String(split.core[index]?.label || split.core[index]?.name || "").trim();
+  const newRingDelays = newStationRingDelays(split.core, newStopIdentities, stale, currentIndex);
+  // RANG ONCE. The ink ring and the ember "you are here" ring are the same
+  // animation in two colours, so a disc that keeps the ink ring's class when
+  // it becomes current only changes colour: the browser has nothing to
+  // restart, and the arrival ring never plays. So a station's ink ring is kept
+  // only until it has finished: each station whose ring ended is recorded (by
+  // its stop identity, never its index, so a disc remounted by a shifted
+  // index cannot ring again), and its ink class and delay come off. Becoming
+  // current then adds a fresh ring, which plays in ember; leaving "current"
+  // brings no ink ring back. The record belongs to one set of New stops on
+  // a settled day: a rebuild (stale) or another set starts it again, while a
+  // re-render that only re-creates the same set keeps it. Under reduced
+  // motion no ring plays and none ends: nothing is recorded, and the classes
+  // stay inert.
+  const ringKey = stale ? "" : [...newStopIdentities].sort().join("\n");
+  const [rangOnce, setRangOnce] = useState<{ key: string; ids: ReadonlySet<string> }>(() => ({ key: ringKey, ids: NO_NEW_STOPS }));
+  if (rangOnce.key !== ringKey) setRangOnce({ key: ringKey, ids: NO_NEW_STOPS });
+  const rangIds = rangOnce.key === ringKey ? rangOnce.ids : NO_NEW_STOPS;
+  const recordRang = (identity: string) =>
+    setRangOnce((prev) =>
+      prev.key !== ringKey
+        ? { key: ringKey, ids: new Set([identity]) }
+        : prev.ids.has(identity)
+          ? prev
+          : { key: ringKey, ids: new Set([...prev.ids, identity]) });
   const followStatus = !following
     ? null
     : follow.state.status === "locating"
@@ -595,7 +659,23 @@ export default function StopLine({
           // The ring plays once when progress reaches this station. It stays
           // on the current station in every state (open, closed, rebuilding),
           // so opening and closing the stop never takes it off and replays it.
-          const ring = isCurrent ? " motion-safe:animate-ring-once" : "";
+          // A station the last adjustment changed rings once in ink as the
+          // rebuilt day lands (newStationRingDelays). The class appears when
+          // `stale` drops and stays, unchanged, while the New chip stands; the
+          // disc keeps its element across open/close (the item's key does not
+          // change), so the animation is applied once and never replays. The
+          // current station's own ember ring wins. Once a New station's ring
+          // has ended (rangIds), its ink class and delay are gone for good.
+          const changeIdentity = changeStopIdentity(stop) ?? "";
+          const isNewStation = !stale && changeIdentity !== "" && newStopIdentities.has(changeIdentity);
+          const newRingDelay = changeIdentity !== "" && rangIds.has(changeIdentity) ? null : newRingDelays[i];
+          // Arriving at a new station while its ink ring is still playing turns
+          // that same ring ember rather than starting a second one (accepted).
+          const ring = isCurrent
+            ? " motion-safe:animate-ring-once"
+            : newRingDelay != null
+              ? " [--p-ring-rgb:var(--p-color-ink)] motion-safe:animate-ring-once"
+              : "";
           const legShown = Boolean(leg && (leg.minutes != null || leg.km != null));
           const laterDaypart = Boolean(daypartHeading && i > 0);
           return (
@@ -657,6 +737,15 @@ export default function StopLine({
                 <span className="type-data relative z-(--p-z-raised) flex h-11 w-11 shrink-0 items-center justify-center rounded-full">
                   <span
                     className={`flex h-8 w-8 items-center justify-center rounded-full border-3 text-13 font-bold transition-[background-color,border-color,color,scale] duration-150 ease-out motion-safe:group-active:scale-95 ${disc}${ring}`}
+                    style={!isCurrent && newRingDelay != null ? { animationDelay: `${newRingDelay}ms` } : undefined}
+                    // Only this disc's own ring (not a child's animation), and
+                    // only on a New station: its ring is done, ink or ember.
+                    onAnimationEnd={isNewStation
+                      ? (event) => {
+                          if (event.target !== event.currentTarget || event.animationName !== RING_ONCE_ANIMATION) return;
+                          recordRang(changeIdentity);
+                        }
+                      : undefined}
                   >
                     {behind ? <CheckIcon className="h-3.5 w-3.5" /> : routeNumber}
                     {behind && <span className="sr-only">{routeNumber}</span>}
@@ -667,7 +756,7 @@ export default function StopLine({
                     {name}
                     {/* Named by the change line above ("4 stops swapped"):
                         which ones are new, for as long as that line stands. */}
-                    {!stale && newStopIdentities.has(changeStopIdentity(stop) ?? "") && (
+                    {isNewStation && (
                       <span className={statusChip("text-parranda-ink-soft")}>{t("Ny", "New")}</span>
                     )}
                     {isCurrent && (

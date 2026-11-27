@@ -18,7 +18,7 @@ source of truth; this is the map.
 | Darkness | `--p-scrim` (behind a modal sheet), `--p-shade` (deepens terracotta under a white digit) | `bg-parranda-scrim`, `bg-parranda-shade` |
 | Stacking | `--p-z-raised`, `-popover`, `-map-control`, `-map-tooltip`, `-map-overlay`, `-sheet`, low to high | `z-(--p-z-…)` |
 | Text sizes | `text-10/11/13/15/17` in `tailwind.css` (rem) | a numbered size with no `--text-N` in `@theme` produces no CSS; a contract test fails on one |
-| Motion | `--p-ease-out`, the curve inside the `parranda-panel-in` and `parranda-ring-once` keyframes | transitions use `ease-out`; entrances `motion-safe:animate-panel-in`, `motion-safe:animate-ring-once` |
+| Motion | `--p-ease-out`, the curve inside the `parranda-panel-in`, `parranda-ring-once` and `parranda-ring` keyframes and the icon swap; `--p-ease-drawer` (the iOS sheet curve) for the Live sheet's rise | transitions use `ease-out`; entrances `motion-safe:animate-panel-in`, `motion-safe:animate-ring-once`, `motion-safe:animate-ring-pending`; classes `icon-swap`, `live-sheet-scrim`, `live-sheet-panel` |
 | Type roles | `type-display`, `type-title`, `type-eyebrow`, `type-data` — one family, Archivo: wide for display, narrow (88 %) with lining tabular figures for labels and data, in the case they are written in | |
 
 Never write an ink percentage (`parranda-ink/68`), an arbitrary opacity
@@ -102,8 +102,17 @@ Never pad with stand-ins, a grey tile or a city's stock image: absence is honest
 
 ## Motion
 
-Everything moves under `motion-safe:`, and only named properties
-transition: never bare `transition` or `transition-all`. Tailwind 4's
+Everything moves under `motion-safe:` (in CSS, `@media
+(prefers-reduced-motion: no-preference)`): reduced motion keeps opacity fades
+and the icon swap's unblur, and nothing translates, scales or rotates. Known
+exceptions, older than this rule and not yet gated: the chevron turns and
+hover nudges in StopLine, AnchorCard, WalkingContinuation and the landing
+hero (`transition-transform`) and in VenueMentions (a bare `transition`)
+still play under reduced motion. Only named properties transition: never bare
+`transition` or `transition-all`. Older colour-only bare `transition`s remain in
+SavedDays and CandidateAreas; name their properties when those files are next
+touched. Every `@starting-style` that moves (`transform`) sits
+under that media query; a contract test fails on one that does not. Tailwind 4's
 `scale-*`, `rotate-*` and `translate-*` set their own CSS properties, so
 transition `scale` (or use `transition-transform`, which covers all three),
 not `transform` alone.
@@ -113,7 +122,12 @@ not `transform` alone.
 | Press | `pressable` on buttons and pills (150ms, `active:scale-[0.97]`); `pressRow` on full-width rows (the fill deepens, no scale) |
 | Enter | `motion-safe:animate-panel-in`: opacity and the last 4px, 180ms on `--p-ease-out`, when the Adjust panel or an open stop mounts. Enter only. |
 | Chevrons | `transition-transform duration-200 ease-out`. A disclosure that opens in place points down and turns 180°; a row that runs an action points right and nudges `group-hover:translate-x-0.5`; stop rows turn 90°. |
-| Once, not forever | `motion-safe:animate-ring-once`: a ring leaves a mark once (600ms) and fades: the current station, the live dot. A mark of another colour than ember sets `--p-ring-rgb`. No new infinite animation; the loading sheen, breathing stations, drawing ring and route redraw are the existing exceptions. |
+| Icon swap | `IconSwap` (`shared/icons.tsx`) around an icon that changes meaning: the Save star, Share → check, the map's Expand ↔ Collapse. The new mark fades in out of a 4px blur, 200ms on `--p-ease-out` (`.icon-swap`); only under no-preference does it also grow from half size. The first render does not animate, only a change does. Labels and focus stay where they were. |
+| Sheet | The Live sheet's scrim fades in (300ms) while the panel rises from the bottom edge on `--p-ease-drawer` (400ms); from the sm breakpoint (40rem, the same one as its `sm:` layout) it lifts 24px into place and fades. Enter only: it leaves at once. Reduced motion keeps the fades. The transform composes with the panel's `sm:-translate-x-1/2` (Tailwind 4's own `translate` property) and settles to none. Its height cap is `85dvh`. |
+| Once, not forever | `motion-safe:animate-ring-once`: a ring leaves a mark once (600ms) and fades: the current station, the live dot. A mark of another colour than ember sets `--p-ring-rgb`. |
+| Pending | `motion-safe:animate-ring-pending`: the Adjust control just tapped rings (ember, starting as a visible 2px ring, widening to 7px and fading) twice, 1.2s each, from the tap until the rebuilt day is on screen, and then rests; the panel's status line carries a longer wait. Finite: it plays twice, never forever. |
+| Show what changed | When a rebuilt day lands, each station that is new sends out one ink ring (`animate-ring-once` with `--p-ring-rgb` set to ink: a change, not progress), down the line in order, 60ms apart and never later than 180ms. Nothing rings while the day rebuilds, when nothing is new, or when every stop is new (a full replace: the change line says so); the current station keeps its own ember ring. |
+| No new infinite animation | The loading sheen, breathing stations, drawing ring (`RingMark`) and route redraw are the only animations that repeat until their wait ends; everything else above plays a fixed number of times. |
 
 ## Rules
 

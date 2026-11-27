@@ -129,8 +129,21 @@ test('Live close stays in reach while scrolling a full event list on mobile', as
     source_url: 'https://calendar.example/event', source_link_kind: 'page', source_link_host: 'calendar.example',
     time_window: { kind: 'all_day', all_day_explicit: true, starts_on: '2026-10-07', ends_on: '2026-10-07' },
   }));
+  // An unrelated animation that never ends (a loading sheen elsewhere on the
+  // page) must not hold the settle wait below.
+  await page.addStyleTag({ content: '@keyframes test-forever { to { opacity: 0.5 } } #test-forever { animation: test-forever 1s infinite; }' });
+  await page.evaluate(() => document.body.insertAdjacentHTML('beforeend', '<div id="test-forever">sheen</div>'));
   await render({ coverage: 'covered', selected_date: '2026-10-07', tonight: rows, this_week: [] });
+  assert.ok(await page.evaluate(() => document.getAnimations().some(animation => animation.playState === 'running'
+    && animation.effect?.getComputedTiming().iterations === Infinity)), 'the unrelated animation is running');
   const close = page.getByRole('button', { name: 'Close live', exact: true });
+  // The sheet rises into place when it opens (.live-sheet-panel): measure
+  // where it settles, not a frame of the entry. Only the panel's own
+  // animations count, so an unrelated repeating one cannot hold the wait.
+  await page.waitForFunction(() => {
+    const panel = document.querySelector('.live-sheet-panel');
+    return Boolean(panel) && panel.getAnimations().every(animation => animation.playState !== 'running');
+  });
   const initial = await close.boundingBox();
   await page.getByRole('heading', { name: 'Calendar event 12', exact: true }).scrollIntoViewIfNeeded();
   const after = await close.boundingBox();

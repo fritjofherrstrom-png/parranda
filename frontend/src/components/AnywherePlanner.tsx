@@ -11,7 +11,7 @@ import type { Commitments } from "./planner/commitments";
  *   structure_only → candidate areas only, honest "not a finished route" note
  *   unavailable    → honest empty state (never a crash)
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { normalizeDayEdit, normalizePreferencePriority, PLANNER_PREFERENCE_KEYS, togglePreferenceSelection, type DayEdit } from "../../../shared/planner-intent.mjs";
 import { fetchPlannerLifecycle } from '../lib/planner-lifecycle.mjs';
 import {
@@ -388,6 +388,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const takeOverFocus = useRef(false);
   const [interestChooserOpen, setInterestChooserOpen] = useState(false);
   const recomposeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirrors recomposeTimerRef for rendering: an adjustment is queued behind the
+  // debounce. The tapped control answers at once with it, before the compose
+  // that makes the day stale is even sent. Never feeds dayIsStale.
+  const [pendingRecompose, setPendingRecompose] = useState(false);
   const requestSequenceRef = useRef(0);
   const retryGenerationRef = useRef(0);
   const interestRetryIntentRef = useRef<number | null>(null);
@@ -606,6 +610,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (!silent && recomposeTimerRef.current) {
       clearTimeout(recomposeTimerRef.current);
       recomposeTimerRef.current = null;
+      setPendingRecompose(false);
     }
     if (!silent && pollTimerRef.current) {
       clearTimeout(pollTimerRef.current);
@@ -1305,6 +1310,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // adjustment nor a scheduled Live composition may wake on return.
     if (recomposeTimerRef.current) clearTimeout(recomposeTimerRef.current);
     recomposeTimerRef.current = null;
+    setPendingRecompose(false);
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     pollTimerRef.current = null;
     abortLiveCompletion();
@@ -1412,6 +1418,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (recomposeTimerRef.current) {
       clearTimeout(recomposeTimerRef.current);
       recomposeTimerRef.current = null;
+      setPendingRecompose(false);
     }
     if (pollTimerRef.current) {
       clearTimeout(pollTimerRef.current);
@@ -1495,6 +1502,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (recomposeTimerRef.current) {
       clearTimeout(recomposeTimerRef.current);
       recomposeTimerRef.current = null;
+      setPendingRecompose(false);
     }
     if (pollTimerRef.current) {
       clearTimeout(pollTimerRef.current);
@@ -2080,7 +2088,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // AUTO-RECOMPOSE: adjustments never need a submit. A settled change (400 ms)
   // starts a latest-request-wins compose. Skipped before the first
   // compose and while showing a restored snapshot, so nothing fires unasked.
-  useEffect(() => {
+  // Arm the render-only queued sign before paint, with the changed selection;
+  // a passive effect lets the first native frame paint without its ring.
+  // Actual composition still runs only when the 400 ms timer settles.
+  useLayoutEffect(() => {
     // Undo put these exact inputs back together with the day that answered
     // them; composing them again is not an adjustment. Read once, whatever
     // happens next, so a stale echo can never swallow a later change.
@@ -2097,8 +2108,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (undoEcho !== null && undoEcho === adjustmentSignature(selected, dayOffset, walkKey, commitments, preferencePriority, dayEdit, intentMode)) return;
     if (navigationSuspendedRef.current || !hasAnchor || phase === "idle" || restoredAt) return;
     if (recomposeTimerRef.current) clearTimeout(recomposeTimerRef.current);
+    setPendingRecompose(true);
     recomposeTimerRef.current = setTimeout(() => {
       recomposeTimerRef.current = null;
+      // First, so the queued sign clears even when the compose exits early.
+      setPendingRecompose(false);
       // The day this adjustment replaces is the one on screen as it leaves.
       // A request still in flight has not replaced it yet, so a quick second
       // change keeps the same day to return to.
@@ -2110,9 +2124,24 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }, 400);
     return () => {
       if (recomposeTimerRef.current) clearTimeout(recomposeTimerRef.current);
+      // A cleared timer is no longer queued: say so, or an early return in the
+      // next run (an Undo echo, a suspended navigation) would leave both the
+      // ref and the tapped control's ring claiming a compose that never comes.
+      recomposeTimerRef.current = null;
+      setPendingRecompose(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, preferencePriority, dayEdit, dayOffset, dateChoiceVersion, walkKey, commitments, intentMode]);
+  // The queued sign never outlives its timer. Declared after the debounce
+  // effect, so it runs after it in every commit: a cleanup-and-re-arm in the
+  // same commit has already set the timer again and is never mistaken for a
+  // cancelled queue; anything that cleared the timer without changing an
+  // adjustment input (invalidateCommitmentIntent) is answered here. No deps on
+  // purpose: a ref and a boolean per commit, and it can only set false, so a
+  // second pass finds nothing to do and it cannot loop.
+  useEffect(() => {
+    if (pendingRecompose && !recomposeTimerRef.current) setPendingRecompose(false);
+  });
 
   // The Live sheet behaves like a modal: focus enters it, stays inside while it
   // is open, returns to the trigger on close, and the page behind does not scroll.
@@ -2521,6 +2550,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setLiveQueryEvents(null);
     retryGenerationRef.current += 1;
     retryInFlightRef.current = false;
+    // The queued sign is left to the debounce effect: every adjustment that
+    // lands here also changes one of its inputs, and its cleanup and re-arm
+    // commit together. Clearing it in the click committed one "nothing
+    // queued" render that cost a quick second tap its ring (review, Nov 2026).
+    // A caller that changes no input is caught by the reconcile effect that
+    // follows the debounce effect.
     if (recomposeTimerRef.current) {
       clearTimeout(recomposeTimerRef.current);
       recomposeTimerRef.current = null;
@@ -2545,6 +2580,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (recomposeTimerRef.current) {
       clearTimeout(recomposeTimerRef.current);
       recomposeTimerRef.current = null;
+      setPendingRecompose(false);
     }
     if (pollTimerRef.current) {
       clearTimeout(pollTimerRef.current);
@@ -3044,7 +3080,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     relaxDayEditForAdjustment();
     setPreferencePriority([]);
   };
-  const chooseDay = (offset: 0 | 1) => {
+  // Both say whether the tap changed anything, so the panel rings only a
+  // control whose tap will be answered by a rebuild.
+  const chooseDay = (offset: 0 | 1): boolean => {
     const nextDate = freezeComposeDateIso({ dayOffset: offset });
     if (dayOffset !== offset || (navigationDateIsoRef.current && navigationDateIsoRef.current !== nextDate)) {
       navigationDateIsoRef.current = nextDate;
@@ -3053,10 +3091,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setDayEdit(null);
       setDayOffset(offset);
       setDateChoiceVersion(current => current + 1);
+      return true;
     }
+    return false;
   };
-  const chooseRhythm = (key: string) => {
-    if (walkKey === key) return;
+  const chooseRhythm = (key: string): boolean => {
+    if (walkKey === key) return false;
     invalidateCommitmentIntent();
     // A rhythm change releases only the extent, keeping the old rejection in
     // its existing absolute place/date scope. Ordinary Keep choices are separate.
@@ -3070,6 +3110,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     pendingStopEditRef.current = null;
     setStopEditPending(false);
     setWalkKey(key);
+    return true;
   };
   const liveSheetEntryTime = liveSheetOpenedRef.current ? liveSheetTime
     : preferFollowingWeek ? "week"
@@ -3241,6 +3282,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         onSetRhythm={chooseRhythm}
         onChangePlace={cancelActivePlannerForNavigation}
         rebuild={adjustRebuild}
+        pendingRecompose={pendingRecompose}
         compact={dayWithRoute}
         // Which day is said once, in the header's facts (Linje 2).
         summary={dayWithRoute && shownPickCoverage.length > 0 ? (

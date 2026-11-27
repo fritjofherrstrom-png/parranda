@@ -69,6 +69,9 @@
      reduced motion gets the end state at once. */
   --animate-panel-in: parranda-panel-in 180ms var(--p-ease-out);
   --animate-ring-once: parranda-ring-once 600ms var(--p-ease-out) 1;
+  /* The choice just tapped in Adjust, while the day rebuilds: the ring
+     plays twice and rests, never forever. */
+  --animate-ring-pending: parranda-ring 1.2s var(--p-ease-out) 2;
 }
 
 @layer base {
@@ -223,11 +226,12 @@
 }
 
 /* The choice just made, while the day rebuilds around it: a soft ember ring
-   that slowly widens and fades from the chip that was tapped. Used only
-   under motion-safe. */
+   that widens and fades from the chip that was tapped. It starts already
+   visible (a 2px ring, not a zero-width one), so the mark answers in the
+   first frames. Used only under motion-safe (`animate-ring-pending`). */
 @keyframes parranda-ring {
   0% {
-    box-shadow: 0 0 0 0 rgb(var(--p-color-ember) / 0.45);
+    box-shadow: 0 0 0 2px rgb(var(--p-color-ember) / 0.45);
   }
   100% {
     box-shadow: 0 0 0 7px rgb(var(--p-color-ember) / 0);
@@ -640,4 +644,74 @@
 [data-map-pane] .route-map-frame {
   border-radius: 0;
   border-width: 0;
+}
+
+/* An icon that changes meaning (saved, copied, expanded) swaps through a
+   short blur, so the eye reads one mark turning into the next rather than
+   two marks trading places (IconSwap in shared/icons.tsx; the first render
+   does not animate). Reduced motion keeps the fade and the blur; only the
+   growth from half size waits for no-preference. */
+.icon-swap {
+  transition:
+    opacity 200ms var(--p-ease-out),
+    filter 200ms var(--p-ease-out),
+    transform 200ms var(--p-ease-out);
+}
+@starting-style {
+  .icon-swap {
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  @starting-style {
+    .icon-swap {
+      transform: scale(0.5);
+    }
+  }
+}
+
+/* The Live sheet rises from the bottom edge on the drawer curve while the
+   page behind it dims; on a wider screen it lifts 24px into place and fades
+   in. Enter only: it leaves at once when closed. Reduced motion keeps the
+   fades. The panel centres itself with `sm:-translate-x-1/2`, which is
+   Tailwind 4's own `translate` property: this `transform` composes with it
+   and settles to none, so the centring holds through and after the entry.
+   The wide-screen entry switches at the same sm breakpoint (40rem) as the
+   panel's `sm:` layout, so a larger default font size never pairs the phone
+   sheet with the desktop lift. */
+.live-sheet-scrim {
+  transition: opacity 300ms var(--p-ease-out);
+}
+@starting-style {
+  .live-sheet-scrim {
+    opacity: 0;
+  }
+}
+.live-sheet-panel {
+  transition:
+    transform 400ms var(--p-ease-drawer),
+    opacity 300ms var(--p-ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  @starting-style {
+    .live-sheet-panel {
+      opacity: 0;
+    }
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  @starting-style {
+    .live-sheet-panel {
+      transform: translateY(100%);
+    }
+  }
+}
+@media (prefers-reduced-motion: no-preference) and (width >= 40rem) {
+  @starting-style {
+    .live-sheet-panel {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
 }
