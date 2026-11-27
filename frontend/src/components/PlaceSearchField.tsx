@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { LAST_KEY } from "../lib/anywhere-storage.mjs";
 import { isPlaceSearchQueryEligible } from "../../../shared/place-search-query.mjs";
+import { SearchIcon } from "./shared/icons";
 import { buttonClass, dataLine } from "./shared/ui";
 
 export interface PlaceSuggestion {
@@ -190,19 +191,17 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
   }, [selected, value, inputRef]);
   return (
     <div className="relative min-w-0 flex-1" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) dismiss(); }}>
-      {/* One edge at a time: a filled well at rest, a surface with an ember
-          edge while typing (the field is the next station). A blocked location
-          marks the field with a glow edge at rest, so the way forward stays
-          marked; focus still hands the edge to ember, as on every field. */}
+      {/* One edge at a time: a quiet border at rest, an accent while typing.
+          A blocked location marks the field as the next way in. */}
       {/* The whole box is the field: a press on the pin or the padding puts
           the caret in the input. preventDefault keeps focus from leaving
           first (no blur, so no dismiss); the click repeats the focus for a
           touch browser that only raises its keyboard from a click. */}
       <div onMouseDown={event => { if (event.target !== inputRef.current) { event.preventDefault(); inputRef.current?.focus(); } }}
         onClick={event => { if (event.target !== inputRef.current) inputRef.current?.focus(); }}
-        className={"flex min-h-[3.75rem] cursor-text items-center gap-3 rounded-parranda-btn border-2 bg-parranda-fill px-5 transition-[background-color,border-color] duration-150 ease-out focus-within:bg-parranda-surface sm:min-h-16 " +
-        (geoDenied ? "border-parranda-glow focus-within:border-parranda-ember" : "border-transparent hover:not-focus-within:bg-parranda-fill-strong focus-within:border-parranda-ember")}>
-        <span aria-hidden="true" className="h-[18px] w-[18px] shrink-0 rounded-full border-[4px] border-parranda-ember" />
+        className={"flex min-h-14 cursor-text items-center gap-3 rounded-parranda-btn border-line bg-parranda-surface px-4 focus-within:ring-1 focus-within:ring-parranda-clay transition-[background-color,border-color] duration-150 ease-out " +
+        (geoDenied ? "border-parranda-glow focus-within:border-parranda-ember" : "border-parranda-line-strong hover:not-focus-within:border-parranda-ink focus-within:border-parranda-clay")}>
+        <SearchIcon className="h-4.5 w-4.5 text-parranda-ink-muted" />
         <input id="landingCity" ref={inputRef} value={value} onChange={onChange}
           role="combobox" aria-autocomplete="list" aria-expanded={shown} aria-controls={shown ? listId : undefined}
           aria-activedescendant={shown && active >= 0 ? `${listId}-${active}` : undefined}
@@ -219,7 +218,7 @@ export default function PlaceSearchField({ value, lang, selected, inputRef, onCh
           }}
           autoComplete="off"
           placeholder={t("Stad eller plats", "City or place")}
-          className="min-w-0 flex-1 self-stretch bg-transparent text-17 text-parranda-ink outline-hidden placeholder:text-parranda-ink-meta focus-visible:outline-hidden sm:text-xl" />
+          className="min-w-0 flex-1 self-stretch bg-transparent text-17 text-parranda-ink outline-hidden placeholder:text-parranda-ink-meta focus-visible:outline-hidden" />
         {waiting && <span aria-hidden="true" data-place-wait="" className={phoneWait}>{t("Söker …", "Finding …")}</span>}
       </div>
       {selected && selectedOverflows && <span aria-hidden="true" className="mt-2 block text-15 leading-snug text-parranda-ink-muted [overflow-wrap:anywhere] sm:hidden">{value}</span>}
