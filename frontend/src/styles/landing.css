@@ -1,0 +1,220 @@
+@font-face {
+  font-family: "Instrument Serif";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/instrument-serif-latin-italic.woff2") format("woff2");
+}
+
+.landing-page {
+  min-height: 100svh;
+  background: rgb(var(--p-color-surface));
+  --landing-rule: rgb(var(--p-color-ink) / var(--p-ink-line));
+}
+:root[data-theme="night"] .landing-page {
+  background: rgb(var(--p-color-paper));
+}
+.landing-page ::selection {
+  color: rgb(var(--p-color-on-terracotta));
+  background: rgb(var(--p-color-terracotta));
+}
+.landing-shell {
+  width: min(100% - 2.5rem, 81rem);
+  margin-inline: auto;
+}
+.landing-masthead {
+  padding-block: 0.65rem;
+  border-bottom: var(--p-line) solid var(--landing-rule);
+}
+.landing-masthead [role="group"] {
+  padding-left: 0.35rem;
+  border-left: var(--p-line) solid var(--landing-rule);
+}
+.landing-layout {
+  display: grid;
+  grid-template-areas: "intro" "postcard" "guide";
+  column-gap: clamp(2.5rem, 5vw, 6rem);
+  row-gap: 2rem;
+  padding-block: 2.3rem 2rem;
+}
+.landing-intro {
+  grid-area: intro;
+  min-width: 0;
+  align-self: center;
+}
+.landing-title {
+  margin: 0;
+  font-family: var(--p-font-display), Arial, sans-serif;
+  font-size: clamp(3.6rem, 12.4vw, 6rem);
+  font-stretch: 99%;
+  font-weight: 690;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+}
+.landing-title em {
+  color: rgb(var(--p-color-clay));
+  font: italic 400 1.14em/0.9 "Instrument Serif", Georgia, serif;
+  letter-spacing: -0.035em;
+}
+.landing-lede {
+  max-width: 38ch;
+  margin-top: 1.15rem;
+  color: rgb(var(--p-color-ink) / var(--p-ink-muted));
+  font-size: clamp(1.0625rem, 1.4vw, 1.28rem);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+.landing-form {
+  margin-top: clamp(1.4rem, 3vw, 2.6rem);
+}
+.landing-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+.landing-form-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.55rem;
+}
+.landing-submit {
+  align-self: stretch;
+  white-space: nowrap;
+}
+.landing-location {
+  margin-top: 0.3rem;
+}
+.landing-postcard {
+  position: relative;
+  grid-area: postcard;
+  isolation: isolate;
+  aspect-ratio: 4 / 3;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--p-radius-button);
+  background: rgb(var(--p-color-paper));
+}
+.landing-street {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 54%;
+}
+.landing-walk {
+  position: absolute;
+  inset: auto auto clamp(0.8rem, 2vw, 1.6rem) clamp(0.8rem, 2vw, 1.6rem);
+  max-width: calc(100% - 1.6rem);
+  width: 15.5rem;
+  padding: 0.8rem 1.1rem 0.9rem;
+  border-radius: var(--p-radius-tag);
+  color: rgb(var(--p-color-ink));
+  background: rgb(var(--p-color-surface));
+  box-shadow: var(--p-shadow-card);
+}
+.landing-walk-label {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+.landing-walk-stops {
+  display: flex;
+  margin-top: 0.7rem;
+}
+.landing-walk-stops li {
+  position: relative;
+  flex: 1;
+  padding-top: 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 550;
+  line-height: 1.2;
+}
+.landing-walk-stops li:last-child {
+  flex: 0 0 auto;
+}
+.landing-walk-stops li:not(:last-child)::before {
+  position: absolute;
+  inset: 0.22rem 0 auto 0.28rem;
+  height: 2px;
+  background: rgb(var(--p-color-ember));
+  content: "";
+}
+.landing-walk-stops li span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0.58rem;
+  height: 0.58rem;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  background: rgb(var(--p-color-surface));
+}
+.landing-guide {
+  grid-area: guide;
+  display: grid;
+  align-content: start;
+  gap: 1.25rem;
+  border-top: var(--p-line) solid var(--landing-rule);
+  padding-top: 1.45rem;
+}
+.landing-section-title {
+  font-size: clamp(1.4rem, 2vw, 1.85rem);
+  font-stretch: 98%;
+  font-weight: 660;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+.landing-guide-steps {
+  display: grid;
+  gap: 0.85rem;
+}
+.landing-guide-steps li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+  font-size: 1rem;
+  font-weight: 550;
+  line-height: 1.4;
+}
+.landing-step-number {
+  color: rgb(var(--p-color-clay));
+  font: italic 400 1.35rem/1 "Instrument Serif", Georgia, serif;
+}
+@media (max-width: 35.999rem) {
+  .landing-walk { width: min(65%, 12rem); padding: 0.7rem 0.85rem; }
+  .landing-street { object-position: 50% 75%; }
+}
+@media (min-width: 36rem) {
+  .landing-shell { width: min(100% - 5rem, 81rem); }
+  .landing-form-row { flex-direction: row; }
+  .landing-form-row > button { align-self: start; }
+  .landing-postcard { aspect-ratio: 16 / 9; }
+}
+@media (min-width: 56rem) {
+  .landing-shell { width: min(100% - 7rem, 81rem); }
+  .landing-masthead { padding-block: 1.1rem; }
+  .landing-layout {
+    grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
+    grid-template-areas: "intro postcard" "guide guide";
+    padding-block: clamp(2.75rem, 5.5vh, 4rem) 2.5rem;
+    row-gap: clamp(2.75rem, 5.5vh, 4rem);
+  }
+  .landing-title { font-size: clamp(4.35rem, 7.2vw, 6rem); }
+  .landing-postcard { aspect-ratio: 1.16; }
+  .landing-walk { width: 16.75rem; padding: 1rem 1.3rem; }
+  .landing-guide { grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); padding-top: 1.8rem; }
+  .landing-guide-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+  .landing-guide-steps li { padding: 0.25rem 1rem 0.25rem 1.3rem; border-left: var(--p-line) solid var(--landing-rule); }
+}
+@media (min-width: 36rem) and (max-width: 55.999rem) {
+  .landing-form { max-width: 37rem; }
+  .landing-guide-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 55.999rem) {
+  .landing-layout:has(.landing-saved) { grid-template-areas: "intro" "guide" "postcard"; }
+}

@@ -5,6 +5,9 @@
 // contract), and the CITY REGISTRY is injected by Express at serve time by
 // replacing the __PARRANDA_LANDING_REGISTRY__ token below — a city is data,
 // never code, and the static build never hardcodes one.
+import "../styles/landing.css";
+import streetSmall from "../assets/walking-street-640.webp?url";
+import streetLarge from "../assets/walking-street-1200.webp?url";
 import Shell from "../layouts/Shell.astro";
 import LandingHero from "../components/LandingHero";
 ---
@@ -13,11 +16,12 @@ import LandingHero from "../components/LandingHero";
   title="Parranda — Next stop?"
   description="Type any city. Parranda builds a day with the right rhythm, neighborhoods and timing."
 >
+  <link slot="head" rel="icon" href="/assets/icons/icon.svg" type="image/svg+xml" />
   <script is:inline slot="head">
     // Express replaces the QUOTED token with the real registry JSON at serve
     // time. Unreplaced (astro dev / flag off) it stays a harmless string — the
     // island type-guards and treats it as an empty registry.
     window.__PARRANDA_CITIES__ = "__PARRANDA_LANDING_REGISTRY__";
   </script>
-  <LandingHero client:load />
+  <LandingHero client:load streetPhoto={{ small: streetSmall, large: streetLarge }} />
 </Shell>

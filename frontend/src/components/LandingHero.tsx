@@ -21,8 +21,8 @@ import { storePlaceChoice } from "../lib/place-choice.mjs";
 import { isComposedEntry, LAST_KEY, SAVED_KEY } from "../lib/anywhere-storage.mjs";
 import { dayStationLine } from "../lib/day-summary.mjs";
 import AppBar from "./shared/AppBar";
-import { ChevronRightIcon, CrosshairIcon } from "./shared/icons";
-import { busyButton, buttonClass, dataLine, pressRow } from "./shared/ui";
+import { ChevronRightIcon, CrosshairIcon, WalkIcon } from "./shared/icons";
+import { busyButton, buttonClass, pressRow } from "./shared/ui";
 
 type Lang = "sv" | "en";
 
@@ -88,7 +88,12 @@ function savedDays(lang: Lang, lastId: string | null): Station[] {
   }
 }
 
-export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang }) {
+interface LandingProps {
+  lang?: Lang;
+  streetPhoto?: { small: string; large: string };
+}
+
+export default function LandingHero({ lang: initialLang = "en", streetPhoto }: LandingProps) {
   const [lang, setLang] = useState<Lang>(initialLang);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("lang");
@@ -199,138 +204,122 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
   }
 
   return (
-    <div className="mx-auto flex min-h-svh w-full max-w-6xl flex-col px-4 pt-3 sm:px-8 sm:pt-5">
-      <AppBar lang={lang} homeLabel={t("Parranda — till startsidan", "Parranda — home")} languageLabel={t("Språk", "Language")} />
-
-      {/* Phone: the question sits high, so the field is in reach of the thumb
-          and the page does not open on a blank band. Wider: centred. */}
-      <main className="flex flex-1 flex-col justify-start gap-7 pt-[12svh] pb-10 sm:justify-center sm:gap-9 sm:py-16">
-        <header className="flex flex-col gap-4">
-          {/* Signage, not a slogan: the question the whole product answers. */}
-          <h1 className="type-display text-[clamp(3rem,17vw,4rem)] leading-[0.86] text-parranda-ink min-[400px]:text-[4.5rem] sm:text-[7rem] lg:text-[8.5rem]">
-            {t("Nästa ", "Next ")}
-            <br className="sm:hidden" />
-            {t("stopp", "stop")}
-            <em className="not-italic text-parranda-ember">?</em>
-          </h1>
-          <p className="max-w-[28ch] text-17 leading-relaxed text-pretty text-parranda-ink-muted sm:max-w-md sm:text-xl">
-            {t("Skriv en stad eller en plats, eller börja där du är.", "Type a city or a place, or start from where you are.")}
-          </p>
+    <div className="landing-page">
+      <div className="landing-shell">
+        <header className="landing-masthead">
+          <AppBar lang={lang} homeLabel={t("Parranda — till startsidan", "Parranda — home")} languageLabel={t("Språk", "Language")} />
         </header>
 
-        <div className="flex w-full flex-col gap-3 sm:max-w-2xl">
-          <form onSubmit={submit} className="flex flex-col gap-2 sm:flex-row">
-            <label htmlFor="landingCity" className="sr-only">
-              {t("Skriv en stad eller plats", "Type a city or place")}
-            </label>
-            <PlaceSearchField value={value} lang={lang} selected={selectedPlace} inputRef={inputRef}
-              onChange={onChange} geoDenied={geoDenied}
-              onSelect={choice => { setSelectedPlace(choice); setValue(choice.query); inputRef.current?.focus(); }} />
-            <button
-              type="submit"
-              onPointerDown={event => {
-                // Keep focus in the combobox until the click submits. Blurring
-                // it on pointer-down removes the mobile's in-flow suggestions
-                // and moves this button before pointer-up can activate it.
-                if (event.button === 0) event.preventDefault();
-              }}
-              className={buttonClass("primary", "min-h-14 whitespace-nowrap px-8 text-17 [font-stretch:110%] sm:min-h-16")}
-            >
-              {t("Bygg min dag", "Build my day")}
-            </button>
-          </form>
-
-          {/* The second way in, in words: a quiet button under the field, its
-              mark in ink (ember is the route's). What it does is its
-              description, not a line of its own. */}
-          <button
-            type="button"
-            {...busyButton(locating, useLocation)}
-            aria-describedby="landingLocationNote"
-            className={buttonClass("quiet", "-ml-3 min-h-11 self-start px-3 text-15")}
-          >
-            <CrosshairIcon className="h-4.5 w-4.5 shrink-0" />
-            {locating ? t("Hämtar position …", "Getting location …") : t("Börja där du är", "Start from my location")}
-          </button>
-          <span id="landingLocationNote" className="sr-only">
-            {t("Hela dagen planeras runt din position.", "The day is planned around where you are.")}
-          </span>
-
-          {geoDenied && (
-            <p className="text-13 leading-relaxed text-parranda-ink-muted" aria-live="polite">
-              {t(
-                "Positionen blockerades — inga problem. Skriv en stad eller plats i stället.",
-                "Location was blocked — no problem. Type a city or place instead.",
-              )}
+        <main className="landing-layout">
+          <div className="landing-intro">
+            <h1 className="landing-title">
+              {t("Nästa", "Next")}{" "}<em>{t("stopp?", "stop?")}</em>
+            </h1>
+            <p className="landing-lede">
+              {t("Välj en plats. Vi sätter ihop en promenad med stopp att upptäcka längs vägen.",
+                "Choose a place. We’ll connect the stops into a day you can explore on foot.")}
             </p>
+            <form onSubmit={submit} className="landing-form">
+              <label htmlFor="landingCity" className="landing-label">
+                {t("Skriv en stad eller plats", "Type a city or place")}
+              </label>
+              <div className="landing-form-row">
+                <PlaceSearchField value={value} lang={lang} selected={selectedPlace} inputRef={inputRef}
+                  onChange={onChange} geoDenied={geoDenied}
+                  onSelect={choice => { setSelectedPlace(choice); setValue(choice.query); inputRef.current?.focus(); }} />
+                <button
+                  type="submit"
+                  onPointerDown={event => {
+                    // Keep the mobile in-flow list in place through pointer-up.
+                    if (event.button === 0) event.preventDefault();
+                  }}
+                  className={buttonClass("primary", "landing-submit min-h-14 gap-3 px-5 text-17")}
+                >
+                  {t("Bygg min dag", "Build my day")}
+                  <svg aria-hidden="true" focusable="false" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 12h15m-6-6 6 6-6 6" />
+                  </svg>
+                </button>
+              </div>
+            </form>
+            <button type="button" {...busyButton(locating, useLocation)} aria-describedby="landingLocationNote"
+              className={buttonClass("quiet", "landing-location -ml-2 min-h-11 self-start px-2 text-15")}>
+              <CrosshairIcon className="h-4 w-4 shrink-0" />
+              {locating ? t("Hämtar position …", "Getting location …") : t("Börja där du är", "Start from my location")}
+            </button>
+            <span id="landingLocationNote" className="sr-only">
+              {t("Hela dagen planeras runt din position.", "The day is planned around where you are.")}
+            </span>
+            {geoDenied && (
+              <p className="mt-1 text-13 leading-relaxed text-parranda-ink-muted" aria-live="polite">
+                {t("Positionen blockerades — inga problem. Skriv en stad eller plats i stället.",
+                  "Location was blocked — no problem. Type a city or place instead.")}
+              </p>
+            )}
+          </div>
+
+          <figure className="landing-postcard">
+            {streetPhoto && (
+              <img className="landing-street" alt="" width="1200" height="1499" fetchPriority="high"
+                src={streetPhoto.large} srcSet={`${streetPhoto.small} 640w, ${streetPhoto.large} 1200w`}
+                sizes="(min-width: 88rem) 43rem, (min-width: 56rem) 48vw, (min-width: 42rem) 90vw, 100vw" />
+            )}
+            <figcaption className="landing-walk">
+              <span className="landing-walk-label"><WalkIcon className="h-4 w-4" />{t("Exempel på promenad", "Example walk")}</span>
+              <ol className="landing-walk-stops">
+                {[t("Kafé", "Café"), t("Galleri", "Gallery"), t("Park", "Park")].map(stop =>
+                  <li key={stop}><span aria-hidden="true" />{stop}</li>
+                )}
+              </ol>
+            </figcaption>
+          </figure>
+
+          {stations.length > 0 && (
+            <section aria-labelledby="landingPickUp" className="landing-guide landing-saved">
+              <h2 id="landingPickUp" className="landing-section-title">{t("Fortsätt en dag", "Pick up a day")}</h2>
+              <ol className="flex flex-col">
+                {stations.map((station) => (
+                  <li key={station.key} className="relative before:pointer-events-none before:absolute before:inset-y-0 before:left-[6px] before:w-1 before:bg-parranda-ember first:before:top-1/2 last:before:bottom-1/2">
+                    <a
+                      href={station.href}
+                      className={`group relative flex min-h-[3.75rem] items-center gap-3 rounded-parranda-btn py-2 hover:bg-parranda-fill-faint sm:pr-3 ${pressRow}`}
+                    >
+                      <span aria-hidden="true" className="relative h-4 w-4 shrink-0 rounded-full border-[3px] border-parranda-ink bg-parranda-paper" />
+                      <span className="flex min-w-0 flex-1 flex-col wrap-anywhere">
+                        <span className="text-17 font-bold leading-tight text-parranda-ink">
+                          {station.place ? t(`En dag i ${station.place}`, `A day in ${station.place}`)
+                            : station.saved ? t("Din sparade dag", "Your saved day") : t("Din senaste dag", "Your last day")}
+                        </span>
+                        <span className="type-data text-13 text-parranda-ink-meta">
+                          {station.saved ? null : <span className="sr-only">{t("Fortsätt", "Continue")}: </span>}
+                          {dayStationLine(station, { lang, saved: station.saved })}
+                        </span>
+                      </span>
+                      <ChevronRightIcon className="h-4 w-4 shrink-0 text-parranda-ink-meta transition-transform duration-200 ease-out motion-safe:group-hover:translate-x-0.5" />
+                    </a>
+                  </li>
+                ))}
+              </ol>
+            </section>
           )}
-        </div>
 
-        {/* A returning visitor's last day is one tap away; the planner restores
-            it as a labelled snapshot and offers a fresh rebuild. */}
-        {/* Linje 2 board: the last day and the saved ones wait as stations on
-            a short line, each one tap from being opened again. */}
-        {stations.length > 0 && (
-          <section aria-labelledby="landingPickUp" className="flex flex-col gap-2 border-t-line border-parranda-line-faint pt-6">
-            <h2 id="landingPickUp" className="type-eyebrow text-parranda-glow">{t("Fortsätt en dag", "Pick up a day")}</h2>
-            <ol className="flex flex-col">
-              {stations.map((station) => (
-                <li key={station.key} className="relative before:pointer-events-none before:absolute before:inset-y-0 before:left-[6px] before:w-1 before:bg-parranda-ember first:before:top-1/2 last:before:bottom-1/2">
-                  <a
-                    href={station.href}
-                    className={`group relative flex min-h-[3.75rem] items-center gap-3 rounded-parranda-btn py-2 hover:bg-parranda-fill-faint sm:pr-3 ${pressRow}`}
-                  >
-                    <span aria-hidden="true" className="relative h-4 w-4 shrink-0 rounded-full border-[3px] border-parranda-ink bg-parranda-paper" />
-                    <span className="flex min-w-0 flex-1 flex-col wrap-anywhere">
-                      <span className="text-17 font-bold leading-tight text-parranda-ink">
-                        {station.place ? t(`En dag i ${station.place}`, `A day in ${station.place}`)
-                          : station.saved ? t("Din sparade dag", "Your saved day") : t("Din senaste dag", "Your last day")}
-                      </span>
-                      <span className="type-data text-13 text-parranda-ink-meta">
-                        {station.saved ? null : <span className="sr-only">{t("Fortsätt", "Continue")}: </span>}
-                        {dayStationLine(station, { lang, saved: station.saved })}
-                      </span>
-                    </span>
-                    <ChevronRightIcon className="h-4 w-4 shrink-0 text-parranda-ink-meta transition-transform duration-200 ease-out group-hover:translate-x-0.5" />
-                  </a>
-                </li>
-              ))}
-            </ol>
-          </section>
-        )}
-
-        {/* A first visit: how a day works, drawn as the line a day becomes.
-            Three stations, no city and no link (the landing advertises no
-            place). Vertical on a phone, across the page from sm. Before
-            storage is read it is only a placeholder of the same height, so a
-            first visit does not reflow the centred hero when it appears. */}
-        {(!stationsRead || stations.length === 0) && (
-          <section aria-labelledby={stationsRead ? "landingHowItWorks" : undefined} aria-hidden={stationsRead ? undefined : true}
-            className={"flex flex-col gap-2 border-t-line border-parranda-line-faint pt-6" + (stationsRead ? "" : " invisible")}>
-            <p id="landingHowItWorks" className="type-eyebrow text-parranda-ink-meta">{t("Så blir en dag till", "How a day works")}</p>
-            <ol className="flex flex-col sm:grid sm:max-w-2xl sm:grid-cols-3">
-              {[
-                t("Skriv en plats", "Name a place"),
-                t("Få en gånglinje av stopp", "Get a walking line of stops"),
-                t("Ta med den till Maps", "Take it to Maps"),
-              ].map((step, index, steps) => (
-                <li key={index} className="relative flex min-h-11 items-center gap-3 sm:min-h-0 sm:flex-col sm:items-start sm:pr-4">
-                  {/* The line runs from this station's centre to the next one's. */}
-                  {index < steps.length - 1 && (
-                    <span aria-hidden="true" className="pointer-events-none absolute top-1/2 left-[6px] h-full w-1 bg-parranda-ember sm:top-[6px] sm:left-2 sm:h-1 sm:w-full" />
-                  )}
-                  <span aria-hidden="true" className="relative h-4 w-4 shrink-0 rounded-full border-[3px] border-parranda-ink bg-parranda-paper" />
-                  <span className="text-15 leading-snug font-semibold text-parranda-ink-soft">{step}</span>
-                </li>
-              ))}
-            </ol>
-          </section>
-        )}
-      </main>
-
-      <footer className={`${dataLine} flex items-center justify-between border-t-line border-parranda-line-faint py-4`}>
-        <span>{t("Din rutt, din stad.", "Your route, your city.")}</span>
-      </footer>
+          {(!stationsRead || stations.length === 0) && (
+            <section aria-labelledby={stationsRead ? "landingHowItWorks" : undefined} aria-hidden={stationsRead ? undefined : true}
+              className={"landing-guide" + (stationsRead ? "" : " invisible")}>
+              <h2 id="landingHowItWorks" className="landing-section-title">{t("Så funkar det", "How a day works")}</h2>
+              <ol className="landing-guide-steps">
+                {[
+                  t("Välj en startplats", "Choose a starting point"),
+                  t("Få en rutt till fots", "Get your walking route"),
+                  t("Öppna rutten i Maps", "Take it to Maps"),
+                ].map((step, index) => (
+                  <li key={step}><span aria-hidden="true" className="landing-step-number">{String(index + 1).padStart(2, "0")}</span>{step}</li>
+                ))}
+              </ol>
+            </section>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

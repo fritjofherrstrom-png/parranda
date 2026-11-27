@@ -230,18 +230,18 @@ test('pressing Build my day keeps the open suggestion layout stable until activa
  } finally { await h.unmount(); }
 });
 
-// The visible box is 60px tall, the input inside it is not: a press on the
-// ember pin or the padding used to leave focus on the page. The box hands any
+// A press on the search icon or the field padding used to leave
+// focus on the page. The box hands any
 // press to the input without a blur in between, and the input fills its height.
 test('a press anywhere on the search box focuses the field without a blur first', async () => {
  const h = await mount();
  try {
   const input = h.document.querySelector('#landingCity');
   const box = input.parentElement;
-  const pin = box.querySelector('span[aria-hidden=true]');
+  const icon = box.querySelector('svg[aria-hidden=true]');
   assert.match(input.className, /(^|\s)self-stretch(\s|$)/, 'the input fills the box height so most taps land on it');
   await h.act(() => h.document.body.focus());
-  for (const target of [pin, box]) {
+  for (const target of [icon, box]) {
    await h.act(() => input.blur());
    assert.notEqual(h.document.activeElement, input);
    let press;

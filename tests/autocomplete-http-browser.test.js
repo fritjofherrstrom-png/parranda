@@ -92,6 +92,17 @@ test('mobile suggestions wrap long names and leave the submit action reachable',
   assert.ok(selectedLayout.scrollWidth <= selectedLayout.clientWidth, 'the selected name wraps on mobile');
 });
 
+test('the tablet submit action accepts free text with the suggestions still open', async t => {
+  const provider = createPlaceSuggestions({ fetcher: async () => photon('Harbour City') });
+  const { page, field } = await landing(t, provider);
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await field.fill('Harbour');
+  await page.getByRole('listbox').waitFor();
+  await page.getByRole('button', { name: 'Build my day', exact: true }).click({ timeout: 3000 });
+  await page.waitForURL(url => url.pathname === '/anywhere');
+  assert.equal(new URL(page.url()).searchParams.get('place'), 'Harbour');
+});
+
 test('selected names wrap when the mobile field overflows, including names under forty characters', async t => {
   const title = 'San Cristóbal de La Laguna';
   const provider = createPlaceSuggestions({ fetcher: async () => ({ ok: true, status: 200, json: async () => ({ features: [{
