@@ -11,7 +11,7 @@ import type { Commitments } from "./planner/commitments";
  *   structure_only → candidate areas only, honest "not a finished route" note
  *   unavailable    → honest empty state (never a crash)
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { normalizeDayEdit, normalizePreferencePriority, PLANNER_PREFERENCE_KEYS, togglePreferenceSelection, type DayEdit } from "../../../shared/planner-intent.mjs";
 import { fetchPlannerLifecycle } from '../lib/planner-lifecycle.mjs';
 import {
@@ -2088,7 +2088,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // AUTO-RECOMPOSE: adjustments never need a submit. A settled change (400 ms)
   // starts a latest-request-wins compose. Skipped before the first
   // compose and while showing a restored snapshot, so nothing fires unasked.
-  useEffect(() => {
+  // Arm the render-only queued sign before paint, with the changed selection;
+  // a passive effect lets the first native frame paint without its ring.
+  // Actual composition still runs only when the 400 ms timer settles.
+  useLayoutEffect(() => {
     // Undo put these exact inputs back together with the day that answered
     // them; composing them again is not an adjustment. Read once, whatever
     // happens next, so a stale echo can never swallow a later change.
