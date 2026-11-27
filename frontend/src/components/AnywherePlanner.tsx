@@ -11,7 +11,7 @@ import type { Commitments } from "./planner/commitments";
  *   structure_only → candidate areas only, honest "not a finished route" note
  *   unavailable    → honest empty state (never a crash)
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { normalizeDayEdit, normalizePreferencePriority, PLANNER_PREFERENCE_KEYS, togglePreferenceSelection, type DayEdit } from "../../../shared/planner-intent.mjs";
 import { fetchPlannerLifecycle } from '../lib/planner-lifecycle.mjs';
 import {
@@ -90,8 +90,8 @@ import {
 } from "../lib/commitment-snapshot.mjs";
 import { anywhereDecision, type AnywhereClassification } from "../lib/anywhere-decision";
 import AppBar from "./shared/AppBar";
-import { KeepIcon, LocationIcon, MinusIcon, UndoIcon } from "./shared/icons";
-import { busyButton, buttonClass, noticeCard, pressable } from "./shared/ui";
+import { LocationIcon, UndoIcon } from "./shared/icons";
+import { busyButton, buttonClass, noticeCard } from "./shared/ui";
 import { useMediaQuery } from "./shared/useMediaQuery";
 import AnchorCard, { ChangePlaceLink, type AdjustRebuild } from "./planner/AnchorCard";
 import type { InterestSelection } from "./planner/InterestChooser";
@@ -2951,15 +2951,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     ? t("Uppdatera den sparade dagen eller välj en ny startpunkt innan du ändrar stopp.", "Rebuild this saved day or choose a new starting point before editing stops.")
     : stopEditError ? t("Ändringen kunde inte bekräftas.", "The change could not be confirmed.") : "";
   const canUndoFailedEdit = Boolean(stopEditError) || interestRetryIntentRef.current === intentSequenceRef.current;
-  let stopEditFeedbackMessage = "";
+  // A stop edit is said like the other changes: a bold lead, then what moved
+  // ("Replaced: Skajs → Stadsmissionen"), one line beside the line it changed.
+  let stopEditFeedbackMessage: ReactNode = null;
   if (stopEditFeedback) {
     const { action, originalLabel, replacementLabel } = stopEditFeedback;
+    const lead = (sv: string, en: string) => <span className="font-bold text-parranda-ink">{t(sv, en)}: </span>;
     if (action === "remove") {
-      stopEditFeedbackMessage = t(`Tog bort ${originalLabel}`, `Removed ${originalLabel}`);
+      stopEditFeedbackMessage = <>{lead("Borttaget", "Removed")}{originalLabel}</>;
     } else if (replacementLabel) {
-      stopEditFeedbackMessage = t(`Bytte ut ${originalLabel} mot ${replacementLabel}`, `Replaced ${originalLabel} with ${replacementLabel}`);
+      stopEditFeedbackMessage = <>{lead("Bytt", "Replaced")}{originalLabel} → {replacementLabel}</>;
     } else {
-      stopEditFeedbackMessage = t(`Bytte ut ${originalLabel}`, `Replaced ${originalLabel}`);
+      stopEditFeedbackMessage = <>{lead("Bytt", "Replaced")}{originalLabel}</>;
     }
   }
   const [dayChangeLine, dayRouteChange] = useMemo(() => {
@@ -3294,6 +3297,94 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     </>
   ) : null;
 
+  // WHAT THE READER CHANGED, said where it happened: beside the line, between
+  // the map and the first station, as one quiet group of rows (the line runs
+  // on past them). Each row keeps its own status region; none is a card. The
+  // last change and its Undo come first, then the standing choices and the
+  // way to drop them, then what a choice could not do. With no route on
+  // screen the same rows stand in the page.
+  const receiptShown = Boolean(dayChange && (phase === "done" || (phase === "error" && canUndoFailedEdit)) &&
+    (!dayIsStale || canUndoFailedEdit) && (dayChangeLine.length > 0 || keptNames.length > 0 || stopEditFeedback || stopEditError));
+  const liveCommitments = Object.entries(commitments).filter(([id]) => isLiveOccurrenceId(id));
+  const keptTotal = pinnedCount + liveCommitments.filter(([, entry]) => entry.kind === "pin").length;
+  const removedTotal = excludedCount + liveCommitments.filter(([, entry]) => entry.kind !== "pin").length;
+  const ledgerParts = [
+    keptTotal > 0 && t(`${keptTotal} ${keptTotal === 1 ? "behållen" : "behållna"}`, `${keptTotal} kept`),
+    removedTotal > 0 && t(`${removedTotal} ${removedTotal === 1 ? "bortvald" : "bortvalda"}`, `${removedTotal} removed`),
+  ].filter(Boolean) as string[];
+  const dayNotes = (receiptShown || (stopEditError && !dayChange) || ledgerParts.length > 0 || unkept.count > 0 || choicesNotCarried) ? (
+    <>
+      {receiptShown && dayChange && (
+        <div role="status" className="flex items-start gap-2">
+          <p className="min-w-0 flex-1 break-words py-3 text-13 leading-snug text-parranda-ink-soft">
+            {stopEditError ? stopEditErrorMessage : stopEditFeedback ? stopEditFeedbackMessage : <>
+              {/* A kept stop is named first and on its own: a Keep is never
+                  read as, or hidden behind, whatever else changed. */}
+              {keptNames.length > 0 && <>
+                <span className="font-bold text-parranda-ink">{t("Behålls", "Kept")}:{" "}</span>
+                {keptNames.join(", ")}
+                {dayChangeLine.length > 0 && " · "}
+              </>}
+              {dayChangeLine.length > 0 && <>
+                <span className="font-bold text-parranda-ink">
+                  {dayChange.summary.trigger === "recheck" ? t("Letade efter fler platser", "Looked for more places") : t("Ändrat", "Changed")}:{" "}
+                </span>
+                {dayChangeLine.join(" · ")}
+              </>}
+            </>}
+          </p>
+          <button
+            type="button"
+            onClick={undoDayChange}
+            aria-label={t("Ångra ändringen", "Undo this change")}
+            className={buttonClass("quiet", "-mr-2 min-h-11 shrink-0 gap-1.5 px-2 text-13")}
+          >
+            <UndoIcon className="h-3.5 w-3.5" />
+            {t("Ångra", "Undo")}
+          </button>
+        </div>
+      )}
+      {stopEditError && !dayChange && <p className="py-2 text-13 leading-snug text-parranda-ink-soft" role="status">{stopEditErrorMessage}</p>}
+      {stopEditError === "live_not_preserved" && <button type="button" onClick={() => retryPlan({ sameDate: true })}
+        className={buttonClass("quiet", "-ml-2 min-h-11 self-start px-2 text-13 underline underline-offset-2")}>
+        {t("Försök planera med evenemanget igen", "Try planning with this event again")}
+      </button>}
+      {/* The standing choices, stated where they can always be seen —
+          including when dismissing left no day at all, which is exactly when
+          a way back matters most. */}
+      {ledgerParts.length > 0 && (
+        <p className="type-data flex flex-wrap items-center gap-x-3 text-13 text-parranda-ink-meta" role="status">
+          <span>{t("Dina val", "Your choices")}: {ledgerParts.join(" · ")}</span>
+          <button
+            type="button"
+            onClick={clearCommitments}
+            aria-label={t("Börja om utan mina val", "Start over without my choices")}
+            className={buttonClass("quiet", "-ml-2 min-h-11 px-2 text-13")}
+          >
+            {t("Börja om", "Start over")}
+          </button>
+        </p>
+      )}
+      {/* A pin is a request, not a promise. When the day that came back does
+          not contain a kept place, say so plainly and name it. */}
+      {unkept.count > 0 && (
+        <div className="my-1 flex flex-col gap-2 rounded-parranda-btn bg-parranda-glow/8 px-3 py-2 text-13 leading-relaxed text-parranda-ink-soft" role="status">
+          {unkept.reasons.map((entry: { id: string; label: string; reason: string | null }) => (
+            <p key={entry.id}>{isLiveOccurrenceId(entry.id) ? t(`${entry.label || "Det valda tillfället"} kunde inte bekräftas som stopp i den här dagen. Ditt val finns kvar.`, `${entry.label || "The chosen occurrence"} could not be confirmed as a stop in this day. Your choice is retained.`) : unkeptReasonSentence(entry, t)}</p>
+          ))}
+        </div>
+      )}
+      {choicesNotCarried && (
+        <p className="py-2 text-13 leading-snug text-parranda-ink-soft" role="status">
+          {t(
+            "Dina tidigare fästa och bortvalda stopp kunde inte föras över till den här dagen.",
+            "Your previous kept and dismissed stops could not be carried over to this day.",
+          )}
+        </p>
+      )}
+    </>
+  ) : null;
+
   return (
     <div
       className={
@@ -3316,7 +3407,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </p>}
       </div>
 
-      <main className={"flex min-w-0 flex-col gap-12" + (splitLayout ? " col-start-1 row-start-2 px-8 pb-16 pt-6 xl:px-10" : "")}>
+      <main className={"flex min-w-0 flex-col gap-8 sm:gap-10" + (splitLayout ? " col-start-1 row-start-2 px-8 pb-16 pt-6 xl:px-10" : "")}>
       {/* The day leads, compact: "A day in Lyon" with Change, which day and
           the picks with Adjust, on a phone the map's short overview, the
           facts — then the route's stops. While a day composes, its heading's
@@ -3340,6 +3431,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           overview={mapOverview}
           picksInControls={shownPickCoverage.length > 0}
           relativeDay={shownDay ? shownDay.activeOffset : null}
+          rhythmKey={shownPickCoverage.length > 0 ? (shownInterestInputs?.walkKey ?? walkKey) : null}
           coreCount={split.core.length}
           wovenCount={split.woven.length}
           pickCoverage={shownPickCoverage}
@@ -3454,59 +3546,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </div>
       )}
 
-      {choicesNotCarried && (
-        <p className={noticeCard} role="status">
-          {t(
-            "Dina tidigare fästa och bortvalda stopp kunde inte föras över till den här dagen. De används inte i den här planeringen.",
-            "Your previous kept and dismissed stops could not be carried over to this day. They are not used in this plan.",
-          )}
-        </p>
-      )}
-
-      {/* The ledger is stated where the user can always see it — including when
-          dismissing left no day at all, which is exactly when a way back
-          matters most. Hiding it behind a collapsed panel made the dismissal
-          effectively irreversible. */}
-      {(excludedCount > 0 || pinnedCount > 0 || liveChoiceCount > 0) && (
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-13 text-parranda-ink-muted" role="status">
-          {liveChoiceCount > 0 && <span>{t("Live-valet behålls för sitt tillfälle", "Live choice saved for its occurrence")}</span>}
-          {pinnedCount > 0 && (
-            <span className="inline-flex items-center gap-1.5">
-              <KeepIcon className="h-3.5 w-3.5 text-parranda-clay" />
-              {pinnedCount === 1
-                ? t("1 plats behålls", "1 place kept")
-                : t(`${pinnedCount} platser behålls`, `${pinnedCount} places kept`)}
-            </span>
-          )}
-          {excludedCount > 0 && (
-            <span className="inline-flex items-center gap-1.5">
-              <MinusIcon className="h-3.5 w-3.5" />
-              {excludedCount === 1
-                ? t("1 plats bortvald", "1 place dismissed")
-                : t(`${excludedCount} platser bortvalda`, `${excludedCount} places dismissed`)}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={clearCommitments}
-            className="inline-flex min-h-11 items-center font-semibold text-parranda-ink underline underline-offset-2 hover:text-parranda-clay"
-          >
-            {t("Börja om utan mina val", "Start over without my choices")}
-          </button>
-        </p>
-      )}
-
-      {/* A pin is a request, not a promise. When the day that came back does
-          not contain a kept place, say so plainly and name it — the day on
-          screen is the evidence. Silently dropping it would let the ledger
-          claim something the day does not show. */}
-      {unkept.count > 0 && (
-        <div className="flex flex-col gap-2 rounded-parranda bg-parranda-glow/8 px-4 py-3 text-13 leading-relaxed text-parranda-ink-soft" role="status">
-          {unkept.reasons.map((entry: { id: string; label: string; reason: string | null }) => (
-            <p key={entry.id}>{isLiveOccurrenceId(entry.id) ? t(`${entry.label || "Det valda tillfället"} kunde inte bekräftas som stopp i den här dagen. Ditt val finns kvar.`, `${entry.label || "The chosen occurrence"} could not be confirmed as a stop in this day. Your choice is retained.`) : unkeptReasonSentence(entry, t)}</p>
-          ))}
-        </div>
-      )}
+      {!dayWithRoute && dayNotes}
 
       {phase === "loading" && !staleNotice && <DayPlaceholder part="body" inlineMap={!splitLayout} />}
 
@@ -3582,50 +3622,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               {t("Välj en annan plats", "Choose another place")}
             </a>
           )}
-        </div>
-      )}
-
-      {/* WHAT THE LAST ADJUSTMENT CHANGED. An adjustment recomposes on its
-          own, so the replacement says what moved — or that nothing did — and
-          offers the day before it back. It sits beside the controls it
-          answers, and it is gone as soon as it stops being true. */}
-      {stopEditError && !dayChange && <p className={noticeCard} role="status">{stopEditErrorMessage}</p>}
-      {stopEditError === "live_not_preserved" && <button type="button" onClick={() => retryPlan({ sameDate: true })}
-        className={buttonClass("secondary", "min-h-11 px-4 text-13")}>
-        {t("Försök planera med evenemanget igen", "Try planning with this event again")}
-      </button>}
-      {dayChange && (phase === "done" || (phase === "error" && canUndoFailedEdit)) &&
-        (!dayIsStale || canUndoFailedEdit) && (dayChangeLine.length > 0 || keptNames.length > 0 || stopEditFeedback || stopEditError) && (
-        <div
-          role="status"
-          className="flex items-center gap-x-2 rounded-parranda bg-parranda-fill py-0.5 pl-4 pr-1"
-        >
-          <p className="min-w-0 flex-1 break-words text-13 leading-snug text-parranda-ink-muted">
-            {stopEditError ? stopEditErrorMessage : stopEditFeedback ? stopEditFeedbackMessage : <>
-              {/* A kept stop is named first and on its own: a Keep is never
-                  read as, or hidden behind, whatever else changed. */}
-              {keptNames.length > 0 && <>
-                <span className="font-bold text-parranda-ink">{t("Behålls", "Kept")}:{" "}</span>
-                {keptNames.join(", ")}
-                {dayChangeLine.length > 0 && " · "}
-              </>}
-              {dayChangeLine.length > 0 && <>
-                <span className="font-bold text-parranda-ink">
-                  {dayChange.summary.trigger === "recheck" ? t("Letade efter fler platser", "Looked for more places") : t("Ändrat", "Changed")}:{" "}
-                </span>
-                {dayChangeLine.join(" · ")}
-              </>}
-            </>}
-          </p>
-          <button
-            type="button"
-            onClick={undoDayChange}
-            aria-label={t("Ångra ändringen", "Undo this change")}
-            className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-parranda-btn px-3 text-13 font-bold text-parranda-ink hover:bg-parranda-fill-strong active:bg-parranda-fill-strong ${pressable}`}
-          >
-            <UndoIcon className="h-3.5 w-3.5" />
-            {t("Ångra", "Undo")}
-          </button>
         </div>
       )}
 
@@ -3737,6 +3733,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           detoursOpen={detoursOpen}
           setDetoursOpen={setDetoursOpen}
           continuesFromMap={Boolean(mapOverview)}
+          notes={dayNotes}
           detoursHost={detoursHost}
           aboutHost={aboutHost}
           actions={

@@ -439,7 +439,7 @@ test("keeping the current day after a longer suggestion preserves an existing Ke
   await h.clock.advance(1000);
 
   assert.deepEqual(h.readStorage(LAST), previous);
-  assert.match(h.text(), /1 place kept/);
+  assert.match(h.text(), /1 kept/);
   assert.equal(compose(h).length, 2);
 });
 

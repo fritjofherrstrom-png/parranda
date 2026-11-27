@@ -40,6 +40,7 @@ import {
   PlusIcon,
   RouteIcon,
   ShuffleIcon,
+  TrashIcon,
   WalkIcon,
 } from "../shared/icons";
 import {
@@ -219,6 +220,7 @@ export default function StopLine({
   detoursOpen,
   actions = null,
   continuesFromMap = false,
+  notes = null,
   detoursHost = null,
   aboutHost = null,
   setDetoursOpen,
@@ -267,6 +269,8 @@ export default function StopLine({
   actions?: ReactNode;
   /** A phone: the map stands right above, so the line starts at its edge. */
   continuesFromMap?: boolean;
+  /** What the reader changed (the last edit and its Undo, the standing choices): rows beside the line, above the first station. */
+  notes?: ReactNode;
   /** Where the detours and About render below Live and Blitz (Linje 2). */
   detoursHost?: HTMLElement | null;
   aboutHost?: HTMLElement | null;
@@ -404,6 +408,9 @@ export default function StopLine({
                 ? t("Du är inte nära rutten just nu.", "You're not near the route right now.")
                 : null;
 
+  const headingRow = opensWithDaypart || canFollow;
+  const leadIn = Boolean(headingRow || followStatus || notes || (continuationAllowed && canFollowToday && following && !stale));
+
   // HOW THE DAY WAS ASSEMBLED — one line, opened on request, said once where
   // the line ends: it qualifies the stops, their walks and the map above
   // them. On a phone the map's still overview stands in the day's header,
@@ -538,47 +545,57 @@ export default function StopLine({
       // a silent swap — but reads as the one being replaced: its names fade,
       // the ember line goes quiet and one soft wash slides down it again.
       data-rebuilding={stale || undefined}
-      className="-mt-8 flex flex-col"
+      className="-mt-4 flex flex-col sm:-mt-6"
     >
-      {/* Linje 2 board: no heading row of its own. On a phone the line comes
-          out of the map above and runs through this row; the first daypart
-          ("Evening") sits on the line beside Follow the day. */}
-      <div className={"stop-line-heading-row relative mb-1 flex min-h-11 flex-wrap items-center justify-between gap-x-3 pl-14 " +
-        (continuesFromMap || opensWithDaypart ? "before:pointer-events-none before:absolute before:-bottom-2 before:left-[19px] before:w-1.5 before:content-[''] " +
-          // Only the phone's map band is full-bleed (below sm), so only there
-          // does the line come out of it; from sm the map is a rounded card
-          // and the line starts at the first daypart, as on desktop.
-          (continuesFromMap ? "max-sm:before:-top-4 sm:before:top-1/2 " : "before:top-1/2 ") +
-          (stale ? "before:bg-parranda-line-faint " : "before:bg-parranda-ember ") : "")}>
-        <h2 className="sr-only">{t("Stoppen i ordning", "The stops, in order")}</h2>
-        {/* The daypart crosses the line as a notch cut into it (paper), not
-            an ink bar laid over it. Only the part over the line shows. */}
-        {opensWithDaypart && <h3 className="type-eyebrow relative min-h-9 text-parranda-glow">
-          <span aria-hidden="true" className="stop-line-daypart-crossing absolute top-1/2 h-1 w-3 translate-x-0.5 -translate-y-1/2 bg-parranda-paper" />
-          {label(DAYPART_LABELS, split.core[0].daypart, lang)}
-        </h3>}
-        {canFollow && (
-          <button
-            type="button"
-            aria-pressed={following}
-            onClick={onToggleFollow}
-            // The day's control pill, like Change place and Adjust. Its sign
-            // is a position, not an ember ring: circles on the line are its
-            // stations. Following, it takes the one "chosen" fill, ink.
-            className={following
-              ? `inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-parranda-btn px-3 text-13 ${choiceOn} hover:brightness-110`
-              : controlPill44}
-          >
-            <LocationIcon className="h-4 w-4" />
-            {following ? t("Sluta följa", "Stop following") : t("Följ dagen", "Follow the day")}
-          </button>
-        )}
-      </div>
-      {followStatus && (
-        <p className="mb-1 pl-14 text-13 font-semibold text-parranda-ink" aria-live="polite">{followStatus}</p>
+      <h2 className="sr-only">{t("Stoppen i ordning", "The stops, in order")}</h2>
+      {/* THE LEAD-IN: what stands between the map and the first station —
+          the first daypart, Follow the day, where you are, what you just
+          changed, the walk from the start. On a phone the line comes out of
+          the map and runs beside all of it; rows sit in the names' column.
+          Nothing renders here when there is nothing to say, so the line
+          meets its first station right under the map. */}
+      {leadIn && (
+        <div className={"relative mb-1 flex flex-col " +
+          (continuesFromMap || opensWithDaypart ? "before:pointer-events-none before:absolute before:-bottom-2 before:left-[19px] before:w-1.5 before:content-[''] " +
+            // Only the phone's map band is full-bleed (below sm), so only there
+            // does the line come out of it; from sm the map is a rounded card
+            // and the line starts at the first daypart, as on desktop.
+            (continuesFromMap ? (headingRow ? "max-sm:before:-top-4 sm:before:top-[22px] " : "max-sm:before:-top-4 sm:before:top-0 ") : "before:top-[22px] ") +
+            (stale ? "before:bg-parranda-line-faint " : "before:bg-parranda-ember ") : "")}>
+          {headingRow && (
+            <div className="stop-line-heading-row flex min-h-11 flex-wrap items-center gap-x-3 pl-14">
+              {/* The daypart crosses the line as a notch cut into it (paper), not
+                  an ink bar laid over it. Only the part over the line shows. */}
+              {opensWithDaypart && <h3 className="type-eyebrow relative min-h-9 text-parranda-glow">
+                <span aria-hidden="true" className="stop-line-daypart-crossing absolute top-1/2 h-1 w-3 translate-x-0.5 -translate-y-1/2 bg-parranda-paper" />
+                {label(DAYPART_LABELS, split.core[0].daypart, lang)}
+              </h3>}
+              {canFollow && (
+                <button
+                  type="button"
+                  aria-pressed={following}
+                  onClick={onToggleFollow}
+                  // A word with its sign in the names' column, not a pill
+                  // floating at the edge: it starts the line's own story.
+                  // Following, it takes the one "chosen" fill, ink.
+                  className={following
+                    ? `inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-parranda-btn px-3 text-13 ${choiceOn} hover:brightness-110`
+                    : buttonClass("quiet", "-ml-2 min-h-11 shrink-0 gap-1.5 px-2 text-13")}
+                >
+                  <LocationIcon className="h-4 w-4" />
+                  {following ? t("Sluta följa", "Stop following") : t("Följ dagen", "Follow the day")}
+                </button>
+              )}
+            </div>
+          )}
+          {followStatus && (
+            <p className="mb-1 pl-14 text-13 font-semibold text-parranda-ink" aria-live="polite">{followStatus}</p>
+          )}
+          <WalkingContinuation t={t} stops={routeStops} follow={follow}
+            enabled={continuationAllowed && canFollowToday && following && !stale} destination={walkingDestination} />
+          {notes && <div data-day-notes="" className="flex flex-col pb-1 pl-14">{notes}</div>}
+        </div>
       )}
-      <WalkingContinuation t={t} stops={routeStops} follow={follow}
-        enabled={continuationAllowed && canFollowToday && following && !stale} destination={walkingDestination} />
       {/* Core stops only, grouped under daypart headings taken from
           stop.daypart — only groups that exist render, and the engine's
           order is never changed to force a grouping. The walk INTO a stop
@@ -601,7 +618,10 @@ export default function StopLine({
           // heading's crossing mark, so the mark caps the line: the heading
           // row's stub runs on into this one (overlapping it, square-ended),
           // so the two read as one unbroken line with no seam under the row.
-          (continuesFromMap || opensWithDaypart ? "before:top-0 before:rounded-b-full " : "before:top-7 before:rounded-full ") +
+          (leadIn && (continuesFromMap || opensWithDaypart) ? "before:top-0 before:rounded-b-full "
+            // No lead-in: on a phone the line comes straight out of the map.
+            : continuesFromMap ? "max-sm:before:-top-4 max-sm:before:rounded-b-full sm:before:top-7 sm:before:rounded-full "
+            : "before:top-7 before:rounded-full ") +
           (stale ? "route-redraw before:bg-parranda-line-faint" : "before:bg-parranda-ember")}
         aria-label={t("Stoppen i ordning", "The stops, in order")}
       >
@@ -911,7 +931,7 @@ export default function StopLine({
                           title={t("Ta bort stoppet utan ersättning", "Remove this stop without replacement")}
                           className={editRemove}
                         >
-                          <MinusIcon className="h-4 w-4" />
+                          <TrashIcon className="h-4 w-4" />
                           {t("Ta bort", "Remove")}
                         </button>
                       </>
@@ -1021,27 +1041,36 @@ export default function StopLine({
                 </p>
                 <LiveEventTiming event={stop} lang={lang} selectedDate={selectedDate} />
                 {venue && venue !== name && <p className="mt-0.5 text-13 text-parranda-ink-muted">{venue}</p>}
-                <p className="mt-1 text-13 text-parranda-ink-muted">
-                  {dayOffset === 0
-                    ? t("Tillagt till dagens rutt", "Added to today's route")
-                    : t("Tillagt till morgondagens rutt", "Added to tomorrow's route")}
-                  {!legShown && Number.isFinite(legKm)
-                    ? t(
-                        ` · ${walkingDistanceLabel(legKm, "sv")} från föregående stopp`,
-                        ` · ${walkingDistanceLabel(legKm, "en")} from the previous stop`,
-                      )
-                    : ""}
-                </p>
-                {liveStopChoiceId(stop) && <div className="mt-3 flex flex-wrap gap-2">
+                {/* "Live in your route" already says it was added; only the
+                    walk to it is left to say when its leg is not drawn. */}
+                {!legShown && Number.isFinite(legKm) && (
+                  <p className={`${dataLine} mt-1`}>
+                    {t(`${walkingDistanceLabel(legKm, "sv")} från föregående stopp`, `${walkingDistanceLabel(legKm, "en")} from the previous stop`)}
+                  </p>
+                )}
+                {/* The same quiet edit row as a station's: words with signs,
+                    no stack of grey boxes. */}
+                {liveStopChoiceId(stop) && <div className="-ml-2 mt-2 flex flex-wrap items-center">
                   {commitments[stop.live_occurrence_id]?.kind === "pin" ? (
-                    <button type="button" className={buttonClass("secondary", "min-h-11 px-4 text-13")} onClick={() => releaseCommitment(stop.live_occurrence_id)}>{confirmedLiveKeepIds.includes(stop.live_occurrence_id)
-                      ? t("Behålls — släpp", "Kept — release")
-                      : t("Valt — släpp", "Selected — release")}</button>
+                    <button type="button" className={editQuiet} onClick={() => releaseCommitment(stop.live_occurrence_id)}>
+                      <KeepIcon className="h-4 w-4 fill-current" />
+                      {confirmedLiveKeepIds.includes(stop.live_occurrence_id)
+                        ? t("Behålls — släpp", "Kept — release")
+                        : t("Valt — släpp", "Selected — release")}</button>
                   ) : stop.live_choice_eligible === true && (
-                    <button type="button" className={buttonClass("secondary", "min-h-11 px-4 text-13")} onClick={() => keepStop(stop.live_occurrence_id, name)}>{t("Behåll eventet", "Keep this event")}</button>
+                    <button type="button" className={editQuiet} onClick={() => keepStop(stop.live_occurrence_id, name)}>
+                      <KeepIcon className="h-4 w-4" />
+                      {t("Behåll eventet", "Keep this event")}
+                    </button>
                   )}
-                  <button type="button" className={buttonClass("secondary", "min-h-11 px-4 text-13")} onClick={() => commit(stop.live_occurrence_id, "exclude", name, "replace")}>{t("Byt event", "Try another event")}</button>
-                  <button type="button" className={buttonClass("secondary", "min-h-11 px-4 text-13")} onClick={() => commit(stop.live_occurrence_id, "exclude", name, "remove")}>{t("Ta bort ur dagen", "Remove from day")}</button>
+                  <button type="button" className={editQuiet} onClick={() => commit(stop.live_occurrence_id, "exclude", name, "replace")}>
+                    <ShuffleIcon className="h-4 w-4" />
+                    {t("Byt event", "Try another event")}
+                  </button>
+                  <button type="button" className={editRemove} onClick={() => commit(stop.live_occurrence_id, "exclude", name, "remove")}>
+                    <TrashIcon className="h-4 w-4" />
+                    {t("Ta bort ur dagen", "Remove from day")}
+                  </button>
                 </div>}
                 {(sourceLabel || sourceLink) && (
                   <p className="mt-1 text-11 leading-snug text-parranda-ink-meta">
@@ -1071,7 +1100,10 @@ export default function StopLine({
       {/* Linje 2: the line runs on into the walk's Maps action, so the
           route and the way to walk it read as one thing. */}
       {actions && (
-        <div data-line-end="" className="relative mt-1 pt-4 before:pointer-events-none before:absolute before:left-[19px] before:-top-3 before:h-7 before:w-1.5 before:bg-parranda-ember before:content-['']">
+        // The stub joins the last station to the walk's Maps action; after a
+        // woven Live stop (its own dotted line) it would hang loose.
+        <div data-line-end="" className={"relative mt-1 pt-4 " + (split.woven.length === 0
+          ? "before:pointer-events-none before:absolute before:left-[19px] before:-top-3 before:h-7 before:w-1.5 before:bg-parranda-ember before:content-['']" : "")}>
           {actions}
         </div>
       )}

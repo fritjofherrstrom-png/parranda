@@ -130,7 +130,7 @@ test("Keep on a settled day pins the stop and composes nothing", async (t) => {
   assert.doesNotMatch(h.text(), /Live: event added/);
   assert.match(h.text(), /Kept: Bagaren och Bonden/, "the receipt names the kept stop");
   assert.doesNotMatch(h.text(), /Changed:/, "and claims no other change");
-  assert.match(h.text(), /1 place kept/);
+  assert.match(h.text(), /1 kept/);
   assert.match(shownStops(h)[0], /Bagaren och Bonden/, "the kept stop is still the first stop");
 });
 
@@ -174,7 +174,7 @@ test("Undo on the Kept receipt releases the stop without composing", async (t) =
 
   assert.equal(routeCalls(h).length, 1, "Undo of a Keep composes nothing");
   assert.deepEqual(shownStops(h), before);
-  assert.doesNotMatch(h.text(), /1 place kept/);
+  assert.doesNotMatch(h.text(), /1 kept/);
   assert.doesNotMatch(h.text(), /Kept: /);
   const row = disclosure(h, "Bagaren och Bonden");
   if (row.getAttribute("aria-expanded") !== "true") await h.act(() => row.dispatchEvent(new h.window.Event("click", { bubbles: true })));

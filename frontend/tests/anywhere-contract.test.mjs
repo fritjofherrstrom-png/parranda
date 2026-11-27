@@ -191,8 +191,8 @@ test("route/Pulse hierarchy: a woven event is a route EXTENSION with exactly one
   assert.match(anywherePlannerSource, /split\.woven\.map\(/);
   assert.match(anywherePlannerSource, /Live i din rutt/);
   assert.match(anywherePlannerSource, /Live in your route/);
-  assert.match(anywherePlannerSource, /Tillagt till dagens rutt/);
-  assert.match(anywherePlannerSource, /Added to today's route/);
+  // "Live in your route" says it was added; no second sentence repeats it.
+  assert.doesNotMatch(anywherePlannerSource, /Tillagt till dagens rutt|Added to today's route/);
   // ...stays in the complete Google Maps route (FULL stop order, not the split)...
   assert.match(anywherePlannerSource, /mapsWalkingRouteParts\([\s\S]{0,80}routeStops,[\s\S]{0,180}origin: routeOrigin/);
   // ...and the old duplicated presentations are gone (the "And tonight" card and

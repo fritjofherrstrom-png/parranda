@@ -189,9 +189,9 @@ test("a replaced stop comes back with its day, and Undo forgets the exclusion an
   await h.fetchMock.respond(calls[1], composedDay(["a", "c"], 1.4, calls[1].body.day_edit));
   await h.clock.advance(50);
   const undo = buttonNamed(h, /^Undo this change$/);
-  assert.match(undo.closest('[role="status"]').textContent, /Replaced Place b with Place c/);
+  assert.match(undo.closest('[role="status"]').textContent, /Replaced: Place b → Place c/);
 
-  assert.match(h.text(), /1 place dismissed/, "precondition: the ledger shows the dismissal");
+  assert.match(h.text(), /1 removed/, "precondition: the ledger shows the dismissal");
   assert.deepEqual(routeStopNames(h).slice(0, 2), ["Place a", "Place c"], "replacement preserves the other stop and the count");
   const replaced = h.readStorage("parranda:anywhere:last");
   assert.deepEqual(replaced.safeResponse.days[0].primary_route.main_stops.map(stop => stop.id), ["a", "c"]);
@@ -203,7 +203,7 @@ test("a replaced stop comes back with its day, and Undo forgets the exclusion an
   await h.clock.advance(1000);
   assert.equal(composeCalls(h).length, 2);
   assert.deepEqual(routeStopNames(h).slice(0, 2), ["Place a", "Place b"]);
-  assert.doesNotMatch(h.text(), /place dismissed/, "the restored day was composed with no dismissal");
+  assert.doesNotMatch(h.text(), /\d removed/, "the restored day was composed with no dismissal");
   assert.deepEqual(h.readStorage("parranda:anywhere:last"), previous, "Undo restores the exact original snapshot, inputs and ledger");
   assert.equal(new URL(h.window.location.href).searchParams.has("edit"), false);
 

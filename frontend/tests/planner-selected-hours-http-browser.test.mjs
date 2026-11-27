@@ -207,7 +207,7 @@ for (const mode of ['unknown', 'failed']) test(`built Planner keeps source-${mod
   assert.ok(stops.every(stop => stop.selected_day_hours === undefined && stop.open_now === undefined));
   assert.match(await route.innerText(), /Opening hours unavailable/);
   assert.match(await panel.innerText(), /Opening hours unavailable for the selected day/);
-  assert.doesNotMatch(await panel.innerText(), /open now|currently open|Source hours for selected day/i);
+  assert.doesNotMatch(await panel.innerText(), /open now|currently open|Hours that day/i);
 });
 
 test('built Planner publishes source hours and excludes an observed closed selected place through normal gates', { timeout: 30000 }, async t => {
@@ -223,7 +223,7 @@ test('built Planner publishes source hours and excludes an observed closed selec
     assert.equal(stop.selected_day_hours.observed_at, '2026-10-17T10:00:00.000Z');
     assert.equal(stop.open_now, undefined);
   }
-  assert.match(await panel.innerText(), /Source hours for selected day: 10:00–17:00/);
+  assert.match(await panel.innerText(), /Hours that day: 10:00–17:00/);
   const closedContext = body.place_structure?.district_day?.areas?.flatMap(area => area.stops || [])
     .find(stop => stop.id === 'selected-0');
   assert.equal(closedContext?.selected_day_hours?.status, 'closed',
@@ -327,7 +327,7 @@ test('built Planner withholds a recorded seasonal Monday closure across reload a
   const ownerPanel = f.page.getByRole('region', { name: 'The route', exact: true });
   assert.match(await ownerPanel.innerText(), /Regular hours: 12:00–17:00.*Selected day unconfirmed/);
   assert.equal(await ownerPanel.getByRole('link', { name: 'Website', exact: true }).getAttribute('href'), OWNER_WEBSITE);
-  assert.doesNotMatch(await ownerPanel.innerText(), /Source hours for selected day|open now|currently open/i);
+  assert.doesNotMatch(await ownerPanel.innerText(), /Hours that day|open now|currently open/i);
   if (evidenceDir) await f.page.screenshot({ path: join(evidenceDir, 'recorded-seasonal-tuesday.png'), fullPage: true });
 });
 
@@ -341,7 +341,7 @@ test('built UI publishes actual owner date override and withholds dated closure 
       assert.deepEqual(stop.selected_day_hours.windows, [{ opens: '12:00', closes: '17:00' }]);
       const button = f.page.getByRole('list', { name: 'The stops, in order', exact: true }).locator(':scope > li > button').filter({ hasText: 'Gustavianum' });
       if (await button.getAttribute('aria-expanded') !== 'true') await button.click();
-      assert.match(await f.route.innerText(), /Source hours for selected day: 12:00–17:00/);
+      assert.match(await f.route.innerText(), /Hours that day: 12:00–17:00/);
     } else {
       assert.equal(stop, undefined);
       const withheld = contextStopsOf(f.body).find(row => row.id === OWNER_ID);
@@ -365,7 +365,7 @@ test('built UI displays recorded café ordinary hours conditionally through HTTP
     const button = f.page.getByRole('list', { name: 'The stops, in order', exact: true }).locator(':scope > li > button').filter({ hasText: cafeRecord.name });
     if (await button.getAttribute('aria-expanded') !== 'true') await button.click();
     assert.match(await f.route.innerText(), /Regular hours: 06:30–18:00.*Holiday hours unconfirmed/);
-    assert.doesNotMatch(await f.route.innerText(), /currently open|open now|Source hours for selected day/i);
+    assert.doesNotMatch(await f.route.innerText(), /currently open|open now|Hours that day/i);
     return stop.selected_day_hours;
   };
   const originalFact = await verify(f.body);

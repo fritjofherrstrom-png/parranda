@@ -103,7 +103,7 @@ test('same-position consent after reload recovers its saved keep and dismissal b
   assert.deepEqual(routes(h)[0].body.pinned_candidate_ids, ['museum']);
   assert.deepEqual(routes(h)[0].body.excluded_candidate_ids, ['park']);
   await h.fetchMock.respond(routes(h)[0], response({ replaced: true, dayEdit: routes(h)[0].body.day_edit }));
-  assert.match(h.text(), /1 place kept/); assert.match(h.text(), /1 place dismissed/);
+  assert.match(h.text(), /1 kept/); assert.match(h.text(), /1 removed/);
   assert.match(h.container.querySelector('section[aria-label="The route"]').textContent, /Kept/);
   await h.clock.advance(1000); assert.equal(routes(h).length, 1);
   assert.doesNotMatch(h.text(), /Your previous kept and dismissed stops could not be carried over/);
@@ -119,7 +119,7 @@ test('same-position consent still recovers a keep-only reload without manual edi
   assert.deepEqual(routes(h)[0].body.pinned_candidate_ids, ['museum']);
   assert.equal(routes(h)[0].body.day_edit, undefined);
   await h.fetchMock.respond(routes(h)[0], response());
-  assert.match(h.text(), /1 place kept/);
+  assert.match(h.text(), /1 kept/);
   await h.clock.advance(1000); assert.equal(routes(h).length, 1);
 });
 
@@ -174,7 +174,7 @@ test('restore last carries valid position ledger and pin badge without asking fo
   const h = await mountPlanner({ url: 'http://localhost/anywhere?restore=last&lang=en', storage: { [LAST]: entry } });
   t.after(() => h.unmount()); const gps = geo(h);
   assert.equal(routes(h).length, 0); assert.equal(gps.requests.length, 0);
-  assert.match(h.text(), /1 place kept/); assert.match(h.text(), /1 place dismissed/);
+  assert.match(h.text(), /1 kept/); assert.match(h.text(), /1 removed/);
   assert.match(h.container.querySelector('section[aria-label="The route"]').textContent, /Kept/);
 });
 
@@ -247,7 +247,7 @@ for (const [name, change] of [
   freeze(t); const { entry } = await completed(t); change(entry);
   const h = await mountPlanner({ url: 'http://localhost/anywhere?restore=last&lang=en', storage: { [LAST]: entry } });
   t.after(() => h.unmount());
-  assert.doesNotMatch(h.text(), /1 place kept|1 place dismissed|Kept/);
+  assert.doesNotMatch(h.text(), /1 kept|1 removed|Kept/);
 });
 
 test('late Blitz position consent after navigation sends nothing', async t => {
@@ -270,11 +270,11 @@ test('a late route body after consent cannot replace the newer position choices'
   assert.deepEqual(older.body.pinned_candidate_ids, ['museum'], 'precondition: this request recovered the original choices');
   assert.deepEqual(older.body.day_edit, entry.inputs.dayEdit);
   await h.fetchMock.respond(older, response({ replaced: true, title: 'Late museum', dayEdit: older.body.day_edit }), 200, { deferBody: true });
-  await click(h, 'Start over without my choices'); await h.clock.advance(400);
+  await click(h, 'Start over'); await h.clock.advance(400);
   const newer = routes(h).at(-1);
   assert.notEqual(newer, older); assert.equal(older.aborted, true);
   await h.fetchMock.respond(newer, response()); await h.fetchMock.releaseBody(older);
-  assert.doesNotMatch(h.text(), /Late museum|1 place kept|1 place dismissed/);
+  assert.doesNotMatch(h.text(), /Late museum|1 kept|1 removed/);
   assert.equal(h.readStorage(LAST).commitments, null);
   assert.equal(h.readStorage(LAST).inputs.dayEdit, undefined);
 });

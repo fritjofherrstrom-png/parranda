@@ -401,7 +401,7 @@ test('fresh same-position consent after exact navigation keeps the published dat
   } });
   await next.clock.advance(500);
   assert.equal(next.fetchMock.calls.length, 0);
-  assert.match(next.text(), /1 place kept/);
+  assert.match(next.text(), /1 kept/);
   await open(next, 'Fixture café'); await click(next, 'Remove');
   await next.clock.advance(500);
   assert.equal(composeCalls(next).length, 0, 'the refused edit awaits a separate consent action');
@@ -416,7 +416,7 @@ test('fresh same-position consent after exact navigation keeps the published dat
   assert.equal(resumed.body.day_edit, undefined, 'the refused Remove was never acknowledged or queued');
   await next.fetchMock.respond(resumed, answer()); await next.clock.advance(1000);
   assert.equal(composeCalls(next).length, 1);
-  assert.match(next.text(), /1 place kept/);
+  assert.match(next.text(), /1 kept/);
   assert.doesNotMatch(next.text(), /Your previous kept and dismissed stops could not be carried over/);
   assert.deepEqual(next.readStorage(LAST_KEY).commitments.entries, saved.commitments.entries);
   assert.equal(next.readStorage(LAST_KEY).inputs.coords, undefined);
