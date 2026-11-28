@@ -409,7 +409,7 @@ export default function StopLine({
                 : null;
 
   const headingRow = opensWithDaypart || canFollow;
-  const leadIn = Boolean(headingRow || followStatus || notes || (continuationAllowed && canFollowToday && following && !stale));
+  const leadIn = Boolean(headingRow || followStatus || notes || startLeg || (continuationAllowed && canFollowToday && following && !stale));
 
   // HOW THE DAY WAS ASSEMBLED — one line, opened on request, said once where
   // the line ends: it qualifies the stops, their walks and the map above
@@ -563,7 +563,7 @@ export default function StopLine({
             (continuesFromMap ? (headingRow ? "max-sm:before:-top-4 sm:before:top-[22px] " : "max-sm:before:-top-4 sm:before:top-0 ") : "before:top-[22px] ") +
             (stale ? "before:bg-parranda-line-faint " : "before:bg-parranda-ember ") : "")}>
           {headingRow && (
-            <div className="stop-line-heading-row flex min-h-11 flex-wrap items-center gap-x-3 pl-14">
+            <div className="stop-line-heading-row flex min-h-11 flex-wrap items-center gap-x-5 pl-14">
               {/* The daypart crosses the line as a notch cut into it (paper), not
                   an ink bar laid over it. Only the part over the line shows. */}
               {opensWithDaypart && <h3 className="type-eyebrow relative min-h-9 text-parranda-glow">
@@ -594,6 +594,14 @@ export default function StopLine({
           <WalkingContinuation t={t} stops={routeStops} follow={follow}
             enabled={continuationAllowed && canFollowToday && following && !stale} destination={walkingDestination} />
           {notes && <div data-day-notes="" className="flex flex-col pb-1 pl-14">{notes}</div>}
+          {startLeg && (
+            <p className={`${dataLine} flex min-h-8 flex-wrap items-center gap-x-1.5 pl-14`}>
+              <WalkIcon className="h-3.5 w-3.5" />
+              <span>{t(`Från ${startLeg.label}`, `From ${startLeg.label}`)}</span>
+              <span aria-hidden="true">·</span>
+              <span>{legLabel(startLeg)}</span>
+            </p>
+          )}
         </div>
       )}
       {/* Core stops only, grouped under daypart headings taken from
@@ -604,14 +612,6 @@ export default function StopLine({
           POI — it renders once below, as an attached route extension.
           The line itself is the list's ::before: one continuous segment
           from the first station to the last. */}
-      {startLeg && (
-        <p className={`${dataLine} flex min-h-8 flex-wrap items-center gap-x-1.5 pl-14`}>
-          <WalkIcon className="h-3.5 w-3.5" />
-          <span>{t(`Från ${startLeg.label}`, `From ${startLeg.label}`)}</span>
-          <span aria-hidden="true">·</span>
-          <span>{legLabel(startLeg)}</span>
-        </p>
-      )}
       <ol
         className={"relative flex flex-col before:pointer-events-none before:absolute before:bottom-7 before:left-[19px] before:w-1.5 before:transition-colors before:content-[''] " +
           // A list that opens with a daypart starts its line at that

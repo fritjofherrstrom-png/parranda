@@ -53,11 +53,14 @@ export default function DayPlaceholder({ status, inlineMap = true, part = "all" 
         {/* On a phone the map's overview follows, the strip it will be: the
             same height, and below 640px the same edge-to-edge band. */}
         {inlineMap && <div data-day-shape="map" className={`${shape} mt-6 h-60 rounded-parranda max-sm:-mx-4 max-sm:rounded-none`} />}
-        {/* The stations follow the map directly: the line's lead-in only
-            stands when it has something to say. */}
+        {/* The line's lead-in as today's day has it (the first daypart,
+            Follow the day): a quiet row, so the stations land where they stood. */}
+        <div className="mb-1 mt-4 flex min-h-11 items-center pl-14">
+          <div className={`${bar} h-3 w-24`} />
+        </div>
         <div
           data-day-shape="stations"
-          className="relative mt-4 flex flex-col before:absolute before:bottom-7 before:left-[19px] before:top-7 before:w-1.5 before:rounded-full before:bg-parranda-fill before:content-['']"
+          className="relative flex flex-col before:absolute before:bottom-7 before:left-[19px] before:top-7 before:w-1.5 before:rounded-full before:bg-parranda-fill before:content-['']"
         >
           {NAME_WIDTHS.map((width, index) => (
             <div key={index} className="flex flex-col">

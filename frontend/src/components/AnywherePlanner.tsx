@@ -3305,7 +3305,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // screen the same rows stand in the page.
   const receiptShown = Boolean(dayChange && (phase === "done" || (phase === "error" && canUndoFailedEdit)) &&
     (!dayIsStale || canUndoFailedEdit) && (dayChangeLine.length > 0 || keptNames.length > 0 || stopEditFeedback || stopEditError));
-  const liveCommitments = Object.entries(commitments).filter(([id]) => isLiveOccurrenceId(id));
+  // A live choice belongs to its occurrence's date: one held for another
+  // day is kept (Start over still drops it) but is not this day's choice.
+  const liveCommitments = Object.entries(commitments).filter(([id]) => isLiveOccurrenceId(id) &&
+    (typeof shownDate !== "string" || id.slice(5, 15) === shownDate));
   const keptTotal = pinnedCount + liveCommitments.filter(([, entry]) => entry.kind === "pin").length;
   const removedTotal = excludedCount + liveCommitments.filter(([, entry]) => entry.kind !== "pin").length;
   const ledgerParts = [
@@ -3337,7 +3340,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             type="button"
             onClick={undoDayChange}
             aria-label={t("Ångra ändringen", "Undo this change")}
-            className={buttonClass("quiet", "-mr-2 min-h-11 shrink-0 gap-1.5 px-2 text-13")}
+            className={buttonClass("quiet", "min-h-11 shrink-0 gap-1.5 px-2 text-13")}
           >
             <UndoIcon className="h-3.5 w-3.5" />
             {t("Ångra", "Undo")}

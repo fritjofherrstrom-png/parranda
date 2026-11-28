@@ -13,11 +13,11 @@
 /* The first daypart and Follow share real flow, not overlapping rows. The
    rem inset follows text zoom while the crossing remains on the 19px line. */
 .stop-line-heading-row > h3 { display: flex; align-items: center; }
-.stop-line-heading-row > h3 + button { margin-left: auto; max-width: 100%; }
+.stop-line-heading-row > button { max-width: 100%; }
 .stop-line-daypart-crossing { left: calc(14px - 3.5rem); }
-/* On a phone the walking credit is its own line in the map's attribution,
-   so it never opens a wrapped line with a stray separator. */
-@media (max-width: 639.98px) { .route-map-frame [data-walking-credit] { display: block; } }
+/* The walking credit is its own line in the map's attribution, so it never
+   opens a wrapped line with a stray separator. */
+.route-map-frame [data-walking-credit] { display: block; }
 
 @theme inline {
   --color-parranda-ink: rgb(var(--p-color-ink));
