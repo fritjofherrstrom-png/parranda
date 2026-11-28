@@ -953,8 +953,29 @@ export default function RouteMap({
   }, [position, mapDrawn, mapFailed, positionCentreRequest]);
 
   const locationCloseRef = useRef<HTMLButtonElement | null>(null);
+  const locationControlRef = useRef<HTMLDivElement | null>(null);
   const locateButtonRef = useRef<HTMLButtonElement | null>(null);
   const locationState = positionSession?.state;
+  // This React overlay is a sibling of the map container, so neither the
+  // container nor MapLibre's control observer sees it appear or change size.
+  // Re-evaluate keepouts only: a status change must not refit the camera.
+  useLayoutEffect(() => {
+    if (mapFailed) return;
+    let animationFrame = 0;
+    const schedule = () => {
+      if (!animationFrame) animationFrame = requestAnimationFrame(() => {
+        animationFrame = 0;
+        layoutRef.current();
+      });
+    };
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+    if (locationControlRef.current) observer?.observe(locationControlRef.current);
+    schedule();
+    return () => {
+      observer?.disconnect();
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+    };
+  }, [positionEnabled, locationState?.status, mapFailed]);
   // Where you are is the map's own business: one small chip in the map's
   // corner (the dot says the rest), never a loose line between the map and
   // the day. A failure offers what fixes it; the cross turns location off.
@@ -972,7 +993,7 @@ export default function RouteMap({
     // (bottom right); a map control for the pins' layout, so stations are
     // set clear of it. Above the pins (their shells stack from 1200): a
     // short-lived status the reader can close, never hidden under a station.
-    <div data-location-status="" data-map-control={inFrame ? "" : undefined} style={inFrame ? { zIndex: 1300 } : undefined} className={(inFrame
+    <div ref={inFrame ? locationControlRef : undefined} data-location-status="" data-map-control={inFrame ? "" : undefined} style={inFrame ? { zIndex: 1300 } : undefined} className={(inFrame
       ? "absolute right-2.5 top-2.5 max-w-[calc(100%_-_1.25rem)] rounded-parranda-btn map-control pl-3 "
       : "mt-1 ") + "flex min-h-11 items-center gap-1 text-13 text-parranda-ink-soft"}>
       <span role="status" className="min-w-0 py-2 leading-snug">{locationText}</span>
@@ -984,7 +1005,7 @@ export default function RouteMap({
           {t("Försök igen", "Try again")}
         </button>
       )}
-      <button type="button" ref={inFrame ? locationCloseRef : undefined}
+      <button type="button" ref={locationCloseRef}
         onClick={() => { onStopLocation?.(); locateButtonRef.current?.focus({ preventScroll: true }); }}
         aria-label={t("Stäng av position", "Stop location")} title={t("Stäng av position", "Stop location")}
         className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-parranda-btn text-parranda-ink-meta hover:text-parranda-ink ${pressable}`}>

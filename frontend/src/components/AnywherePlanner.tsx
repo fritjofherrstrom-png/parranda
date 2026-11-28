@@ -3315,7 +3315,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     keptTotal > 0 && t(`${keptTotal} ${keptTotal === 1 ? "behållen" : "behållna"}`, `${keptTotal} kept`),
     removedTotal > 0 && t(`${removedTotal} ${removedTotal === 1 ? "bortvald" : "bortvalda"}`, `${removedTotal} removed`),
   ].filter(Boolean) as string[];
-  const dayNotes = (receiptShown || (stopEditError && !dayChange) || ledgerParts.length > 0 || unkept.count > 0 || choicesNotCarried) ? (
+  const hasLedgerChoices = ledgerParts.length > 0 || liveChoiceCount > 0;
+  const dayNotes = (receiptShown || (stopEditError && !dayChange) || hasLedgerChoices || unkept.count > 0 || choicesNotCarried) ? (
     <>
       {receiptShown && dayChange && (
         <div role="status" className="flex items-start gap-2">
@@ -3355,9 +3356,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {/* The standing choices, stated where they can always be seen —
           including when dismissing left no day at all, which is exactly when
           a way back matters most. */}
-      {ledgerParts.length > 0 && (
+      {hasLedgerChoices && (
         <p className="type-data flex flex-wrap items-center gap-x-3 text-13 text-parranda-ink-meta" role="status">
-          <span>{t("Dina val", "Your choices")}: {ledgerParts.join(" · ")}</span>
+          <span>{ledgerParts.length > 0
+            ? <>{t("Dina val", "Your choices")}: {ledgerParts.join(" · ")}</>
+            : t("Live-val för andra datum", "Live choices for other dates")}</span>
           <button
             type="button"
             onClick={clearCommitments}

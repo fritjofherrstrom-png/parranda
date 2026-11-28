@@ -13,15 +13,15 @@ const stable = [
   { id: 'lunch', label: 'Fixture Lunch', type: 'restaurant', lat: 59.334, lng: 18.066, covered_preferences: ['food'] },
 ];
 
-function day({ occurrence = ID, honored = false } = {}) {
+function day({ date = DATE, occurrence = `live:${date}:${'a'.repeat(32)}`, honored = false } = {}) {
   const event = {
     id: occurrence === OTHER ? 'other-event' : 'source-event', title: occurrence === OTHER ? 'Other concert' : 'Evening concert',
     live_occurrence_id: occurrence, live_choice_eligible: true, route_eligible: true,
-    occurrence_date: DATE, starts_at: `${DATE}T18:00:00Z`, timezone: 'Europe/Stockholm',
+    occurrence_date: date, starts_at: `${date}T18:00:00Z`, timezone: 'Europe/Stockholm',
     lat: 59.335, lng: 18.067, source_label: 'Source', source_url: 'https://source.example/event',
   };
   return {
-    days: [{ date: DATE, experimental_agnostic_route_applied: true, primary_route: {
+    days: [{ date, experimental_agnostic_route_applied: true, primary_route: {
       id: '__agnostic_compose__', title: 'Fixture day', estimated_km: 3.9,
       main_stops: [...stable, { ...event, id: `live-event-${event.id}`, event_id: event.id,
         label: event.title, is_live_event: true, source: { label: 'Source', url: event.source_url } }],
@@ -33,7 +33,7 @@ function day({ occurrence = ID, honored = false } = {}) {
       source_status: { anchor: { lat: 59.333, lng: 18.065 } },
       live_event_choices: { requested_count: honored ? 1 : 0, ignored_other_day_count: 0,
         remove_requested: false, honored_count: honored ? 1 : 0, unhonored: [] } },
-    live_events: { coverage: 'covered', selected_date: DATE, pending: false, tonight: [event], this_week: [event],
+    live_events: { coverage: 'covered', selected_date: date, pending: false, tonight: [event], this_week: [event],
       acquisition: { source_health: { status: 'healthy', result: 'events_found' } } },
   };
 }
@@ -78,6 +78,54 @@ async function requestKeep(h) {
 }
 
 // An optimistic ledger write must not turn a pending request into a confirmed badge.
+test('a held Live choice remains visibly resettable after navigating to another date without counting for that date', async t => {
+  const h = await start(t);
+  const resetLabel = 'Start over without my choices';
+  assert.equal(Boolean(button(h, resetLabel)), false, 'an ordinary day has no empty choices row');
+  const keep = await requestKeep(h);
+  await h.fetchMock.respond(keep, day({ honored: true }));
+  assert.match(button(h, resetLabel).closest('[role="status"]').textContent, /Your choices: 1 kept/);
+
+  await click(h, 'Adjust');
+  await click(h, 'Tomorrow');
+  await h.clock.advance(400);
+  const tomorrow = routes(h).at(-1);
+  const nextDate = tomorrow.body.dates[0];
+  assert.equal(nextDate, '2026-10-19', 'the actual date control moves from A to B');
+  assert.equal(tomorrow.body.live_event_choices, undefined, 'A is not sent as B intent');
+  assert.equal(tomorrow.body.pinned_candidate_ids, undefined, 'a Live occurrence is never a place pin');
+  await h.fetchMock.respond(tomorrow, day({ date: nextDate }));
+  assert.deepEqual(h.readStorage(LAST).commitments?.entries ?? {}, {}, 'B saves only its scoped ledger');
+
+  const reset = button(h, resetLabel);
+  assert.ok(Boolean(reset), 'the held other-date choice must keep a visible Start over control');
+  assert.equal(Boolean(reset.closest('details, [hidden], [aria-hidden="true"]')), false,
+    'reset is outside collapsed/hidden controls');
+  const row = reset.closest('[role="status"]');
+  assert.match(row.textContent, /Live choices for other dates/);
+  assert.doesNotMatch(row.textContent, /\d+ kept|\d+ removed/, 'A must not inflate B counters');
+  assert.equal(Boolean(button(h, 'Kept — release')), false, 'B occurrence has not been kept');
+  await click(h, resetLabel);
+  await h.clock.advance(400);
+  const cleared = routes(h).at(-1);
+  assert.notEqual(cleared, tomorrow, 'the existing reset semantics recompose B');
+  assert.deepEqual(cleared.body.dates, [nextDate]);
+  assert.equal(cleared.body.live_event_choices, undefined);
+  await h.fetchMock.respond(cleared, day({ date: nextDate }));
+  assert.equal(Boolean(button(h, resetLabel)), false, 'no leftover ordinary-day clutter after reset');
+
+  if (button(h, 'Adjust')) await click(h, 'Adjust');
+  await click(h, 'Today');
+  await h.clock.advance(400);
+  const today = routes(h).at(-1);
+  assert.deepEqual(today.body.dates, [DATE]);
+  assert.equal(today.body.live_event_choices, undefined, 'Start over really cleared the retained A choice');
+  await h.fetchMock.respond(today, day());
+  assert.equal(Boolean(button(h, resetLabel)), false);
+  assert.ok(h.fetchMock.calls.every(call => call.url.includes('/api/route-recommendations') ||
+    call.url.includes('/api/day-share')), 'the journey acquires no extra Live sources');
+});
+
 test('Keep pending for an already included event retains the old day without claiming Kept', async t => {
   const h = await start(t);
   const before = h.readStorage(LAST);
