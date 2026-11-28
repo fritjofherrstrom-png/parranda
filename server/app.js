@@ -40,6 +40,7 @@ const {
   parseExcludedCandidateIds,
   withoutExcludedCandidates,
 } = require("./planner/excluded-candidates");
+const { createOwnerCorrectionStore, withOwnerCorrections } = require("./planner/owner-corrections");
 const {
   parsePinnedCandidateIds,
   summarizePinnedOutcome,
@@ -1521,6 +1522,9 @@ function buildApp({
   eventSupply,
   sourceCatalog,
   reviewedPlaceSource,
+  // The owner's durable place corrections (hide / re-type). Off unless
+  // PARRANDA_CORRECTIONS_DIR names a directory; never reachable from a payload.
+  ownerCorrections = createOwnerCorrectionStore({ directory: process.env.PARRANDA_CORRECTIONS_DIR }),
   walkingRouter,
   walkingConfig,
   weatherProvider = null,
@@ -1558,6 +1562,9 @@ function buildApp({
     const primaryLoader = typeof openDataLoader === "function" ? openDataLoader : async () => [];
     openDataLoader = composeOpenDataLoaders(primaryLoader, reviewedPlaceSource);
   }
+  // One wrap, after every source is composed: the day, the candidate panel,
+  // inspect sidecars and Blitz all read this loader, so none can bypass it.
+  openDataLoader = withOwnerCorrections(openDataLoader, ownerCorrections);
   const app = express();
   const liveCompletion = createLiveCompletionStore();
 
