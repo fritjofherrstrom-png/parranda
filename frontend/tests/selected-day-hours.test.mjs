@@ -11,14 +11,14 @@ test("selected-day hours render bounded source facts in sv/en without open-now c
       { opens: "18:00", closes: "24:00" },
     ],
   };
-  assert.equal(selectedDayHoursLabel(fact, "sv"), "Källans tider för vald dag: 10:00–14:00, 18:00–24:00");
-  assert.equal(selectedDayHoursLabel(fact, "en"), "Source hours for selected day: 10:00–14:00, 18:00–24:00");
+  assert.equal(selectedDayHoursLabel(fact, "sv"), "Öppettider den dagen: 10:00–14:00, 18:00–24:00");
+  assert.equal(selectedDayHoursLabel(fact, "en"), "Hours that day: 10:00–14:00, 18:00–24:00");
 });
 
 test("all-day is explicit while unknown and malformed facts stay silent", () => {
   assert.equal(
     selectedDayHoursLabel({ status: "known", all_day: true, windows: [] }, "sv"),
-    "Källans tider för vald dag: hela dygnet",
+    "Öppettider den dagen: hela dygnet",
   );
   assert.equal(selectedDayHoursLabel({ status: "unknown", windows: [] }, "en"), null);
   assert.equal(
@@ -33,8 +33,8 @@ test("all-day is explicit while unknown and malformed facts stay silent", () => 
 
 test("an explicit source-closed day stays distinct from missing hours", () => {
   const closed = { status: "closed", all_day: false, windows: [] };
-  assert.equal(selectedDayHoursLabel(closed, "sv"), "Källan anger stängt för vald dag");
-  assert.equal(selectedDayHoursLabel(closed, "en"), "Source reports closed for selected day");
+  assert.equal(selectedDayHoursLabel(closed, "sv"), "Stängt den dagen enligt källan");
+  assert.equal(selectedDayHoursLabel(closed, "en"), "Closed that day, says the source");
 });
 
 test("selected-day copy never claims live availability", () => {
@@ -65,7 +65,7 @@ test("ordinary closed never becomes a confirmed closure for the selected day", (
   const closed = { ...ordinary, ordinary_status: "closed", ordinary_windows: [] };
   assert.equal(selectedDayHoursLabel(closed, "en"), "Regular hours: closed · Holiday hours unconfirmed");
   assert.equal(selectedDayHoursLabel(closed, "sv"), "Ordinarie tider: stängt · Helgdagstider ej bekräftade");
-  assert.doesNotMatch(selectedDayHoursLabel(closed, "en"), /Source reports closed|open now|currently open/i);
+  assert.doesNotMatch(selectedDayHoursLabel(closed, "en"), /Closed that day|open now|currently open/i);
 });
 
 test("malformed or unsafe conditional facts never publish a partial regular schedule", () => {

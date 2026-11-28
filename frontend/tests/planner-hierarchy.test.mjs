@@ -193,7 +193,7 @@ test("the day's weather follows the date: the sky's icon, the high, then the sky
   assert.ok(forecast(h).querySelector("svg"), "the sky's icon leads the reading");
   assert.match(forecast(h).getAttribute('aria-label'), /12.*Rain/);
   assert.ok(forecast(h).closest('[data-day-facts]'), "among the facts");
-  assert.match(forecast(h).parentElement.textContent, /, 12° and rain\.$/);
+  assert.match(forecast(h).parentElement.textContent, /, 12° and rain\.( Balanced pace\.)?$/);
 });
 
 test('a day in the city leads the heading, with the selected date directly below it', async t => {
@@ -513,7 +513,7 @@ test("a day planned for tomorrow never calls its route today's", async (t) => {
   response.live_events = { coverage: "covered", tonight: [], this_week: [] };
   const h = await plannerWith(t, response, "http://localhost/anywhere?place=Testville&day=1&lang=en");
 
-  assert.match(routeCard(h).textContent, /Added to tomorrow's route/);
+  assert.match(routeCard(h).textContent, /Live in your route/);
   assert.match(h.text(), /Quay concert · Included in tomorrow's route/);
   assert.doesNotMatch(h.text(), /today's route/);
 });

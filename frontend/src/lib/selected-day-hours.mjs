@@ -18,10 +18,10 @@ export function selectedDayHoursLabel(value, lang = "en") {
     return `${prefix}: ${schedule} · ${uncertainty}`;
   }
   if (value?.status === "closed") {
-    return lang === "sv" ? "Källan anger stängt för vald dag" : "Source reports closed for selected day";
+    return lang === "sv" ? "Stängt den dagen enligt källan" : "Closed that day, says the source";
   }
   if (!value || value.status !== "known") return null;
-  const prefix = lang === "sv" ? "Källans tider för vald dag" : "Source hours for selected day";
+  const prefix = lang === "sv" ? "Öppettider den dagen" : "Hours that day";
   if (value.all_day === true) {
     return `${prefix}: ${lang === "sv" ? "hela dygnet" : "all day"}`;
   }

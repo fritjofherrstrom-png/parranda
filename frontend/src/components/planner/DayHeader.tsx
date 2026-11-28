@@ -162,10 +162,9 @@ export function PickSummary({ t, lang, pickCoverage, rhythmLabel }: {
           </li>
         ))}
       </ul>
-      <span className="inline-flex items-center whitespace-nowrap align-top font-medium text-parranda-ink-meta">
-        {rhythmName && <span className="sr-only">{rhythmName}</span>}
-        {rhythmValue}
-      </span>
+      {/* The rhythm is shown in the facts line ("… · Balanced pace"); here
+          it is said, so the picks keep one line beside Adjust on a phone. */}
+      <span className="sr-only">{rhythmName}{rhythmValue}</span>
     </span>
   );
 }
@@ -188,6 +187,7 @@ export default function DayHeader({
   overview = null,
   picksInControls = false,
   relativeDay = null,
+  rhythmKey = null,
   coreCount,
   wovenCount,
   pickCoverage,
@@ -225,6 +225,8 @@ export default function DayHeader({
   picksInControls?: boolean;
   /** 0 today, 1 tomorrow, null for any other day: the facts line says the day the way a person would. */
   relativeDay?: 0 | 1 | null;
+  /** The day rhythm the shown day was built with, said in the facts line. */
+  rhythmKey?: string | null;
   coreCount: number;
   wovenCount: number;
   pickCoverage: PickCoverage[];
@@ -294,6 +296,14 @@ export default function DayHeader({
   // What the day contains and how it stands (a thin day, a saved snapshot)
   // is said before the picks and the map, so the map is the last thing in
   // the header and the line can come straight out of it (Linje 2).
+  const PACE: Record<string, [string, string]> = {
+    calm: ["Lugnt tempo", "Relaxed pace"],
+    balanced: ["Lagom tempo", "Balanced pace"],
+    full: ["Fullt tempo", "Full pace"],
+    free: ["Parranda väljer tempot", "Parranda sets the pace"],
+  };
+  const pace = rhythmKey && PACE[rhythmKey] ? t(PACE[rhythmKey][0], PACE[rhythmKey][1]) : null;
+
   const tail = (
       <div className="flex flex-col gap-2 empty:hidden">
         {pickCoverage.length > 0 && !picksInControls && (
@@ -432,6 +442,8 @@ export default function DayHeader({
                 <span aria-hidden="true">{condition ? ` ${t("och", "and")} ${t(condition[0], condition[1]).toLowerCase()}.` : "."}</span>
               </>
             )}
+            {/* Said to assistive tech with the picks (PickSummary). */}
+            {pace && <span aria-hidden="true">{weatherChip ? ` ${pace}.` : displayedDate ? ` · ${pace}` : pace}</span>}
           </p>
         </div>
         {/* The day's character from its published places, said once and

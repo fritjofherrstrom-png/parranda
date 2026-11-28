@@ -81,12 +81,16 @@ test("the way back is visible without opening anything", () => {
   // Found in a real browser run: nested inside the collapsed Adjust panel, the
   // ledger was invisible and the undo unreachable — a dismissal you cannot see
   // is effectively irreversible.
+  // The ledger is one of the day's notes: beside the line above the first
+  // station when a day is on screen, and in the page itself when none is.
   const ledgerBlock = component.slice(
-    component.indexOf("{(excludedCount > 0 || pinnedCount > 0 || liveChoiceCount > 0) && ("),
-    component.indexOf("<DayPlaceholder part=\"body\""),
+    component.indexOf("const dayNotes ="),
+    component.indexOf("  return (\n    <div"),
   );
   assert.ok(ledgerBlock.includes("Start over without my choices"), "the ledger renders above the day, not inside Adjust");
   assert.ok(ledgerBlock.includes('role="status"'));
+  assert.match(component, /\{!dayWithRoute && dayNotes\}/, "with no day on screen the notes stand in the page");
+  assert.match(component, /notes=\{dayNotes\}/, "with a day they stand beside its line");
   // It must not sit inside the day block either: dismissing everything removes
   // the day, and that is exactly when the user needs the way back.
   assert.ok(!/showDay[\s\S]{0,200}excludedCount > 0/.test(component));
@@ -249,7 +253,7 @@ test("a commitment can be released without starting over", () => {
   assert.match(component, /Behålls — släpp|Kept — release/);
   assert.match(component, /Med i dagen — släpp|In my day — release/);
   // And the ledger line states both halves, with one way out of all of them.
-  assert.match(component, /1 plats behålls|1 place kept/);
+  assert.match(component, /behållen|\$\{keptTotal\} kept/);
   assert.match(component, /Börja om utan mina val|Start over without my choices/);
 });
 

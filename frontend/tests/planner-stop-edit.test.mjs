@@ -119,7 +119,7 @@ test('applied Remove persists the shorter intent and Undo restores the previous 
   assert.deepEqual(saved.inputs.dayEdit.retained_candidate_ids, remaining.map(stop => stop.id));
   assert.notEqual(saved.id, previous.id, 'the shorter intent has a distinct canonical saved identity');
   assert.equal(JSON.parse(new URL(h.window.location.href).searchParams.get('edit')).target_stop_count, 4);
-  assert.match(button(h, 'Undo').closest('[role="status"]').textContent, /Removed Fixture Museum/);
+  assert.match(button(h, 'Undo').closest('[role="status"]').textContent, /Removed: Fixture Museum/);
   await click(h, 'Undo');
   assert.match(h.container.querySelector('section[aria-label="The route"]').textContent, /Fixture Museum/);
   assert.equal(h.readStorage(LAST).id, previous.id);
@@ -129,8 +129,8 @@ test('applied Remove persists the shorter intent and Undo restores the previous 
 });
 
 for (const { lang, replace, undo, receipt } of [
-  { lang: 'en', replace: 'Replace', undo: 'Undo', receipt: /Replaced Fixture Museum with Fixture Archive/ },
-  { lang: 'sv', replace: 'Byt', undo: 'Ångra', receipt: /Bytte ut Fixture Museum mot Fixture Archive/ },
+  { lang: 'en', replace: 'Replace', undo: 'Undo', receipt: /Replaced: Fixture Museum → Fixture Archive/ },
+  { lang: 'sv', replace: 'Byt', undo: 'Ångra', receipt: /Bytt: Fixture Museum → Fixture Archive/ },
 ]) test(`${lang} the replacement receipt names the old and confirmed new stop`, async t => {
   const h = await completed(t, { url: PLANNER_URL.replace('lang=en', `lang=${lang}`) });
   await expandMuseum(h);

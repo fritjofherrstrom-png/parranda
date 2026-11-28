@@ -19,7 +19,7 @@ import { mountPlanner } from "./helpers/planner-harness.mjs";
 import { freezeComposeDateIso } from "../src/lib/anywhere-payload.mjs";
 
 const NOTICE = /could not fit in this day/i;
-const KEPT_LEDGER = /\d+ places? kept/;
+const KEPT_LEDGER = /Your choices: \d+ kept/;
 
 test("one compose intent keeps its local date when a follow-up crosses midnight", () => {
   const beforeMidnight = new Date("2026-08-24T23:59:59");
@@ -568,7 +568,7 @@ test("starting over invalidates the commitment request already in flight", async
   const inFlight = h.fetchMock.pending()[0];
   assert.deepEqual(inFlight.body.pinned_candidate_ids, ["outsider"]);
 
-  await click(h, buttonMatching(h, /Start over without my choices/));
+  await click(h, buttonMatching(h, /^Start over$/));
   await h.fetchMock.respond(inFlight, composedDay(["q", "r", "s"])).catch(() => {});
   await h.clock.advance(50);
 

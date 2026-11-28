@@ -244,7 +244,7 @@ test('real HTTP Keep distinguishes source refusal from confirmed Keep and preser
   await h.page.getByRole('list', { name: 'The stops, in order', exact: true })
     .locator(':scope > li > button').filter({ hasText: hoursStop.label }).click();
   const visiblePanel = h.route.locator('[id^="route-stop-panel-"]:visible');
-  await visiblePanel.getByText('Source hours for selected day: 10:00–23:00', { exact: true }).waitFor();
+  await visiblePanel.getByText('Hours that day: 10:00–23:00', { exact: true }).waitFor();
   assert.equal(await visiblePanel.getByRole('link', { name: 'Website', exact: true }).getAttribute('href'), hoursStop.website);
   assert.doesNotMatch(await visiblePanel.innerText(), /open now|currently open/i);
   await h.capture('reload-kept-with-dated-hours');

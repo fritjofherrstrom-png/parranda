@@ -39,7 +39,7 @@ import type { RouteContextSuggestion } from "../../lib/route-context-view.mjs";
 import type { DistrictArea } from "./types";
 import type { Translate } from "./copy";
 import type { PositionSession } from "./useFollowPosition";
-import { CollapseIcon, ExpandIcon, IconSwap, LocationIcon, RouteIcon } from "../shared/icons";
+import { CloseIcon, CollapseIcon, ExpandIcon, IconSwap, LocationIcon, RouteIcon } from "../shared/icons";
 import { busyButton, pressable } from "../shared/ui";
 
 // Footprints the fit keeps clear of the controls, in px. A route marker's
@@ -952,24 +952,68 @@ export default function RouteMap({
     return () => { map.off("zoom", sizeAccuracy); marker.remove(); ring.remove(); };
   }, [position, mapDrawn, mapFailed, positionCentreRequest]);
 
+  const locationCloseRef = useRef<HTMLButtonElement | null>(null);
+  const locationControlRef = useRef<HTMLDivElement | null>(null);
+  const locateButtonRef = useRef<HTMLButtonElement | null>(null);
   const locationState = positionSession?.state;
-  const locationStatus = positionEnabled && locationState && (
-    <div className="mt-1 flex min-h-11 flex-wrap items-center gap-x-3 text-13 text-parranda-ink-meta">
-      <span role="status">{locationState.status === "tracking"
-        ? t("Din position visas", "Your location is shown")
-        : locationState.status === "paused"
-          ? t("Positionsvisningen är pausad", "Location is paused")
-          : locationState.status === "denied"
-            ? t("Tillåt platsdelning för att visa din position.", "Allow location sharing to show your position.")
-            : locationState.status === "unavailable"
-              ? t("Positionen kunde inte hämtas. Försök igen.", "Location couldn't be found. Try again.")
-              : t("Hämtar din position …", "Finding your position …")}</span>
-      {position && <span aria-live="off">± {Math.max(1, Math.ceil(position.accuracy))} m</span>}
-      <button type="button" onClick={onStopLocation} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2">
-        {t("Stäng av position", "Stop location")}
+  // This React overlay is a sibling of the map container, so neither the
+  // container nor MapLibre's control observer sees it appear or change size.
+  // Re-evaluate keepouts only: a status change must not refit the camera.
+  useLayoutEffect(() => {
+    if (mapFailed) return;
+    let animationFrame = 0;
+    const schedule = () => {
+      if (!animationFrame) animationFrame = requestAnimationFrame(() => {
+        animationFrame = 0;
+        layoutRef.current();
+      });
+    };
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+    if (locationControlRef.current) observer?.observe(locationControlRef.current);
+    schedule();
+    return () => {
+      observer?.disconnect();
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+    };
+  }, [positionEnabled, locationState?.status, mapFailed]);
+  // Where you are is the map's own business: one small chip in the map's
+  // corner (the dot says the rest), never a loose line between the map and
+  // the day. A failure offers what fixes it; the cross turns location off.
+  const locationText = locationState && (locationState.status === "tracking"
+    ? t("Din position", "Your location")
+    : locationState.status === "paused"
+      ? t("Positionen är pausad", "Location paused")
+      : locationState.status === "denied"
+        ? t("Platsdelning är blockerad i webbläsaren.", "Location is blocked in your browser.")
+        : locationState.status === "unavailable"
+          ? t("Hittade inte din position.", "Couldn't find your location.")
+          : t("Hämtar din position …", "Finding your location …"));
+  const locationChip = (inFrame: boolean) => positionEnabled && locationState && (
+    // Top right, clear of the zoom buttons (top left) and the controls
+    // (bottom right); a map control for the pins' layout, so stations are
+    // set clear of it. Above the pins (their shells stack from 1200): a
+    // short-lived status the reader can close, never hidden under a station.
+    <div ref={inFrame ? locationControlRef : undefined} data-location-status="" data-map-control={inFrame ? "" : undefined} style={inFrame ? { zIndex: 1300 } : undefined} className={(inFrame
+      ? "absolute right-2.5 top-2.5 max-w-[calc(100%_-_1.25rem)] rounded-parranda-btn map-control pl-3 "
+      : "mt-1 ") + "flex min-h-11 items-center gap-1 text-13 text-parranda-ink-soft"}>
+      <span role="status" className="min-w-0 py-2 leading-snug">{locationText}</span>
+      {/* The reading's accuracy changes with every fix: shown, not announced. */}
+      {position && locationState.status === "tracking" && <span aria-live="off" className="type-data shrink-0 text-parranda-ink-meta">± {Math.max(1, Math.ceil(position.accuracy))} m</span>}
+      {locationState.status === "unavailable" && onLocate && (
+        <button type="button" onClick={() => { onLocate(); locationCloseRef.current?.focus({ preventScroll: true }); }}
+          className="inline-flex min-h-11 shrink-0 items-center px-2 font-bold text-parranda-ink underline underline-offset-2">
+          {t("Försök igen", "Try again")}
+        </button>
+      )}
+      <button type="button" ref={locationCloseRef}
+        onClick={() => { onStopLocation?.(); locateButtonRef.current?.focus({ preventScroll: true }); }}
+        aria-label={t("Stäng av position", "Stop location")} title={t("Stäng av position", "Stop location")}
+        className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-parranda-btn text-parranda-ink-meta hover:text-parranda-ink ${pressable}`}>
+        <CloseIcon className="h-4 w-4" />
       </button>
     </div>
   );
+  const locationStatus = locationChip(false);
   const walkingCreditLinks = geometryAttribution && <>
     <a href={geometryAttribution.url} target="_blank" rel="noopener noreferrer"
       className="underline underline-offset-2 hover:text-parranda-ink focus-visible:outline-2 focus-visible:outline-parranda-ember">{geometryAttribution.label}</a>
@@ -1050,9 +1094,10 @@ export default function RouteMap({
           {t("Ritar kartan …", "Drawing the map …")}
         </div>
       )}
+      {locationChip(true)}
       {/* The fit accounts for the whole control group, including the visible expand label. */}
       <div data-map-control="" className="absolute right-2.5 z-(--p-z-map-control) flex gap-2" style={{ bottom: `${attribHeight + 8}px` }}>
-        {positionSession?.supported && onLocate && <button type="button" {...busyButton(!mapDrawn, onLocate)}
+        {positionSession?.supported && onLocate && <button type="button" ref={locateButtonRef} {...busyButton(!mapDrawn, onLocate)}
           aria-label={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
           title={positionEnabled ? t("Centrera på min position", "Center on my location") : t("Visa min position", "Show my location")}
           className={`${mapButton} w-11`}>
@@ -1083,10 +1128,9 @@ export default function RouteMap({
         </button>}
       </div>
     </div>
-    {locationStatus}
-    {creditHost && geometryAttribution && createPortal(<>
-      {" · "}{t("Gångväg", "Walking route")}{": "}{walkingCreditLinks}
-    </>, creditHost)}
+    {creditHost && geometryAttribution && createPortal(<span data-walking-credit="">
+      {t("Gångväg", "Walking route")}{": "}{walkingCreditLinks}
+    </span>, creditHost)}
     {/* Without a drawn map (no WebGL, or before it exists) the credit and
         whether a walking path was found stay as a line under the frame. On
         a drawn map the credit is in the attribution, and "About this day and
@@ -1101,7 +1145,7 @@ export default function RouteMap({
           : t("Kartbakgrunden kunde inte hämtas. Platser i närheten visas ändå.", "The map background couldn't be loaded. Nearby places are still shown.")}
       </p>
     )}
-    {layoutCrowded && <p role="status" className="mt-1 text-13 text-parranda-ink-meta">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}
+    {layoutCrowded && !still && <p role="status" className="mt-1 text-13 text-parranda-ink-meta">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}
     </div>
   );
 }

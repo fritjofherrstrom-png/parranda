@@ -87,10 +87,10 @@ for (const lang of ['sv', 'en']) test(`${lang} restored source-closed day stays 
   const h = await mountPlanner({ url: `http://localhost/anywhere?restore=last&lang=${lang}`, storage: { [LAST_KEY]: stored } });
   t.after(() => h.unmount());
   assert.match(h.container.querySelector(`section[aria-label="${lang === 'sv' ? 'Rutten' : 'The route'}"]`).textContent,
-    lang === 'sv' ? /Källan anger stängt för vald dag/ : /Source reports closed for selected day/,
+    lang === 'sv' ? /Stängt den dagen enligt källan/ : /Closed that day, says the source/,
     'the saved closed-day fact is visible before expanding the stop');
   const panel = await expandMuseum(h);
-  assert.match(panel.textContent, lang === 'sv' ? /Källan anger stängt för vald dag/ : /Source reports closed for selected day/);
+  assert.match(panel.textContent, lang === 'sv' ? /Stängt den dagen enligt källan/ : /Closed that day, says the source/);
   assert.doesNotMatch(panel.textContent, /Hours unknown|Opening hours unavailable|Öppettider (?:okända|saknas)|Källtider saknas/);
   await h.clock.advance(500);
   assert.equal(routes(h).length, 0, 'presenting the saved fact does not recompose or block the saved day');
@@ -108,7 +108,7 @@ for (const lang of ['sv', 'en']) test(`${lang} conditional regular hours stay vi
   assert.doesNotMatch(row.textContent, label, 'unconfirmed selected-day hours belong inside the stop disclosure');
   const panel = await expandMuseum(h);
   assert.match(panel.textContent, label);
-  assert.doesNotMatch(panel.textContent, /Source hours for selected day|Källans tider för vald dag|Source reports closed|open now|öppet nu/i);
+  assert.doesNotMatch(panel.textContent, /Hours that day|Öppettider den dagen|Closed that day|open now|öppet nu/i);
   assert.equal([...panel.querySelectorAll('a')].find(a => /Website|Webbplats/.test(a.textContent))?.getAttribute('href'), conditional.source_url);
   const replace = [...panel.querySelectorAll('button')].find(b => b.textContent.trim() === (lang === 'sv' ? 'Byt' : 'Replace'));
   assert.ok(replace);
@@ -153,7 +153,7 @@ for (const lang of ['sv', 'en']) test(`${lang} restoring regular hours retains t
 test('known selected-day hours keep their existing detail label', async t => {
   const h = await completed(t, 'en', { selected_day_hours: { status: 'known', all_day: false, windows: [{ opens: '10:00', closes: '17:00' }] } });
   const panel = await expandMuseum(h);
-  assert.match(panel.textContent, /Source hours for selected day: 10:00–17:00/);
+  assert.match(panel.textContent, /Hours that day: 10:00–17:00/);
   assert.doesNotMatch(panel.textContent, /unconfirmed|Opening hours unavailable/);
 });
 
@@ -167,7 +167,7 @@ test('an unsafe restored conditional fact falls back to unavailable hours', asyn
   t.after(() => h.unmount());
   const panel = await expandMuseum(h);
   assert.match(panel.textContent, /Opening hours unavailable for the selected day/);
-  assert.doesNotMatch(panel.textContent, /Regular hours|06:30|Source hours|javascript/);
+  assert.doesNotMatch(panel.textContent, /Regular hours|06:30|Hours that day|javascript/);
 });
 
 for (const lang of ['sv', 'en']) test(`${lang} stop facts and controls stay compact without hiding source evidence`, async t => {
